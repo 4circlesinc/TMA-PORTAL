@@ -147,6 +147,54 @@ class Conversation extends Model
         });
     }
 
+    /**
+     * Threads that belong in the inbox list.
+     *
+     * Opening a client file creates a conversation so staff can compose, but
+     * that is not correspondence yet. A system "case opened" line, or a DM
+     * nobody has written in, must not land in anyone's inbox as if a message
+     * had been sent. The firm's always-present chat, and ordinary groups, stay
+     * findable even before anyone talks.
+     */
+    public function scopeListedInInbox(Builder $query): Builder
+    {
+        return $query->where(function (Builder $q) {
+            $q->where('is_default', true)
+                ->orWhere(function (Builder $groups) {
+                    $groups->where('type', self::TYPE_GROUP)
+                        ->where(function ($subject) {
+                            $subject->whereNull('subject')
+                                ->orWhere('subject', '!=', self::SUBJECT_PROVIDER);
+                        });
+                })
+                ->orWhereHas('messages', function (Builder $messages) {
+                    $messages->where('type', '!=', Message::TYPE_SYSTEM);
+                });
+        });
+    }
+
+    /**
+     * Whether this thread should appear in the inbox for the current viewer.
+     *
+     * Used on single-conversation payloads (open, send, history). The list
+     * endpoint filters with {@see scopeListedInInbox} instead, so it does not
+     * run this per row.
+     */
+    public function isListedInInbox(): bool
+    {
+        if ($this->is_default) {
+            return true;
+        }
+
+        if ($this->isGroup() && ! $this->isProviderCase()) {
+            return true;
+        }
+
+        return $this->messages()
+            ->where('type', '!=', Message::TYPE_SYSTEM)
+            ->exists();
+    }
+
     /** This user's own membership row, or null if they are not a member. */
     public function participantFor(User $user): ?ConversationParticipant
     {

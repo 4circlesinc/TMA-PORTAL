@@ -4,6 +4,7 @@ namespace App\Support\Dashboard;
 
 use App\Models\CipDocumentComment;
 use App\Models\CipEvent;
+use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\MailMessage;
 use App\Models\Message;
@@ -460,7 +461,8 @@ class DashboardMetrics
     /**
      * Portal messaging. Only conversations that put a client and an in-scope
      * staff member in the same thread are considered, internal chatter is not
-     * a client response time.
+     * a client response time. Case threads with the service provider are the
+     * other side of the file, not an answer to the applicant.
      */
     private function addPortalMessages(Timelines $timelines): void
     {
@@ -478,6 +480,12 @@ class DashboardMetrics
                     ->whereIn('user_id', $this->scopeStaffIds)
                     ->select('conversation_id')
             )
+            ->whereHas('conversation', function ($q) {
+                $q->where(function ($subject) {
+                    $subject->whereNull('subject')
+                        ->orWhere('subject', '!=', Conversation::SUBJECT_PROVIDER);
+                });
+            })
             ->distinct()
             ->pluck('conversation_id')
             ->all();

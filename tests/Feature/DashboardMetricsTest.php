@@ -230,7 +230,107 @@ class DashboardMetricsTest extends TestCase
         $this->assertSame(0, $card['sample']);
     }
 
-    /* ── CIP updates required ──────────────────────────────────────── */
+    public function test_provider_case_threads_are_not_client_response_times(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $staff = $this->staff();
+        $contact = User::factory()->create([
+            'email' => 'gil@galaxy.example',
+            'status' => 'approved',
+            'account_type' => 'Client',
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+        ]);
+        $company = Company::create(['uid' => 'galaxy-kpi', 'name' => 'Galaxy KPI']);
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'user_id' => $contact->id,
+            'name' => $contact->name,
+            'email' => $contact->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+        CipProvider::create([
+            'name' => 'Galaxy', 'code' => 'GAL', 'company_id' => $company->id,
+        ]);
+
+        $c = Conversation::create([
+            'type' => Conversation::TYPE_GROUP,
+            'created_by' => $staff->id,
+            'subject' => Conversation::SUBJECT_PROVIDER,
+            'last_message_at' => now(),
+        ]);
+        foreach ([$staff, $contact] as $member) {
+            ConversationParticipant::create([
+                'conversation_id' => $c->id,
+                'user_id' => $member->id,
+                'role' => ConversationParticipant::ROLE_MEMBER,
+                'joined_at' => now(),
+            ]);
+        }
+
+        $this->say($c, $contact, '5 hours');
+        $this->say($c, $staff, '3 hours');
+
+        $card = $this->metrics($staff)['cards']['clientResponse'];
+
+        $this->assertSame('-', $card['value']);
+        $this->assertSame(0, $card['sample']);
+    }
+
+    public function test_avg_response_to_clients_is_only_the_applicant(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $staff = $this->staff();
+        $applicant = $this->client('dana@example.com');
+        $contact = User::factory()->create([
+            'email' => 'gil-mix@galaxy.example',
+            'status' => 'approved',
+            'account_type' => 'Client',
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+        ]);
+        $company = Company::create(['uid' => 'galaxy-mix', 'name' => 'Galaxy Mix']);
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'user_id' => $contact->id,
+            'name' => $contact->name,
+            'email' => $contact->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+        CipProvider::create([
+            'name' => 'Galaxy Mix', 'code' => 'GXM', 'company_id' => $company->id,
+        ]);
+
+        $case = Conversation::create([
+            'type' => Conversation::TYPE_GROUP,
+            'created_by' => $staff->id,
+            'subject' => Conversation::SUBJECT_PROVIDER,
+            'last_message_at' => now(),
+        ]);
+        foreach ([$staff, $contact] as $member) {
+            ConversationParticipant::create([
+                'conversation_id' => $case->id,
+                'user_id' => $member->id,
+                'role' => ConversationParticipant::ROLE_MEMBER,
+                'joined_at' => now(),
+            ]);
+        }
+        $this->say($case, $contact, '5 hours');
+        $this->say($case, $staff, '1 hour');
+
+        $person = $this->conversation($staff, $applicant);
+        $this->say($person, $applicant, '3 hours');
+        $this->say($person, $staff, '2 hours');
+
+        $card = $this->metrics($staff)['cards']['clientResponse'];
+
+        $this->assertSame(3600, $card['seconds']);
+        $this->assertSame(1, $card['sample']);
+    }
 
     public function test_it_counts_cip_applications_waiting_on_updates(): void
     {

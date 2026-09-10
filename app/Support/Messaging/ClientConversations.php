@@ -169,7 +169,6 @@ class ClientConversations
                     'company_id' => $company->id,
                     'cip_application_id' => $application?->id,
                     'subject' => Conversation::SUBJECT_PROVIDER,
-                    'last_message_at' => now(),
                 ]);
 
                 $conversation->participants()->create([
@@ -291,7 +290,6 @@ class ClientConversations
                 'created_by' => $user->id,
                 'client_id' => $client?->id,
                 'subject' => $client ? Conversation::SUBJECT_PERSON : null,
-                'last_message_at' => now(),
             ]);
 
             foreach ([$user, $other] as $member) {
@@ -504,6 +502,11 @@ class ClientConversations
             'system_event' => array_merge(['event' => $event], $detail),
         ]);
 
-        $conversation->forceFill(['last_message_at' => $message->created_at])->save();
+        // A "case opened" line is history on the file, not correspondence.
+        // Stamping last_message_at here would float the empty thread to the
+        // top of every member's inbox as if someone had written.
+        if ($event !== 'case_opened') {
+            $conversation->forceFill(['last_message_at' => $message->created_at])->save();
+        }
     }
 }

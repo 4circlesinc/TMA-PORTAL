@@ -242,20 +242,74 @@ class ClientConversationTest extends TestCase
         ]);
     }
 
-    public function test_the_inbox_shows_the_applicant_and_the_provider(): void
+    public function test_opening_a_client_chat_does_not_put_it_in_the_inbox(): void
     {
         $fx = $this->applicantWithProvider();
 
+        $id = $this->actingAs($fx['staff'])
+            ->postJson('/portal/clients/'.$fx['client']->uid.'/conversations', ['with' => 'provider'])
+            ->assertCreated()
+            ->json('conversation.id');
+
         $this->actingAs($fx['staff'])
-            ->postJson('/portal/clients/'.$fx['client']->uid.'/conversations', ['with' => 'provider']);
+            ->getJson('/portal/messaging/conversations')
+            ->assertOk()
+            ->assertJsonMissing(['id' => $id]);
+
+        $this->actingAs($fx['providerUser'])
+            ->getJson('/portal/messaging/conversations')
+            ->assertOk()
+            ->assertJsonMissing(['id' => $id]);
+
+        $this->actingAs($fx['staff'])
+            ->postJson('/portal/messaging/conversations/'.$id.'/messages', ['body' => 'Please send the passport scan.'])
+            ->assertOk();
 
         $this->actingAs($fx['staff'])
             ->getJson('/portal/messaging/conversations')
             ->assertOk()
             ->assertJsonFragment([
+                'id' => $id,
                 'name' => 'Ahmed Hassan',
                 'subtitle' => 'Galaxy Partners',
             ]);
+
+        $this->actingAs($fx['providerUser'])
+            ->getJson('/portal/messaging/conversations')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $id]);
+    }
+
+    public function test_opening_a_private_dm_does_not_put_it_in_the_applicants_inbox(): void
+    {
+        $login = $this->portalUser();
+        $fx = $this->applicantWithProvider($login);
+
+        $opened = $this->actingAs($fx['staff'])
+            ->postJson('/portal/clients/'.$fx['client']->uid.'/conversations', ['with' => 'person'])
+            ->assertCreated()
+            ->json('conversation');
+
+        $this->assertFalse($opened['listed']);
+
+        $this->actingAs($login)
+            ->getJson('/portal/messaging/conversations')
+            ->assertOk()
+            ->assertJsonMissing(['id' => $opened['id']]);
+
+        $this->actingAs($fx['staff'])
+            ->getJson('/portal/messaging/conversations')
+            ->assertOk()
+            ->assertJsonMissing(['id' => $opened['id']]);
+
+        $this->actingAs($fx['staff'])
+            ->postJson('/portal/messaging/conversations/'.$opened['id'].'/messages', ['body' => 'Hello Ahmed'])
+            ->assertOk();
+
+        $this->actingAs($login)
+            ->getJson('/portal/messaging/conversations')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $opened['id']]);
     }
 
     public function test_a_client_account_cannot_open_the_hub_conversation_endpoints(): void
@@ -369,6 +423,6 @@ class ClientConversationTest extends TestCase
 
         $ids = collect($this->actingAs($colleague)->getJson('/portal/messaging/conversations')->json('conversations'))
             ->pluck('id');
-        $this->assertTrue($ids->contains($id));
+        $this->assertFalse($ids->contains($id));
     }
 }

@@ -1073,6 +1073,11 @@
     var tab = state.tab || 'all';
 
     return getThreads().filter(function (row) {
+      // An unsent client/direct thread stays off the inbox until someone
+      // writes. The open pane can still show it so the person who just
+      // opened it can compose.
+      if (row.listed === false && row.id !== state.selectedId) return false;
+
       // Archived conversations live in their own tab, never the main list.
       if (tab === 'archived') {
         if (!row.archived) return false;
@@ -5529,6 +5534,7 @@
 
     return window.TMAMessagingAPI.conversations()
       .then(function (data) {
+        var previousThreads = STORE.threads || [];
         STORE.threads = data.conversations || [];
         STORE.me = data.me || null;
         rememberMe();
@@ -5541,6 +5547,8 @@
         STORE.loaded = true;
         STORE.loadError = null;
         STORE.real = true;
+
+        retainOpenThread(previousThreads, state.selectedId);
 
         if (window.TMAStore) {
           window.TMAStore.put('messages:warm', {
@@ -5557,7 +5565,7 @@
         // Guarded internally, so calling it on every load is free.
         subscribeToOwnChannel(root, state, render);
 
-        // Keep the open conversation if it still exists; otherwise fall back
+    // Keep the open conversation if it still exists; otherwise fall back
         // to the first row on desktop, where an empty pane looks broken.
         if (state.selectedId && !findThread(state.selectedId)) {
           state.selectedId = null;
@@ -5667,6 +5675,21 @@
       }
     }
     STORE.threads.unshift(row);
+  }
+
+  /*
+   * An unsent client chat is omitted from the inbox. If the viewer still has
+   * it open (they just pressed Message on the file), keep the local row so
+   * a list refresh does not close the composer.
+   */
+  function retainOpenThread(previous, selectedId) {
+    if (!selectedId || findThread(selectedId)) return;
+    for (var i = 0; i < previous.length; i++) {
+      if (previous[i].id === selectedId) {
+        STORE.threads.unshift(previous[i]);
+        return;
+      }
+    }
   }
 
   function markConversationRead(root, state, render, conversationId) {
@@ -5797,6 +5820,7 @@
           row.preview = 'You: ' + messagePreview(confirmed);
           row.timestamp = confirmed.sentAt;
           row.draft = null;
+          row.listed = true;
         }
 
         render({ chatToBottom: true });
@@ -5844,6 +5868,29 @@
     if (conversationId) {
       window.TMAMessagingAPI.saveDraft(conversationId, text).catch(function () {});
     }
+  }
+
+  /*
+   * Open a conversation by id, even when it is not in the inbox yet.
+   *
+   * Staff landing from a client file's Message button get an unsent thread
+   * that the inbox omits on purpose. History still loads, so they can compose.
+   */
+  function openConversationFromId(root, state, render, conversationId) {
+    if (!conversationId) return;
+    showMessagesChats(state);
+    if (findThread(conversationId)) {
+      openConversation(root, state, render, conversationId);
+      subscribeToConversation(root, state, render, conversationId);
+      return;
+    }
+    window.TMAMessagingAPI.messages(conversationId)
+      .then(function (data) {
+        if (data.conversation) replaceThread(data.conversation);
+        openConversation(root, state, render, conversationId);
+        subscribeToConversation(root, state, render, conversationId);
+      })
+      .catch(function () {});
   }
 
   function openConversation(root, state, render, conversationId) {
@@ -5959,18 +6006,19 @@
 
       window.TMAMessagingAPI.conversations()
         .then(function (data) {
-          var previous = {};
-          getThreads().forEach(function (row) {
-            previous[row.id] = row.timestamp;
+          var previous = STORE.threads || [];
+          var previousTimes = {};
+          previous.forEach(function (row) {
+            previousTimes[row.id] = row.timestamp;
           });
-
           STORE.threads = data.conversations || [];
+          retainOpenThread(previous, state.selectedId);
 
           // Pull the open thread's newest page if it actually moved on.
           var open = state.selectedId;
           if (open) {
             var row = findThread(open);
-            if (row && previous[open] !== row.timestamp) {
+            if (row && previousTimes[open] !== row.timestamp) {
               return window.TMAMessagingAPI.messages(open).then(function (thread) {
                 mergeMessages(open, thread.messages || [], false);
                 render();
@@ -6234,6 +6282,21 @@
       // from the visible rows, which excludes archived threads; the server
       // total counts them. Keeping both would be two answers to one question.
       var row = findThread(payload.conversationId);
+
+      if (!row && payload.reason === 'message' && payload.conversationId) {
+        // First real message on a thread that was not in the inbox yet
+        // (opened from a client file, never written in). Pull it in.
+        window.TMAMessagingAPI.messages(payload.conversationId).then(function (data) {
+          if (data.conversation) {
+            data.conversation.listed = true;
+            replaceThread(data.conversation);
+            subscribeToConversation(root, state, render, payload.conversationId);
+            render();
+            syncTabBarBadges();
+          }
+        }).catch(function () {});
+        return;
+      }
 
       if (row && payload.reason === 'state') {
         if (payload.detail && typeof payload.detail.pinned === 'boolean') row.pinned = payload.detail.pinned;
@@ -7314,6 +7377,7 @@
         if (row) {
           row.preview = 'You: Voice note';
           row.timestamp = data.message.sentAt;
+          row.listed = true;
         }
         render({ chatToBottom: true });
       })
@@ -9162,11 +9226,7 @@
       // (the shell mounts Messages on load, whichever view is showing).
       var reopen = opts.openConversationId || takePendingConversationId();
       if (reopen) {
-        showMessagesChats(state);
-        if (findThread(reopen)) openConversation(root, state, render, reopen);
-        else loadConversations(root, state, render).then(function () {
-          if (findThread(reopen)) openConversation(root, state, render, reopen);
-        });
+        openConversationFromId(root, state, render, reopen);
       }
       return;
     }
@@ -9337,9 +9397,8 @@
       // options so a cold load of /social/messages?conversation=… lands in the
       // same place an in-shell navigation does.
       var wanted = opts.openConversationId || takePendingConversationId();
-      if (wanted && findThread(wanted)) {
-        showMessagesChats(state);
-        openConversation(root, state, render, wanted);
+      if (wanted) {
+        openConversationFromId(root, state, render, wanted);
       }
     });
   }

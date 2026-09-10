@@ -2,16 +2,23 @@
 
 namespace App\Support\Dashboard;
 
+use App\Models\CipProvider;
 use App\Models\Client;
+use App\Models\CompanyMember;
 use App\Models\User;
 
 /**
  * Who counts as "a client" when measuring how quickly staff answer them.
  *
- * A client reaches the firm through two doors, a portal login (a user whose
- * account_type is Client) and an email address in the client directory, and
- * the same person may hold both. Every metric therefore resolves an actor to a
- * stable *client key* so one person waiting on both channels is counted once.
+ * A client reaches the firm through two doors, a portal login tied to a
+ * client record (or a Client account that is not a service-provider contact)
+ * and an email address in the client directory, and the same person may hold
+ * both. Every metric therefore resolves an actor to a stable *client key* so
+ * one person waiting on both channels is counted once.
+ *
+ * Service-provider contacts also use account_type Client, but they are the
+ * firm on the other side of a case, not the applicant being answered. They
+ * must not move "Avg. Response to Clients".
  */
 final class ClientDirectory
 {
@@ -49,11 +56,19 @@ final class ClientDirectory
 
         // Client logins with no directory record still count, they are people
         // waiting on a reply whether or not anyone filed them under Clients.
+        // Provider-firm contacts are the exception: they share the Client
+        // account type but they are not the applicant.
+        $providerContactIds = array_flip(self::providerContactUserIds());
+
         $logins = User::query()
             ->where('account_type', 'Client')
             ->get(['id', 'name', 'email']);
 
         foreach ($logins as $login) {
+            if (isset($providerContactIds[$login->id]) && ! isset($keyByUserId[$login->id])) {
+                continue;
+            }
+
             $key = $keyByUserId[$login->id] ?? 'user:'.$login->id;
             $keyByUserId[$login->id] = $key;
             $names[$key] ??= $login->name;
@@ -97,5 +112,19 @@ final class ClientDirectory
     public function isEmpty(): bool
     {
         return $this->keyByUserId === [] && $this->keyByEmail === [];
+    }
+
+    /** @return list<int> */
+    private static function providerContactUserIds(): array
+    {
+        return CompanyMember::query()
+            ->active()
+            ->whereIn(
+                'company_id',
+                CipProvider::query()->select('company_id')->whereNotNull('company_id')
+            )
+            ->pluck('user_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
     }
 }

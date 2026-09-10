@@ -159,6 +159,8 @@ class MessagingPresenter
      * @param  ?Collection  $latestReactions  Newest reaction
      *                                        per conversation id, when the caller has already batched them. Passing
      *                                        null keeps the single-conversation behaviour of looking one up.
+     * @param  ?bool  $listed  Whether the row belongs in the inbox. The list
+     *                         endpoint already filtered, so it passes true.
      */
     public static function conversation(
         Conversation $conversation,
@@ -167,6 +169,7 @@ class MessagingPresenter
         ?int $unread = null,
         ?Collection $latestReactions = null,
         ?array $workStatuses = null,
+        ?bool $listed = null,
     ): array {
         $participant ??= $conversation->participantFor($viewer);
         $others = $conversation->activeParticipants
@@ -221,6 +224,9 @@ class MessagingPresenter
                 : null,
             'counterpartId' => $counterpart?->id,
             'description' => $conversation->description,
+            // Opening a client file creates a thread so staff can compose;
+            // it is not in the inbox until someone actually writes.
+            'listed' => $listed ?? $conversation->isListedInInbox(),
             // The firm's own chat: managed by administrators, and nobody
             // leaves it.
             'isDefault' => (bool) $conversation->is_default,

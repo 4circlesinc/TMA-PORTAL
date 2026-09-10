@@ -3,12 +3,12 @@
 namespace App\Support\Messaging;
 
 use App\Models\Conversation;
-use App\Support\UserTime;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
 use App\Models\UserBlock;
 use App\Support\Access\ContactScope;
+use App\Support\UserTime;
 use Illuminate\Support\Str;
 
 /**
@@ -118,6 +118,7 @@ class MessagingSearch
     {
         $matches = Conversation::query()
             ->whereIn('id', $ids)
+            ->listedInInbox()
             ->with([
                 'activeParticipants.user',
                 'client:id,uid,name',
@@ -138,7 +139,7 @@ class MessagingSearch
             ->get();
 
         return $matches
-            ->map(fn (Conversation $c) => MessagingPresenter::conversation($c, $user))
+            ->map(fn (Conversation $c) => MessagingPresenter::conversation($c, $user, listed: true))
             ->all();
     }
 

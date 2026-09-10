@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Events\CallSignal;
-use App\Support\Notifications\Push;
 use App\Events\ConversationDelivered;
 use App\Events\ConversationRead;
 use App\Events\InboxUpdated;
@@ -35,6 +34,7 @@ use App\Support\Messaging\MessagingSettings;
 use App\Support\Messaging\OrganizationChat;
 use App\Support\Messaging\PresenceService;
 use App\Support\Messaging\TabCounts;
+use App\Support\Notifications\Push;
 use App\Support\Presence\AvailabilityService;
 use App\Support\UserTime;
 use Illuminate\Http\JsonResponse;
@@ -69,8 +69,13 @@ class MessagingController extends Controller
         OrganizationChat::syncMembership($user);
         ClientConversations::attachLogin($user);
 
+        $membershipIds = Conversation::query()
+            ->forUser($user)
+            ->pluck('id');
+
         $conversations = Conversation::query()
             ->forUser($user)
+            ->listedInInbox()
             ->with([
                 // presence comes along so PresenceService does not fetch it one
                 // subject at a time while presenting the list.
@@ -113,7 +118,7 @@ class MessagingController extends Controller
         $rows = $conversations
             ->map(fn (Conversation $c) => MessagingPresenter::conversation(
                 $c, $user, $participants->get($c->id), (int) ($unread[$c->id] ?? 0),
-                $latestReactions, $workStatuses
+                $latestReactions, $workStatuses, true
             ))
             // Pinned conversations sort above the rest but keep recency within
             // each band, which is the order the list expects to render.
@@ -134,7 +139,7 @@ class MessagingController extends Controller
             // Badges for the nav bar's other tabs. Chats is not here: the
             // client sums it from the visible rows (see TabCounts). The
             // conversation ids are already in hand, so it does not re-fetch.
-            'tabCounts' => TabCounts::for($user, $conversations->pluck('id')->all()),
+            'tabCounts' => TabCounts::for($user, $membershipIds->all()),
             'realtime' => $this->realtimeConfig(),
             // The real upload ceiling, which PHP's own ini caps can lower well
             // below what messaging would otherwise allow. Sent so the composer
@@ -432,6 +437,11 @@ class MessagingController extends Controller
         // The Messages page has its own badge; this is what reaches the bell,
         // the right sidebar and Overview when the recipient is elsewhere.
         MessageNotifier::announceMessage($conversation, $message, $user);
+
+        // Recipients only subscribe to threads already in their inbox. The
+        // first real message on an unlisted client chat has to land on their
+        // personal channel or they would not see the row until they reload.
+        $this->announceFirstCorrespondence($conversation, $message, $user);
 
         return response()->json([
             'message' => MessagingPresenter::message($message, $user, $conversation),
@@ -1755,6 +1765,43 @@ class MessagingController extends Controller
             ->with('activeParticipants.user')
             ->where('uuid', $uuid)
             ->firstOrFail();
+    }
+
+    /**
+     * Recipients only subscribe to threads already in their inbox. The first
+     * real message on a client chat that was opened but never written in has
+     * to land on their personal channel, or the row would stay invisible until
+     * they reloaded Messages.
+     */
+    private function announceFirstCorrespondence(Conversation $conversation, Message $message, User $sender): void
+    {
+        if ($conversation->is_default || ($conversation->isGroup() && ! $conversation->isProviderCase())) {
+            return;
+        }
+
+        $alreadyHadCorrespondence = $conversation->messages()
+            ->where('type', '!=', Message::TYPE_SYSTEM)
+            ->where('id', '!=', $message->id)
+            ->exists();
+
+        if ($alreadyHadCorrespondence) {
+            return;
+        }
+
+        $conversation->activeParticipants()
+            ->where('user_id', '!=', $sender->id)
+            ->with('user')
+            ->get()
+            ->each(function (ConversationParticipant $participant) use ($conversation) {
+                if ($participant->user) {
+                    Broadcaster::to(new InboxUpdated(
+                        user: $participant->user,
+                        reason: 'message',
+                        totalUnread: 0,
+                        conversationUuid: $conversation->uuid,
+                    ));
+                }
+            });
     }
 
     /**
