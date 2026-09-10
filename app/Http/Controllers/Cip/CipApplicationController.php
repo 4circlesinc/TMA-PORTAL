@@ -1256,20 +1256,31 @@ class CipApplicationController extends Controller
      * numbered file is soft-deleted so the audit still names it, and the
      * client it was for is left standing — deleting an application is not
      * deleting the person.
+     *
+     * Already gone is success, not 404. A second click, a retry after the
+     * first write landed, and a live echo that refetches while the first
+     * request is still open must not toast an error for a file the table
+     * already dropped.
      */
     public function destroy(Request $request, string $uuid): JsonResponse
     {
         $user = $request->user();
         abort_unless(CipAccess::canCreate($user), 404);
 
-        $application = CipApplication::query()->where('uuid', $uuid)->first();
+        $application = CipApplication::withTrashed()->where('uuid', $uuid)->first();
         abort_unless($application, 404);
 
-        $inScope = ApplicationScope::query($user)->whereKey($application->id)->exists();
+        $inScope = ApplicationScope::query($user, CipApplication::withTrashed())
+            ->whereKey($application->id)
+            ->exists();
         $ownDraft = $application->status === Status::DRAFT
             && (int) $application->created_by === (int) $user->id;
         abort_unless($inScope || $ownDraft, 404);
         abort_unless(CipAccess::canDelete($user, $application), 404);
+
+        if ($application->trashed()) {
+            return response()->json(['status' => 'ok']);
+        }
 
         Removal::delete($application, $user);
 

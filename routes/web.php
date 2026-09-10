@@ -427,6 +427,11 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/applications/{uuid}', [CipApplicationController::class, 'show'])->name('applications.show');
         Route::delete('/applications/{uuid}', [CipApplicationController::class, 'destroy'])
             ->name('applications.destroy');
+        // Same verb as the rest of CIP writes. DELETE still works; POST is
+        // what the table uses so a proxy that drops DELETE is not a second
+        // click and a "Request failed" toast.
+        Route::post('/applications/{uuid}/delete', [CipApplicationController::class, 'destroy'])
+            ->name('applications.destroy.post');
         Route::get('/applications/{uuid}/messages', [CipThreadController::class, 'index'])
             ->name('applications.messages.index');
         Route::post('/applications/{uuid}/messages', [CipThreadController::class, 'store'])

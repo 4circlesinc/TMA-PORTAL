@@ -504,7 +504,13 @@
       var parse = ct.indexOf('application/json') !== -1 ? res.json() : Promise.resolve(null);
       return parse.then(function (data) {
         if (!res.ok) {
-          var err = new Error((data && data.message) || 'Request failed');
+          var msg = (data && data.message) || '';
+          if (!msg) {
+            if (res.status === 419) msg = 'Your session expired. Refresh the page and try again.';
+            else if (res.status >= 500) msg = 'The server could not complete that request.';
+            else msg = 'Request failed';
+          }
+          var err = new Error(msg);
           err.status = res.status;
           err.data = data;
           err.offline = res.headers.get('x-tma-offline') === '1';
@@ -516,12 +522,17 @@
          * (see TMAFilesNet.fetchJSON): every client, company, assignment and
          * invitation write in the hub goes through here, and dropping the
          * prefix costs one refetch of whatever is opened next.
+         *
+         * Best-effort: a cache drop must not turn a 200 into the toast the
+         * reader sees as "Request failed" after they already deleted the row.
          */
         if (opts.method && opts.method !== 'GET' && window.TMAStore) {
-          window.TMAStore.invalidate('clients:');
-          if (String(url || '').indexOf('/portal/cip/') === 0) {
-            window.TMAStore.invalidate('cip:');
-          }
+          try {
+            window.TMAStore.invalidate('clients:');
+            if (String(url || '').indexOf('/portal/cip/') === 0) {
+              window.TMAStore.invalidate('cip:');
+            }
+          } catch (e) { /* ignore */ }
         }
         return data;
       });
@@ -2809,7 +2820,9 @@
    */
   var APP_TABLE = {
     rows: [], page: 1, lastPage: 1, total: 0,
-    loading: false, error: null, loadedKey: null, status: '',
+    loading: false, error: null, loadedKey: null, loadingKey: null,
+    fetchGen: 0, deleting: {},
+    status: '',
     // Empty until a header is clicked: the listing stays newest-first, which
     // is the worklist order, not an implicit sort on Application.
     sort: '', dir: 'asc',
@@ -3175,6 +3188,7 @@
     var key = applicationTableKey(state);
     if (APP_TABLE.loadedKey === key || APP_TABLE.loadingKey === key) return;
 
+    var gen = APP_TABLE.fetchGen;
     APP_TABLE.loadingKey = key;
     APP_TABLE.loading = true;
     APP_TABLE.error = null;
@@ -3201,8 +3215,10 @@
     clientsFetch('/portal/cip/applications?' + params.join('&'))
       .then(function (json) {
         // A slower answer for a term the reader has moved on from must not
-        // overwrite the one they are looking at.
-        if (APP_TABLE.loadingKey !== key) return;
+        // overwrite the one they are looking at. fetchGen also drops a
+        // listing that left before a delete: the same key is still loading,
+        // and writing those rows puts a deleted file back on the table.
+        if (APP_TABLE.fetchGen !== gen || APP_TABLE.loadingKey !== key) return;
         APP_TABLE.rows = (json && json.applications) || [];
         APP_TABLE.rows.forEach(function (row) {
           rememberCipApplicant(row && row.clientUid);
@@ -3224,12 +3240,12 @@
         APP_TABLE.loadedKey = key;
       })
       .catch(function (err) {
-        if (APP_TABLE.loadingKey !== key) return;
+        if (APP_TABLE.fetchGen !== gen || APP_TABLE.loadingKey !== key) return;
         APP_TABLE.error = (err && err.message) || 'Could not load applications.';
         APP_TABLE.loadedKey = key;
       })
       .then(function () {
-        if (APP_TABLE.loadingKey !== key) return;
+        if (APP_TABLE.fetchGen !== gen || APP_TABLE.loadingKey !== key) return;
         APP_TABLE.loadingKey = null;
         APP_TABLE.loading = false;
         render();
@@ -3237,9 +3253,13 @@
   }
 
   /* Drop what is held so the next paint refetches, after a save, or a live
-     signal that somebody else changed one. */
+     signal that somebody else changed one. Bump fetchGen so an in-flight
+     listing cannot write the rows it left with — that is how a deleted
+     application reappeared and the next click toasted "Request failed". */
   function forgetApplicationTable() {
     APP_TABLE.loadedKey = null;
+    APP_TABLE.loadingKey = null;
+    APP_TABLE.fetchGen += 1;
   }
 
   /*
@@ -5053,9 +5073,13 @@
     var items = [];
     var provider = opts.provider || {};
     var person = opts.person || {};
-    var providerLabel = provider.companyName
-      ? 'Message ' + provider.companyName + ' about ' + (c.name || 'this applicant')
-      : 'Message the service provider about ' + (c.name || 'this applicant');
+    /* On the provider's own side of the thread, the firm is who they reach —
+       "the service provider" would be them describing themselves. */
+    var providerLabel = provider.viewerIsProvider
+      ? 'Message about ' + (c.name || 'this applicant')
+      : (provider.companyName
+        ? 'Message ' + provider.companyName + ' about ' + (c.name || 'this applicant')
+        : 'Message the service provider about ' + (c.name || 'this applicant'));
     items.push(messageChooserItem('provider', providerLabel, provider.available, provider.reason));
 
     if (person.available) {
@@ -10594,6 +10618,8 @@
     clientsCtxEl.addEventListener('click', function (e) {
       var btn = e.target.closest('[data-clients-ctx-act]');
       if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
       var act = btn.getAttribute('data-clients-ctx-act');
       // The parent row only opens its submenu; it is not an action itself.
       if (act === 'assign') { openClientsAssignSub(btn, kind, id); return; }
@@ -12382,12 +12408,12 @@
       clientsToast('Could not delete this application', 'negative');
       return;
     }
+    if (APP_TABLE.deleting[id]) return;
     var label = (app && (app.number || app.applicantName)) || 'this application';
     if (!window.confirm('Delete ' + label + '? The client record is kept.')) return;
+    APP_TABLE.deleting[id] = true;
 
-    var previous = (APP_TABLE.rows || []).slice();
-    var previousTotal = APP_TABLE.total;
-    APP_TABLE.rows = previous.filter(function (row) { return row.id !== id; });
+    APP_TABLE.rows = (APP_TABLE.rows || []).filter(function (row) { return row.id !== id; });
     APP_TABLE.total = Math.max(0, (APP_TABLE.total || 1) - 1);
     if (clientUid) {
       delete APPLICATIONS[clientUid];
@@ -12395,26 +12421,44 @@
       forgetCipApplicant(clientUid);
     }
     if (id && window.TMAStore) {
-      window.TMAStore.invalidate('cip:application-record:' + id);
+      try { window.TMAStore.invalidate('cip:application-record:' + id); } catch (e) { /* ignore */ }
     }
     if (ctx && ctx.render) ctx.render({ forceFull: true });
 
-    clientsFetch('/portal/cip/applications/' + encodeURIComponent(id), { method: 'DELETE' })
+    function deleted() {
+      clientsToast('Application deleted', 'positive');
+      forgetApplicationTable();
+      forgetBuckets();
+      if (ctx && ctx.state && ctx.state.selectedId === clientUid && ctx.navigate) {
+        ctx.navigate('list');
+      } else if (ctx && ctx.render) {
+        ctx.render({ forceFull: true });
+      }
+    }
+
+    function failed(err) {
+      // Refetch rather than putting the snapshot back: if the write landed
+      // and the client only thought it failed, restoring the row is how the
+      // reader had to delete it twice and saw "Request failed" on the 404.
+      forgetApplicationTable();
+      if (ctx && ctx.render) ctx.render({ forceFull: true });
+      clientsToast((err && err.message) || 'Could not delete this application', 'negative');
+    }
+
+    clientsFetch('/portal/cip/applications/' + encodeURIComponent(id) + '/delete', { method: 'POST' })
       .then(function () {
-        clientsToast('Application deleted', 'positive');
-        forgetApplicationTable();
-        forgetBuckets();
-        if (ctx && ctx.state && ctx.state.selectedId === clientUid && ctx.navigate) {
-          ctx.navigate('list');
-        } else if (ctx && ctx.render) {
-          ctx.render({ forceFull: true });
-        }
+        deleted();
       })
       .catch(function (err) {
-        APP_TABLE.rows = previous;
-        APP_TABLE.total = previousTotal;
-        if (ctx && ctx.render) ctx.render({ forceFull: true });
-        clientsToast((err && err.message) || 'Could not delete this application', 'negative');
+        var status = err && err.status;
+        if (status === 404 || status === 410) {
+          deleted();
+          return;
+        }
+        failed(err);
+      })
+      .then(function () {
+        delete APP_TABLE.deleting[id];
       });
   }
 

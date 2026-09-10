@@ -176,6 +176,36 @@ class CipApplicationDeleteTest extends TestCase
         $this->assertNotNull(CipApplication::query()->find($application->id));
     }
 
+    public function test_deleting_an_application_twice_is_ok(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->filing($staff, $this->provider($staff));
+
+        $this->actingAs($staff)
+            ->deleteJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk();
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/delete')
+            ->assertOk();
+
+        $this->assertNull(CipApplication::query()->find($application->id));
+        $this->assertNotNull(CipApplication::withTrashed()->find($application->id));
+    }
+
+    public function test_the_table_posts_delete_and_removes_the_filing(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->filing($staff, $this->provider($staff));
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/delete')
+            ->assertOk();
+
+        $this->assertNull(CipApplication::query()->find($application->id));
+        $this->assertNotNull(CipApplication::withTrashed()->find($application->id));
+    }
+
     public function test_deleting_a_draft_from_the_table_removes_it_outright(): void
     {
         Storage::fake('local');
