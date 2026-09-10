@@ -18,6 +18,7 @@
     folder: 'Folder',
     user: 'Account',
     client: 'Client',
+    cip_application: 'Application',
     signature: 'Signature',
     group: 'Group',
     calendar_event: 'Calendar',
@@ -30,6 +31,7 @@
     { value: 'folder', label: 'Folders' },
     { value: 'user', label: 'Accounts' },
     { value: 'client', label: 'Clients' },
+    { value: 'cip_application', label: 'Applications' },
     { value: 'signature', label: 'Signatures' },
     { value: 'group', label: 'Groups' },
     { value: 'calendar_event', label: 'Calendar' },
@@ -120,7 +122,7 @@
     var px = size || 24;
     var iconPx = px >= 40 ? 40 : 16;
 
-    if (kind === 'folder') {
+    if (kind === 'folder' || kind === 'cip_application') {
       var html = window.TMAFolderIcons
         ? window.TMAFolderIcons.html('FolderFilled', meta.colour, meta.iconName, px)
         : '<img src="' + ICON + 'Folder.svg" alt="" width="' + px + '" height="' + px + '">';

@@ -1264,6 +1264,43 @@ class CipApplicationController extends Controller
      */
     public function destroy(Request $request, string $uuid): JsonResponse
     {
+        $application = $this->removalTarget($request, $uuid);
+
+        if ($application->trashed()) {
+            return response()->json(['status' => 'ok']);
+        }
+
+        Removal::delete($application, $request->user());
+
+        return response()->json(['status' => 'ok']);
+    }
+
+    /** Put a numbered file back on the caseload from the recycle bin. */
+    public function restore(Request $request, string $uuid): JsonResponse
+    {
+        $application = $this->removalTarget($request, $uuid);
+
+        if ($application->trashed()) {
+            Removal::restore($application, $request->user());
+        }
+
+        return response()->json(['status' => 'ok']);
+    }
+
+    /** Erase a numbered file that is already in the recycle bin. */
+    public function purge(Request $request, string $uuid): JsonResponse
+    {
+        $application = $this->removalTarget($request, $uuid);
+        abort_unless($application->trashed(), 404);
+
+        Removal::purge($application, $request->user());
+
+        return response()->json(['status' => 'ok']);
+    }
+
+    /** An application this reader may take off the caseload, including trashed. */
+    private function removalTarget(Request $request, string $uuid): CipApplication
+    {
         $user = $request->user();
         abort_unless(CipAccess::canCreate($user), 404);
 
@@ -1278,13 +1315,7 @@ class CipApplicationController extends Controller
         abort_unless($inScope || $ownDraft, 404);
         abort_unless(CipAccess::canDelete($user, $application), 404);
 
-        if ($application->trashed()) {
-            return response()->json(['status' => 'ok']);
-        }
-
-        Removal::delete($application, $user);
-
-        return response()->json(['status' => 'ok']);
+        return $application;
     }
 
     /** The application record shape, for controllers that update and re-read. */

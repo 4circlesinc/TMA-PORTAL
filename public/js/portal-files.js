@@ -217,7 +217,7 @@
   }
 
   function fileIconSrc(item) {
-    if (item.type === 'folder') {
+    if (item.type === 'folder' || item.type === 'application') {
       var base = folderLooksEmpty(item) ? 'FolderEmpty' : 'FolderFilled';
       return window.TMAFolderColours ? window.TMAFolderColours.iconSrc(base, item.colour) : 'images/icons/phosphor/' + base + '.svg';
     }
@@ -238,7 +238,7 @@
   // A real preview when there is one - the server's image thumbnail, or page
   // one of a PDF painted by TMAFileThumbs - else the type icon.
   function thumbOrIcon(item, size) {
-    if (item.type === 'folder') return folderIconHtml(item, size);
+    if (item.type === 'folder' || item.type === 'application') return folderIconHtml(item, size);
     var icon = fileIconSrc(item);
     if (window.TMAFileThumbs) {
       return window.TMAFileThumbs.imgHtml(item, {
@@ -283,7 +283,7 @@
     try { document.dispatchEvent(new CustomEvent('tma:folders-changed')); } catch (e) {}
   }
 
-  function items() { return state.data.folders.concat(state.data.files); }
+  function items() { return (state.data.folders || []).concat(state.data.applications || []).concat(state.data.files || []); }
 
   /*
    * Rows belonging to some OTHER list that is driving these actions.
@@ -472,7 +472,7 @@
       painted = true;
       state.loading = false;
       state.error = null;
-      state.data = { folders: res.folders || [], files: res.files || [] };
+      state.data = { folders: res.folders || [], files: res.files || [], applications: res.applications || [] };
       state.total = typeof res.total === 'number'
         ? res.total
         : (res.folders || []).length + (res.files || []).length;
@@ -652,6 +652,7 @@
       state.data = {
         folders: pageFolders,
         files: shownFiles.slice(fileOffset, fileOffset + (state.pageSize - pageFolders.length)),
+        applications: [],
       };
       state.owners = [];
       state.breadcrumb = crumb;
@@ -732,8 +733,9 @@
      a network refetch of the listing. */
 
   function removeItem(id) {
-    ['folders', 'files'].forEach(function (key) {
+    ['folders', 'files', 'applications'].forEach(function (key) {
       var list = state.data[key];
+      if (!list) return;
       for (var i = list.length - 1; i >= 0; i--) {
         if (list[i].id === id) list.splice(i, 1);
       }
@@ -1224,6 +1226,9 @@
         if (listingParams().toString() !== expected) return;
         state.data.folders = state.data.folders.concat(res.folders || []);
         state.data.files = state.data.files.concat(res.files || []);
+        if (res.applications && res.applications.length) {
+          state.data.applications = (state.data.applications || []).concat(res.applications);
+        }
         state.hasMore = !!res.hasMore;
         if (typeof res.total === 'number') state.total = res.total;
         render();
@@ -1373,7 +1378,8 @@
       if (busy) rowClasses.push('is-busy');
       var cls = rowClasses.length ? ' class="' + rowClasses.join(' ') + '"' : '';
       var star = showStar ? '<td class="tma-portal-cell--tight">' + starBtn(it) + '</td>' : '';
-      var typeLabel = it.type === 'folder' ? 'Folder' : (it.category ? cap(it.category) : 'File');
+      var typeLabel = it.type === 'folder' ? 'Folder'
+        : (it.type === 'application' ? 'Application' : (it.category ? cap(it.category) : 'File'));
       var size = it.type === 'folder' ? (it.sizeLabel || '-') : it.sizeLabel;
       var owner = ownerCell(it);
       var when = isRecycle() ? fmtDate(it.deletedAt) : fmtDate(it.modifiedAt || it.createdAt);
@@ -6581,8 +6587,13 @@
     if (isBusy(item.id)) return;
     setBusy(item.id, true);
     rerender();
-    var url = (item.type === 'folder' ? '/folders/' : '/files/') + item.id + '/restore';
-    net().fetchJSON(net().url(url), { method: 'POST' })
+    var url = item.type === 'application'
+      ? (window.__TMA_SITE_ROOT || '') + '/portal/cip/applications/' + encodeURIComponent(item.id) + '/restore'
+      : ((item.type === 'folder' ? '/folders/' : '/files/') + item.id + '/restore');
+    var req = item.type === 'application'
+      ? net().fetchJSON(url, { method: 'POST' })
+      : net().fetchJSON(net().url(url), { method: 'POST' });
+    req
       .then(function () {
         setBusy(item.id, false);
         removeItem(item.id);
@@ -6602,8 +6613,13 @@
       onConfirm: function () {
         setBusy(item.id, true);
         rerender();
-        var url = (item.type === 'folder' ? '/folders/' : '/files/') + item.id + '/force';
-        net().fetchJSON(net().url(url), { method: 'DELETE' })
+        var url = item.type === 'application'
+          ? (window.__TMA_SITE_ROOT || '') + '/portal/cip/applications/' + encodeURIComponent(item.id) + '/force'
+          : ((item.type === 'folder' ? '/folders/' : '/files/') + item.id + '/force');
+        var req = item.type === 'application'
+          ? net().fetchJSON(url, { method: 'DELETE' })
+          : net().fetchJSON(net().url(url), { method: 'DELETE' });
+        req
           .then(function () {
             setBusy(item.id, false);
             removeItem(item.id);
@@ -6623,7 +6639,7 @@
       confirmLabel: 'Empty bin', danger: true,
       onConfirm: function () {
         net().fetchJSON(net().url('/recycle-bin/empty'), { method: 'POST' })
-          .then(function (r) { state.data = { folders: [], files: [] }; state.selected = {}; ui().toast('Recycle bin emptied'); rerender(); })
+          .then(function (r) { state.data = { folders: [], files: [], applications: [] }; state.selected = {}; ui().toast('Recycle bin emptied'); rerender(); })
           .catch(function (err) { ui().toast(err.message || 'Could not empty bin'); });
       },
     });

@@ -432,6 +432,10 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // click and a "Request failed" toast.
         Route::post('/applications/{uuid}/delete', [CipApplicationController::class, 'destroy'])
             ->name('applications.destroy.post');
+        Route::post('/applications/{uuid}/restore', [CipApplicationController::class, 'restore'])
+            ->name('applications.restore');
+        Route::delete('/applications/{uuid}/force', [CipApplicationController::class, 'purge'])
+            ->name('applications.purge');
         Route::get('/applications/{uuid}/messages', [CipThreadController::class, 'index'])
             ->name('applications.messages.index');
         Route::post('/applications/{uuid}/messages', [CipThreadController::class, 'store'])

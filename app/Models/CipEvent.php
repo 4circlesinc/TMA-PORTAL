@@ -173,6 +173,11 @@ class CipEvent extends Model
      */
     public const ACTION_DELETED = 'deleted';
 
+    /**
+     * A numbered file came back from the recycle bin onto the caseload.
+     */
+    public const ACTION_RESTORED = 'restored';
+
     protected function casts(): array
     {
         return [

@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\CalendarEvent;
+use App\Models\CipApplication;
 use App\Models\Client;
 use App\Models\FileItem;
 use App\Models\Folder;
@@ -10,6 +11,7 @@ use App\Models\Group;
 use App\Models\MessageAttachment;
 use App\Models\SignatureRequest;
 use App\Models\User;
+use App\Support\Cip\Removal;
 use App\Support\Clients\ClientDirectory;
 use App\Support\Companies\CompanyMembers;
 use App\Support\Files\FileType;
@@ -37,6 +39,7 @@ class AdminRecycleBin
         'folder',
         'user',
         'client',
+        'cip_application',
         'signature',
         'group',
         'calendar_event',
@@ -63,6 +66,9 @@ class AdminRecycleBin
         }
         if (! $kind || $kind === 'client') {
             $chunks = $chunks->merge(self::clients($search));
+        }
+        if (! $kind || $kind === 'cip_application') {
+            $chunks = $chunks->merge(self::cipApplications($search));
         }
         if (! $kind || $kind === 'signature') {
             $chunks = $chunks->merge(self::signatures($search));
@@ -94,6 +100,7 @@ class AdminRecycleBin
             'folder' => self::restoreFolder($id),
             'user' => self::restoreUser($id),
             'client' => self::restoreClient($id),
+            'cip_application' => self::restoreCipApplication($id),
             'signature' => self::restoreSignature($id),
             'group' => self::restoreGroup($id),
             'calendar_event' => self::restoreCalendarEvent($id),
@@ -109,6 +116,7 @@ class AdminRecycleBin
             'folder' => self::purgeFolder($id),
             'user' => self::purgeUser($id),
             'client' => self::purgeClient($id),
+            'cip_application' => self::purgeCipApplication($id),
             'signature' => self::purgeSignature($id),
             'group' => self::purgeGroup($id),
             'calendar_event' => self::purgeCalendarEvent($id),
@@ -117,7 +125,7 @@ class AdminRecycleBin
         };
     }
 
-    /** @return array{files: int, folders: int, users: int, clients: int, signatures: int, groups: int, calendar_events: int, message_attachments: int} */
+    /** @return array{files: int, folders: int, users: int, clients: int, cip_applications: int, signatures: int, groups: int, calendar_events: int, message_attachments: int} */
     public static function empty(?array $kinds = null): array
     {
         $kinds = $kinds ? array_values(array_intersect(self::KINDS, $kinds)) : self::KINDS;
@@ -126,6 +134,7 @@ class AdminRecycleBin
             'folders' => 0,
             'users' => 0,
             'clients' => 0,
+            'cip_applications' => 0,
             'signatures' => 0,
             'groups' => 0,
             'calendar_events' => 0,
@@ -137,6 +146,13 @@ class AdminRecycleBin
             $files->each(fn (FileItem $f) => Vault::delete($f));
             $counts['files'] = $files->count();
             FileItem::onlyTrashed()->whereIn('id', $files->pluck('id'))->forceDelete();
+        }
+        if (in_array('cip_application', $kinds, true)) {
+            $actor = auth()->user();
+            foreach (CipApplication::onlyTrashed()->limit(500)->get() as $application) {
+                Removal::purge($application, $actor instanceof User ? $actor : ($application->creator ?: $actor));
+                $counts['cip_applications']++;
+            }
         }
         if (in_array('folder', $kinds, true)) {
             $trashed = self::trashedFolderIds();
@@ -229,10 +245,12 @@ class AdminRecycleBin
     private static function folders(?string $search): Collection
     {
         $trashedFolders = self::trashedFolderIds();
+        $hidden = Removal::recycledFolderIds();
 
         return Folder::onlyTrashed()
             ->with(['owner', 'deletedBy'])
             ->where(fn ($q) => $q->whereNull('parent_id')->orWhereNotIn('parent_id', $trashedFolders ?: [0]))
+            ->when($hidden !== [], fn ($q) => $q->whereNotIn('id', $hidden))
             ->when($search !== '', function ($q) use ($search) {
                 $like = '%'.mb_strtolower($search).'%';
                 $q->whereRaw('LOWER(name) like ?', [$like]);
@@ -330,6 +348,36 @@ class AdminRecycleBin
                     ],
                 );
             });
+    }
+
+    /** @return Collection<int, array<string, mixed>> */
+    private static function cipApplications(?string $search): Collection
+    {
+        return CipApplication::onlyTrashed()
+            ->with(['people' => fn ($q) => $q->withTrashed(), 'client'])
+            ->when($search !== '', function ($q) use ($search) {
+                $like = '%'.mb_strtolower($search).'%';
+                $q->where(function ($w) use ($like) {
+                    $w->whereRaw('LOWER(coalesce(internal_number, \'\')) like ?', [$like])
+                        ->orWhereRaw('LOWER(coalesce(cip_number, \'\')) like ?', [$like])
+                        ->orWhereHas('client', fn ($c) => $c->whereRaw('LOWER(coalesce(name, \'\')) like ?', [$like]));
+                });
+            })
+            ->orderByDesc('deleted_at')
+            ->limit(self::PER_KIND)
+            ->get()
+            ->map(fn (CipApplication $app) => self::row(
+                kind: 'cip_application',
+                id: $app->uuid,
+                name: Removal::recycleLabel($app),
+                subtitle: 'Application',
+                deletedAt: $app->deleted_at,
+                deletedBy: null,
+                meta: [
+                    'icon' => 'Files',
+                    'number' => $app->displayNumber(),
+                ],
+            ));
     }
 
     /** @return Collection<int, array<string, mixed>> */
@@ -544,6 +592,21 @@ class AdminRecycleBin
     private static function purgeClient(string $uid): void
     {
         Client::onlyTrashed()->where('uid', $uid)->firstOrFail()->forceDelete();
+    }
+
+    private static function restoreCipApplication(string $uuid): void
+    {
+        $application = CipApplication::onlyTrashed()->where('uuid', $uuid)->firstOrFail();
+        $actor = auth()->user();
+        abort_unless($actor instanceof User, 403);
+        Removal::restore($application, $actor);
+    }
+
+    private static function purgeCipApplication(string $uuid): void
+    {
+        $application = CipApplication::onlyTrashed()->where('uuid', $uuid)->firstOrFail();
+        $actor = auth()->user();
+        Removal::purge($application, $actor instanceof User ? $actor : null);
     }
 
     private static function restoreSignature(string $uuid): void

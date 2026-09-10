@@ -12410,7 +12410,11 @@
     }
     if (APP_TABLE.deleting[id]) return;
     var label = (app && (app.number || app.applicantName)) || 'this application';
-    if (!window.confirm('Delete ' + label + '? The client record is kept.')) return;
+    var isDraft = app && app.status === 'draft';
+    var confirmMsg = isDraft
+      ? 'Delete ' + label + '? A draft is discarded and does not go to the recycle bin. The client record is kept.'
+      : 'Delete ' + label + '? It goes to the recycle bin. The client record is kept.';
+    if (!window.confirm(confirmMsg)) return;
     APP_TABLE.deleting[id] = true;
 
     APP_TABLE.rows = (APP_TABLE.rows || []).filter(function (row) { return row.id !== id; });

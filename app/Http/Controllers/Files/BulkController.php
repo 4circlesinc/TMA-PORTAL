@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers\Files;
 
+use App\Models\CipApplication;
+use App\Models\Favorite;
 use App\Models\FileItem;
 use App\Models\Folder;
-use App\Models\Favorite;
+use App\Support\Cip\ApplicationScope;
+use App\Support\Cip\CipAccess;
+use App\Support\Cip\Removal;
 use App\Support\Files\Activity;
 use App\Support\Files\FileAccess;
 use App\Support\Files\FileValidationException;
@@ -30,7 +34,7 @@ class BulkController extends BaseFilesController
         $request->validate([
             'action' => ['required', 'in:delete,restore,forceDelete,move,copy,favorite,unfavorite,review'],
             'items' => ['required', 'array', 'min:1'],
-            'items.*.type' => ['required', 'in:file,folder'],
+            'items.*.type' => ['required', 'in:file,folder,application'],
             'items.*.id' => ['required', 'string'],
             'target' => ['nullable', 'string'],
             'status' => ['required_if:action,review', 'nullable', Rule::in(ReviewStatus::ALL)],
@@ -54,6 +58,11 @@ class BulkController extends BaseFilesController
 
         foreach ($request->input('items') as $ref) {
             try {
+                if (($ref['type'] ?? '') === 'application') {
+                    $this->applyApplication($action, $ref['id'], $user);
+                    $done++;
+                    continue;
+                }
                 $trashed = in_array($action, ['restore', 'forceDelete'], true);
                 $item = $ref['type'] === 'file'
                     ? $this->findFile($ref['id'], $trashed)
@@ -96,6 +105,27 @@ class BulkController extends BaseFilesController
         }
 
         return response()->json(['ok' => empty($errors), 'processed' => $done, 'errors' => $errors, 'results' => $results]);
+    }
+
+    private function applyApplication(string $action, string $uuid, $user): void
+    {
+        abort_unless(in_array($action, ['restore', 'forceDelete'], true), 422, 'Applications in the recycle bin can only be restored or deleted forever.');
+
+        $application = CipApplication::onlyTrashed()->where('uuid', $uuid)->firstOrFail();
+        abort_unless(
+            ApplicationScope::query($user, CipApplication::withTrashed())->whereKey($application->id)->exists(),
+            403,
+            'Permission denied.',
+        );
+        abort_unless(CipAccess::canDelete($user, $application), 403, 'Permission denied.');
+
+        if ($action === 'restore') {
+            Removal::restore($application, $user);
+
+            return;
+        }
+
+        Removal::purge($application, $user);
     }
 
     private function apply(string $action, FileItem|Folder $item, $user, ?Folder $target, Request $request): FileItem|Folder|null

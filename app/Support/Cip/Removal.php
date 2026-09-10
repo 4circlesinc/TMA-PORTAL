@@ -5,9 +5,12 @@ namespace App\Support\Cip;
 use App\Models\CipApplication;
 use App\Models\CipDocument;
 use App\Models\CipEvent;
+use App\Models\CipPerson;
 use App\Models\Folder;
 use App\Models\User;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Cip\ApplicationScope;
+use App\Support\Cip\CipAccess;
 use App\Support\Files\FolderTree;
 use App\Support\Realtime\Live;
 use Illuminate\Support\Facades\DB;
@@ -110,6 +113,148 @@ class Removal
     }
 
     /**
+     * Put a numbered file back on the caseload, with its people, checklist
+     * and paper. Drafts never land here: they are discarded outright.
+     */
+    public static function restore(CipApplication $application, User $actor): void
+    {
+        if (! $application->trashed()) {
+            return;
+        }
+
+        $providerIds = Contacts::providerUserIds($application);
+        $number = $application->displayNumber();
+
+        DB::transaction(function () use ($application, $actor) {
+            $application->restore();
+            $application->people()->onlyTrashed()->restore();
+            CipDocument::onlyTrashed()->where('application_id', $application->id)->restore();
+
+            foreach (self::trashedOwnedFolders($application) as $folder) {
+                FolderTree::restoreTree($folder);
+            }
+
+            Engine::record($application, CipEvent::ACTION_RESTORED, $actor, [
+                'internalNumber' => $application->internal_number,
+                'status' => $application->status,
+            ]);
+        });
+
+        ActivityLogger::log([
+            'actor' => $actor,
+            'type' => 'cip.application_restored',
+            'module' => 'cip',
+            'description' => $actor->name.' restored application '.$number,
+            'subject' => $application,
+            'client' => $application->client,
+        ]);
+
+        Live::staffAnd(Live::CIP, $providerIds);
+    }
+
+    /** Erase a numbered file that is already in the recycle bin. */
+    public static function purge(CipApplication $application, ?User $actor = null): void
+    {
+        $actor ??= $application->creator;
+
+        if (! $application->trashed()) {
+            if ($actor === null) {
+                return;
+            }
+            self::delete($application, $actor);
+
+            $application = CipApplication::withTrashed()->find($application->id);
+            if ($application === null) {
+                return;
+            }
+        }
+
+        $providerIds = Contacts::providerUserIds($application);
+
+        foreach (self::trashedOwnedFolders($application) as $folder) {
+            FolderTree::purgeTree($folder);
+        }
+
+        CipDocument::withTrashed()->where('application_id', $application->id)->forceDelete();
+        $application->people()->withTrashed()->forceDelete();
+        $application->forceDelete();
+
+        Live::staffAnd(Live::CIP, $providerIds);
+    }
+
+    /**
+     * Numbered files currently in the bin, as File Library rows.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function recycleBinRows(?User $user): array
+    {
+        if ($user === null) {
+            return [];
+        }
+
+        return ApplicationScope::query($user, CipApplication::onlyTrashed())
+            ->with(['people' => fn ($q) => $q->withTrashed(), 'client'])
+            ->orderByDesc('deleted_at')
+            ->limit(150)
+            ->get()
+            ->filter(fn (CipApplication $app) => CipAccess::canDelete($user, $app))
+            ->map(fn (CipApplication $app) => self::fileLibraryRow($app))
+            ->values()
+            ->all();
+    }
+
+    /** The label Recycle Bin uses: the file number, then the applicant. */
+    public static function recycleLabel(CipApplication $application): string
+    {
+        $application->loadMissing(['people' => fn ($q) => $q->withTrashed(), 'client']);
+        $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $applicant = CipPerson::upperName(trim(($main?->first_name ?? '').' '.($main?->last_name ?? '')))
+            ?: CipPerson::upperName((string) ($application->client?->name ?? ''));
+        $number = $application->displayNumber();
+
+        if ($number !== '' && $applicant !== '') {
+            return $number.' · '.$applicant;
+        }
+
+        return $number !== '' ? $number : ($applicant !== '' ? $applicant : 'Application');
+    }
+
+    /**
+     * Paper folders already in the bin because their application was deleted.
+     *
+     * Recycle Bin lists the application itself, not "Main Applicant" and
+     * "Additional Documents" beside it, so those folders are kept off the
+     * folder listing. Restore of the application puts them back.
+     *
+     * @return list<int>
+     */
+    public static function recycledFolderIds(): array
+    {
+        $personFolders = CipPerson::onlyTrashed()->whereNotNull('folder_id')->pluck('folder_id');
+        $postApproval = CipApplication::onlyTrashed()
+            ->whereNotNull('post_approval_folder_id')
+            ->pluck('post_approval_folder_id');
+        $appFolderIds = CipApplication::onlyTrashed()
+            ->whereNotNull('folder_id')
+            ->pluck('folder_id');
+        $drawers = $appFolderIds->isEmpty()
+            ? collect()
+            : Folder::onlyTrashed()
+                ->whereIn('parent_id', $appFolderIds)
+                ->whereIn('name', [Tree::ADDITIONAL, Tree::APPEAL])
+                ->pluck('id');
+
+        return $personFolders
+            ->merge($postApproval)
+            ->merge($drawers)
+            ->unique()
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    /**
      * Paper that belongs to this application, not the client's own folder.
      *
      * Person folders and the post-approval drawer are this file's. Additional
@@ -162,6 +307,58 @@ class Removal
         foreach (Folder::query()->whereIn('id', $ids)->get() as $folder) {
             FolderTree::softDeleteTree($folder, $actor->id);
         }
+    }
+
+    /**
+     * Folders this deleted filing took with it, still sitting in the bin.
+     *
+     * @return list<Folder>
+     */
+    private static function trashedOwnedFolders(CipApplication $application): array
+    {
+        $application->loadMissing(['people' => fn ($q) => $q->withTrashed()]);
+
+        $ids = $application->people->pluck('folder_id')->all();
+        $ids[] = $application->post_approval_folder_id;
+
+        if ($application->folder_id) {
+            $ids = array_merge($ids, Folder::onlyTrashed()
+                ->where('parent_id', $application->folder_id)
+                ->whereIn('name', [Tree::ADDITIONAL, Tree::APPEAL])
+                ->pluck('id')
+                ->all());
+        }
+
+        $ids = array_values(array_unique(array_filter($ids)));
+        if ($ids === []) {
+            return [];
+        }
+
+        return Folder::onlyTrashed()->whereIn('id', $ids)->get()->all();
+    }
+
+    /** @return array<string, mixed> */
+    private static function fileLibraryRow(CipApplication $application): array
+    {
+        return [
+            'id' => $application->uuid,
+            'type' => 'application',
+            'name' => self::recycleLabel($application),
+            'category' => 'application',
+            'deletedAt' => optional($application->deleted_at)->toIso8601String(),
+            'modifiedAt' => optional($application->deleted_at)->toIso8601String(),
+            'colour' => null,
+            'iconName' => null,
+            'fileCount' => null,
+            'folderCount' => null,
+            'size' => null,
+            'sizeLabel' => null,
+            'owner' => null,
+            'people' => [],
+            'assignedTo' => [],
+            'permissions' => ['delete' => true],
+            'favorite' => false,
+        ];
     }
 
     /** A folder this application owns, rather than the client's home. */

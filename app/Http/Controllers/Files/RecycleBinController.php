@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers\Files;
 
+use App\Models\CipApplication;
 use App\Models\FileItem;
 use App\Models\Folder;
+use App\Support\Cip\ApplicationScope;
+use App\Support\Cip\CipAccess;
+use App\Support\Cip\Removal;
 use App\Support\Files\Activity;
 use App\Support\Files\FileAccess;
 use App\Support\Files\Vault;
@@ -29,6 +33,12 @@ class RecycleBinController extends BaseFilesController
         $folderCount = Folder::onlyTrashed()
             ->when(! $isAdmin, fn ($q) => $q->where('owner_id', $user->id))
             ->count();
+
+        $applications = ApplicationScope::query($user, CipApplication::onlyTrashed())->get()
+            ->filter(fn (CipApplication $app) => CipAccess::canDelete($user, $app));
+        foreach ($applications as $application) {
+            Removal::purge($application, $user);
+        }
 
         DB::transaction(function () use ($user, $isAdmin) {
             FileItem::onlyTrashed()

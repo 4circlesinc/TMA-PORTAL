@@ -206,6 +206,60 @@ class CipApplicationDeleteTest extends TestCase
         $this->assertNotNull(CipApplication::withTrashed()->find($application->id));
     }
 
+    public function test_a_deleted_application_lands_in_the_recycle_bin(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->filing($staff, $this->provider($staff));
+        $number = $application->internal_number;
+
+        $this->actingAs($staff)
+            ->deleteJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk();
+
+        $this->actingAs($staff)
+            ->getJson('/portal/admin/recycle-bin?kind=cip_application')
+            ->assertOk()
+            ->assertJsonPath('items.0.kind', 'cip_application')
+            ->assertJsonPath('items.0.id', $application->uuid);
+
+        $recycle = $this->actingAs($staff)
+            ->getJson('/portal/files/?section=recycle')
+            ->assertOk();
+
+        $apps = $recycle->json('applications');
+        $this->assertNotEmpty($apps);
+        $this->assertSame($application->uuid, $apps[0]['id']);
+        $this->assertSame('application', $apps[0]['type']);
+        $this->assertStringContainsString($number, $apps[0]['name']);
+        $this->assertFalse(
+            collect($recycle->json('folders'))->pluck('name')->contains('Main Applicant'),
+            'The filing is the recycle row, not its person folder.',
+        );
+    }
+
+    public function test_restoring_from_the_recycle_bin_returns_the_filing(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->filing($staff, $this->provider($staff));
+        $personFolderId = $application->people->first()->folder_id;
+
+        $this->actingAs($staff)
+            ->deleteJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk();
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/restore')
+            ->assertOk();
+
+        $this->assertNotNull(CipApplication::query()->find($application->id));
+        $this->assertNotNull(Folder::query()->find($personFolderId));
+
+        $this->actingAs($staff)
+            ->getJson('/portal/cip/applications')
+            ->assertOk()
+            ->assertJsonCount(1, 'applications');
+    }
+
     public function test_deleting_a_draft_from_the_table_removes_it_outright(): void
     {
         Storage::fake('local');

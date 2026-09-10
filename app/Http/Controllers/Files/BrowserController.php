@@ -8,6 +8,7 @@ use App\Models\Share;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Package;
+use App\Support\Cip\Removal;
 use App\Support\Files\FileAccess;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Files\SyncScope;
@@ -165,6 +166,14 @@ class BrowserController extends BaseFilesController
         $withStats = $section !== 'recycle' && ! $lean;
         $presenter->prime($files->all(), $folders->all(), $withStats);
 
+        $applications = [];
+        if ($section === 'recycle' && $current === null) {
+            $applications = Removal::recycleBinRows($user);
+            if ($page > 1) {
+                $applications = [];
+            }
+        }
+
         return response()->json([
             'section' => $section,
             'folder' => $current ? [
@@ -176,11 +185,12 @@ class BrowserController extends BaseFilesController
             'breadcrumb' => $current ? $this->breadcrumb($current) : [],
             'folders' => $folders->map(fn (Folder $f) => $presenter->folder($f, $withStats))->values(),
             'files' => $files->map(fn (FileItem $f) => $presenter->file($f))->values(),
+            'applications' => $applications,
             'page' => $page,
             'perPage' => $perPage,
-            'total' => $total,
+            'total' => $total + count($applications),
             'hasMore' => $hasMore,
-            'counts' => ['folders' => $folderTotal, 'files' => $fileTotal],
+            'counts' => ['folders' => $folderTotal, 'files' => $fileTotal, 'applications' => count($applications)],
             'owners' => $owners,
         ]);
     }
@@ -523,10 +533,13 @@ class BrowserController extends BaseFilesController
     {
         $trashed = $this->trashedFolderIds();
 
+        $hidden = Removal::recycledFolderIds();
+
         return Folder::onlyTrashed()
             ->when(! FileAccess::isAdmin($user), fn ($q) => $q->where('owner_id', $user->id))
             // Only the top of a deleted subtree, so contents aren't listed twice.
-            ->where(fn ($q) => $q->whereNull('parent_id')->orWhereNotIn('parent_id', $trashed));
+            ->where(fn ($q) => $q->whereNull('parent_id')->orWhereNotIn('parent_id', $trashed))
+            ->when($hidden !== [], fn ($q) => $q->whereNotIn('id', $hidden));
     }
 
     private function trashedTopFiles(User $user): Builder
