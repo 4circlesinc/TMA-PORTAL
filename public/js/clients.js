@@ -5042,6 +5042,18 @@
    * they have a portal login.
    */
   function renderMessageChooser(c, state) {
+    /*
+     * The provider side has one destination on a file — the application's own
+     * provider lane — so there is nothing to choose between. They get a single
+     * item that opens the Messages tab, rather than a chooser built from the
+     * staff-only options endpoint they are not allowed to read.
+     */
+    if (isExternalCipUser()) {
+      return '<button type="button" class="tma-dash__menu-item" role="menuitem" data-clients-message-file>' +
+        '<span class="tma-dash__clients-message-choice-label">Message about ' +
+        esc(c.name || 'this application') + '</span></button>';
+    }
+
     var opts = (state && state.conversationOptions) || null;
     // A retry after a failed load keeps the last (failed) options around, so
     // ask whether a fetch is in flight rather than only whether we have none:
@@ -9442,6 +9454,18 @@
       }).join('') + '</div>';
     }
 
+    /*
+     * Conversations and call recordings are the staff view of this file: both
+     * come from the endpoint the provider side may not read, so for them the
+     * blocks could only ever sit there empty. Their thread is the whole panel.
+     */
+    if (isExternalCipUser()) {
+      return (
+        '<div class="tma-dash__clients-profile-panel" data-clients-panel="messages" role="tabpanel"' +
+        (hidden ? ' hidden' : '') + '>' + cipThread + '</div>'
+      );
+    }
+
     return (
       '<div class="tma-dash__clients-profile-panel" data-clients-panel="messages" role="tabpanel"' +
       (hidden ? ' hidden' : '') + '>' +
@@ -13491,6 +13515,19 @@
       });
     }
 
+    /* The provider side's one destination: this file's own thread. */
+    unwiredAllClientsChrome(root, '[data-clients-message-file]').forEach(function (item) {
+      item.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeClientMessageMenu(root);
+        state.profileTab = 'messages';
+        ensureCipThreadLoaded(state, render);
+        if (usesPagedClientsFlow(state)) render();
+        else render({ detailOnly: true });
+      });
+    });
+
     unwiredAllClientsChrome(root, '[data-clients-message-with]').forEach(function (item) {
       item.addEventListener('click', function (e) {
         e.preventDefault();
@@ -14522,6 +14559,15 @@
 
   function ensureConversationsLoaded(state, render, opts) {
     if (!state.selectedId) return;
+    /*
+     * The hub's conversations endpoint is staff-only (`clients.view`), so for
+     * a service-provider contact or a private client it can only ever answer
+     * 403 — which the catch below turned into "Could not load messaging
+     * options." on a button they were being shown regardless. Their thread on
+     * this file is the CIP one, loaded separately; don't ask for the staff
+     * view of it at all.
+     */
+    if (isExternalCipUser()) return;
     if (state.conversationsLoadedFor === state.selectedId) return;
     state.conversationsLoading = true;
     state.conversationsLoadedFor = state.selectedId;
