@@ -328,6 +328,72 @@ class CipApplicationDraftTest extends TestCase
     }
 
     /**
+     * A post-approval draft files as post-approval, not as New Applications.
+     *
+     * The wizard's Save used to drive every draft onto NEW. That status is
+     * a pre-approval label, and the engine refuses it once the phase is
+     * post-approval — a 500 on the button that was supposed to file the form.
+     */
+    public function test_filing_a_post_approval_draft_lands_in_post_approval(): void
+    {
+        Storage::fake('local');
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->actingAs($staff)->post('/portal/cip/applications/draft', $this->answers($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12680P',
+            'firstName' => 'John',
+            'lastName' => 'Smith',
+            'gender' => 'Male',
+            'dateOfBirth' => '1985-04-12',
+            'countryOfBirth' => 'Lebanon',
+            'countryOfResidence' => 'United Arab Emirates',
+            'occupation' => 'Engineer',
+            'passportNumber' => 'X1234567',
+            'investmentType' => InvestmentType::REAL_ESTATE,
+            'sponsored' => '0',
+            'passportPhoto' => $this->photo(),
+            'passportBioPage' => [UploadedFile::fake()->create('bio.pdf', 40, 'application/pdf')],
+            'birthCertificate' => [UploadedFile::fake()->create('birth.pdf', 40, 'application/pdf')],
+            'oathOfAllegiance' => [UploadedFile::fake()->create('oath.pdf', 40, 'application/pdf')],
+            'proofOfPayment' => [UploadedFile::fake()->create('payment.pdf', 40, 'application/pdf')],
+            'policeCertificate' => [UploadedFile::fake()->create('police.pdf', 40, 'application/pdf')],
+            'proofOfAddress' => [UploadedFile::fake()->create('address.pdf', 40, 'application/pdf')],
+        ]), ['Accept' => 'application/json'])->assertOk();
+
+        $draft = CipApplication::query()->first();
+        $this->assertSame(Phase::POST_APPROVAL, $draft->phase);
+        $this->assertSame(Status::DRAFT, $draft->status);
+
+        $filing = $this->filing($provider) + [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12680P',
+            'draftId' => $draft->uuid,
+        ];
+        unset(
+            $filing['passportPhoto'],
+            $filing['passportBioPage'],
+            $filing['birthCertificate'],
+            $filing['policeCertificate'],
+            $filing['proofOfAddress'],
+        );
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications', $filing, ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        $filed = $draft->fresh();
+        $this->assertSame(Status::POST_APPROVAL, $filed->status);
+        $this->assertSame(Phase::POST_APPROVAL, $filed->phase);
+        $this->assertSame('10T1G12680P', $filed->cip_number);
+        $this->assertNotNull($filed->post_approval_at);
+        $main = $filed->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $this->assertNotNull($main->photo_path);
+    }
+
+    /**
      * Throwing a draft away takes its folder to the recycle bin.
      *
      * The application is an unfiled form and nobody refers to it, so it goes

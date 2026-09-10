@@ -218,14 +218,18 @@ class CipApplicationController extends Controller
 
         /*
          * The draft is completed rather than duplicated: the full rules have
-         * just passed, Intake::update writes the answers, the uploads and the
-         * folders, and the submit edge moves the row from DRAFT to NEW. A
-         * second application would leave this one behind as an orphan wearing
-         * the same applicant's name.
+         * just passed, Intake::fileDraft writes the answers and moves the
+         * row out of Draft the same way a first-sitting filing lands — New
+         * Applications, or Post-Approval when that is the lane. Driving
+         * every draft onto NEW was a 500 for a post-approval form: that
+         * status is not one the lane may wear.
          */
         if ($draft) {
-            $application = Intake::update($draft, $user, $data);
-            $application = Engine::apply($application, Status::NEW, $user, []);
+            try {
+                $application = Intake::fileDraft($draft, $user, $data);
+            } catch (\InvalidArgumentException $e) {
+                abort(422, $e->getMessage());
+            }
 
             Live::staff(Live::CIP);
 

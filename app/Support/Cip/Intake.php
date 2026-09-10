@@ -859,6 +859,88 @@ class Intake
     }
 
     /**
+     * File a draft: the same landing {@see create} would have given a form
+     * typed in one sitting.
+     *
+     * The answers and scans are already on the row. What remains is the
+     * status change. Pre-approval becomes New Applications. Post-approval
+     * cannot: NEW is a pre-approval label, and driving it from a draft
+     * whose phase is already post-approval threw rather than filing.
+     *
+     * @param  array<string, mixed>  $data  already validated by self::rules()
+     */
+    public static function fileDraft(CipApplication $application, User $actor, array $data): CipApplication
+    {
+        if ($application->status !== Status::DRAFT) {
+            throw new \RuntimeException('This application has been filed and is no longer a draft.');
+        }
+
+        $application = self::update($application, $actor, $data);
+
+        $phase = $application->phase ?? Phase::PRE_APPROVAL;
+        if (! empty($data['phase']) && Phase::isValid($data['phase'])) {
+            $phase = $data['phase'];
+        }
+
+        if ($phase === Phase::POST_APPROVAL) {
+            return self::filePostApprovalDraft($application, $actor, $data);
+        }
+
+        /*
+         * New Applications is a lifecycle label. Officers and administrators
+         * drive it through the engine; a service provider who may file but
+         * may not pick statuses still has to land there, which is the same
+         * place {@see create} puts a first-sitting filing.
+         */
+        if (Engine::canTransition($application, Status::NEW)
+            && Engine::allows($actor, $application, Status::NEW)) {
+            $application = Engine::apply($application, Status::NEW, $actor, []);
+        } else {
+            $from = $application->status;
+            $application->forceFill(['status' => Status::NEW])->save();
+            Engine::record($application, CipEvent::ACTION_STATUS_CHANGED, $actor, [], $from, Status::NEW);
+            Notices::announce($application, Status::NEW, $actor);
+        }
+
+        if (Assignments::mayHold($actor)
+            && in_array($actor->account_type, Role::OFFICERS, true)) {
+            Assignments::assign($application, $actor, $actor,
+                CipAccess::REVIEWING_OFFICER, systemStatusMove: true);
+            $application = $application->fresh();
+        }
+
+        return $application;
+    }
+
+    /**
+     * The post-approval half of {@see create}, for a row that already exists.
+     *
+     * The Unit's number is adopted rather than corrected: a draft never
+     * held one, and {@see Submission::correct} is a compliance edit of a
+     * number already on file.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private static function filePostApprovalDraft(CipApplication $application, User $creator, array $data): CipApplication
+    {
+        $from = $application->status;
+        $application->forceFill([
+            'phase' => Phase::POST_APPROVAL,
+            'status' => Status::POST_APPROVAL,
+            'post_approval_at' => $application->post_approval_at ?? now(),
+        ])->save();
+
+        Submission::adopt($application, $creator, (string) ($data['cipNumber'] ?? ''));
+        Engine::record($application, CipEvent::ACTION_STATUS_CHANGED, $creator, [], $from, Status::POST_APPROVAL);
+        Engine::record($application, CipEvent::ACTION_POST_APPROVAL_ENTERED, $creator, []);
+
+        $application = PostApproval::prepare($application->fresh(), $creator);
+        Notices::announce($application, Status::POST_APPROVAL, $creator);
+
+        return $application;
+    }
+
+    /**
      * The answers, written onto a draft row.
      *
      * Shared by both draft paths. People are synced the same way a filed
@@ -1029,6 +1111,17 @@ class Intake
          * unnumbered.
          */
         if ($given === '') {
+            return;
+        }
+
+        /*
+         * A draft has not entered the lane. The Unit's number is adopted
+         * when the form is filed ({@see fileDraft}), the same moment a
+         * first-sitting post-approval filing writes it. Correcting it here
+         * asked cip.compliance of a form that is still being typed, and a
+         * reader who may file could not Save.
+         */
+        if ($application->status === Status::DRAFT) {
             return;
         }
 
