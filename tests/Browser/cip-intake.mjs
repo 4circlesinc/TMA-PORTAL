@@ -100,6 +100,11 @@ try {
   check(await page.locator('[data-cip-field="firstName"]').count() > 0, 'the form rendered');
   check(await page.locator('[data-cip-save]').count() > 0, 'the toolbar carries Add');
 
+  step('1b', 'Date of birth can be typed, including a year like 2004');
+  // max=today makes the browser reject year digits while 2004 is still 0002.
+  check(!(await page.locator('[data-cip-field="dateOfBirth"]').getAttribute('max')),
+    'the input has no max that blocks typing the year');
+
   step(2, 'Add with nothing filled in refuses, and says how much is missing');
   await page.click('[data-cip-save]');
   await page.waitForTimeout(600);

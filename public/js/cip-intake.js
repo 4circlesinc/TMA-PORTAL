@@ -328,12 +328,34 @@
       .map(function (d) { return d.field; });
   }
 
+  function todayLocal() {
+    var d = new Date();
+    var mm = String(d.getMonth() + 1);
+    var dd = String(d.getDate());
+    if (mm.length < 2) mm = '0' + mm;
+    if (dd.length < 2) dd = '0' + dd;
+    return d.getFullYear() + '-' + mm + '-' + dd;
+  }
+
+  /* Native date inputs treat each year digit as a finished year. 0002 is
+     not a birth year; 2004 is. */
+  function dobYearSettled(value) {
+    return parseInt(String(value || '').slice(0, 4), 10) >= 1900;
+  }
+
   function missing() {
     var found = {};
 
     requiredPaths().forEach(function (path) {
-      if (String(state.draft[path] || '').trim() === '') {
+      var value = String(state.draft[path] || '').trim();
+      if (value === '') {
         found[path] = labelFor(path) + ' is required';
+        return;
+      }
+      // Same rule as Intake::rules `before:today`. Not enforced with min/max
+      // on the input — those reject year digits while 2004 is still 0002.
+      if (/dateOfBirth$/.test(path) && value >= todayLocal()) {
+        found[path] = 'A date of birth has to be in the past.';
       }
     });
 
@@ -763,7 +785,7 @@
       textField(prefix + 'firstName') +
       textField(prefix + 'lastName') +
       selectField(prefix + 'gender', genderOptions(), 'Select') +
-      textField(prefix + 'dateOfBirth', { type: 'date', max: new Date().toISOString().slice(0, 10) }) +
+      textField(prefix + 'dateOfBirth', { type: 'date' }) +
       selectField(prefix + 'countryOfBirth', countries, 'Select a country') +
       selectField(prefix + 'countryOfResidence', countries, 'Select a country') +
       textField(prefix + 'occupation') +
@@ -894,7 +916,7 @@
       '<div class="tma-portal-form-grid tma-portal-form-grid--person">' +
       textField(prefix + 'firstName') +
       textField(prefix + 'lastName') +
-      textField(prefix + 'dateOfBirth', { type: 'date', max: new Date().toISOString().slice(0, 10) }) +
+      textField(prefix + 'dateOfBirth', { type: 'date' }) +
       selectField(prefix + 'relationship', [
         { value: 'spouse', label: 'Spouse' },
         { value: 'qualified_dependent', label: 'Qualified dependent' },
@@ -1030,9 +1052,21 @@
         // free text, whether there is a sponsor at all, the dependent
         // numbering that follows a date of birth or a relationship, and the
         // documents asked only of women.
-        if (/countryOfResidence$|investmentType$|sponsored$|relationship$|dateOfBirth$|gender$/.test(path)) {
+        //
+        // Date of birth is special. The browser commits each year digit as a
+        // finished date (type 2 → 0002-09-10). Re-rendering there wipes the
+        // year buffer, so 2004 lands as 0004. Wait until the year looks like
+        // a birth year, or until they leave the field.
+        if (/countryOfResidence$|investmentType$|sponsored$|relationship$|gender$/.test(path)) {
+          render(root);
+        } else if (/dateOfBirth$/.test(path) && dobYearSettled(el.value)) {
           render(root);
         }
+      });
+      el.addEventListener('blur', function () {
+        if (!/dateOfBirth$/.test(path)) return;
+        if (!el.value || dobYearSettled(el.value)) return;
+        render(root);
       });
     });
 
