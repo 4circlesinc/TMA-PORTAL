@@ -670,16 +670,33 @@
     open = false;
   }
 
+  function consider() {
+    if (isComposePopout()) return;
+    if (enabled()) {
+      if (!host) mount();
+      if (bannerEl) bannerEl.hidden = configured;
+      return;
+    }
+    if (host) destroy();
+  }
+
   function start() {
-    if (!enabled() || isComposePopout()) return;
-    mount();
+    if (isComposePopout()) return;
+    consider();
     if (window.TMACurrentUser && window.TMACurrentUser.onChange) {
       window.TMACurrentUser.onChange(function (me) {
-        if (me && me.bespoke && me.bespoke.enabled === false) destroy();
-        else if (!host) mount();
         if (me && me.bespoke) configured = !!me.bespoke.configured;
-        if (bannerEl) bannerEl.hidden = configured;
+        consider();
       });
+    }
+    // Desktop / Android keep yesterday's shell, which inlined
+    // TMABootBespoke=false. /me and this route are the live flag.
+    if (window.TMABootBespoke !== true && window.TMABootBespoke !== 'true') {
+      api('/portal/bespoke/suggestions').then(function (data) {
+        window.TMABootBespoke = true;
+        configured = !!(data && data.configured);
+        consider();
+      }).catch(function () { /* 404 = still dark */ });
     }
   }
 

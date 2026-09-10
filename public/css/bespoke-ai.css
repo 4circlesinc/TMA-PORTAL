@@ -16,7 +16,10 @@
   position: fixed;
   right: var(--space-16);
   bottom: var(--space-16);
-  z-index: 640;
+  /* Above dashboard overlays (1200–1310) and the desktop title bar (201).
+     Below portal modals (10000). Toasts are bottom-center, so they do not
+     sit under this corner. */
+  z-index: 1400;
   font-family: var(--font-family);
   font-feature-settings: var(--font-features);
   color: var(--color-text-primary);
@@ -24,7 +27,7 @@
 }
 
 .tma-bespoke.is-open {
-  z-index: 660;
+  z-index: 1420;
 }
 
 .tma-bespoke__fab,

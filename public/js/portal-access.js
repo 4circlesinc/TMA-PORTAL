@@ -367,6 +367,28 @@
     start();
   }
 
+  /* Native apps cache the last shell. A copy taken before Bespoke AI shipped
+     has no launcher tags; this file is fetched from the network when the
+     deploy moves, so inject the assistant there. Wait for DOMContentLoaded
+     so a current shell's bottom-of-page tag is already in the document. */
+  function ensureBespoke() {
+    if (document.documentElement.classList.contains('tma-dash--compose-popout')) return;
+    if (window.TMABespoke || document.querySelector('script[src*="bespoke-ai.js"]')) return;
+    var css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'css/bespoke-ai.css?v=3';
+    (document.head || document.documentElement).appendChild(css);
+    var js = document.createElement('script');
+    js.src = 'js/bespoke-ai.js?v=6';
+    js.defer = true;
+    (document.head || document.documentElement).appendChild(js);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', ensureBespoke);
+  } else {
+    ensureBespoke();
+  }
+
   window.TMAPortalAccess = {
     can: can,
     holds: holds,
