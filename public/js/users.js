@@ -42,6 +42,7 @@
     ShieldCheck: 'images/icons/phosphor/ShieldCheck.svg',
     ShieldSlash: 'images/icons/phosphor/ShieldSlash.svg',
     Buildings: 'images/icons/phosphor/Buildings.svg',
+    UserGear: 'images/icons/phosphor/UserGear.svg',
   };
 
   /* ── real user directory (database-backed, staff-readable) ── */
@@ -928,6 +929,11 @@ if (state.filters.user) {
           html += uCtxItem('reset-2fa', 'Reset authenticator', ICONS.ShieldSlash);
         }
       }
+
+      if (state.canManage && !row._self) {
+        html += uCtxItem('', '', '', { sep: true });
+        html += uCtxItem('delete', 'Delete account', ICONS.Trash, { danger: true });
+      }
       return html;
     }
 
@@ -1063,6 +1069,17 @@ if (state.filters.user) {
           });
         });
       }
+      if (act === 'delete') confirmDeleteUser(row);
+    }
+
+    function statusMenuItem(act, label, icon, extra) {
+      extra = extra || {};
+      var attrs = ' data-ustatus-act="' + act + '"';
+      if (extra.type) attrs += ' data-ustatus-type="' + escapeHtml(extra.type) + '"';
+      return '<button type="button" class="tma-dash__menu-item' +
+        (extra.danger ? ' tma-dash__menu-item--danger' : '') + '" role="menuitem"' + attrs + '>' +
+        '<img src="' + icon + '" alt="" width="16" height="16">' +
+        '<span>' + escapeHtml(label) + '</span></button>';
     }
 
     function openStatusMenu(btn) {
@@ -1075,27 +1092,32 @@ if (state.filters.user) {
       var items = '';
       if (row._status === 'pending') {
         items = ACCOUNT_TYPES.map(function (type) {
-          return '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="approve" data-ustatus-type="' + type + '">Approve as ' + type + '</button>';
+          return statusMenuItem('approve', 'Approve as ' + type,
+            type === 'Administrator' ? ICONS.UserGear : ICONS.User, { type: type });
         }).join('') +
-          '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="approve-sp">Approve as service provider</button>';
+          statusMenuItem('approve-sp', 'Approve as service provider', ICONS.Buildings);
       } else if (row._status === 'suspended') {
-        items = '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="reactivate">Reactivate account</button>';
+        items = statusMenuItem('reactivate', 'Reactivate account', ICONS.ArrowClockwise);
       } else if (!row._self) {
-        items = '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="suspend">Suspend account</button>';
+        items = statusMenuItem('suspend', 'Suspend account', ICONS.Prohibit, { danger: true });
         if (state.canManage) {
-          items += '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="approve-sp">' +
-            (isServiceProviderContact(row) ? 'Change service provider' : 'Assign to service provider') + '</button>';
+          items += statusMenuItem('approve-sp',
+            isServiceProviderContact(row) ? 'Change service provider' : 'Assign to service provider',
+            ICONS.Buildings);
         }
       }
-      items += '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="send-reset">Email password reset link</button>' +
-        '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="generate-password">Generate temporary password</button>';
+      items += statusMenuItem('send-reset', 'Email password reset link', ICONS.EnvelopeSimple) +
+        statusMenuItem('generate-password', 'Generate temporary password', ICONS.Key);
       if (state.canManage) {
         items += row._requireTwoFactor
-          ? '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="clear-2fa">Stop requiring authenticator</button>'
-          : '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="require-2fa">Require authenticator app</button>';
+          ? statusMenuItem('clear-2fa', 'Stop requiring authenticator', ICONS.ShieldSlash)
+          : statusMenuItem('require-2fa', 'Require authenticator app', ICONS.ShieldCheck);
         if (row._twoFactor) {
-          items += '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="reset-2fa">Reset authenticator</button>';
+          items += statusMenuItem('reset-2fa', 'Reset authenticator', ICONS.ShieldSlash);
         }
+      }
+      if (state.canManage && !row._self) {
+        items += statusMenuItem('delete', 'Delete account', ICONS.Trash, { danger: true });
       }
 
       var menu = document.createElement('div');
@@ -1135,6 +1157,7 @@ if (state.filters.user) {
             });
           });
         }
+        if (kind === 'delete') confirmDeleteUser(row);
         if (kind === 'send-reset') {
           usersApi('POST', '/admin/users/' + row._id + '/send-reset').then(function (res) {
             usersToast(res.ok ? 'Reset link sent to ' + row.email : 'Could not send the link.', res.ok);
