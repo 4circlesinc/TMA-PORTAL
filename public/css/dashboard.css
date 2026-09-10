@@ -17434,8 +17434,29 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   pointer-events: none;
 }
 
+/* Full-width black veil at the top of the thread, fading out as it
+ * drops so messages scrolling under the floating bar don't collide
+ * with the name. Taller than the bar itself so the fade has room. */
+.tma-dash__messages-chat-head::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 120px;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.22) 0%,
+    rgba(0, 0, 0, 0.1) 40%,
+    rgba(0, 0, 0, 0) 100%
+  );
+}
+
 .tma-dash__messages-chat-head > * {
   pointer-events: auto;
+  position: relative;
+  z-index: 1;
 }
 
 .tma-dash__messages-chat-contact {
@@ -18257,6 +18278,10 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
     background: var(--color-bg-card);
     pointer-events: auto;
     border-bottom: 0.5px solid var(--color-overlay-8, var(--color-overlay-4));
+  }
+
+  .tma-dash--messages-mobile-reading .tma-dash__messages-chat-head::before {
+    content: none;
   }
 
   .tma-dash--messages-mobile-reading .tma-dash__messages-chat-body {
