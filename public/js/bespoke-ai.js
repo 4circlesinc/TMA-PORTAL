@@ -8,6 +8,8 @@
 (function () {
   'use strict';
 
+  if (window.TMABespoke) return;
+
   var LS_OPEN = 'tma.bespoke.open';
   var LS_CONV = 'tma.bespoke.conversationId';
   var SIDEBAR_BP = 1024;
