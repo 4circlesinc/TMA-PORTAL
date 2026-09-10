@@ -164,6 +164,15 @@ class CipEvent extends Model
 
     public const ACTION_APPEAL_SUBMITTED = 'appeal_submitted';
 
+    /**
+     * The application was taken off the caseload.
+     *
+     * Its own action rather than a missing row: a numbered file that somebody
+     * deleted is still a file the firm referred to, and the audit has to say
+     * who removed it. Drafts are removed outright and never write this.
+     */
+    public const ACTION_DELETED = 'deleted';
+
     protected function casts(): array
     {
         return [

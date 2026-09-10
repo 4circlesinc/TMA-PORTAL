@@ -34,6 +34,7 @@ use App\Support\Cip\PassportPhoto;
 use App\Support\Cip\PersonStatus;
 use App\Support\Cip\Phase;
 use App\Support\Cip\PostApproval;
+use App\Support\Cip\Removal;
 use App\Support\Cip\Requirements;
 use App\Support\Cip\Review;
 use App\Support\Cip\Stages;
@@ -943,6 +944,7 @@ class CipApplicationController extends Controller
             'availableTransitions' => $this->transitions($application, $viewer, forListing: true),
             'availableOverrides' => $this->overrides($application, $viewer, forListing: true),
             'lockedStatuses' => $this->lockedStatuses($application, $viewer, forListing: true),
+            'canDelete' => CipAccess::canDelete($viewer, $application),
             'stageStatuses' => $this->statusChoices(Engine::stageStatuses($application, $viewer)),
             'assignedTo' => $this->assignees($application),
             'familyMembers' => $this->familyMembersForRow($application, $viewer),
@@ -1197,6 +1199,33 @@ class CipApplicationController extends Controller
         return response()->json([
             'application' => $this->record($application, $request->user()),
         ]);
+    }
+
+    /**
+     * Take an application off the caseload.
+     *
+     * A draft is discarded outright, the way the wizard already does. A
+     * numbered file is soft-deleted so the audit still names it, and the
+     * client it was for is left standing — deleting an application is not
+     * deleting the person.
+     */
+    public function destroy(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless(CipAccess::canCreate($user), 404);
+
+        $application = CipApplication::query()->where('uuid', $uuid)->first();
+        abort_unless($application, 404);
+
+        $inScope = ApplicationScope::query($user)->whereKey($application->id)->exists();
+        $ownDraft = $application->status === Status::DRAFT
+            && (int) $application->created_by === (int) $user->id;
+        abort_unless($inScope || $ownDraft, 404);
+        abort_unless(CipAccess::canDelete($user, $application), 404);
+
+        Removal::delete($application, $user);
+
+        return response()->json(['status' => 'ok']);
     }
 
     /** The application record shape, for controllers that update and re-read. */
@@ -1563,6 +1592,7 @@ class CipApplicationController extends Controller
             'availableTransitions' => $this->transitions($application, $viewer),
             'availableOverrides' => $this->overrides($application, $viewer),
             'lockedStatuses' => $this->lockedStatuses($application, $viewer),
+            'canDelete' => CipAccess::canDelete($viewer, $application),
             'stageStatuses' => $this->statusChoices(Engine::stageStatuses($application, $viewer)),
             'provider' => $application->provider?->name,
             'providerId' => $application->provider?->uuid,

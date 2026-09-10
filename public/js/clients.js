@@ -10479,11 +10479,9 @@
       },
     ];
     if (kind === 'company') items.push({ act: 'add-person', label: 'Add person', icon: 'Plus' });
-    if (kind === 'application') {
-      var app = cipSourceFor(extra, clientUid);
-      if (canChangeCipStatus(app)) {
-        items.push({ act: 'status', label: 'Change status', icon: 'Flag', submenu: true });
-      }
+    var app = kind === 'application' ? cipSourceFor(extra, clientUid) : null;
+    if (kind === 'application' && canChangeCipStatus(app)) {
+      items.push({ act: 'status', label: 'Change status', icon: 'Flag', submenu: true });
     }
     // Assigning staff is `clients.assign`, the same capability the server
     // enforces, read through the access mirror rather than guessed from the
@@ -10491,7 +10489,9 @@
     // is right-clicked).
     if (canAssignClients()) items.push({ act: 'assign', label: 'Assign to', icon: 'UserPlus', submenu: true });
     items.push({ sep: true });
-    items.push({ act: 'delete', label: 'Delete', icon: 'Trash', danger: true });
+    if (kind !== 'application' || !app || app.canDelete !== false) {
+      items.push({ act: 'delete', label: 'Delete', icon: 'Trash', danger: true });
+    }
     return items;
   }
 
@@ -10572,7 +10572,7 @@
       if (act === 'assign') { openClientsAssignSub(btn, kind, id); return; }
       if (act === 'status') { openCipStatusSub(btn, kind, id, extra); return; }
       closeClientsContextMenu();
-      runClientsContextAction(act, kind, id);
+      runClientsContextAction(act, kind, id, extra);
     });
 
     // Hovering the parent opens the list; hovering any other row closes it,
@@ -12282,17 +12282,18 @@
     });
   }
 
-  function runClientsContextAction(act, kind, id) {
+  function runClientsContextAction(act, kind, id, extra) {
     var ctx = clientsMenuCtx;
     if (!ctx) return;
     var state = ctx.state;
     var navigate = ctx.navigate;
+    extra = extra || {};
 
     /*
-     * An application row is addressed by its client for everything except the
-     * edit, which belongs to the application. Opening, assigning and deleting
-     * are all questions about the person the application is for, and the hub
-     * already answers them, this only says which record is being pointed at.
+     * An application row is addressed by its client for opening and assigning.
+     * Edit and delete belong to the application itself: deleting the person
+     * would leave the filing on the table, which is how this used to read as
+     * a click that did nothing.
      */
     if (kind === 'application') {
       if (act === 'edit') {
@@ -12302,6 +12303,10 @@
 
           return navigate('edit-application', null, { applicationId: row.id });
         }
+      }
+      if (act === 'delete') {
+        deleteCipApplication(id, extra.applicationId);
+        return;
       }
       rememberCipApplicant(id);
       kind = 'client';
@@ -12345,6 +12350,45 @@
       if (!window.confirm('Delete ' + name + '?')) return;
       deleteDirectoryKeys(state, ctx.render, [id]);
     }
+  }
+
+  function deleteCipApplication(clientUid, applicationId) {
+    var ctx = clientsMenuCtx;
+    var app = applicationRowById(applicationId) || applicationHeldById(applicationId)
+      || (clientUid ? applicationFor(clientUid) : null);
+    var id = applicationId || (app && app.id);
+    if (!id) {
+      clientsToast('Could not delete this application', 'negative');
+      return;
+    }
+    var label = (app && (app.number || app.applicantName)) || 'this application';
+    if (!window.confirm('Delete ' + label + '? The client record is kept.')) return;
+
+    var previous = (APP_TABLE.rows || []).slice();
+    var previousTotal = APP_TABLE.total;
+    APP_TABLE.rows = previous.filter(function (row) { return row.id !== id; });
+    APP_TABLE.total = Math.max(0, (APP_TABLE.total || 1) - 1);
+    if (clientUid) {
+      delete APPLICATIONS[clientUid];
+      forgetApplication(clientUid);
+    }
+    if (ctx && ctx.render) ctx.render({ forceFull: true });
+
+    clientsFetch('/portal/cip/applications/' + encodeURIComponent(id), { method: 'DELETE' })
+      .then(function () {
+        clientsToast('Application deleted', 'positive');
+        forgetApplicationTable();
+        forgetBuckets();
+        if (ctx && ctx.state && ctx.state.selectedId === clientUid && ctx.navigate) {
+          ctx.navigate('list');
+        }
+      })
+      .catch(function (err) {
+        APP_TABLE.rows = previous;
+        APP_TABLE.total = previousTotal;
+        if (ctx && ctx.render) ctx.render({ forceFull: true });
+        clientsToast((err && err.message) || 'Could not delete this application', 'negative');
+      });
   }
 
   function wireTableFilters(root, state, render) {

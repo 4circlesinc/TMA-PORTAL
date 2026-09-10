@@ -5,13 +5,11 @@ namespace App\Http\Controllers\Cip;
 use App\Http\Controllers\Controller;
 use App\Models\CipApplication;
 use App\Models\CipPerson;
-use App\Models\Folder;
-use App\Models\User;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Intake;
 use App\Support\Cip\Phase;
+use App\Support\Cip\Removal;
 use App\Support\Cip\Status;
-use App\Support\Files\FolderTree;
 use App\Support\Realtime\Live;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -113,7 +111,7 @@ class CipApplicationDraftController extends Controller
          */
         if (! $this->hasAnswers($data)) {
             if ($draft) {
-                $this->discard($draft, $user);
+                Removal::discardDraft($draft, $user);
             }
 
             return response()->json(['draft' => null]);
@@ -139,8 +137,7 @@ class CipApplicationDraftController extends Controller
         abort_unless(CipAccess::canCreate($user), 404);
 
         if ($draft = $this->mine($request)) {
-            $this->discard($draft, $user);
-            Live::staff(Live::CIP);
+            Removal::discardDraft($draft, $user);
         }
 
         return response()->json(['draft' => null]);
@@ -188,59 +185,6 @@ class CipApplicationDraftController extends Controller
             ->with('people')
             ->latest('id')
             ->first();
-    }
-
-    /**
-     * Throw a draft away for good.
-     *
-     * A hard delete, unlike every other application, and deliberately: the
-     * recycle bin is for work somebody did, and an abandoned half-filled form
-     * that a reader explicitly discarded is not something anybody should have
-     * to find and empty later. Nothing else points at it — a draft has no
-     * folders, no documents and no assignments.
-     */
-    private function discard(CipApplication $draft, ?User $actor = null): void
-    {
-        /*
-         * The folder goes to the recycle bin, not with it.
-         *
-         * A draft keeps its scans now, so throwing one away throws away
-         * documents — and a reader who deletes the wrong draft has lost six
-         * passports with no way back. The application and its people are
-         * removed outright, because an unfiled form is not a record anybody
-         * refers to; the paper is soft-deleted, so it can be restored from
-         * the bin like anything else.
-         */
-        foreach ($this->foldersOf($draft) as $folder) {
-            FolderTree::softDeleteTree($folder, $actor?->id ?? $draft->created_by);
-        }
-
-        $draft->people()->forceDelete();
-        $draft->forceDelete();
-    }
-
-    /**
-     * Every folder this draft owns, deepest first.
-     *
-     * The application's own folder covers the people inside it, but a person
-     * whose folder was provisioned before the tree existed can sit outside
-     * it, so both are collected rather than assuming the shape.
-     *
-     * @return list<Folder>
-     */
-    private function foldersOf(CipApplication $draft): array
-    {
-        $ids = $draft->people()->pluck('folder_id')->all();
-        $ids[] = $draft->folder_id;
-        $ids[] = $draft->post_approval_folder_id;
-
-        $ids = array_values(array_unique(array_filter($ids)));
-
-        if ($ids === []) {
-            return [];
-        }
-
-        return Folder::query()->whereIn('id', $ids)->get()->all();
     }
 
     /**

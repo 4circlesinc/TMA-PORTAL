@@ -425,6 +425,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/applications', [CipApplicationController::class, 'index'])->name('applications.index');
         Route::post('/applications', [CipApplicationController::class, 'store'])->name('applications.store');
         Route::get('/applications/{uuid}', [CipApplicationController::class, 'show'])->name('applications.show');
+        Route::delete('/applications/{uuid}', [CipApplicationController::class, 'destroy'])
+            ->name('applications.destroy');
         Route::get('/applications/{uuid}/messages', [CipThreadController::class, 'index'])
             ->name('applications.messages.index');
         Route::post('/applications/{uuid}/messages', [CipThreadController::class, 'store'])

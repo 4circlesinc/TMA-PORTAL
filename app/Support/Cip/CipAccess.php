@@ -2,6 +2,7 @@
 
 namespace App\Support\Cip;
 
+use App\Models\CipApplication;
 use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\CompanyMember;
@@ -170,6 +171,39 @@ class CipAccess
         }
 
         return Role::of($user) === Role::REVIEWING_OFFICER;
+    }
+
+    /**
+     * May this account take an application off the caseload?
+     *
+     * A draft is unfinished work the person typing it — or staff looking at
+     * the table — may throw away. A numbered application is a file: only
+     * staff who can create applications may remove one they can see, and the
+     * client it belongs to stays. Provider contacts and private clients
+     * file and upload; they do not delete a filed file.
+     */
+    public static function canDelete(?User $user, CipApplication $application): bool
+    {
+        if ($user === null || ! self::enabled()) {
+            return false;
+        }
+
+        // Administrators see every file and may take any of them off the
+        // caseload. Asked on every table row, so this must not become a
+        // capability lookup per application.
+        if (Role::isAdmin($user)) {
+            return true;
+        }
+
+        if (! self::canCreate($user)) {
+            return false;
+        }
+
+        if ($application->status === Status::DRAFT) {
+            return Role::isStaff($user) || (int) $application->created_by === (int) $user->id;
+        }
+
+        return Role::isStaff($user) && Role::of($user) !== Role::EMPLOYEE;
     }
 
     /**
