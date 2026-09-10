@@ -4,6 +4,7 @@ namespace App\Support\Messaging;
 
 use App\Models\CallRecording;
 use App\Models\CipApplication;
+use App\Models\ClientAssignment;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyMember;
@@ -82,7 +83,22 @@ class ClientConversations
      */
     public static function open(Client $client, User $actor, string $with): Conversation
     {
-        abort_unless(Role::isStaff($actor), 403, 'Only staff can open a conversation from a client record.');
+        /*
+         * The provider side opens the same case thread, from their own side of
+         * it. It is one group per file — staff and the firm in one room — so a
+         * provider starting the conversation must join that thread rather than
+         * begin a parallel one, and the firm is talking to them either way.
+         *
+         * Only the provider lane, though: a private DM with the applicant is
+         * the firm's to start.
+         */
+        if (! Role::isStaff($actor)) {
+            abort_unless(
+                $with === self::WITH_PROVIDER && self::isProviderContactFor($client, $actor),
+                403,
+                'Only staff can open a conversation from a client record.'
+            );
+        }
 
         return match ($with) {
             self::WITH_PROVIDER => self::openProvider($client, $actor),
@@ -91,6 +107,28 @@ class ClientConversations
                 'with' => 'Choose who to message.',
             ]),
         };
+    }
+
+    /**
+     * Is this account an active contact at the firm this applicant belongs to?
+     *
+     * Asked of THIS client's provider, not of provider-ness in general: a
+     * contact at one firm has no business opening a thread about another
+     * firm's applicant.
+     */
+    private static function isProviderContactFor(Client $client, User $user): bool
+    {
+        $company = self::providerCompany($client);
+
+        if (! $company) {
+            return false;
+        }
+
+        return CompanyMember::query()
+            ->active()
+            ->where('company_id', $company->id)
+            ->where('user_id', $user->id)
+            ->exists();
     }
 
     /**
@@ -128,10 +166,70 @@ class ClientConversations
             $person['reason'] = $client->name.' doesn’t have a portal login yet.';
         }
 
+        /*
+         * The provider side reads the same options from their own side of the
+         * thread. "Message the service provider" is the firm's sentence, not
+         * theirs — they ARE the provider — and the private DM with the
+         * applicant is the firm's to start, so it is not offered.
+         *
+         * Their one destination stays available even when nobody at the firm
+         * has a login besides themselves: they are the login, and the group
+         * they are opening is with the firm handling the file.
+         */
+        if (! Role::isStaff($viewer)) {
+            return [
+                'provider' => [
+                    'available' => true,
+                    'companyName' => null,
+                    'companyId' => $company?->uid,
+                    'accountCount' => $provider['accountCount'],
+                    'contacts' => [],
+                    'viewerIsProvider' => true,
+                ],
+                'person' => ['available' => false],
+            ];
+        }
+
         return [
             'provider' => $provider,
             'person' => $person,
         ];
+    }
+
+    /**
+     * The firm's side of a case thread the provider opened.
+     *
+     * Section 24's thread already answers "who at the firm is this provider
+     * talking to" for its own messages — administrators plus the officers
+     * actually holding the file — so the group uses the same rule rather than
+     * inventing a second one. Staff who open it themselves are added by being
+     * the actor, and anyone assigned later joins on their next visit through
+     * the ordinary attach path.
+     *
+     * @return Collection<int, User>
+     */
+    private static function firmSideFor(Client $client, User $actor): Collection
+    {
+        if (Role::isStaff($actor)) {
+            return collect();
+        }
+
+        $admins = User::query()
+            ->where('account_type', Role::ADMINISTRATOR)
+            ->where('status', User::STATUS_APPROVED)
+            ->get();
+
+        // whereIn + subquery, the ClientScope convention: the assignment index
+        // answers directly rather than a correlated EXISTS per user row.
+        $officers = User::query()
+            ->where('status', User::STATUS_APPROVED)
+            ->whereIn('id', ClientAssignment::query()
+                ->select('user_id')
+                ->live()
+                ->where('client_id', $client->id))
+            ->get();
+
+        return $admins->concat($officers)->unique('id')->values();
     }
 
     private static function openProvider(Client $client, User $actor): Conversation
@@ -151,8 +249,9 @@ class ClientConversations
         }
 
         $application = self::applicationFor($client);
+        $staff = self::firmSideFor($client, $actor);
 
-        return DB::transaction(function () use ($client, $actor, $company, $members, $application) {
+        return DB::transaction(function () use ($client, $actor, $company, $members, $application, $staff) {
             $conversation = Conversation::query()
                 ->where('client_id', $client->id)
                 ->where('subject', Conversation::SUBJECT_PROVIDER)
@@ -173,7 +272,9 @@ class ClientConversations
 
                 $conversation->participants()->create([
                     'user_id' => $actor->id,
-                    'role' => ConversationParticipant::ROLE_ADMIN,
+                    'role' => Role::isStaff($actor)
+                        ? ConversationParticipant::ROLE_ADMIN
+                        : ConversationParticipant::ROLE_MEMBER,
                     'joined_at' => now(),
                 ]);
 
@@ -188,6 +289,19 @@ class ClientConversations
                     ]);
                 }
 
+                /*
+                 * A thread the provider side opened still needs the firm in
+                 * it, or they are writing to an empty room: staff join by
+                 * being assigned or by being an administrator, never by
+                 * having clicked Message first.
+                 */
+                foreach ($staff as $member) {
+                    if ($member->id === $actor->id) {
+                        continue;
+                    }
+                    self::ensureMember($conversation, $member, ConversationParticipant::ROLE_ADMIN);
+                }
+
                 self::systemMessage($conversation, 'case_opened', [
                     'actorName' => $actor->name,
                     'clientName' => $client->name,
@@ -200,9 +314,18 @@ class ClientConversations
                     'cip_application_id' => $application?->id ?? $conversation->cip_application_id,
                 ])->save();
 
-                self::ensureMember($conversation, $actor, ConversationParticipant::ROLE_ADMIN);
+                self::ensureMember(
+                    $conversation,
+                    $actor,
+                    Role::isStaff($actor)
+                        ? ConversationParticipant::ROLE_ADMIN
+                        : ConversationParticipant::ROLE_MEMBER
+                );
                 foreach ($members as $member) {
                     self::ensureMember($conversation, $member, ConversationParticipant::ROLE_MEMBER);
+                }
+                foreach ($staff as $member) {
+                    self::ensureMember($conversation, $member, ConversationParticipant::ROLE_ADMIN);
                 }
             }
 

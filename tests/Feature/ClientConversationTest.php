@@ -425,4 +425,98 @@ class ClientConversationTest extends TestCase
             ->pluck('id');
         $this->assertFalse($ids->contains($id));
     }
+
+    public function test_the_provider_side_opens_the_same_case_thread_as_staff(): void
+    {
+        $fx = $this->applicantWithProvider();
+
+        // The firm opens it first; the provider must join that thread rather
+        // than start a second one about the same file.
+        $staffThread = $this->actingAs($fx['staff'])
+            ->postJson('/portal/clients/'.$fx['client']->uid.'/conversations', ['with' => 'provider'])
+            ->assertCreated()
+            ->json('conversation.id');
+
+        $providerThread = $this->actingAs($fx['providerUser'])
+            ->postJson('/portal/clients/'.$fx['client']->uid.'/conversations', ['with' => 'provider'])
+            ->assertCreated()
+            ->json('conversation.id');
+
+        $this->assertSame($staffThread, $providerThread);
+        $this->assertSame(1, Conversation::where('client_id', $fx['client']->id)
+            ->where('subject', Conversation::SUBJECT_PROVIDER)
+            ->count());
+    }
+
+    public function test_a_thread_the_provider_opens_first_still_has_the_firm_in_it(): void
+    {
+        $fx = $this->applicantWithProvider();
+
+        $id = $this->actingAs($fx['providerUser'])
+            ->postJson('/portal/clients/'.$fx['client']->uid.'/conversations', ['with' => 'provider'])
+            ->assertCreated()
+            ->json('conversation.id');
+
+        $conversation = Conversation::where('uuid', $id)->firstOrFail();
+        $memberIds = $conversation->activeParticipants()->pluck('user_id')->all();
+
+        // Otherwise they are writing to an empty room.
+        $this->assertContains($fx['providerUser']->id, $memberIds);
+        $this->assertContains($fx['staff']->id, $memberIds);
+        $this->assertSame('group', $conversation->type);
+        $this->assertSame('Ahmed Hassan', $conversation->name);
+    }
+
+    public function test_the_provider_side_is_not_told_to_message_itself(): void
+    {
+        $fx = $this->applicantWithProvider($this->portalUser());
+
+        $options = $this->actingAs($fx['providerUser'])
+            ->getJson('/portal/clients/'.$fx['client']->uid.'/conversations')
+            ->assertOk()
+            ->json('options');
+
+        $this->assertTrue($options['provider']['available']);
+        $this->assertTrue($options['provider']['viewerIsProvider']);
+        // The private DM with the applicant is the firm's to start.
+        $this->assertFalse($options['person']['available']);
+    }
+
+    public function test_a_contact_at_another_firm_cannot_open_this_applicants_thread(): void
+    {
+        $fx = $this->applicantWithProvider();
+
+        $otherCompany = Company::create(['uid' => 'rival', 'name' => 'Rival Advisors']);
+        CipProvider::create([
+            'name' => 'Rival Advisors',
+            'code' => 'RIV',
+            'company_id' => $otherCompany->id,
+        ]);
+        $outsider = $this->portalUser();
+        CompanyMember::create([
+            'company_id' => $otherCompany->id,
+            'user_id' => $outsider->id,
+            'name' => $outsider->name,
+            'email' => $outsider->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+
+        // 404, not 403: another firm's applicant does not exist to them.
+        $this->actingAs($outsider)
+            ->postJson('/portal/clients/'.$fx['client']->uid.'/conversations', ['with' => 'provider'])
+            ->assertNotFound();
+
+        $this->assertSame(0, Conversation::where('client_id', $fx['client']->id)->count());
+    }
+
+    public function test_the_provider_side_cannot_open_a_private_dm_with_the_applicant(): void
+    {
+        $login = $this->portalUser();
+        $fx = $this->applicantWithProvider($login);
+
+        $this->actingAs($fx['providerUser'])
+            ->postJson('/portal/clients/'.$fx['client']->uid.'/conversations', ['with' => 'person'])
+            ->assertForbidden();
+    }
 }
