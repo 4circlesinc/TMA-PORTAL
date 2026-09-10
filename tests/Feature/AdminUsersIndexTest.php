@@ -2,6 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\Client;
+use App\Models\Company;
+use App\Models\CompanyMember;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -51,25 +54,25 @@ class AdminUsersIndexTest extends TestCase
         $parked = $this->staff('Employee');
 
         // A contact invited from a service provider page.
-        $provider = \App\Models\Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
+        $provider = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
         $contact = $this->staff('Client');
-        \App\Models\CompanyMember::create([
+        CompanyMember::create([
             'company_id' => $provider->id,
             'user_id' => $contact->id,
             'name' => $contact->name,
             'email' => $contact->email,
             'role' => 'member',
-            'status' => \App\Models\CompanyMember::STATUS_ACTIVE,
+            'status' => CompanyMember::STATUS_ACTIVE,
         ]);
 
         // A client under a provider, and one under nobody.
         $referred = $this->staff('Client');
-        \App\Models\Client::create([
+        Client::create([
             'uid' => 'referred-one', 'name' => 'Referred One', 'user_id' => $referred->id,
             'referral_type' => 'company', 'referred_by_company_id' => $provider->id, 'data' => [],
         ]);
         $private = $this->staff('Client');
-        \App\Models\Client::create([
+        Client::create([
             'uid' => 'private-one', 'name' => 'Private One', 'user_id' => $private->id, 'data' => [],
         ]);
 
@@ -79,6 +82,8 @@ class AdminUsersIndexTest extends TestCase
         $this->assertSame('Administrator', $users[$admin->id]['accountTypeLabel']);
         $this->assertSame('Pending', $users[$parked->id]['accountTypeLabel']);
         $this->assertSame('Service Provider Contact', $users[$contact->id]['accountTypeLabel']);
+        $this->assertSame('Galaxy', $users[$contact->id]['serviceProviders'][0]['name']);
+        $this->assertFalse($users[$contact->id]['requireTwoFactor']);
         $this->assertSame('Service Provider Client', $users[$referred->id]['accountTypeLabel']);
         $this->assertSame('Private Client', $users[$private->id]['accountTypeLabel']);
     }

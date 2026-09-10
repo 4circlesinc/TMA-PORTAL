@@ -51,10 +51,12 @@ final class AccountSetupFlow
         return self::STEPS[$step]['title'] ?? ucfirst($step);
     }
 
-    public static function isOptional(string $step): bool
+    public static function isOptional(string $step, ?User $user = null): bool
     {
         if ($step === 'two-factor') {
-            return ! SecurityPolicies::authenticatorRequired();
+            return $user
+                ? ! $user->mustUseAuthenticator()
+                : ! SecurityPolicies::authenticatorRequired();
         }
 
         return (bool) (self::STEPS[$step]['optional'] ?? false);
@@ -199,7 +201,7 @@ final class AccountSetupFlow
 
     public static function skip(User $user, string $step): void
     {
-        if (! self::isOptional($step)) {
+        if (! self::isOptional($step, $user)) {
             return;
         }
 

@@ -70,7 +70,7 @@ class AccountSetupController extends Controller
             'title' => AccountSetupFlow::title($step),
             'index' => $position['index'],
             'total' => $position['total'],
-            'optional' => AccountSetupFlow::isOptional($step),
+            'optional' => AccountSetupFlow::isOptional($step, $user),
             'steps' => $steps,
             'previousUrl' => $previous ? AccountSetupFlow::routeFor($previous) : null,
         ], $this->stepData($user, $step), $step === 'two-factor'
@@ -103,7 +103,7 @@ class AccountSetupController extends Controller
     {
         $user = $request->user();
 
-        if (! AccountSetupFlow::isOptional($step)) {
+        if (! AccountSetupFlow::isOptional($step, $user)) {
             return redirect()->route('account-setup.show', ['step' => $step]);
         }
 
@@ -192,7 +192,7 @@ class AccountSetupController extends Controller
 
         // Optional 2FA: Continue posts here with no code and must still
         // advance. Requiring a code trapped people on this screen.
-        if (! $request->filled('code') && AccountSetupFlow::isOptional('two-factor')) {
+        if (! $request->filled('code') && AccountSetupFlow::isOptional('two-factor', $user)) {
             AuthenticatorNudge::markShown($user);
 
             return;

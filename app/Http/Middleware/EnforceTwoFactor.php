@@ -2,7 +2,6 @@
 
 namespace App\Http\Middleware;
 
-use App\Support\SecurityPolicies;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -34,7 +33,7 @@ class EnforceTwoFactor
             ! $user
             || $user->two_factor_confirmed_at !== null
             || $this->exempt($request)
-            || ! SecurityPolicies::authenticatorRequired()
+            || ! $user->mustUseAuthenticator()
         ) {
             return $next($request);
         }

@@ -48,7 +48,7 @@ class AccountSetupWalkthroughTest extends TestCase
             ->assertSee('complete')
             ->assertDontSee('Step 1')
             ->assertSee('Set up your account')
-            ->assertSee('Next: two-factor authentication');
+            ->assertSee('Next: an authenticator app');
     }
 
     public function test_each_setup_screen_shows_its_place_in_the_full_walkthrough(): void

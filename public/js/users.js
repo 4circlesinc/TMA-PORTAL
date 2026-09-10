@@ -39,6 +39,9 @@
     Key: 'images/icons/phosphor/Key.svg',
     CaretRight: 'images/icons/phosphor/CaretRight.svg',
     SealCheck: 'images/icons/phosphor/SealCheck.svg',
+    ShieldCheck: 'images/icons/phosphor/ShieldCheck.svg',
+    ShieldSlash: 'images/icons/phosphor/ShieldSlash.svg',
+    Buildings: 'images/icons/phosphor/Buildings.svg',
   };
 
   /* ── real user directory (database-backed, staff-readable) ── */
@@ -96,6 +99,13 @@
       bio: u.bio || '',
       linkedin: u.linkedin || '',
       _twoFactor: u.twoFactor,
+      _requireTwoFactor: !!u.requireTwoFactor,
+      _accountType: u.accountType || '',
+      lastLogin: u.lastLogin || '',
+      lastLoginIso: u.lastLoginIso || '',
+      lastLogout: u.lastLogout || '',
+      lastLogoutIso: u.lastLogoutIso || '',
+      serviceProviders: u.serviceProviders || [],
       _lastActive: u.lastActive,
       note: u.note || '',
       workStatus: (u.workStatus && u.workStatus.label) || '',
@@ -112,7 +122,47 @@
     account_reactivated: 'Account reactivated', account_updated: 'Profile updated by admin',
     password_reset_link_sent: 'Password reset link sent', password_generated: 'Temporary password generated',
     account_deleted: 'Account deleted',
+    account_denied: 'Account denied',
+    two_factor_reset: 'Authenticator reset by admin',
+    two_factor_required: 'Authenticator required by admin',
+    two_factor_requirement_cleared: 'Authenticator requirement cleared',
+    assigned_service_provider: 'Assigned to a service provider',
   };
+
+  function formatActivityWhen(iso, fallback) {
+    if (iso) {
+      var at = new Date(iso);
+      if (!isNaN(at.getTime())) {
+        return at.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+      }
+    }
+    return fallback || '';
+  }
+
+  function twoFactorLabel(row) {
+    if (row._twoFactor && row._requireTwoFactor) return 'On · required';
+    if (row._twoFactor) return 'On';
+    if (row._requireTwoFactor) return 'Required — not set up';
+    return 'Off';
+  }
+
+  function serviceProviderNames(row) {
+    return (row.serviceProviders || []).map(function (p) {
+      return p.cipCode ? p.name + ' (' + p.cipCode + ')' : p.name;
+    }).join(', ');
+  }
+
+  function isServiceProviderContact(row) {
+    return (row.serviceProviders && row.serviceProviders.length > 0)
+      || row.address === 'Service Provider Contact';
+  }
+
+  function mutedField(label, value) {
+    return '<div class="tma-user-info-panel__field tma-user-info-panel__field--muted">' +
+      '<p class="tma-user-info-panel__field-label">' + escapeHtml(label) + '</p>' +
+      '<div class="tma-user-info-panel__field-row"><span class="tma-user-info-panel__field-value">' +
+      escapeHtml(value || '—') + '</span></div></div>';
+  }
 
   function renderActivityPane(row, el, type) {
     el.innerHTML = window.TMASkeleton ? window.TMASkeleton.rows(3, { leading: false }) : '<p class="tma-user-info-panel__field-label">Loading…</p>';
@@ -120,21 +170,22 @@
       return res.ok ? res.json() : null;
     }).then(function (j) {
       if (!j) { el.innerHTML = '<p class="tma-user-info-panel__field-label">Couldn\'t load activity.</p>'; return; }
-      var last = (type === 'login' && j.lastLogin)
-        ? '<div class="tma-user-info-panel__field tma-user-info-panel__field--muted">' +
-          '<p class="tma-user-info-panel__field-label">Last signed in</p>' +
-          '<div class="tma-user-info-panel__field-row"><span class="tma-user-info-panel__field-value">' + escapeHtml(j.lastLogin) + '</span></div></div>'
-        : '';
+      var summary = '';
+      if (type === 'login') {
+        summary = mutedField('Account created', formatActivityWhen(j.joinedIso || row.joinedIso, j.joined || row.date)) +
+          mutedField('Last signed in', formatActivityWhen(j.lastLoginIso || row.lastLoginIso, j.lastLogin || row.lastLogin) || 'Never') +
+          mutedField('Last signed out', formatActivityWhen(j.lastLogoutIso || row.lastLogoutIso, j.lastLogout || row.lastLogout) || 'Never');
+      }
       var empty = type === 'login'
         ? 'No sign-ins yet.'
         : 'No application activity yet - this fills in as they use the portal.';
       var rows = j.events.length ? j.events.map(function (ev) {
-        var at = ev.atIso ? new Date(ev.atIso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ev.when;
+        var at = formatActivityWhen(ev.atIso, ev.when);
         return '<div class="tma-rup__event"><strong>' + escapeHtml(ACT_LABELS[ev.event] || ev.event) + '</strong>' +
           '<span>' + escapeHtml(at) + (ev.ip ? ' · ' + escapeHtml(ev.ip) : '') + (ev.device ? ' · ' + escapeHtml(ev.device) : '') +
           (ev.detail ? ' · ' + escapeHtml(ev.detail) : '') + '</span></div>';
       }).join('') : '<p class="tma-user-info-panel__field-label">' + empty + '</p>';
-      el.innerHTML = last + '<div>' + rows + '</div>';
+      el.innerHTML = summary + '<div>' + rows + '</div>';
     }).catch(function () {
       el.innerHTML = '<p class="tma-user-info-panel__field-label">Couldn\'t load activity.</p>';
     });
@@ -674,6 +725,7 @@ if (state.filters.user) {
       loadErrorStatus: 0,
       loadErrorMessage: '',
       canManage: false,
+      orgRequiresAuthenticator: false,
       search: '',
       searchFocused: false,
       searchLoading: false,
@@ -726,6 +778,7 @@ if (state.filters.user) {
           state.loadErrorStatus = 0;
           state.loadErrorMessage = '';
           state.canManage = !!j.canManage;
+          state.orgRequiresAuthenticator = !!j.orgRequiresAuthenticator;
           state.live = true;
 
           if (silent) {
@@ -775,10 +828,10 @@ if (state.filters.user) {
       if (open) open.remove();
     }
 
-    function statusAction(url, body) {
+    function statusAction(url, body, okMessage) {
       usersApi('POST', url, body).then(function (res) {
         return res.json().catch(function () { return {}; }).then(function (j) {
-          if (res.ok) { usersToast('Done', true); loadRealUsers(); refreshPendingBadge(); }
+          if (res.ok) { usersToast(okMessage || 'Done', true); loadRealUsers(); refreshPendingBadge(); }
           else usersToast((j && j.message) || 'That action failed.', false);
         });
       }).catch(function () { usersToast('That action failed.', false); });
@@ -863,6 +916,18 @@ if (state.filters.user) {
 
       html += uCtxItem('send-reset', 'Email password reset link', ICONS.EnvelopeSimple) +
         uCtxItem('generate-password', 'Generate temporary password', ICONS.Key);
+
+      if (state.canManage) {
+        html += uCtxItem('', '', '', { sep: true });
+        if (row._requireTwoFactor) {
+          html += uCtxItem('clear-2fa', 'Stop requiring authenticator', ICONS.ShieldSlash);
+        } else {
+          html += uCtxItem('require-2fa', 'Require authenticator app', ICONS.ShieldCheck);
+        }
+        if (row._twoFactor) {
+          html += uCtxItem('reset-2fa', 'Reset authenticator', ICONS.ShieldSlash);
+        }
+      }
       return html;
     }
 
@@ -882,7 +947,15 @@ if (state.filters.user) {
             '" alt="" width="16" height="16">' +
           '<span class="tma-portal-context-menu__label">' + escapeHtml(type) + '</span>' +
           '</button>';
-      }).join('');
+      }).join('') +
+        '<div class="tma-portal-context-menu__sep" role="separator"></div>' +
+        '<button type="button" role="menuitem" class="tma-portal-context-menu__item"' +
+          ' data-uctx-type="service-provider"' + (isServiceProviderContact(row) ? ' data-selected' : '') + '>' +
+          '<img class="tma-portal-context-menu__icon" src="' +
+            (isServiceProviderContact(row) ? ICONS.SealCheck : ICONS.Buildings) +
+            '" alt="" width="16" height="16">' +
+          '<span class="tma-portal-context-menu__label">Service provider</span>' +
+        '</button>';
       document.body.appendChild(uCtxSubEl);
 
       var rect = parentBtn.getBoundingClientRect();
@@ -893,6 +966,10 @@ if (state.filters.user) {
         if (!btn) return;
         var type = btn.getAttribute('data-uctx-type');
         closeUserCtx();
+        if (type === 'service-provider') {
+          openServiceProviderPicker(row);
+          return;
+        }
         if (type === row.address) return;
         // Approving a pending account and re-typing an approved one are two
         // different endpoints; the row's status decides which.
@@ -970,6 +1047,22 @@ if (state.filters.user) {
           });
         });
       }
+      if (act === 'require-2fa') {
+        statusAction('/admin/users/' + row._id + '/require-two-factor', { required: true },
+          row.user + ' must now set up an authenticator app');
+      }
+      if (act === 'clear-2fa') {
+        statusAction('/admin/users/' + row._id + '/require-two-factor', { required: false },
+          'Authenticator is no longer required for ' + row.user);
+      }
+      if (act === 'reset-2fa') {
+        usersApi('POST', '/admin/users/' + row._id + '/reset-two-factor').then(function (res) {
+          return res.json().catch(function () { return {}; }).then(function (j) {
+            usersToast(res.ok ? 'Authenticator reset for ' + row.user : ((j && j.message) || 'Could not reset two-factor.'), res.ok);
+            if (res.ok) loadRealUsers();
+          });
+        });
+      }
     }
 
     function openStatusMenu(btn) {
@@ -983,14 +1076,27 @@ if (state.filters.user) {
       if (row._status === 'pending') {
         items = ACCOUNT_TYPES.map(function (type) {
           return '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="approve" data-ustatus-type="' + type + '">Approve as ' + type + '</button>';
-        }).join('');
+        }).join('') +
+          '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="approve-sp">Approve as service provider</button>';
       } else if (row._status === 'suspended') {
         items = '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="reactivate">Reactivate account</button>';
       } else if (!row._self) {
         items = '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="suspend">Suspend account</button>';
+        if (state.canManage) {
+          items += '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="approve-sp">' +
+            (isServiceProviderContact(row) ? 'Change service provider' : 'Assign to service provider') + '</button>';
+        }
       }
       items += '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="send-reset">Email password reset link</button>' +
         '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="generate-password">Generate temporary password</button>';
+      if (state.canManage) {
+        items += row._requireTwoFactor
+          ? '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="clear-2fa">Stop requiring authenticator</button>'
+          : '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="require-2fa">Require authenticator app</button>';
+        if (row._twoFactor) {
+          items += '<button type="button" class="tma-dash__menu-item" role="menuitem" data-ustatus-act="reset-2fa">Reset authenticator</button>';
+        }
+      }
 
       var menu = document.createElement('div');
       menu.className = 'tma-dash__menu';
@@ -1010,8 +1116,25 @@ if (state.filters.user) {
         var kind = act.getAttribute('data-ustatus-act');
         closeStatusMenu();
         if (kind === 'approve') statusAction('/admin/users/' + row._id + '/approve', { account_type: act.getAttribute('data-ustatus-type') });
+        if (kind === 'approve-sp') openServiceProviderPicker(row);
         if (kind === 'suspend') statusAction('/admin/users/' + row._id + '/suspend');
         if (kind === 'reactivate') statusAction('/admin/users/' + row._id + '/reactivate');
+        if (kind === 'require-2fa') {
+          statusAction('/admin/users/' + row._id + '/require-two-factor', { required: true },
+            row.user + ' must now set up an authenticator app');
+        }
+        if (kind === 'clear-2fa') {
+          statusAction('/admin/users/' + row._id + '/require-two-factor', { required: false },
+            'Authenticator is no longer required for ' + row.user);
+        }
+        if (kind === 'reset-2fa') {
+          usersApi('POST', '/admin/users/' + row._id + '/reset-two-factor').then(function (res) {
+            return res.json().catch(function () { return {}; }).then(function (j) {
+              usersToast(res.ok ? 'Authenticator reset for ' + row.user : ((j && j.message) || 'Could not reset two-factor.'), res.ok);
+              if (res.ok) loadRealUsers();
+            });
+          });
+        }
         if (kind === 'send-reset') {
           usersApi('POST', '/admin/users/' + row._id + '/send-reset').then(function (res) {
             usersToast(res.ok ? 'Reset link sent to ' + row.email : 'Could not send the link.', res.ok);
@@ -1180,6 +1303,121 @@ if (state.filters.user) {
       });
     }
 
+    function openServiceProviderPicker(row) {
+      var existing = document.querySelector('[data-users-sp-picker]');
+      if (existing) existing.remove();
+      var wrap = document.createElement('div');
+      wrap.className = 'tma-dash__settings-popup';
+      wrap.setAttribute('data-users-sp-picker', '');
+      wrap.setAttribute('role', 'dialog');
+      wrap.setAttribute('aria-modal', 'true');
+      wrap.setAttribute('aria-label', 'Assign service provider');
+      var heading = row._status === 'pending' ? 'Approve as service provider' : 'Assign to a service provider';
+      wrap.innerHTML =
+        '<div class="tma-dash__settings-popup-backdrop" aria-hidden="true"></div>' +
+        '<div class="tma-dash__settings-change-card tma-users-dialog tma-users-picker">' +
+        '<h3 class="tma-dash__settings-change-title">' + escapeHtml(heading) + '</h3>' +
+        '<p class="tma-dash__settings-change-text">Choose the firm ' + escapeHtml(row.user) + ' belongs to.</p>' +
+        '<input type="search" class="tma-users-picker-search" data-sp-search placeholder="Search service providers" autocomplete="off">' +
+        '<div class="tma-users-picker-list" data-sp-list>' +
+          (window.TMASkeleton ? window.TMASkeleton.rows(3, { leading: false }) : '<p class="tma-user-info-panel__field-label">Loading…</p>') +
+        '</div>' +
+        '<p class="tma-dash__settings-change-text" data-sp-error hidden style="color: var(--color-red);"></p>' +
+        '<div class="tma-users-delete-actions">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-sp-cancel>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-sp-confirm disabled>Assign</button>' +
+        '</div></div>';
+      document.body.appendChild(wrap);
+
+      var selectedId = (row.serviceProviders && row.serviceProviders[0] && row.serviceProviders[0].id) || '';
+      var providers = [];
+
+      function close() { wrap.remove(); }
+      function currentQuery() {
+        var input = wrap.querySelector('[data-sp-search]');
+        return input ? input.value : '';
+      }
+      function paintList(term) {
+        var q = String(term || '').toLowerCase().trim();
+        var list = wrap.querySelector('[data-sp-list]');
+        var confirm = wrap.querySelector('[data-sp-confirm]');
+        var shown = providers.filter(function (p) {
+          if (!q) return true;
+          return (p.name + ' ' + (p.cipCode || '')).toLowerCase().indexOf(q) !== -1;
+        });
+        if (!providers.length) {
+          list.innerHTML = '<p class="tma-user-info-panel__field-label">No service providers yet. Add one from the Client hub first.</p>';
+          confirm.disabled = true;
+          return;
+        }
+        if (!shown.length) {
+          list.innerHTML = '<p class="tma-user-info-panel__field-label">No matches.</p>';
+          return;
+        }
+        list.innerHTML = shown.map(function (p) {
+          var on = selectedId === p.id;
+          var meta = p.cipCode ? escapeHtml(p.cipCode) : '';
+          return '<button type="button" class="tma-users-picker-item"' + (on ? ' data-selected' : '') +
+            ' data-sp-id="' + escapeHtml(p.id) + '">' +
+            '<img src="' + ICONS.Buildings + '" alt="" width="16" height="16">' +
+            '<span class="tma-users-picker-item-copy"><strong>' + escapeHtml(p.name) + '</strong>' +
+            (meta ? '<span>' + meta + '</span>' : '') + '</span></button>';
+        }).join('');
+        confirm.disabled = !selectedId;
+      }
+
+      wrap.querySelector('[data-sp-cancel]').addEventListener('click', close);
+      wrap.querySelector('.tma-dash__settings-popup-backdrop').addEventListener('click', close);
+      document.addEventListener('keydown', function esc(ev) {
+        if (ev.key === 'Escape') { close(); document.removeEventListener('keydown', esc); }
+      });
+      wrap.querySelector('[data-sp-list]').addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-sp-id]');
+        if (!btn) return;
+        selectedId = btn.getAttribute('data-sp-id');
+        paintList(currentQuery());
+      });
+      wrap.querySelector('[data-sp-search]').addEventListener('input', function () {
+        paintList(this.value);
+      });
+      wrap.querySelector('[data-sp-confirm]').addEventListener('click', function () {
+        if (!selectedId) return;
+        this.disabled = true;
+        usersApi('POST', '/admin/users/' + row._id + '/assign-service-provider', { company: selectedId })
+          .then(function (res) {
+            return res.json().catch(function () { return {}; }).then(function (j) {
+              if (!res.ok) {
+                var err = wrap.querySelector('[data-sp-error]');
+                err.textContent = (j && j.message) || 'Could not assign.';
+                err.hidden = false;
+                wrap.querySelector('[data-sp-confirm]').disabled = false;
+                return;
+              }
+              close();
+              usersToast(row.user + ' is now a service provider contact', true);
+              loadRealUsers();
+              refreshPendingBadge();
+            });
+          })
+          .catch(function () {
+            wrap.querySelector('[data-sp-confirm]').disabled = false;
+            usersToast('Could not assign.', false);
+          });
+      });
+
+      usersApi('GET', '/admin/users/service-providers').then(function (res) {
+        return res.ok ? res.json() : null;
+      }).then(function (j) {
+        providers = (j && j.providers) || [];
+        paintList('');
+        var search = wrap.querySelector('[data-sp-search]');
+        if (search) search.focus();
+      }).catch(function () {
+        wrap.querySelector('[data-sp-list]').innerHTML =
+          '<p class="tma-user-info-panel__field-label">Couldn\'t load service providers.</p>';
+      });
+    }
+
     function openUserInfoPanel(filteredIndex) {
       if (!window.TMAUserInfoPanel) return;
       var filtered = applyPipeline(state);
@@ -1206,6 +1444,17 @@ if (state.filters.user) {
           { id: 'logins', label: 'Logins', render: function (r2, el) { renderActivityPane(r2, el, 'login'); } },
           { id: 'activity', label: 'Activity', render: function (r2, el) { renderActivityPane(r2, el, 'app'); } },
         ] : null,
+        extraReadOnlyFields: state.live ? function (r2) {
+          var fields = [
+            { label: 'Last signed in', value: r2.lastLogin ? formatActivityWhen(r2.lastLoginIso, r2.lastLogin) : 'Never', icon: 'CalendarBlank16' },
+            { label: 'Two-factor', value: twoFactorLabel(r2) },
+          ];
+          var firms = serviceProviderNames(r2);
+          if (firms || r2.address === 'Service Provider Contact') {
+            fields.push({ label: 'Service provider', value: firms || '—' });
+          }
+          return fields;
+        } : null,
         onSave: function (targetRow, index, data) {
           if (state.live) {
             usersApi('PATCH', '/admin/users/' + targetRow._id, {

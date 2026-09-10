@@ -3329,6 +3329,9 @@
   scrollbar-width: none;
   min-width: 0;
   background: var(--color-bg-page);
+  /* Type in this panel scales with the panel's own width, not the viewport. */
+  container-type: inline-size;
+  container-name: dash-rightbar;
 }
 .tma-dash__rightbar::-webkit-scrollbar { display: none; }
 
@@ -31016,6 +31019,47 @@ button.tma-dash__header-popup-item:focus-visible {
 .tma-users-dialog .tma-users-delete-confirm:hover { filter: brightness(0.94); }
 .tma-users-dialog .tma-users-delete-confirm:disabled { opacity: 0.5; pointer-events: none; }
 
+.tma-users-picker { min-width: min(420px, calc(100vw - 32px)); }
+.tma-users-picker-search {
+  width: 100%;
+  margin-top: var(--space-12);
+  padding: 8px 12px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-8, 8px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--text-size-14);
+}
+.tma-users-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 280px;
+  overflow: auto;
+  margin: var(--space-12) 0;
+}
+.tma-users-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-8, 8px);
+  background: transparent;
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+.tma-users-picker-item:hover { background: var(--color-bg-muted, rgba(0,0,0,0.04)); }
+.tma-users-picker-item[data-selected] {
+  border-color: var(--color-primary);
+  background: var(--color-bg-muted, rgba(19, 109, 160, 0.08));
+}
+.tma-users-picker-item-copy { display: flex; flex-direction: column; gap: 2px; }
+.tma-users-picker-item-copy span { color: var(--color-text-secondary); font-size: var(--text-size-12); }
+
 /* Client hub: initial load placeholder while the directory is fetched. */
 .tma-dash__clients-loading {
   display: flex;
@@ -35282,6 +35326,56 @@ span.tma-dash__messages-profile-avatar {
 .tma-dash__rb-see-all {
   color: var(--color-primary, #03a5e9);
   font-weight: 500;
+}
+
+/* Right sidebar only: shrink copy as the panel is dragged below its 280px
+   default so notification, activity, and client labels stay mostly visible.
+   Tokens live on the section (not the rightbar) because cqi cannot resolve
+   against the container they are declared on. Size queries see the content
+   box (280px track − 16px padding each side = 248px), so the clamps are
+   anchored there — 14 / 12 / 24 at the default, 10 / 9 / 20 at the 220px min. */
+.tma-dash__rightbar .tma-dash__rb-section {
+  --text-size-14: clamp(10px, calc(6.67cqi - 2.53px), 14px);
+  --text-lh-14: 1.4em;
+  --text-size-12: clamp(9px, calc(5cqi - 0.4px), 12px);
+  --text-lh-12: 1.35em;
+  --dash-icon-lg: clamp(20px, calc(6.67cqi + 7.47px), 24px);
+  --dash-icon-sm: clamp(13px, calc(5cqi + 3.6px), 16px);
+  --dash-icon-text-gap: clamp(8px, calc(6.67cqi - 4.53px), 12px);
+}
+
+/* Inner 230px ≈ outer 262px — below the 280px default, not at it. */
+@container dash-rightbar (max-width: 230px) {
+  .tma-dash__notice,
+  .tma-dash__activity {
+    padding-right: var(--space-8);
+  }
+  .tma-dash__notice-body {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 2px 8px;
+  }
+  .tma-dash__notice .tma-dash__notice-title,
+  .tma-dash__activity .tma-dash__notice-title {
+    flex: 1 1 100%;
+    white-space: normal;
+    overflow: hidden;
+    overflow-wrap: break-word;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    text-overflow: ellipsis;
+  }
+  .tma-dash__notice .tma-dash__notice-meta,
+  .tma-dash__activity .tma-dash__notice-meta {
+    flex: 0 1 auto;
+    max-width: 100%;
+  }
+  .tma-dash__contact-name {
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
 }
 
 /* ── Overview → Notifications: full inbox ── */

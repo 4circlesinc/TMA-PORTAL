@@ -3,8 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\AuthEvent;
+use App\Models\CipApplicationAssignment;
 use App\Models\Client;
+use App\Models\Company;
 use App\Models\CompanyMember;
+use App\Models\CompanyStaffAssignment;
 use App\Models\FileLibrarySetting;
 use App\Models\Invitation;
 use App\Models\Notification;
@@ -14,7 +17,10 @@ use App\Support\Access\AccessSync;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
 use App\Support\AvatarService;
+use App\Support\Cip\Assignments;
 use App\Support\Clients\ClientDirectory;
+use App\Support\Companies\CompanyMembers;
+use App\Support\Companies\CompanyRoles;
 use App\Support\DeviceName;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Invitations\Invitations;
@@ -23,8 +29,11 @@ use App\Support\Mail\Postcards;
 use App\Support\Notifications\Notifier;
 use App\Support\Presence\LastSeen;
 use App\Support\Realtime\Live;
+use App\Support\SecurityPolicies;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Password;
@@ -87,57 +96,115 @@ class AdminUsersController extends Controller
          * makes them a Service Provider Client; a client under no provider
          * is a Private Client. Measured in two grouped queries, not per row.
          */
+        $userIds = $userModels->pluck('id');
         $externalIds = $userModels->where('account_type', Role::CLIENT)->pluck('id');
-        $providerContactIds = $externalIds->isEmpty() ? collect() : CompanyMember::query()
+        $membershipsByUser = $userIds->isEmpty() ? collect() : CompanyMember::query()
             ->active()
-            ->whereIn('user_id', $externalIds)
-            ->pluck('user_id')
-            ->flip();
+            ->whereIn('user_id', $userIds)
+            ->with(['company:id,uid,name', 'company.cipProvider:id,company_id,code'])
+            ->get()
+            ->groupBy('user_id');
+        $providerContactIds = $membershipsByUser->keys()->flip();
         $referredClientIds = $externalIds->isEmpty() ? collect() : Client::query()
             ->whereIn('user_id', $externalIds)
             ->whereNotNull('referred_by_company_id')
             ->pluck('user_id')
             ->flip();
 
-        $users = $userModels->map(fn (User $user) => [
-            'id' => $user->id,
-            'name' => $user->name,
-            'firstName' => $user->first_name,
-            'middleName' => $user->middle_name,
-            'lastName' => $user->last_name,
-            'gender' => $user->gender,
-            'email' => $user->email,
-            'accountType' => $user->account_type,
-            'accountTypeLabel' => $this->accountTypeLabel($user, $providerContactIds, $referredClientIds),
-            'avatar' => $user->avatar_url,
-            'phone' => $user->phone,
-            'jobTitle' => $user->job_title,
-            'bio' => $user->bio,
-            'linkedin' => $user->linkedin_url,
-            'profileDone' => $user->profile_completed_at !== null,
-            'note' => $user->admin_note,
-            'status' => $user->status,
-            'twoFactor' => $user->hasTwoFactorEnabled(),
-            'joined' => $user->created_at->format('M j, Y'),
-            'joinedIso' => $user->created_at->toIso8601String(),
-            'lastActive' => isset($lastSeen[$user->id])
-                ? LastSeen::short(now()->setTimestamp($lastSeen[$user->id]), $viewer)
-                : null,
-            'lastActiveLabel' => isset($lastSeen[$user->id])
-                ? LastSeen::label(now()->setTimestamp($lastSeen[$user->id]), $viewer)
-                : null,
-            'lastActiveAt' => isset($lastSeen[$user->id])
-                ? now()->setTimestamp($lastSeen[$user->id])->toIso8601String()
-                : null,
-            'workStatus' => $workStatuses[(int) $user->id] ?? null,
-            'self' => $user->id === $viewer->id,
-        ]);
+        $lastLogins = $this->latestAuthAt($userIds, 'login');
+        $lastLogouts = $this->latestAuthAt($userIds, 'logout');
+
+        $users = $userModels->map(function (User $user) use (
+            $providerContactIds,
+            $referredClientIds,
+            $membershipsByUser,
+            $lastSeen,
+            $lastLogins,
+            $lastLogouts,
+            $workStatuses,
+            $viewer,
+        ) {
+            $loginAt = isset($lastLogins[$user->id]) ? Carbon::parse($lastLogins[$user->id]) : null;
+            $logoutAt = isset($lastLogouts[$user->id]) ? Carbon::parse($lastLogouts[$user->id]) : null;
+
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'firstName' => $user->first_name,
+                'middleName' => $user->middle_name,
+                'lastName' => $user->last_name,
+                'gender' => $user->gender,
+                'email' => $user->email,
+                'accountType' => $user->account_type,
+                'accountTypeLabel' => $this->accountTypeLabel($user, $providerContactIds, $referredClientIds),
+                'avatar' => $user->avatar_url,
+                'phone' => $user->phone,
+                'jobTitle' => $user->job_title,
+                'bio' => $user->bio,
+                'linkedin' => $user->linkedin_url,
+                'profileDone' => $user->profile_completed_at !== null,
+                'note' => $user->admin_note,
+                'status' => $user->status,
+                'twoFactor' => $user->hasTwoFactorEnabled(),
+                'requireTwoFactor' => (bool) $user->require_two_factor,
+                'serviceProviders' => ($membershipsByUser->get($user->id) ?? collect())
+                    ->map(function (CompanyMember $member) {
+                        $company = $member->company;
+                        if (! $company) {
+                            return null;
+                        }
+
+                        return [
+                            'id' => $company->uid,
+                            'name' => $company->name,
+                            'cipCode' => $company->cipProvider?->code,
+                        ];
+                    })
+                    ->filter()
+                    ->unique('id')
+                    ->values()
+                    ->all(),
+                'joined' => $user->created_at->format('M j, Y'),
+                'joinedIso' => $user->created_at->toIso8601String(),
+                'lastLogin' => $loginAt ? LastSeen::short($loginAt, $viewer) : null,
+                'lastLoginIso' => $loginAt?->toIso8601String(),
+                'lastLogout' => $logoutAt ? LastSeen::short($logoutAt, $viewer) : null,
+                'lastLogoutIso' => $logoutAt?->toIso8601String(),
+                'lastActive' => isset($lastSeen[$user->id])
+                    ? LastSeen::short(now()->setTimestamp($lastSeen[$user->id]), $viewer)
+                    : null,
+                'lastActiveLabel' => isset($lastSeen[$user->id])
+                    ? LastSeen::label(now()->setTimestamp($lastSeen[$user->id]), $viewer)
+                    : null,
+                'lastActiveAt' => isset($lastSeen[$user->id])
+                    ? now()->setTimestamp($lastSeen[$user->id])->toIso8601String()
+                    : null,
+                'workStatus' => $workStatuses[(int) $user->id] ?? null,
+                'self' => $user->id === $viewer->id,
+            ];
+        });
 
         return response()->json([
             'accountTypes' => self::ACCOUNT_TYPES,
             'users' => $users,
             'canManage' => $this->isAdmin($viewer),
+            'orgRequiresAuthenticator' => SecurityPolicies::authenticatorRequired(),
         ]);
+    }
+
+    /** @param  Collection<int, int|string>  $userIds */
+    private function latestAuthAt($userIds, string $event)
+    {
+        if ($userIds->isEmpty()) {
+            return collect();
+        }
+
+        return AuthEvent::query()
+            ->select('user_id', DB::raw('MAX(created_at) as last_at'))
+            ->whereIn('user_id', $userIds)
+            ->where('event', $event)
+            ->groupBy('user_id')
+            ->pluck('last_at', 'user_id');
     }
 
     public function bulkDestroy(Request $request): JsonResponse
@@ -376,7 +443,7 @@ class AdminUsersController extends Controller
             ->when($request->query('type') === 'login', fn ($q) => $q->whereIn('event', $loginEvents))
             ->when($request->query('type') === 'app', fn ($q) => $q->whereNotIn('event', $loginEvents))
             ->orderByDesc('created_at')
-            ->limit(30)
+            ->limit(100)
             ->get()
             ->map(fn (AuthEvent $event) => [
                 'event' => $event->event,
@@ -391,9 +458,18 @@ class AdminUsersController extends Controller
             ->where('event', 'login')
             ->orderByDesc('created_at')
             ->first();
+        $lastLogout = AuthEvent::where('user_id', $user->id)
+            ->where('event', 'logout')
+            ->orderByDesc('created_at')
+            ->first();
 
         return response()->json([
+            'joined' => $user->created_at->diffForHumans(),
+            'joinedIso' => $user->created_at->toIso8601String(),
             'lastLogin' => $lastLogin?->created_at->diffForHumans(),
+            'lastLoginIso' => $lastLogin?->created_at->toIso8601String(),
+            'lastLogout' => $lastLogout?->created_at->diffForHumans(),
+            'lastLogoutIso' => $lastLogout?->created_at->toIso8601String(),
             'events' => $events,
         ]);
     }
@@ -416,37 +492,7 @@ class AdminUsersController extends Controller
         ])->save();
 
         $this->record($user->id, 'account_approved');
-        $this->maybeProvisionStaffFolder($user->fresh(), $request->user());
-
-        ActivityLogger::log([
-            'actor' => $request->user(),
-            'type' => 'account.approved',
-            'module' => 'account',
-            'description' => $request->user()->name.' approved '.$user->name.'’s account',
-            'subject' => $user,
-            'new' => ['account_type' => $user->account_type],
-        ]);
-        Notifier::send([
-            'user' => $user,
-            'actor' => $request->user(),
-            'type' => 'account.approved',
-            'title' => 'Your account has been approved',
-            'message' => 'Welcome to the portal. You now have full access.',
-            'action_url' => '/',
-            // The welcome postcard below is the email for this moment.
-            'email' => false,
-        ]);
-        // Inline, and tracked: a queued approval email is indistinguishable
-        // from no approval email at all when no worker is draining the queue,
-        // and this is the one message the account has been waiting on.
-        Deliveries::send(
-            Postcards::welcome($user->email, url('/'), $user->first_name ?: null),
-            $user->email,
-            $user,
-            'welcome',
-            immediate: true,
-        );
-        $this->clearPendingApprovalNotifications($user);
+        $this->completeApproval($user->fresh(), $request->user());
 
         Live::staffAnd(Live::USERS, [$user->id]);
 
@@ -529,6 +575,79 @@ class AdminUsersController extends Controller
         }
     }
 
+    /**
+     * Welcome mail, audit, folder and the pending-approval inbox, shared by
+     * staff approval and approve-as-service-provider.
+     */
+    private function completeApproval(User $user, User $actor): void
+    {
+        $this->maybeProvisionStaffFolder($user, $actor);
+
+        ActivityLogger::log([
+            'actor' => $actor,
+            'type' => 'account.approved',
+            'module' => 'account',
+            'description' => $actor->name.' approved '.$user->name.'’s account',
+            'subject' => $user,
+            'new' => ['account_type' => $user->account_type],
+        ]);
+        Notifier::send([
+            'user' => $user,
+            'actor' => $actor,
+            'type' => 'account.approved',
+            'title' => 'Your account has been approved',
+            'message' => 'Welcome to the portal. You now have full access.',
+            'action_url' => '/',
+            'email' => false,
+        ]);
+        Deliveries::send(
+            Postcards::welcome($user->email, url('/'), $user->first_name ?: null),
+            $user->email,
+            $user,
+            'welcome',
+            immediate: true,
+        );
+        $this->clearPendingApprovalNotifications($user);
+    }
+
+    private function assertNotLastAdmin(User $user): void
+    {
+        if (! Role::isAdmin($user) || $user->status !== 'approved') {
+            return;
+        }
+
+        $otherAdmins = User::where('account_type', 'Administrator')
+            ->where('status', 'approved')
+            ->where('id', '!=', $user->id)
+            ->exists();
+        abort_unless($otherAdmins, 422, 'The portal needs at least one active administrator.');
+    }
+
+    /**
+     * Officer and company-staff grants do not belong on a Client account.
+     * Memberships stay: we are about to add one.
+     */
+    private function endStaffGrants(User $user, User $actor): void
+    {
+        $endedCompanies = CompanyStaffAssignment::live()->where('user_id', $user->id)->get();
+        foreach ($endedCompanies as $assignment) {
+            $assignment->forceFill([
+                'status' => CompanyStaffAssignment::STATUS_ENDED,
+                'is_primary' => false,
+                'ended_at' => now(),
+                'ended_by' => $actor->id,
+            ])->save();
+        }
+
+        $endedCipFiles = CipApplicationAssignment::live()->where('user_id', $user->id)->get();
+        foreach ($endedCipFiles as $assignment) {
+            $assignment->end($actor);
+            if ($assignment->application) {
+                Assignments::refreshCache($assignment->application);
+            }
+        }
+    }
+
     public function suspend(Request $request, User $user): JsonResponse
     {
         abort_unless($this->isAdmin($request->user()), 403, 'Only administrators can suspend users.');
@@ -574,6 +693,147 @@ class AdminUsersController extends Controller
         $this->record($user->id, 'two_factor_reset');
 
         return response()->json(['status' => 'ok']);
+    }
+
+    /**
+     * Firms registered as CIP service providers, for the Users-page picker.
+     */
+    public function serviceProviders(Request $request): JsonResponse
+    {
+        abort_unless($this->isAdmin($request->user()), 403, 'Only administrators can assign service providers.');
+
+        $companies = Company::query()
+            ->with('cipProvider:id,company_id,code')
+            ->whereHas('cipProvider', fn ($q) => $q->where('active', true)->whereNotNull('company_id'))
+            ->where(function ($q) {
+                $q->whereNull('status')->orWhere('status', '!=', Company::STATUS_ARCHIVED);
+            })
+            ->orderBy('name')
+            ->orderBy('id')
+            ->get(['id', 'uid', 'name']);
+
+        return response()->json([
+            'providers' => $companies->map(fn (Company $company) => [
+                'id' => $company->uid,
+                'name' => $company->name,
+                'cipCode' => $company->cipProvider?->code,
+            ])->values()->all(),
+        ]);
+    }
+
+    /**
+     * Make this account a service-provider contact of the chosen firm.
+     *
+     * Account type stays Client — that is what CIP access keys off. The Users
+     * page describes them as a Service Provider Contact from the membership.
+     */
+    public function assignServiceProvider(Request $request, User $user): JsonResponse
+    {
+        abort_unless($this->isAdmin($request->user()), 403, 'Only administrators can assign service providers.');
+        abort_if($user->id === $request->user()->id, 422, "You can't change your own account type this way.");
+        abort_unless(in_array($user->status, ['pending', 'approved'], true), 422, 'Reactivate the account before assigning it to a service provider.');
+
+        $data = $request->validate([
+            'company' => ['required', 'string', 'max:96'],
+        ]);
+
+        $company = Company::query()
+            ->where('uid', $data['company'])
+            ->whereHas('cipProvider', fn ($q) => $q->where('active', true)->whereNotNull('company_id'))
+            ->first();
+
+        abort_unless($company, 422, 'Pick a service provider from the list.');
+        abort_if($company->isArchived(), 422, 'That service provider is archived.');
+
+        $this->assertNotLastAdmin($user);
+
+        $wasPending = $user->status === 'pending';
+        $wasStaff = Role::isStaff($user);
+        $actor = $request->user();
+
+        $fill = ['account_type' => Role::CLIENT];
+        if ($wasPending) {
+            $fill['status'] = 'approved';
+            $fill['approved_at'] = now();
+            $fill['approved_by'] = $actor->id;
+        }
+
+        $user->forceFill($fill)->save();
+
+        if ($wasStaff) {
+            $this->endStaffGrants($user, $actor);
+        }
+
+        CompanyMembers::add($company, [
+            'email' => $user->email,
+            'name' => $user->name,
+            'role' => CompanyRoles::MEMBER,
+        ], $actor);
+
+        $this->record($user->id, 'assigned_service_provider', $company->name);
+        if ($wasPending) {
+            $this->record($user->id, 'account_approved');
+            $this->completeApproval($user->fresh(), $actor);
+        }
+
+        ActivityLogger::log([
+            'actor' => $actor,
+            'type' => 'account.service_provider_assigned',
+            'module' => 'account',
+            'description' => $actor->name.' assigned '.$user->name.' to '.$company->name,
+            'subject' => $user,
+            'metadata' => [
+                'companyUid' => $company->uid,
+                'companyName' => $company->name,
+            ],
+        ]);
+
+        Cache::forget('companies.directory');
+        ClientDirectory::flush();
+        Live::staffAnd(Live::USERS, [$user->id]);
+        Live::staff(Live::COMPANIES);
+        Live::staff(Live::CLIENTS);
+
+        return response()->json(['status' => 'ok']);
+    }
+
+    public function requireTwoFactor(Request $request, User $user): JsonResponse
+    {
+        abort_unless($this->isAdmin($request->user()), 403, 'Only administrators can require two-factor authentication.');
+
+        $data = $request->validate([
+            'required' => ['required', 'boolean'],
+        ]);
+
+        $required = (bool) $data['required'];
+        $user->forceFill(['require_two_factor' => $required])->save();
+
+        $this->record($user->id, $required ? 'two_factor_required' : 'two_factor_requirement_cleared');
+
+        ActivityLogger::log([
+            'actor' => $request->user(),
+            'type' => $required ? 'account.two_factor_required' : 'account.two_factor_requirement_cleared',
+            'module' => 'account',
+            'description' => $required
+                ? $request->user()->name.' required an authenticator app for '.$user->name
+                : $request->user()->name.' stopped requiring an authenticator app for '.$user->name,
+            'subject' => $user,
+        ]);
+
+        if ($required && ! $user->hasTwoFactorEnabled()) {
+            Notifier::send([
+                'user' => $user,
+                'actor' => $request->user(),
+                'type' => 'account.two_factor_required',
+                'title' => 'Set up an authenticator app',
+                'message' => 'An administrator requires two-factor authentication on your account.',
+                'action_url' => '/security-settings',
+            ]);
+        }
+
+        Live::staffAnd(Live::USERS, [$user->id]);
+
+        return response()->json(['status' => 'ok', 'requireTwoFactor' => $required]);
     }
 
     public function destroy(Request $request, User $user): JsonResponse
@@ -678,11 +938,12 @@ class AdminUsersController extends Controller
         return Role::can($user, 'users.manage');
     }
 
-    private function record(int $userId, string $event): void
+    private function record(int $userId, string $event, ?string $detail = null): void
     {
         AuthEvent::create([
             'user_id' => $userId,
             'event' => $event,
+            'detail' => $detail,
             'ip' => request()->ip(),
             'user_agent' => (string) request()->userAgent(),
             'created_at' => now(),

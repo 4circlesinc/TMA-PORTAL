@@ -10,7 +10,7 @@ use Carbon\Carbon;
  * unusual sign-ins; this is the push toward the stronger method.
  *
  * Shown at most once per 7 days, at most 5 times, and never when the app is
- * already on or the sign-in policy requires it (those people are sent to
+ * already on or the authenticator is required (those people are sent to
  * set-up instead of being asked).
  */
 final class AuthenticatorNudge
@@ -34,7 +34,7 @@ final class AuthenticatorNudge
 
     public static function shouldShow(User $user): bool
     {
-        if ($user->hasTwoFactorEnabled() || SecurityPolicies::authenticatorRequired()) {
+        if ($user->hasTwoFactorEnabled() || $user->mustUseAuthenticator()) {
             return false;
         }
 

@@ -15,18 +15,22 @@ class PreventDisablingRequiredAuthenticator
 {
     public function handle(Request $request, Closure $next): Response
     {
+        $user = $request->user();
+
         if (
             $request->isMethod('DELETE')
             && $request->is('auth/user/two-factor-authentication')
-            && SecurityPolicies::authenticatorRequired()
+            && $user?->mustUseAuthenticator()
         ) {
+            $message = $user->require_two_factor && ! SecurityPolicies::authenticatorRequired()
+                ? 'An administrator requires an authenticator app on this account.'
+                : 'Your organisation requires an authenticator app.';
+
             if ($request->expectsJson()) {
-                return response()->json([
-                    'message' => 'Your organisation requires an authenticator app.',
-                ], 403);
+                return response()->json(['message' => $message], 403);
             }
 
-            abort(403, 'Your organisation requires an authenticator app.');
+            abort(403, $message);
         }
 
         return $next($request);

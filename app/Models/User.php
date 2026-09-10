@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Listeners\RecordAuthEvent;
 use App\Notifications\PortalResetPassword;
 use App\Notifications\PortalVerifyEmail;
+use App\Support\SecurityPolicies;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -54,6 +55,7 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     protected $attributes = [
         'status' => self::STATUS_PENDING,
+        'require_two_factor' => false,
     ];
 
     public function sendPasswordResetNotification(#[\SensitiveParameter] $token): void
@@ -83,6 +85,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'last_authenticated_at' => 'datetime',
             'password' => 'hashed',
             'preferences' => 'array',
+            'require_two_factor' => 'boolean',
         ];
     }
 
@@ -111,6 +114,15 @@ class User extends Authenticatable implements MustVerifyEmail
     public function hasTwoFactorEnabled(): bool
     {
         return $this->two_factor_confirmed_at !== null;
+    }
+
+    /**
+     * Must this account use an authenticator app? Either the firm-wide
+     * sign-in policy, or an administrator requiring it on this person.
+     */
+    public function mustUseAuthenticator(): bool
+    {
+        return $this->require_two_factor || SecurityPolicies::authenticatorRequired();
     }
 
     /**

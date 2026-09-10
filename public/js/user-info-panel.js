@@ -292,6 +292,21 @@
     return labels;
   }
 
+  function extraReadOnlyFieldsHtml(row, session) {
+    if (!session || !session.extraReadOnlyFields) return '';
+    var fields = typeof session.extraReadOnlyFields === 'function'
+      ? session.extraReadOnlyFields(row)
+      : session.extraReadOnlyFields;
+    if (!fields || !fields.length) return '';
+    return fields.map(function (field) {
+      return renderField(field.label, 'extra-' + field.label, field.value || '', {
+        readOnly: true,
+        muted: true,
+        icon: field.icon || null,
+      });
+    }).join('');
+  }
+
   function renderPanel(row, index, rows, session) {
     var labels = fieldLabels(session);
     var entity = (session && session.entityLabel) || 'user';
@@ -350,6 +365,7 @@
       renderField(labels.email, 'email', row.email, session && session.readOnlyEmail ? { readOnly: true, muted: true } : null) +
       renderField(labels.address, 'address', row.address, session && session.addressOptions ? { select: session.addressOptions } : null) +
       renderField(labels.date, 'date', formatPanelDate(row.date), { readOnly: true, muted: true, icon: 'CalendarBlank16' }) +
+      extraReadOnlyFieldsHtml(row, session) +
       (session && session.profileFields
         ? renderField('Phone', 'phone', row.phone || '', { leadingIcon: 'phosphor/DeviceMobile', placeholder: '+1 555 123 4567' }) +
           renderField('Role', 'jobTitle', row.jobTitle || '') +
@@ -436,6 +452,7 @@
       fieldLabels: options.fieldLabels || null,
       readOnlyEmail: !!options.readOnlyEmail,
       extraTabs: options.extraTabs || null,
+      extraReadOnlyFields: options.extraReadOnlyFields || null,
       addressOptions: options.addressOptions || null,
       avatarChoices: options.avatarChoices || null,
       profileFields: !!options.profileFields,
