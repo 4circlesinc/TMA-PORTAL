@@ -566,7 +566,11 @@ class CipApplicationController extends Controller
             $chosen = [];
 
             foreach ($buckets as $key) {
-                $bucket = Buckets::find($user, $key);
+                $bucket = Buckets::find(
+                    $user,
+                    $key,
+                    Phase::isValid($data['phase'] ?? '') ? $data['phase'] : null,
+                );
                 abort_unless($bucket, 404);
                 $chosen[] = $bucket;
             }

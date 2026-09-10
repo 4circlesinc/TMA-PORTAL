@@ -15,6 +15,7 @@ use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\Assignments;
 use App\Support\Cip\Buckets;
 use App\Support\Cip\CipAccess;
+use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -102,6 +103,9 @@ class CipBucketTest extends TestCase
 
         $application->forceFill([
             'status' => $status,
+            'phase' => Status::laneOf($status) === Phase::POST_APPROVAL
+                ? Phase::POST_APPROVAL
+                : Phase::PRE_APPROVAL,
             'assigned_officer_id' => $officer?->id,
         ])->save();
 
@@ -171,7 +175,7 @@ class CipBucketTest extends TestCase
         return $account;
     }
 
-    public function test_the_administrator_dashboard_is_section_9s_buckets_plus_the_post_approval_lane(): void
+    public function test_the_administrator_dashboard_opens_on_pre_approval_buckets(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
 
@@ -179,11 +183,19 @@ class CipBucketTest extends TestCase
 
         $this->assertTrue($body['cip']);
         $this->assertSame(Buckets::ADMINISTRATOR, $body['dashboard']);
+        $this->assertSame(Phase::PRE_APPROVAL, $body['phase']);
         $this->assertSame([
             'New Applications', 'Review Applications', 'Assessment Feedback', 'Updates Required',
             'Ready to Submit', 'Pending Review', 'Non-compliant', 'Background Check', 'Delayed',
-            'Approved', 'Post-Approval', 'Denied',
-        ], array_column($body['buckets'], 'label'), 'The order is section 9’s, not a renderer’s choice.');
+            'Approved', 'Denied',
+        ], array_column($body['buckets'], 'label'), 'Pre-approval is section 9 without the collapsed post-approval chip.');
+        $this->assertSame('Pre-Approval Applications', $body['phases'][Phase::PRE_APPROVAL]['label']);
+        $this->assertSame('Post-Approval Applications', $body['phases'][Phase::POST_APPROVAL]['label']);
+        $this->assertSame([
+            'Post-Approval', 'Apply for COR', 'Pending COR', 'Apply for NIC', 'Pending NIC',
+            'Apply for Passport', 'Pending Passport', 'Ready for Delivery', 'Updates Required',
+            'Approved', 'Denied',
+        ], array_column($body['phases'][Phase::POST_APPROVAL]['buckets'], 'label'));
     }
 
     public function test_the_reviewing_officer_dashboard_is_four_personal_queues(): void
@@ -232,15 +244,20 @@ class CipBucketTest extends TestCase
         $this->assertSame(Buckets::SERVICE_PROVIDER, $body['dashboard']);
         $this->assertSame([
             'Updates Required', 'Ready to Submit', 'Pending Review', 'Non-compliant', 'Delayed',
-            'Approved', 'Post-Approval', 'Denied',
+            'Approved', 'Denied',
         ], array_column($body['buckets'], 'label'));
 
         // A provider firm has no queue of its own — what it sees is its whole
         // book, which ApplicationScope has already narrowed to its own files.
         $this->assertSame(
-            array_fill(0, 8, Buckets::SCOPE_ALL),
+            array_fill(0, 7, Buckets::SCOPE_ALL),
             array_column($body['buckets'], 'scope'),
         );
+        $this->assertSame([
+            'Post-Approval', 'Apply for COR', 'Pending COR', 'Apply for NIC', 'Pending NIC',
+            'Apply for Passport', 'Pending Passport', 'Ready for Delivery', 'Updates Required',
+            'Approved', 'Denied',
+        ], array_column($body['phases']['post_approval']['buckets'], 'label'));
     }
 
     /**
@@ -313,31 +330,25 @@ class CipBucketTest extends TestCase
         [, $contact] = $this->providerWithContact('GAL');
 
         foreach ([$admin, $rita, $contact] as $reader) {
-            $buckets = $this->actingAs($reader)->getJson('/portal/cip/dashboard')->assertOk()->json('buckets');
+            foreach ([Phase::PRE_APPROVAL, Phase::POST_APPROVAL] as $phase) {
+                $buckets = $this->actingAs($reader)
+                    ->getJson('/portal/cip/dashboard')
+                    ->assertOk()
+                    ->json('phases.'.$phase.'.buckets');
 
-            foreach ($buckets as $bucket) {
-                $this->assertNotSame('', trim($bucket['short'] ?? ''), $bucket['key'].' is named short');
-                /*
-                 * The legend it has to fit is two columns of a third-width
-                 * card. "Additional Information Requests" is 31 characters and
-                 * the reason this field exists; twelve is the width the column
-                 * holds without the name being cut by the browser instead.
-                 */
-                $this->assertLessThanOrEqual(
-                    12,
-                    mb_strlen($bucket['short']),
-                    $bucket['key'].' fits a legend column',
-                );
+                foreach ($buckets as $bucket) {
+                    $this->assertNotSame('', trim($bucket['short'] ?? ''), $bucket['key'].' is named short');
+                    $this->assertLessThanOrEqual(
+                        12,
+                        mb_strlen($bucket['short']),
+                        $bucket['key'].' fits a legend column',
+                    );
+                }
+
+                $shorts = array_column($buckets, 'short');
+                $this->assertSame($shorts, array_unique($shorts), $reader->email.' '.$phase.' shorts must tell the queues apart');
             }
         }
-
-        // And within one set they still tell the queues apart — a legend of
-        // four rows saying "Pending" twice names nothing.
-        $shorts = array_column(
-            $this->actingAs($rita)->getJson('/portal/cip/dashboard')->json('buckets'),
-            'short',
-        );
-        $this->assertSame($shorts, array_unique($shorts));
     }
 
     public function test_the_total_counts_the_applications_the_dashboard_covers(): void
@@ -489,8 +500,12 @@ class CipBucketTest extends TestCase
         ];
 
         foreach ([$admin, $rita, $contact] as $reader) {
-            foreach ($this->tones($reader) as $key => $tone) {
-                $this->assertContains($tone, $vocabulary, $key.' must wear a tone the portal styles.');
+            $body = $this->actingAs($reader)->getJson('/portal/cip/dashboard')->assertOk()->json();
+
+            foreach ([Phase::PRE_APPROVAL, Phase::POST_APPROVAL] as $phase) {
+                foreach (array_column($body['phases'][$phase]['buckets'], 'tone', 'key') as $key => $tone) {
+                    $this->assertContains($tone, $vocabulary, $key.' ('.$phase.') must wear a tone the portal styles.');
+                }
             }
         }
 
@@ -648,14 +663,20 @@ class CipBucketTest extends TestCase
         foreach ([$admin, $rita, $contact] as $reader) {
             $dashboard = $this->actingAs($reader)->getJson('/portal/cip/dashboard')->assertOk();
 
-            foreach ($dashboard->json('buckets') as $bucket) {
-                $definition = Buckets::find($reader, $bucket['filter']['bucket']);
+            foreach ([Phase::PRE_APPROVAL, Phase::POST_APPROVAL] as $phase) {
+                foreach ($dashboard->json('phases.'.$phase.'.buckets') as $bucket) {
+                    $definition = Buckets::find(
+                        $reader,
+                        $bucket['filter']['bucket'],
+                        $bucket['filter']['phase'] ?? null,
+                    );
 
-                $this->assertSame(
-                    $bucket['count'],
-                    Buckets::apply(ApplicationScope::query($reader), $definition, $reader)->count(),
-                    $bucket['label'].' must find the rows it counted.',
-                );
+                    $this->assertSame(
+                        $bucket['count'],
+                        Buckets::apply(ApplicationScope::query($reader), $definition, $reader)->count(),
+                        $bucket['label'].' ('.$phase.') must find the rows it counted.',
+                    );
+                }
             }
         }
 
@@ -690,6 +711,9 @@ class CipBucketTest extends TestCase
         $colin = $this->user(Role::COMPLIANCE_OFFICER, 'colin@example.com');
         $this->assertNotNull(Buckets::find($colin, 'assigned_reviews'));
         $this->assertNull(Buckets::find($colin, 'background_check'));
+        $this->assertNotNull(Buckets::find($admin, 'apply_for_cor'));
+        $this->assertNotNull(Buckets::find($contact, 'apply_for_cor'));
+        $this->assertNull(Buckets::find($colin, 'apply_for_cor'));
     }
 
     public function test_approved_is_the_granted_bucket(): void
@@ -756,7 +780,45 @@ class CipBucketTest extends TestCase
         $queries = DB::getQueryLog();
         DB::disableQueryLog();
 
-        $this->assertCount(12, $buckets);
-        $this->assertCount(1, $queries, 'Twelve buckets are one grouped count, not twelve questions.');
+        $this->assertCount(11, $buckets);
+        $this->assertCount(1, $queries, 'Both lanes are one grouped count, not one question per bucket.');
+    }
+
+    public function test_pre_and_post_approval_counts_are_separate_lanes(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        [$galaxy] = $this->providerWithContact('GAL');
+
+        $this->application($galaxy, $admin, Status::NEW);
+        $this->application($galaxy, $admin, Status::UPDATE_REQUIRED);
+        $this->application($galaxy, $admin, Status::GRANTED);
+
+        $post = $this->application($galaxy, $admin, Status::APPLY_FOR_COR);
+        $post->forceFill([
+            'status' => Status::APPLY_FOR_COR,
+            'phase' => Phase::POST_APPROVAL,
+        ])->save();
+
+        $shared = $this->application($galaxy, $admin, Status::UPDATE_REQUIRED);
+        $shared->forceFill([
+            'status' => Status::UPDATE_REQUIRED,
+            'phase' => Phase::POST_APPROVAL,
+        ])->save();
+
+        $body = $this->actingAs($admin)->getJson('/portal/cip/dashboard')->assertOk()->json();
+        $pre = array_column($body['phases'][Phase::PRE_APPROVAL]['buckets'], 'count', 'key');
+        $postCounts = array_column($body['phases'][Phase::POST_APPROVAL]['buckets'], 'count', 'key');
+
+        $this->assertSame(1, $pre['new']);
+        $this->assertSame(1, $pre['update_required']);
+        $this->assertSame(1, $pre['approved']);
+        $this->assertSame(3, $body['phases'][Phase::PRE_APPROVAL]['total']);
+
+        $this->assertSame(1, $postCounts['apply_for_cor']);
+        $this->assertSame(1, $postCounts['update_required']);
+        $this->assertSame(0, $postCounts['post_approval']);
+        $this->assertSame(2, $body['phases'][Phase::POST_APPROVAL]['total']);
+        $this->assertArrayNotHasKey('new', $postCounts);
+        $this->assertArrayNotHasKey('apply_for_cor', $pre);
     }
 }

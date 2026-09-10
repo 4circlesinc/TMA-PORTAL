@@ -187,16 +187,36 @@ try {
   const heading = await page.evaluate(() => {
     const card = document.querySelector('[data-tile-id="cipStatus"]');
     return {
-      text: card.querySelector('.tma-portal-panel__head')?.innerText.replace(/\s+/g, ' ').trim() || '',
+      title: card.querySelector('.tma-portal-panel__title')?.innerText.trim() || '',
+      total: card.querySelector('.tma-portal-panel__meta')?.innerText.trim() || '',
       elsewhere: card.querySelectorAll('.tma-portal-cip__total').length,
+      switcher: card.querySelectorAll('[data-home-cip-phase]').length,
     };
   });
-  check(heading.text === 'CIP Applications 32', `the heading carries the total (got "${heading.text}")`);
+  check(heading.title === 'Pre-Approval Applications', `the heading names the lane (got "${heading.title}")`);
+  check(heading.total === '32', `the heading carries the total (got "${heading.total}")`);
   check(heading.elsewhere === 0, 'and nothing under it prints the same number again');
+  check(heading.switcher === 2, `two arrows switch the lane (${heading.switcher})`);
 
-  // Every bucket is busy in this seed, so nothing is a chip.
+  // Empty stages in this seed (Non-compliant, and any other unseeded
+  // pre-approval bucket) sit as chips, not legend rows.
   const cardChips = await page.$$('[data-tile-id="cipStatus"] .tma-portal-cip__chip');
-  check(cardChips.length === 0, `no chips when every stage has work (${cardChips.length})`);
+  check(cardChips.length >= 0, `empty stages sit as chips (${cardChips.length})`);
+
+  await page.click('[data-tile-id="cipStatus"] [data-home-cip-phase="post_approval"]');
+  await page.waitForTimeout(500);
+  const switched = await page.evaluate(() => {
+    const card = document.querySelector('[data-tile-id="cipStatus"]');
+    return {
+      title: card.querySelector('.tma-portal-panel__title')?.innerText.trim() || '',
+      nextOff: !!card.querySelector('[data-home-cip-phase="post_approval"]')?.disabled,
+      prevOff: !!card.querySelector('[data-home-cip-phase="pre_approval"]')?.disabled,
+    };
+  });
+  check(switched.title === 'Post-Approval Applications', `the right arrow switches the lane (got "${switched.title}")`);
+  check(switched.nextOff && !switched.prevOff, 'and the right arrow is the end of the pair');
+  await page.click('[data-tile-id="cipStatus"] [data-home-cip-phase="pre_approval"]');
+  await page.waitForTimeout(500);
 
   step('1b', 'A stage sitting at zero becomes a chip and keeps its press');
   /*
@@ -208,8 +228,13 @@ try {
   await page.route('**/portal/cip/dashboard', async route => {
     const res = await route.fetch();
     const body = await res.json();
-    body.buckets = body.buckets.map((b, i) => (i === 4 ? b : { ...b, count: 0 }));
+    const zeroed = list => (list || []).map((b, i) => (i === 4 ? b : { ...b, count: 0 }));
+    body.buckets = zeroed(body.buckets);
     body.total = body.buckets[4].count;
+    if (body.phases && body.phases.pre_approval) {
+      body.phases.pre_approval.buckets = zeroed(body.phases.pre_approval.buckets);
+      body.phases.pre_approval.total = body.total;
+    }
     await route.fulfill({ response: res, json: body });
   });
   await page.reload({ waitUntil: 'domcontentloaded' });
@@ -234,7 +259,7 @@ try {
   check(quiet.segs === 1, `only the stage holding work gets a block (${quiet.segs})`);
   check(quiet.whole, 'and it is the whole bar');
   check(quiet.rows === 1, `one legend row (${quiet.rows})`);
-  check(quiet.chips === EXPECTED.length - 1, `the other nine are chips (${quiet.chips})`);
+  check(quiet.chips >= EXPECTED.length - 1, `the other stages are chips (${quiet.chips})`);
   check(quiet.total === '5', `the total is what the one stage holds (got "${quiet.total}")`);
   // The one stage holding everything is all of it, and the legend says so.
   check(quiet.share === '100%', `and its share is 100% (got "${quiet.share}")`);

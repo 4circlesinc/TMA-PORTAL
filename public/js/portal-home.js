@@ -1002,10 +1002,12 @@
    * App\Support\Cip\Buckets.
    *
    * Which set arrives is the server's decision and this card does not second
-     * guess it: an administrator gets the twelve the firm reports on, a Reviewing
-     * Officer and a Compliance Officer get their four work queues, and a Service
-     * Provider contact gets the applicant-facing eight. The card renders whatever
-   * came back, in the order it came back in.
+     * guess it: an administrator gets the pre-approval report the firm opens
+     * on, a Reviewing Officer and a Compliance Officer get their four work
+     * queues, and a Service Provider contact gets the applicant-facing set.
+     * Both lanes arrive together; arrows on the heading switch between
+     * Pre-Approval Applications and Post-Approval Applications. The card
+     * renders whatever came back, in the order it came back in.
    *
    * A private client never sees this card. They share the service-provider set
    * with the contact, so the dashboard name cannot decide it, the server
@@ -1015,6 +1017,7 @@
   var homeCip = null;
   var homeCipInflight = null;
   var homeCipAt = 0;
+  var homeCipPhase = 'pre_approval';
 
   /*
    * The five-tone status vocabulary (App\Support\Cip\Status), whitelisted here
@@ -1035,6 +1038,8 @@
   var CIP_TONES = [
     'success', 'danger', 'pending', 'action', 'neutral',
     'sky', 'indigo', 'violet', 'amber', 'teal', 'orange', 'rose', 'cyan', 'copper',
+    'emerald', 'slate', 'lime', 'navy', 'gold', 'plum', 'mint', 'stone',
+    'clay', 'sand', 'moss', 'laurel', 'garnet',
   ];
 
   function cipCardVisible(payload) {
@@ -1043,6 +1048,73 @@
     if (payload.card === false) return false;
     // Warm snapshot from before `card` existed: staff was the gate.
     return payload.staff === true;
+  }
+
+  /*
+   * Which lane the card is showing.
+   *
+   * The payload carries both (phases.pre_approval / phases.post_approval) so
+   * switching the heading does not wait on another request. A warm snapshot
+   * written before that existed has no phases and is drawn as the mixed
+   * list it always was, without arrows, so an old cache cannot invent a
+   * post-approval view it never counted.
+   */
+  function cipPhaseView(payload, phase) {
+    var phases = payload && payload.phases;
+    var key = phase === 'post_approval' ? 'post_approval' : 'pre_approval';
+    var lane = phases && phases[key];
+
+    if (lane && Array.isArray(lane.buckets)) {
+      return {
+        key: key,
+        title: lane.label || (key === 'post_approval'
+          ? 'Post-Approval Applications'
+          : 'Pre-Approval Applications'),
+        buckets: lane.buckets,
+        total: lane.total,
+        switchable: !!(phases.pre_approval && phases.post_approval),
+      };
+    }
+
+    return {
+      key: 'pre_approval',
+      title: 'CIP Applications',
+      buckets: (payload && payload.buckets) || [],
+      total: payload && payload.total,
+      switchable: false,
+    };
+  }
+
+  function cipActiveView(payload) {
+    var want = homeCipPhase === 'post_approval' ? 'post_approval' : 'pre_approval';
+    var view = cipPhaseView(payload, want);
+
+    if (want === 'post_approval' && !view.switchable) {
+      return cipPhaseView(payload, 'pre_approval');
+    }
+
+    return view;
+  }
+
+  function cipPhaseSwitch(view) {
+    if (!view.switchable) return '';
+
+    var atPre = view.key !== 'post_approval';
+
+    return '<div class="tma-portal-cip__switch" role="group" aria-label="Application lane">' +
+      '<button type="button" class="tma-portal-cip__switch-btn" data-home-cip-phase="pre_approval"' +
+      (atPre ? ' disabled' : '') +
+      ' aria-label="Pre-Approval Applications"' +
+      (atPre ? ' aria-current="true"' : '') + '>' +
+      '<img src="images/icons/phosphor/CaretLeft.svg" alt="" width="16" height="16">' +
+      '</button>' +
+      '<button type="button" class="tma-portal-cip__switch-btn" data-home-cip-phase="post_approval"' +
+      (atPre ? '' : ' disabled') +
+      ' aria-label="Post-Approval Applications"' +
+      (atPre ? '' : ' aria-current="true"') + '>' +
+      '<img src="images/icons/phosphor/CaretRight.svg" alt="" width="16" height="16">' +
+      '</button>' +
+      '</div>';
   }
 
   function cipTone(bucket) {
@@ -1093,7 +1165,8 @@
       '</li>';
 
     return tileShell(
-      'cipStatus', 'panel-cip', 'CIP Applications', panelHead('CIP Applications'),
+      'cipStatus', 'panel-cip', 'Pre-Approval Applications',
+      panelHead('Pre-Approval Applications', '', cipPhaseSwitch({ key: 'pre_approval', switchable: true })),
       '<div class="tma-portal-cip-card" aria-hidden="true">' +
       '<p class="tma-portal-cip__stack-skeleton tma-skeleton"></p>' +
       '<ul class="tma-portal-cip">' + new Array(4).fill(row).join('') + '</ul>' +
@@ -1188,7 +1261,7 @@
    * Each is a button, like the rows: a share is only useful if the reader can
    * open what it is a share of.
    */
-  function cipStack(busy, total) {
+  function cipStack(busy, total, phase) {
     return '<div class="tma-portal-cip__stack" role="group" aria-label="Applications by stage">' +
       busy.map(function (b) {
         var share = cipShare(b.count, total);
@@ -1197,6 +1270,7 @@
         return '<button type="button" class="tma-portal-cip__seg tma-portal-cip__tone--' + cipTone(b) + '"' +
           ' style="--tma-cip-share:' + share + '%"' +
           ' data-home-cip-bucket="' + ui().esc(b.key) + '"' +
+          (phase ? ' data-home-cip-lane="' + ui().esc(phase) + '"' : '') +
           ' title="' + ui().esc(name) + '" aria-label="' + ui().esc(name) + '">' +
           (share >= 12 ? '<span aria-hidden="true">' + ui().esc(cipCount(b.count)) + '</span>' : '') +
           '</button>';
@@ -1229,13 +1303,14 @@
    * end up disagreeing with itself, and here the two are how a reader knows
    * which block of the bar is which.
    */
-  function cipLegendRow(bucket, total) {
+  function cipLegendRow(bucket, total, phase) {
     var percent = cipPercent(bucket.count, total);
     var name = bucket.label + ': ' + cipCount(bucket.count) + ' (' + percent + ')';
 
     return '<li class="tma-portal-cip__row tma-portal-cip__tone--' + cipTone(bucket) +
       '" data-key="cip-' + ui().esc(bucket.key) + '">' +
       '<button type="button" class="tma-portal-cip__link" data-home-cip-bucket="' + ui().esc(bucket.key) + '"' +
+      (phase ? ' data-home-cip-lane="' + ui().esc(phase) + '"' : '') +
       ' title="' + ui().esc(name) + '" aria-label="' + ui().esc(name) + '">' +
       '<i class="tma-portal-cip__dot" aria-hidden="true"></i>' +
       '<span class="tma-portal-cip__label">' + ui().esc(bucket.short || bucket.label) + '</span>' +
@@ -1252,13 +1327,14 @@
    * confirm the zero some other way. Dropping them instead would leave a card
    * that cannot say whether a stage is empty or missing.
    */
-  function cipChips(clear) {
+  function cipChips(clear, phase) {
     if (!clear.length) return '';
 
     return '<div class="tma-portal-cip__chips">' +
       clear.map(function (b) {
         return '<button type="button" class="tma-portal-cip__chip"' +
           ' data-home-cip-bucket="' + ui().esc(b.key) + '"' +
+          (phase ? ' data-home-cip-lane="' + ui().esc(phase) + '"' : '') +
           ' title="' + ui().esc(b.label + ': ' + cipCount(b.count)) + '"' +
           ' aria-label="' + ui().esc(b.label + ': ' + cipCount(b.count)) + '">' +
           ui().esc(b.short || b.label) +
@@ -1319,7 +1395,8 @@
      */
     if (!cipCardVisible(homeCip)) return '';
 
-    var buckets = homeCip.buckets || [];
+    var view = cipActiveView(homeCip);
+    var buckets = view.buckets || [];
     if (!buckets.length) return '';
 
     /*
@@ -1337,9 +1414,10 @@
      * counts are re-read on every CIP signal and most will not have moved.
      */
     var parts = cipParts(buckets);
-    var total = cipTotal(homeCip, parts);
+    var total = cipTotal({ total: view.total }, parts);
     var busy = parts.filter(function (b) { return b.count > 0; });
     var clear = parts.filter(function (b) { return !b.count; });
+    var phase = view.switchable ? view.key : '';
 
     /*
      * The total sits in the heading, beside the card's name.
@@ -1355,18 +1433,18 @@
      * lower down printing the same number twice.
      */
     return tileShell(
-      'cipStatus', 'panel-cip', 'CIP Applications',
-      panelHead('CIP Applications', cipCount(total)),
+      'cipStatus', 'panel-cip', view.title,
+      panelHead(view.title, cipCount(total), cipPhaseSwitch(view)),
       '<div class="tma-portal-cip-card">' +
       (busy.length
-        ? cipStack(busy, total) +
+        ? cipStack(busy, total, phase) +
           '<ul class="tma-portal-cip">' +
-          busy.map(function (b) { return cipLegendRow(b, total); }).join('') +
+          busy.map(function (b) { return cipLegendRow(b, total, phase); }).join('') +
           '</ul>'
         // Every stage clear, which is a finished day rather than an empty
         // card — so it says so, instead of leaving a bar with nothing in it.
         : '<p class="tma-portal-cip__none">Nothing waiting right now</p>') +
-      cipChips(clear) +
+      cipChips(clear, phase) +
       '</div>',
       'tma-portal-panel--cip'
     );
@@ -1430,7 +1508,7 @@
    * Guarded on openBucket because clients.js is a separate bundle: without it
    * the row still opens the unfiltered table, which is the smaller failure.
    */
-  function openCipBucket(key) {
+  function openCipBucket(key, phase) {
     navigate({
       navId: 'clients',
       view: 'clients',
@@ -1439,7 +1517,7 @@
       clientsScreen: 'list',
     });
     if (window.TMAClients && window.TMAClients.openBucket) {
-      window.TMAClients.openBucket(key);
+      window.TMAClients.openBucket(key, phase);
     }
   }
 
@@ -2291,7 +2369,7 @@
      * tile that would never appear; without the server's answer, a staff
      * member without CIP gets an empty panel.
      */
-    { id: 'cipStatus', label: 'CIP Applications', desc: 'How many applications sit at each stage, and what needs picking up.', preview: 'cip', cipCard: true },
+    { id: 'cipStatus', label: 'CIP Applications', desc: 'Pre-approval and post-approval counts by stage, switched from the card.', preview: 'cip', cipCard: true },
     { id: 'requests', label: 'Requests', desc: 'Reviews, approvals and signatures waiting on you.', preview: 'requests', cap: 'workflows.view' },
     { id: 'comments', label: 'Comments', desc: 'Recent discussion on files. Administrators see every thread; everyone else sees what involves them.', preview: 'comments', cap: 'workflows.view' },
   ];
@@ -3552,9 +3630,24 @@
       });
     });
 
+    pick('[data-home-cip-phase]').forEach(function (b) {
+      bind(b, 'click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var phase = b.getAttribute('data-home-cip-phase');
+        if (phase !== 'pre_approval' && phase !== 'post_approval') return;
+        if (phase === homeCipPhase) return;
+        homeCipPhase = phase;
+        mount(el, { fromLoad: true });
+      });
+    });
+
     pick('[data-home-cip-bucket]').forEach(function (b) {
       b.addEventListener('click', function () {
-        openCipBucket(b.getAttribute('data-home-cip-bucket'));
+        openCipBucket(
+          b.getAttribute('data-home-cip-bucket'),
+          b.getAttribute('data-home-cip-lane')
+        );
       });
     });
 

@@ -1576,7 +1576,7 @@
    * dead end.
    */
   function statusFilterApplies(state) {
-    return onApplicationsTable(state) && BUCKETS.list.length > 0;
+    return onApplicationsTable(state) && allBuckets().length > 0;
   }
 
   /*
@@ -2903,7 +2903,7 @@
    * a work queue (CRO and Compliance share that view) and an administrator's
    * twelve are a report, and the difference is scope, not presentation.
    */
-  var BUCKETS = { list: [], dashboard: null, loaded: false, loading: false, active: null };
+  var BUCKETS = { list: [], phases: null, dashboard: null, loaded: false, loading: false, active: null };
 
   /* The bucket a key names, or null. The reader's own set is the authority:
      the listing 404s on a bucket that was never on their dashboard, so a key
@@ -2929,10 +2929,44 @@
     return match;
   }
 
+  function bucketsFromPhase(phase) {
+    var lane = BUCKETS.phases && BUCKETS.phases[phase];
+
+    return (lane && Array.isArray(lane.buckets)) ? lane.buckets : [];
+  }
+
+  function allBuckets() {
+    if (!BUCKETS.phases) return BUCKETS.list || [];
+
+    var seen = {};
+    var list = [];
+    ['pre_approval', 'post_approval'].forEach(function (phase) {
+      bucketsFromPhase(phase).forEach(function (b) {
+        if (b && b.key && !seen[b.key]) {
+          seen[b.key] = true;
+          list.push(b);
+        }
+      });
+    });
+
+    return list.length ? list : (BUCKETS.list || []);
+  }
+
+  function bucketsForCurrentTab(state) {
+    if (!BUCKETS.phases) return BUCKETS.list || [];
+
+    var tab = state ? listTabOf(state) : '';
+    if (tab === 'post_approval') return bucketsFromPhase('post_approval');
+    if (tab === 'pre_approval') return bucketsFromPhase('pre_approval');
+
+    return allBuckets();
+  }
+
   function bucketFor(key) {
     if (!key) return null;
-    for (var i = 0; i < BUCKETS.list.length; i++) {
-      if (BUCKETS.list[i].key === key) return BUCKETS.list[i];
+    var list = allBuckets();
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].key === key) return list[i];
     }
 
     return null;
@@ -3019,6 +3053,7 @@
     clientsFetch('/portal/cip/dashboard')
       .then(function (json) {
         BUCKETS.list = (json && json.buckets) || [];
+        BUCKETS.phases = (json && json.phases) || null;
         BUCKETS.dashboard = (json && json.dashboard) || null;
       })
       .catch(function () { BUCKETS.list = []; })
@@ -3038,7 +3073,7 @@
         var dropped = TABLE_FILTERS.bucket.length !== before;
         if (dropped) syncClientsListUrl(clientsMountState);
 
-        if (dropped || BUCKETS.list.length) render();
+        if (dropped || allBuckets().length) render();
       });
   }
 
@@ -3059,7 +3094,7 @@
    * reason, that is for what the address said at page load, and this is a
    * caller in the same page saying it now.
    */
-  function openBucket(key) {
+  function openBucket(key, phase) {
     key = key || '';
 
     /*
@@ -3079,17 +3114,25 @@
     APP_TABLE.page = 1;
 
     /*
-     * On the applications tab, whichever tab the reader left the page on. A
-     * status is a fact about an application and the service providers list
-     * holds none, so somebody whose last visit ended on Service providers
-     * would otherwise arrive at a filter they cannot see. Saved as well as
-     * set, because an unmounted view reads the stored tab when it comes up.
+     * On the matching lane tab. A post-approval stage opened from the
+     * dashboard would otherwise land on Pre-Approval, where the listing
+     * filters the other lane and the number on the card would open onto
+     * an empty table. Updates Required exists in both; the card says which.
      */
-    saveListTab('pre_approval');
+    var tab = 'pre_approval';
+    if (phase === 'post_approval' || phase === 'pre_approval') {
+      tab = phase;
+    } else if (key && BUCKETS.phases) {
+      var postHas = bucketsFromPhase('post_approval').some(function (b) { return b.key === key; });
+      var preHas = bucketsFromPhase('pre_approval').some(function (b) { return b.key === key; });
+      if (postHas && !preHas) tab = 'post_approval';
+    }
+
+    saveListTab(tab);
 
     var state = clientsMountState;
     if (state) {
-      state.listTab = 'pre_approval';
+      state.listTab = tab;
       state.page = 1;
       state.selected = {};
       syncClientsListUrl(state);
@@ -9850,7 +9893,7 @@
     var group = '';
 
     if (field === 'bucket' && statusFilterApplies(state)) {
-      group = filterGroup('bucket', BUCKETS.list.map(function (b) {
+      group = filterGroup('bucket', bucketsForCurrentTab(state).map(function (b) {
         return { id: b.key, name: b.label, count: b.count, tone: b.tone };
       }));
     } else if (field === 'assignee' && assigneeFilterApplies(state)) {

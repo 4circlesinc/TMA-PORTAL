@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Builder;
  *
  * WHICH BUCKETS ARE PERSONAL, AND WHICH ARE THE WHOLE SLICE
  *
- * The administrator's twelve and the service provider's eight are reports. They
+ * The administrator's pre-approval eleven and the service provider's seven are reports. They
  * count everything the reader may see, and what that is has already been
  * decided by {@see ApplicationScope}, every application for an administrator,
  * one provider firm's book for a contact there, one applicant's own record for
@@ -161,33 +161,79 @@ class Buckets
             'scope' => self::SCOPE_ALL,
         ],
         /*
-         * The whole post-approval lane as one block: COR, NIC and passport
-         * stages are steps of one journey, and ten more chips would say less
-         * than one saying how many files are on it. CLOSED is deliberately
-         * not here — a closed file is finished, and a "waiting" count that
+         * The first post-approval status, not the whole lane. The dashboard
+         * card now splits pre- and post-approval into two views, and the
+         * post-approval view names each COR / NIC / passport stage so the
+         * counts are the same vocabulary as the listing. CLOSED stays off
+         * the card — a closed file is finished, and a waiting count that
          * never goes down teaches people to stop reading it.
          */
         'post_approval' => [
             'label' => 'Post-Approval',
             // 'Post-Approval' is 13 characters and the legend column holds
             // 12 — see the short-name test for why that budget exists.
-            'short' => 'Post-Grant',
-            'statuses' => [
-                Status::POST_APPROVAL,
-                Status::APPLY_FOR_COR,
-                Status::PENDING_COR,
-                Status::APPLY_FOR_NIC,
-                Status::PENDING_NIC,
-                Status::APPLY_FOR_PASSPORT,
-                Status::PENDING_PASSPORT,
-                Status::READY_FOR_DELIVERY,
-            ],
+            'short' => 'Post-App',
+            'statuses' => [Status::POST_APPROVAL],
+            'scope' => self::SCOPE_ALL,
+        ],
+        'apply_for_cor' => [
+            'label' => 'Apply for COR',
+            'short' => 'Apply COR',
+            'statuses' => [Status::APPLY_FOR_COR],
+            'scope' => self::SCOPE_ALL,
+        ],
+        'pending_cor' => [
+            'label' => 'Pending COR',
+            'short' => 'Pend. COR',
+            'statuses' => [Status::PENDING_COR],
+            'scope' => self::SCOPE_ALL,
+        ],
+        'apply_for_nic' => [
+            'label' => 'Apply for NIC',
+            'short' => 'Apply NIC',
+            'statuses' => [Status::APPLY_FOR_NIC],
+            'scope' => self::SCOPE_ALL,
+        ],
+        'pending_nic' => [
+            'label' => 'Pending NIC',
+            'short' => 'Pend. NIC',
+            'statuses' => [Status::PENDING_NIC],
+            'scope' => self::SCOPE_ALL,
+        ],
+        'apply_for_passport' => [
+            'label' => 'Apply for Passport',
+            'short' => 'Passport',
+            'statuses' => [Status::APPLY_FOR_PASSPORT],
+            'scope' => self::SCOPE_ALL,
+        ],
+        'pending_passport' => [
+            'label' => 'Pending Passport',
+            'short' => 'Pend. Pass',
+            'statuses' => [Status::PENDING_PASSPORT],
+            'scope' => self::SCOPE_ALL,
+        ],
+        'ready_for_delivery' => [
+            'label' => 'Ready for Delivery',
+            'short' => 'Delivery',
+            'statuses' => [Status::READY_FOR_DELIVERY],
             'scope' => self::SCOPE_ALL,
         ],
         'denied' => [
             'label' => 'Denied',
             'short' => 'Denied',
             'statuses' => [Status::DENIED],
+            'scope' => self::SCOPE_ALL,
+        ],
+        'post_approved' => [
+            'label' => 'Approved',
+            'short' => 'Approved',
+            'statuses' => [Status::POST_APPROVED],
+            'scope' => self::SCOPE_ALL,
+        ],
+        'post_denied' => [
+            'label' => 'Denied',
+            'short' => 'Denied',
+            'statuses' => [Status::POST_DENIED],
             'scope' => self::SCOPE_ALL,
         ],
 
@@ -227,24 +273,52 @@ class Buckets
     ];
 
     /**
-     * Which buckets each dashboard shows, in the order section 9 lists them, the
-     * order is part of the brief, not a detail for a renderer to choose.
+     * The post-approval pipeline, named stage by stage. Administrators and
+     * provider contacts share it: ApplicationScope has already decided whose
+     * book each of them is looking at. CLOSED is not on it, see post_approval.
      *
-     * @var array<string, list<string>>
+     * @var list<string>
      */
-    private const SETS = [
-        self::ADMINISTRATOR => [
-            'new', 'review_application', 'assessment_feedback', 'update_required',
-            'ready_to_submit', 'pending_review', 'non_compliant', 'background_check',
-            'delayed', 'approved', 'post_approval', 'denied',
+    private const POST_APPROVAL_PIPELINE = [
+        'post_approval', 'apply_for_cor', 'pending_cor', 'apply_for_nic',
+        'pending_nic', 'apply_for_passport', 'pending_passport',
+        'ready_for_delivery', 'update_required', 'post_approved', 'post_denied',
+    ];
+
+    /**
+     * Which buckets each dashboard shows, split by workflow lane.
+     *
+     * Pre-approval is section 9's report without the collapsed post-approval
+     * chip — that lane has its own view now. Reviewing officers keep their
+     * four personal queues on both sides; a file they hold that has moved
+     * into post-approval is work on the post-approval card, not a leftover
+     * on the pre-approval one.
+     *
+     * @var array<string, array<string, list<string>>>
+     */
+    private const PHASE_SETS = [
+        Phase::PRE_APPROVAL => [
+            self::ADMINISTRATOR => [
+                'new', 'review_application', 'assessment_feedback', 'update_required',
+                'ready_to_submit', 'pending_review', 'non_compliant', 'background_check',
+                'delayed', 'approved', 'denied',
+            ],
+            self::REVIEWING_OFFICER => [
+                'assigned_reviews', 'reviews_pending', 'assessment_feedback_tasks',
+                'information_requests',
+            ],
+            self::SERVICE_PROVIDER => [
+                'update_required', 'ready_to_submit', 'pending_review', 'non_compliant',
+                'delayed', 'approved', 'denied',
+            ],
         ],
-        self::REVIEWING_OFFICER => [
-            'assigned_reviews', 'reviews_pending', 'assessment_feedback_tasks',
-            'information_requests',
-        ],
-        self::SERVICE_PROVIDER => [
-            'update_required', 'ready_to_submit', 'pending_review', 'non_compliant',
-            'delayed', 'approved', 'post_approval', 'denied',
+        Phase::POST_APPROVAL => [
+            self::ADMINISTRATOR => self::POST_APPROVAL_PIPELINE,
+            self::REVIEWING_OFFICER => [
+                'assigned_reviews', 'reviews_pending', 'assessment_feedback_tasks',
+                'information_requests',
+            ],
+            self::SERVICE_PROVIDER => self::POST_APPROVAL_PIPELINE,
         ],
     ];
 
@@ -268,17 +342,52 @@ class Buckets
         }
 
         // A Service Provider contact or a Private Client: the same
-        // applicant-facing eight, because ApplicationScope has already decided
+        // applicant-facing set, because ApplicationScope has already decided
         // how much of the world each of them sees. A private client is the
         // same reader with a slice of one.
         return self::SERVICE_PROVIDER;
     }
 
     /**
-     * This reader's dashboard: every bucket with its count and the filter that
-     * reproduces it.
+     * The heading the home card uses for one lane.
+     */
+    public static function titleFor(string $phase): string
+    {
+        return Phase::label($phase).' Applications';
+    }
+
+    /**
+     * The keys one dashboard names, in the order they are drawn.
      *
-     * @return list<array{key: string, label: string, short: string, count: int, statuses: list<string>, scope: string, tone: string, filter: array<string, string>, aggregate: bool}>
+     * Passing a phase returns that lane's set. Passing none returns the
+     * union, which is what {@see self::find()} uses: a bucket the reader
+     * was offered on either card is theirs to filter by, even if they are
+     * looking at the other lane when they press it.
+     *
+     * @return list<string>
+     */
+    public static function keysFor(string $set, ?string $phase = null): array
+    {
+        if ($phase !== null) {
+            return self::PHASE_SETS[$phase][$set] ?? [];
+        }
+
+        $keys = [];
+
+        foreach (self::PHASE_SETS as $phaseKeys) {
+            foreach ($phaseKeys[$set] ?? [] as $key) {
+                $keys[$key] = true;
+            }
+        }
+
+        return array_keys($keys);
+    }
+
+    /**
+     * This reader's dashboard: every bucket with its count and the filter that
+     * reproduces it. Pre-approval, which is what the card opens on.
+     *
+     * @return list<array{key: string, label: string, short: string, count: int, statuses: list<string>, scope: string, tone: string, filter: array<string, string>, aggregate: bool, phase: string}>
      */
     public static function for(?User $user): array
     {
@@ -301,42 +410,72 @@ class Buckets
      * What it therefore means is "applications this dashboard is about": the
      * whole book for an administrator, the firm's book for a provider contact,
      * this officer's desk for a reviewer. It is not a pipeline figure — the
-     * administrator's twelve include Approved and Denied, which have left the
-     * pipeline — so nothing that draws it may call it one.
+     * administrator's pre-approval set includes Approved and Denied, which have
+     * left the pipeline — so nothing that draws it may call it one.
      *
      * Free: the tallies are already in hand, so no extra query is asked.
      *
-     * @return array{buckets: list<array{key: string, label: string, short: string, count: int, statuses: list<string>, scope: string, tone: string, filter: array<string, string>, aggregate: bool}>, total: int}
+     * @return array{buckets: list<array{key: string, label: string, short: string, count: int, statuses: list<string>, scope: string, tone: string, filter: array<string, string>, aggregate: bool, phase: string}>, total: int}
      */
-    public static function summary(?User $user): array
+    public static function summary(?User $user, ?string $phase = null): array
     {
+        $phase = ($phase !== null && Phase::isValid($phase)) ? $phase : Phase::PRE_APPROVAL;
+
+        return self::summaries($user)[$phase];
+    }
+
+    /**
+     * Both lanes, from one grouped count per scope.
+     *
+     * The home card draws one lane at a time and switches without asking
+     * again, so both answers have to arrive together. Status and phase are
+     * one GROUP BY, not two trips: the rows are the same ones either way.
+     *
+     * @return array<string, array{buckets: list<array{key: string, label: string, short: string, count: int, statuses: list<string>, scope: string, tone: string, filter: array<string, string>, aggregate: bool, phase: string}>, total: int}>
+     */
+    public static function summaries(?User $user): array
+    {
+        $empty = ['buckets' => [], 'total' => 0];
         $set = self::setFor($user);
 
         if ($set === null || $user === null) {
-            return ['buckets' => [], 'total' => 0];
+            return [
+                Phase::PRE_APPROVAL => $empty,
+                Phase::POST_APPROVAL => $empty,
+            ];
         }
 
-        $buckets = [];
         $tallies = [];
+
+        foreach ([Phase::PRE_APPROVAL, Phase::POST_APPROVAL] as $phase) {
+            foreach (self::keysFor($set, $phase) as $key) {
+                $scope = self::DEFINITIONS[$key]['scope'];
+                $tallies[$scope] ??= self::tallyByPhase($user, $scope);
+            }
+        }
+
+        return [
+            Phase::PRE_APPROVAL => self::assemble($set, Phase::PRE_APPROVAL, $tallies),
+            Phase::POST_APPROVAL => self::assemble($set, Phase::POST_APPROVAL, $tallies),
+        ];
+    }
+
+    /**
+     * One lane of one dashboard, from tallies already in hand.
+     *
+     * @param  array<string, array<string, array<string, int>>>  $tallies
+     * @return array{buckets: list<array{key: string, label: string, short: string, count: int, statuses: list<string>, scope: string, tone: string, filter: array<string, string>, aggregate: bool, phase: string}>, total: int}
+     */
+    private static function assemble(string $set, string $phase, array $tallies): array
+    {
+        $buckets = [];
         // Keyed by scope and status, so the same status reached through two
         // buckets overwrites rather than adds.
         $covered = [];
 
-        foreach (self::SETS[$set] as $key) {
+        foreach (self::keysFor($set, $phase) as $key) {
             $definition = self::DEFINITIONS[$key];
-
-            /*
-             * One grouped count per scope, not one per bucket.
-             *
-             * Twelve buckets over one slice is a single question, how many
-             * applications sit at each status, and asking it ten times would
-             * put ten round trips behind every dashboard load for numbers that
-             * came out of the same rows. Keyed by scope because a personal
-             * queue counts a different set of rows, so a set that mixes the
-             * two costs one count each rather than one per bucket.
-             */
-            $tallies[$definition['scope']] ??= self::tally($user, $definition['scope']);
-            $tally = $tallies[$definition['scope']];
+            $tally = $tallies[$definition['scope']][$phase] ?? [];
 
             foreach ($definition['statuses'] as $status) {
                 $covered[$definition['scope'].'|'.$status] = $tally[$status] ?? 0;
@@ -365,14 +504,17 @@ class Buckets
                 /*
                  * What to hand the applications listing to see these rows.
                  *
-                 * The key and nothing else, on purpose. A filter spelled out
-                 * as `status=` would work for the single-status buckets and
-                 * silently lie for the officer queues, which are a person as
-                 * well as a status, so the listing hands this straight back
-                 * to {@see self::find()} and {@see self::apply()}, the same
-                 * definition the count above was measured through.
+                 * The key and the lane. A filter spelled out as `status=`
+                 * would work for the single-status buckets and silently lie
+                 * for the officer queues, which are a person as well as a
+                 * status, so the listing hands this straight back to
+                 * {@see self::find()} and {@see self::apply()}, the same
+                 * definition the count above was measured through. Phase is
+                 * on it because Updates Required lives in both lanes, and
+                 * without it the pre-approval card's count would open onto
+                 * post-approval rows as well.
                  */
-                'filter' => ['bucket' => $key],
+                'filter' => ['bucket' => $key, 'phase' => $phase],
                 /*
                  * Whether this bucket is a roll-up of others in the same set
                  * rather than a slice of its own.
@@ -386,7 +528,8 @@ class Buckets
                  * the roll-up a share alongside its own children would draw
                  * every file on that officer's desk twice and add up to 200%.
                  */
-                'aggregate' => self::rollsUp($key, $set),
+                'aggregate' => self::rollsUp($key, $set, $phase),
+                'phase' => $phase,
             ];
         }
 
@@ -401,17 +544,33 @@ class Buckets
      * somebody else's queue, even correctly scoped, so empty, would be the
      * listing offering a view nothing ever put in front of them.
      *
-     * @return array{key: string, label: string, statuses: list<string>, scope: string}|null
+     * A phase narrows membership to that lane's set. Without one, either
+     * lane counts — the listing's Status menu and a typed URL both arrive
+     * here, and a key the reader was offered on the other card is still
+     * theirs.
+     *
+     * @return array{key: string, label: string, short: string, statuses: list<string>, scope: string, phase?: string}|null
      */
-    public static function find(?User $user, string $key): ?array
+    public static function find(?User $user, string $key, ?string $phase = null): ?array
     {
         $set = self::setFor($user);
 
-        if ($set === null || ! in_array($key, self::SETS[$set], true)) {
+        if ($set === null || ! in_array($key, self::keysFor($set), true)) {
             return null;
         }
 
-        return ['key' => $key] + self::DEFINITIONS[$key];
+        $found = ['key' => $key] + self::DEFINITIONS[$key];
+        $lane = ($phase !== null && Phase::isValid($phase)) ? $phase : null;
+
+        // Attach the lane when this key is on that card, so Updates Required
+        // counted pre-approval does not open post-approval rows. A leftover
+        // filter from the other card is still a valid key (no 404) and is
+        // left without a phase so the listing's own tab filter empties it.
+        if ($lane !== null && in_array($key, self::keysFor($set, $lane), true)) {
+            $found['phase'] = $lane;
+        }
+
+        return $found;
     }
 
     /**
@@ -422,12 +581,18 @@ class Buckets
      * eager loads, ordering and paging; it must already be scoped through
      * {@see ApplicationScope}, exactly as the count is.
      *
-     * @param  array{statuses: list<string>, scope: string}  $bucket
+     * @param  array{statuses: list<string>, scope: string, phase?: string}  $bucket
      */
     public static function apply(Builder $query, array $bucket, User $user): Builder
     {
-        return self::scoped($query, $bucket['scope'], $user)
+        $query = self::scoped($query, $bucket['scope'], $user)
             ->whereIn('status', $bucket['statuses']);
+
+        if (! empty($bucket['phase']) && Phase::isValid($bucket['phase'])) {
+            $query->where('cip_applications.phase', $bucket['phase']);
+        }
+
+        return $query;
     }
 
     /**
@@ -439,11 +604,11 @@ class Buckets
      * rolls up and Reviews Pending does not, and a test for mere overlap would
      * mark both and leave nothing to draw.
      */
-    private static function rollsUp(string $key, string $set): bool
+    private static function rollsUp(string $key, string $set, string $phase): bool
     {
         $mine = self::DEFINITIONS[$key];
 
-        foreach (self::SETS[$set] as $other) {
+        foreach (self::keysFor($set, $phase) as $other) {
             if ($other === $key) {
                 continue;
             }
@@ -524,27 +689,33 @@ class Buckets
     }
 
     /**
-     * How many applications sit at each status, within one scope.
+     * How many applications sit at each status in each lane, within one scope.
      *
      * Aggregated in the database, like {@see Review::tally}: the dashboard
      * needs a dozen numbers, and fetching the rows to count them would be a
-     * firm's whole book loaded to answer them.
+     * firm's whole book loaded to answer them. Phase is in the GROUP BY so
+     * both cards are answered from the same trip — Updates Required in
+     * pre-approval is not the same work as Updates Required after a grant.
      *
-     * @return array<string, int>
+     * @return array<string, array<string, int>>
      */
-    private static function tally(User $user, string $scope): array
+    private static function tallyByPhase(User $user, string $scope): array
     {
-        $tally = [];
+        $byPhase = [
+            Phase::PRE_APPROVAL => [],
+            Phase::POST_APPROVAL => [],
+        ];
 
         $rows = self::scoped(ApplicationScope::query($user), $scope, $user)
-            ->selectRaw('status, COUNT(*) as total')
-            ->groupBy('status')
+            ->selectRaw('cip_applications.status as status, cip_applications.phase as phase, COUNT(*) as total')
+            ->groupBy('cip_applications.status', 'cip_applications.phase')
             ->get();
 
         foreach ($rows as $row) {
-            $tally[$row->status] = (int) $row->total;
+            $phase = Phase::isValid((string) $row->phase) ? $row->phase : Phase::PRE_APPROVAL;
+            $byPhase[$phase][$row->status] = (int) $row->total;
         }
 
-        return $tally;
+        return $byPhase;
     }
 }

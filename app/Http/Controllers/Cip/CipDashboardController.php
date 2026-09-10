@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Support\Access\Role;
 use App\Support\Cip\Buckets;
 use App\Support\Cip\CipAccess;
+use App\Support\Cip\Phase;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -44,7 +45,9 @@ class CipDashboardController extends Controller
             return response()->json(['cip' => false, 'buckets' => []]);
         }
 
-        $summary = Buckets::summary($user);
+        $summaries = Buckets::summaries($user);
+        $pre = $summaries[Phase::PRE_APPROVAL];
+        $post = $summaries[Phase::POST_APPROVAL];
 
         return response()->json([
             'cip' => true,
@@ -61,7 +64,7 @@ class CipDashboardController extends Controller
             /*
              * Whether the home screen should draw the CIP Applications card.
              *
-             * Staff, and the Service Provider contact whose six buckets are
+             * Staff, and the Service Provider contact whose buckets are
              * that card's other view. Not a private client: they share the
              * service-provider set, and inferring the card from the set name
              * would hang a firm's summary on an applicant's home screen.
@@ -72,7 +75,9 @@ class CipDashboardController extends Controller
             // desk, and a heading that got that wrong would be the difference
             // between a report and a to-do list.
             'dashboard' => $dashboard,
-            'buckets' => $summary['buckets'],
+            // Pre-approval is what the card opens on. `phases` is both lanes,
+            // so switching the heading does not wait on another request.
+            'buckets' => $pre['buckets'],
             /*
              * How many applications the buckets cover between them — the
              * figure the card leads on, above the queues that make it up.
@@ -83,7 +88,22 @@ class CipDashboardController extends Controller
              * queues below it, so a naive total would report that officer's
              * desk twice and nothing on the page would show it.
              */
-            'total' => $summary['total'],
+            'total' => $pre['total'],
+            'phase' => Phase::PRE_APPROVAL,
+            'phases' => [
+                Phase::PRE_APPROVAL => [
+                    'key' => Phase::PRE_APPROVAL,
+                    'label' => Buckets::titleFor(Phase::PRE_APPROVAL),
+                    'buckets' => $pre['buckets'],
+                    'total' => $pre['total'],
+                ],
+                Phase::POST_APPROVAL => [
+                    'key' => Phase::POST_APPROVAL,
+                    'label' => Buckets::titleFor(Phase::POST_APPROVAL),
+                    'buckets' => $post['buckets'],
+                    'total' => $post['total'],
+                ],
+            ],
         ]);
     }
 }
