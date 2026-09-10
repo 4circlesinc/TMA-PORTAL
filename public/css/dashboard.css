@@ -17436,23 +17436,26 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   pointer-events: none;
 }
 
-/* Full-width black veil at the top of the thread, fading out as it
- * drops so messages scrolling under the floating bar don't collide
- * with the name. Taller than the bar itself so the fade has room. */
+/* Full-width frost at the top of the thread: a little white plus blur,
+ * masked so both wash out toward the messages. */
 .tma-dash__messages-chat-head::before {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
   top: 0;
-  height: 120px;
+  height: 140px;
   pointer-events: none;
   background: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.22) 0%,
-    rgba(0, 0, 0, 0.1) 40%,
-    rgba(0, 0, 0, 0) 100%
+    rgb(255 255 255 / 0.5) 0%,
+    rgb(255 255 255 / 0.18) 45%,
+    rgb(255 255 255 / 0) 100%
   );
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  -webkit-mask-image: linear-gradient(to bottom, #000 30%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 30%, transparent 100%);
 }
 
 .tma-dash__messages-chat-head > * {
@@ -17603,8 +17606,18 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
 .tma-dash__messages-chat-actions {
   display: flex;
   align-items: center;
-  gap: var(--space-8);
+  gap: 2px;
   flex-shrink: 0;
+  padding: 2px 4px;
+  border-radius: var(--radius-pill);
+  background: rgb(255 255 255 / 0.78);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  box-shadow: var(--shadow-pill);
+}
+
+.tma-dash__messages-chat-actions .tma-dash__messages-icon-btn {
+  border-radius: var(--radius-pill);
 }
 
 .tma-dash__messages-chat-body {
