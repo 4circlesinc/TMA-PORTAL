@@ -1183,6 +1183,13 @@ class CipApplicationController extends Controller
         }
 
         /*
+         * A draft minted the hub as "Application {number}" before the
+         * applicant had a name. Opening the file is when the profile draws
+         * that name, so this is the moment to follow the person.
+         */
+        Tree::syncClientName($application);
+
+        /*
          * The checklist is settled on the read that opens ONE file, so the
          * detail tabs always show the templates as they stand, however a
          * template arrived, a seeder and an import included. Materialise is
@@ -1287,6 +1294,7 @@ class CipApplicationController extends Controller
                 Tree::provision($application, $user);
                 $application->refresh();
             }
+            Tree::syncClientName($application);
             Requirements::materialiseApplication($application);
             $application->unsetRelation('people');
         }

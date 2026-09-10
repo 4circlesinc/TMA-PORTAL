@@ -337,6 +337,8 @@ class Tree
                 ])->save();
             }
 
+            self::syncClientName($application);
+
             return $application->client;
         }
 
@@ -431,7 +433,8 @@ class Tree
      */
     public static function resyncNames(CipApplication $application): void
     {
-        $application->loadMissing('people');
+        $application->load('people');
+        self::syncClientName($application, force: true);
 
         foreach ($application->people as $person) {
             if (! $person->folder_id) {
@@ -444,6 +447,80 @@ class Tree
                 $folder->forceFill(['name' => $name])->save();
             }
         }
+    }
+
+    /**
+     * Name the hub record for the person, not the file.
+     *
+     * {@see self::client()} mints "Application {number}" when the main
+     * applicant has no name yet — a draft's first autosave, a photo before
+     * the identity fields. Later answers write the person and used to leave
+     * the hub answering twice: the table from the person, the profile from
+     * the client. The person is the name.
+     *
+     * Opening a file only replaces that fallback. A hub already named for
+     * somebody — mixed case from before names were printed in capitals,
+     * a name typed on the client itself — is left alone. Callers that just
+     * wrote the person pass `$force` so a correction follows through.
+     */
+    public static function syncClientName(CipApplication $application, bool $force = false): void
+    {
+        $application->loadMissing(['client', 'people']);
+
+        $client = $application->client;
+        $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $name = trim((string) ($main?->fullName() ?? ''));
+
+        if (! $client || $name === '') {
+            return;
+        }
+
+        if (! $force && ! self::clientNameIsFileFallback($client, $application)) {
+            return;
+        }
+
+        $data = $client->data ?? [];
+        $same = $client->name === $name
+            && ($data['firstName'] ?? null) === $main->first_name
+            && ($data['lastName'] ?? null) === $main->last_name;
+
+        if ($same) {
+            return;
+        }
+
+        $data['firstName'] = $main->first_name;
+        $data['lastName'] = $main->last_name;
+
+        $client->forceFill([
+            'name' => $name,
+            'initial' => Str::upper(Str::substr($name, 0, 1)),
+            'data' => $data,
+        ])->save();
+
+        FolderProvisioner::syncClientFolderName($client);
+    }
+
+    /** Was this client minted as a stand-in for the file number? */
+    private static function clientNameIsFileFallback(Client $client, CipApplication $application): bool
+    {
+        $name = trim((string) $client->name);
+        if ($name === '') {
+            return true;
+        }
+
+        $needles = array_filter([
+            'Application '.$application->displayNumber(),
+            $application->internal_number ? 'Application '.$application->internal_number : null,
+            $application->cip_number ? 'Application '.$application->cip_number : null,
+        ]);
+
+        foreach ($needles as $needle) {
+            if (strcasecmp($name, $needle) === 0) {
+                return true;
+            }
+        }
+
+        return (bool) preg_match('/^Application\s+[A-Z]{2,}\d{2}-\d+$/iu', $name);
     }
 
     /**

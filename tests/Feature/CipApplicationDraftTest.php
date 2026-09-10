@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
+use App\Models\Client;
 use App\Models\Company;
 use App\Models\Folder;
 use App\Models\User;
@@ -92,6 +93,40 @@ class CipApplicationDraftTest extends TestCase
         // It carries a number, so the firm can refer to it like anything else.
         $this->assertNotNull($draft->internal_number);
         $this->assertSame('JOHN', $draft->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->first_name);
+    }
+
+    /**
+     * The hub is named for the person, once there is one.
+     *
+     * A draft's first autosave often has a country or a photo and no name
+     * yet, and the client is minted as "Application GAL26-00005" so the row
+     * has something to hang from. Typing the name later used to leave the
+     * profile titled after the file. The table already showed the applicant;
+     * the client has to follow.
+     */
+    public function test_the_client_takes_the_applicants_name_when_it_is_typed(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->save($staff, $this->answers($provider, [
+            'firstName' => '',
+            'lastName' => '',
+        ]))->assertOk();
+
+        $draft = CipApplication::query()->first();
+        $this->assertNotNull($draft->client_id);
+        $this->assertSame('Application '.$draft->displayNumber(), $draft->client->name);
+
+        $this->save($staff, $this->answers($provider, [
+            'firstName' => 'Wei',
+            'lastName' => 'Chen',
+        ]))->assertOk();
+
+        $client = $draft->fresh()->client;
+        $this->assertSame('WEI CHEN', $client->name);
+        $this->assertSame('WEI', $client->data['firstName'] ?? null);
+        $this->assertSame('CHEN', $client->data['lastName'] ?? null);
     }
 
     /**

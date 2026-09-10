@@ -1572,6 +1572,58 @@ class CipIntakeTest extends TestCase
             ->assertJson(['application' => null, 'client' => null]);
     }
 
+    /**
+     * Opening the profile repairs a hub still named for the file.
+     *
+     * Filing through a draft that existed before the names were typed left
+     * the client as "Application GAL26-00005". The person on the application
+     * already has the name; this read is when the profile draws it, so the
+     * hub follows rather than waiting for another save.
+     */
+    public function test_opening_the_profile_renames_a_client_still_called_the_file(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $this->file($staff, $this->payload($provider))->assertCreated();
+
+        $application = CipApplication::first();
+        $client = $application->client;
+        $fallback = 'Application '.$application->displayNumber();
+        $data = $client->data ?? [];
+        $data['firstName'] = null;
+        $data['lastName'] = null;
+        $client->forceFill(['name' => $fallback, 'data' => $data])->save();
+
+        $body = $this->actingAs($staff)
+            ->getJson('/portal/cip/clients/'.$client->uid.'/application')
+            ->assertOk()
+            ->json();
+
+        $this->assertSame('JOHN SMITH', $body['client']['name']);
+        $this->assertSame('JOHN SMITH', $body['application']['applicant']['name']);
+        $this->assertSame('JOHN SMITH', $client->fresh()->name);
+    }
+
+    public function test_opening_the_profile_leaves_a_named_client_alone(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $this->file($staff, $this->payload($provider))->assertCreated();
+
+        $client = CipApplication::first()->client;
+        $client->forceFill(['name' => 'John Smith'])->save();
+
+        $this->actingAs($staff)
+            ->getJson('/portal/cip/clients/'.$client->uid.'/application')
+            ->assertOk();
+
+        $this->assertSame('John Smith', $client->fresh()->name);
+    }
+
     public function test_the_applicants_passport_photo_becomes_the_clients_picture(): void
     {
         Storage::fake(config('filesystems.avatar_disk', 'public'));

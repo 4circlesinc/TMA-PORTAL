@@ -315,7 +315,11 @@ class PersonEdits
 
         $person->forceFill($columns)->save();
 
-        $person->loadMissing('application');
+        $person->load('application.people');
+        if ($person->application) {
+            Tree::resyncNames($person->application);
+        }
+
         Engine::record(
             $person->application,
             CipEvent::ACTION_PERSON_CHANGED,

@@ -3819,6 +3819,38 @@
     return s ? s.toLocaleUpperCase() : s;
   }
 
+  /*
+   * The person, not the file.
+   *
+   * The hub record is minted as "Application GAL26-00005" when a draft is
+   * saved before anyone has a name. The table already reads the applicant;
+   * the profile head must too, or the same file answers twice.
+   */
+  function cipApplicantDisplayName(clientId, app, fallback) {
+    var name = '';
+    if (app) {
+      var person = app.applicant || {};
+      name = person.name
+        || [person.firstName, person.lastName].filter(Boolean).join(' ')
+        || app.applicantName
+        || '';
+    }
+    name = cipUpperName(name);
+    if (name && name !== '-') return name;
+
+    if (clientId && APP_TABLE && APP_TABLE.rows) {
+      for (var i = 0; i < APP_TABLE.rows.length; i++) {
+        var row = APP_TABLE.rows[i];
+        if (row.clientUid === clientId || (app && row.id === app.id)) {
+          name = cipUpperName(row.applicantName);
+          if (name && name !== '-') return name;
+        }
+      }
+    }
+
+    return fallback || '';
+  }
+
   function forceUpperInput(el) {
     if (!el) return;
     var start = el.selectionStart;
@@ -4965,6 +4997,10 @@
     var app = applicationFor(c.id);
     var status = app ? renderApplicationStatus(app) : '';
     var subtitle = app ? '' : esc(contactProfileSubtitle(c));
+    var applicantName = cipApplicantDisplayName(c.id, app, c.name);
+    if (applicantName && applicantName !== c.name) {
+      c = Object.assign({}, c, { name: applicantName });
+    }
 
     /*
      * Arrow, face, name, and, on an application, the status beside the name.
