@@ -5038,7 +5038,7 @@
       '<div class="tma-dash__clients-profile-head">' + renderClientsBackArrow(state) +
       renderFormHeadAvatar(draft, contact, isNew) +
       '<span class="tma-dash__clients-profile-name">' + esc(title) + '</span></div>' +
-      '<div class="tma-dash__clients-profile-actions">' +
+      '<div class="tma-dash__clients-profile-actions tma-dash__clients-profile-actions--form">' +
       '<button type="button" class="tma-dash__clients-edit-btn" data-clients-cancel>Cancel</button>' +
       '<button type="button" class="tma-dash__clients-message-btn" data-clients-save>' + (isNew ? 'Add' : 'Save') + '</button>' +
       '</div></div>'
@@ -5055,7 +5055,7 @@
       '<div class="tma-dash__clients-profile-toolbar">' +
       '<div class="tma-dash__clients-profile-head">' + renderClientsBackArrow(state) +
       '<span class="tma-dash__clients-profile-name">' + esc(title) + '</span></div>' +
-      '<div class="tma-dash__clients-profile-actions">' +
+      '<div class="tma-dash__clients-profile-actions tma-dash__clients-profile-actions--form">' +
       '<button type="button" class="tma-dash__clients-edit-btn" data-clients-cancel>Cancel</button>' +
       '<button type="button" class="tma-dash__clients-message-btn" data-clients-save-company>' + (isNew ? 'Create' : 'Save') + '</button>' +
       '</div></div>'
@@ -5109,7 +5109,7 @@
         '<span class="tma-dash__clients-profile-name">' +
         (editingApp ? 'Edit application' : newApplicationLabel(newPhase)) + '</span>' +
         '</div>' +
-        '<div class="tma-dash__clients-profile-actions">' +
+        '<div class="tma-dash__clients-profile-actions tma-dash__clients-profile-actions--form">' +
         '<button type="button" class="tma-dash__clients-edit-btn" data-cip-cancel>Cancel</button>' +
         /*
          * Save as draft, beside the button that files it.

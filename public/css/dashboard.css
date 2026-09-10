@@ -19736,6 +19736,10 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   display: flex;
   align-items: center;
   gap: var(--space-16);
+  /* The half that yields. Without this the title refuses to narrow and the
+     buttons beside it are squeezed instead, which is how "Save as draft"
+     ended up stacked over three lines. */
+  min-width: 0;
 }
 
 .tma-dash__clients-profile-name {
@@ -21457,6 +21461,20 @@ a.tma-dash__clients-edit-btn--accent:visited {
   align-items: center;
   gap: var(--space-8);
   flex-shrink: 0;
+}
+
+/*
+ * A button is as wide as its label.
+ *
+ * These sit in a flex row that runs out of width on a narrow screen, and a
+ * flex item shrinks below its content before its neighbours give anything
+ * up — so "Save as draft" wrapped to three lines while the title beside it
+ * kept its full width. The label stays on one line and the button stops
+ * being the thing that gives.
+ */
+.tma-dash__clients-profile-actions > button {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .tma-dash__clients-icon-btn {

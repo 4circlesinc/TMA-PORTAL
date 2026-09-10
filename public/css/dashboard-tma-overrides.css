@@ -1658,20 +1658,43 @@ body::-webkit-scrollbar,
     gap: var(--space-6);
   }
 
-  /* Icon-only actions: the words go, the glyphs stay tappable. */
-  .tma-dash__clients-profile-actions .tma-dash__clients-message-btn span,
-  .tma-dash__clients-profile-actions .tma-dash__clients-edit-btn span,
+  /*
+   * Icon-only actions: the words go, the glyphs stay tappable.
+   *
+   * A profile's verbs — Open folder, Edit, Message — each carry an icon and
+   * a <span>, so hiding the span leaves the glyph and the button squares up
+   * around it. A FORM's toolbar is different: Cancel, Save as draft and Add
+   * are words with no glyph behind them, so squaring them produced three
+   * identical 36px buttons with their labels spilling over each other. Those
+   * keep their words, and the row below lets them wrap to their own line.
+   */
+  .tma-dash__clients-profile-actions:not(.tma-dash__clients-profile-actions--form) .tma-dash__clients-message-btn span,
+  .tma-dash__clients-profile-actions:not(.tma-dash__clients-profile-actions--form) .tma-dash__clients-edit-btn span,
   .tma-dash__clients-profile-actions .tma-dash__clients-message-caret {
     display: none;
   }
 
-  .tma-dash__clients-profile-actions .tma-dash__clients-message-btn,
-  .tma-dash__clients-profile-actions .tma-dash__clients-edit-btn {
+  .tma-dash__clients-profile-actions:not(.tma-dash__clients-profile-actions--form) .tma-dash__clients-message-btn,
+  .tma-dash__clients-profile-actions:not(.tma-dash__clients-profile-actions--form) .tma-dash__clients-edit-btn {
     width: 36px;
     min-width: 36px;
     height: 36px;
     padding: 0;
     justify-content: center;
+  }
+
+  /* A form's buttons are words. They keep their width and their line. */
+  .tma-dash__clients-profile-actions--form {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    row-gap: var(--space-8);
+  }
+
+  .tma-dash__clients-profile-actions--form > button {
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding: var(--space-8) var(--space-12);
+    white-space: nowrap;
   }
 
   /* Documents tab: crumbs and the action buttons share the row politely. */
@@ -2504,5 +2527,29 @@ body::-webkit-scrollbar,
 
   .tma-dash__users .tma-dash__ctable .tma-dash__cc--user .tma-dash__cc-user-stack {
     min-width: 0;
+  }
+}
+
+/*
+ * The form toolbar on a narrow screen.
+ *
+ * Cancel, Save as draft and Add do not fit beside a title on a phone. Held
+ * on one row they collided with the name and with each other; allowed to
+ * wrap they turned "Save as draft" into three stacked words. So the row
+ * breaks under the title instead, which is the only arrangement where every
+ * label is readable and nothing overlaps.
+ */
+@media (max-width: 767px) {
+  .tma-dash__clients-profile-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .tma-dash__clients-profile-toolbar > .tma-dash__clients-profile-head {
+    flex: 1 1 100%;
+  }
+
+  .tma-dash__clients-profile-actions {
+    flex: 1 1 100%;
+    justify-content: flex-end;
   }
 }
