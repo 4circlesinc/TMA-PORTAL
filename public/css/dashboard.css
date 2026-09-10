@@ -35368,14 +35368,13 @@ span.tma-dash__messages-profile-avatar {
   font-weight: 500;
 }
 
-/* Right sidebar only: shrink copy as the panel is dragged below its 280px
-   default so notification, activity, and client labels stay mostly visible.
-   Tokens live on the section (not the rightbar) because cqi cannot resolve
-   against the container they are declared on. Size queries see the content
-   box (280px track − 16px padding each side = 248px), so the clamps are
-   anchored there — 14 / 12 / 24 at the default, 10 / 9 / 20 at the 220px min. */
+/* Right sidebar only: as the panel narrows, titles stay near the original
+   14px (13px at the 220px min) while wrapping so the full line still fits.
+   Tokens live on the section because cqi cannot resolve against the container
+   they are declared on. Size queries see the content box (280px − 16px padding
+   each side = 248px). */
 .tma-dash__rightbar .tma-dash__rb-section {
-  --text-size-14: clamp(10px, calc(6.67cqi - 2.53px), 14px);
+  --text-size-14: clamp(13px, calc(1.67cqi + 9.86px), 14px);
   --text-lh-14: 1.4em;
   --text-size-12: clamp(9px, calc(5cqi - 0.4px), 12px);
   --text-lh-12: 1.35em;
