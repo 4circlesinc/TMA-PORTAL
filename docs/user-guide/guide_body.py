@@ -925,6 +925,20 @@ def _cip_post(doc, add_title, add_h2, add_body, add_bullets, add_table, add_call
         doc,
         "Post-approval starts after a pre-approval grant. Staff enter it by moving the file to Post-Approval (or by filing Create New Post-Approval Application when the grant already exists outside this intake). The lane’s own decision (Approved or Denied on the post-approval letters) comes first, then COR, NIC, and passport dates.",
     )
+    add_h2(doc, "How the file is given to a service provider")
+    add_body(
+        doc,
+        "A service provider is not assigned the way an officer is. There is no Assign to service provider on an open file. The firm is chosen when the application is created, on the intake form field Service provider. That choice also prefixes the internal number (for example GAL26-00001), so it is not changed later.",
+    )
+    add_bullets(
+        doc,
+        [
+            "File already in this portal and Approved (pre-approval grant): open the file and move it to Post-Approval. It stays with the same service provider that was selected at original filing. Invite that firm’s people (section 10) if they should see the file in the portal.",
+            "Grant already exists outside this intake: CIP Applications → Create New Application → Create New Post-Approval Application → on Investment, select Service provider → complete the form → Add. That is how a new post-approval file is placed under a firm.",
+            "Assign an officer (administrators) is who on staff reviews the file. It does not change the service provider.",
+            "Users → assign a person to a service provider makes that account a contact of the firm. It does not move a CIP file.",
+        ],
+    )
     add_h2(doc, "Order after a grant")
     add_table(
         doc,
@@ -1485,7 +1499,7 @@ def _settings(doc, add_title, add_h2, add_body, add_bullets, add_table, add_call
         ["Group / item", "What it is for"],
         [
             ["Background Operations", "Long-running jobs: mail import, calendar import, OneDrive sync, outbound email."],
-            ["Notification History", "Firm-wide notification history."],
+            ["Notification History", "Every email the portal has sent (invites, CIP status letters, and the rest). Filter by date, recipient, and status: Queued, Sent, or Failed. Opened/read receipts are not shown here."],
             ["Edit Company Branding", "Company name, logo, and colours."],
             ["CIP Console — Administrator", "CIP administration."],
             ["CIP Console — Access", "Who on staff may use the client hub (same destination as Manage access)."],
@@ -1590,6 +1604,8 @@ def _common(doc, add_title, add_table):
             ["Start a CIP file", "CIP Applications → Create New Application."],
             ["Register a service provider", "CIP Applications → Create New Application → New service provider → Create."],
             ["Invite a service provider to sign in", "Open the provider → Access → enter email → Add (administrators). Or open a contact → Invite to portal."],
+            ["Put a post-approval file under a service provider", "On Create New Post-Approval Application, select Service provider before Add. A granted file already in the portal keeps the provider chosen at original filing when you move it to Post-Approval."],
+            ["See if the provider was emailed an approval", "Settings → Account And Reporting → Notification History. Filter by their email. Subject includes GRANTED or APPROVED and the application number."],
             ["Message the provider on a file", "Open the file → Message."],
             ["Request a name/DOB correction (CRO)", "Open the file → Edit → Save (waits on an administrator)."],
             ["Import an email signature", "Email settings → Import from Outlook / Gmail / mailbox."],
@@ -1619,12 +1635,14 @@ def _trouble(doc, add_title, add_table):
             ["A sidebar item is missing", "Your account does not have that area. That is expected, not a broken menu."],
             ["CIP Applications is missing or empty of controls", "You may not have CIP access, or the CIP module is off. Ask an administrator."],
             ["Cannot submit a CIP intake", "Complete every field marked with an asterisk and the required files, then use Add. Use Save as draft if you are not ready. Confirm Draft saved appeared if you are still typing."],
-            ["Cannot assign an officer", "Only administrators assign CIP files."],
+            ["Cannot assign an officer", "Only administrators assign CIP files (staff reviewers). That is not how you attach a service provider — pick Service provider on the intake form."],
+            ["No way to assign this file to another service provider", "The firm is set at Create / Add and is not edited later. File a new application under the correct provider, or keep this file with the original firm."],
             ["Save on Edit application did not change the name", "If you are not an administrator, you created a change request. Wait for an administrator."],
             ["Message the service provider is disabled", "The applicant is not linked to a provider. Attach a provider on the file first."],
             ["New service provider is missing from Create New Application", "External CIP users do not get that item. Staff need client-hub manage access."],
             ["No email + Add on the provider Access card", "Only administrators invite from Access. A CRO uses Invite to portal on a contact instead."],
             ["Could not send the invitation / Invite failed", "Check the address, then Resend or Try again. Confirm the mailbox can receive mail from the portal."],
+            ["Service provider did not get the approval email", "Confirm the file’s Service provider is that firm, and that the person is an Access / Provider contact with an email. Then Settings → Account And Reporting → Notification History: filter by their address. Queued means it has not left yet; Failed means it bounced or the worker could not send it."],
             ["Invitation expired", "Open the contact or Access row and Resend. Default expiry is 7 days unless your firm changed it."],
             ["Email tile says connect a mailbox", "Settings → Connectors, or Connect email account on Email."],
             ["Windows download says not commonly downloaded / not verified", "Click Keep, then Keep anyway. Open the installer. If SmartScreen appears, More info → Run anyway."],
@@ -1659,6 +1677,20 @@ def _faq(doc, add_title, add_h2, add_body):
     add_body(
         doc,
         "CIP Applications → Create New Application → New service provider → fill the name → Create. Then, as an administrator, open the provider → Access → type their email → Add. The toast Invitation sent means mail went out. They follow You’re invited to join {company} and finish the client welcome screens. A CRO who cannot see Add on Access should open the contact and click Invite to portal. Do not add them on Users.",
+    )
+    add_h2(doc, "How do I assign a post-approval file to a service provider?")
+    add_body(
+        doc,
+        "You select the firm on the application, you do not assign it afterwards. For a new post-approval filing: Create New Application → Create New Post-Approval Application → Service provider → Add. For a file that was already Approved in this portal: open it and move the status to Post-Approval — it stays with the provider chosen when it was first filed. Assign an officer is only which staff member reviews the file. To let the firm’s people open the file, invite them (see How do I invite a service provider?).",
+    )
+    add_h2(doc, "How can I tell if the service provider got the approval notice?")
+    add_body(
+        doc,
+        "When staff record Approved (pre-approval grant) or the post-approval Approved outcome, the portal emails the section 22 list: the CIP Distribution Group, the assigned officer, administrators, and the service provider’s contacts (active members of that firm, plus the firm’s contact and company email when those are set). The subject looks like VF - GRANTED - GAL26-00001 - CHEN WEI (F1) - 10.09.2026 (GRANTED for the pre-approval grant, APPROVED for the post-approval outcome).",
+    )
+    add_body(
+        doc,
+        "An administrator checks Settings → Account And Reporting → Notification History. Filter Recipient to the provider contact’s email and look at Status: Queued (still waiting to leave), Sent (the mail server accepted it), or Failed (it did not go out — read the error under the chip). The Activity tab on the file shows that the decision was recorded, which is what triggers the letter; it does not list each mailbox. Contacts who have a portal account also get a bell notification. The history page does not show whether they opened the email.",
     )
     add_h2(doc, "What is the difference between Save as draft and Add?")
     add_body(
