@@ -998,7 +998,16 @@ class Intake
     public static function update(CipApplication $application, User $actor, array $data): CipApplication
     {
         return DB::transaction(function () use ($application, $actor, $data) {
-            Confirmation::guard($application);
+            $locked = $application->isLocked();
+            /*
+             * Confirm submission freezes the scans the Unit was handed, not
+             * the names on the file. A locked row still accepts a detail
+             * correction; the original package is left alone by skipping the
+             * upload pass below.
+             */
+            if (! $locked) {
+                Confirmation::guard($application);
+            }
             self::guardIdentityEdits($application, $actor, $data);
             self::syncCipNumber($application, $actor, $data);
             $application->forceFill([
@@ -1034,7 +1043,9 @@ class Intake
                 DocumentSlots::open($person);
             }
 
-            self::fileUploads($application, $data, $actor, $dependentUuids);
+            if (! $locked) {
+                self::fileUploads($application, $data, $actor, $dependentUuids);
+            }
 
             return $application->fresh();
         });

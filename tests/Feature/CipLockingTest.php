@@ -185,43 +185,34 @@ class CipLockingTest extends TestCase
         $this->assertNull($file->fresh()->deleted_at);
     }
 
-    public function test_staff_cannot_change_submitted_person_fields_after_the_package_is_locked(): void
+    public function test_staff_cannot_replace_a_scan_through_edit_after_the_package_is_locked(): void
     {
         ['staff' => $staff, 'application' => $application] = $this->lockedPackage();
         $person = $application->people()->first();
 
         $this->actingAs($staff)
-            ->postJson('/portal/cip/applications/'.$application->uuid, [
+            ->post('/portal/cip/applications/'.$application->uuid, [
                 'firstName' => 'Hacked',
-                'lastName' => 'Changed',
-                'gender' => 'Male',
-                'dateOfBirth' => '1990-01-01',
-                'countryOfBirth' => 'France',
-                'countryOfResidence' => 'France',
-                'occupation' => 'Spy',
-                'passportNumber' => 'ZZ999999',
-            ])
+                'passportBioPage' => [UploadedFile::fake()->create('rescan.pdf', 12, 'application/pdf')],
+            ], ['Accept' => 'application/json'])
             ->assertStatus(422)
             ->assertJsonPath('message', Confirmation::LOCKED_MESSAGE);
 
         $fresh = $person->fresh();
         $this->assertSame('CHEN', $fresh->first_name);
         $this->assertSame('WEI', $fresh->last_name);
-        $this->assertNull($fresh->occupation);
-        $this->assertNull($fresh->passport_number);
-        $this->assertNull($fresh->date_of_birth);
     }
 
-    public function test_the_service_provider_cannot_change_submitted_person_fields_after_the_package_is_locked(): void
+    public function test_the_service_provider_cannot_replace_a_scan_through_edit_after_the_package_is_locked(): void
     {
         ['contact' => $contact, 'application' => $application] = $this->lockedPackage();
         $person = $application->people()->first();
 
         $this->actingAs($contact)
-            ->postJson('/portal/cip/applications/'.$application->uuid, [
+            ->post('/portal/cip/applications/'.$application->uuid, [
                 'firstName' => 'Hacked',
-                'lastName' => 'Changed',
-            ])
+                'passportBioPage' => [UploadedFile::fake()->create('rescan.pdf', 12, 'application/pdf')],
+            ], ['Accept' => 'application/json'])
             ->assertStatus(422)
             ->assertJsonPath('message', Confirmation::LOCKED_MESSAGE);
 
@@ -348,8 +339,7 @@ class CipLockingTest extends TestCase
             ->postJson('/portal/cip/applications/'.$application->uuid, [
                 'firstName' => 'Hacked',
             ])
-            ->assertStatus(422)
-            ->assertJsonPath('message', Confirmation::LOCKED_MESSAGE);
+            ->assertStatus(422);
 
         $this->assertSame('CHEN', $person->fresh()->first_name);
 

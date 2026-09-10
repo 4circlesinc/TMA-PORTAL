@@ -1301,7 +1301,16 @@ class CipApplicationController extends Controller
             ? CipAccess::canEditPostApprovalPeople($user) || CipAccess::canCreate($user)
             : CipAccess::canCreate($user);
         abort_unless($mayEdit, 404);
-        abort_if($application->isLocked(), 422, Confirmation::LOCKED_MESSAGE);
+        /*
+         * The freeze is the original scans. Details can still be corrected;
+         * a replacement file in this body is the one thing that must not
+         * land, and Additional Documents is the drawer for anything new.
+         */
+        abort_if(
+            $application->isLocked() && count($request->allFiles()) > 0,
+            422,
+            Confirmation::LOCKED_MESSAGE,
+        );
 
         Intake::normaliseDocuments($request);
         $data = $request->validate(Intake::rules(editing: true), Intake::messages());

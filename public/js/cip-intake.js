@@ -291,16 +291,18 @@
       }
     });
 
-    requiredFiles().forEach(function (path) {
-      if (!state.files[path] && !state.filed[path]) found[path] = labelFor(path) + ' is required';
-    });
+    if (!packageLocked()) {
+      requiredFiles().forEach(function (path) {
+        if (!state.files[path] && !state.filed[path]) found[path] = labelFor(path) + ' is required';
+      });
 
-    requiredDocuments().forEach(function (path) {
-      var files = state.documents[path];
-      if ((!files || !files.length) && !state.filed[path]) {
-        found[path] = labelFor(path) + ' is required';
-      }
-    });
+      requiredDocuments().forEach(function (path) {
+        var files = state.documents[path];
+        if ((!files || !files.length) && !state.filed[path]) {
+          found[path] = labelFor(path) + ' is required';
+        }
+      });
+    }
 
     if (state.draft.investmentType === 'other'
       && String(state.draft.investmentTypeOther || '').trim() === '') {
@@ -474,7 +476,7 @@
      to judge the scan on, not an avatar disc. */
   function photoField(path) {
     var preview = state.previews[path];
-    if (fieldsLocked()) {
+    if (fieldsLocked() || packageLocked()) {
       return '<div class="tma-dash__clients-photo tma-dash__clients-photo--passport is-locked">' +
         fieldLabel(path, labelFor(path)) +
         '<div class="tma-dash__clients-photo-wrap">' +

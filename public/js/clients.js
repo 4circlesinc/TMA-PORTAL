@@ -5134,16 +5134,21 @@
       var newPhase = draftApp
         ? ((applicationRecord(state) || {}).phase || 'pre_approval')
         : (state.applicationPhase || 'pre_approval');
-      var packageLocked = editingApp && !!state.applicationLocked;
       /*
        * Post-approval Edit is not the intake wizard, so its Save is a
        * different button doing a different thing: the wizard posts one form,
        * this posts each person card that was actually changed. Both live in
        * the head, because "save this screen" is one idea and a reader should
        * not have to find a button per card to express it.
+       *
+       * Package lock is the scans, not this button. Confirm submission used
+       * to take Save off the page as well, which left a form that still
+       * accepted a name correction with nowhere to put it. Hide Save only
+       * when the people themselves are frozen for this reader.
        */
       var postApprovalEdit = editingApp && editApplicationPhase(state) === 'post_approval';
-      var hideSave = packageLocked || (editingApp && !postApprovalEdit
+      var peopleFrozen = editingApp && !!state.applicationLocked && state.canEditPeople === false;
+      var hideSave = peopleFrozen || (editingApp && !postApprovalEdit
         && editApplicationPhase(state) !== 'pre_approval');
       var saveAttr = postApprovalEdit ? 'data-cip-people-save' : 'data-cip-save';
       toolbar = '<div class="tma-dash__clients-profile-toolbar">' +
@@ -13096,8 +13101,8 @@
           : (state.applicationPhase || 'pre_approval'),
         onReady: function (application) {
           state.applicationLocked = !!(application && application.locked);
-          var btn = document.querySelector('[data-cip-save]');
-          if (state.applicationLocked && btn) btn.remove();
+          state.canEditPeople = !(application && application.canEditPeople === false);
+          syncClientsDetailHead(state);
         },
         onSaving: function (saving) {
           var btn = document.querySelector('[data-cip-save]');
@@ -14612,6 +14617,7 @@
       // later New application would open with the last one's answers in it.
       state.applicationId = screen === 'edit-application' ? (applicationId || state.applicationId) : null;
       state.applicationLocked = screen === 'edit-application' && isApplicationLocked(state.applicationId);
+      if (screen !== 'edit-application') state.canEditPeople = true;
       if (screen === 'new-application') {
         state.applicationPhase = state.applicationPhase || 'pre_approval';
       } else if (screen !== 'edit-application') {

@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\ApplicantType;
 use App\Support\Cip\CipAccess;
+use App\Support\Cip\Confirmation;
 use App\Support\Cip\CorRequirements;
 use App\Support\Cip\Countries;
 use App\Support\Cip\Dependents;
@@ -759,6 +760,55 @@ class CipIntakeTest extends TestCase
         // The same form, posted back untouched, is not a correction — so the
         // officer can still edit everything else on it.
         $this->edit($officer, $application, $this->edits($provider))->assertOk();
+    }
+
+    /**
+     * Confirm submission freezes the scans, not the names.
+     *
+     * Edit application still offers the details, so Save has to land them.
+     * A replacement scan in the same post is the one thing that must not.
+     */
+    public function test_a_locked_application_still_saves_a_detail_correction(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($staff, $this->payload($provider))->assertCreated()->json('application');
+        $application = CipApplication::where('uuid', $body['id'])->firstOrFail();
+        $application->forceFill(['locked_at' => now()])->save();
+
+        $this->edit($staff, $application, $this->edits($provider, [
+            'firstName' => 'Jonathan',
+            'occupation' => 'Retired Engineer',
+        ]))->assertOk();
+
+        $person = $application->fresh()->people()->where('role', CipPerson::ROLE_MAIN_APPLICANT)->first();
+        $this->assertSame('JONATHAN', $person->first_name);
+        $this->assertSame('Retired Engineer', $person->occupation);
+    }
+
+    public function test_a_locked_application_still_refuses_a_replacement_scan(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($staff, $this->payload($provider))->assertCreated()->json('application');
+        $application = CipApplication::where('uuid', $body['id'])->firstOrFail();
+        $application->forceFill(['locked_at' => now()])->save();
+
+        $edit = $this->edits($provider, ['occupation' => 'Retired Engineer']);
+        $edit['passportBioPage'] = [$this->scan('new-bio.pdf')];
+
+        $this->edit($staff, $application, $edit)
+            ->assertStatus(422)
+            ->assertJsonPath('message', Confirmation::LOCKED_MESSAGE);
+
+        $this->assertSame(
+            'Engineer',
+            $application->fresh()->people()->where('role', CipPerson::ROLE_MAIN_APPLICANT)->first()->occupation,
+        );
     }
 
     /** Re-posting the number the form was drawn with is not a change. */
