@@ -12,7 +12,6 @@ use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
-use App\Support\Cip\PersonEdits;
 use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -128,7 +127,7 @@ class CipPersonEditsTest extends TestCase
         $this->assertSame('ANA', $person->fresh()->first_name);
         $this->assertCount(1, $body['pendingChanges']);
         $this->assertSame(
-            ['from' => 'ANA', 'to' => 'Anna'],
+            ['from' => 'ANA', 'to' => 'ANNA'],
             $body['pendingChanges'][0]['changes']['firstName'],
         );
     }
@@ -211,7 +210,7 @@ class CipPersonEditsTest extends TestCase
         // One open ask per person: an approver reading two half-corrections
         // would have to reconcile them by hand.
         $this->assertCount(1, $body['pendingChanges']);
-        $this->assertSame('Annabel', $body['pendingChanges'][0]['changes']['firstName']['to']);
+        $this->assertSame('ANNABEL', $body['pendingChanges'][0]['changes']['firstName']['to']);
     }
 
     /**

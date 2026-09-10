@@ -206,7 +206,8 @@ class CipApplicationController extends Controller
          * anyway"; everyone else is stopped and told who can.
          */
         if ($duplicate = Intake::duplicateOf($data, $draft)) {
-            $applicant = trim($data['firstName'].' '.$data['lastName']);
+            $applicant = CipPerson::upperName(trim($data['firstName'].' '.$data['lastName']))
+                ?: trim($data['firstName'].' '.$data['lastName']);
             if (! Role::isAdmin($user)) {
                 abort(422, sprintf(
                     'An application for %s is already on file (%s). An administrator has to approve a duplicate.',
@@ -907,9 +908,11 @@ class CipApplicationController extends Controller
             'submittedAt' => $application->submitted_at?->toDateString(),
             // Their passport photo, which intake files as the client's picture.
             'photo' => $client?->photo_url,
-            'applicantName' => $main
-                ? trim($main->first_name.' '.$main->last_name)
-                : ($client?->name ?? '-'),
+            'applicantName' => CipPerson::upperName(
+                $main
+                    ? trim(($main->first_name ?? '').' '.($main->last_name ?? ''))
+                    : (string) ($client?->name ?? '')
+            ) ?: '-',
             'provider' => $application->provider?->name,
             /*
              * Who to contact about this application.
@@ -920,7 +923,7 @@ class CipApplicationController extends Controller
              * the government's officer, a different question that section 8 does not
              * ask on this row.
              */
-            'contactPerson' => $client?->name,
+            'contactPerson' => CipPerson::upperName($client?->name),
             'contactEmail' => $client?->contactEmail(),
             'investmentType' => InvestmentType::display(
                 $application->investment_type,

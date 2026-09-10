@@ -1732,7 +1732,7 @@ class CipIntakeTest extends TestCase
         $this->file($admin, $this->payload($provider, ['submissionId' => 'admin-2']))
             ->assertStatus(409)
             ->assertJsonPath('duplicate.internalNumber', 'GAL'.now()->format('y').'-00001')
-            ->assertJsonPath('duplicate.name', 'John Smith');
+            ->assertJsonPath('duplicate.name', 'JOHN SMITH');
         $this->assertSame(1, CipApplication::count());
 
         $this->file($admin, $this->payload($provider, ['submissionId' => 'admin-2', 'allowDuplicate' => '1']))

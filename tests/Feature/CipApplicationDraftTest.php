@@ -784,7 +784,7 @@ class CipApplicationDraftTest extends TestCase
         $this->actingAs($staff)
             ->post('/portal/cip/applications', $this->filing($provider), ['Accept' => 'application/json'])
             ->assertStatus(409)
-            ->assertJsonPath('duplicate.name', 'John Smith');
+            ->assertJsonPath('duplicate.name', 'JOHN SMITH');
     }
 
     /**

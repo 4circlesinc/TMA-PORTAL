@@ -348,6 +348,9 @@ class PersonEdits
             $value = $changes[$field];
             $value = is_string($value) ? trim($value) : $value;
             $value = $value === '' ? null : $value;
+            if (in_array($field, ['firstName', 'lastName'], true) && is_string($value)) {
+                $value = CipPerson::upperName($value);
+            }
 
             // A field sent back unchanged is not a correction, and an approver
             // should not have to read it as one.

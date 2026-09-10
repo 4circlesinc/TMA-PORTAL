@@ -6,6 +6,7 @@ use App\Casts\EncryptedIdentity;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
@@ -73,12 +74,28 @@ class CipPerson extends Model
         $this->attributes['first_name'] = self::upperName($value);
     }
 
+    public function getFirstNameAttribute(?string $value): ?string
+    {
+        return self::upperName($value);
+    }
+
     public function setLastNameAttribute(?string $value): void
     {
         $this->attributes['last_name'] = self::upperName($value);
     }
 
-    private static function upperName(?string $value): ?string
+    public function getLastNameAttribute(?string $value): ?string
+    {
+        return self::upperName($value);
+    }
+
+    /**
+     * A name as the Unit prints it.
+     *
+     * Reading through here as well as writing, so a row typed before the
+     * setter existed still comes out in capitals on every list and letter.
+     */
+    public static function upperName(?string $value): ?string
     {
         if ($value === null) {
             return null;
@@ -109,7 +126,7 @@ class CipPerson extends Model
      * a checklist that came back in whatever order the database felt like
      * would reshuffle itself between two reads of the same page.
      */
-    public function documents(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function documents(): HasMany
     {
         return $this->hasMany(CipDocument::class, 'person_id')->orderBy('id');
     }

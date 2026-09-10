@@ -116,6 +116,50 @@ class CipApplicationTableTest extends TestCase
         );
     }
 
+    public function test_mixed_case_names_are_listed_in_capitals(): void
+    {
+        $staff = $this->staff();
+        $application = $this->application($staff, $this->provider($staff), 0, false);
+        $person = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+
+        DB::table('cip_people')->where('id', $person->id)->update([
+            'first_name' => 'Cindy',
+            'last_name' => 'Applicant',
+        ]);
+
+        $row = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications')
+            ->assertOk()
+            ->json('applications.0');
+
+        $this->assertSame('CINDY APPLICANT', $row['applicantName']);
+    }
+
+    public function test_a_client_name_used_as_the_applicant_is_listed_in_capitals(): void
+    {
+        $staff = $this->staff();
+        $application = Applications::create($this->provider($staff), $staff, [
+            'investment_type' => 'real_estate',
+            'sponsored' => false,
+        ]);
+        $client = Client::create([
+            'uid' => 'larry-kidd',
+            'name' => 'Larry Kidd',
+            'email' => 'larry@example.com',
+            'created_by' => $staff->id,
+            'data' => [],
+        ]);
+        $application->forceFill(['client_id' => $client->id])->save();
+
+        $row = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications')
+            ->assertOk()
+            ->json('applications.0');
+
+        $this->assertSame('LARRY KIDD', $row['applicantName']);
+        $this->assertSame('LARRY KIDD', $row['contactPerson']);
+    }
+
     public function test_the_assigned_column_names_the_staff_on_the_client(): void
     {
         $staff = $this->staff();

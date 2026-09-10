@@ -1390,6 +1390,12 @@
 .tma-portal-input::placeholder,
 .tma-portal-textarea::placeholder { color: var(--color-text-placeholder); }
 
+/* Names are capitals as they are typed, the way the Unit prints them. */
+.tma-portal-input--name,
+.tma-portal-field--name .tma-portal-field__static {
+  text-transform: uppercase;
+}
+
 /*
  * The portal's own caret, not the operating system's.
  *

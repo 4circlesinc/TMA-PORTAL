@@ -3434,7 +3434,7 @@
       '<div class="tma-dash__clients-card-person">' +
       '<div class="tma-dash__clients-card-person-text">' +
       '<h3 class="tma-dash__clients-card-title">' + esc(person.label || person.applicantTypeLabel || 'Applicant') + '</h3>' +
-      '<span class="tma-dash__clients-card-person-name">' + esc(person.name || '-') + '</span>' +
+      '<span class="tma-dash__clients-card-person-name">' + esc(cipUpperName(person.name) || '-') + '</span>' +
       '</div></div>' +
       status +
       '</header>';
@@ -3492,7 +3492,7 @@
       '<span class="tma-cip-table__member-avatar">' + memberFace(member) + '</span>' +
       '<div class="tma-cip-table__member-text">' +
       '<span class="tma-cip-table__member-role">' + esc(member.label || '') + '</span>' +
-      '<span class="tma-cip-table__member-name">' + esc(member.name || '-') + '</span>' +
+      '<span class="tma-cip-table__member-name">' + esc(cipUpperName(member.name) || '-') + '</span>' +
       '</div></div></td>' +
       '<td colspan="5"></td>' +
       '<td>' + cipPersonStatusChip(member, a, true) + '</td>' +
@@ -3809,9 +3809,32 @@
    * picture at intake, and their initials where there is not. Never an
    * invented face: a stock silhouette on a citizenship application would be
    * the table showing somebody who does not exist.
+   *
+   * Names are capitals, always: the Unit prints them that way, and a list
+   * that mixed "Larry Kidd" with "AHMED BENAISSA" would be two conventions
+   * for the same fact.
    */
+  function cipUpperName(value) {
+    var s = String(value == null ? '' : value).trim();
+    return s ? s.toLocaleUpperCase() : s;
+  }
+
+  function forceUpperInput(el) {
+    if (!el) return;
+    var start = el.selectionStart;
+    var end = el.selectionEnd;
+    var prev = el.value;
+    var next = String(prev || '').toLocaleUpperCase();
+    if (next === prev) return;
+    el.value = next;
+    if (typeof start === 'number' && typeof el.setSelectionRange === 'function') {
+      var delta = next.length - prev.length;
+      try { el.setSelectionRange(Math.max(0, start + delta), Math.max(0, end + delta)); } catch (err) {}
+    }
+  }
+
   function applicantCell(a) {
-    var name = a.applicantName || '-';
+    var name = cipUpperName(a.applicantName) || '-';
     var face = a.photo
       ? '<img class="tma-cip-table__applicant-face" src="' + esc(a.photo) + '" alt="" width="26" height="26">'
       : applicantInitials(a);
@@ -7427,12 +7450,18 @@
     })[0];
 
     var fields = CIP_PERSON_EDIT_FIELDS.map(function (f) {
-      return '<label class="tma-portal-field">' +
+      var raw = person[f.key] == null ? '' : String(person[f.key]);
+      if (f.key === 'firstName' || f.key === 'lastName') raw = cipUpperName(raw);
+      return '<label class="tma-portal-field' +
+        (f.key === 'firstName' || f.key === 'lastName' ? ' tma-portal-field--name' : '') + '">' +
         '<span class="tma-portal-field__label">' + esc(f.label) + '</span>' +
-        '<input class="tma-portal-input" type="' + (f.type || 'text') + '"' +
+        '<input class="tma-portal-input' +
+        (f.key === 'firstName' || f.key === 'lastName' ? ' tma-portal-input--name' : '') + '"' +
+        ' type="' + (f.type || 'text') + '"' +
         ' data-cip-person-field="' + esc(f.key) + '"' +
         ' data-cip-person="' + esc(person.id) + '"' +
-        ' value="' + esc(person[f.key] == null ? '' : person[f.key]) + '"' +
+        ' value="' + esc(raw) + '"' +
+        (f.key === 'firstName' || f.key === 'lastName' ? ' autocapitalize="characters" spellcheck="false"' : '') +
         ' autocomplete="off">' +
         '</label>';
     }).join('');
@@ -12984,6 +13013,7 @@
       block.querySelectorAll('[data-cip-person-field]').forEach(function (input) {
         var key = input.getAttribute('data-cip-person-field');
         var value = input.value.trim();
+        if (key === 'firstName' || key === 'lastName') value = value.toLocaleUpperCase();
         body[key] = value;
         if (value !== String(was[key] == null ? '' : was[key]).trim()) moved = true;
       });
@@ -13021,8 +13051,29 @@
       });
   }
 
+  /*
+   * First and last name fields on the CIP profile, as you type.
+   *
+   * Once, on the document: wireEvents runs on every paint, and stacking a
+   * listener each time would shout the same keystroke into the field twice.
+   */
+  var cipNameCapsWired = false;
+
+  function wireCipNameCaps() {
+    if (cipNameCapsWired) return;
+    cipNameCapsWired = true;
+    document.addEventListener('input', function (e) {
+      var el = e.target;
+      if (!el || !el.getAttribute) return;
+      var key = el.getAttribute('data-cip-person-field');
+      if (key !== 'firstName' && key !== 'lastName') return;
+      forceUpperInput(el);
+    });
+  }
+
   function wireEvents(root, state, scope, navigate, render) {
     wireCipToolbar(navigate);
+    wireCipNameCaps();
     // The shared person card: the hover that names the faces in Assigned to.
     // Once, on the document, like the board it is borrowed from.
     if (window.TMAPersonCard && window.TMAPersonCard.wire) window.TMAPersonCard.wire();

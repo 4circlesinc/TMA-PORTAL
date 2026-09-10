@@ -272,10 +272,13 @@ class Contacts
         $application->loadMissing(['provider', 'client', 'people']);
 
         $applicant = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $name = CipPerson::upperName(
+            $applicant?->fullName() ?: (string) ($application->client?->name ?? '')
+        );
 
         return [
             'number' => $application->displayNumber(),
-            'applicant' => $applicant?->fullName() ?: ($application->client?->name ?? 'Unnamed applicant'),
+            'applicant' => $name !== null && $name !== '' ? $name : 'Unnamed applicant',
             'provider' => $application->provider?->name ?? 'Private client',
             'familySize' => $application->familySize(),
         ];

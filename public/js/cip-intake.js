@@ -420,11 +420,35 @@
     return isRequired(path) ? ' aria-required="true"' : '';
   }
 
+  function isNamePath(path) {
+    return /(^|\.)(firstName|lastName)$/.test(String(path || ''));
+  }
+
+  function upperName(value) {
+    return String(value == null ? '' : value).toLocaleUpperCase();
+  }
+
+  function forceUpperInput(el) {
+    if (!el) return;
+    var start = el.selectionStart;
+    var end = el.selectionEnd;
+    var prev = el.value;
+    var next = upperName(prev);
+    if (next === prev) return;
+    el.value = next;
+    if (typeof start === 'number' && typeof el.setSelectionRange === 'function') {
+      var delta = next.length - prev.length;
+      try { el.setSelectionRange(Math.max(0, start + delta), Math.max(0, end + delta)); } catch (err) {}
+    }
+  }
+
   function lockedField(path, shown, opts) {
     opts = opts || {};
-    return '<div class="tma-portal-field tma-portal-field--locked">' +
+    var display = isNamePath(path) ? upperName(shown) : shown;
+    return '<div class="tma-portal-field tma-portal-field--locked' +
+      (isNamePath(path) ? ' tma-portal-field--name' : '') + '">' +
       '<span class="tma-portal-field__label">' + esc(opts.label || labelFor(path)) + '</span>' +
-      '<p class="tma-portal-field__static">' + esc(shown || '—') + '</p>' +
+      '<p class="tma-portal-field__static">' + esc(display || '—') + '</p>' +
       '</div>';
   }
 
@@ -438,14 +462,19 @@
 
   function textField(path, opts) {
     opts = opts || {};
-    if (fieldsLocked()) return lockedField(path, state.draft[path] || '', opts);
-    return '<label class="tma-portal-field' + (state.errors[path] ? ' is-invalid' : '') + '">' +
+    var name = isNamePath(path);
+    var shown = name ? upperName(state.draft[path] || '') : (state.draft[path] || '');
+    if (fieldsLocked()) return lockedField(path, shown, opts);
+    return '<label class="tma-portal-field' + (state.errors[path] ? ' is-invalid' : '') +
+      (name ? ' tma-portal-field--name' : '') + '">' +
       fieldLabel(path, opts.label || labelFor(path)) +
-      '<input class="tma-portal-input" type="' + (opts.type || 'text') + '"' +
+      '<input class="tma-portal-input' + (name ? ' tma-portal-input--name' : '') + '"' +
+      ' type="' + (opts.type || 'text') + '"' +
       ' data-cip-field="' + esc(path) + '"' +
-      ' value="' + esc(state.draft[path] || '') + '"' +
+      ' value="' + esc(shown) + '"' +
       (opts.placeholder ? ' placeholder="' + esc(opts.placeholder) + '"' : '') +
       (opts.max ? ' max="' + esc(opts.max) + '"' : '') +
+      (name ? ' autocapitalize="characters" spellcheck="false"' : '') +
       requiredAttr(path) +
       ' autocomplete="off">' +
       fieldError(path) +
@@ -941,11 +970,13 @@
     MORPH.unwired(root, '[data-cip-field]').forEach(function (el) {
       var path = el.getAttribute('data-cip-field');
       el.addEventListener('input', function () {
+        if (isNamePath(path)) forceUpperInput(el);
         state.draft[path] = el.value;
         delete state.errors[path];
         touchDraft();
       });
       el.addEventListener('change', function () {
+        if (isNamePath(path)) forceUpperInput(el);
         state.draft[path] = el.value;
         delete state.errors[path];
         touchDraft();
@@ -2160,7 +2191,10 @@
   function prefill(app) {
     var into = function (prefix, person) {
       if (!person) return;
-      PERSON_FIELDS.forEach(function (f) { state.draft[prefix + f] = person[f] || ''; });
+      PERSON_FIELDS.forEach(function (f) {
+        var value = person[f] || '';
+        state.draft[prefix + f] = (f === 'firstName' || f === 'lastName') ? upperName(value) : value;
+      });
       /*
        * The photo is answered by its SLOT, or by the person's own stored
        * picture. `photo` is a display URL and falls back to the client's
@@ -2219,8 +2253,8 @@
       // The uuid rides along so the server changes this dependant rather than
       // replacing the family with a new one.
       state.draft[p + 'id'] = d.id;
-      state.draft[p + 'firstName'] = d.firstName || '';
-      state.draft[p + 'lastName'] = d.lastName || '';
+      state.draft[p + 'firstName'] = upperName(d.firstName || '');
+      state.draft[p + 'lastName'] = upperName(d.lastName || '');
       state.draft[p + 'dateOfBirth'] = d.dateOfBirth || '';
       state.draft[p + 'relationship'] = d.relationship || 'qualified_dependent';
       into(p, d);
