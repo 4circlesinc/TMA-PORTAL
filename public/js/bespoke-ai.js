@@ -625,7 +625,7 @@
     host = document.createElement('div');
     host.className = 'tma-bespoke';
     host.innerHTML = markup();
-    dash.appendChild(host);
+    document.body.appendChild(host);
 
     fab = host.querySelector('[data-bespoke-fab]');
     panel = host.querySelector('.tma-bespoke__panel');

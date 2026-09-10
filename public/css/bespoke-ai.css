@@ -15,7 +15,7 @@
 .tma-bespoke {
   position: fixed;
   right: var(--space-16);
-  bottom: 72px;
+  bottom: var(--space-16);
   z-index: 640;
   font-family: var(--font-family);
   font-feature-settings: var(--font-features);
@@ -25,10 +25,6 @@
 
 .tma-bespoke.is-open {
   z-index: 660;
-}
-
-.tma-dash:not(.is-rightbar-collapsed) > .tma-bespoke {
-  right: calc(var(--dash-rightbar-w) + var(--space-16));
 }
 
 .tma-bespoke__fab,
@@ -442,8 +438,8 @@ html.tma-dash--compose-popout .tma-bespoke,
   display: none !important;
 }
 
-.tma-dash.is-nav-open .tma-bespoke:not(.is-open),
-.tma-dash.is-rb-open .tma-bespoke:not(.is-open) {
+body:has(.tma-dash.is-nav-open) .tma-bespoke:not(.is-open),
+body:has(.tma-dash.is-rb-open) .tma-bespoke:not(.is-open) {
   opacity: 0;
   pointer-events: none;
 }
@@ -452,10 +448,6 @@ html.tma-dash--compose-popout .tma-bespoke,
   .tma-bespoke {
     right: var(--space-12);
     bottom: calc(var(--dash-tabbar-block-h, 68px) + var(--space-12) + env(safe-area-inset-bottom, 0px));
-  }
-
-  .tma-dash:not(.is-rightbar-collapsed) > .tma-bespoke {
-    right: var(--space-12);
   }
 
   .tma-bespoke__panel {
