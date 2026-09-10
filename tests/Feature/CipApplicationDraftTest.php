@@ -394,6 +394,100 @@ class CipApplicationDraftTest extends TestCase
     }
 
     /**
+     * Autosave writes the wizard's submission key onto the draft. Save
+     * used to find that row and return it as if the filing had already
+     * happened — still a Draft. Completing it is what the press was for.
+     */
+    public function test_filing_with_the_drafts_submission_key_moves_it_to_new(): void
+    {
+        Storage::fake('local');
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+        $key = 'wizard-key-pre';
+
+        $this->actingAs($staff)->post('/portal/cip/applications/draft', $this->answers($provider, [
+            'submissionId' => $key,
+            'firstName' => 'John',
+            'lastName' => 'Smith',
+            'gender' => 'Male',
+            'dateOfBirth' => '1985-04-12',
+            'countryOfBirth' => 'Lebanon',
+            'countryOfResidence' => 'United Arab Emirates',
+            'occupation' => 'Engineer',
+            'passportNumber' => 'X1234567',
+            'investmentType' => InvestmentType::REAL_ESTATE,
+            'sponsored' => '0',
+            'passportPhoto' => $this->photo(),
+            'passportBioPage' => [UploadedFile::fake()->create('bio.pdf', 40, 'application/pdf')],
+            'birthCertificate' => [UploadedFile::fake()->create('birth.pdf', 40, 'application/pdf')],
+        ]), ['Accept' => 'application/json'])->assertOk();
+
+        $draft = CipApplication::query()->first();
+        $this->assertSame(Status::DRAFT, $draft->status);
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications', $this->filing($provider) + ['submissionId' => $key], ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        $filed = $draft->fresh();
+        $this->assertSame(Status::NEW, $filed->status);
+        $this->assertSame(1, CipApplication::query()->count());
+
+        // A retry after a timeout is the application already filed, not a second one.
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications', $this->filing($provider) + ['submissionId' => $key], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('application.id', $filed->uuid)
+            ->assertJsonPath('application.status', Status::NEW);
+    }
+
+    public function test_filing_a_post_approval_draft_with_its_submission_key_moves_it_to_post_approval(): void
+    {
+        Storage::fake('local');
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+        $key = 'wizard-key-post';
+
+        $this->actingAs($staff)->post('/portal/cip/applications/draft', $this->answers($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'submissionId' => $key,
+            'cipNumber' => '10T1G12681P',
+            'firstName' => 'John',
+            'lastName' => 'Smith',
+            'gender' => 'Male',
+            'dateOfBirth' => '1985-04-12',
+            'countryOfBirth' => 'Lebanon',
+            'countryOfResidence' => 'United Arab Emirates',
+            'occupation' => 'Engineer',
+            'passportNumber' => 'X1234567',
+            'investmentType' => InvestmentType::REAL_ESTATE,
+            'sponsored' => '0',
+            'passportPhoto' => $this->photo(),
+            'passportBioPage' => [UploadedFile::fake()->create('bio.pdf', 40, 'application/pdf')],
+            'birthCertificate' => [UploadedFile::fake()->create('birth.pdf', 40, 'application/pdf')],
+            'oathOfAllegiance' => [UploadedFile::fake()->create('oath.pdf', 40, 'application/pdf')],
+            'proofOfPayment' => [UploadedFile::fake()->create('payment.pdf', 40, 'application/pdf')],
+        ]), ['Accept' => 'application/json'])->assertOk();
+
+        $this->actingAs($staff)->post(
+            '/portal/cip/applications',
+            $this->filing($provider) + [
+                'phase' => Phase::POST_APPROVAL,
+                'cipNumber' => '10T1G12681P',
+                'submissionId' => $key,
+            ],
+            ['Accept' => 'application/json'],
+        )->assertCreated();
+
+        $filed = CipApplication::query()->first();
+        $this->assertSame(Status::POST_APPROVAL, $filed->status);
+        $this->assertSame(Phase::POST_APPROVAL, $filed->phase);
+        $this->assertSame('10T1G12681P', $filed->cip_number);
+    }
+
+    /**
      * Throwing a draft away takes its folder to the recycle bin.
      *
      * The application is an unfiled form and nobody refers to it, so it goes

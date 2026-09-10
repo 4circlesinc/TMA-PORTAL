@@ -169,17 +169,26 @@ class CipApplicationController extends Controller
          * carries the key the wizard minted at open, so it finds the row
          * the first attempt created and returns it as the success the
          * reader never saw. GLO26-00002 exists because this check did not.
+         *
+         * A DRAFT wearing that key is not a success. Autosave writes the
+         * key onto the unfinished row, so Save used to find it, return it
+         * still at Draft, and never file. Completing it is what this
+         * request is for; a retry after filing is the 200 below.
          */
         $key = trim((string) ($data['submissionId'] ?? ''));
         if ($key !== '') {
             $landed = CipApplication::query()
                 ->where('submission_key', $key)
                 ->where('created_by', $user->id)
+                ->with(['people.documents'])
                 ->first();
-            if ($landed) {
+            if ($landed && $landed->status !== Status::DRAFT) {
                 return response()->json([
                     'application' => $this->record($landed, $user),
                 ], 200);
+            }
+            if ($landed && $landed->status === Status::DRAFT) {
+                $draft = $landed;
             }
         }
 
@@ -1459,8 +1468,8 @@ class CipApplicationController extends Controller
 
     /**
      * @param  ?array<int, array{comments: int, mentionsMe: bool, messages: int}>  $attention
-     *                                Primed by the caller when it is drawing more than one
-     *                                application; measured here for a single record.
+     *                                                                                         Primed by the caller when it is drawing more than one
+     *                                                                                         application; measured here for a single record.
      */
     private function record($application, User $viewer, ?Presenter $presenter = null, ?array $attention = null): array
     {
