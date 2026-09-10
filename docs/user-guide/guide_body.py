@@ -21,6 +21,7 @@ def write_guide(doc, h):
     _dashboard(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callout, add_image)
     _overview_apps(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callout, add_image)
     _cip_list(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callout, add_image)
+    _invite_providers(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callout, add_image)
     _cip_pre(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callout)
     _cip_post(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callout)
     _cip_file(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callout, add_image)
@@ -583,7 +584,7 @@ def _overview_apps(doc, add_title, add_h2, add_body, add_bullets, add_table, add
     add_h2(doc, "Activity on Overview")
     add_body(
         doc,
-        "Overview → Activity is the full activity log. The right-hand Activities list is a short version of the same stream. CIP status changes appear here as they happen (for example an application number “moved to Review Applications”). See section 26.",
+        "Overview → Activity is the full activity log. The right-hand Activities list is a short version of the same stream. CIP status changes appear here as they happen (for example an application number “moved to Review Applications”). See section 27.",
     )
 
 
@@ -667,7 +668,7 @@ def _cip_list(doc, add_title, add_h2, add_body, add_bullets, add_table, add_call
     add_h2(doc, "Create an application")
     add_body(
         doc,
-        "Staff: click Create New Application. The menu offers Create New Pre-Approval Application, Create New Post-Approval Application, New service provider, and Import. Service-provider contacts see one button: Create New Application (pre-approval only).",
+        "Staff: click Create New Application. The menu offers Create New Pre-Approval Application, Create New Post-Approval Application, New service provider, and Import. Service-provider contacts see one button: Create New Application (pre-approval only). How to register a provider and invite its people to sign in is in section 10.",
     )
     add_h2(doc, "Fill the intake form")
     add_image(
@@ -720,8 +721,118 @@ def _cip_list(doc, add_title, add_h2, add_body, add_bullets, add_table, add_call
     )
 
 
+def _invite_providers(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callout, add_image):
+    add_title(doc, "10. Inviting service providers")
+    add_body(
+        doc,
+        "A service provider is a firm you work with on CIP files. Registering the firm and inviting its people are two steps. Do not add them on Users — invited provider people always arrive as Client accounts linked to that firm.",
+    )
+    add_h2(doc, "Who can do this")
+    add_table(
+        doc,
+        ["Action", "Who"],
+        [
+            ["New service provider (register the firm)", "Staff with client-hub manage access: administrators and CRO / Reviewing officers. External CIP users do not see this menu item."],
+            ["Invite from the provider’s Access card (email + Add)", "Administrators only. A CRO can open the provider but does not get that Add field."],
+            ["Invite to portal on a contact’s profile", "Staff who can invite clients (administrators and CRO / Reviewing officers)."],
+        ],
+    )
+    add_h2(doc, "Step 1 — Register the service provider")
+    add_bullets(
+        doc,
+        [
+            "Open CIP Applications.",
+            "Click Create New Application.",
+            "Click New service provider. (You can also open the Providers tab and create from there when the list is in use.)",
+        ],
+        numbered=True,
+    )
+    add_image(
+        doc,
+        "32-create-menu.png",
+        "Figure 15. Create New Application menu. New service provider sits under the two application choices, with Import.",
+    )
+    add_body(
+        doc,
+        "The page title is New service provider (breadcrumb: CIP Applications / New service provider).",
+    )
+    add_image(
+        doc,
+        "33-new-provider.png",
+        "Figure 16. New service provider. Enter Service provider name, optional Website, CIP code, and Notes, then Create.",
+    )
+    add_bullets(
+        doc,
+        [
+            "Enter Service provider name. This is required.",
+            "Optional: Website (placeholder https://).",
+            "CIP code fills in from the name as you type (placeholder From the name). You can still edit it. The portal checks the code on the server so you do not reuse one another provider already owns.",
+            "Optional: Notes about this company.",
+            "Click Create. Click Cancel to leave without saving.",
+        ],
+        numbered=True,
+    )
+    add_h2(doc, "Step 2 — Open the provider")
+    add_body(
+        doc,
+        "After Create, you land on that provider’s profile. Later, open CIP Applications → Providers (full label: Service providers) and click the firm’s name. If the tab says No service providers, register one first (step 1). The profile toolbar has Edit, Add person, and Delete. Cards include Details, Clients referred, Access, Provider contacts, and Assigned staff.",
+    )
+    add_h2(doc, "Step 3 — Invite people so they can sign in (administrators)")
+    add_body(
+        doc,
+        "On the provider profile, find the Access card. This is who at the firm may use the portal for that provider’s files. Administrators see an Email address field and Add.",
+    )
+    add_bullets(
+        doc,
+        [
+            "Type the person’s work email.",
+            "Click Add. The portal adds them as a Service provider member and sends the invitation in the same action. A toast reads Invitation sent (or Member added if they already had an account and no mail went out).",
+            "If you leave the email blank, the toast reads Enter an email address.",
+            "If they already have access, the row shows Has access. If mail went out, Invite sent. If it failed, Invite failed. If nobody has been invited yet, the card can show No portal access yet.",
+        ],
+        numbered=True,
+    )
+    add_body(
+        doc,
+        "On a row that does not yet have an account, click Invite (or Resend if an invite was already sent or failed). The toast again reads Invitation sent. Remove a person’s company access with the trash control (confirm: Remove this person’s access to the company?).",
+    )
+    add_callout(
+        doc,
+        "NOTE",
+        "Add on Access always tries to invite (it is not a silent “park the email”). Everyone is added as Service provider member. You can change the row’s role afterwards if they are actually the Primary contact, Finance contact, Event contact, Contract signatory, or Viewer.",
+    )
+    add_h2(doc, "Another way — invite a provider contact")
+    add_body(
+        doc,
+        "Add person on the provider toolbar opens a contact form (a person at the firm, listed under Provider contacts). After they have an email, open that contact. If they cannot sign in yet, the toolbar shows Invite to portal (or Resend invite if one is already pending). The Portal access tab on the contact says No portal access yet. Invite them to create an account. — or Add an email address to this client before inviting them. After you invite, the same tab shows status such as Invitation sent, Invitation delivered, Invitation opened, Invitation accepted, Invitation expired, Invitation withdrawn, or Invitation could not be sent. You can Resend or Try again, Copy link, or Cancel while the invite can still be changed.",
+    )
+    add_h2(doc, "What the service provider receives")
+    add_body(
+        doc,
+        "They get an email whose subject is of the form You’re invited to join {company} on {site}. The message says who invited them and that they are joining as their company role. They open the link, complete the client welcome screens (Welcome, About you, How we reach you, and so on), and sign in as a Client. They then see that provider’s CIP files — not the Users page, not CIP Console, not other firms’ files.",
+    )
+    add_body(
+        doc,
+        "Invitations expire after the number of days set for the firm (the default is 7 days). If it expires, send Resend / Try again. If they already had a portal account, they receive the existing-account variant of the same invite and are linked to the company when they accept.",
+    )
+    add_h2(doc, "What not to do")
+    add_bullets(
+        doc,
+        [
+            "Do not create a Users row and type them as Client. The Users page does not hand out Client.",
+            "Do not skip registering the firm if you only invite a private email — they will not be a service-provider contact on the hub.",
+            "A CIP application that shows a provider name (for example Galaxy Partners) is not the same as a registered provider record. Until you Create the firm under New service provider, the Providers tab can still read No service providers, and there is no Access card to invite from.",
+        ],
+    )
+    add_callout(
+        doc,
+        "TIP",
+        "Activities records that you invited the email to the company. After they accept, Portal access on their contact reads that they have a portal account and can sign in.",
+    )
+
+
 def _cip_pre(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callout):
-    add_title(doc, "10. Pre-Approval workflow")
+    add_title(doc, "11. Pre-Approval workflow")
     add_body(
         doc,
         "Pre-approval is the path from a new filing to the Unit’s decision (Approved or Denied). Work the file in this order unless an administrator overrides. Only administrators and CRO / Reviewing officers drive these steps. Service-provider contacts and private clients do not change status here (except later lodging an appeal).",
@@ -809,7 +920,7 @@ def _cip_pre(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callo
 
 
 def _cip_post(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callout):
-    add_title(doc, "11. Post-Approval workflow")
+    add_title(doc, "12. Post-Approval workflow")
     add_body(
         doc,
         "Post-approval starts after a pre-approval grant. Staff enter it by moving the file to Post-Approval (or by filing Create New Post-Approval Application when the grant already exists outside this intake). The lane’s own decision (Approved or Denied on the post-approval letters) comes first, then COR, NIC, and passport dates.",
@@ -880,7 +991,7 @@ def _cip_post(doc, add_title, add_h2, add_body, add_bullets, add_table, add_call
 
 
 def _cip_file(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callout, add_image):
-    add_title(doc, "12. Working a CIP file")
+    add_title(doc, "13. Working a CIP file")
     add_body(
         doc,
         "Click an application number or applicant to open the file. Typical tabs: Client info (or Overview with timeline and facts), Documents, Assigned, Messages, Portal access, and Activity. A pencil Edit control and a Message control sit in the header.",
@@ -888,7 +999,7 @@ def _cip_file(doc, add_title, add_h2, add_body, add_bullets, add_table, add_call
     add_image(
         doc,
         "29-cip-file.png",
-        "Figure 15. Application profile. Folder, Edit, and Message in the header. Tabs: Client info, Documents, Assigned, Messages, Portal access.",
+        "Figure 17. Application profile. Folder, Edit, and Message in the header. Tabs: Client info, Documents, Assigned, Messages, Portal access.",
     )
     add_h2(doc, "Message the service provider")
     add_body(
@@ -898,7 +1009,7 @@ def _cip_file(doc, add_title, add_h2, add_body, add_bullets, add_table, add_call
     add_image(
         doc,
         "30-cip-message.png",
-        "Figure 16. Message menu on a file.",
+        "Figure 18. Message menu on a file.",
     )
     add_h2(doc, "Edit the form — administrator versus CRO")
     add_body(
@@ -936,7 +1047,7 @@ def _cip_file(doc, add_title, add_h2, add_body, add_bullets, add_table, add_call
 
 
 def _records(doc, add_title, add_h2, add_body, add_bullets, add_callout):
-    add_title(doc, "13. Managing Records")
+    add_title(doc, "14. Managing Records")
     add_body(
         doc,
         "Lists in the portal follow the same pattern: a table, a search box, optional filters, sortable headings, and a row menu.",
@@ -960,7 +1071,7 @@ def _records(doc, add_title, add_h2, add_body, add_bullets, add_callout):
 
 def _files(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callout, add_image):
     doc.add_page_break()
-    add_title(doc, "14. File Library")
+    add_title(doc, "15. File Library")
     add_body(
         doc,
         "File Library holds the firm’s documents. Expand it in the sidebar and choose a view.",
@@ -968,7 +1079,7 @@ def _files(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callout
     add_image(
         doc,
         "10-file-library.png",
-        "Figure 17. File Library / All Files. Toolbar: new folder, upload, extra folder actions, download, list or grid, sort, refresh, Name sort, and type filters. Star a folder to keep it in Favorites.",
+        "Figure 19. File Library / All Files. Toolbar: new folder, upload, extra folder actions, download, list or grid, sort, refresh, Name sort, and type filters. Star a folder to keep it in Favorites.",
     )
     add_table(
         doc,
@@ -1007,7 +1118,7 @@ def _files(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callout
 
 
 def _email(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callout, add_image):
-    add_title(doc, "15. Email")
+    add_title(doc, "16. Email")
     add_body(
         doc,
         "Email is a connected mailbox for accounts that hold mail access. Clients use Messages instead. Until a mailbox is connected, the page reads No emails yet / Connect your email account to get started, with Connect email account. Connect from that button, from Settings → Connectors, or during staff setup (Connect your email).",
@@ -1015,7 +1126,7 @@ def _email(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callout
     add_image(
         doc,
         "20-email.png",
-        "Figure 18. Email. Folder chips (Inbox, Important, Starred, Snoozed, Sent, Drafts, Spam, …) and New Email.",
+        "Figure 20. Email. Folder chips (Inbox, Important, Starred, Snoozed, Sent, Drafts, Spam, …) and New Email.",
     )
     add_h2(doc, "Folders and views")
     add_table(
@@ -1063,7 +1174,7 @@ def _email(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callout
 
 
 def _messages(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callout, add_image):
-    add_title(doc, "16. Messages and calls")
+    add_title(doc, "17. Messages and calls")
     add_body(
         doc,
         "Messages is the portal chat. Open it from the sidebar. Search for people or conversations. Start a thread with New message. Clients can message the staff assigned to them. Staff with permission can contact more widely.",
@@ -1071,7 +1182,7 @@ def _messages(doc, add_title, add_h2, add_body, add_bullets, add_table, add_call
     add_image(
         doc,
         "11-messages.png",
-        "Figure 19. Messages. Use Search to find a person or conversation. If you have none yet, the page reads No conversations yet.",
+        "Figure 21. Messages. Use Search to find a person or conversation. If you have none yet, the page reads No conversations yet.",
     )
     add_h2(doc, "Voice call and video call")
     add_body(
@@ -1090,7 +1201,7 @@ def _messages(doc, add_title, add_h2, add_body, add_bullets, add_table, add_call
     )
     add_body(
         doc,
-        "Client-call recordings, when captured, appear under Call Recordings. See section 22.",
+        "Client-call recordings, when captured, appear under Call Recordings. See section 23.",
     )
     add_callout(
         doc,
@@ -1100,7 +1211,7 @@ def _messages(doc, add_title, add_h2, add_body, add_bullets, add_table, add_call
 
 
 def _feed(doc, add_title, add_h2, add_body, add_bullets, add_table, add_image):
-    add_title(doc, "17. Feed")
+    add_title(doc, "18. Feed")
     add_body(
         doc,
         "Feed is the internal social area for staff with feed access. Creating a channel is allowed for staff; moderating every channel (including ones you were never added to) is administration.",
@@ -1108,7 +1219,7 @@ def _feed(doc, add_title, add_h2, add_body, add_bullets, add_table, add_image):
     add_image(
         doc,
         "21-feed.png",
-        "Figure 20. Feed. Views: All channels, My channels, Drafts, Scheduled posts, Archived posts. Search posts, people and files. Create a channel.",
+        "Figure 22. Feed. Views: All channels, My channels, Drafts, Scheduled posts, Archived posts. Search posts, people and files. Create a channel.",
     )
     add_table(
         doc,
@@ -1133,7 +1244,7 @@ def _feed(doc, add_title, add_h2, add_body, add_bullets, add_table, add_image):
 
 
 def _calendar(doc, add_title, add_h2, add_body, add_bullets, add_table, add_image):
-    add_title(doc, "18. Calendar")
+    add_title(doc, "19. Calendar")
     add_body(
         doc,
         "Calendar shows your calendars and, for staff, shared calendars. Clients keep their own calendar and meetings they are invited to.",
@@ -1141,7 +1252,7 @@ def _calendar(doc, add_title, add_h2, add_body, add_bullets, add_table, add_imag
     add_image(
         doc,
         "12-calendar.png",
-        "Figure 21. Calendar in Month view, with My Calendars on the left.",
+        "Figure 23. Calendar in Month view, with My Calendars on the left.",
     )
     add_table(
         doc,
@@ -1161,7 +1272,7 @@ def _calendar(doc, add_title, add_h2, add_body, add_bullets, add_table, add_imag
 
 
 def _signatures(doc, add_title, add_h2, add_body, add_bullets, add_image):
-    add_title(doc, "19. Signatures")
+    add_title(doc, "20. Signatures")
     add_body(
         doc,
         "The sidebar label is Signatures. The page title is Signature Requests. Staff who can create requests compose and send them. Anyone can sign a request that is addressed to them. The Dashboard card Awaiting Signature counts unsigned work in the selected period.",
@@ -1169,7 +1280,7 @@ def _signatures(doc, add_title, add_h2, add_body, add_bullets, add_image):
     add_image(
         doc,
         "22-signatures.png",
-        "Figure 22. Signature Requests. Status (Show All), Admin View, Export list, Signature settings, Create signature request. Empty copy: Need to get a signature? Create a request.",
+        "Figure 24. Signature Requests. Status (Show All), Admin View, Export list, Signature settings, Create signature request. Empty copy: Need to get a signature? Create a request.",
     )
     add_bullets(
         doc,
@@ -1184,7 +1295,7 @@ def _signatures(doc, add_title, add_h2, add_body, add_bullets, add_image):
 
 
 def _workflows(doc, add_title, add_h2, add_body, add_table, add_image):
-    add_title(doc, "20. Workflows")
+    add_title(doc, "21. Workflows")
     add_body(
         doc,
         "Workflows tracks file requests, comments, and items that need an update. Expand Workflows in the sidebar. Service-provider contacts can reach these pages for their own work even without the staff workflows permission.",
@@ -1201,7 +1312,7 @@ def _workflows(doc, add_title, add_h2, add_body, add_table, add_image):
     add_image(
         doc,
         "13-workflows.png",
-        "Figure 23. Workflows / Requests. Tabs: Waiting on you, Sent by you, All requests.",
+        "Figure 25. Workflows / Requests. Tabs: Waiting on you, Sent by you, All requests.",
     )
     add_body(
         doc,
@@ -1210,7 +1321,7 @@ def _workflows(doc, add_title, add_h2, add_body, add_table, add_image):
 
 
 def _reporting(doc, add_title, add_h2, add_body, add_bullets, add_image):
-    add_title(doc, "21. Reporting")
+    add_title(doc, "22. Reporting")
     add_body(
         doc,
         "Reporting is a main sidebar page for administrators (capability settings.reporting). It is not only a Settings item.",
@@ -1218,7 +1329,7 @@ def _reporting(doc, add_title, add_h2, add_body, add_bullets, add_image):
     add_image(
         doc,
         "23-reporting.png",
-        "Figure 24. Reporting. Recent Reports, Recurring Reports, Create Report.",
+        "Figure 26. Reporting. Recent Reports, Recurring Reports, Create Report.",
     )
     add_bullets(
         doc,
@@ -1232,7 +1343,7 @@ def _reporting(doc, add_title, add_h2, add_body, add_bullets, add_image):
 
 
 def _calls(doc, add_title, add_h2, add_body, add_table, add_image):
-    add_title(doc, "22. Call Recordings")
+    add_title(doc, "23. Call Recordings")
     add_body(
         doc,
         "Call Recordings lists captured client calls. Search by client. Employees see their own recordings; administrators see the wider set. Clients never get this page — recordings are for the firm.",
@@ -1240,7 +1351,7 @@ def _calls(doc, add_title, add_h2, add_body, add_table, add_image):
     add_image(
         doc,
         "24-call-recordings.png",
-        "Figure 25. Call Recordings. Empty copy: Recordings appear here after a call is captured.",
+        "Figure 27. Call Recordings. Empty copy: Recordings appear here after a call is captured.",
     )
     add_table(
         doc,
@@ -1255,7 +1366,7 @@ def _calls(doc, add_title, add_h2, add_body, add_table, add_image):
 
 
 def _users(doc, add_title, add_h2, add_body, add_image):
-    add_title(doc, "23. Users and People")
+    add_title(doc, "24. Users and People")
     add_h2(doc, "Users")
     add_body(
         doc,
@@ -1264,7 +1375,7 @@ def _users(doc, add_title, add_h2, add_body, add_image):
     add_image(
         doc,
         "09-users.png",
-        "Figure 26. Users. Use + to add, the filter and sort controls in the toolbar, and the checkboxes for bulk actions when they are offered.",
+        "Figure 28. Users. Use + to add, the filter and sort controls in the toolbar, and the checkboxes for bulk actions when they are offered.",
     )
     add_h2(doc, "People")
     add_body(
@@ -1275,7 +1386,7 @@ def _users(doc, add_title, add_h2, add_body, add_image):
 
 def _settings(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callout, add_image):
     doc.add_page_break()
-    add_title(doc, "24. Settings")
+    add_title(doc, "25. Settings")
     add_body(
         doc,
         "Open Settings from the sidebar (Account settings). Everyone can open the page. The rail on the left only shows sections your account may use. Personal sections are always there. Firm administration appears for administrators.",
@@ -1283,7 +1394,7 @@ def _settings(doc, add_title, add_h2, add_body, add_bullets, add_table, add_call
     add_image(
         doc,
         "08-settings.png",
-        "Figure 27. Settings. Left: settings rail. Right: My Profile (name, contact details, email, Save profile).",
+        "Figure 29. Settings. Left: settings rail. Right: My Profile (name, contact details, email, Save profile).",
     )
     add_h2(doc, "My Profile")
     add_body(
@@ -1303,7 +1414,7 @@ def _settings(doc, add_title, add_h2, add_body, add_bullets, add_table, add_call
     add_image(
         doc,
         "26-time-language.png",
-        "Figure 28. Time And Language. Automatically set time zone, Date and time, Language and Region.",
+        "Figure 30. Time And Language. Automatically set time zone, Date and time, Language and Region.",
     )
     add_bullets(
         doc,
@@ -1317,7 +1428,7 @@ def _settings(doc, add_title, add_h2, add_body, add_bullets, add_table, add_call
     add_image(
         doc,
         "27-language.png",
-        "Figure 29. Language list: Automatic, English, Español, Français, 中文(简体).",
+        "Figure 31. Language list: Automatic, English, Español, Français, 中文(简体).",
     )
     add_h2(doc, "Notifications")
     add_body(
@@ -1337,7 +1448,7 @@ def _settings(doc, add_title, add_h2, add_body, add_bullets, add_table, add_call
     add_image(
         doc,
         "28-two-step.png",
-        "Figure 30. Account Security. Password, Connected accounts, Phone number, Two-factor authentication.",
+        "Figure 32. Account Security. Password, Connected accounts, Phone number, Two-factor authentication.",
     )
     add_bullets(
         doc,
@@ -1398,7 +1509,7 @@ def _settings(doc, add_title, add_h2, add_body, add_bullets, add_table, add_call
 
 
 def _roles(doc, add_title, add_h2, add_body, add_table, add_callout):
-    add_title(doc, "25. Account Types and Permissions")
+    add_title(doc, "26. Account Types and Permissions")
     add_body(
         doc,
         "The portal stores an account type on each user. Administrators hold every capability the environment allows. Other types hold a fixed set. Two overlays administrators can change: Client hub access and Advanced Preferences → Permissions.",
@@ -1438,7 +1549,7 @@ def _roles(doc, add_title, add_h2, add_body, add_table, add_callout):
 
 
 def _activity(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callout):
-    add_title(doc, "26. Notifications and recent activity")
+    add_title(doc, "27. Notifications and recent activity")
     add_h2(doc, "Notification bell")
     add_body(
         doc,
@@ -1461,7 +1572,7 @@ def _activity(doc, add_title, add_h2, add_body, add_bullets, add_table, add_call
 
 
 def _common(doc, add_title, add_table):
-    add_title(doc, "27. Common Tasks")
+    add_title(doc, "28. Common Tasks")
     add_table(
         doc,
         ["Task", "Where to start"],
@@ -1477,6 +1588,8 @@ def _common(doc, add_title, add_table):
             ["Install Windows / Mac / Android", "Overview → Windows, macOS, or Android 8+."],
             ["Open a CIP file", "CIP Applications → click the application number."],
             ["Start a CIP file", "CIP Applications → Create New Application."],
+            ["Register a service provider", "CIP Applications → Create New Application → New service provider → Create."],
+            ["Invite a service provider to sign in", "Open the provider → Access → enter email → Add (administrators). Or open a contact → Invite to portal."],
             ["Message the provider on a file", "Open the file → Message."],
             ["Request a name/DOB correction (CRO)", "Open the file → Edit → Save (waits on an administrator)."],
             ["Import an email signature", "Email settings → Import from Outlook / Gmail / mailbox."],
@@ -1494,7 +1607,7 @@ def _common(doc, add_title, add_table):
 
 def _trouble(doc, add_title, add_table):
     doc.add_page_break()
-    add_title(doc, "28. Troubleshooting")
+    add_title(doc, "29. Troubleshooting")
     add_table(
         doc,
         ["What you see", "What to do"],
@@ -1509,6 +1622,10 @@ def _trouble(doc, add_title, add_table):
             ["Cannot assign an officer", "Only administrators assign CIP files."],
             ["Save on Edit application did not change the name", "If you are not an administrator, you created a change request. Wait for an administrator."],
             ["Message the service provider is disabled", "The applicant is not linked to a provider. Attach a provider on the file first."],
+            ["New service provider is missing from Create New Application", "External CIP users do not get that item. Staff need client-hub manage access."],
+            ["No email + Add on the provider Access card", "Only administrators invite from Access. A CRO uses Invite to portal on a contact instead."],
+            ["Could not send the invitation / Invite failed", "Check the address, then Resend or Try again. Confirm the mailbox can receive mail from the portal."],
+            ["Invitation expired", "Open the contact or Access row and Resend. Default expiry is 7 days unless your firm changed it."],
             ["Email tile says connect a mailbox", "Settings → Connectors, or Connect email account on Email."],
             ["Windows download says not commonly downloaded / not verified", "Click Keep, then Keep anyway. Open the installer. If SmartScreen appears, More info → Run anyway."],
             ["macOS will not open the app", "System Settings → Privacy & Security → allow / Open Anyway."],
@@ -1521,7 +1638,7 @@ def _trouble(doc, add_title, add_table):
 
 
 def _faq(doc, add_title, add_h2, add_body):
-    add_title(doc, "29. Frequently Asked Questions")
+    add_title(doc, "30. Frequently Asked Questions")
     add_h2(doc, "Why don’t I see Users, Reporting, or CIP Console?")
     add_body(doc, "Those areas are administration. Only accounts with the matching permission see them. A CRO / Reviewing officer will not see them.")
     add_h2(doc, "Why don’t I see Email?")
@@ -1538,6 +1655,11 @@ def _faq(doc, add_title, add_h2, add_body):
         doc,
         "No. Settings → Time And Language → Language and Region changes the portal’s own labels (Automatic, English, Español, Français, 中文). Application content stays in the language it was typed.",
     )
+    add_h2(doc, "How do I invite a service provider?")
+    add_body(
+        doc,
+        "CIP Applications → Create New Application → New service provider → fill the name → Create. Then, as an administrator, open the provider → Access → type their email → Add. The toast Invitation sent means mail went out. They follow You’re invited to join {company} and finish the client welcome screens. A CRO who cannot see Add on Access should open the contact and click Invite to portal. Do not add them on Users.",
+    )
     add_h2(doc, "What is the difference between Save as draft and Add?")
     add_body(
         doc,
@@ -1551,7 +1673,7 @@ def _faq(doc, add_title, add_h2, add_body):
 
 
 def _support(doc, add_title, add_body, add_table):
-    add_title(doc, "30. Support")
+    add_title(doc, "31. Support")
     add_table(
         doc,
         ["Item", "Detail"],
