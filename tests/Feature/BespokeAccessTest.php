@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /**
- * Bespoke AI ships dark behind FEATURE_BESPOKE. While the flag is off the
+ * Bespoke AI is on by default. FEATURE_BESPOKE=false is the kill switch:
  * routes 404 for everyone, administrators included — never 403.
  */
 class BespokeAccessTest extends TestCase

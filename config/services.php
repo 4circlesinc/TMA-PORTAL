@@ -127,10 +127,12 @@ return [
     ],
 
     'bespoke' => [
-        // In-portal assistant. While this is off the FAB is not mounted and
-        // every /portal/bespoke route 404s — never 403s — so the feature does
-        // not exist, administrators included. Same contract as FEATURE_CIP.
-        'enabled' => (bool) env('FEATURE_BESPOKE', false),
+        // In-portal assistant. FEATURE_BESPOKE=false hides the FAB and 404s
+        // every /portal/bespoke route — never 403s — so the feature does not
+        // exist, administrators included. Same kill-switch as FEATURE_CIP.
+        // Default on: production has no Cloud var yet, and the launcher
+        // should appear after deploy. Set false to pull it.
+        'enabled' => (bool) env('FEATURE_BESPOKE', true),
         // Prefer the dedicated key. OPENAI_API_KEY is the fallback so a
         // local .env that already has one does not need a second name.
         'key' => env('BESPOKE_AI_API_KEY', env('OPENAI_API_KEY')),
