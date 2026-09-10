@@ -9,6 +9,7 @@ use App\Http\Controllers\AuthenticatorNudgeController;
 use App\Http\Controllers\AvailabilityController;
 use App\Http\Controllers\AvatarController;
 use App\Http\Controllers\BackgroundOperationsController;
+use App\Http\Controllers\Bespoke\BespokeController;
 use App\Http\Controllers\BrandingController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\CalendarEventController;
@@ -180,6 +181,14 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     // reads the Workflows section uses — see DashboardWorkController.
     Route::get('/portal/dashboard/work', DashboardWorkController::class)
         ->name('dashboard.work');
+
+    // In-portal assistant. Dark behind FEATURE_BESPOKE — 404, never 403.
+    Route::prefix('portal/bespoke')->name('bespoke.')->group(function () {
+        Route::get('/suggestions', [BespokeController::class, 'suggestions'])->name('suggestions');
+        Route::post('/chat', [BespokeController::class, 'chat'])
+            ->middleware('throttle:30,1')
+            ->name('chat');
+    });
 
     // Recent sign-ins across the firm, for the Overview card. Staff-gated
     // inside the controller — clients never see who signed in.

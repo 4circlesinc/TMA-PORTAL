@@ -101,6 +101,7 @@ final class PortalShell
         // identity had not arrived yet asked the server for their OWN threads,
         // and a firm-wide reader who is on none of them saw an empty page.
         $admin = Role::isAdmin($user) ? 'true' : 'false';
+        $bespoke = (bool) config('services.bespoke.enabled') ? 'true' : 'false';
         $token = json_encode((string) Session::token(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 
         // CSRF for shell sign-out (static HTML has no Blade @csrf). Capabilities
@@ -111,6 +112,7 @@ final class PortalShell
             .'window.TMABootCipReach='.$cipReach.';'
             .'window.TMABootProviderContact='.$provider.';'
             .'window.TMABootIsAdmin='.$admin.';'
+            .'window.TMABootBespoke='.$bespoke.';'
             .'window.TMACsrfToken='.$token.';</script>'."\n  ";
     }
 }

@@ -126,6 +126,18 @@ return [
         'enabled' => (bool) env('FEATURE_CIP', false),
     ],
 
+    'bespoke' => [
+        // In-portal assistant. While this is off the FAB is not mounted and
+        // every /portal/bespoke route 404s — never 403s — so the feature does
+        // not exist, administrators included. Same contract as FEATURE_CIP.
+        'enabled' => (bool) env('FEATURE_BESPOKE', false),
+        // Prefer the dedicated key. OPENAI_API_KEY is the fallback so a
+        // local .env that already has one does not need a second name.
+        'key' => env('BESPOKE_AI_API_KEY', env('OPENAI_API_KEY')),
+        'model' => env('BESPOKE_AI_MODEL', 'gpt-4o-mini'),
+        'base_url' => env('BESPOKE_AI_BASE_URL', 'https://api.openai.com/v1'),
+    ],
+
     'sharepoint' => [
         // Delta page size and per-run page cap — larger values import faster
         // but each job holds the worker longer. 500 × 150 ≈ 75k items/run.
@@ -142,7 +154,6 @@ return [
         'site_key' => env('TURNSTILE_SITE_KEY', ''),
         'secret' => env('TURNSTILE_SECRET', ''),
     ],
-
 
     /*
     |--------------------------------------------------------------------------

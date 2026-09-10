@@ -44,6 +44,7 @@ final class ActivityLogger
         'security' => 'security',
         'auth' => 'security',
         'system' => 'system',
+        'bespoke' => 'bespoke',
     ];
 
     /** Keys whose values are never stored, at any depth of old/new/metadata. */

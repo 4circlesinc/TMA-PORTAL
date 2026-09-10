@@ -6,6 +6,7 @@ use App\Models\WorkDay;
 use App\Support\Access\Role;
 use App\Support\AuthenticatorNudge;
 use App\Support\AvatarService;
+use App\Support\Bespoke\Bespoke;
 use App\Support\Cip\CipAccess;
 use App\Support\Messaging\MessagingSettings;
 use App\Support\Notifications\ToastSettings;
@@ -54,6 +55,10 @@ class MeController extends Controller
             // refuse. Convenience only, every one of these is enforced again
             // on the request that acts on it.
             'capabilities' => Role::capabilities($user),
+            'bespoke' => [
+                'enabled' => Bespoke::enabled(),
+                'configured' => Bespoke::configured(),
+            ],
             'providerPhoto' => $user->provider_avatar_url,
             // Lets the notification realtime share the messaging websocket.
             'realtime' => RealtimeConfig::client(),
