@@ -51,7 +51,6 @@
     { id: 'shared-folders', label: 'Shared Folders', cap: 'files.viewOrg', nav: { navId: 'folders-shared', view: 'folders', title: 'Shared Folders', crumb: 'File Library / Shared Folders' } },
     { id: 'favorites', label: 'Favorites', nav: { navId: 'folders-favorites', view: 'folders', title: 'Favorites', crumb: 'File Library / Favorites' } },
     { id: 'feedback-approval', label: 'Feedback And Comments', cap: 'workflows.view', nav: { navId: 'workflows-feedback', view: 'workflows', title: 'Feedback And Comments', crumb: 'Workflows / Feedback And Comments' } },
-    { id: 'updates-required', label: 'Updates Required', cap: 'workflows.view', nav: { navId: 'workflows-updates', view: 'workflows', title: 'Updates Required', crumb: 'Workflows / Updates Required' } },
     { id: 'send-signature', label: 'Send for Signature', cap: 'signatures.create', nav: { navId: 'signatures', view: 'signatures', title: 'Signature Requests', crumb: 'Signatures' } },
   ];
 
