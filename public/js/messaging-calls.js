@@ -1348,14 +1348,15 @@
       doc.head.appendChild(style);
     });
 
-    /* Last, and inline, so it is doing two jobs: it paints the window dark
-     * immediately, before a single one of those stylesheets has arrived, which
-     * is what stops the window opening as a white rectangle, and it still wins
-     * afterwards over the app's light page background, which was never meant
-     * to be behind a call. */
+    /* Last, and inline, so it is doing two jobs: it paints the window in
+     * brand navy immediately, before a single one of those stylesheets has
+     * arrived, which is what stops the window opening as a white rectangle,
+     * and it still wins afterwards over the app's light page background, which
+     * was never meant to be behind a call. Hex is --tma-call-ink's mix of
+     * --color-primary-dark into #03141c. */
     var boot = doc.createElement('style');
     boot.textContent =
-      'html,body{margin:0;height:100%;background:#05070c;overflow:hidden;' +
+      'html,body{margin:0;height:100%;background:#062536;overflow:hidden;' +
       '-webkit-font-smoothing:antialiased;}';
     doc.head.appendChild(boot);
 

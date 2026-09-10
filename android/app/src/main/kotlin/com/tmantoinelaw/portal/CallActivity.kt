@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -170,7 +171,13 @@ private fun CallScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF05070C))
+            .background(
+                Brush.verticalGradient(
+                    0f to Color(0xFF0C4767),
+                    0.55f to Color(0xFF083044),
+                    1f to Color(0xFF062536),
+                ),
+            )
             .statusBarsPadding()
             .navigationBarsPadding()
             .padding(horizontal = 28.dp, vertical = 24.dp),

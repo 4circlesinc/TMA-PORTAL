@@ -30,8 +30,11 @@
     align-items: center;
     text-align: center;
     color: #fff;
-    background: linear-gradient(160deg, #1f4b52 0%, #17343c 55%, #12262d 100%);
-    box-shadow: 0 18px 48px rgba(0, 0, 0, .45);
+    /* Same family as the in-app call stage: --color-primary / --color-primary-dark. */
+    background:
+      radial-gradient(120% 80% at 50% -10%, rgba(3, 165, 233, 0.42), transparent 55%),
+      linear-gradient(160deg, #136da0 0%, #0c4767 48%, #062536 100%);
+    box-shadow: 0 18px 48px rgba(19, 109, 160, .35);
     animation: rise .22s ease-out;
   }
 

@@ -37350,6 +37350,7 @@ span.tma-dash__messages-profile-avatar {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   background: var(--tma-call-face);
 }
 .tma-call__compact-avatar { width: 76px; height: 76px; font-size: 26px; }
