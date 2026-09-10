@@ -5043,7 +5043,10 @@
    */
   function renderMessageChooser(c, state) {
     var opts = (state && state.conversationOptions) || null;
-    if (!opts) {
+    // A retry after a failed load keeps the last (failed) options around, so
+    // ask whether a fetch is in flight rather than only whether we have none:
+    // otherwise reopening the menu shows the stale error while it reloads.
+    if (!opts || (state && state.conversationsLoading)) {
       return '<div class="tma-dash__menu-item tma-dash__menu-item--muted" role="menuitem" aria-disabled="true">Loading…</div>';
     }
 
@@ -14536,6 +14539,15 @@
       else render({ detailOnly: true });
     }).catch(function () {
       if (state.conversationsLoadedFor !== state.selectedId) return;
+      /*
+       * Release the latch. `conversationsLoadedFor` is claimed up front so two
+       * renders can't race the same fetch, but leaving it set after a failure
+       * made one bad response permanent: every later call short-circuits on
+       * the guard above, so the Message menu kept saying it could not load the
+       * options for the rest of the session even though the next request would
+       * have succeeded. Clearing it means reopening the menu tries again.
+       */
+      state.conversationsLoadedFor = null;
       state.conversations = [];
       state.conversationOptions = state.conversationOptions || {
         provider: { available: false, reason: 'Could not load messaging options.' },
