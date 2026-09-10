@@ -15,6 +15,7 @@ use App\Support\Files\FolderTree;
 use App\Support\Realtime\Live;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 /**
@@ -246,7 +247,7 @@ class CipApplicationDraftController extends Controller
      * The document field names this draft already has a file for, in the same
      * dotted paths the form keys its controls on.
      *
-     * @param  \Illuminate\Support\Collection<int, CipPerson>  $dependents
+     * @param  Collection<int, CipPerson>  $dependents
      * @return list<string>
      */
     private function filedSlots(CipApplication $draft, $dependents): array
@@ -275,6 +276,35 @@ class CipApplicationDraftController extends Controller
         }
 
         return array_values(array_unique($paths));
+    }
+
+    /**
+     * Passport-photo URLs already stored on this draft, keyed like the form.
+     *
+     * @param  Collection<int, CipPerson>  $dependents
+     * @return array<string, string>
+     */
+    private function photoPreviews(CipApplication $draft, $dependents): array
+    {
+        $urls = [];
+
+        $of = function (?CipPerson $person, string $prefix) use (&$urls) {
+            if (! $person?->photo_path) {
+                return;
+            }
+
+            $urls[$prefix.'passportPhoto'] = '/portal/cip/people/'.$person->uuid.'/passport-photo?v='
+                .substr(md5($person->photo_path.'|'.($person->updated_at?->getTimestamp() ?? 0)), 0, 8);
+        };
+
+        $of($draft->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT), '');
+        $of($draft->people->firstWhere('role', CipPerson::ROLE_SPONSOR), 'sponsor.');
+
+        foreach ($dependents as $i => $dependent) {
+            $of($dependent, 'dependents.'.$i.'.');
+        }
+
+        return $urls;
     }
 
     /** Did the reader type anything the provider was not filled in for them? */
@@ -380,6 +410,11 @@ class CipApplicationDraftController extends Controller
              * reader was told to choose six files that were sitting there.
              */
             'filed' => $this->filedSlots($draft, $dependents),
+            /*
+             * The faces already kept, so the photo control can show them
+             * rather than an empty box beside "the field is required".
+             */
+            'previews' => $this->photoPreviews($draft, $dependents),
             'savedAt' => $draft->updated_at?->toIso8601String(),
         ];
     }

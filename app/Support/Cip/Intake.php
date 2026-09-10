@@ -171,6 +171,39 @@ class Intake
         return self::photoRequirement($applicantType, $phase);
     }
 
+    /**
+     * A scan already sitting on the draft this filing completes.
+     *
+     * The wizard does not re-send files it has already kept: a reopened
+     * draft shows the picture and lists the scans as filed, then posts the
+     * typed answers. Demanding those files again is the form showing the
+     * photo and answering "The passport photo field is required."
+     */
+    private static function draftHolds(
+        ?CipApplication $draft,
+        string $type,
+        string $role = CipPerson::ROLE_MAIN_APPLICANT,
+    ): bool {
+        if ($draft === null) {
+            return false;
+        }
+
+        $person = $draft->people->firstWhere('role', $role);
+        if ($person === null) {
+            return false;
+        }
+
+        if ($type === DocumentTypes::PASSPORT_PHOTO && filled($person->photo_path)) {
+            return true;
+        }
+
+        $slot = $person->relationLoaded('documents')
+            ? $person->documents->firstWhere('type', $type)
+            : $person->documents()->where('type', $type)->first();
+
+        return $slot !== null && $slot->isFilled();
+    }
+
     /** The shared person field set. Section 2's list, which section 4 says a sponsor repeats. */
     private const PERSON_FIELDS = [
         'firstName', 'lastName', 'gender', 'dateOfBirth', 'countryOfBirth',
@@ -181,13 +214,18 @@ class Intake
      * @param  bool  $editing  an update, where the uploads are already on file
      *
      * Editing keeps every answer required. Section 2 does not stop applying once a
-     * draft exists, but stops demanding the files, because they were handed
-     * over at creation and are sitting in the person's folder. Sending one
-     * replaces it; sending nothing leaves it alone. The provider is not in the
-     * list at all: its code is minted into the internal number, so changing it
-     * afterwards would leave the number naming a firm that did not file.
+     * draft exists, but stops demanding the files already sitting on that
+     * row: the wizard does not re-send a photo it has already kept, and
+     * asking for it again is the form showing the picture and calling it
+     * missing. Sending one replaces it; sending nothing leaves it alone. The
+     * provider is not in the list at all: its code is minted into the
+     * internal number, so changing it afterwards would leave the number naming
+     * a firm that did not file.
+     * @param  CipApplication|null  $draft  the row this filing completes, when
+     *                                      there is one: files already on it
+     *                                      count as answered
      */
-    public static function rules(bool $editing = false): array
+    public static function rules(bool $editing = false, ?CipApplication $draft = null): array
     {
         return array_merge(
             $editing ? [
@@ -223,9 +261,9 @@ class Intake
                 'draftId' => ['nullable', 'string', 'max:64'],
             ],
             self::personRules(),
-            self::mainApplicantDocumentRules($editing),
+            self::mainApplicantDocumentRules($editing, $draft),
             self::investmentRules(),
-            self::sponsorRules($editing),
+            self::sponsorRules($editing, $draft),
             self::dependentRules(),
         );
     }
@@ -240,9 +278,9 @@ class Intake
      * however unfinished the form is, and storing them would put a value in
      * the record that the filing step can never accept.
      *
-     * The documents are absent entirely. A draft holds no files (see
-     * CipApplicationDraftController), so a rule for them would describe
-     * something this endpoint never receives.
+     * The scans travel with it. A draft is the application, so a photo chosen
+     * on an unfinished form is kept in the same slot a filed one uses rather
+     * than asked for again when the reader comes back.
      */
     public static function draftRules(): array
     {
@@ -334,27 +372,25 @@ class Intake
      * dropped on it quietly loses the rest. {@see normaliseDocuments()} lets a
      * single file still arrive on its own.
      */
-    private static function mainApplicantDocumentRules(bool $editing = false): array
+    private static function mainApplicantDocumentRules(bool $editing = false, ?CipApplication $draft = null): array
     {
-        // On an edit they are already filed: sending one replaces it, sending
-        // nothing keeps what is there.
-        $need = $editing ? 'nullable' : 'required';
-        $min = $editing ? [] : ['min:1'];
         $phase = self::filingPhase();
 
         $photo = self::photoTemplate(ApplicantType::PRINCIPAL_APPLICANT, $phase);
+        $photoKept = $editing || self::draftHolds($draft, DocumentTypes::PASSPORT_PHOTO);
         $rules = [
             'passportPhoto' => [
-                ! $editing && $photo && $photo->required ? 'required' : 'nullable',
+                ! $photoKept && $photo && $photo->required ? 'required' : 'nullable',
                 'file', self::photoRule(),
             ],
         ];
 
         foreach (self::documentFields(ApplicantType::PRINCIPAL_APPLICANT, $phase) as $doc) {
-            $demanded = ! $editing && $doc['atFiling'];
+            $kept = $editing || self::draftHolds($draft, $doc['key']);
+            $demanded = ! $kept && $doc['atFiling'];
             $rules[$doc['field']] = array_merge(
-                [$demanded ? $need : 'nullable', 'array'],
-                $demanded ? $min : [],
+                [$demanded ? 'required' : 'nullable', 'array'],
+                $demanded ? ['min:1'] : [],
                 ['max:'.self::MAX_DOCUMENTS_PER_SLOT],
             );
             $rules[$doc['field'].'.*'] = self::documentRule();
@@ -452,7 +488,7 @@ class Intake
      * would leave the sponsor as the reason nobody finishes one. The slots
      * are opened either way, so what is skipped here is still asked for.
      */
-    private static function sponsorRules(bool $editing = false): array
+    private static function sponsorRules(bool $editing = false, ?CipApplication $draft = null): array
     {
         $sponsored = fn () => filter_var(request()->input('sponsored'), FILTER_VALIDATE_BOOLEAN);
 
@@ -461,8 +497,13 @@ class Intake
             $rules[$field] = array_merge([Rule::requiredIf($sponsored)], array_slice($rule, 1));
         }
 
-        // A sponsor already on file has a photo; only a new one must bring one.
-        $rules['sponsor.passportPhoto'] = $editing
+        // A sponsor already on file — or on the draft being completed — has
+        // a photo; only a new one must bring one.
+        $rules['sponsor.passportPhoto'] = ($editing || self::draftHolds(
+            $draft,
+            DocumentTypes::PASSPORT_PHOTO,
+            CipPerson::ROLE_SPONSOR,
+        ))
             ? ['nullable', 'file', self::photoRule()]
             : [Rule::requiredIf($sponsored), 'file', self::photoRule()];
 
@@ -764,11 +805,9 @@ class Intake
      * gives it a number to be referred to, and means filing it is a status
      * change rather than a second act of creation with its own way to fail.
      *
-     * It skips the two things that only make sense once there is an
-     * application to have them: no folders are provisioned and no checklist
-     * slots are opened, because a draft carries no files and an empty tree in
-     * the client's library would advertise work that has not started.
-     * {@see Intake::update} does both when the draft is filed.
+     * Folders and slots are opened as soon as there is a scan to keep: a
+     * draft is the application, and the paper belongs in the same tree a
+     * filed one uses rather than a second home that would have to move later.
      */
     public static function createDraft(CipProvider $provider, User $creator, array $data): CipApplication
     {
@@ -822,10 +861,9 @@ class Intake
     /**
      * The answers, written onto a draft row.
      *
-     * Shared by both draft paths, and deliberately narrower than
-     * {@see update}: no uploads, no folders, no checklist slots. The people
-     * are synced the same way a filed application's are, so a dependant
-     * added and removed while drafting leaves the same clean list behind.
+     * Shared by both draft paths. People are synced the same way a filed
+     * application's are, then folders, slots and uploads are written so a
+     * photo chosen while drafting is still there when the form is filed.
      */
     private static function saveDraftAnswers(CipApplication $application, User $actor, array $data): void
     {

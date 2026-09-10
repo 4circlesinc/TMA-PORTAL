@@ -4,18 +4,19 @@ namespace App\Http\Controllers\Cip;
 
 use App\Http\Controllers\Controller;
 use App\Models\CipApplication;
+use App\Models\CipDocument;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\ClientAssignment;
 use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Access\Role;
-use App\Support\Cip\ApplicantType;
 use App\Support\Cip\Appeal;
+use App\Support\Cip\ApplicantType;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\Assignments;
-use App\Support\Cip\Buckets;
 use App\Support\Cip\Attention;
+use App\Support\Cip\Buckets;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Confirmation;
 use App\Support\Cip\Countries;
@@ -30,8 +31,8 @@ use App\Support\Cip\Intake;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\Milestones;
 use App\Support\Cip\PassportPhoto;
-use App\Support\Cip\Phase;
 use App\Support\Cip\PersonStatus;
+use App\Support\Cip\Phase;
 use App\Support\Cip\PostApproval;
 use App\Support\Cip\Requirements;
 use App\Support\Cip\Review;
@@ -50,6 +51,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 /**
@@ -148,7 +150,16 @@ class CipApplicationController extends Controller
         // as a list of one.
         Intake::normaliseDocuments($request);
 
-        $data = $request->validate(Intake::rules(), Intake::messages());
+        /*
+         * The draft this filing completes, found before the rules run.
+         *
+         * A photo or scan already sitting on that row is the answer: the
+         * wizard does not re-send files it has already kept, and demanding
+         * them again is the form showing the picture and calling it missing.
+         */
+        $draft = $this->draftBeing($user, $request->all());
+
+        $data = $request->validate(Intake::rules(draft: $draft), Intake::messages());
 
         /*
          * The same submission landing twice is not a new application.
@@ -176,18 +187,6 @@ class CipApplicationController extends Controller
         // accepted, the same list the form was drawn from decides.
         $provider = Intake::providersFor($user)->firstWhere('uuid', $data['providerId']);
         abort_unless($provider, 422, 'Choose a service provider you can file under.');
-
-        /*
-         * The draft this filing has been typed into, found before anything
-         * else asks a question about it.
-         *
-         * The wizard autosaves into a real application at DRAFT, so by the
-         * time Add is pressed there is usually already a numbered row holding
-         * these answers — which is why the duplicate check below has to know
-         * about it. Without that it found the applicant already on file and
-         * warned the reader about their own unfinished work.
-         */
-        $draft = $this->draftBeing($user, $data);
 
         /*
          * The same person filed twice on purpose is an administrator's call.
@@ -279,7 +278,7 @@ class CipApplicationController extends Controller
                 ->where('uuid', $uuid)
                 ->where('status', Status::DRAFT)
                 ->where('created_by', $user->id)
-                ->with('people')
+                ->with(['people.documents'])
                 ->first();
         }
 
@@ -291,7 +290,7 @@ class CipApplicationController extends Controller
             ->where('status', Status::DRAFT)
             ->where('created_by', $user->id)
             ->where('phase', $phase)
-            ->with('people')
+            ->with(['people.documents'])
             ->latest('id')
             ->first();
     }
@@ -984,7 +983,7 @@ class CipApplicationController extends Controller
             ->all();
     }
 
-    /** @return \Illuminate\Support\Collection<int, \App\Models\CipDocument> */
+    /** @return Collection<int, CipDocument> */
     private function documentsForPhase(CipPerson $person, string $phase)
     {
         $allowed = Requirements::forPhase(ApplicantType::for($person), $phase, $person->application, $person)
@@ -1043,7 +1042,7 @@ class CipApplicationController extends Controller
                 'value' => $status,
                 'label' => Status::label($status),
                 'tone' => Status::tone($status),
-            ])            ->values()->all();
+            ])->values()->all();
     }
 
     /**

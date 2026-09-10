@@ -1071,6 +1071,7 @@
         var path = btn.getAttribute('data-cip-photo-remove');
         delete state.files[path];
         delete state.previews[path];
+        delete state.filed[path];
         render(root);
         touchDraft();
       });
@@ -1716,30 +1717,33 @@
       headers: headers(),
       body: draftForm(),
     }).then(function (res) {
-      state.draftSaving = false;
-      if (announce) setDraftButtonBusy(opts.button, false);
-      if (!res.ok) {
-        /*
-         * The server refused. Not shouted about when it was the timer — the
-         * reader is mid-form and can still file — but the autosave goes quiet
-         * rather than carry on failing, and the line that said their work was
-         * safe is removed, because by now it is not.
-         */
-        state.draftOff = true;
-        state.draftSavedAt = null;
-        paintDraftStatus();
-        if (announce || state.draftAnnounce) ui().toastError('Could not save this draft');
-        state.draftAnnounce = false;
+      return res.json().catch(function () { return {}; }).then(function (json) {
+        state.draftSaving = false;
+        if (announce) setDraftButtonBusy(opts.button, false);
+        if (!res.ok) {
+          /*
+           * The server refused. Not shouted about when it was the timer — the
+           * reader is mid-form and can still file — but the autosave goes quiet
+           * rather than carry on failing, and the line that said their work was
+           * safe is removed, because by now it is not.
+           */
+          state.draftOff = true;
+          state.draftSavedAt = null;
+          paintDraftStatus();
+          if (announce || state.draftAnnounce) ui().toastError('Could not save this draft');
+          state.draftAnnounce = false;
 
-        return;
-      }
-      state.draftSent = payload;
-      state.draftSavedAt = new Date();
-      paintDraftStatus();
-      if (announce || state.draftAnnounce) ui().toast('Draft saved');
-      state.draftAnnounce = false;
-      // Answers changed while that was in the air.
-      if (state.draftDirty) saveDraft();
+          return;
+        }
+        rememberFiled(json.draft);
+        state.draftSent = payload;
+        state.draftSavedAt = new Date();
+        paintDraftStatus();
+        if (announce || state.draftAnnounce) ui().toast('Draft saved');
+        state.draftAnnounce = false;
+        // Answers changed while that was in the air.
+        if (state.draftDirty) saveDraft();
+      });
     }).catch(function () {
       /*
        * Never delivered — the offline case. The autosave is not queued: the
@@ -1805,9 +1809,8 @@
    * Put a saved draft back into the form.
    *
    * The answers are the wizard's own field paths, so this is a copy rather
-   * than a translation. The scans are the part that cannot come back, so
-   * every path the draft holds an answer for that is a document or a photo is
-   * collected and named to the reader instead of quietly missing.
+   * than a translation. The scans come back as filed slots and photo URLs,
+   * so the controls mark them answered rather than asking for them again.
    */
   function restoreDraft(draft) {
     if (!draft || !draft.answers) return false;
@@ -1819,22 +1822,31 @@
     state.draftSavedAt = draft.savedAt ? new Date(draft.savedAt) : null;
     state.draftResumed = true;
 
-    // The scans that came back with it, so the form marks those slots
-    // answered rather than asking for them again.
-    (draft.filed || []).forEach(function (path) { state.filed[path] = true; });
+    rememberFiled(draft);
 
-    /*
-     * What the form is still short of. Asked of the requirement templates
-     * rather than requiredPaths(), which names the TYPED answers only —
-     * reading it there quietly produced an empty list, and a resume notice
-     * that never mentioned the files was exactly the silence it exists to
-     * break.
-     */
     // What was just put back is what the server holds, so an untouched
     // resume does not immediately re-post the same answers.
     state.draftSent = JSON.stringify([draftBody(), fileSignature()]);
 
     return true;
+  }
+
+  /*
+   * Marks the scans the server has already kept, so a photo sitting on the
+   * draft is not asked for again the moment the reader presses Save.
+   *
+   * The local preview wins while they still have one: a blob they just
+   * chose is the picture they are looking at, and swapping it for the
+   * stored URL under them would flicker for no gain.
+   */
+  function rememberFiled(draft) {
+    if (!draft) return;
+    (draft.filed || []).forEach(function (path) { state.filed[path] = true; });
+    Object.keys(draft.previews || {}).forEach(function (path) {
+      if (draft.previews[path] && !state.previews[path]) {
+        state.previews[path] = draft.previews[path];
+      }
+    });
   }
 
 
@@ -2148,32 +2160,31 @@
       if (!person) return;
       PERSON_FIELDS.forEach(function (f) { state.draft[prefix + f] = person[f] || ''; });
       /*
-       * The photo is answered by its SLOT, not by the picture on screen.
+       * The photo is answered by its SLOT, or by the person's own stored
+       * picture. `photo` is a display URL and falls back to the client's
+       * avatar when the person has no passport photo of their own, so
+       * reading it here asked the wrong question twice over: a person
+       * wearing the client's face counted as answered, and a filed photo
+       * whose slot the record described but whose URL was absent counted as
+       * missing — which is the form showing the picture and demanding it in
+       * the same breath.
        *
-       * `photo` is a display URL and falls back to the client's avatar when
-       * the person has no passport photo of their own, so reading it here
-       * asked the wrong question twice over: a person wearing the client's
-       * face counted as answered, and a filed photo whose slot the record
-       * described but whose URL was absent counted as missing — which is the
-       * form showing the picture and demanding it in the same breath.
+       * A draft keeps the scan on the person (`passportPhotoUrl`) even
+       * before the checklist slot is what a filed application would call
+       * filled, so that URL is enough: showing the client's avatar in the
+       * control put a face on screen beside "The passport photo field is
+       * required".
        */
       var photoSlot = (person.documents || []).filter(function (d) {
         return d.type === 'passport_photo';
       })[0];
-
-      /*
-       * And the picture only when the slot holds one. Showing the client's
-       * avatar in the passport-photo control put a face on screen beside
-       * "The passport photo field is required" — the reader sees a photo and
-       * is told there is none, which reads as a bug in the form rather than
-       * as the honest answer: that picture is not this document.
-       */
       var photoFiled = !!(photoSlot && photoSlot.uploaded);
+      var ownPhoto = person.passportPhotoUrl || null;
 
-      if (photoFiled && (person.passportPhotoUrl || person.photo)) {
-        state.previews[prefix + 'passportPhoto'] = person.passportPhotoUrl || person.photo;
+      if (ownPhoto || (photoFiled && person.photo)) {
+        state.previews[prefix + 'passportPhoto'] = ownPhoto || person.photo;
       }
-      state.filed[prefix + 'passportPhoto'] = photoFiled;
+      state.filed[prefix + 'passportPhoto'] = photoFiled || !!ownPhoto;
       docFields(sectionForPath(prefix || 'x')).forEach(function (doc) {
         var slot = (person.documents || []).filter(function (d) {
           return d.type === doc.key;

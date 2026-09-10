@@ -190,6 +190,141 @@ class CipApplicationDraftTest extends TestCase
         $this->assertContains('passportPhoto', $filed);
         $this->assertContains('passportBioPage', $filed);
         $this->assertNotContains('birthCertificate', $filed, 'A slot nobody filled is not claimed as kept.');
+
+        $draft = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/draft')
+            ->assertOk()
+            ->json('draft');
+
+        $this->assertNotEmpty($draft['previews']['passportPhoto'] ?? null, 'The stored photo is a URL the form can show.');
+    }
+
+    /**
+     * The record the wizard actually reopens must describe the photo as filed.
+     *
+     * The draft endpoint is not what the table uses: opening a row loads the
+     * application, and if that payload does not mark the slot uploaded the
+     * form shows the face and still demands a file.
+     */
+    public function test_a_reopened_draft_record_shows_the_photo_as_filed(): void
+    {
+        Storage::fake('local');
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->actingAs($staff)->post('/portal/cip/applications/draft', $this->answers($provider, [
+            'passportPhoto' => $this->photo(),
+            'passportBioPage' => [UploadedFile::fake()->create('bio.pdf', 40, 'application/pdf')],
+        ]), ['Accept' => 'application/json'])->assertOk();
+
+        $draft = CipApplication::query()->first();
+
+        $record = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$draft->uuid)
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame(Status::DRAFT, $record['status']);
+        $this->assertNotEmpty($record['applicant']['passportPhotoUrl']);
+
+        $photo = collect($record['applicant']['documents'])->firstWhere('type', 'passport_photo');
+        $this->assertNotNull($photo);
+        $this->assertTrue($photo['uploaded'], 'The photo slot is filled, so the form must not ask for it again.');
+
+        $bio = collect($record['applicant']['documents'])->firstWhere('type', 'passport_bio_page');
+        $this->assertNotNull($bio);
+        $this->assertTrue($bio['uploaded']);
+    }
+
+    /**
+     * Filing a draft does not demand the photo and scans it already holds.
+     *
+     * The wizard cannot re-send a file that is already on the server: a
+     * reopened draft has a preview, not a File. Asking for the upload again
+     * is the form showing the picture and answering "The passport photo
+     * field is required."
+     */
+    public function test_filing_a_draft_does_not_demand_the_files_it_already_holds(): void
+    {
+        Storage::fake('local');
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->actingAs($staff)->post('/portal/cip/applications/draft', $this->answers($provider, [
+            'firstName' => 'John',
+            'lastName' => 'Smith',
+            'gender' => 'Male',
+            'dateOfBirth' => '1985-04-12',
+            'countryOfBirth' => 'Lebanon',
+            'countryOfResidence' => 'United Arab Emirates',
+            'occupation' => 'Engineer',
+            'passportNumber' => 'X1234567',
+            'investmentType' => InvestmentType::REAL_ESTATE,
+            'sponsored' => '0',
+            'passportPhoto' => $this->photo(),
+            'passportBioPage' => [UploadedFile::fake()->create('bio.pdf', 40, 'application/pdf')],
+            'birthCertificate' => [UploadedFile::fake()->create('birth.pdf', 40, 'application/pdf')],
+        ]), ['Accept' => 'application/json'])->assertOk();
+
+        $draft = CipApplication::query()->first();
+
+        $filing = $this->filing($provider);
+        unset(
+            $filing['passportPhoto'],
+            $filing['passportBioPage'],
+            $filing['birthCertificate'],
+            $filing['policeCertificate'],
+            $filing['proofOfAddress'],
+        );
+        $filing['draftId'] = $draft->uuid;
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications', $filing, ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        $filed = $draft->fresh();
+        $this->assertSame(Status::NEW, $filed->status);
+        $main = $filed->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $this->assertNotNull($main->photo_path, 'The photo survived filing.');
+        $this->assertTrue(
+            $main->documents()->where('type', 'passport_photo')->whereNotNull('file_id')->exists(),
+        );
+        $this->assertTrue(
+            $main->documents()->where('type', 'passport_bio_page')->whereNotNull('file_id')->exists(),
+        );
+        $this->assertTrue(
+            $main->documents()->where('type', 'birth_certificate')->whereNotNull('file_id')->exists(),
+        );
+    }
+
+    /** A draft that never received a photo still has to bring one at filing. */
+    public function test_filing_a_draft_still_asks_for_a_photo_it_never_received(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->save($staff, $this->answers($provider, [
+            'firstName' => 'John',
+            'lastName' => 'Smith',
+            'gender' => 'Male',
+            'dateOfBirth' => '1985-04-12',
+            'countryOfBirth' => 'Lebanon',
+            'countryOfResidence' => 'United Arab Emirates',
+            'occupation' => 'Engineer',
+            'passportNumber' => 'X1234567',
+            'investmentType' => InvestmentType::REAL_ESTATE,
+            'sponsored' => '0',
+        ]))->assertOk();
+
+        $filing = $this->filing($provider);
+        unset($filing['passportPhoto']);
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications', $filing, ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('passportPhoto');
     }
 
     /**
