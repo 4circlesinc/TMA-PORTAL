@@ -31,6 +31,8 @@
   var ICON = 'images/icons/phosphor/';
   /* 2 inches at 300dpi, the same floor App\Support\Cip\PassportPhoto keeps. */
   var PHOTO_MIN_PX = 600;
+  /* Matches App\Support\Cip\PassportPhoto::MAX_BYTES. */
+  var PHOTO_MAX_BYTES = 8 * 1024 * 1024;
   var MAX_DOCUMENT_MB = 10;
   /* Matches Intake::MAX_DOCUMENTS_PER_SLOT, the server is the authority. */
   var MAX_DOCUMENTS_PER_SLOT = 10;
@@ -153,6 +155,11 @@
     filedMeta: {},
     /* The application being edited, or null when this is a new one. */
     applicationId: null,
+    /* The draft row the autosave just created, when this form was opened as
+       a new filing. Not `applicationId`: that would send Add to the edit
+       URL and leave the row at Draft. Filing still posts to create, and
+       names this row so the photo already kept on it counts as answered. */
+    draftId: null,
     /* pre_approval or post_approval for a new filing; null when editing. */
     phase: 'pre_approval',
     /* The filed record the form was opened on. Kept so a save that has to be
@@ -241,6 +248,45 @@
     return false;
   }
 
+  /* A face on the control is an answer. The File can be gone after Morph
+     rebuilds the input, and a reopened draft has a URL rather than a File;
+     either way demanding the field again is the form showing the picture
+     and calling it missing. */
+  function photoChosen(path) {
+    return !!(state.files[path] || state.filed[path] || state.previews[path]);
+  }
+
+  /* Copy bytes out of the file picker before Morph tears the input down.
+     Keeping the input's own File leaves WebKit sending an empty upload,
+     which Laravel treats as "the field is required" while the preview —
+     already read into a data URL — is still on screen. */
+  function keepFile(file) {
+    if (!file) return null;
+    try {
+      return new File([file.slice(0, file.size, file.type || '')], file.name || 'upload', {
+        type: file.type || 'application/octet-stream',
+        lastModified: file.lastModified || Date.now(),
+      });
+    } catch (err) {
+      return file;
+    }
+  }
+
+  function blobFromDataUrl(dataUrl, name) {
+    var match = String(dataUrl || '').match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) return null;
+    var binary = atob(match[2]);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    var type = match[1] || 'image/jpeg';
+    var ext = type.indexOf('png') !== -1 ? 'png' : (type.indexOf('webp') !== -1 ? 'webp' : 'jpg');
+    try {
+      return new File([bytes], name || ('photo.' + ext), { type: type });
+    } catch (err) {
+      return new Blob([bytes], { type: type });
+    }
+  }
+
   /* Every path this form must have an answer for, given what it now says. */
   function requiredPaths() {
     var paths = ['providerId'].concat(PERSON_FIELDS)
@@ -293,7 +339,7 @@
 
     if (!packageLocked()) {
       requiredFiles().forEach(function (path) {
-        if (!state.files[path] && !state.filed[path]) found[path] = labelFor(path) + ' is required';
+        if (!photoChosen(path)) found[path] = labelFor(path) + ' is required';
       });
 
       requiredDocuments().forEach(function (path) {
@@ -1042,6 +1088,8 @@
     state.files = {};
     state.previews = {};
     state.documents = {};
+    state.filed = {};
+    state.draftId = null;
     state.dependents = 0;
     state.errors = {};
     // The one answer the form fills in for itself, put back.
@@ -1064,6 +1112,16 @@
       input.addEventListener('change', function () {
         var file = input.files && input.files[0];
         if (!file) return;
+        if (file.size > PHOTO_MAX_BYTES) {
+          state.errors[path] = 'That photo is too large. Keep it under '
+            + Math.round(PHOTO_MAX_BYTES / (1024 * 1024)) + 'MB.';
+          delete state.files[path];
+          delete state.previews[path];
+          input.value = '';
+          render(root);
+          return;
+        }
+        var kept = keepFile(file);
         var reader = new FileReader();
         reader.onload = function (ev) {
           measure(ev.target.result, function (why, dataUrl) {
@@ -1073,7 +1131,7 @@
               delete state.previews[path];
               input.value = '';
             } else {
-              state.files[path] = file;
+              state.files[path] = kept || file;
               state.previews[path] = dataUrl;
               delete state.errors[path];
               // A chosen scan is a change to the draft like any other, and
@@ -1222,7 +1280,7 @@
       var seen = list.some(function (had) {
         return had.name === file.name && had.size === file.size;
       });
-      if (!seen) list.push(file);
+      if (!seen) list.push(keepFile(file) || file);
     });
 
     if (list.length > MAX_DOCUMENTS_PER_SLOT) {
@@ -1404,7 +1462,20 @@
       if (!sponsored() && path.indexOf('sponsor.') === 0) return;
       if (/^dependents\.(\d+)\./.test(path) && Number(RegExp.$1) >= state.dependents) return;
       var file = state.files[path];
-      out.push({ name: bracketed(path), file: file, filename: file.name });
+      if (file) out.push({ name: bracketed(path), file: file, filename: file.name || 'upload' });
+    });
+
+    // The File did not survive Morph; the preview did. Rebuild the upload
+    // from the data URL already on screen rather than posting an empty field
+    // next to a face and hearing "the passport photo field is required."
+    Object.keys(state.previews).forEach(function (path) {
+      if (state.files[path] || state.filed[path]) return;
+      if (!sponsored() && path.indexOf('sponsor.') === 0) return;
+      if (/^dependents\.(\d+)\./.test(path) && Number(RegExp.$1) >= state.dependents) return;
+      var rebuilt = blobFromDataUrl(state.previews[path]);
+      if (rebuilt) {
+        out.push({ name: bracketed(path), file: rebuilt, filename: rebuilt.name || 'photo.jpg' });
+      }
     });
 
     // A requirement's scans go up as a list, in the order they were added.
@@ -1434,8 +1505,9 @@
       out.push({ name: 'allowDuplicate', value: '1' });
     }
 
-    if (editingDraft() && state.applicationId) {
-      out.push({ name: 'draftId', value: state.applicationId });
+    var draftUuid = (editingDraft() && state.applicationId) ? state.applicationId : state.draftId;
+    if (filing && draftUuid) {
+      out.push({ name: 'draftId', value: draftUuid });
     }
 
     return out;
@@ -1492,8 +1564,9 @@
    * drafts open in two tabs must not overwrite each other.
    */
   function draftUrl() {
-    return state.applicationId
-      ? DRAFT_URL + '?application=' + encodeURIComponent(state.applicationId)
+    var id = state.applicationId || state.draftId;
+    return id
+      ? DRAFT_URL + '?application=' + encodeURIComponent(id)
       : DRAFT_URL;
   }
 
@@ -1769,6 +1842,9 @@
           return;
         }
         rememberFiled(json.draft);
+        if (json.draft && json.draft.id && !state.applicationId) {
+          state.draftId = json.draft.id;
+        }
         state.draftSent = payload;
         state.draftSavedAt = new Date();
         paintDraftStatus();
@@ -1876,9 +1952,9 @@
     if (!draft) return;
     (draft.filed || []).forEach(function (path) { state.filed[path] = true; });
     Object.keys(draft.previews || {}).forEach(function (path) {
-      if (draft.previews[path] && !state.previews[path]) {
-        state.previews[path] = draft.previews[path];
-      }
+      if (!draft.previews[path]) return;
+      if (!state.previews[path]) state.previews[path] = draft.previews[path];
+      state.filed[path] = true;
     });
   }
 
@@ -2276,6 +2352,7 @@
     state.saving = false;
     state.error = '';
     state.applicationId = opts.applicationId || null;
+    state.draftId = null;
     /*
      * A draft names its phase even though it is opened by id, because the
      * document requirements are fetched on it. Only an edit of a FILED

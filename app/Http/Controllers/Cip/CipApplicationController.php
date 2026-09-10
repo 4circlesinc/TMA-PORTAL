@@ -297,6 +297,26 @@ class CipApplicationController extends Controller
                 ->first();
         }
 
+        /*
+         * A new form names the row with the key the wizard minted at open,
+         * because it never learned the uuid the first autosave created.
+         * That lookup has to happen HERE, before the rules run: finding the
+         * draft after validation is too late, the photo already on it is
+         * still demanded as missing.
+         */
+        $key = trim((string) ($data['submissionId'] ?? ''));
+        if ($key !== '') {
+            $named = CipApplication::query()
+                ->where('submission_key', $key)
+                ->where('status', Status::DRAFT)
+                ->where('created_by', $user->id)
+                ->with(['people.documents'])
+                ->first();
+            if ($named) {
+                return $named;
+            }
+        }
+
         $phase = ! empty($data['phase']) && Phase::isValid($data['phase'])
             ? $data['phase']
             : Phase::PRE_APPROVAL;

@@ -334,6 +334,62 @@ class CipApplicationDraftTest extends TestCase
         );
     }
 
+    /**
+     * Filing a form that was never reopened still finds the photo the
+     * autosave kept.
+     *
+     * Create New Application does not put the draft uuid on the wizard, so
+     * Add arrives with the submission key and no draftId. The File the reader
+     * picked often does not travel with that request either — Morph rebuilds
+     * the input, WebKit empties the original File, and the face on screen is
+     * only a data URL. The key has to name the row BEFORE the rules run, or
+     * Laravel answers "The passport photo field is required" next to it.
+     */
+    public function test_filing_finds_the_draft_by_submission_key_when_no_file_is_re_sent(): void
+    {
+        Storage::fake('local');
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+        $key = 'sub-wizard-'.uniqid();
+
+        $this->actingAs($staff)->post('/portal/cip/applications/draft', $this->answers($provider, [
+            'firstName' => 'John',
+            'lastName' => 'Smith',
+            'gender' => 'Male',
+            'dateOfBirth' => '1985-04-12',
+            'countryOfBirth' => 'Lebanon',
+            'countryOfResidence' => 'United Arab Emirates',
+            'occupation' => 'Engineer',
+            'passportNumber' => 'X1234567',
+            'investmentType' => InvestmentType::REAL_ESTATE,
+            'sponsored' => '0',
+            'submissionId' => $key,
+            'passportPhoto' => $this->photo(),
+            'passportBioPage' => [UploadedFile::fake()->create('bio.pdf', 40, 'application/pdf')],
+            'birthCertificate' => [UploadedFile::fake()->create('birth.pdf', 40, 'application/pdf')],
+        ]), ['Accept' => 'application/json'])->assertOk();
+
+        $filing = $this->filing($provider);
+        unset(
+            $filing['passportPhoto'],
+            $filing['passportBioPage'],
+            $filing['birthCertificate'],
+            $filing['policeCertificate'],
+            $filing['proofOfAddress'],
+        );
+        $filing['submissionId'] = $key;
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications', $filing, ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        $draft = CipApplication::query()->first();
+        $this->assertSame(Status::NEW, $draft->fresh()->status);
+        $main = $draft->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $this->assertNotNull($main->photo_path);
+    }
+
     /** A draft that never received a photo still has to bring one at filing. */
     public function test_filing_a_draft_still_asks_for_a_photo_it_never_received(): void
     {
