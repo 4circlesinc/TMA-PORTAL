@@ -24,6 +24,7 @@ use App\Support\Cip\Countries;
 use App\Support\Cip\Dependents;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentTypes;
+use App\Support\Cip\Intake;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\NicRequirements;
 use App\Support\Cip\PassportPhoto;
@@ -779,6 +780,99 @@ class CipIntakeTest extends TestCase
      * Leaving it open would mean an officer refused at one door and waved
      * through at the other, so a change here is refused and they ask instead.
      */
+    /**
+     * Typing into a new application is not editing somebody's identity.
+     *
+     * The wizard autosaves onto a DRAFT row and PATCHes it on every save, so
+     * the applicant's own name arrives as a "change" to what is already there.
+     * Guarding that asked an administrator for permission to fill in the form,
+     * and nobody else could file at all.
+     */
+    public function test_the_provider_side_can_type_the_applicant_details_on_its_own_draft(): void
+    {
+        $company = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
+        $provider = $this->provider('GAL', $company);
+
+        $contact = $this->user(Role::CLIENT);
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'user_id' => $contact->id,
+            'name' => $contact->name,
+            'email' => $contact->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+
+        $draft = Intake::createDraft($provider, $contact, [
+            'firstName' => 'Vernon',
+            'lastName' => 'Francis',
+            'dateOfBirth' => '1990-01-01',
+        ]);
+        $this->assertSame(Status::DRAFT, $draft->fresh()->status);
+
+        // Correcting a date of birth they typed a moment ago is filling in
+        // the form, not amending a filing.
+        $this->edit($contact, $draft, $this->edits($provider, [
+            'firstName' => 'Vernon',
+            'lastName' => 'Francis',
+            'dateOfBirth' => '1991-02-02',
+        ]))->assertOk();
+    }
+
+    /**
+     * The same carve-out, asked of the guard itself.
+     *
+     * An officer cannot reach update() for a file nobody has assigned them
+     * (ApplicationScope, section 10), so the endpoint is the wrong door to
+     * test this through — the wizard autosaves via the draft controller,
+     * which scopes by created_by. What matters here is that the identity
+     * guard does not refuse them on a draft, which is what blocked filing.
+     */
+    public function test_the_identity_guard_lets_anyone_type_details_on_a_draft(): void
+    {
+        $provider = $this->provider('GAL');
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+
+        $draft = Intake::createDraft($provider, $officer, [
+            'firstName' => 'Vernon',
+            'lastName' => 'Francis',
+            'dateOfBirth' => '1990-01-01',
+        ]);
+        $this->assertSame(Status::DRAFT, $draft->fresh()->status);
+
+        Intake::update($draft->fresh('people'), $officer, $this->edits($provider, [
+            'firstName' => 'Vernon',
+            'lastName' => 'Francis',
+            'dateOfBirth' => '1991-02-02',
+        ]));
+
+        $main = $draft->fresh('people')->people
+            ->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $this->assertSame('1991-02-02', $main->date_of_birth->toDateString());
+    }
+
+    /**
+     * The guard still stands the moment the filing exists.
+     *
+     * The draft carve-out must not become a way around it: once the
+     * application is filed, identity is an administrator's to change.
+     */
+    public function test_the_identity_guard_still_refuses_once_the_application_is_filed(): void
+    {
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($this->user(Role::ADMINISTRATOR), $this->payload($provider))
+            ->assertCreated()->json('application');
+        $application = CipApplication::where('uuid', $body['id'])->firstOrFail();
+        $this->assertNotSame(Status::DRAFT, $application->status);
+
+        $officer = $this->holder($application);
+
+        $this->edit($officer, $application, $this->edits($provider, [
+            'occupation' => 'Architect',
+        ]))->assertStatus(422);
+    }
+
     public function test_an_officer_cannot_change_identity_on_the_edit_form(): void
     {
         $provider = $this->provider('GAL');

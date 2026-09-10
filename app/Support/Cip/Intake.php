@@ -1073,6 +1073,25 @@ class Intake
             return;
         }
 
+        /*
+         * A draft is a filing that has not happened yet.
+         *
+         * The wizard autosaves onto a DRAFT row and then PATCHes it on every
+         * save, so typing the applicant's own name into a new application
+         * arrives here as an "edit" to the identity already on the row. Asking
+         * an administrator for that is asking permission to fill in the form:
+         * it refused the provider side and the officers alike, and nobody but
+         * an administrator could file at all.
+         *
+         * Identity becomes an administrator's to change once the filing exists
+         * — which is the moment the Unit could be checking it against a
+         * passport — and that is where this guard still stands. The same
+         * carve-out, for the same reason, as {@see syncCipNumber}.
+         */
+        if ($application->status === Status::DRAFT) {
+            return;
+        }
+
         $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
         if ($main === null) {
             return;
