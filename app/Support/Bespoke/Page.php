@@ -130,6 +130,9 @@ final class Page
         if ($path === '/reporting') {
             return 'reporting';
         }
+        if (str_starts_with($path, '/bespoke-ai')) {
+            return 'bespoke';
+        }
         if (str_starts_with($path, '/templates')) {
             return 'templates';
         }
@@ -163,6 +166,7 @@ final class Page
             'settings' => 'Settings',
             'users' => 'Users',
             'reporting' => 'Reporting',
+            'bespoke' => 'Bespoke AI Assistant',
             'templates' => 'Templates',
             'workflows' => 'Workflows',
             'people' => 'People',

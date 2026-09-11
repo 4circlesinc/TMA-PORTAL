@@ -185,7 +185,7 @@ final class Knowledge
         }
         $text .= "\nDependents: first name, last name, date of birth, relationship (Spouse or Qualified dependent).\n";
         $text .= 'Post-approval also needs the CIP application number from the decision letter.';
-        $text .= "\n\n**Save as draft** (and autosave) keep the file in Draft. **Add** files it into New Applications when required fields and files are complete. Filing follows Document Requirements: every required upload for the applicant, a sponsor if Sponsored is Yes, and each dependent on the form.";
+        $text .= "\n\n**Save as draft** (and autosave) keep the file in Draft. **Add** files it into New Applications when required fields and files are complete. Filing follows Document Requirements: every required upload for the applicant, a sponsor if Sponsored is Yes, and each dependent on the form. **Save** on an application already on file does not re-demand outstanding pack documents; those stay on the checklist.";
 
         if ($empty !== []) {
             $text .= "\n\nOn this form, these labels look empty: **".implode('**, **', $empty).'**. Required fields also show a red asterisk.';
@@ -274,6 +274,7 @@ final class Knowledge
             '/folders/shared-with-me',
             '/account-settings',
             '/settings',
+            '/bespoke-ai',
         ];
 
         if (Bespoke::can($user, 'overview.view')) {
@@ -410,7 +411,7 @@ final class Knowledge
                 'q' => 'What’s the difference between Save as draft and Add?',
                 'keywords' => ['save as draft', 'add', 'file the application', 'new applications', 'difference'],
                 'cipOnly' => true,
-                'answer' => "**Save as draft** (and autosave) keep a CIP intake in Draft. Drafts appear in the table with a number. Draft is not a queue in the status list.\n\n**Add** files the application into **New Applications** when required fields and files are complete. Filing follows Document Requirements: every required upload for the applicant, a sponsor if Sponsored is Yes, and each dependent on the form. Required items show a red asterisk. If something required is missing, the portal will not move the file.",
+                'answer' => "**Save as draft** (and autosave) keep a CIP intake in Draft. Drafts appear in the table with a number. Draft is not a queue in the status list.\n\n**Add** files the application into **New Applications** when required fields and files are complete. Filing follows Document Requirements: every required upload for the applicant, a sponsor if Sponsored is Yes, and each dependent on the form. Required items show a red asterisk. If something required is missing, the portal will not move the file.\n\n**Save** on an application already on file keeps details even when pack documents are still outstanding. Those rows stay on the checklist.",
             ],
             [
                 'id' => 'photo',
@@ -509,7 +510,13 @@ final class Knowledge
                 'id' => 'search',
                 'q' => 'How do I search?',
                 'keywords' => ['search', 'slash', 'find'],
-                'answer' => 'Press **/** or click Search in the header. That is global search. Bespoke AI uses ⌘J / Ctrl+J and does not steal /.',
+                'answer' => 'Press **/** or click Search in the header. That is global search. Bespoke AI Assistant uses ⌘J / Ctrl+J and does not steal /.',
+            ],
+            [
+                'id' => 'bespoke-page',
+                'q' => 'Where are my Bespoke AI chats?',
+                'keywords' => ['bespoke', 'past chats', 'assistant', 'history', 'ai chat'],
+                'answer' => 'Open [Bespoke AI Assistant](/bespoke-ai) from the sidebar. Past chats are in the list on the left. The mark in the corner opens the same assistant on the page you are on. Shortcut: ⌘J / Ctrl+J.',
             ],
             [
                 'id' => 'sign-out',

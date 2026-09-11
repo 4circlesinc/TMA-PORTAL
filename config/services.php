@@ -127,9 +127,9 @@ return [
     ],
 
     'bespoke' => [
-        // In-portal assistant. FEATURE_BESPOKE=false hides the FAB and 404s
-        // every /portal/bespoke route — never 403s — so the feature does not
-        // exist, administrators included. Same kill-switch as FEATURE_CIP.
+        // In-portal assistant. FEATURE_BESPOKE=false hides the page, FAB and
+        // 404s every /portal/bespoke route — never 403s — so the feature does
+        // not exist, administrators included. Same kill-switch as FEATURE_CIP.
         // Default on: production has no Cloud var yet, and the launcher
         // should appear after deploy. Set false to pull it.
         'enabled' => (bool) env('FEATURE_BESPOKE', true),

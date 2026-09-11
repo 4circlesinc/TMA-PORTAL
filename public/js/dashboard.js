@@ -12,7 +12,7 @@
 (function () {
   'use strict';
 
-  var NAV_SHELL_VERSION = '2026-08-30-templates-subnav';
+  var NAV_SHELL_VERSION = '2026-09-11-bespoke-ai';
   var CIP_APPLICATIONS_PATH = '/citizenship-applications';
 
   function cipApplicationsRest(pathname) {
@@ -43,6 +43,7 @@
     'folders',
   ];
   var APPROVED_PAGES_NAV = [
+    'bespoke',
     'users',
     'reporting',
     'templates',
@@ -55,6 +56,7 @@
     return id === 'folders' ? 'folders-personal' : id;
   });
   var APPROVED_MOBILE_PAGES = [
+    'bespoke',
     'users',
     'reporting',
     'templates',
@@ -324,6 +326,16 @@
           crumb: 'Users',
         };
       }
+      if (p === '/bespoke-ai' || p.indexOf('/bespoke-ai/') === 0) {
+        var conversationId = p.indexOf('/bespoke-ai/') === 0 ? p.slice('/bespoke-ai/'.length) : '';
+        return {
+          navId: 'bespoke',
+          view: 'bespoke',
+          title: 'Bespoke AI Assistant',
+          crumb: 'Bespoke AI Assistant',
+          conversationId: conversationId || null,
+        };
+      }
       if (p === '/reporting') {
         return {
           navId: 'reporting',
@@ -556,6 +568,10 @@
         return clientsPathFor(extra.clientsScreen || 'list', extra.contactId);
       }
       if (view === 'users' || navId === 'users') return '/users';
+      if (view === 'bespoke' || navId === 'bespoke') {
+        if (extra.conversationId) return '/bespoke-ai/' + extra.conversationId;
+        return '/bespoke-ai';
+      }
       if (view === 'reporting' || navId === 'reporting') return '/reporting';
       if (view === 'add-data') return '/users/new';
       if (view === 'overview' || navId === 'dash-project-overview') return '/overview';
@@ -595,6 +611,7 @@
           crumb: opts.crumb,
           clientsScreen: opts.clientsScreen,
           contactId: opts.contactId,
+          conversationId: opts.conversationId,
         },
         '',
         appUrl(next)
@@ -976,7 +993,7 @@
         window.TMAPortalHome.restoreTodayToShell();
         todayWrap = root.querySelector('[data-today-dropdown]');
       }
-      var portalChromeless = ['cbi', 'call-recordings', 'client-hub', 'folders', 'workflows', 'templates', 'signatures', 'inbox', 'people', 'admin', 'dashboard', 'reporting', 'users'];
+      var portalChromeless = ['cbi', 'call-recordings', 'client-hub', 'folders', 'workflows', 'templates', 'signatures', 'inbox', 'people', 'admin', 'dashboard', 'reporting', 'users', 'bespoke'];
       var hideMainChrome = name === 'overview' || name === 'account' || name === 'messages' || name === 'feed' || name === 'email' || name === 'calendar' || name === 'pricing' || name === 'settings' || portalChromeless.indexOf(name) !== -1;
       if (mainHead) {
         mainHead.style.display = hideMainChrome ? 'none' : '';
@@ -996,6 +1013,7 @@
       root.classList.toggle('tma-dash--compose-popout', composePopout);
       document.documentElement.classList.toggle('tma-dash--compose-popout', composePopout);
       root.classList.toggle('tma-dash--messages', name === 'messages');
+      root.classList.toggle('tma-dash--bespoke', name === 'bespoke');
       root.classList.toggle('tma-dash--feed', name === 'feed');
       root.classList.toggle('tma-dash--calendar', name === 'calendar');
       if (name === 'calendar' && window.TMACalendar && typeof window.TMACalendar.activate === 'function') {
@@ -1341,6 +1359,7 @@
              for idle navigation, wrong for somebody who has just asked for
              this page again. */
           refresh: repeatSelection || !!opts.refresh,
+          conversationId: opts.conversationId || null,
         });
       }
       if (viewName === 'email' && window.TMAEmail && mayMount('mail.use')) {
@@ -1517,6 +1536,19 @@
         }
       }
 
+      if (base === '/bespoke-ai' || base.indexOf('/bespoke-ai/') === 0) {
+        if (root.querySelector('.tma-dash__view[data-view="bespoke"]')) {
+          var bespokeId = base.indexOf('/bespoke-ai/') === 0 ? base.slice('/bespoke-ai/'.length) : '';
+          activate('bespoke', {
+            view: 'bespoke',
+            title: 'Bespoke AI Assistant',
+            crumb: 'Bespoke AI Assistant',
+            conversationId: bespokeId || null,
+          });
+          return true;
+        }
+      }
+
       if (base === '/settings' || base === '/account-settings') {
         if (root.querySelector('.tma-dash__view[data-view="settings"]')) {
           activate('settings', { view: 'settings', title: 'Settings', crumb: 'Settings', settingsNav: params['settings-page'] || null });
@@ -1619,6 +1651,7 @@
         crumb: state.crumb,
         clientsScreen: state.clientsScreen,
         contactId: state.contactId,
+        conversationId: state.conversationId,
         keepDrawer: true,
         skipExpand: true,
         skipUrl: true,

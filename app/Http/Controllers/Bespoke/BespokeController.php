@@ -6,13 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Bespoke\Bespoke;
 use App\Support\Bespoke\Completions;
+use App\Support\Bespoke\Conversations;
 use App\Support\Bespoke\Knowledge;
 use App\Support\Bespoke\Page;
 use App\Support\Bespoke\Prompt;
 use App\Support\Bespoke\Suggestions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 
 /**
  * In-portal assistant. FEATURE_BESPOKE is the gate: 404 when off, including
@@ -68,7 +68,11 @@ class BespokeController extends Controller
         $clientContext = is_array($validated['clientContext'] ?? null) ? $validated['clientContext'] : [];
         $page = Page::fromClient($clientContext);
         $fieldHints = Page::fieldHints($clientContext);
-        $conversationId = $validated['conversationId'] ?? (string) Str::uuid();
+        $conversation = Conversations::resolveForChat(
+            $user,
+            isset($validated['conversationId']) ? (string) $validated['conversationId'] : null,
+        );
+        $conversationId = $conversation->uuid;
         $configured = Bespoke::configured();
 
         $messages = [];
@@ -113,6 +117,9 @@ class BespokeController extends Controller
         $allowed = Knowledge::allowedPaths($user, $identity);
         $reply = Knowledge::sanitizeAnswer($reply, $allowed);
 
+        Conversations::appendTurn($conversation, $lastUser, $reply);
+        $conversation->refresh();
+
         ActivityLogger::log([
             'type' => 'bespoke.asked',
             'description' => 'Asked Bespoke AI on '.$page['path'],
@@ -131,6 +138,57 @@ class BespokeController extends Controller
             'configured' => $configured,
             'source' => $source,
             'conversationId' => $conversationId,
+            'title' => $conversation->title,
         ]);
+    }
+
+    public function conversations(Request $request): JsonResponse
+    {
+        Bespoke::abortUnlessEnabled();
+
+        $items = Conversations::listFor($request->user())
+            ->map(fn ($conversation) => Conversations::listPayload($conversation))
+            ->values()
+            ->all();
+
+        return response()->json(['conversations' => $items]);
+    }
+
+    public function showConversation(Request $request, string $uuid): JsonResponse
+    {
+        Bespoke::abortUnlessEnabled();
+
+        $conversation = Conversations::findOwnedOrFail($request->user(), $uuid);
+
+        return response()->json([
+            'conversation' => Conversations::detailPayload($conversation),
+        ]);
+    }
+
+    public function updateConversation(Request $request, string $uuid): JsonResponse
+    {
+        Bespoke::abortUnlessEnabled();
+
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:80'],
+        ]);
+
+        $conversation = Conversations::rename(
+            Conversations::findOwnedOrFail($request->user(), $uuid),
+            $validated['title'],
+        );
+
+        return response()->json([
+            'conversation' => Conversations::listPayload($conversation->load('latestMessage')),
+        ]);
+    }
+
+    public function destroyConversation(Request $request, string $uuid): JsonResponse
+    {
+        Bespoke::abortUnlessEnabled();
+
+        Conversations::findOwnedOrFail($request->user(), $uuid)->delete();
+
+        return response()->json(['ok' => true]);
     }
 }

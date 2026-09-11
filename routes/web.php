@@ -188,6 +188,16 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/chat', [BespokeController::class, 'chat'])
             ->middleware('throttle:30,1')
             ->name('chat');
+        Route::get('/conversations', [BespokeController::class, 'conversations'])->name('conversations.index');
+        Route::get('/conversations/{uuid}', [BespokeController::class, 'showConversation'])
+            ->whereUuid('uuid')
+            ->name('conversations.show');
+        Route::patch('/conversations/{uuid}', [BespokeController::class, 'updateConversation'])
+            ->whereUuid('uuid')
+            ->name('conversations.update');
+        Route::delete('/conversations/{uuid}', [BespokeController::class, 'destroyConversation'])
+            ->whereUuid('uuid')
+            ->name('conversations.destroy');
     });
 
     // Recent sign-ins across the firm, for the Overview card. Staff-gated
@@ -1363,6 +1373,10 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/applications/{uuid}', [CbiController::class, 'application'])->name('applications.show');
         Route::post('/applications/{uuid}/comments', [CbiController::class, 'storeComment'])->name('applications.comments');
     });
+
+    Route::get('/bespoke-ai/{conversation}', [LegacyPageController::class, 'bespoke'])
+        ->where('conversation', '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}')
+        ->name('bespoke-ai.thread');
 
     /*
      * Client deep links.

@@ -1,9 +1,10 @@
 /*
- * Bespoke AI — in-portal assistant.
+ * Bespoke AI Assistant — in-portal assistant.
  * Vanilla IIFE. Global: window.TMABespoke
  *
- * Mounts only when FEATURE_BESPOKE is on (TMABootBespoke). Stays off the
- * sign-in shells and the email compose popout.
+ * Corner launcher for help on the page you are on. /bespoke-ai is the
+ * full page, with this account's past chats. FEATURE_BESPOKE off: no
+ * launcher, no nav row, 404.
  */
 (function () {
   'use strict';
@@ -12,12 +13,16 @@
 
   var LS_OPEN = 'tma.bespoke.open';
   var LS_CONV = 'tma.bespoke.conversationId';
-  var SIDEBAR_BP = 1024;
   var MARK = 'images/brand/tma/tma-logo-mark.png';
   var PLUS = 'images/icons/phosphor/Plus.svg';
   var CLOSE = 'images/icons/phosphor/X.svg';
   var SEND = 'images/icons/phosphor/PaperPlaneTilt.svg';
   var COPY = 'images/icons/phosphor/Copy.svg';
+  var CLOCK = 'images/icons/phosphor/ClockCounterClockwise.svg';
+  var EXPAND = 'images/icons/phosphor/ArrowsOut.svg';
+  var TRASH = 'images/icons/phosphor/Trash.svg';
+  var PENCIL = 'images/icons/phosphor/PencilSimple.svg';
+  var BACK = 'images/icons/phosphor/ArrowLeft.svg';
 
   var FALLBACK_FAQ = [
     {
@@ -49,21 +54,13 @@
   var host = null;
   var panel = null;
   var fab = null;
-  var logEl = null;
-  var chipsEl = null;
-  var inputEl = null;
-  var liveEl = null;
-  var bannerEl = null;
-  var subEl = null;
-  var sendBtn = null;
+  var widget = null;
+  var page = null;
   var lastFocus = null;
   var open = false;
-  var busy = false;
   var configured = false;
-  var conversationId = storeGet(LS_CONV, '');
   var faq = FALLBACK_FAQ.slice();
-  var allowedPaths = ['/', '/calendar', '/signatures', '/social/messages', '/account-settings', '/folders/recent'];
-  var messages = [];
+  var allowedPaths = ['/', '/calendar', '/signatures', '/social/messages', '/account-settings', '/folders/recent', '/bespoke-ai'];
 
   function enabled() {
     if (window.TMACurrentUser && window.TMACurrentUser.get) {
@@ -76,6 +73,11 @@
 
   function isComposePopout() {
     return document.documentElement.classList.contains('tma-dash--compose-popout');
+  }
+
+  function isPagePath(path) {
+    var p = path || currentPath();
+    return p === '/bespoke-ai' || p.indexOf('/bespoke-ai/') === 0;
   }
 
   function storeGet(k, d) {
@@ -145,6 +147,34 @@
       return;
     }
     window.location.assign(path);
+  }
+
+  function replaceBespokeUrl(path, conversationId) {
+    if (currentPath() === path) return;
+    try {
+      history.replaceState({
+        navId: 'bespoke',
+        view: 'bespoke',
+        title: 'Bespoke AI Assistant',
+        crumb: 'Bespoke AI Assistant',
+        conversationId: conversationId || null
+      }, '', path);
+    } catch (e) { /* ignore */ }
+  }
+
+  function pushBespokeUrl(path, conversationId) {
+    if (currentPath() === path) return;
+    try {
+      history.pushState({
+        navId: 'bespoke',
+        view: 'bespoke',
+        title: 'Bespoke AI Assistant',
+        crumb: 'Bespoke AI Assistant',
+        conversationId: conversationId || null
+      }, '', path);
+    } catch (e) {
+      go(path);
+    }
   }
 
   function escapeHtml(s) {
@@ -246,60 +276,26 @@
     });
   }
 
-  function ensureConversation() {
-    if (!conversationId) {
-      conversationId = uuid();
-      storeSet(LS_CONV, conversationId);
-    }
-    return conversationId;
-  }
-
   function api(path, opts) {
     opts = opts || {};
     var headers = {
       Accept: 'application/json',
       'X-Requested-With': 'XMLHttpRequest'
     };
-    if (opts.body) {
-      headers['Content-Type'] = 'application/json';
+    if (opts.body || opts.method === 'PATCH' || opts.method === 'DELETE') {
       headers['X-XSRF-TOKEN'] = csrf();
     }
+    if (opts.body) headers['Content-Type'] = 'application/json';
     return fetch(path, {
       method: opts.method || 'GET',
       credentials: 'same-origin',
       headers: headers,
       body: opts.body ? JSON.stringify(opts.body) : undefined
     }).then(function (res) {
-      if (res.status === 404) return Promise.reject({ notFound: true });
+      if (res.status === 404) return Promise.reject({ notFound: true, status: 404 });
       if (!res.ok) return Promise.reject({ status: res.status });
+      if (res.status === 204) return {};
       return res.json();
-    });
-  }
-
-  function refreshSuggestions() {
-    var path = currentPath();
-    var qs = '?path=' + encodeURIComponent(path) +
-      '&view=' + encodeURIComponent(currentView()) +
-      '&title=' + encodeURIComponent(currentTitle());
-    return api('/portal/bespoke/suggestions' + qs).then(function (data) {
-      configured = !!data.configured;
-      if (Array.isArray(data.faq) && data.faq.length) faq = data.faq;
-      if (Array.isArray(data.allowedPaths) && data.allowedPaths.length) allowedPaths = data.allowedPaths;
-      if (bannerEl) {
-        bannerEl.hidden = configured;
-      }
-      if (subEl) subEl.textContent = data.subtitle || 'How can I help?';
-      renderChips(data.chips || []);
-      if (window.TMACurrentUser && window.TMACurrentUser.get) {
-        var me = window.TMACurrentUser.get();
-        if (me && me.bespoke) me.bespoke.configured = configured;
-      }
-    }).catch(function (err) {
-      if (err && err.notFound) {
-        destroy();
-        return;
-      }
-      renderChips(localChips());
     });
   }
 
@@ -331,6 +327,13 @@
         { id: 'sidebar', label: 'Change sidebar style', prompt: 'How do I change sidebar style?' }
       ];
     }
+    if (isPagePath(path)) {
+      return [
+        { id: 'dash-what', label: 'What’s on this dashboard?', prompt: 'What’s on this dashboard?' },
+        { id: 'start-cip', label: 'How do I start a CIP application?', prompt: 'How do I start a CIP application?' },
+        { id: 'files-where', label: 'Where is File Library?', prompt: 'Where is File Library?' }
+      ];
+    }
     return [
       { id: 'dash-what', label: 'What’s on this dashboard?', prompt: 'What’s on this dashboard?' },
       { id: 'start-cip', label: 'How do I start a CIP application?', prompt: 'How do I start a CIP application?' },
@@ -339,14 +342,14 @@
     ];
   }
 
-  function renderChips(chips) {
-    if (!chipsEl) return;
-    chipsEl.innerHTML = '';
-    if (!chips || !chips.length || messages.length) {
-      chipsEl.hidden = true;
+  function renderChips(ctx, chips) {
+    if (!ctx || !ctx.chipsEl) return;
+    ctx.chipsEl.innerHTML = '';
+    if (!chips || !chips.length || ctx.messages.length) {
+      ctx.chipsEl.hidden = true;
       return;
     }
-    chipsEl.hidden = false;
+    ctx.chipsEl.hidden = false;
     chips.forEach(function (chip) {
       var btn = document.createElement('button');
       btn.type = 'button';
@@ -357,13 +360,13 @@
           go(chip.path);
           return;
         }
-        ask(chip.prompt || chip.label);
+        ask(ctx, chip.prompt || chip.label);
       });
-      chipsEl.appendChild(btn);
+      ctx.chipsEl.appendChild(btn);
     });
   }
 
-  function appendRow(role, html, opts) {
+  function appendRow(ctx, role, html, opts) {
     opts = opts || {};
     var row = document.createElement('div');
     row.className = 'tma-bespoke__row tma-bespoke__row--' + role;
@@ -396,16 +399,12 @@
       bubble.appendChild(copy);
     }
     row.appendChild(bubble);
-    logEl.appendChild(row);
-    logEl.scrollTop = logEl.scrollHeight;
+    ctx.logEl.appendChild(row);
+    ctx.logEl.scrollTop = ctx.logEl.scrollHeight;
     return bubble;
   }
 
-  function showTyping() {
-    return appendRow('assistant', '<span class="tma-bespoke__typing" aria-hidden="true"><span></span><span></span><span></span></span>');
-  }
-
-  function typeInto(bubble, text) {
+  function typeInto(ctx, bubble, text) {
     var copy = looksLikeDraft(text);
     bubble.innerHTML = renderLite(text);
     if (copy) {
@@ -421,33 +420,86 @@
       });
       bubble.appendChild(btn);
     }
-    logEl.scrollTop = logEl.scrollHeight;
-    announce(text);
+    ctx.logEl.scrollTop = ctx.logEl.scrollHeight;
+    announce(ctx, text);
   }
 
-  function announce(text) {
-    if (!liveEl) return;
-    liveEl.textContent = text.replace(/\s+/g, ' ').slice(0, 280);
+  function announce(ctx, text) {
+    if (!ctx.liveEl) return;
+    ctx.liveEl.textContent = text.replace(/\s+/g, ' ').slice(0, 280);
   }
 
-  function ask(text) {
+  function ensureConversation(ctx) {
+    if (!isUuid(ctx.conversationId)) {
+      ctx.conversationId = uuid();
+      storeSet(LS_CONV, ctx.conversationId);
+    }
+    return ctx.conversationId;
+  }
+
+  function isUuid(v) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(v || ''));
+  }
+
+  function resizeInput(ctx) {
+    if (!ctx.inputEl) return;
+    ctx.inputEl.style.height = 'auto';
+    ctx.inputEl.style.height = Math.min(ctx.inputEl.scrollHeight, 4 * 22 + 16) + 'px';
+    if (ctx.sendBtn) ctx.sendBtn.disabled = ctx.busy || !String(ctx.inputEl.value || '').trim();
+  }
+
+  function paintLog(ctx) {
+    if (!ctx.logEl) return;
+    ctx.logEl.innerHTML = '';
+    ctx.messages.forEach(function (row) {
+      appendRow(ctx, row.role, renderLite(row.content), { copy: row.role === 'assistant' && looksLikeDraft(row.content) });
+    });
+  }
+
+  function refreshSuggestions(ctx) {
+    var path = currentPath();
+    var qs = '?path=' + encodeURIComponent(path) +
+      '&view=' + encodeURIComponent(currentView()) +
+      '&title=' + encodeURIComponent(currentTitle());
+    return api('/portal/bespoke/suggestions' + qs).then(function (data) {
+      configured = !!data.configured;
+      if (Array.isArray(data.faq) && data.faq.length) faq = data.faq;
+      if (Array.isArray(data.allowedPaths) && data.allowedPaths.length) allowedPaths = data.allowedPaths;
+      if (ctx && ctx.bannerEl) ctx.bannerEl.hidden = configured;
+      if (ctx && ctx.subEl) ctx.subEl.textContent = data.subtitle || 'How can I help?';
+      if (ctx) renderChips(ctx, data.chips || []);
+      if (window.TMACurrentUser && window.TMACurrentUser.get) {
+        var me = window.TMACurrentUser.get();
+        if (me && me.bespoke) me.bespoke.configured = configured;
+      }
+      return data;
+    }).catch(function (err) {
+      if (err && err.notFound) {
+        destroy();
+        return;
+      }
+      if (ctx) renderChips(ctx, localChips());
+    });
+  }
+
+  function ask(ctx, text) {
     text = String(text || '').trim();
-    if (!text || busy) return;
-    messages.push({ role: 'user', content: text });
-    appendRow('user', renderLite(text));
-    renderChips([]);
-    inputEl.value = '';
-    resizeInput();
-    busy = true;
-    sendBtn.disabled = true;
-    var bubble = showTyping();
-
+    if (!text || !ctx || ctx.busy) return;
+    ctx.messages.push({ role: 'user', content: text });
+    appendRow(ctx, 'user', renderLite(text));
+    renderChips(ctx, []);
+    if (ctx.inputEl) ctx.inputEl.value = '';
+    resizeInput(ctx);
+    ctx.busy = true;
+    if (ctx.sendBtn) ctx.sendBtn.disabled = true;
+    var bubble = appendRow(ctx, 'assistant', '<span class="tma-bespoke__typing" aria-hidden="true"><span></span><span></span><span></span></span>');
     var local = matchFaq(text);
+
     api('/portal/bespoke/chat', {
       method: 'POST',
       body: {
-        messages: messages,
-        conversationId: ensureConversation(),
+        messages: ctx.messages.slice(-12),
+        conversationId: ensureConversation(ctx),
         clientContext: {
           path: currentPath(),
           view: currentView(),
@@ -457,14 +509,16 @@
       }
     }).then(function (data) {
       configured = !!data.configured;
-      if (bannerEl) bannerEl.hidden = configured;
+      if (ctx.bannerEl) ctx.bannerEl.hidden = configured;
       if (data.conversationId) {
-        conversationId = data.conversationId;
-        storeSet(LS_CONV, conversationId);
+        ctx.conversationId = data.conversationId;
+        storeSet(LS_CONV, ctx.conversationId);
       }
+      if (data.title && ctx.setTitle) ctx.setTitle(data.title);
       var reply = data.reply || '';
-      messages.push({ role: 'assistant', content: reply });
-      typeInto(bubble, reply);
+      ctx.messages.push({ role: 'assistant', content: reply });
+      typeInto(ctx, bubble, reply);
+      if (typeof ctx.afterReply === 'function') ctx.afterReply(data);
     }).catch(function (err) {
       if (err && err.notFound) {
         destroy();
@@ -473,22 +527,419 @@
       var fallback = local && local.answer
         ? local.answer
         : 'I could not reach Bespoke AI. Try a suggestion, or ask an administrator.';
-      messages.push({ role: 'assistant', content: fallback });
-      typeInto(bubble, fallback);
+      ctx.messages.push({ role: 'assistant', content: fallback });
+      typeInto(ctx, bubble, fallback);
     }).then(function () {
-      busy = false;
-      sendBtn.disabled = !String(inputEl.value || '').trim();
-      inputEl.focus();
+      ctx.busy = false;
+      if (ctx.sendBtn) ctx.sendBtn.disabled = !String(ctx.inputEl && ctx.inputEl.value || '').trim();
+      if (ctx.inputEl) ctx.inputEl.focus();
     });
   }
 
-  function newChat() {
-    messages = [];
-    conversationId = uuid();
-    storeSet(LS_CONV, conversationId);
-    if (logEl) logEl.innerHTML = '';
-    refreshSuggestions();
-    if (inputEl) inputEl.focus();
+  function bindComposer(ctx) {
+    if (!ctx.formEl) return;
+    ctx.formEl.addEventListener('submit', function (e) {
+      e.preventDefault();
+      ask(ctx, ctx.inputEl.value);
+    });
+    ctx.inputEl.addEventListener('input', function () { resizeInput(ctx); });
+    ctx.inputEl.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        ask(ctx, ctx.inputEl.value);
+      }
+    });
+    ctx.logEl.addEventListener('click', onNavClick);
+  }
+
+  function onNavClick(e) {
+    var a = e.target.closest && e.target.closest('[data-bespoke-nav]');
+    if (!a) return;
+    var href = a.getAttribute('data-bespoke-nav') || a.getAttribute('href');
+    if (!href || href.charAt(0) !== '/') return;
+    e.preventDefault();
+    go(href);
+  }
+
+  function timeLabel(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    var now = new Date();
+    if (d.toDateString() === now.toDateString()) {
+      return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    }
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+
+  function confirmDelete(title, onYes) {
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal) {
+      if (window.confirm('Delete “' + title + '”? This cannot be undone.')) onYes();
+      return;
+    }
+    ui.openModal({
+      title: 'Delete chat',
+      body: '<p>Delete “' + escapeHtml(title) + '”? This cannot be undone.</p>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-bespoke-cancel>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--danger" data-bespoke-ok>Delete</button>' +
+        '</div>',
+      onMount: function (modalHost) {
+        modalHost.querySelector('[data-bespoke-cancel]').addEventListener('click', ui.closeModal);
+        modalHost.querySelector('[data-bespoke-ok]').addEventListener('click', function () {
+          ui.closeModal();
+          onYes();
+        });
+      }
+    });
+  }
+
+  /* ── Full page ─────────────────────────────────────────────── */
+
+  function pageMarkup() {
+    return '<div class="tma-bespoke-page">' +
+      '<aside class="tma-bespoke-page__rail">' +
+        '<div class="tma-bespoke-page__rail-head">' +
+          '<p class="tma-bespoke-page__rail-title">Past chats</p>' +
+          '<button type="button" class="tma-bespoke-page__new" data-bespoke-page-new>' +
+            '<img src="' + PLUS + '" alt="" width="14" height="14"> New chat' +
+          '</button>' +
+        '</div>' +
+        '<div class="tma-bespoke-page__list" data-bespoke-page-list></div>' +
+      '</aside>' +
+      '<section class="tma-bespoke-page__thread">' +
+        '<div class="tma-bespoke-page__thread-head">' +
+          '<button type="button" class="tma-bespoke-page__back" data-bespoke-page-back aria-label="Past chats">' +
+            '<img src="' + BACK + '" alt="">' +
+          '</button>' +
+          '<img class="tma-bespoke-page__thread-mark" src="' + MARK + '" alt="" width="28" height="28">' +
+          '<h1 class="tma-bespoke-page__thread-title" data-bespoke-page-title>Bespoke AI Assistant</h1>' +
+          '<button type="button" class="tma-bespoke__icon-btn" data-bespoke-page-rename aria-label="Rename chat" hidden>' +
+            '<img src="' + PENCIL + '" alt="">' +
+          '</button>' +
+          '<button type="button" class="tma-bespoke__icon-btn" data-bespoke-page-delete aria-label="Delete chat" hidden>' +
+            '<img src="' + TRASH + '" alt="">' +
+          '</button>' +
+        '</div>' +
+        '<p class="tma-bespoke__banner" data-bespoke-page-banner hidden>Bespoke AI Assistant isn’t configured for live answers. Navigation and the user guide still work.</p>' +
+        '<div class="tma-bespoke__log" data-bespoke-page-log></div>' +
+        '<div class="sr-only" aria-live="polite" data-bespoke-page-live></div>' +
+        '<div class="tma-bespoke__chips" data-bespoke-page-chips></div>' +
+        '<form class="tma-bespoke__composer" data-bespoke-page-form>' +
+          '<textarea class="tma-bespoke__input" data-bespoke-page-input rows="1" placeholder="Ask about this portal" aria-label="Message Bespoke AI Assistant"></textarea>' +
+          '<button type="submit" class="tma-bespoke__send" data-bespoke-page-send disabled aria-label="Send"><img src="' + SEND + '" alt=""></button>' +
+        '</form>' +
+      '</section>' +
+    '</div>';
+  }
+
+  function setPageTitle(ctx, title) {
+    ctx.title = title || 'New chat';
+    if (ctx.titleEl && !ctx.renaming) ctx.titleEl.textContent = ctx.title;
+    var rename = ctx.root && ctx.root.querySelector('[data-bespoke-page-rename]');
+    var del = ctx.root && ctx.root.querySelector('[data-bespoke-page-delete]');
+    var show = !!(ctx.conversationId && ctx.messages.length);
+    if (rename) rename.hidden = !show;
+    if (del) del.hidden = !show;
+  }
+
+  function renderPageList(ctx) {
+    var list = ctx.listEl;
+    if (!list) return;
+    list.innerHTML = '';
+    if (!ctx.conversations.length) {
+      var empty = document.createElement('p');
+      empty.className = 'tma-bespoke-page__empty';
+      empty.textContent = 'No past chats yet. Ask a question to start one.';
+      list.appendChild(empty);
+      return;
+    }
+    ctx.conversations.forEach(function (row) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tma-bespoke-page__item' + (row.uuid === ctx.conversationId ? ' is-active' : '');
+      btn.setAttribute('data-bespoke-open', row.uuid);
+      btn.innerHTML =
+        '<span class="tma-bespoke-page__item-title">' + escapeHtml(row.title || 'New chat') + '</span>' +
+        '<span class="tma-bespoke-page__item-time">' + escapeHtml(timeLabel(row.updatedAt)) + '</span>' +
+        '<span class="tma-bespoke-page__item-preview">' + escapeHtml(row.preview || '') + '</span>';
+      btn.addEventListener('click', function () {
+        openPageThread(ctx, row.uuid, true);
+      });
+      list.appendChild(btn);
+    });
+  }
+
+  function loadPageList(ctx) {
+    return api('/portal/bespoke/conversations').then(function (data) {
+      ctx.conversations = Array.isArray(data.conversations) ? data.conversations : [];
+      renderPageList(ctx);
+      return ctx.conversations;
+    }).catch(function () {
+      ctx.conversations = ctx.conversations || [];
+      renderPageList(ctx);
+      return ctx.conversations;
+    });
+  }
+
+  function resetPageThread(ctx) {
+    ctx.messages = [];
+    ctx.conversationId = uuid();
+    storeSet(LS_CONV, ctx.conversationId);
+    ctx.busy = false;
+    if (ctx.logEl) ctx.logEl.innerHTML = '';
+    setPageTitle(ctx, 'New chat');
+    ctx.shell.classList.add('is-thread');
+    renderPageList(ctx);
+    refreshSuggestions(ctx);
+    if (ctx.inputEl) ctx.inputEl.focus();
+  }
+
+  function openPageThread(ctx, id, pushUrl) {
+    if (!id) {
+      resetPageThread(ctx);
+      if (pushUrl) replaceBespokeUrl('/bespoke-ai', null);
+      return;
+    }
+    api('/portal/bespoke/conversations/' + encodeURIComponent(id)).then(function (data) {
+      var conv = data.conversation || {};
+      ctx.conversationId = conv.uuid || id;
+      storeSet(LS_CONV, ctx.conversationId);
+      ctx.messages = Array.isArray(conv.messages) ? conv.messages.map(function (row) {
+        return { role: row.role, content: row.content };
+      }) : [];
+      paintLog(ctx);
+      setPageTitle(ctx, conv.title || 'New chat');
+      ctx.shell.classList.add('is-thread');
+      renderChips(ctx, ctx.messages.length ? [] : localChips());
+      renderPageList(ctx);
+      if (pushUrl) pushBespokeUrl('/bespoke-ai/' + ctx.conversationId, ctx.conversationId);
+      if (ctx.inputEl) ctx.inputEl.focus();
+    }).catch(function () {
+      resetPageThread(ctx);
+    });
+  }
+
+  function startRename(ctx) {
+    if (!ctx.conversationId || ctx.renaming) return;
+    ctx.renaming = true;
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'tma-bespoke-page__title-input';
+    input.value = ctx.title || 'New chat';
+    input.setAttribute('maxlength', '80');
+    input.setAttribute('aria-label', 'Chat title');
+    ctx.titleEl.replaceWith(input);
+    input.focus();
+    input.select();
+    function finish(save) {
+      if (!ctx.renaming) return;
+      ctx.renaming = false;
+      var next = String(input.value || '').trim() || ctx.title || 'New chat';
+      var titleEl = document.createElement('h1');
+      titleEl.className = 'tma-bespoke-page__thread-title';
+      titleEl.setAttribute('data-bespoke-page-title', '');
+      ctx.titleEl = titleEl;
+      input.replaceWith(titleEl);
+      if (!save || next === ctx.title) {
+        setPageTitle(ctx, ctx.title);
+        return;
+      }
+      api('/portal/bespoke/conversations/' + encodeURIComponent(ctx.conversationId), {
+        method: 'PATCH',
+        body: { title: next }
+      }).then(function (data) {
+        var title = (data.conversation && data.conversation.title) || next;
+        setPageTitle(ctx, title);
+        loadPageList(ctx);
+      }).catch(function () {
+        setPageTitle(ctx, ctx.title);
+      });
+    }
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        finish(true);
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        finish(false);
+      }
+    });
+    input.addEventListener('blur', function () { finish(true); });
+  }
+
+  function mountPage(root, opts) {
+    if (!root || !enabled()) return;
+    opts = opts || {};
+    root.innerHTML = pageMarkup();
+    var shell = root.querySelector('.tma-bespoke-page');
+    var ctx = {
+      root: root,
+      shell: shell,
+      listEl: root.querySelector('[data-bespoke-page-list]'),
+      logEl: root.querySelector('[data-bespoke-page-log]'),
+      chipsEl: root.querySelector('[data-bespoke-page-chips]'),
+      inputEl: root.querySelector('[data-bespoke-page-input]'),
+      liveEl: root.querySelector('[data-bespoke-page-live]'),
+      bannerEl: root.querySelector('[data-bespoke-page-banner]'),
+      sendBtn: root.querySelector('[data-bespoke-page-send]'),
+      formEl: root.querySelector('[data-bespoke-page-form]'),
+      titleEl: root.querySelector('[data-bespoke-page-title]'),
+      messages: [],
+      conversations: [],
+      conversationId: '',
+      busy: false,
+      renaming: false,
+      title: 'New chat',
+      setTitle: function (title) { setPageTitle(ctx, title); },
+      afterReply: function () {
+        ctx.shell.classList.add('is-thread');
+        loadPageList(ctx);
+        if (ctx.conversationId && currentPath().indexOf(ctx.conversationId) === -1) {
+          replaceBespokeUrl('/bespoke-ai/' + ctx.conversationId, ctx.conversationId);
+        }
+      }
+    };
+    page = ctx;
+    setPageTitle(ctx, 'New chat');
+    bindComposer(ctx);
+    if (ctx.bannerEl) ctx.bannerEl.hidden = configured;
+
+    root.querySelector('[data-bespoke-page-new]').addEventListener('click', function () {
+      resetPageThread(ctx);
+      replaceBespokeUrl('/bespoke-ai', null);
+    });
+    root.querySelector('[data-bespoke-page-back]').addEventListener('click', function () {
+      ctx.shell.classList.remove('is-thread');
+    });
+    root.querySelector('[data-bespoke-page-rename]').addEventListener('click', function () {
+      startRename(ctx);
+    });
+    root.querySelector('[data-bespoke-page-delete]').addEventListener('click', function () {
+      if (!ctx.conversationId) return;
+      confirmDelete(ctx.title || 'this chat', function () {
+        api('/portal/bespoke/conversations/' + encodeURIComponent(ctx.conversationId), { method: 'DELETE' })
+          .then(function () {
+            if (storeGet(LS_CONV, '') === ctx.conversationId) storeSet(LS_CONV, '');
+            resetPageThread(ctx);
+            replaceBespokeUrl('/bespoke-ai', null);
+            loadPageList(ctx);
+          });
+      });
+    });
+
+    loadPageList(ctx).then(function (list) {
+      var wanted = opts.conversationId || '';
+      if (!wanted) {
+        var stored = storeGet(LS_CONV, '');
+        var found = list.filter(function (row) { return row.uuid === stored; })[0];
+        if (found) wanted = found.uuid;
+      }
+      if (wanted) {
+        openPageThread(ctx, wanted, !opts.conversationId);
+        return;
+      }
+      resetPageThread(ctx);
+    });
+  }
+
+  function ensurePageChrome() {
+    var dash = document.querySelector('.tma-dash');
+    if (!dash || !enabled()) return;
+
+    if (!dash.querySelector('.tma-dash__view[data-view="bespoke"]')) {
+      var view = document.createElement('div');
+      view.className = 'tma-dash__view';
+      view.setAttribute('data-view', 'bespoke');
+      view.hidden = true;
+      view.innerHTML = '<div data-portal-mount></div>';
+      var usersView = dash.querySelector('.tma-dash__view[data-view="users"]');
+      if (usersView && usersView.parentNode) usersView.parentNode.insertBefore(view, usersView);
+      else {
+        var main = dash.querySelector('.tma-dash__main');
+        if (main) main.appendChild(view);
+      }
+    }
+
+    if (!dash.querySelector('.tma-dash__sidebar [data-nav="bespoke"]')) {
+      var users = dash.querySelector('.tma-dash__sidebar [data-nav="users"]');
+      var a = document.createElement('a');
+      a.className = 'tma-dash__nav-item';
+      a.href = '/bespoke-ai';
+      a.setAttribute('data-nav', 'bespoke');
+      a.setAttribute('data-title', 'Bespoke AI Assistant');
+      a.setAttribute('data-crumb', 'Bespoke AI Assistant');
+      a.setAttribute('data-view', 'bespoke');
+      a.innerHTML = '<span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>' +
+        '<span class="tma-dash__nav-icon tma-dash__nav-icon--mark" aria-hidden="true">' +
+        '<img src="' + MARK + '" alt="" width="20" height="20"></span>' +
+        '<span>Bespoke AI Assistant</span>';
+      if (users && users.parentNode) users.parentNode.insertBefore(a, users);
+    }
+
+    var pagesCard = null;
+    dash.querySelectorAll('.tma-dash__mmenu-card').forEach(function (card) {
+      if (card.querySelector('[data-nav="users"]:not([hidden])')) pagesCard = card;
+    });
+    if (pagesCard && !pagesCard.querySelector('[data-nav="bespoke"]')) {
+      var mUsers = pagesCard.querySelector('[data-nav="users"]');
+      var m = document.createElement('button');
+      m.type = 'button';
+      m.className = 'tma-dash__mrow';
+      m.setAttribute('data-mrow', '');
+      m.setAttribute('data-nav', 'bespoke');
+      m.setAttribute('data-title', 'Bespoke AI Assistant');
+      m.setAttribute('data-crumb', 'Bespoke AI Assistant');
+      m.setAttribute('data-view', 'bespoke');
+      m.innerHTML = '<img class="tma-dash__mrow-icon tma-dash__mrow-icon--mark" src="' + MARK + '" alt=""><span>Bespoke AI Assistant</span>';
+      if (mUsers) pagesCard.insertBefore(m, mUsers);
+      else pagesCard.insertBefore(m, pagesCard.firstChild);
+    }
+  }
+
+  /* ── Corner launcher ───────────────────────────────────────── */
+
+  function widgetMarkup() {
+    return '<button type="button" class="tma-bespoke__fab" data-bespoke-fab aria-label="Open Bespoke AI Assistant" aria-expanded="false" aria-controls="tma-bespoke-panel">' +
+      '<img class="tma-bespoke__mark" src="' + MARK + '" alt="" width="32" height="32">' +
+      '</button>' +
+      '<div class="tma-bespoke__panel" id="tma-bespoke-panel" role="dialog" aria-modal="true" aria-labelledby="tma-bespoke-title" aria-hidden="true" inert>' +
+        '<div class="tma-bespoke__head">' +
+          '<div class="tma-bespoke__identity">' +
+            '<img class="tma-bespoke__mark" src="' + MARK + '" alt="" width="28" height="28">' +
+            '<div class="tma-bespoke__titles">' +
+              '<p class="tma-bespoke__name" id="tma-bespoke-title">Bespoke AI Assistant</p>' +
+              '<p class="tma-bespoke__sub" data-bespoke-sub>How can I help?</p>' +
+            '</div>' +
+          '</div>' +
+          '<div class="tma-bespoke__head-actions">' +
+            '<button type="button" class="tma-bespoke__icon-btn" data-bespoke-history aria-label="Past chats"><img src="' + CLOCK + '" alt=""></button>' +
+            '<button type="button" class="tma-bespoke__icon-btn" data-bespoke-expand aria-label="Open full page"><img src="' + EXPAND + '" alt=""></button>' +
+            '<button type="button" class="tma-bespoke__icon-btn" data-bespoke-new aria-label="New chat"><img src="' + PLUS + '" alt=""></button>' +
+            '<button type="button" class="tma-bespoke__icon-btn" data-bespoke-close aria-label="Close"><img src="' + CLOSE + '" alt=""></button>' +
+          '</div>' +
+        '</div>' +
+        '<p class="tma-bespoke__banner" data-bespoke-banner>Bespoke AI Assistant isn’t configured for live answers. Navigation and the user guide still work.</p>' +
+        '<div class="tma-bespoke__log" data-bespoke-log></div>' +
+        '<div class="sr-only" aria-live="polite" data-bespoke-live></div>' +
+        '<div class="tma-bespoke__chips" data-bespoke-chips></div>' +
+        '<form class="tma-bespoke__composer" data-bespoke-form>' +
+          '<textarea class="tma-bespoke__input" data-bespoke-input rows="1" placeholder="Ask about this portal" aria-label="Message Bespoke AI Assistant"></textarea>' +
+          '<button type="submit" class="tma-bespoke__send" data-bespoke-send disabled aria-label="Send"><img src="' + SEND + '" alt=""></button>' +
+        '</form>' +
+      '</div>';
+  }
+
+  function newWidgetChat() {
+    if (!widget) return;
+    widget.messages = [];
+    widget.conversationId = uuid();
+    storeSet(LS_CONV, widget.conversationId);
+    if (widget.logEl) widget.logEl.innerHTML = '';
+    refreshSuggestions(widget);
+    if (widget.inputEl) widget.inputEl.focus();
   }
 
   function focusables() {
@@ -524,9 +975,9 @@
     if ('inert' in panel) panel.inert = !open;
     if (open) {
       lastFocus = document.activeElement;
-      refreshSuggestions();
+      refreshSuggestions(widget);
       setTimeout(function () {
-        if (inputEl) inputEl.focus();
+        if (widget && widget.inputEl) widget.inputEl.focus();
       }, 40);
     } else if (lastFocus && typeof lastFocus.focus === 'function') {
       lastFocus.focus();
@@ -536,43 +987,11 @@
   }
 
   function toggle() {
+    if (isPagePath()) {
+      go('/bespoke-ai');
+      return;
+    }
     setOpen(!open);
-  }
-
-  function resizeInput() {
-    if (!inputEl) return;
-    inputEl.style.height = 'auto';
-    inputEl.style.height = Math.min(inputEl.scrollHeight, 4 * 22 + 16) + 'px';
-    sendBtn.disabled = busy || !String(inputEl.value || '').trim();
-  }
-
-  function markup() {
-    return '<button type="button" class="tma-bespoke__fab" data-bespoke-fab aria-label="Open Bespoke AI" aria-expanded="false" aria-controls="tma-bespoke-panel">' +
-      '<img class="tma-bespoke__mark" src="' + MARK + '" alt="" width="32" height="32">' +
-      '</button>' +
-      '<div class="tma-bespoke__panel" id="tma-bespoke-panel" role="dialog" aria-modal="true" aria-labelledby="tma-bespoke-title" aria-hidden="true" inert>' +
-        '<div class="tma-bespoke__head">' +
-          '<div class="tma-bespoke__identity">' +
-            '<img class="tma-bespoke__mark" src="' + MARK + '" alt="" width="28" height="28">' +
-            '<div class="tma-bespoke__titles">' +
-              '<p class="tma-bespoke__name" id="tma-bespoke-title">Bespoke AI</p>' +
-              '<p class="tma-bespoke__sub" data-bespoke-sub>How can I help?</p>' +
-            '</div>' +
-          '</div>' +
-          '<div class="tma-bespoke__head-actions">' +
-            '<button type="button" class="tma-bespoke__icon-btn" data-bespoke-new aria-label="New chat"><img src="' + PLUS + '" alt=""></button>' +
-            '<button type="button" class="tma-bespoke__icon-btn" data-bespoke-close aria-label="Close"><img src="' + CLOSE + '" alt=""></button>' +
-          '</div>' +
-        '</div>' +
-        '<p class="tma-bespoke__banner" data-bespoke-banner>Bespoke AI isn’t configured for live answers. Navigation and the user guide still work.</p>' +
-        '<div class="tma-bespoke__log" data-bespoke-log></div>' +
-        '<div class="sr-only" aria-live="polite" data-bespoke-live></div>' +
-        '<div class="tma-bespoke__chips" data-bespoke-chips></div>' +
-        '<form class="tma-bespoke__composer" data-bespoke-form>' +
-          '<textarea class="tma-bespoke__input" data-bespoke-input rows="1" placeholder="Ask about this portal" aria-label="Message Bespoke AI"></textarea>' +
-          '<button type="submit" class="tma-bespoke__send" data-bespoke-send disabled aria-label="Send"><img src="' + SEND + '" alt=""></button>' +
-        '</form>' +
-      '</div>';
   }
 
   function onKey(e) {
@@ -584,17 +1003,12 @@
     }
     if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && String(e.key).toLowerCase() === 'j') {
       e.preventDefault();
+      if (isPagePath()) {
+        if (page && page.inputEl) page.inputEl.focus();
+        return;
+      }
       toggle();
     }
-  }
-
-  function onNavClick(e) {
-    var a = e.target.closest && e.target.closest('[data-bespoke-nav]');
-    if (!a) return;
-    var href = a.getAttribute('data-bespoke-nav') || a.getAttribute('href');
-    if (!href || href.charAt(0) !== '/') return;
-    e.preventDefault();
-    go(href);
   }
 
   var historyWrapped = false;
@@ -615,68 +1029,75 @@
       window.dispatchEvent(new Event('tma:bespoke-route'));
     });
     window.addEventListener('tma:bespoke-route', function () {
-      if (open) refreshSuggestions();
+      if (open && widget) refreshSuggestions(widget);
     });
   }
 
-  function mount() {
+  function mountWidget() {
     if (host || !enabled() || isComposePopout()) return;
     var dash = document.querySelector('.tma-dash');
     if (!dash) return;
 
     host = document.createElement('div');
     host.className = 'tma-bespoke';
-    host.innerHTML = markup();
+    host.innerHTML = widgetMarkup();
     document.body.appendChild(host);
 
     fab = host.querySelector('[data-bespoke-fab]');
     panel = host.querySelector('.tma-bespoke__panel');
-    logEl = host.querySelector('[data-bespoke-log]');
-    chipsEl = host.querySelector('[data-bespoke-chips]');
-    inputEl = host.querySelector('[data-bespoke-input]');
-    liveEl = host.querySelector('[data-bespoke-live]');
-    bannerEl = host.querySelector('[data-bespoke-banner]');
-    subEl = host.querySelector('[data-bespoke-sub]');
-    sendBtn = host.querySelector('[data-bespoke-send]');
+    widget = {
+      logEl: host.querySelector('[data-bespoke-log]'),
+      chipsEl: host.querySelector('[data-bespoke-chips]'),
+      inputEl: host.querySelector('[data-bespoke-input]'),
+      liveEl: host.querySelector('[data-bespoke-live]'),
+      bannerEl: host.querySelector('[data-bespoke-banner]'),
+      subEl: host.querySelector('[data-bespoke-sub]'),
+      sendBtn: host.querySelector('[data-bespoke-send]'),
+      formEl: host.querySelector('[data-bespoke-form]'),
+      messages: [],
+      conversationId: storeGet(LS_CONV, ''),
+      busy: false
+    };
 
     fab.addEventListener('click', toggle);
     host.querySelector('[data-bespoke-close]').addEventListener('click', function () { setOpen(false); });
-    host.querySelector('[data-bespoke-new]').addEventListener('click', newChat);
-    host.querySelector('[data-bespoke-form]').addEventListener('submit', function (e) {
-      e.preventDefault();
-      ask(inputEl.value);
+    host.querySelector('[data-bespoke-new]').addEventListener('click', newWidgetChat);
+    host.querySelector('[data-bespoke-history]').addEventListener('click', function () {
+      setOpen(false);
+      go('/bespoke-ai');
     });
-    inputEl.addEventListener('input', resizeInput);
-    inputEl.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        ask(inputEl.value);
-      }
+    host.querySelector('[data-bespoke-expand]').addEventListener('click', function () {
+      setOpen(false);
+      var id = widget && widget.conversationId && widget.messages.length
+        ? widget.conversationId
+        : '';
+      go(id ? '/bespoke-ai/' + id : '/bespoke-ai');
     });
-    panel.addEventListener('click', onNavClick);
+    bindComposer(widget);
     document.addEventListener('keydown', onKey, true);
     document.addEventListener('keydown', trap, true);
 
     wrapHistory();
-    renderChips(localChips());
+    renderChips(widget, localChips());
 
-    if (storeGet(LS_OPEN, '') === '1') setOpen(true);
-    else refreshSuggestions();
+    if (storeGet(LS_OPEN, '') === '1' && !isPagePath()) setOpen(true);
+    else refreshSuggestions(widget);
   }
 
   function destroy() {
     document.removeEventListener('keydown', onKey, true);
     document.removeEventListener('keydown', trap, true);
     if (host && host.parentNode) host.parentNode.removeChild(host);
-    host = panel = fab = logEl = chipsEl = inputEl = liveEl = bannerEl = subEl = sendBtn = null;
+    host = panel = fab = widget = null;
     open = false;
   }
 
   function consider() {
     if (isComposePopout()) return;
     if (enabled()) {
-      if (!host) mount();
-      if (bannerEl) bannerEl.hidden = configured;
+      ensurePageChrome();
+      if (!host) mountWidget();
+      if (widget && widget.bannerEl) widget.bannerEl.hidden = configured;
       return;
     }
     if (host) destroy();
@@ -691,8 +1112,6 @@
         consider();
       });
     }
-    // Desktop / Android keep yesterday's shell, which inlined
-    // TMABootBespoke=false. /me and this route are the live flag.
     if (window.TMABootBespoke !== true && window.TMABootBespoke !== 'true') {
       api('/portal/bespoke/suggestions').then(function (data) {
         window.TMABootBespoke = true;
@@ -700,6 +1119,10 @@
         consider();
       }).catch(function () { /* 404 = still dark */ });
     }
+  }
+
+  if (window.TMAPortalViews) {
+    window.TMAPortalViews.register('bespoke', mountPage);
   }
 
   if (document.readyState === 'loading') {
@@ -712,6 +1135,6 @@
     open: function () { setOpen(true); },
     close: function () { setOpen(false); },
     toggle: toggle,
-    mount: mount
+    mount: mountWidget
   };
 })();

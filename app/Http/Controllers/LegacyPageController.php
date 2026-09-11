@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Support\Access\Role;
+use App\Support\Bespoke\Bespoke;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Pages;
 use App\Support\PortalShell;
@@ -32,6 +33,8 @@ class LegacyPageController extends Controller
     public const SPA_PAGES = [
         'account',
         'account-settings',
+        // Open to every approved account while FEATURE_BESPOKE is on.
+        'bespoke-ai',
         'calendar',
         // Staff-only (Role::PAGE_CAPABILITIES): recordings of client calls.
         'call-recordings',
@@ -147,6 +150,8 @@ class LegacyPageController extends Controller
                 abort_unless($this->canViewWorkflowsPage($request), 404);
             } elseif ($page === 'overview') {
                 abort_unless($this->canViewOverviewPage($request), 404);
+            } elseif ($page === 'bespoke-ai') {
+                abort_unless(Bespoke::enabled(), 404);
             } else {
                 abort_unless(Role::canViewPage($request->user(), $page), 404);
             }
@@ -174,6 +179,17 @@ class LegacyPageController extends Controller
         // Only the public and standalone pages reach here; the SPA shell went
         // out above, where its no-store headers live with the rest of it.
         return response()->file($path);
+    }
+
+    /**
+     * A past chat. The uuid is for the SPA to open; a miss is handled in the
+     * page so we never advertise whether another account has that thread.
+     */
+    public function bespoke(Request $request): Response
+    {
+        abort_unless(Bespoke::enabled(), 404);
+
+        return PortalShell::respond(self::spaShellPath(), $request->user());
     }
 
     /**

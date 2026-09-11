@@ -158,6 +158,16 @@
     return caps.indexOf(capability) !== -1;
   }
 
+  function bespokeOn() {
+    if (window.TMACurrentUser && window.TMACurrentUser.get) {
+      var me = window.TMACurrentUser.get();
+      if (me && me.bespoke && typeof me.bespoke.enabled === 'boolean') {
+        return me.bespoke.enabled;
+      }
+    }
+    return window.TMABootBespoke === true || window.TMABootBespoke === 'true';
+  }
+
   function can(capability) {
     if (!capability) return true;
     // Before /me resolves nothing is known; callers should await ready().
@@ -185,6 +195,11 @@
   function pruneNavItems(scope) {
     scope.querySelectorAll('[data-nav]').forEach(function (el) {
       var nav = el.getAttribute('data-nav');
+
+      if (nav === 'bespoke' && !bespokeOn()) {
+        remove(el);
+        return;
+      }
 
       if (providerContact && PROVIDER_CONTACT_HIDDEN_NAV.indexOf(nav) !== -1) {
         remove(el);
@@ -308,7 +323,6 @@
       navIds = navIds.filter(function (id) { return !can(NAV_CAPABILITIES[id]); });
       tabIds = tabIds.filter(function (id) { return !can(TAB_CAPABILITIES[id]); });
       bootGated = bootGated.filter(function (capability) { return !can(capability); });
-      if (!navIds.length && !tabIds.length && !bootGated.length) return;
     }
 
     var selectors = navIds.map(function (id) {
@@ -318,6 +332,8 @@
     })).concat(bootGated.map(function (capability) {
       return '[data-boot-needs="' + capability + '"]';
     }));
+    if (!bespokeOn()) selectors.push('[data-nav="bespoke"]');
+    if (!selectors.length) return;
 
     var style = document.createElement('style');
     style.id = 'tma-access-css';
@@ -376,10 +392,10 @@
     if (window.TMABespoke || document.querySelector('script[src*="bespoke-ai.js"]')) return;
     var css = document.createElement('link');
     css.rel = 'stylesheet';
-    css.href = 'css/bespoke-ai.css?v=3';
+    css.href = 'css/bespoke-ai.css?v=7';
     (document.head || document.documentElement).appendChild(css);
     var js = document.createElement('script');
-    js.src = 'js/bespoke-ai.js?v=6';
+    js.src = 'js/bespoke-ai.js?v=8';
     js.defer = true;
     (document.head || document.documentElement).appendChild(js);
   }

@@ -95,7 +95,7 @@ class EmployeeReachTest extends TestCase
         }
 
         $this->assertSame([
-            'account', 'account-info', 'account-settings', 'billing-details',
+            'account', 'account-info', 'account-settings', 'bespoke-ai', 'billing-details',
             'billing-details/card', 'calendar', 'call-recordings',
             'choose-account-type',
             'citizenship-applications', 'classic', 'email', 'email/compose', 'email/templates', 'folders/all',
@@ -109,7 +109,7 @@ class EmployeeReachTest extends TestCase
         // A client keeps their own File Library screens; the two
         // organization-wide ones (All Files, Shared Folders) are staff.
         $this->assertSame([
-            'account', 'account-info', 'account-settings', 'billing-details',
+            'account', 'account-info', 'account-settings', 'bespoke-ai', 'billing-details',
             'billing-details/card', 'calendar', 'choose-account-type',
             'classic', 'folders/clients', 'folders/favorites', 'folders/filebox',
             'folders/personal', 'folders/recent', 'folders/recycle',
