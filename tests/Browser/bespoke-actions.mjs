@@ -210,6 +210,53 @@ const stored = await page.evaluate(async (id) => {
 check(stored && stored.name === 'contract.pdf' && stored.hasText === true && stored.pages > 0, `the server holds the PDF with the text pdf.js read (${JSON.stringify(stored)})`);
 check((await page.evaluate(async (u) => (await fetch(u, { credentials: 'same-origin' })).status, stored && stored.url)) === 200, 'the reader can fetch the bytes back');
 
+// ── 2×2 photo: from an image, and from page 1 of a PDF ──────────────────
+const uploads = [];
+page.on('response', async (r) => {
+  if (r.url().includes('/portal/bespoke/attachments') && r.request().method() === 'POST' && r.status() === 201) {
+    try { uploads.push((await r.json()).attachment); } catch (e) { /* ignore */ }
+  }
+});
+async function photoCase(fixture, label) {
+  scripted = null;
+  await page.route('**/portal/bespoke/chat', async (route) => {
+    lastChatBody = route.request().postDataJSON();
+    const attachment = uploads[uploads.length - 1];
+    await route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ reply: 'Your 2×2 photo is below.', configured: true, source: 'model', conversationId: lastChatBody.conversationId, title: 'Stub', actions: [{ type: 'photo2x2', attachment }], choices: [] }),
+    });
+  });
+  const before = uploads.length;
+  const cardsBefore = await page.evaluate(() => document.querySelectorAll('[data-bespoke-card="photo"]').length);
+  await page.setInputFiles('.tma-bespoke.is-open [data-bespoke-file]', fixture);
+  await page.waitForFunction((n) => document.querySelectorAll('.tma-bespoke.is-open [data-bespoke-attach] .tma-bespoke__file--ready').length >= 1, null, { timeout: 20000 });
+  await page.fill('.tma-bespoke.is-open [data-bespoke-input]', 'make it 2x2');
+  await page.keyboard.press('Enter');
+  // The newest card, not any card: an earlier case's photo would satisfy a bare selector.
+  await page.waitForFunction((n) => { const c = document.querySelectorAll('[data-bespoke-card="photo"]'); return c.length >= n && !!c[c.length - 1].querySelector('img'); }, cardsBefore + 1, { timeout: 45000 });
+  const dims = await page.evaluate(() => {
+    const cards = document.querySelectorAll('[data-bespoke-card="photo"]');
+    const img = cards[cards.length - 1].querySelector('img');
+    if (!img) return { w: 0, h: 0, cards: [...cards].map((c) => c.outerHTML.replace(/\s+/g, ' ').slice(0, 300)) };
+    return new Promise((resolve) => {
+      const done = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+      if (img.complete && img.naturalWidth) done(); else { img.onload = done; img.onerror = () => resolve({ w: 0, h: 0 }); }
+    });
+  });
+  if (dims.cards) console.log('    cards at check time:', dims.cards);
+  check(dims.w === dims.h && dims.w >= 600, `${label}: the photo is square and at least 600 px (${dims.w}×${dims.h})`);
+  await page.waitForFunction(() => { const c = document.querySelectorAll('[data-bespoke-card="photo"]'); return !!c[c.length - 1].querySelector('a.tma-bespoke__card-btn'); }, null, { timeout: 15000 });
+  const link = await page.evaluate(() => { const c = document.querySelectorAll('[data-bespoke-card="photo"]'); const a = c[c.length - 1].querySelector('a.tma-bespoke__card-btn'); return { download: a.getAttribute('download'), href: a.getAttribute('href') }; });
+  check(link.download && link.download.endsWith('-2x2.jpg'), `${label}: Download names the file ${link.download}`);
+  await page.waitForTimeout(1500);
+  const kept = uploads.slice(before).find((u) => u && u.kind === 'derived');
+  check(!!kept && kept.width === kept.height && kept.width >= 600, `${label}: a copy is kept on the server as a derived file (${kept ? kept.width + '×' + kept.height : 'none'})`);
+  await page.unroute('**/portal/bespoke/chat');
+}
+await photoCase('tests/Browser/fixtures/message-large.png', 'image');
+await photoCase('tests/Browser/fixtures/contract.pdf', 'pdf page');
+
 await page.screenshot({ path: 'tests/Browser/bespoke-actions.png', fullPage: false });
 await browser.close();
 

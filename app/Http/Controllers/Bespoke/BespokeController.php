@@ -188,6 +188,17 @@ class BespokeController extends Controller
             'kind' => $validated['kind'] ?? Attachments::KIND_UPLOAD,
         ]);
 
+        // Something the portal made (a 2×2 photo) is not waiting for a
+        // message: it hangs off the latest turn, so it is kept and shows
+        // when the thread is reopened.
+        if ($attachment->kind === Attachments::KIND_DERIVED) {
+            $latest = $conversation->messages()->latest('id')->first();
+            if ($latest) {
+                Attachments::attachTo($latest, collect([$attachment]));
+                $attachment->refresh();
+            }
+        }
+
         return response()->json(['attachment' => Attachments::payload($attachment)], 201);
     }
 

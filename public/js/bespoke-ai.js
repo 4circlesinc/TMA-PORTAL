@@ -825,13 +825,184 @@
     return card;
   }
 
+  /* ── 2×2 passport photo ─────────────────────────────────────────
+   * Done here in the browser: pdf.js paints page 1, canvas crops. A PDF page
+   * is trimmed of its white margins first (a photo on a page); an image is
+   * taken as it is, since a passport photo's own background is white too and
+   * trimming would eat it. Then a centre square, scaled to 600–1200 px:
+   * 600 is 2 inches at 300 dpi, the floor the CIP intake accepts. */
+  var PHOTO_MIN = 600;
+  var PHOTO_MAX = 1200;
+
+  function loadImageBitmap(blob) {
+    if (window.createImageBitmap) {
+      return createImageBitmap(blob).catch(function () { return loadImageElement(blob); });
+    }
+    return loadImageElement(blob);
+  }
+
+  function loadImageElement(blob) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(blob);
+      var img = new Image();
+      img.onload = function () { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('image')); };
+      img.src = url;
+    });
+  }
+
+  function rasterizePdfPage(blob) {
+    return blob.arrayBuffer().then(function (buffer) {
+      return loadPdfjs().then(function (lib) {
+        return lib.getDocument({ data: new Uint8Array(buffer) }).promise;
+      });
+    }).then(function (doc) {
+      return doc.getPage(1).then(function (page) {
+        var base = page.getViewport({ scale: 1 });
+        var scale = Math.min(4, Math.max(1, 1800 / Math.max(1, Math.min(base.width, base.height))));
+        var viewport = page.getViewport({ scale: scale });
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.round(viewport.width);
+        canvas.height = Math.round(viewport.height);
+        var c = canvas.getContext('2d');
+        c.fillStyle = '#fff';
+        c.fillRect(0, 0, canvas.width, canvas.height);
+        return page.render({ canvasContext: c, viewport: viewport }).promise.then(function () {
+          try { doc.destroy(); } catch (e) { /* ignore */ }
+          return { canvas: canvas, trim: true };
+        });
+      });
+    });
+  }
+
+  /* Bounding box of everything that is not near-white. Falls back to the
+   * whole canvas when nothing is found or the box is nearly the page. */
+  function trimWhite(canvas) {
+    var w = canvas.width;
+    var h = canvas.height;
+    var full = { x: 0, y: 0, w: w, h: h };
+    var data;
+    try {
+      data = canvas.getContext('2d').getImageData(0, 0, w, h).data;
+    } catch (e) {
+      return full;
+    }
+    var step = Math.max(1, Math.round(Math.min(w, h) / 900));
+    var minX = w, minY = h, maxX = -1, maxY = -1;
+    for (var y = 0; y < h; y += step) {
+      for (var x = 0; x < w; x += step) {
+        var i = (y * w + x) * 4;
+        if (data[i] < 235 || data[i + 1] < 235 || data[i + 2] < 235) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (maxX < 0 || maxY < 0) return full;
+    var pad = Math.round(Math.min(w, h) * 0.01);
+    var box = {
+      x: Math.max(0, minX - pad),
+      y: Math.max(0, minY - pad),
+      w: Math.min(w, maxX + step + pad) - Math.max(0, minX - pad),
+      h: Math.min(h, maxY + step + pad) - Math.max(0, minY - pad)
+    };
+    if (box.w * box.h > w * h * 0.92 || box.w < 40 || box.h < 40) return full;
+    return box;
+  }
+
+  function makeSquarePhoto(a) {
+    return fetch(a.url, { credentials: 'same-origin' }).then(function (res) {
+      if (!res.ok) throw new Error('fetch ' + res.status);
+      return res.blob();
+    }).then(function (blob) {
+      if (a.isPdf || blob.type === 'application/pdf') return rasterizePdfPage(blob);
+      return loadImageBitmap(blob).then(function (img) {
+        var canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        if (img.close) img.close();
+        return { canvas: canvas, trim: false };
+      });
+    }).then(function (src) {
+      var canvas = src.canvas;
+      var box = src.trim ? trimWhite(canvas) : { x: 0, y: 0, w: canvas.width, h: canvas.height };
+      var side = Math.min(box.w, box.h);
+      if (side < 40) throw new Error('empty');
+      var sx = box.x + (box.w - side) / 2;
+      var sy = box.y + (box.h - side) / 2;
+      var out = Math.round(Math.max(PHOTO_MIN, Math.min(PHOTO_MAX, side)));
+      var outCanvas = document.createElement('canvas');
+      outCanvas.width = out;
+      outCanvas.height = out;
+      var c = outCanvas.getContext('2d');
+      c.fillStyle = '#fff';
+      c.fillRect(0, 0, out, out);
+      c.imageSmoothingEnabled = true;
+      c.imageSmoothingQuality = 'high';
+      c.drawImage(canvas, sx, sy, side, side, 0, 0, out, out);
+      return new Promise(function (resolve, reject) {
+        outCanvas.toBlob(function (b) {
+          if (b) resolve({ blob: b, size: out, upscaled: side < PHOTO_MIN });
+          else reject(new Error('blob'));
+        }, 'image/jpeg', 0.92);
+      });
+    });
+  }
+
+  function renderPhotoCard(ctx, action) {
+    var a = action.attachment || {};
+    var card = cardShell(ctx, 'photo');
+    card.innerHTML =
+      '<p class="tma-bespoke__card-head">2×2 photo from ' + escapeHtml(a.name || 'file') + '</p>' +
+      '<p class="tma-bespoke__card-ask" data-bespoke-photo-status>Preparing…</p>' +
+      '<div class="tma-bespoke__photo" data-bespoke-photo hidden></div>' +
+      '<div class="tma-bespoke__card-foot" data-bespoke-card-foot></div>';
+    var status = card.querySelector('[data-bespoke-photo-status]');
+    var slot = card.querySelector('[data-bespoke-photo]');
+    var foot = card.querySelector('[data-bespoke-card-foot]');
+    var base = String(a.name || 'photo').replace(/\.[^.]+$/, '');
+    var filename = base + '-2x2.jpg';
+
+    makeSquarePhoto(a).then(function (result) {
+      var objectUrl = URL.createObjectURL(result.blob);
+      slot.innerHTML = '<img src="' + objectUrl + '" alt="2×2 photo" width="120" height="120">';
+      slot.hidden = false;
+      status.textContent = result.size + '×' + result.size + ' px, 2×2 in at ' + Math.round(result.size / 2) + ' dpi' +
+        (result.upscaled ? '. The original was small; expect some softness.' : '.');
+      var link = document.createElement('a');
+      link.className = 'tma-bespoke__card-btn tma-bespoke__card-btn--primary';
+      link.textContent = 'Download';
+      link.href = objectUrl;
+      link.download = filename;
+      foot.appendChild(link);
+      ctx.logEl.scrollTop = ctx.logEl.scrollHeight;
+
+      // Keep a copy in the chat: it survives a reload and downloads from
+      // the server, which the desktop shells prefer to a blob URL.
+      var form = new FormData();
+      form.append('file', result.blob, filename);
+      form.append('conversationId', ensureConversation(ctx));
+      form.append('kind', 'derived');
+      return apiForm('/portal/bespoke/attachments', form).then(function (data) {
+        var d = data && data.attachment;
+        if (d && d.url) link.href = d.url + '?download=1';
+      }).catch(function () { /* the blob link still works */ });
+    }).catch(function () {
+      status.textContent = 'The photo could not be prepared from this file.';
+    });
+    return card;
+  }
+
   function renderActions(ctx, actions) {
     if (!ctx || !ctx.logEl || !Array.isArray(actions)) return;
     actions.forEach(function (action) {
       if (!action || typeof action !== 'object') return;
       if (action.type === 'message') renderMessageCard(ctx, action);
       else if (action.type === 'email') renderEmailCard(ctx, action);
-      else if (typeof ctx.renderExtraAction === 'function') ctx.renderExtraAction(action);
+      else if (action.type === 'photo2x2') renderPhotoCard(ctx, action);
     });
   }
 

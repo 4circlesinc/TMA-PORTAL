@@ -244,6 +244,32 @@ class BespokeAttachmentsTest extends TestCase
         });
     }
 
+    public function test_a_derived_photo_hangs_off_the_latest_turn_and_shows_on_reopen(): void
+    {
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $conversationId = (string) Str::uuid();
+        Http::fake(['api.groq.com/*' => Http::response(['choices' => [['message' => ['content' => 'Your photo is below.']]]])]);
+        $this->actingAs($officer)->postJson('/portal/bespoke/chat', [
+            'messages' => [['role' => 'user', 'content' => 'make it 2x2']],
+            'conversationId' => $conversationId,
+        ])->assertOk();
+
+        $derived = $this->upload($officer, $conversationId, UploadedFile::fake()->image('me-2x2.jpg', 600, 600), ['kind' => 'derived']);
+        $this->assertSame('derived', $derived['kind']);
+
+        $row = BespokeAttachment::query()->where('uuid', $derived['id'])->firstOrFail();
+        $this->assertNotNull($row->message_id);
+        $this->assertSame('assistant', $row->message->role);
+
+        $detail = $this->actingAs($officer)->getJson('/portal/bespoke/conversations/'.$conversationId)->assertOk()->json('conversation');
+        $last = end($detail['messages']);
+        $this->assertSame(['me-2x2.jpg'], array_column($last['attachments'], 'name'));
+
+        // Not staged, so a later prune leaves it alone.
+        $row->forceFill(['created_at' => now()->subDays(3)])->save();
+        $this->assertSame(0, Attachments::prune($officer));
+    }
+
     public function test_stale_staged_files_are_pruned_on_the_next_upload(): void
     {
         $officer = $this->user(Role::REVIEWING_OFFICER);

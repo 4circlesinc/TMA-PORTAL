@@ -36,6 +36,7 @@
   pointer-events: auto;
 }
 
+
 .tma-bespoke__fab {
   appearance: none;
   display: grid;
@@ -430,6 +431,30 @@ a.tma-bespoke__file:hover {
 .tma-dash[data-theme="dark"] .tma-bespoke__file-remove img,
 :root[data-theme="dark"] .tma-bespoke__file-remove img {
   filter: invert(1);
+}
+
+/* The 2×2 photo the portal made: a small square preview above Download. */
+.tma-bespoke__photo {
+  margin: var(--space-8) 0 0;
+}
+
+.tma-bespoke__photo[hidden] {
+  display: none;
+}
+
+.tma-bespoke__photo img {
+  display: block;
+  width: 120px;
+  height: 120px;
+  object-fit: cover;
+  border: 0.5px solid var(--color-border-soft);
+  border-radius: var(--radius-8);
+  background: var(--color-white);
+}
+
+a.tma-bespoke__card-btn {
+  text-decoration: none;
+  display: inline-block;
 }
 
 /* Reply buttons the model asked for, sitting in the log under its answer. */
