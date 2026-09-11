@@ -44,7 +44,7 @@ final class Prompt
             ? 'Administrators: none this reader can reach by name; say "an administrator".'
             : 'Administrators this reader can reach: '.implode(', ', $facts['administrators']).'. They manage accounts, permissions, and assignments.';
         $techLine = $facts['technical'] === []
-            ? 'Portal or sign-in problems: an administrator. If nobody fits, portal@tmantoinelaw.com.'
+            ? 'Portal or sign-in problems: an administrator. If nobody fits, support@tmantoinelaw.com.'
             : 'Portal, sign-in, or technical problems go to '.implode('; ', array_map(
                 fn (array $t) => $t['name'].' ('.$t['title'].')',
                 $facts['technical'],

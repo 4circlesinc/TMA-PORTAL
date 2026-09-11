@@ -11,7 +11,7 @@
   var PHOSPHOR = 'images/icons/phosphor/';
   var SITE_NAME = 'TM ANTOINE Advisory';
   var AUTH_LINK = 'https://portal.tmantoine.com/';
-  var SUPPORT_EMAIL = 'portal@tmantoinelaw.com';
+  var SUPPORT_EMAIL = 'support@tmantoinelaw.com';
   var SOCIALS = [
     { name: 'Facebook', href: 'https://www.facebook.com/tmantoinepartners', icon: 'Facebook40.svg' },
     { name: 'Instagram', href: 'https://www.instagram.com/tmapartners/', icon: 'Instagram40.svg' },
@@ -219,7 +219,7 @@
     var paymentValue =
       '<span class="tma-dash__email-template-invoice-payment">' +
       '<img src="' + ICON + 'PayPal40.svg" alt="" width="20" height="20">' +
-      '<span>portal@tmantoinelaw.com</span></span>';
+      '<span>support@tmantoinelaw.com</span></span>';
 
     return (
       '<div class="tma-dash__email-template-canvas tma-dash__email-template-canvas--invoice" data-node-id="32546:96133">' +
@@ -249,7 +249,7 @@
       '<p class="tma-dash__email-template-invoice-grand-total-value">$340.94</p></div></div>' +
       '<div class="tma-dash__email-template-invoice-foot">' + renderBrandFooter() +
       '<div class="tma-dash__email-template-invoice-contact">' +
-      '<div class="tma-dash__email-template-invoice-contact-col"><p>portal@tmantoinelaw.com</p><p>portal.tmantoine.com</p></div></div></div></div></div>'
+      '<div class="tma-dash__email-template-invoice-contact-col"><p>support@tmantoinelaw.com</p><p>portal.tmantoine.com</p></div></div></div></div></div>'
     );
   }
 

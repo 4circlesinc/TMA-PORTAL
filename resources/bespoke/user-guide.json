@@ -616,7 +616,7 @@
     "The right-hand Activities list is the recent activity stream — the closest thing to a “recent being” of what just happened. It is not a separate product named Recent being. Open Toggle right panel → Activities, or Overview → Activity for the full log, or the Activity tab on a CIP file.",
     "CIP applications write into this stream when status changes: the application number moved to the new status (or pulled from one status to another on an override). Document actions, invitations, and sign-ins also appear. That is how CIP and the rest of the portal stay in one activity history.",
     "## Emails the portal sends",
-    "Typical messages include Your sign-in code, password reset, password changed, two-factor changed, invitations, and CIP notices. Wording can be edited by administrators under Templates → System Emails. Support copy in those messages uses portal@tmantoinelaw.com."
+    "Typical messages include Your sign-in code, password reset, password changed, two-factor changed, invitations, and CIP notices. Wording can be edited by administrators under Templates → System Emails. Support copy in those messages uses support@tmantoinelaw.com."
    ]
   },
   {
@@ -699,14 +699,14 @@
     "## What is the difference between Save as draft and Add?",
     "Save as draft (and autosave) keep a CIP intake in Draft. Add files the application into New Applications after required information is present.",
     "## Who do I contact if something is wrong?",
-    "Email portal@tmantoinelaw.com. A phone number for the helpdesk is not published in the portal. [Information Required] if your firm uses a different internal contact."
+    "Email support@tmantoinelaw.com. A phone number for the helpdesk is not published in the portal. [Information Required] if your firm uses a different internal contact."
    ]
   },
   {
    "title": "Support",
    "paragraphs": [
     "Item: Portal; Detail: https://portal.tmantoinelaw.com",
-    "Item: Support email; Detail: portal@tmantoinelaw.com",
+    "Item: Support email; Detail: support@tmantoinelaw.com",
     "Item: Privacy contact; Detail: portal@tmantoinelaw.com",
     "Item: Phone / hours; Detail: [Information Required]",
     "When you write to support, include the page you were on, the account email, the application number if it is a CIP file, and what you clicked. Do not send sign-in codes or authenticator codes.",

@@ -158,7 +158,7 @@
                   <img src="{{ url('/images/brand/tma/tma-logo-horizontal.png') }}" alt="TM ANTOINE Advisory" height="40" style="display:block;height:40px;width:auto;margin:0 auto 16px;">
                   <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;"><tr>
                     <td style="padding:0 8px;font-size:13px;line-height:18px;color:{{ $MUTED }};vertical-align:middle;">
-                      <a href="mailto:portal@tmantoinelaw.com" style="color:{{ $BLUE }};text-decoration:none;">portal@tmantoinelaw.com</a>
+                      <a href="mailto:support@tmantoinelaw.com" style="color:{{ $BLUE }};text-decoration:none;">support@tmantoinelaw.com</a>
                     </td>
                     @foreach ($socials as $s)
                       <td style="padding:0 4px;vertical-align:middle;"><a href="{{ $s[1] }}" style="text-decoration:none;"><img src="{{ url('/images/icons/brands/'.$s[2]) }}" alt="{{ $s[0] }}" width="18" height="18" style="display:block;width:18px;height:18px;"></a></td>

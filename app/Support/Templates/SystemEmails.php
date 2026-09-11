@@ -54,9 +54,9 @@ class SystemEmails
 
     private const CIP_HI = '{{#recipient}}Hi {{recipient}},{{/recipient}}{{^recipient}}Hello,{{/recipient}}';
 
-    private const CIP_FOOT = 'This is an automated notice from {{site}}. If this does not look right, reply to this email or contact us at portal@tmantoinelaw.com.';
+    private const CIP_FOOT = 'This is an automated notice from {{site}}. If this does not look right, reply to this email or contact us at support@tmantoinelaw.com.';
 
-    private const IGNORE_NOTE = "If you weren't expecting this invitation you can ignore this email, or contact us at portal@tmantoinelaw.com.";
+    private const IGNORE_NOTE = "If you weren't expecting this invitation you can ignore this email, or contact us at support@tmantoinelaw.com.";
 
     /** @return list<string> */
     public static function keys(): array
@@ -364,7 +364,7 @@ class SystemEmails
                     'eyebrow' => 'Welcome',
                     'greeting' => self::HI_OR_HELLO,
                     'title' => 'Your account is approved and ready',
-                    'body' => "An administrator has approved your account. You now have access to your files, messages, calendar and everything the firm shares with you.\n\nHere's your sign-in address in case you forget: [{{email}}]({{url}})\n\nIf you need any help getting started, reach out at portal@tmantoinelaw.com.",
+                    'body' => "An administrator has approved your account. You now have access to your files, messages, calendar and everything the firm shares with you.\n\nHere's your sign-in address in case you forget: [{{email}}]({{url}})\n\nIf you need any help getting started, reach out at support@tmantoinelaw.com.",
                     'button' => 'Open the portal',
                 ],
             ],
@@ -397,7 +397,7 @@ class SystemEmails
                     'eyebrow' => 'Account request',
                     'greeting' => self::HI_OR_HELLO,
                     'title' => "We couldn't approve your request",
-                    'body' => "Your request for access to the {{site}} portal has been reviewed and we're not able to approve it at this time.\n\nIf you think this is a mistake, or you'd like to know more, reply to this email or contact us at portal@tmantoinelaw.com.",
+                    'body' => "Your request for access to the {{site}} portal has been reviewed and we're not able to approve it at this time.\n\nIf you think this is a mistake, or you'd like to know more, reply to this email or contact us at support@tmantoinelaw.com.",
                 ],
             ],
             'account-deleted' => [
@@ -412,7 +412,7 @@ class SystemEmails
                     'eyebrow' => 'Account',
                     'greeting' => self::HI_OR_HELLO,
                     'title' => 'Your account has been closed',
-                    'body' => "An administrator has closed the {{site}} account for **{{email}}**. You will no longer be able to sign in, and the files, messages and calendars shared with you are no longer available.\n\nIf this is unexpected, or you need anything you had stored there, reply to this email or contact us at portal@tmantoinelaw.com.",
+                    'body' => "An administrator has closed the {{site}} account for **{{email}}**. You will no longer be able to sign in, and the files, messages and calendars shared with you are no longer available.\n\nIf this is unexpected, or you need anything you had stored there, reply to this email or contact us at support@tmantoinelaw.com.",
                 ],
             ],
         ];
@@ -826,7 +826,7 @@ class SystemEmails
                     'lead' => '{{#addedBy}}{{addedBy}} has added you{{/addedBy}}{{^addedBy}}You have been added{{/addedBy}} to {{company}} as {{role}}.',
                     'body' => "Your access is already active — you do not need to accept an invitation.\n\n".$explainer."\n\nSign in to the portal to see what you now have access to.",
                     'button' => 'Open the portal',
-                    'footNote' => "If you weren't expecting this change, contact us at portal@tmantoinelaw.com.",
+                    'footNote' => "If you weren't expecting this change, contact us at support@tmantoinelaw.com.",
                 ],
             ],
             'company-member-removed' => [
@@ -843,7 +843,7 @@ class SystemEmails
                     'greeting' => self::HELLO,
                     'title' => 'Your access to {{company}} has been removed',
                     'lead' => '{{#removedBy}}{{removedBy}} has removed you{{/removedBy}}{{^removedBy}}You have been removed{{/removedBy}} from {{company}} on the {{site}} portal.',
-                    'body' => "You received this email because your access to {{#isProvider}}{{company}}'s applications, files and updates{{/isProvider}}{{^isProvider}}{{company}}'s files, documents and updates{{/isProvider}} through the portal has ended.\n\nYour personal account is unchanged. You can still sign in if you have other access. If this was a mistake, ask the person who manages {{company}} to restore it, or contact us at portal@tmantoinelaw.com.",
+                    'body' => "You received this email because your access to {{#isProvider}}{{company}}'s applications, files and updates{{/isProvider}}{{^isProvider}}{{company}}'s files, documents and updates{{/isProvider}} through the portal has ended.\n\nYour personal account is unchanged. You can still sign in if you have other access. If this was a mistake, ask the person who manages {{company}} to restore it, or contact us at support@tmantoinelaw.com.",
                     'button' => 'Sign in to the portal',
                     'footNote' => 'This is an automated notice from {{site}}.',
                 ],

@@ -1305,7 +1305,7 @@ function buildMenu() {
         {
           label: 'Report a Problem…',
           click: () => shell.openExternal(
-            `mailto:portal@tmantoinelaw.com?subject=${encodeURIComponent(`Portal desktop ${APP_VERSION}`)}`,
+            `mailto:support@tmantoinelaw.com?subject=${encodeURIComponent(`Portal desktop ${APP_VERSION}`)}`,
           ),
         },
         // macOS puts About in the app menu; Windows has no app menu, and Help
