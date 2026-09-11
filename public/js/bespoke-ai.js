@@ -23,6 +23,7 @@
   var TRASH = 'images/icons/phosphor/Trash.svg';
   var PENCIL = 'images/icons/phosphor/PencilSimple.svg';
   var BACK = 'images/icons/phosphor/ArrowLeft.svg';
+  var PENDING_COMPOSE_KEY = 'tma.mail.pending-compose';
 
   var FALLBACK_FAQ = [
     {
@@ -482,9 +483,171 @@
     });
   }
 
+  function clearChoices(ctx) {
+    if (!ctx || !ctx.logEl) return;
+    ctx.logEl.querySelectorAll('[data-bespoke-choices]').forEach(function (el) { el.remove(); });
+  }
+
+  /* Reply buttons the model asked for: the reader picks one, and the label
+   * goes back as their own message. Gone as soon as they type instead. */
+  function renderChoices(ctx, choices) {
+    clearChoices(ctx);
+    if (!ctx || !ctx.logEl || !Array.isArray(choices) || !choices.length) return;
+    var row = document.createElement('div');
+    row.className = 'tma-bespoke__choices';
+    row.setAttribute('data-bespoke-choices', '');
+    choices.slice(0, 4).forEach(function (label) {
+      label = String(label || '').trim();
+      if (!label) return;
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tma-bespoke__chip';
+      btn.textContent = label;
+      btn.addEventListener('click', function () { ask(ctx, label); });
+      row.appendChild(btn);
+    });
+    ctx.logEl.appendChild(row);
+    ctx.logEl.scrollTop = ctx.logEl.scrollHeight;
+  }
+
+  function cardButton(label, kind) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tma-bespoke__card-btn' + (kind ? ' tma-bespoke__card-btn--' + kind : '');
+    btn.textContent = label;
+    return btn;
+  }
+
+  function cardShell(ctx, kind) {
+    var row = document.createElement('div');
+    row.className = 'tma-bespoke__row tma-bespoke__row--card';
+    var card = document.createElement('div');
+    card.className = 'tma-bespoke__card tma-bespoke__card--' + kind;
+    card.setAttribute('data-bespoke-card', kind);
+    row.appendChild(card);
+    ctx.logEl.appendChild(row);
+    ctx.logEl.scrollTop = ctx.logEl.scrollHeight;
+    return card;
+  }
+
+  function cardDone(card, html) {
+    card.classList.add('is-done');
+    card.innerHTML = '<p class="tma-bespoke__card-done">' + html + '</p>';
+  }
+
+  function toast(message, failed) {
+    var ui = window.TMAPortalUI;
+    if (ui && ui.toast) ui.toast(message, failed ? { state: 'failure' } : undefined);
+  }
+
+  /* A drafted portal message. Send asks once more, then the reader's own
+   * click posts it — the model never sends anything. */
+  function renderMessageCard(ctx, action) {
+    var to = action.to || {};
+    var card = cardShell(ctx, 'message');
+    var who = escapeHtml(to.name || 'someone') + (to.jobTitle ? ' <span class="tma-bespoke__card-muted">· ' + escapeHtml(to.jobTitle) + '</span>' : '');
+    card.innerHTML =
+      '<p class="tma-bespoke__card-head">Message to ' + who + '</p>' +
+      '<textarea class="tma-bespoke__card-body" rows="5" aria-label="Message text"></textarea>' +
+      '<div class="tma-bespoke__card-foot" data-bespoke-card-foot></div>';
+    var body = card.querySelector('.tma-bespoke__card-body');
+    body.value = String(action.body || '');
+    var foot = card.querySelector('[data-bespoke-card-foot]');
+
+    function idle() {
+      foot.innerHTML = '';
+      var send = cardButton('Send', 'primary');
+      var cancel = cardButton('Cancel', 'ghost');
+      send.addEventListener('click', confirm);
+      cancel.addEventListener('click', function () { cardDone(card, 'Draft discarded.'); });
+      foot.appendChild(send);
+      foot.appendChild(cancel);
+    }
+
+    function confirm() {
+      if (!String(body.value || '').trim()) {
+        body.focus();
+        return;
+      }
+      foot.innerHTML = '<span class="tma-bespoke__card-ask">Send this to ' + escapeHtml(to.name || 'them') + '?</span>';
+      var yes = cardButton('Yes, send', 'primary');
+      var no = cardButton('No', 'ghost');
+      yes.addEventListener('click', doSend);
+      no.addEventListener('click', idle);
+      foot.appendChild(yes);
+      foot.appendChild(no);
+      yes.focus();
+    }
+
+    function doSend() {
+      var text = String(body.value || '').trim();
+      body.disabled = true;
+      foot.innerHTML = '<span class="tma-bespoke__card-ask">Sending…</span>';
+      api('/portal/bespoke/actions/send-message', {
+        method: 'POST',
+        body: { userId: to.userId, body: text, conversationId: ctx.conversationId || null }
+      }).then(function (data) {
+        var url = data && data.url ? String(data.url) : '/social/messages';
+        cardDone(card, 'Sent to ' + escapeHtml(to.name || 'them') + '. <a href="' + escapeHtml(url) + '" data-bespoke-nav="' + escapeHtml(url) + '">Open Messages</a>');
+        toast('Message sent');
+        var note = (data && data.note) || ('Sent to ' + (to.name || 'them') + '.');
+        ctx.messages.push({ role: 'assistant', content: note });
+        if (typeof ctx.afterReply === 'function') ctx.afterReply({});
+      }).catch(function () {
+        body.disabled = false;
+        toast('The message could not be sent.', true);
+        idle();
+      });
+    }
+
+    idle();
+    return card;
+  }
+
+  /* A drafted email. It opens in the Email page's composer, signature and
+   * all, and the reader sends it from there. */
+  function renderEmailCard(ctx, action) {
+    var card = cardShell(ctx, 'email');
+    var to = Array.isArray(action.to) ? action.to.join(', ') : String(action.to || '');
+    var cc = Array.isArray(action.cc) ? action.cc.join(', ') : String(action.cc || '');
+    card.innerHTML =
+      '<p class="tma-bespoke__card-head">Email to ' + escapeHtml(to) + (cc ? ' <span class="tma-bespoke__card-muted">· cc ' + escapeHtml(cc) + '</span>' : '') + '</p>' +
+      '<p class="tma-bespoke__card-subject">' + escapeHtml(action.subject || '(no subject)') + '</p>' +
+      '<pre class="tma-bespoke__card-pre">' + escapeHtml(action.body || '') + '</pre>' +
+      '<div class="tma-bespoke__card-foot" data-bespoke-card-foot></div>';
+    var foot = card.querySelector('[data-bespoke-card-foot]');
+    var openBtn = cardButton('Open in Email', 'primary');
+    var cancel = cardButton('Cancel', 'ghost');
+    openBtn.addEventListener('click', function () {
+      try {
+        sessionStorage.setItem(PENDING_COMPOSE_KEY, JSON.stringify({
+          to: to, cc: cc, subject: String(action.subject || ''), body: String(action.body || ''), at: Date.now()
+        }));
+      } catch (e) { /* private mode: the composer opens blank */ }
+      cardDone(card, 'Opened in Email.');
+      if (host && open) setOpen(false);
+      go('/email');
+    });
+    cancel.addEventListener('click', function () { cardDone(card, 'Draft discarded.'); });
+    foot.appendChild(openBtn);
+    foot.appendChild(cancel);
+    return card;
+  }
+
+  function renderActions(ctx, actions) {
+    if (!ctx || !ctx.logEl || !Array.isArray(actions)) return;
+    actions.forEach(function (action) {
+      if (!action || typeof action !== 'object') return;
+      if (action.type === 'message') renderMessageCard(ctx, action);
+      else if (action.type === 'email') renderEmailCard(ctx, action);
+      else if (typeof ctx.renderExtraAction === 'function') ctx.renderExtraAction(action);
+    });
+  }
+
   function ask(ctx, text) {
     text = String(text || '').trim();
     if (!text || !ctx || ctx.busy) return;
+    clearChoices(ctx);
     ctx.messages.push({ role: 'user', content: text });
     appendRow(ctx, 'user', renderLite(text));
     renderChips(ctx, []);
@@ -518,6 +681,8 @@
       var reply = data.reply || '';
       ctx.messages.push({ role: 'assistant', content: reply });
       typeInto(ctx, bubble, reply);
+      renderActions(ctx, data.actions || []);
+      renderChoices(ctx, data.choices || []);
       if (typeof ctx.afterReply === 'function') ctx.afterReply(data);
     }).catch(function (err) {
       if (err && err.notFound) {

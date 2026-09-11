@@ -4,6 +4,32 @@ The signature editor, the signing page and the sidebar are the parts of the
 portal PHPUnit can't reach: pdf.js rendering, canvas painting, pointer-driven
 field placement and drawing, and computed CSS only exist in a browser.
 
+- **`bespoke-actions.mjs`** — Bespoke AI's action cards. The model is stubbed
+  at the network layer (`POST /portal/bespoke/chat` is intercepted), because
+  what only a browser can check is the flow around it: a drafted message
+  arrives as a card with an editable body, Send asks once more, No goes back
+  without sending, Yes posts to the real `/portal/bespoke/actions/send-message`
+  and the edited text lands in the thread the card then links to; reply
+  choices go back as the reader's own message; Open in Email hands the draft
+  to the mailbox through sessionStorage and the mail page consumes it.
+
+  Seed the standard throwaway server plus a second administrator whose job
+  title carries "IT", and serve with `FEATURE_BESPOKE=true`:
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
+    \$v = App\Models\User::create(['name' => 'Vernon Francis', 'email' => 'vernon@example.com', 'password' => Hash::make('password12345')]);
+    \$v->forceFill(['email_verified_at' => now(), 'profile_completed_at' => now(), 'onboarding_completed_at' => now(),
+      'status' => 'approved', 'account_type' => 'Administrator', 'job_title' => 'IT & Web Solutions Specialist'])->save();
+  "
+  : > storage/logs/laravel.log
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FILES_DISK=local MAIL_MAILER=log CACHE_STORE=array \
+    SESSION_DRIVER=file BROADCAST_CONNECTION=log QUEUE_CONNECTION=sync FEATURE_BESPOKE=true \
+    php artisan serve --host=127.0.0.1 --port=8899 --no-reload &
+  npm run build   # the served shell uses public/build; a stale bundle hides the change
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/bespoke-actions.mjs
+  ```
+
 - **`signature-editor.mjs`** — log in, pick a library file, add recipients,
   place fields on the rendered PDF, drag one, confirm the coordinates persist
   as page-relative fractions.

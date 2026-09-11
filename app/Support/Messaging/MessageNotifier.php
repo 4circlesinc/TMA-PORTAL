@@ -2,6 +2,7 @@
 
 namespace App\Support\Messaging;
 
+use App\Events\InboxUpdated;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\Message;
@@ -40,6 +41,42 @@ final class MessageNotifier
 
     /** Preview length: enough to recognise the message, short enough to scan. */
     private const PREVIEW_CHARS = 120;
+
+    /**
+     * Recipients only subscribe to threads already in their inbox. The
+     * first real message on an unlisted client chat has to land on their
+     * personal channel or they would not see the row until they reload.
+     */
+    public static function announceFirstCorrespondence(Conversation $conversation, Message $message, User $sender): void
+    {
+        if ($conversation->is_default || ($conversation->isGroup() && ! $conversation->isProviderCase())) {
+            return;
+        }
+
+        $alreadyHadCorrespondence = $conversation->messages()
+            ->where('type', '!=', Message::TYPE_SYSTEM)
+            ->where('id', '!=', $message->id)
+            ->exists();
+
+        if ($alreadyHadCorrespondence) {
+            return;
+        }
+
+        $conversation->activeParticipants()
+            ->where('user_id', '!=', $sender->id)
+            ->with('user')
+            ->get()
+            ->each(function (ConversationParticipant $participant) use ($conversation) {
+                if ($participant->user) {
+                    Broadcaster::to(new InboxUpdated(
+                        user: $participant->user,
+                        reason: 'message',
+                        totalUnread: 0,
+                        conversationUuid: $conversation->uuid,
+                    ));
+                }
+            });
+    }
 
     /** Tell everyone else in the conversation that a message landed. */
     public static function announceMessage(Conversation $conversation, Message $message, User $sender): void

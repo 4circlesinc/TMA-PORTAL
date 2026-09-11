@@ -79,6 +79,21 @@ final class Conversations
         $conversation->save();
     }
 
+    /** A line from the portal itself, such as "Sent to …", kept in the thread. */
+    public static function appendNote(BespokeConversation $conversation, string $note): void
+    {
+        $note = trim($note);
+        if ($note === '') {
+            return;
+        }
+        $conversation->messages()->create([
+            'role' => BespokeMessage::ROLE_ASSISTANT,
+            'body' => mb_substr($note, 0, 2000),
+        ]);
+        $conversation->last_message_at = now();
+        $conversation->save();
+    }
+
     /** @return Collection<int, BespokeConversation> */
     public static function listFor(User $user): Collection
     {

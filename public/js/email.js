@@ -3375,6 +3375,22 @@
         return;
       }
 
+      // A draft handed over by Bespoke AI: open it in the composer, ready to send.
+      if (state._pendingNewCompose) {
+        var handed = state._pendingNewCompose;
+        state._pendingNewCompose = null;
+        reloadMessages(root, state, render);
+        openCompose(state, {
+          to: handed.to,
+          cc: handed.cc,
+          subject: handed.subject,
+          bodyHtml: composeBodyFromText(handed.body),
+          showCc: !!handed.cc,
+        });
+        render();
+        return;
+      }
+
       reloadMessages(root, state, render);
     }).catch(function (err) {
       state.loading = false;
@@ -8965,6 +8981,44 @@
     return composeSignatureHtmlFor(active && active.html);
   }
 
+  /* Plain text from Bespoke AI becomes the composer's block-per-line HTML,
+   * with the reader's signature under it — the same shape typing produces. */
+  function composeBodyFromText(text) {
+    var lines = String(text || '').replace(/\r\n?/g, '\n').split('\n');
+    var html = lines.map(function (line) {
+      var trimmed = line.replace(/\s+$/, '');
+      if (!trimmed) return '<div><br></div>';
+      return '<div>' + esc(trimmed) + '</div>';
+    }).join('');
+    return html + composeTypingRoomHtml() + composeSignatureHtml();
+  }
+
+  var PENDING_COMPOSE_KEY = 'tma.mail.pending-compose';
+
+  /* A one-shot handoff written by Bespoke AI just before it navigates here.
+   * Read once and cleared, and ignored when stale, so a reload later in the
+   * day does not open a composer nobody asked for. */
+  function takePendingNewCompose() {
+    var raw = null;
+    try {
+      raw = sessionStorage.getItem(PENDING_COMPOSE_KEY);
+      if (raw !== null) sessionStorage.removeItem(PENDING_COMPOSE_KEY);
+    } catch (e) {
+      return null;
+    }
+    if (!raw) return null;
+    var parsed;
+    try { parsed = JSON.parse(raw); } catch (e) { return null; }
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (typeof parsed.at === 'number' && Date.now() - parsed.at > 5 * 60 * 1000) return null;
+    return {
+      to: typeof parsed.to === 'string' ? parsed.to : '',
+      cc: typeof parsed.cc === 'string' ? parsed.cc : '',
+      subject: typeof parsed.subject === 'string' ? parsed.subject : '',
+      body: typeof parsed.body === 'string' ? parsed.body : '',
+    };
+  }
+
   /* Two empty blocks so the caret sits above the signature in the HTML
    * that actually goes out. Extra visual room in the reply box is CSS. */
   function composeTypingRoomHtml() {
@@ -14081,6 +14135,20 @@
         return;
       }
 
+      // Arrived from Bespoke AI with a drafted email: open it in the composer.
+      var handedOver = root._emailState.composePopout ? null : takePendingNewCompose();
+      if (handedOver && root._emailState.connected) {
+        openCompose(root._emailState, {
+          to: handedOver.to,
+          cc: handedOver.cc,
+          subject: handedOver.subject,
+          bodyHtml: composeBodyFromText(handedOver.body),
+          showCc: !!handedOver.cc,
+        });
+        root._emailRender();
+        return;
+      }
+
       root._emailRender();
 
       /*
@@ -14339,6 +14407,12 @@
       var mailCompose = mailParams.get('compose');
       if (!state.composePopout && (mailCompose === 'reply' || mailCompose === 'reply-all' || mailCompose === 'forward')) {
         state._pendingCompose = mailCompose;
+      }
+      // Bespoke AI hands a drafted email over through sessionStorage rather
+      // than the query string: the SPA shell rewrites the address bar as a
+      // view activates, and a body does not belong in a URL anyway.
+      if (!state.composePopout) {
+        state._pendingNewCompose = takePendingNewCompose();
       }
       if (!state.composePopout) {
         if (mailMessage) state._pendingMessageId = mailMessage;

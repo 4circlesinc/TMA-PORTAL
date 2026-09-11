@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Bespoke;
 
 use App\Http\Controllers\Controller;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Bespoke\Actions\SendMessage;
 use App\Support\Bespoke\Bespoke;
 use App\Support\Bespoke\Completions;
 use App\Support\Bespoke\Conversations;
@@ -145,6 +146,51 @@ class BespokeController extends Controller
             'title' => $conversation->title,
             'actions' => $toolbox->actions(),
             'choices' => $toolbox->choices(),
+        ]);
+    }
+
+    /**
+     * The reader's own click on Send. The draft came from a tool, but reach
+     * is checked again here; the model's word is never what sends.
+     */
+    public function sendMessage(Request $request): JsonResponse
+    {
+        Bespoke::abortUnlessEnabled();
+
+        $validated = $request->validate([
+            'userId' => ['required', 'integer'],
+            'body' => ['required', 'string', 'max:4000'],
+            'conversationId' => ['sometimes', 'nullable', 'uuid'],
+        ]);
+
+        $user = $request->user();
+        $sent = SendMessage::run($user, (int) $validated['userId'], $validated['body']);
+
+        $conversationId = isset($validated['conversationId']) ? (string) $validated['conversationId'] : null;
+        $note = 'Sent to '.$sent['recipient']['name'].'. [Open Messages]('.$sent['url'].')';
+        if ($conversationId !== null) {
+            $thread = Conversations::findOwned($user, $conversationId);
+            if ($thread) {
+                Conversations::appendNote($thread, $note);
+            }
+        }
+
+        ActivityLogger::log([
+            'type' => 'bespoke.sent_message',
+            'description' => 'Sent a Bespoke AI draft to '.$sent['recipient']['name'],
+            'actor' => $user,
+            'metadata' => [
+                'recipient' => $sent['recipient']['userId'],
+                'conversation' => $conversationId,
+                'thread' => $sent['conversationUuid'],
+            ],
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'recipient' => $sent['recipient'],
+            'url' => $sent['url'],
+            'note' => $note,
         ]);
     }
 

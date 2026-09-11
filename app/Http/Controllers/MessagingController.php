@@ -1775,33 +1775,7 @@ class MessagingController extends Controller
      */
     private function announceFirstCorrespondence(Conversation $conversation, Message $message, User $sender): void
     {
-        if ($conversation->is_default || ($conversation->isGroup() && ! $conversation->isProviderCase())) {
-            return;
-        }
-
-        $alreadyHadCorrespondence = $conversation->messages()
-            ->where('type', '!=', Message::TYPE_SYSTEM)
-            ->where('id', '!=', $message->id)
-            ->exists();
-
-        if ($alreadyHadCorrespondence) {
-            return;
-        }
-
-        $conversation->activeParticipants()
-            ->where('user_id', '!=', $sender->id)
-            ->with('user')
-            ->get()
-            ->each(function (ConversationParticipant $participant) use ($conversation) {
-                if ($participant->user) {
-                    Broadcaster::to(new InboxUpdated(
-                        user: $participant->user,
-                        reason: 'message',
-                        totalUnread: 0,
-                        conversationUuid: $conversation->uuid,
-                    ));
-                }
-            });
+        MessageNotifier::announceFirstCorrespondence($conversation, $message, $sender);
     }
 
     /**
