@@ -128,8 +128,9 @@
   padding: 8px;
   margin: 0;
   border: 0.5px solid var(--color-border-soft);
-  border-radius: var(--radius-16);
+  border-radius: 50%;
   background: var(--color-bg-card);
+  overflow: hidden;
   box-shadow: var(--shadow-popup);
   cursor: pointer;
   transition: background-color 200ms ease, box-shadow 200ms ease, opacity 200ms ease, transform 200ms ease;
@@ -309,7 +310,7 @@
 .tma-bespoke__avatar {
   width: 24px;
   height: 24px;
-  border-radius: var(--radius-8);
+  border-radius: 50%;
   flex-shrink: 0;
   object-fit: contain;
 }
