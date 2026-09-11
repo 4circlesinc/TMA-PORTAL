@@ -63,8 +63,8 @@
             { field: 'birthCertificate', key: 'birth_certificate', label: 'Birth certificate', required: true, atFiling: true },
           ]
         : [
-            { field: 'passportBioPage', key: 'passport_bio_page', label: 'Passport bio page', required: false, atFiling: false },
-            { field: 'birthCertificate', key: 'birth_certificate', label: 'Birth certificate', required: false, atFiling: false },
+            { field: 'passportBioPage', key: 'passport_bio_page', label: 'Passport bio page', required: true, atFiling: true },
+            { field: 'birthCertificate', key: 'birth_certificate', label: 'Birth certificate', required: true, atFiling: true },
           ];
     }
 
@@ -238,12 +238,20 @@
   function sponsored() { return String(state.draft.sponsored) === '1'; }
 
   function photoRequiredFor(path) {
+    var settings = state.options && state.options.photoRequired;
     if (path === 'passportPhoto') {
-      var settings = state.options && state.options.photoRequired;
       return settings ? !!settings.principal : true;
     }
 
-    if (path === 'sponsor.passportPhoto') return sponsored();
+    if (path === 'sponsor.passportPhoto') {
+      return sponsored() && (settings ? !!settings.sponsor : true);
+    }
+
+    var match = path.match(/^dependents\.(\d+)\.passportPhoto$/);
+    if (match) {
+      var section = dependentSection(Number(match[1]));
+      return !!(settings && settings[section]);
+    }
 
     return false;
   }
@@ -317,15 +325,30 @@
     var paths = [];
     if (photoRequiredFor('passportPhoto')) paths.push('passportPhoto');
     if (photoRequiredFor('sponsor.passportPhoto')) paths.push('sponsor.passportPhoto');
+    for (var i = 0; i < state.dependents; i++) {
+      var photoPath = 'dependents.' + i + '.passportPhoto';
+      if (photoRequiredFor(photoPath)) paths.push(photoPath);
+    }
 
     return paths;
   }
 
   /* The requirements that take a list, and must have at least one. */
   function requiredDocuments() {
-    return docFields('principal')
-      .filter(function (d) { return d.atFiling; })
-      .map(function (d) { return d.field; });
+    var paths = [];
+    var add = function (section, prefix) {
+      docFields(section, prefix).forEach(function (d) {
+        if (d.required) paths.push(prefix + d.field);
+      });
+    };
+
+    add('principal', '');
+    if (sponsored()) add('sponsor', 'sponsor.');
+    for (var i = 0; i < state.dependents; i++) {
+      add(dependentSection(i), 'dependents.' + i + '.');
+    }
+
+    return paths;
   }
 
   function todayLocal() {
@@ -431,9 +454,9 @@
    * in beside each field, so a mark can never promise something the check
    * does not enforce. It follows the form as it changes: a sponsor's fields
    * are required only once Sponsored is Yes, "Specify investment type" only
-   * once Other is picked. The main applicant's required documents also gate
-   * filing; everyone else's required flags show on the form but the checklist
-   * holds the door until those uploads arrive.
+   * once Other is picked. Document Requirements settings decide which
+   * uploads carry an asterisk and gate Add — for the applicant, the sponsor,
+   * and every dependent on the form. Save as draft does not ask for them.
    */
   /*
    * Is the submitted package frozen?
@@ -674,7 +697,7 @@
       updateReason +
       '<input type="file" accept=".pdf,image/*" multiple class="tma-dash__clients-photo-input"' +
       ' data-cip-file="' + esc(path) + '" aria-hidden="true">' +
-      '<button type="button" class="tma-portal-drop__zone" data-cip-file-btn="' + esc(path) + '">' +
+      '<button type="button" class="tma-portal-drop__zone" data-cip-file-btn="' + esc(path) + '"' + requiredAttr(path) + '>' +
       '<img src="' + ICON + 'UploadSimple.svg" alt="" width="20" height="20">' +
       '<span class="tma-portal-drop__hint">' +
       (files.length || state.filed[path]
@@ -858,8 +881,8 @@
 
     // A person is a person: the sponsor gets the main applicant's row, name
     // above the box, photo, fields one under the last, documents beside them.
-    // The only difference is that their scans are not demanded to start a
-    // draft.
+    // Required uploads follow Document Requirements the same way the
+    // applicant's do; Save as draft is what does not demand them.
     return titledCard('Sponsor',
       photoField('sponsor.passportPhoto') + personFields('sponsor.'),
       { modifier: 'tma-portal-section--person' }) +

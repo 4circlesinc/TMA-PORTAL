@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import { tinyPdfBuffer } from './fixtures/tiny-pdf.mjs';
+import { attachFamilyDocuments } from './helpers/cip-required-docs.mjs';
 import { deflateSync } from 'node:zlib';
 
 // The CIP intake wizard (section 2, section 3). PHPUnit pins the endpoint; this pins that
@@ -152,6 +153,10 @@ try {
   let marks = await starred();
   check(marks['First name'] && marks['Passport photo'] && marks['Certified Copy of Birth Record'],
     'the applicant’s fields and uploads are marked');
+  check(marks['Original Bank Reference Letter'] === true,
+    'required documents from Document Requirements are marked');
+  check(marks['Marriage Record or Marriage Certificate'] === false,
+    'optional documents from Document Requirements are not marked');
   check(marks['Specify investment type'] === undefined, 'a hidden conditional field has no mark yet');
   check(await page.locator('[data-cip-field="firstName"]').getAttribute('aria-required') === 'true',
     'and the control says so to a screen reader');
@@ -298,15 +303,17 @@ try {
       && docs.left > box.right - 2;
   }), 'on the same row and the same height, the way the applicant’s is');
 
-  // ...but not marked required, because they are not. The applicant's two
-  // identical controls are, which is the whole point of marking anything.
+  // Required sponsor scans follow Document Requirements, the same way the
+  // applicant's do. Optional ones stay unmarked.
   check(await page.evaluate(() => {
     const docs = [...document.querySelectorAll('.tma-dash__clients-card--docs')]
       .find(el => el.querySelector('[data-cip-drop="sponsor.passportBioPage"]'));
+    const labels = [...docs.querySelectorAll('.tma-portal-field__label')];
+    const required = labels.filter(l => l.querySelector('.tma-portal-field__required'));
+    const optional = labels.filter(l => !l.querySelector('.tma-portal-field__required'));
 
-    return [...docs.querySelectorAll('.tma-portal-field__label')]
-      .every(l => !l.querySelector('.tma-portal-field__required'));
-  }), 'whose scans are offered, not demanded, and carry no asterisk');
+    return required.length > 0 && optional.length > 0;
+  }), 'required sponsor documents carry an asterisk; optional ones do not');
   check(await page.evaluate(() => {
     const sec = [...document.querySelectorAll('.tma-portal-section')]
       .find(el => el.querySelector('[data-cip-field="sponsor.firstName"]'));
@@ -365,6 +372,7 @@ try {
     'and the rows below shuffle up');
 
   step(6, 'Filing creates a numbered draft');
+  await attachFamilyDocuments(page, 3, { pdf: pdf(), png: png(600, 600) });
   const created = page.waitForResponse(r => r.url().includes('/portal/cip/applications') && r.request().method() === 'POST', { timeout: 20000 });
   await page.click('[data-cip-save]');
   const res = await created;
@@ -378,18 +386,18 @@ try {
   check(/^\/media\/avatars\//.test(body?.application?.applicant?.photo || ''),
     'the passport photo became the applicant’s profile picture');
   /*
-   * The three the form collects are answered. Not "nothing is outstanding":
-   * since phase 3 the checklist is the firm's requirement templates, so an
-   * application filed a second ago rightly still owes the rest of them.
+   * Required uploads from Document Requirements are answered. Optional
+   * slots may still be outstanding.
    */
   const stillOwed = body?.application?.applicant?.outstanding || ['x'];
   const collected = [
     'Scanned Copy of a Passport-Sized Photo (JPEG or PNG & PDF)',
     'Certified Copy of Passport Bio Data Page',
     'Certified Copy of Birth Record',
+    'Original Bank Reference Letter',
   ];
   check(collected.every(label => !stillOwed.includes(label)),
-    'section 2’s three uploads answered their slots');
+    'required uploads answered their slots');
   check(body?.application?.sponsor?.name === 'Maryam Haddad', 'the sponsor was filed with it');
   const filed = (body?.application?.dependents || [])
     .filter(d => d.relationship === 'qualified_dependent')

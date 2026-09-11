@@ -380,14 +380,13 @@ class CipRequirementAdminTest extends TestCase
     }
 
     /**
-     * Since the official checklist arrived, being required is not the same as
-     * gating filing: the guide's principal list runs to thirty-odd rows, and a
-     * wizard that demanded every required one before the application could
-     * exist would mean no application exists. Only section 2's intake documents gate
-     * a pre-approval filing; everything else is offered on the form and
-     * collected once the file is open.
+     * A required tick on Document Requirements is what gates Add.
+     *
+     * The official checklist is long on purpose. Settings is still the
+     * source of truth: a required row is demanded at filing, an optional
+     * row is not, and a draft may be saved without either.
      */
-    public function test_a_required_principal_requirement_reaches_the_form_without_gating_filing(): void
+    public function test_a_required_principal_requirement_gates_filing(): void
     {
         $admin = $this->user('Administrator', 'ada@example.com');
 
@@ -402,12 +401,30 @@ class CipRequirementAdminTest extends TestCase
 
         $field = $principal->firstWhere('label', 'Proof of funds');
         $this->assertTrue($field['required'], 'the form marks it required');
-        $this->assertFalse($field['atFiling'], 'but it does not block the save');
+        $this->assertTrue($field['atFiling'], 'and Add will not file without it');
 
-        // The intake documents still do — required and demanded at filing.
         $bio = $principal->firstWhere('key', 'passport_bio_page');
         $this->assertTrue($bio['required']);
         $this->assertTrue($bio['atFiling']);
+    }
+
+    public function test_an_optional_principal_requirement_does_not_gate_filing(): void
+    {
+        $admin = $this->user('Administrator', 'ada@example.com');
+
+        $this->actingAs($admin)->postJson('/portal/cip/requirements', [
+            'applicantType' => ApplicantType::PRINCIPAL_APPLICANT,
+            'label' => 'Optional reference',
+            'required' => false,
+        ])->assertCreated();
+
+        $principal = collect($this->actingAs($admin)->getJson('/portal/cip/applications/form')
+            ->assertOk()->json('requirements.principal'));
+
+        $field = $principal->firstWhere('label', 'Optional reference');
+        $this->assertNotNull($field);
+        $this->assertFalse($field['required']);
+        $this->assertFalse($field['atFiling']);
     }
 
     public function test_the_order_the_checklist_reads_in_is_the_firms(): void

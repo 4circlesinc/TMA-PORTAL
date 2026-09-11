@@ -136,7 +136,8 @@ class CipApplicationController extends Controller
                 'dependent_under_16' => ApplicantType::DEPENDENT_UNDER_16,
                 'dependent_16_over' => ApplicantType::DEPENDENT_16_OVER,
             ])->mapWithKeys(fn (string $type, string $key) => [
-                $key => (bool) (Intake::photoRequirement($type, $phase)?->required ?? ($key === 'principal')),
+                $key => (bool) (Intake::photoRequirement($type, $phase)?->required
+                    ?? in_array($key, ['principal', 'sponsor'], true)),
             ])->all(),
             'dependentAgeCutoff' => ApplicantType::cutoff(),
         ]);
@@ -1436,7 +1437,8 @@ class CipApplicationController extends Controller
         );
 
         Intake::normaliseDocuments($request);
-        $data = $request->validate(Intake::rules(editing: true), Intake::messages());
+        $application->loadMissing('people.documents');
+        $data = $request->validate(Intake::rules(editing: true, draft: $application), Intake::messages());
 
         try {
             $application = Intake::update($application, $user, $data);

@@ -310,8 +310,6 @@ class CipApplicationDraftTest extends TestCase
             $filing['passportPhoto'],
             $filing['passportBioPage'],
             $filing['birthCertificate'],
-            $filing['policeCertificate'],
-            $filing['proofOfAddress'],
         );
         $filing['draftId'] = $draft->uuid;
 
@@ -375,8 +373,6 @@ class CipApplicationDraftTest extends TestCase
             $filing['passportPhoto'],
             $filing['passportBioPage'],
             $filing['birthCertificate'],
-            $filing['policeCertificate'],
-            $filing['proofOfAddress'],
         );
         $filing['submissionId'] = $key;
 
@@ -790,30 +786,30 @@ class CipApplicationDraftTest extends TestCase
         $this->save($staff, $this->answers($provider))->assertOk();
         $draftNumber = CipApplication::query()->first()->internal_number;
 
-        $this->actingAs($staff)->post('/portal/cip/applications', [
-            'providerId' => $provider->uuid,
-            'firstName' => 'John',
-            'lastName' => 'Smith',
-            'gender' => 'Male',
-            'dateOfBirth' => '1985-04-12',
-            'countryOfBirth' => 'Lebanon',
-            'countryOfResidence' => 'United Arab Emirates',
-            'occupation' => 'Engineer',
-            'passportNumber' => 'X1234567',
-            'passportPhoto' => $this->photo(),
-            'passportBioPage' => UploadedFile::fake()->create('bio.pdf', 40, 'application/pdf'),
-            'birthCertificate' => UploadedFile::fake()->create('birth.pdf', 40, 'application/pdf'),
-            'policeCertificate' => [UploadedFile::fake()->create('police.pdf', 40, 'application/pdf')],
-            'proofOfAddress' => [UploadedFile::fake()->create('address.pdf', 40, 'application/pdf')],
-            'investmentType' => InvestmentType::REAL_ESTATE,
-            'sponsored' => '0',
-        ], ['Accept' => 'application/json'])->assertCreated();
+        $this->actingAs($staff)->post('/portal/cip/applications', $this->filing($provider), ['Accept' => 'application/json'])->assertCreated();
 
         $this->assertSame(1, CipApplication::query()->count());
         $filed = CipApplication::query()->first();
         $this->assertSame(Status::NEW, $filed->status);
         // The same row, so the number it was known by while drafting stands.
         $this->assertSame($draftNumber, $filed->internal_number);
+    }
+
+    public function test_filing_a_draft_still_demands_required_documents(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->save($staff, $this->answers($provider))->assertOk();
+
+        $incomplete = $this->filing($provider);
+        unset($incomplete['bankReferenceLetter'], $incomplete['netWorthBreakdown']);
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications', $incomplete, ['Accept' => 'application/json'])
+            ->assertStatus(422);
+
+        $this->assertSame(Status::DRAFT, CipApplication::query()->first()->status);
     }
 
     /**
@@ -959,7 +955,7 @@ class CipApplicationDraftTest extends TestCase
     /** The whole form, as the wizard posts it. */
     private function filing(CipProvider $provider): array
     {
-        return [
+        return array_merge([
             'providerId' => $provider->uuid,
             'firstName' => 'John',
             'lastName' => 'Smith',
@@ -970,13 +966,14 @@ class CipApplicationDraftTest extends TestCase
             'occupation' => 'Engineer',
             'passportNumber' => 'X1234567',
             'passportPhoto' => $this->photo(),
-            'passportBioPage' => UploadedFile::fake()->create('bio.pdf', 40, 'application/pdf'),
-            'birthCertificate' => UploadedFile::fake()->create('birth.pdf', 40, 'application/pdf'),
-            'policeCertificate' => [UploadedFile::fake()->create('police.pdf', 40, 'application/pdf')],
-            'proofOfAddress' => [UploadedFile::fake()->create('address.pdf', 40, 'application/pdf')],
             'investmentType' => InvestmentType::REAL_ESTATE,
             'sponsored' => '0',
-        ];
+        ], $this->cipRequiredDocumentFiles(
+            \App\Support\Cip\ApplicantType::PRINCIPAL_APPLICANT,
+            Phase::PRE_APPROVAL,
+            'Male',
+            InvestmentType::REAL_ESTATE,
+        ));
     }
 
     private function photo(int $width = 600): UploadedFile

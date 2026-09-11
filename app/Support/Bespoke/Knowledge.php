@@ -169,7 +169,7 @@ final class Knowledge
             'Country of birth and country of residence',
             'Occupation',
             'Passport number',
-            'Passport bio page / birth certificate where the form requires them',
+            'Passport bio page, birth certificate, and every other document Document Requirements marks required for the people on this form',
         ];
 
         $empty = [];
@@ -185,7 +185,7 @@ final class Knowledge
         }
         $text .= "\nDependents: first name, last name, date of birth, relationship (Spouse or Qualified dependent).\n";
         $text .= 'Post-approval also needs the CIP application number from the decision letter.';
-        $text .= "\n\n**Save as draft** (and autosave) keep the file in Draft. **Add** files it into New Applications when required fields and files are complete. Filing checks the main applicant’s documents first.";
+        $text .= "\n\n**Save as draft** (and autosave) keep the file in Draft. **Add** files it into New Applications when required fields and files are complete. Filing follows Document Requirements: every required upload for the applicant, a sponsor if Sponsored is Yes, and each dependent on the form.";
 
         if ($empty !== []) {
             $text .= "\n\nOn this form, these labels look empty: **".implode('**, **', $empty).'**. Required fields also show a red asterisk.';
@@ -410,7 +410,7 @@ final class Knowledge
                 'q' => 'What’s the difference between Save as draft and Add?',
                 'keywords' => ['save as draft', 'add', 'file the application', 'new applications', 'difference'],
                 'cipOnly' => true,
-                'answer' => "**Save as draft** (and autosave) keep a CIP intake in Draft. Drafts appear in the table with a number. Draft is not a queue in the status list.\n\n**Add** files the application into **New Applications** when required fields and files are complete. Filing checks the main applicant’s documents first. If something required is missing, the portal will not move the file.",
+                'answer' => "**Save as draft** (and autosave) keep a CIP intake in Draft. Drafts appear in the table with a number. Draft is not a queue in the status list.\n\n**Add** files the application into **New Applications** when required fields and files are complete. Filing follows Document Requirements: every required upload for the applicant, a sponsor if Sponsored is Yes, and each dependent on the form. Required items show a red asterisk. If something required is missing, the portal will not move the file.",
             ],
             [
                 'id' => 'photo',

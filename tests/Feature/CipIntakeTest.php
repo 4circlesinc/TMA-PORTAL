@@ -127,7 +127,7 @@ class CipIntakeTest extends TestCase
      */
     private function payload(CipProvider $provider, array $overrides = []): array
     {
-        return array_merge([
+        $merged = array_merge([
             'providerId' => $provider->uuid,
             'firstName' => 'John',
             'lastName' => 'Smith',
@@ -138,13 +138,59 @@ class CipIntakeTest extends TestCase
             'occupation' => 'Engineer',
             'passportNumber' => 'X1234567',
             'passportPhoto' => $this->photo(),
-            'passportBioPage' => $this->scan('bio.pdf'),
-            'birthCertificate' => $this->scan('birth.pdf'),
-            'policeCertificate' => [$this->scan('police.pdf')],
-            'proofOfAddress' => [$this->scan('address.pdf')],
             'investmentType' => InvestmentType::REAL_ESTATE,
             'sponsored' => '0',
-        ], $overrides);
+        ], $this->cipRequiredDocumentFiles(
+            ApplicantType::PRINCIPAL_APPLICANT,
+            $overrides['phase'] ?? Phase::PRE_APPROVAL,
+            $overrides['gender'] ?? 'Male',
+            $overrides['investmentType'] ?? InvestmentType::REAL_ESTATE,
+        ), $overrides);
+
+        if (isset($merged['dependents']) && is_array($merged['dependents'])) {
+            $phase = $merged['phase'] ?? Phase::PRE_APPROVAL;
+            $merged['dependents'] = array_map(
+                fn ($row) => is_array($row) ? $this->dependentPerson($row, $phase) : $row,
+                $merged['dependents'],
+            );
+        }
+
+        return $merged;
+    }
+
+    /**
+     * A dependent row with the uploads Document Requirements asks of their type.
+     *
+     * @param  array<string, mixed>  $person
+     * @return array<string, mixed>
+     */
+    private function dependentPerson(array $person, string $phase = Phase::PRE_APPROVAL): array
+    {
+        $relationship = $person['relationship'] ?? CipPerson::RELATIONSHIP_QUALIFIED;
+        $type = $relationship === CipPerson::RELATIONSHIP_SPOUSE
+            ? ApplicantType::SPOUSE
+            : $this->dependentTypeFromDob($person['dateOfBirth'] ?? null);
+
+        $photo = Intake::photoRequirement($type, $phase);
+        $files = $this->cipRequiredDocumentFiles($type, $phase, $person['gender'] ?? 'Male');
+        if ($photo?->required) {
+            $files['passportPhoto'] = $this->photo();
+        }
+
+        return array_merge($files, $person);
+    }
+
+    private function dependentTypeFromDob(?string $dob): string
+    {
+        if (! $dob) {
+            return ApplicantType::DEPENDENT_16_OVER;
+        }
+
+        $birth = \Illuminate\Support\Carbon::parse($dob);
+
+        return $birth->copy()->addYears(ApplicantType::cutoff())->isAfter(now())
+            ? ApplicantType::DEPENDENT_UNDER_16
+            : ApplicantType::DEPENDENT_16_OVER;
     }
 
     /** The whole sponsor block section 4 asks for when Sponsored is Yes. */
@@ -160,7 +206,7 @@ class CipIntakeTest extends TestCase
             'occupation' => 'Retired',
             'passportNumber' => 'S7654321',
             'passportPhoto' => $this->photo(),
-        ], $overrides)];
+        ], $this->cipRequiredDocumentFiles(ApplicantType::SPONSOR, Phase::PRE_APPROVAL, 'Female'), $overrides)];
     }
 
     /** Post the intake the way the form does — multipart, not JSON. */
@@ -183,14 +229,7 @@ class CipIntakeTest extends TestCase
      */
     private function edits(CipProvider $provider, array $overrides = []): array
     {
-        $payload = $this->payload($provider, $overrides);
-
-        foreach (['passportPhoto', 'passportBioPage', 'birthCertificate', 'policeCertificate',
-            'proofOfAddress', 'oathOfAllegiance', 'proofOfPayment'] as $upload) {
-            unset($payload[$upload]);
-        }
-
-        return $payload;
+        return $this->cipWithoutUploads($this->payload($provider, $overrides));
     }
 
     /**
@@ -257,6 +296,11 @@ class CipIntakeTest extends TestCase
             ->first();
         $this->assertNotNull($person);
         $this->assertSame('X1234567', $person->passport_number);
+        $this->assertSame(
+            [],
+            $body['applicant']['outstanding'],
+            'every Document Requirements required upload was filed with the application',
+        );
     }
 
     public function test_the_region_is_derived_from_the_country_never_asked(): void
@@ -574,10 +618,13 @@ class CipIntakeTest extends TestCase
         $this->assertNotContains(NicRequirements::R3_FORM, $keys);
         $this->assertNotContains(PassportRequirements::EPP_FORM, $keys);
 
-        $this->file($staff, $this->payload($provider, [
+        $payload = $this->payload($provider, [
             'phase' => Phase::POST_APPROVAL,
             'cipNumber' => '10T1G12663P',
-        ]))
+        ]);
+        unset($payload['oathOfAllegiance'], $payload['proofOfPayment']);
+
+        $this->file($staff, $payload)
             ->assertStatus(422)
             ->assertJsonValidationErrors(['oathOfAllegiance', 'proofOfPayment']);
     }
@@ -1170,27 +1217,33 @@ class CipIntakeTest extends TestCase
          * time somebody edited one in the portal, which is the feature.
          */
         $outstanding = DocumentSlots::outstanding($sponsor);
-        $this->assertContains('Certified Copy of the Passport Bio Data Page', $outstanding);
-        $this->assertContains('Certified Copy of Birth Certificate', $outstanding);
+        $this->assertNotContains('Certified Copy of the Passport Bio Data Page', $outstanding);
+        $this->assertNotContains('Certified Copy of Birth Certificate', $outstanding);
     }
 
-    public function test_a_sponsors_scans_are_offered_but_never_demanded(): void
+    public function test_a_sponsors_required_scans_are_demanded_and_optional_ones_are_not(): void
     {
         Storage::fake(config('filesystems.avatar_disk', 'public'));
         $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
+
+        $withoutScans = $this->sponsor();
+        unset($withoutScans['sponsor']['passportBioPage'], $withoutScans['sponsor']['birthCertificate']);
+
+        $this->file($staff, $this->payload($provider, array_merge(
+            ['sponsored' => '1'],
+            $withoutScans,
+        )))->assertStatus(422)->assertJsonValidationErrors(['sponsor.passportBioPage']);
 
         $body = $this->file($staff, $this->payload($provider, array_merge(
             ['sponsored' => '1'],
             $this->sponsor(['passportBioPage' => [$this->scan('sponsor-bio.pdf')]]),
         )))->assertCreated()->json('application');
 
-        // What was sent answers the sponsor's own slot, on the sponsor's own
-        // folder — not the applicant's.
         $sponsor = CipPerson::firstWhere('role', CipPerson::ROLE_SPONSOR);
         $outstanding = DocumentSlots::outstanding($sponsor);
         $this->assertNotContains('Certified Copy of the Passport Bio Data Page', $outstanding, 'the one they sent is answered');
-        $this->assertContains('Certified Copy of Birth Certificate', $outstanding, 'the ones they did not still stand');
+        $this->assertNotContains('Certified Copy of Birth Certificate', $outstanding);
 
         $slot = CipDocument::where('person_id', $sponsor->id)
             ->where('type', DocumentTypes::PASSPORT_BIO_PAGE)->first();
@@ -1198,9 +1251,6 @@ class CipIntakeTest extends TestCase
         $this->assertSame($sponsor->folder_id, $file->folder_id);
         $this->assertSame('MARYAM HADDAD - Passport bio page.pdf', $file->name);
 
-        // The main applicant's own slots are untouched by any of it: what the
-        // form collected for them is filed, and a sponsor's upload did not
-        // reach into their checklist.
         $this->assertSame(
             [],
             array_intersect(
@@ -1623,19 +1673,10 @@ class CipIntakeTest extends TestCase
         // are filed in is the folder they still have.
         $this->assertSame('Retired Engineer', $body['applicant']['occupation']);
         $this->assertSame($mainFolderId, CipPerson::firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->folder_id);
-        // An edit does not un-file what was already filed. Asserted against
-        // the three the form collects, not against an empty checklist: the
-        // rest of the requirements were never sent and are still owed.
+        // An edit does not un-file what was already filed.
         $this->assertSame(
             [],
-            array_intersect(
-                [
-                    'Scanned Copy of a Passport-Sized Photo (JPEG or PNG & PDF)',
-                    'Certified Copy of Passport Bio Data Page',
-                    'Certified Copy of Birth Record',
-                ],
-                $body['applicant']['outstanding'],
-            ),
+            $body['applicant']['outstanding'],
             'the filed uploads survive an edit',
         );
 
@@ -1964,5 +2005,115 @@ class CipIntakeTest extends TestCase
         ]))->assertStatus(422);
 
         $this->assertSame(2, CipApplication::count());
+    }
+
+    public function test_filing_refuses_when_a_seeded_required_document_is_missing(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+        $payload = $this->payload($provider);
+        unset($payload['policeCertificate']);
+
+        $this->file($staff, $payload)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('policeCertificate');
+
+        $this->assertSame(0, CipApplication::count());
+    }
+
+    public function test_filing_demands_a_dependents_required_documents(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+        $payload = $this->payload($provider, [
+            'dependents' => [[
+                'firstName' => 'Lina',
+                'lastName' => 'Smith',
+                'dateOfBirth' => '2016-09-09',
+                'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+            ]],
+        ]);
+        unset($payload['dependents'][0]['passportBioPage']);
+
+        $this->file($staff, $payload)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('dependents.0.passportBioPage');
+
+        $this->assertSame(0, CipApplication::count());
+    }
+
+    public function test_filing_demands_every_required_document_from_settings(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+        $payload = $this->payload($provider);
+
+        $this->actingAs($staff)->postJson('/portal/cip/requirements', [
+            'applicantType' => ApplicantType::PRINCIPAL_APPLICANT,
+            'label' => 'Proof of funds',
+            'required' => true,
+        ])->assertCreated();
+
+        $this->file($staff, $payload)
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('proofOfFunds');
+
+        $this->assertSame(0, CipApplication::count());
+
+        $payload['proofOfFunds'] = [$this->scan('funds.pdf')];
+        $this->file($staff, $payload)->assertCreated();
+    }
+
+    public function test_an_optional_document_from_settings_does_not_block_filing(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $this->actingAs($staff)->postJson('/portal/cip/requirements', [
+            'applicantType' => ApplicantType::PRINCIPAL_APPLICANT,
+            'label' => 'Nice to have letter',
+            'required' => false,
+        ])->assertCreated();
+
+        $this->file($staff, $this->payload($provider))->assertCreated();
+    }
+
+    public function test_editing_demands_a_required_document_added_in_settings(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $created = $this->file($staff, $this->payload($provider))->assertCreated()->json('application');
+        $application = CipApplication::where('uuid', $created['id'])->firstOrFail();
+
+        $this->actingAs($staff)->postJson('/portal/cip/requirements', [
+            'applicantType' => ApplicantType::PRINCIPAL_APPLICANT,
+            'label' => 'Proof of funds',
+            'required' => true,
+        ])->assertCreated();
+
+        $this->edit($staff, $application, $this->edits($provider))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('proofOfFunds');
+
+        $this->edit($staff, $application, $this->payload($provider, [
+            'proofOfFunds' => [$this->scan('funds.pdf')],
+        ]))->assertOk();
+    }
+
+    public function test_the_form_marks_required_documents_at_filing(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+
+        $principal = collect($this->actingAs($staff)->getJson('/portal/cip/applications/form')
+            ->assertOk()->json('requirements.principal'));
+
+        $required = $principal->where('required', true);
+        $this->assertGreaterThan(3, $required->count(), 'settings carry more than the old section-2 three');
+        $this->assertTrue($required->every(fn ($row) => $row['atFiling'] === true));
+
+        $optional = $principal->where('required', false);
+        $this->assertTrue($optional->isNotEmpty());
+        $this->assertTrue($optional->every(fn ($row) => $row['atFiling'] === false));
     }
 }

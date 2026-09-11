@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import { tinyPdfBuffer } from './fixtures/tiny-pdf.mjs';
+import { attachFamilyDocuments } from './helpers/cip-required-docs.mjs';
 import { deflateSync } from 'node:zlib';
 
 /*
@@ -151,6 +152,7 @@ try {
   await page.setInputFiles('[data-cip-file="birthCertificate"]', {
     name: 'birth.pdf', mimeType: 'application/pdf', buffer: pdf(),
   });
+  await attachFamilyDocuments(page, 0, { pdf: pdf(), png: png(600) });
   await page.waitForTimeout(600);
   await page.click('[data-cip-save]');
   check(await until(() => page.locator('[data-cip-form]').count().then(n => n === 0), 30000),

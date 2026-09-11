@@ -106,4 +106,70 @@ abstract class TestCase extends BaseTestCase
             ['Accept' => 'application/json', 'X-Requested-With' => 'XMLHttpRequest'],
         );
     }
+
+    /**
+     * The scans Document Requirements currently demands of this applicant type.
+     *
+     * Filing follows those settings, so a test that posts the wizard must
+     * send every required upload rather than the old section-2 three.
+     *
+     * @return array<string, list<UploadedFile>>
+     */
+    protected function cipRequiredDocumentFiles(
+        string $applicantType,
+        string $phase = \App\Support\Cip\Phase::PRE_APPROVAL,
+        ?string $gender = 'Male',
+        ?string $investment = null,
+    ): array {
+        $out = [];
+
+        foreach (\App\Support\Cip\Intake::documentFields($applicantType, $phase) as $doc) {
+            if (! $doc['required']) {
+                continue;
+            }
+            if ($doc['femaleOnly'] && strcasecmp((string) $gender, 'Female') !== 0) {
+                continue;
+            }
+            if ($doc['realEstateOnly'] && $investment
+                && $investment !== \App\Support\Cip\InvestmentType::REAL_ESTATE) {
+                continue;
+            }
+
+            $out[$doc['field']] = [UploadedFile::fake()->create($doc['key'].'.pdf', 40, 'application/pdf')];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Strip uploads from an intake body, the way Edit application posts it.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    protected function cipWithoutUploads(array $payload): array
+    {
+        $clean = [];
+
+        foreach ($payload as $key => $value) {
+            if ($value instanceof UploadedFile) {
+                continue;
+            }
+
+            if (is_array($value)) {
+                $first = $value[0] ?? null;
+                if ($first instanceof UploadedFile) {
+                    continue;
+                }
+
+                $clean[$key] = $this->cipWithoutUploads($value);
+
+                continue;
+            }
+
+            $clean[$key] = $value;
+        }
+
+        return $clean;
+    }
 }

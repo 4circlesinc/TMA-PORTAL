@@ -15,6 +15,7 @@ use App\Support\Security\IdentityFields;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -51,30 +52,18 @@ class Intake
     /** The wizard offers twenty dependent rows; a draft may hold that many. */
     public const MAX_DEPENDENTS_DRAFT = 20;
 
-    /** The section 2 uploads that take a list rather than a single file. */
-    /**
-     * Section 2's own three, by template key.
-     *
-     * The wizard's document fields come from the requirement templates now,
-     * so what the form ASKS follows the admin screen, but what filing
-     * DEMANDS stays section 2's list. The brief makes exactly these three the
-     * intake requirements; everything else on the checklist is completed
-     * after filing, which is what the whole document-management phase is
-     * for. A firm can still loosen even these: retire one, or mark it
-     * optional, and filing stops demanding it.
-     */
-    private const AT_FILING = [
-        DocumentTypes::PASSPORT_PHOTO,
-        DocumentTypes::PASSPORT_BIO_PAGE,
-        DocumentTypes::BIRTH_CERTIFICATE,
-    ];
-
     /**
      * The upload fields one applicant type's wizard section carries, from the
      * live templates. The photo is not among them, it has measurement rules
      * and becomes the person's picture, so it keeps its own control, and the
      * field name is the template key in camel case, which lands the legacy
      * three on exactly the names the endpoint has always documented.
+     *
+     * `required` and `atFiling` are the same fact: Document Requirements
+     * settings are the source of truth for the asterisk, for Add, and for
+     * editing a filed application. A draft does not demand them. Optional
+     * rows stay optional. A firm that unticks Required, or retires a row,
+     * is what stops filing from asking for it.
      *
      * @return Collection<int, array{key:string, field:string, label:string, help:?string, required:bool, realEstateOnly:bool, femaleOnly:bool, atFiling:bool}>
      */
@@ -110,17 +99,7 @@ class Intake
                 // drawn before anybody's gender is chosen, so the filtering
                 // has to happen live in the wizard as the answer changes.
                 'femaleOnly' => (bool) $t->female_only,
-                // Only the main applicant's uploads gate filing, and
-                // pre-approval only section 2's three: the official checklist runs to
-                // thirty-odd rows, and demanding every required one before the
-                // application may exist would mean no application exists. The
-                // rest of the checklist is what the document-management phase
-                // collects once the file is open. A post-approval filing still
-                // demands its pack's required documents, which is its own
-                // documented behaviour.
-                'atFiling' => $applicantType === ApplicantType::PRINCIPAL_APPLICANT
-                    && (bool) $t->required
-                    && ($phase !== Phase::PRE_APPROVAL || in_array($t->key, self::AT_FILING, true)),
+                'atFiling' => (bool) $t->required,
             ])
             ->values();
     }
@@ -172,7 +151,8 @@ class Intake
     }
 
     /**
-     * A scan already sitting on the draft this filing completes.
+     * A scan already sitting on the draft or filed application this request
+     * completes.
      *
      * The wizard does not re-send files it has already kept: a reopened
      * draft shows the picture and lists the scans as filed, then posts the
@@ -188,7 +168,14 @@ class Intake
             return false;
         }
 
-        $person = $draft->people->firstWhere('role', $role);
+        $person = $draft->people()->withTrashed()->where('role', $role)->first();
+        $person?->loadMissing('documents');
+
+        return self::personHolds($person, $type);
+    }
+
+    private static function personHolds(?CipPerson $person, string $type): bool
+    {
         if ($person === null) {
             return false;
         }
@@ -204,6 +191,44 @@ class Intake
         return $slot !== null && $slot->isFilled();
     }
 
+    /** Female-only templates apply only when this person is Female. */
+    private static function documentAppliesToGender(array $doc, mixed $gender): bool
+    {
+        if (! ($doc['femaleOnly'] ?? false)) {
+            return true;
+        }
+
+        return strcasecmp((string) $gender, 'Female') === 0;
+    }
+
+    /**
+     * The workflow lane the document rules should judge against.
+     *
+     * A filing takes the phase the form sent. An edit, or completing a
+     * draft, takes the row's own phase: the body does not repeat it, and
+     * guessing pre-approval would demand the wrong pack.
+     */
+    private static function rulesPhase(?CipApplication $existing = null): string
+    {
+        $fromFile = (string) ($existing?->phase ?? '');
+
+        if ($existing && Phase::isValid($fromFile)) {
+            return $fromFile;
+        }
+
+        return self::filingPhase();
+    }
+
+    /** @return array<string, mixed> */
+    private static function scanFieldRules(bool $demanded): array
+    {
+        return array_merge(
+            [$demanded ? 'required' : 'nullable', 'array'],
+            $demanded ? ['min:1'] : [],
+            ['max:'.self::MAX_DOCUMENTS_PER_SLOT],
+        );
+    }
+
     /** The shared person field set. Section 2's list, which section 4 says a sponsor repeats. */
     private const PERSON_FIELDS = [
         'firstName', 'lastName', 'gender', 'dateOfBirth', 'countryOfBirth',
@@ -211,16 +236,17 @@ class Intake
     ];
 
     /**
-     * @param  bool  $editing  an update, where the uploads are already on file
+     * @param  bool  $editing  an update of a row that already exists
      *
-     * Editing keeps every answer required. Section 2 does not stop applying once a
-     * draft exists, but stops demanding the files already sitting on that
-     * row: the wizard does not re-send a photo it has already kept, and
-     * asking for it again is the form showing the picture and calling it
-     * missing. Sending one replaces it; sending nothing leaves it alone. The
-     * provider is not in the list at all: its code is minted into the
-     * internal number, so changing it afterwards would leave the number naming
-     * a firm that did not file.
+     * Editing keeps every typed answer required. It does not demand files
+     * already sitting on that row: the wizard does not re-send a photo it
+     * has already kept, and asking for it again is the form showing the
+     * picture and calling it missing. Sending one replaces it; sending
+     * nothing leaves it alone. A required slot that was never answered is
+     * still demanded — Document Requirements settings apply to an edit the
+     * same way they apply to Add. The provider is not in the list at all:
+     * its code is minted into the internal number, so changing it afterwards
+     * would leave the number naming a firm that did not file.
      * @param  CipApplication|null  $draft  the row this filing completes, when
      *                                      there is one: files already on it
      *                                      count as answered
@@ -261,10 +287,10 @@ class Intake
                 'draftId' => ['nullable', 'string', 'max:64'],
             ],
             self::personRules(),
-            self::mainApplicantDocumentRules($editing, $draft),
+            self::mainApplicantDocumentRules($draft, $editing),
             self::investmentRules(),
-            self::sponsorRules($editing, $draft),
-            self::dependentRules(),
+            self::sponsorRules($draft, $editing),
+            self::dependentRules($draft, $editing),
         );
     }
 
@@ -364,35 +390,46 @@ class Intake
     }
 
     /**
-     * Section 2's three uploads. The photo has shape rules; the scans have limits.
+     * Uploads Document Requirements marks required gate Add, and an edit of
+     * a filed application. Typing into a draft through the update door does
+     * not — that is still a form that is not finished, and Save as draft is
+     * the other half of the same fact.
+     */
+    private static function demandsUploads(bool $editing, ?CipApplication $existing): bool
+    {
+        return ! ($editing && $existing && $existing->status === Status::DRAFT);
+    }
+
+    /**
+     * The uploads Document Requirements asks of the main applicant.
      *
+     * Required rows gate Add and an edit; a file already on the draft or
+     * the filed application counts as answered. Optional rows never do.
      * A scan is a LIST. One requirement is not always one sheet of paper, a
      * bio page can be a passport's two pages, a birth certificate can arrive
      * with its translation, and a control that takes only the last file
      * dropped on it quietly loses the rest. {@see normaliseDocuments()} lets a
      * single file still arrive on its own.
      */
-    private static function mainApplicantDocumentRules(bool $editing = false, ?CipApplication $draft = null): array
+    private static function mainApplicantDocumentRules(?CipApplication $existing = null, bool $editing = false): array
     {
-        $phase = self::filingPhase();
+        $phase = self::rulesPhase($existing);
+        $gender = request()->input('gender');
+        $demand = self::demandsUploads($editing, $existing);
 
         $photo = self::photoTemplate(ApplicantType::PRINCIPAL_APPLICANT, $phase);
-        $photoKept = $editing || self::draftHolds($draft, DocumentTypes::PASSPORT_PHOTO);
+        $photoKept = self::draftHolds($existing, DocumentTypes::PASSPORT_PHOTO);
         $rules = [
             'passportPhoto' => [
-                ! $photoKept && $photo && $photo->required ? 'required' : 'nullable',
+                $demand && ! $photoKept && $photo && $photo->required ? 'required' : 'nullable',
                 'file', self::photoRule(),
             ],
         ];
 
-        foreach (self::documentFields(ApplicantType::PRINCIPAL_APPLICANT, $phase) as $doc) {
-            $kept = $editing || self::draftHolds($draft, $doc['key']);
-            $demanded = ! $kept && $doc['atFiling'];
-            $rules[$doc['field']] = array_merge(
-                [$demanded ? 'required' : 'nullable', 'array'],
-                $demanded ? ['min:1'] : [],
-                ['max:'.self::MAX_DOCUMENTS_PER_SLOT],
-            );
+        foreach (self::documentFields(ApplicantType::PRINCIPAL_APPLICANT, $phase, $existing) as $doc) {
+            $kept = self::draftHolds($existing, $doc['key']);
+            $demanded = $demand && ! $kept && $doc['required'] && self::documentAppliesToGender($doc, $gender);
+            $rules[$doc['field']] = self::scanFieldRules($demanded);
             $rules[$doc['field'].'.*'] = self::documentRule();
         }
 
@@ -482,36 +519,38 @@ class Intake
      * Section 4: sponsored means a sponsor, asked for now rather than later.
      *
      * The sponsor repeats the applicant's personal fields and their photo, so
-     * they have a face in the portal like everyone else. Their bio page and
-     * birth certificate are offered but optional. Section 2's upload list is the
-     * main applicant's, and making six files the price of starting a draft
-     * would leave the sponsor as the reason nobody finishes one. The slots
-     * are opened either way, so what is skipped here is still asked for.
+     * they have a face in the portal like everyone else. Their document list
+     * is the Document Requirements settings for the sponsor type: required
+     * rows gate filing, optional rows do not. A file already on the draft
+     * or the filed application counts as answered.
      */
-    private static function sponsorRules(bool $editing = false, ?CipApplication $draft = null): array
+    private static function sponsorRules(?CipApplication $existing = null, bool $editing = false): array
     {
         $sponsored = fn () => filter_var(request()->input('sponsored'), FILTER_VALIDATE_BOOLEAN);
+        $phase = self::rulesPhase($existing);
+        $gender = request()->input('sponsor.gender');
+        $demand = self::demandsUploads($editing, $existing);
 
         $rules = [];
         foreach (self::personRules('sponsor.') as $field => $rule) {
             $rules[$field] = array_merge([Rule::requiredIf($sponsored)], array_slice($rule, 1));
         }
 
-        // A sponsor already on file — or on the draft being completed — has
-        // a photo; only a new one must bring one.
-        $rules['sponsor.passportPhoto'] = ($editing || self::draftHolds(
-            $draft,
-            DocumentTypes::PASSPORT_PHOTO,
-            CipPerson::ROLE_SPONSOR,
-        ))
-            ? ['nullable', 'file', self::photoRule()]
-            : [Rule::requiredIf($sponsored), 'file', self::photoRule()];
+        $photo = self::photoTemplate(ApplicantType::SPONSOR, $phase);
+        $photoKept = self::draftHolds($existing, DocumentTypes::PASSPORT_PHOTO, CipPerson::ROLE_SPONSOR);
+        $photoDemanded = $demand && ! $photoKept && ($photo?->required ?? true);
+        $rules['sponsor.passportPhoto'] = $photoDemanded
+            ? [Rule::requiredIf($sponsored), 'file', self::photoRule()]
+            : ['nullable', 'file', self::photoRule()];
 
-        // The sponsor's scans are offered, never demanded at filing (section 2): a
-        // sponsor is often added before their paperwork is in hand, and the
-        // checklist holds the door.
-        foreach (self::documentFields(ApplicantType::SPONSOR, self::filingPhase()) as $doc) {
-            $rules['sponsor.'.$doc['field']] = ['nullable', 'array', 'max:'.self::MAX_DOCUMENTS_PER_SLOT];
+        foreach (self::documentFields(ApplicantType::SPONSOR, $phase, $existing) as $doc) {
+            $kept = self::draftHolds($existing, $doc['key'], CipPerson::ROLE_SPONSOR);
+            $demanded = $demand && ! $kept && $doc['required'] && self::documentAppliesToGender($doc, $gender);
+            $rules['sponsor.'.$doc['field']] = array_merge(
+                [$demanded ? Rule::requiredIf($sponsored) : 'nullable', 'array'],
+                $demanded ? ['min:1'] : [],
+                ['max:'.self::MAX_DOCUMENTS_PER_SLOT],
+            );
             $rules['sponsor.'.$doc['field'].'.*'] = self::documentRule();
         }
 
@@ -519,8 +558,11 @@ class Intake
     }
 
     /** Section 5: each dependent is a name, a date of birth, a relationship, and the same uploads the settings ask of their type. */
-    private static function dependentRules(bool $editing = false): array
+    private static function dependentRules(?CipApplication $existing = null, bool $editing = false): array
     {
+        $phase = self::rulesPhase($existing);
+        $demand = self::demandsUploads($editing, $existing);
+
         $rules = [
             'dependents' => ['nullable', 'array', 'max:20'],
             // The uuid of a dependant already on the application, so an edit
@@ -532,10 +574,6 @@ class Intake
             'dependents.*.relationship' => ['required', Rule::in([
                 CipPerson::RELATIONSHIP_SPOUSE, CipPerson::RELATIONSHIP_QUALIFIED,
             ])],
-            // Offered, never demanded at filing, the same courtesy the
-            // sponsor's scans get. The boxes are on the form so the files
-            // can travel with the person; the checklist holds the door if
-            // they are skipped.
             'dependents.*.passportPhoto' => ['nullable', 'file', self::photoRule()],
         ];
 
@@ -544,7 +582,95 @@ class Intake
             $rules['dependents.*.'.$field.'.*'] = self::documentRule();
         }
 
+        $rows = request()->input('dependents', []);
+        if (! is_array($rows)) {
+            return $rules;
+        }
+
+        foreach ($rows as $index => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $type = self::dependentApplicantType($row, $existing);
+            $person = self::dependentOnFile($existing, $row, (int) $index);
+            $gender = $row['gender'] ?? null;
+
+            $photo = self::photoTemplate($type, $phase);
+            $photoKept = self::personHolds($person, DocumentTypes::PASSPORT_PHOTO);
+            if ($demand && ! $photoKept && $photo?->required) {
+                $rules['dependents.'.$index.'.passportPhoto'] = ['required', 'file', self::photoRule()];
+            }
+
+            foreach (self::documentFields($type, $phase, $existing, $person) as $doc) {
+                $kept = self::personHolds($person, $doc['key']);
+                $demanded = $demand && ! $kept && $doc['required'] && self::documentAppliesToGender($doc, $gender);
+                if (! $demanded) {
+                    continue;
+                }
+
+                $rules['dependents.'.$index.'.'.$doc['field']] = self::scanFieldRules(true);
+                $rules['dependents.'.$index.'.'.$doc['field'].'.*'] = self::documentRule();
+            }
+        }
+
         return $rules;
+    }
+
+    /**
+     * Which checklist a dependent row on the form owes, from the same facts
+     * {@see ApplicantType::for()} uses once the person exists.
+     */
+    private static function dependentApplicantType(array $row, ?CipApplication $application = null): string
+    {
+        $relationship = (string) ($row['relationship'] ?? '');
+        if ($relationship === CipPerson::RELATIONSHIP_SPOUSE
+            || preg_match('/spouse/i', $relationship) === 1) {
+            return ApplicantType::SPOUSE;
+        }
+
+        $raw = $row['dateOfBirth'] ?? null;
+        if (! $raw) {
+            return ApplicantType::DEPENDENT_16_OVER;
+        }
+
+        try {
+            $birth = Carbon::parse((string) $raw);
+        } catch (\Throwable) {
+            return ApplicantType::DEPENDENT_16_OVER;
+        }
+
+        $reference = $application?->created_at ?? now();
+
+        return $birth->copy()->addYears(ApplicantType::cutoff())->isAfter($reference)
+            ? ApplicantType::DEPENDENT_UNDER_16
+            : ApplicantType::DEPENDENT_16_OVER;
+    }
+
+    private static function dependentOnFile(?CipApplication $application, array $row, int $index): ?CipPerson
+    {
+        if ($application === null) {
+            return null;
+        }
+
+        $id = trim((string) ($row['id'] ?? ''));
+        if ($id !== '') {
+            $person = $application->people()->withTrashed()->where('uuid', $id)->first();
+            $person?->loadMissing('documents');
+
+            return $person;
+        }
+
+        $person = $application->people()
+            ->withTrashed()
+            ->where('role', CipPerson::ROLE_DEPENDENT)
+            ->orderBy('id')
+            ->get()
+            ->values()
+            ->get($index);
+        $person?->loadMissing('documents');
+
+        return $person;
     }
 
     /** The 2×2 rule, as a validator closure over {@see PassportPhoto}. */

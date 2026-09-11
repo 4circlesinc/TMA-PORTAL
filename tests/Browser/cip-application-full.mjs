@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import { tinyPdfBuffer } from './fixtures/tiny-pdf.mjs';
+import { attachFamilyDocuments } from './helpers/cip-required-docs.mjs';
 import { deflateSync } from 'node:zlib';
 
 /*
@@ -138,6 +139,7 @@ try {
     `the form numbers them youngest-first (${titles.join(', ')})`);
 
   step(5, 'Filing');
+  await attachFamilyDocuments(page, 4, { pdf: pdf(), png: png(600, 600) });
   const created = page.waitForResponse(r => r.url().includes('/portal/cip/applications') && r.request().method() === 'POST', { timeout: 30000 });
   await page.click('[data-cip-save]');
   const res = await created;
@@ -169,34 +171,29 @@ try {
   check(!!app.applicant?.passportPhotoUrl, 'the filed photo is reachable at full resolution');
 
   /*
-   * What the form collects, against what the checklist asks for.
-   *
-   * Not "owes nothing": since phase 3 the checklist is the firm's requirement
-   * templates, so an application filed a second ago rightly still owes the
-   * police certificate and the rest. What the wizard is answerable for is the
-   * three it collects — each upload has to land in its slot and close it.
+   * Required uploads from Document Requirements closed their slots.
+   * Optional rows may still be outstanding.
    */
-  step(8, 'Checklists (section 2 uploads → document slots)');
+  step(8, 'Checklists (required uploads → document slots)');
   const collected = [
     'Scanned Copy of a Passport-Sized Photo (JPEG or PNG & PDF)',
     'Certified Copy of Passport Bio Data Page',
     'Certified Copy of Birth Record',
+    'Original Bank Reference Letter',
   ];
   const applicantOwes = app.applicant?.outstanding || ['x'];
   check(collected.every(label => !applicantOwes.includes(label)),
-    `the applicant's three uploads closed their slots (${JSON.stringify(applicantOwes)})`);
+    `the applicant's required uploads closed their slots (${JSON.stringify(applicantOwes)})`);
 
-  // The sponsor's birth certificate was deliberately skipped, so it is the one
-  // of the three still open — the evidence that a slot stays open until a file
-  // actually arrives in it.
-  const sponsorOwes = app.sponsor?.outstanding || [];
-  check(sponsorOwes.includes('Certified Copy of Birth Certificate'), 'the one the sponsor skipped is still owed');
-  check(!sponsorOwes.includes('Passport photo') && !sponsorOwes.includes('Certified Copy of the Passport Bio Data Page'),
-    `and the two they did upload are not (${JSON.stringify(sponsorOwes)})`);
+  const sponsorOwes = app.sponsor?.outstanding || ['x'];
+  check(!sponsorOwes.includes('Certified Copy of the Passport Bio Data Page')
+    && !sponsorOwes.includes('Certified Copy of Birth Certificate'),
+    `the sponsor's required uploads closed their slots (${JSON.stringify(sponsorOwes)})`);
 
   const dep = (app.dependents || [])[0];
   const depLabels = (dep?.documents || []).map(d => d.label);
-  check(collected.slice(1).every(label => depLabels.includes(label)),
+  check(['Certified Copy of Passport Bio Data Page', 'Certified Copy of Birth Record']
+    .every(label => depLabels.includes(label)),
     `every dependant has a checklist from the first save (${JSON.stringify(depLabels)})`);
 
   step(9, 'The photo is reachable, and only by someone who may see the file');

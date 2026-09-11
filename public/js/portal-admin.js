@@ -1752,7 +1752,8 @@
     // the same grey the table already uses, so the eye reads it as history.
     var name = r.retired
       ? '<span class="tma-portal-table__muted"><strong>' + ui().esc(r.label) + '</strong></span>'
-      : '<strong>' + ui().esc(r.label) + '</strong>';
+      : '<strong>' + ui().esc(r.label) + '</strong>' +
+        (r.required ? '<span class="tma-portal-field__required" aria-hidden="true">*</span>' : '');
 
     var tick = r.retired ? '' : cipDocCheck(
       canEdit,

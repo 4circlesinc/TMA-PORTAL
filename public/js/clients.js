@@ -7732,12 +7732,9 @@
         ? '<img class="tma-dash__clients-checklist-open-icon" src="' + ICONS.ArrowSquareOut +
           '" alt="" width="14" height="14">'
         : '') +
-      // Not a red star after every line: the mandatory ones are the norm and
-      // the exception is worth naming, so the OPTIONAL ones are the ones
-      // marked. A checklist of asterisks marks nothing.
       (d.required === false
         ? '<span class="tma-dash__clients-checklist-optional">Optional</span>'
-        : '') +
+        : '<span class="tma-portal-field__required" aria-hidden="true">*</span>') +
       '</span>';
     var chip;
     if (filed && d.fileId && d.canReview) {
