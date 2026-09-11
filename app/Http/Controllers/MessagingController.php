@@ -80,7 +80,7 @@ class MessagingController extends Controller
                 // presence comes along so PresenceService does not fetch it one
                 // subject at a time while presenting the list.
                 'activeParticipants.user.presence',
-                'client:id,uid,name',
+                'client:id,uid,name,photo_url',
                 'company:id,uid,name',
                 // Only the newest message is needed for the list preview.
                 'messages' => fn ($q) => $q->latest('id')->limit(1)->with(['sender', 'attachments']),
@@ -475,7 +475,7 @@ class MessagingController extends Controller
         $conversation = $this->conversationFor($request, $uuid);
         $participant = $conversation->participantFor($user);
         $counterpart = $conversation->counterpartFor($user);
-        $conversation->loadMissing(['client:id,uid,name', 'company:id,uid,name', 'activeParticipants.user.presence']);
+        $conversation->loadMissing(['client:id,uid,name,photo_url', 'company:id,uid,name', 'activeParticipants.user.presence']);
 
         $attachments = MessageAttachment::query()
             ->where('conversation_id', $conversation->id)

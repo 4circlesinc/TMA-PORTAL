@@ -121,7 +121,7 @@ class MessagingSearch
             ->listedInInbox()
             ->with([
                 'activeParticipants.user',
-                'client:id,uid,name',
+                'client:id,uid,name,photo_url',
                 'company:id,uid,name',
                 'messages' => fn ($q) => $q->latest('id')->limit(1),
             ])

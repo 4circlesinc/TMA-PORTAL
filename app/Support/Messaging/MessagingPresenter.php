@@ -2,6 +2,7 @@
 
 namespace App\Support\Messaging;
 
+use App\Models\CompanyMember;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\Message;
@@ -124,6 +125,76 @@ class MessagingPresenter
      * @param  Collection<int, User>  $others
      * @return list<array{id: int, name: string, photo: ?string, online: bool, lastSeenAt: ?string}>
      */
+    /**
+     * The two faces a case thread is actually about.
+     *
+     * A provider case is one file: the applicant it concerns and the firm
+     * handling it. Its membership is not the subject — administrators and the
+     * assigned officers are in the room so the conversation reaches them, and
+     * a facepile built from that showed a crowd of staff who are incidental to
+     * what the thread IS.
+     *
+     * So the applicant's own photo leads (the one on the application), and the
+     * provider side's contact stands for the firm. Anyone without a picture
+     * falls through to the initials tile the cluster already draws; nobody is
+     * given a stock avatar.
+     *
+     * Built from the whole room rather than from everyone-but-the-reader:
+     * which two faces a case is about is a property of the file, not of who
+     * is looking at it, and the provider contact reading their own thread
+     * should still see the firm's side of it.
+     *
+     * @return list<array{id: ?int, name: string, photo: ?string, online: bool, lastSeenAt: ?string}>
+     */
+    private static function providerCaseMembers(Conversation $conversation): array
+    {
+        $faces = [];
+
+        $client = $conversation->client;
+        if ($client) {
+            $faces[] = [
+                'id' => null,
+                'name' => $client->name,
+                'photo' => $client->photo_url,
+                'online' => false,
+                'lastSeenAt' => null,
+            ];
+        }
+
+        /*
+         * The firm's side of the room, by the same rule that put them there:
+         * a member of the provider company. Staff are deliberately not shown —
+         * they are who the thread reaches, not who it is about.
+         */
+        $companyId = $conversation->company_id;
+        if ($companyId) {
+            // One question for the firm's people, rather than one per member
+            // of the room: this runs for every case thread in the inbox.
+            $firmUserIds = CompanyMember::query()
+                ->active()
+                ->where('company_id', $companyId)
+                ->pluck('user_id')
+                ->all();
+
+            $contact = $conversation->activeParticipants
+                ->map(fn (ConversationParticipant $p) => $p->user)
+                ->filter()
+                ->first(fn (User $u) => in_array($u->id, $firmUserIds, true));
+
+            if ($contact) {
+                $faces[] = [
+                    'id' => $contact->id,
+                    'name' => $contact->name,
+                    'photo' => $contact->avatar_url,
+                    'online' => (bool) $contact->presence?->isOnline(),
+                    'lastSeenAt' => $contact->presence?->last_seen_at?->toIso8601String(),
+                ];
+            }
+        }
+
+        return $faces;
+    }
+
     private static function groupListMembers(Collection $others): array
     {
         return $others
@@ -193,7 +264,9 @@ class MessagingPresenter
                 : $counterpart?->avatar_url,
             // Inbox facepile: top online / most recently seen members.
             'members' => $conversation->isGroup()
-                ? self::groupListMembers($others)
+                ? ($conversation->isProviderCase()
+                    ? self::providerCaseMembers($conversation)
+                    : self::groupListMembers($others))
                 : [],
             'memberCount' => $conversation->activeParticipants->count(),
             'preview' => self::preview($last, $viewer, $conversation),

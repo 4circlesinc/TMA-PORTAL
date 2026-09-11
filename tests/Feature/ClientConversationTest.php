@@ -519,4 +519,49 @@ class ClientConversationTest extends TestCase
             ->postJson('/portal/clients/'.$fx['client']->uid.'/conversations', ['with' => 'person'])
             ->assertForbidden();
     }
+
+    public function test_a_case_thread_shows_the_applicant_and_the_provider_only(): void
+    {
+        $fx = $this->applicantWithProvider();
+        // The photo the application carries — what the disc should lead with.
+        Client::whereKey($fx['client']->id)->update(['photo_url' => '/media/avatars/amy.jpg']);
+
+        $id = $this->actingAs($fx['staff'])
+            ->postJson('/portal/clients/'.$fx['client']->uid.'/conversations', ['with' => 'provider'])
+            ->assertCreated()
+            ->json('conversation.id');
+
+        // Another administrator in the room: reachable, but not what the
+        // thread is about, so not a face on it.
+        $otherStaff = $this->staff();
+        $conversation = Conversation::where('uuid', $id)->firstOrFail();
+        $conversation->participants()->create([
+            'user_id' => $otherStaff->id,
+            'role' => ConversationParticipant::ROLE_ADMIN,
+            'joined_at' => now(),
+        ]);
+
+        // A case thread reaches the inbox once somebody actually writes.
+        $conversation->messages()->create([
+            'user_id' => $fx['staff']->id,
+            'type' => Message::TYPE_TEXT,
+            'body' => 'Opening the file.',
+        ]);
+        $conversation->forceFill(['last_message_at' => now()])->save();
+
+        foreach ([$fx['staff'], $fx['providerUser']] as $viewer) {
+            $row = collect($this->actingAs($viewer)
+                ->getJson('/portal/messaging/conversations')
+                ->json('conversations'))
+                ->firstWhere('id', $id);
+
+            $names = collect($row['members'])->pluck('name')->all();
+            $this->assertSame(
+                ['Ahmed Hassan', $fx['providerUser']->name],
+                $names,
+                'A case thread shows the applicant and the firm, whoever is reading it.'
+            );
+            $this->assertSame('/media/avatars/amy.jpg', $row['members'][0]['photo']);
+        }
+    }
 }

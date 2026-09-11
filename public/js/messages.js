@@ -607,6 +607,18 @@
 
   function groupClusterMembers(row, members) {
     var pool = (members || row.members || []).slice().filter(function (m) { return m && m.name; });
+
+    /*
+     * A provider case thread is about one file, and the server sends exactly
+     * the two faces that say which: the applicant's photo and the firm's
+     * contact. Sorting them by who is online, padding with the reader, or
+     * topping up from the room would put the staff in the disc — and they are
+     * who the thread reaches, not what it is about.
+     */
+    if (row && row.subject === 'provider') {
+      return pool.slice(0, GROUP_CLUSTER_MAX);
+    }
+
     pool.sort(function (a, b) {
       var ao = a.online ? 0 : 1;
       var bo = b.online ? 0 : 1;

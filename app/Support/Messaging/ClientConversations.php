@@ -62,7 +62,7 @@ class ClientConversations
             })
             ->with([
                 'activeParticipants.user.presence',
-                'client:id,uid,name',
+                'client:id,uid,name,photo_url',
                 'company:id,uid,name',
                 'messages' => fn ($q) => $q->latest('id')->limit(1),
             ])
@@ -331,7 +331,7 @@ class ClientConversations
 
             return $conversation->fresh([
                 'activeParticipants.user.presence',
-                'client:id,uid,name',
+                'client:id,uid,name,photo_url',
                 'company:id,uid,name',
                 'messages' => fn ($q) => $q->latest('id')->limit(1),
             ]);
@@ -583,7 +583,7 @@ class ClientConversations
     {
         return $conversation->fresh([
             'activeParticipants.user.presence',
-            'client:id,uid,name',
+            'client:id,uid,name,photo_url',
             'company:id,uid,name',
             'messages' => fn ($q) => $q->latest('id')->limit(1),
         ]) ?? $conversation;
