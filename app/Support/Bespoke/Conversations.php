@@ -53,15 +53,16 @@ final class Conversations
         return $conversation;
     }
 
-    public static function appendTurn(BespokeConversation $conversation, string $userText, string $reply): void
+    /** Returns the stored user turn, so attachments can be tied to it. */
+    public static function appendTurn(BespokeConversation $conversation, string $userText, string $reply): ?BespokeMessage
     {
         $userText = trim($userText);
         $reply = trim($reply);
         if ($userText === '') {
-            return;
+            return null;
         }
 
-        $conversation->messages()->create([
+        $userMessage = $conversation->messages()->create([
             'role' => BespokeMessage::ROLE_USER,
             'body' => mb_substr($userText, 0, 4000),
         ]);
@@ -77,6 +78,8 @@ final class Conversations
         }
         $conversation->last_message_at = now();
         $conversation->save();
+
+        return $userMessage;
     }
 
     /** A line from the portal itself, such as "Sent to …", kept in the thread. */
@@ -130,7 +133,7 @@ final class Conversations
     /** @return array<string, mixed> */
     public static function detailPayload(BespokeConversation $conversation): array
     {
-        $conversation->loadMissing(['messages' => fn ($query) => $query->orderBy('id')]);
+        $conversation->loadMissing(['messages' => fn ($query) => $query->orderBy('id')->with('attachments')]);
 
         return [
             'uuid' => $conversation->uuid,
@@ -141,6 +144,7 @@ final class Conversations
                     'role' => $message->role,
                     'content' => $message->body,
                     'createdAt' => optional($message->created_at)->toIso8601String(),
+                    'attachments' => $message->attachments->map(fn ($a) => Attachments::payload($a))->values()->all(),
                 ];
             })->values()->all(),
         ];

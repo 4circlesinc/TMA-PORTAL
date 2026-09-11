@@ -304,6 +304,134 @@
   background: var(--color-hover);
 }
 
+/* Files: the strip of pending uploads above the composer, and the chips a
+   sent message carries in its bubble. */
+.tma-bespoke__attach {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  padding: 0 var(--space-12) var(--space-8);
+  flex-shrink: 0;
+}
+
+.tma-bespoke__attach[hidden] {
+  display: none;
+}
+
+.tma-bespoke__files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
+}
+
+.tma-bespoke__file {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 0.5px solid var(--color-border-soft);
+  border-radius: var(--radius-8);
+  background: var(--color-white);
+  color: var(--color-text-primary);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  text-decoration: none;
+}
+
+a.tma-bespoke__file:hover {
+  background: var(--color-hover);
+  text-decoration: none;
+}
+
+.tma-bespoke__file img {
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.tma-bespoke__file > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-bespoke__file-meta {
+  color: var(--color-text-secondary);
+}
+
+.tma-bespoke__file--failed {
+  border-color: var(--color-red);
+}
+
+.tma-bespoke__file--failed .tma-bespoke__file-meta {
+  color: var(--color-red);
+}
+
+.tma-bespoke__file-remove {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin: 0 -2px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-6, 6px);
+  background: transparent;
+  cursor: pointer;
+}
+
+.tma-bespoke__file-remove:hover {
+  background: var(--color-hover);
+}
+
+.tma-bespoke__file-remove img {
+  width: 10px;
+  height: 10px;
+}
+
+.tma-bespoke__clip {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0.5px solid var(--color-border-medium);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.tma-bespoke__clip:hover {
+  background: var(--color-hover);
+}
+
+.tma-bespoke__clip:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--color-overlay-4);
+}
+
+.tma-bespoke__clip img {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.tma-dash[data-theme="dark"] .tma-bespoke__clip img,
+:root[data-theme="dark"] .tma-bespoke__clip img,
+.tma-dash[data-theme="dark"] .tma-bespoke__file img,
+:root[data-theme="dark"] .tma-bespoke__file img,
+.tma-dash[data-theme="dark"] .tma-bespoke__file-remove img,
+:root[data-theme="dark"] .tma-bespoke__file-remove img {
+  filter: invert(1);
+}
+
 /* Reply buttons the model asked for, sitting in the log under its answer. */
 .tma-bespoke__choices {
   display: flex;

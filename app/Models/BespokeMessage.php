@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable(['conversation_id', 'role', 'body'])]
 class BespokeMessage extends Model
@@ -16,5 +17,10 @@ class BespokeMessage extends Model
     public function conversation(): BelongsTo
     {
         return $this->belongsTo(BespokeConversation::class, 'conversation_id');
+    }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(BespokeAttachment::class, 'message_id');
     }
 }

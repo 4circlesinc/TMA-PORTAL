@@ -2,12 +2,15 @@
 
 namespace App\Support\Bespoke;
 
+use App\Models\BespokeAttachment;
+use App\Models\BespokeConversation;
 use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\User;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 /**
@@ -34,11 +37,48 @@ final class Toolbox
      * @param  array<string, mixed>  $identity
      * @param  array{path: string, view: string, title: string, kind: string}  $page
      */
+    /** @var Collection<int, BespokeAttachment>|null */
+    private ?Collection $attachments = null;
+
     public function __construct(
         private readonly User $user,
         private readonly array $identity,
         private readonly array $page,
+        private readonly ?BespokeConversation $conversation = null,
     ) {}
+
+    /** @return Collection<int, BespokeAttachment> */
+    private function attachments(): Collection
+    {
+        if ($this->attachments === null) {
+            $this->attachments = $this->conversation
+                ? Attachments::forConversation($this->conversation, $this->user)
+                : collect();
+        }
+
+        return $this->attachments;
+    }
+
+    /**
+     * Prompt lines about the files in this chat, so the model knows what it
+     * may read or resize without guessing at ids.
+     *
+     * @return list<string>
+     */
+    public function attachmentFacts(): array
+    {
+        $files = $this->attachments();
+        if ($files->isEmpty()) {
+            return ['Files: none attached in this chat. The reader can attach up to five (PDF, image, text) with the paperclip.'];
+        }
+        $lines = ['Files in this chat (id — name — what it is):'];
+        foreach ($files as $a) {
+            $lines[] = '- '.$a->uuid.' — '.$a->name.' — '.Attachments::describe($a).($a->hasText() ? ', text available via read_attachment' : '');
+        }
+        $lines[] = 'read_attachment returns a file\'s text in slices. resize_photo makes a 2×2 inch passport photo (600×600 or larger, square) from an image or the first page of a PDF; the result appears under your answer with Download. You cannot see image contents; never describe a photo.';
+
+        return $lines;
+    }
 
     /** @return list<array<string, mixed>> */
     public function actions(): array
@@ -116,6 +156,20 @@ final class Toolbox
                 ['number']);
         }
 
+        if ($this->attachments()->isNotEmpty()) {
+            $tools[] = self::define('read_attachment',
+                'Read the text of a file attached to this chat, in slices of up to 6000 characters. Use offset to continue.',
+                [
+                    'attachmentId' => ['type' => 'string', 'description' => 'The file id from the prompt.'],
+                    'offset' => ['type' => 'integer', 'description' => 'Character offset to start from. Default 0.'],
+                ],
+                ['attachmentId']);
+            $tools[] = self::define('resize_photo',
+                'Make a 2×2 inch passport photo from an attached image, or from page 1 of an attached PDF. The portal does the cropping and shows the result with Download; this call only asks for it.',
+                ['attachmentId' => ['type' => 'string']],
+                ['attachmentId']);
+        }
+
         if ($this->mailAvailable()) {
             $tools[] = self::define('propose_email',
                 'Draft an email the reader will send from the Email page. The portal opens the draft there; nothing is sent by this call. Body is plain text; paragraphs separated by blank lines.',
@@ -150,6 +204,8 @@ final class Toolbox
             'offer_choices' => $this->offerChoices($args),
             'list_applications' => $this->listApplications($args),
             'get_application' => $this->getApplication($args),
+            'read_attachment' => $this->readAttachment($args),
+            'resize_photo' => $this->resizePhoto($args),
             default => ['error' => 'Unknown tool.'],
         };
     }
@@ -279,6 +335,69 @@ final class Toolbox
         $this->choices = $clean;
 
         return ['ok' => true, 'options' => $clean];
+    }
+
+    // ------------------------------------------------------- attachments
+
+    private function attachment(string $id): ?BespokeAttachment
+    {
+        return $this->attachments()->first(fn (BespokeAttachment $a) => $a->uuid === $id);
+    }
+
+    /** @param  array<string, mixed>  $args */
+    private function readAttachment(array $args): array
+    {
+        $a = $this->attachment(trim((string) ($args['attachmentId'] ?? '')));
+        if ($a === null) {
+            return ['error' => 'No such file in this chat. Use an id from the prompt.'];
+        }
+        if (! $a->hasText()) {
+            return [
+                'name' => $a->name,
+                'text' => '',
+                'note' => $a->isImage()
+                    ? 'This is an image; there is no text to read and you cannot see it.'
+                    : 'No text layer in this file (a scanned PDF, perhaps). Say so rather than guessing.',
+            ];
+        }
+        $text = (string) $a->text;
+        $length = mb_strlen($text);
+        $offset = max(0, min($length, (int) ($args['offset'] ?? 0)));
+        $slice = mb_substr($text, $offset, 6000);
+        $next = $offset + mb_strlen($slice);
+
+        return [
+            'name' => $a->name,
+            'offset' => $offset,
+            'length' => $length,
+            'text' => $slice,
+            'nextOffset' => $next < $length ? $next : null,
+        ];
+    }
+
+    /** @param  array<string, mixed>  $args */
+    private function resizePhoto(array $args): array
+    {
+        $a = $this->attachment(trim((string) ($args['attachmentId'] ?? '')));
+        if ($a === null) {
+            return ['error' => 'No such file in this chat. Use an id from the prompt.'];
+        }
+        if (! $a->isImage() && ! $a->isPdf()) {
+            return ['error' => 'Only an image or a PDF can become a 2×2 photo.'];
+        }
+        if ($a->isImage() && $a->width && $a->height && min($a->width, $a->height) < 600) {
+            return ['error' => 'That image is only '.$a->width.'×'.$a->height.'. A 2×2 photo needs at least 600 pixels on the short side; ask for a larger original.'];
+        }
+
+        $this->actions[] = [
+            'type' => 'photo2x2',
+            'attachment' => Attachments::payload($a),
+        ];
+
+        return [
+            'ok' => true,
+            'note' => 'The portal is making the 2×2 photo now; it appears under your answer with Download. Tell the reader that. It is 600×600 or larger, square, and trimmed of white margins.',
+        ];
     }
 
     // ------------------------------------------------------ applications

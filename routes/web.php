@@ -188,6 +188,11 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/chat', [BespokeController::class, 'chat'])
             ->middleware('throttle:30,1')
             ->name('chat');
+        Route::post('/attachments', [BespokeController::class, 'uploadAttachment'])
+            ->middleware('throttle:60,1')
+            ->name('attachments.store');
+        Route::get('/attachments/{uuid}', [BespokeController::class, 'showAttachment'])
+            ->name('attachments.show');
         Route::post('/actions/send-message', [BespokeController::class, 'sendMessage'])
             ->middleware('throttle:30,1')
             ->name('actions.send-message');

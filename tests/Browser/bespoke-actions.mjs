@@ -182,6 +182,34 @@ await page.waitForTimeout(1500);
 const handoff = await page.evaluate(() => sessionStorage.getItem('tma.mail.pending-compose'));
 check(handoff === null, 'the mail page consumed the hand-off (no mailbox connected here, so it opens nothing)');
 
+// ── attachments: a real PDF, read by pdf.js in the browser, claimed by the real endpoint ──
+await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+await page.waitForSelector('[data-bespoke-fab]', { timeout: 15000 });
+await page.click('[data-bespoke-fab]');
+await page.waitForSelector('.tma-bespoke.is-open [data-bespoke-input]', { timeout: 8000 });
+await page.click('.tma-bespoke.is-open [data-bespoke-new]');
+await page.unroute('**/portal/bespoke/chat');
+let chatBody = null;
+page.on('request', (r) => { if (r.url().includes('/portal/bespoke/chat') && r.method() === 'POST') chatBody = r.postDataJSON(); });
+await page.setInputFiles('.tma-bespoke.is-open [data-bespoke-file]', 'tests/Browser/fixtures/contract.pdf');
+await page.waitForSelector('.tma-bespoke.is-open [data-bespoke-attach] .tma-bespoke__file--ready', { timeout: 20000 });
+const chipText = await page.textContent('.tma-bespoke.is-open [data-bespoke-attach] .tma-bespoke__file--ready');
+check(chipText.includes('contract.pdf'), `the picked PDF shows as a ready chip (${chipText.trim()})`);
+await page.fill('.tma-bespoke.is-open [data-bespoke-input]', 'Summarize this PDF');
+await page.keyboard.press('Enter');
+await page.waitForFunction(() => document.querySelectorAll('.tma-bespoke.is-open .tma-bespoke__row--assistant').length >= 1 && !document.querySelector('.tma-bespoke.is-open .tma-bespoke__typing'), null, { timeout: 20000 });
+check(chatBody && Array.isArray(chatBody.attachments) && chatBody.attachments.length === 1, 'the chat request names the uploaded file');
+check(await page.isVisible('.tma-bespoke.is-open .tma-bespoke__row--user .tma-bespoke__file'), 'the sent message carries the file chip');
+check(!(await page.isVisible('.tma-bespoke.is-open [data-bespoke-attach]')), 'the pending strip clears after sending');
+const stored = await page.evaluate(async (id) => {
+  const r = await fetch('/portal/bespoke/conversations/' + encodeURIComponent(id), { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+  const j = await r.json();
+  const m = (j.conversation && j.conversation.messages || []).find((x) => x.role === 'user');
+  return m && m.attachments && m.attachments[0] ? m.attachments[0] : null;
+}, chatBody && chatBody.conversationId);
+check(stored && stored.name === 'contract.pdf' && stored.hasText === true && stored.pages > 0, `the server holds the PDF with the text pdf.js read (${JSON.stringify(stored)})`);
+check((await page.evaluate(async (u) => (await fetch(u, { credentials: 'same-origin' })).status, stored && stored.url)) === 200, 'the reader can fetch the bytes back');
+
 await page.screenshot({ path: 'tests/Browser/bespoke-actions.png', fullPage: false });
 await browser.close();
 

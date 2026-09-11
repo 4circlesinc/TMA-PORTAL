@@ -14,8 +14,9 @@ final class Prompt
      * @param  array<string, mixed>  $identity
      * @param  array{path: string, view: string, title: string, kind: string}  $page
      * @param  list<array{label: string, empty: bool}>  $fieldHints
+     * @param  list<string>  $extra  Further facts, such as the files in this chat.
      */
-    public static function system(User $user, array $identity, array $page, array $fieldHints): string
+    public static function system(User $user, array $identity, array $page, array $fieldHints, array $extra = []): string
     {
         $allowed = Knowledge::allowedPaths($user, $identity);
         $account = $identity['accountType'];
@@ -95,6 +96,12 @@ final class Prompt
 
         if ($identity['cipEnabled'] && str_starts_with($page['kind'], 'cip')) {
             $parts[] = Knowledge::statusFacts();
+        }
+
+        foreach ($extra as $line) {
+            if (is_string($line) && $line !== '') {
+                $parts[] = $line;
+            }
         }
 
         $parts[] = 'Refuse to discuss other people’s files, applications, or users beyond what a tool returned. If a tool did not return it, you do not know it; say so and offer the link to open the file.';

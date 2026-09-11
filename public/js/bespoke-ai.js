@@ -24,6 +24,14 @@
   var PENCIL = 'images/icons/phosphor/PencilSimple.svg';
   var BACK = 'images/icons/phosphor/ArrowLeft.svg';
   var PENDING_COMPOSE_KEY = 'tma.mail.pending-compose';
+  var CLIP = 'images/icons/phosphor/Paperclip.svg';
+  var ICON_PDF = 'images/icons/phosphor/FilePdf.svg';
+  var ICON_IMAGE = 'images/icons/phosphor/Image.svg';
+  var ICON_FILE = 'images/icons/phosphor/File.svg';
+  var MAX_FILES = 5;
+  var ACCEPT = '.pdf,.jpg,.jpeg,.png,.webp,.txt,.md,.csv,application/pdf,image/jpeg,image/png,image/webp,text/plain';
+  var PDF_MAX_PAGES = 40;
+  var PDF_MAX_CHARS = 120000;
 
   var FALLBACK_FAQ = [
     {
@@ -300,6 +308,184 @@
     });
   }
 
+  function apiForm(path, formData) {
+    return fetch(path, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-XSRF-TOKEN': csrf()
+      },
+      body: formData
+    }).then(function (res) {
+      if (res.status === 404) return Promise.reject({ notFound: true, status: 404 });
+      return res.json().catch(function () { return {}; }).then(function (data) {
+        if (!res.ok) return Promise.reject({ status: res.status, data: data });
+        return data;
+      });
+    });
+  }
+
+  /* pdf.js loads on first use, the same lazy import the lightbox uses. The
+   * text layer is read here in the browser because nothing on the server
+   * reads PDFs. */
+  var pdfjsPromise = null;
+  function loadPdfjs() {
+    if (pdfjsPromise) return pdfjsPromise;
+    var root = window.__TMA_SITE_ROOT || '';
+    pdfjsPromise = import(root + '/js/vendor/pdf-loader.mjs?v=5').then(function (lib) {
+      try {
+        lib.GlobalWorkerOptions.workerSrc = new URL(root + '/js/vendor/pdf-worker.mjs?v=2', window.location.href).href;
+      } catch (e) {
+        lib.GlobalWorkerOptions.workerSrc = root + '/js/vendor/pdf-worker.mjs?v=2';
+      }
+      return lib;
+    }).catch(function (err) {
+      pdfjsPromise = null;
+      throw err;
+    });
+    return pdfjsPromise;
+  }
+
+  function extractPdfText(file) {
+    return file.arrayBuffer().then(function (buffer) {
+      return loadPdfjs().then(function (lib) {
+        return lib.getDocument({ data: new Uint8Array(buffer) }).promise;
+      });
+    }).then(function (doc) {
+      var pages = doc.numPages || 0;
+      var limit = Math.min(pages, PDF_MAX_PAGES);
+      var out = '';
+      var chain = Promise.resolve();
+      for (var n = 1; n <= limit; n++) {
+        (function (pageNo) {
+          chain = chain.then(function () {
+            if (out.length >= PDF_MAX_CHARS) return;
+            return doc.getPage(pageNo).then(function (page) {
+              return page.getTextContent();
+            }).then(function (content) {
+              var line = '';
+              (content.items || []).forEach(function (item) {
+                if (typeof item.str !== 'string') return;
+                line += item.str;
+                line += item.hasEOL ? '\n' : ' ';
+              });
+              out += (out ? '\n\n' : '') + line.replace(/[ \t]+\n/g, '\n').trim();
+            });
+          });
+        })(n);
+      }
+      return chain.then(function () {
+        try { doc.destroy(); } catch (e) { /* ignore */ }
+        return { text: out.slice(0, PDF_MAX_CHARS), pages: pages };
+      });
+    });
+  }
+
+  function fileIcon(entry) {
+    var mime = String(entry.mime || (entry.file && entry.file.type) || '');
+    var name = String(entry.name || '').toLowerCase();
+    if (mime === 'application/pdf' || /\.pdf$/.test(name)) return ICON_PDF;
+    if (/^image\//.test(mime) || /\.(jpe?g|png|webp)$/.test(name)) return ICON_IMAGE;
+    return ICON_FILE;
+  }
+
+  function sizeLabel(bytes) {
+    bytes = Number(bytes) || 0;
+    if (bytes >= 1048576) return (Math.round(bytes / 104857.6) / 10) + ' MB';
+    if (bytes >= 1024) return Math.round(bytes / 1024) + ' KB';
+    return bytes + ' B';
+  }
+
+  /* Chips for the files on a sent message, in the bubble. */
+  function attachmentsHtml(list) {
+    if (!Array.isArray(list) || !list.length) return '';
+    return '<div class="tma-bespoke__files">' + list.map(function (a) {
+      var url = a.url ? escapeHtml(a.url) : '';
+      var inner = '<img src="' + fileIcon(a) + '" alt="" width="14" height="14"><span>' + escapeHtml(a.name || 'file') + '</span>';
+      return url
+        ? '<a class="tma-bespoke__file" href="' + url + '" target="_blank" rel="noopener">' + inner + '</a>'
+        : '<span class="tma-bespoke__file">' + inner + '</span>';
+    }).join('') + '</div>';
+  }
+
+  function readyAttachments(ctx) {
+    return (ctx && ctx.pending || []).filter(function (e) { return e.status === 'ready' && e.id; });
+  }
+
+  function renderAttachStrip(ctx) {
+    if (!ctx || !ctx.attachEl) return;
+    var list = ctx.pending || [];
+    ctx.attachEl.innerHTML = '';
+    ctx.attachEl.hidden = !list.length;
+    list.forEach(function (entry) {
+      var chip = document.createElement('span');
+      chip.className = 'tma-bespoke__file tma-bespoke__file--' + entry.status;
+      var label = entry.status === 'uploading' ? 'Uploading…'
+        : entry.status === 'failed' ? (entry.error || 'Failed')
+        : sizeLabel(entry.size);
+      chip.innerHTML = '<img src="' + fileIcon(entry) + '" alt="" width="14" height="14">' +
+        '<span class="tma-bespoke__file-name">' + escapeHtml(entry.name) + '</span>' +
+        '<span class="tma-bespoke__file-meta">' + escapeHtml(label) + '</span>';
+      var remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'tma-bespoke__file-remove';
+      remove.setAttribute('aria-label', 'Remove ' + entry.name);
+      remove.innerHTML = '<img src="' + CLOSE + '" alt="" width="10" height="10">';
+      remove.addEventListener('click', function () {
+        ctx.pending = ctx.pending.filter(function (e) { return e !== entry; });
+        renderAttachStrip(ctx);
+        resizeInput(ctx);
+      });
+      chip.appendChild(remove);
+      ctx.attachEl.appendChild(chip);
+    });
+    resizeInput(ctx);
+  }
+
+  /* Each file goes up as it is picked, a PDF with the text read out of it,
+   * so the send itself only names what is already there. */
+  function attachFiles(ctx, files) {
+    if (!ctx || !files || !files.length) return;
+    var room = MAX_FILES - (ctx.pending || []).length;
+    var chosen = Array.prototype.slice.call(files, 0, Math.max(0, room));
+    if (files.length > room) toast('Up to ' + MAX_FILES + ' files per message.', true);
+    chosen.forEach(function (file) {
+      var entry = { file: file, name: file.name, size: file.size, mime: file.type, status: 'uploading', id: null };
+      ctx.pending.push(entry);
+      renderAttachStrip(ctx);
+      var isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+      var read = isPdf
+        ? extractPdfText(file).catch(function () { return { text: '', pages: null }; })
+        : Promise.resolve({ text: null, pages: null });
+      read.then(function (extracted) {
+        var form = new FormData();
+        form.append('file', file, file.name);
+        form.append('conversationId', ensureConversation(ctx));
+        if (extracted.text !== null && extracted.text !== undefined) form.append('text', extracted.text);
+        if (extracted.pages !== null && extracted.pages !== undefined) form.append('pages', String(extracted.pages));
+        return apiForm('/portal/bespoke/attachments', form);
+      }).then(function (data) {
+        var a = data && data.attachment;
+        if (!a || !a.id) throw new Error('no attachment');
+        entry.status = 'ready';
+        entry.id = a.id;
+        entry.url = a.url;
+        entry.size = a.size;
+        entry.mime = a.mime;
+        entry.payload = a;
+        renderAttachStrip(ctx);
+      }).catch(function (err) {
+        entry.status = 'failed';
+        var msg = err && err.data && err.data.message ? String(err.data.message) : 'Could not upload';
+        entry.error = msg.length > 48 ? 'Could not upload' : msg;
+        renderAttachStrip(ctx);
+        toast(msg, true);
+      });
+    });
+  }
+
   function localChips() {
     var path = currentPath();
     var cip = path.indexOf('/citizenship-applications') === 0;
@@ -382,7 +568,7 @@
     }
     var bubble = document.createElement('div');
     bubble.className = 'tma-bespoke__bubble';
-    bubble.innerHTML = html;
+    bubble.innerHTML = html + attachmentsHtml(opts.attachments);
     if (opts.copy) {
       var copy = document.createElement('button');
       copy.type = 'button';
@@ -446,14 +632,19 @@
     if (!ctx.inputEl) return;
     ctx.inputEl.style.height = 'auto';
     ctx.inputEl.style.height = Math.min(ctx.inputEl.scrollHeight, 4 * 22 + 16) + 'px';
-    if (ctx.sendBtn) ctx.sendBtn.disabled = ctx.busy || !String(ctx.inputEl.value || '').trim();
+    if (ctx.sendBtn) {
+      ctx.sendBtn.disabled = ctx.busy || (!String(ctx.inputEl.value || '').trim() && !readyAttachments(ctx).length);
+    }
   }
 
   function paintLog(ctx) {
     if (!ctx.logEl) return;
     ctx.logEl.innerHTML = '';
     ctx.messages.forEach(function (row) {
-      appendRow(ctx, row.role, renderLite(row.content), { copy: row.role === 'assistant' && looksLikeDraft(row.content) });
+      appendRow(ctx, row.role, renderLite(row.content), {
+        copy: row.role === 'assistant' && looksLikeDraft(row.content),
+        attachments: row.attachments
+      });
     });
   }
 
@@ -646,12 +837,22 @@
 
   function ask(ctx, text) {
     text = String(text || '').trim();
-    if (!text || !ctx || ctx.busy) return;
+    if (!ctx || ctx.busy) return;
+    var files = readyAttachments(ctx);
+    if ((ctx.pending || []).some(function (e) { return e.status === 'uploading'; })) {
+      toast('Still uploading. One moment.', true);
+      return;
+    }
+    if (!text && !files.length) return;
+    if (!text) text = files.length === 1 ? 'Here is a file.' : 'Here are ' + files.length + ' files.';
+    var sent = files.map(function (e) { return e.payload || { id: e.id, name: e.name, url: e.url, mime: e.mime }; });
     clearChoices(ctx);
-    ctx.messages.push({ role: 'user', content: text });
-    appendRow(ctx, 'user', renderLite(text));
+    ctx.messages.push({ role: 'user', content: text, attachments: sent });
+    appendRow(ctx, 'user', renderLite(text), { attachments: sent });
     renderChips(ctx, []);
     if (ctx.inputEl) ctx.inputEl.value = '';
+    ctx.pending = [];
+    renderAttachStrip(ctx);
     resizeInput(ctx);
     ctx.busy = true;
     if (ctx.sendBtn) ctx.sendBtn.disabled = true;
@@ -661,8 +862,9 @@
     api('/portal/bespoke/chat', {
       method: 'POST',
       body: {
-        messages: ctx.messages.slice(-12),
+        messages: ctx.messages.slice(-12).map(function (m) { return { role: m.role, content: m.content }; }),
         conversationId: ensureConversation(ctx),
+        attachments: sent.map(function (a) { return a.id; }).filter(Boolean),
         clientContext: {
           path: currentPath(),
           view: currentView(),
@@ -708,6 +910,13 @@
       ask(ctx, ctx.inputEl.value);
     });
     ctx.inputEl.addEventListener('input', function () { resizeInput(ctx); });
+    if (ctx.clipBtn && ctx.fileEl) {
+      ctx.clipBtn.addEventListener('click', function () { ctx.fileEl.click(); });
+      ctx.fileEl.addEventListener('change', function () {
+        attachFiles(ctx, ctx.fileEl.files);
+        ctx.fileEl.value = '';
+      });
+    }
     ctx.inputEl.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -791,7 +1000,10 @@
         '<div class="tma-bespoke__log" data-bespoke-page-log></div>' +
         '<div class="sr-only" aria-live="polite" data-bespoke-page-live></div>' +
         '<div class="tma-bespoke__chips" data-bespoke-page-chips></div>' +
+        '<div class="tma-bespoke__attach" data-bespoke-page-attach hidden></div>' +
         '<form class="tma-bespoke__composer" data-bespoke-page-form>' +
+          '<button type="button" class="tma-bespoke__clip" data-bespoke-page-clip aria-label="Attach files"><img src="' + CLIP + '" alt=""></button>' +
+          '<input type="file" data-bespoke-page-file multiple accept="' + ACCEPT + '" hidden>' +
           '<textarea class="tma-bespoke__input" data-bespoke-page-input rows="1" placeholder="Ask about this portal" aria-label="Message Bespoke AI Assistant"></textarea>' +
           '<button type="submit" class="tma-bespoke__send" data-bespoke-page-send disabled aria-label="Send"><img src="' + SEND + '" alt=""></button>' +
         '</form>' +
@@ -850,6 +1062,8 @@
 
   function resetPageThread(ctx) {
     ctx.messages = [];
+    ctx.pending = [];
+    renderAttachStrip(ctx);
     ctx.conversationId = uuid();
     storeSet(LS_CONV, ctx.conversationId);
     ctx.busy = false;
@@ -872,7 +1086,7 @@
       ctx.conversationId = conv.uuid || id;
       storeSet(LS_CONV, ctx.conversationId);
       ctx.messages = Array.isArray(conv.messages) ? conv.messages.map(function (row) {
-        return { role: row.role, content: row.content };
+        return { role: row.role, content: row.content, attachments: row.attachments || [] };
       }) : [];
       paintLog(ctx);
       setPageTitle(ctx, conv.title || 'New chat');
@@ -951,6 +1165,10 @@
       bannerEl: root.querySelector('[data-bespoke-page-banner]'),
       sendBtn: root.querySelector('[data-bespoke-page-send]'),
       formEl: root.querySelector('[data-bespoke-page-form]'),
+      attachEl: root.querySelector('[data-bespoke-page-attach]'),
+      clipBtn: root.querySelector('[data-bespoke-page-clip]'),
+      fileEl: root.querySelector('[data-bespoke-page-file]'),
+      pending: [],
       titleEl: root.querySelector('[data-bespoke-page-title]'),
       messages: [],
       conversations: [],
@@ -1090,7 +1308,10 @@
         '<div class="tma-bespoke__log" data-bespoke-log></div>' +
         '<div class="sr-only" aria-live="polite" data-bespoke-live></div>' +
         '<div class="tma-bespoke__chips" data-bespoke-chips></div>' +
+        '<div class="tma-bespoke__attach" data-bespoke-attach hidden></div>' +
         '<form class="tma-bespoke__composer" data-bespoke-form>' +
+          '<button type="button" class="tma-bespoke__clip" data-bespoke-clip aria-label="Attach files"><img src="' + CLIP + '" alt=""></button>' +
+          '<input type="file" data-bespoke-file multiple accept="' + ACCEPT + '" hidden>' +
           '<textarea class="tma-bespoke__input" data-bespoke-input rows="1" placeholder="Ask about this portal" aria-label="Message Bespoke AI Assistant"></textarea>' +
           '<button type="submit" class="tma-bespoke__send" data-bespoke-send disabled aria-label="Send"><img src="' + SEND + '" alt=""></button>' +
         '</form>' +
@@ -1100,6 +1321,8 @@
   function newWidgetChat() {
     if (!widget) return;
     widget.messages = [];
+    widget.pending = [];
+    renderAttachStrip(widget);
     widget.conversationId = uuid();
     storeSet(LS_CONV, widget.conversationId);
     if (widget.logEl) widget.logEl.innerHTML = '';
@@ -1219,6 +1442,10 @@
       subEl: host.querySelector('[data-bespoke-sub]'),
       sendBtn: host.querySelector('[data-bespoke-send]'),
       formEl: host.querySelector('[data-bespoke-form]'),
+      attachEl: host.querySelector('[data-bespoke-attach]'),
+      clipBtn: host.querySelector('[data-bespoke-clip]'),
+      fileEl: host.querySelector('[data-bespoke-file]'),
+      pending: [],
       messages: [],
       conversationId: storeGet(LS_CONV, ''),
       busy: false

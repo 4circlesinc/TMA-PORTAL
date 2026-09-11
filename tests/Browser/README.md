@@ -11,7 +11,10 @@ field placement and drawing, and computed CSS only exist in a browser.
   without sending, Yes posts to the real `/portal/bespoke/actions/send-message`
   and the edited text lands in the thread the card then links to; reply
   choices go back as the reader's own message; Open in Email hands the draft
-  to the mailbox through sessionStorage and the mail page consumes it.
+  to the mailbox through sessionStorage and the mail page consumes it. The
+  last step drops the real `fixtures/contract.pdf` into the composer with the
+  stub removed: pdf.js reads its text in the browser, the upload stages it,
+  the real chat claims it, and the reopened thread carries it with `hasText`.
 
   Seed the standard throwaway server plus a second administrator whose job
   title carries "IT", and serve with `FEATURE_BESPOKE=true`:
