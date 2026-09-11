@@ -11,6 +11,13 @@ use Illuminate\Support\Str;
  * Optional OpenAI-compatible chat completion. Missing key means the
  * controller stays on the local FAQ — the panel still opens.
  *
+ * BESPOKE_AI_MODEL may list several models, comma-separated, in order of
+ * preference. A model the host reports as unknown or decommissioned
+ * (hosts retire them without notice — Groq dropped llama-3.3-70b in
+ * Sep 2026 and the assistant went dark) hands over to the next one;
+ * every other failure stops there, since a bad key or a quota block
+ * would fail every model the same way.
+ *
  * The first attempt speaks the classic dialect (max_tokens, temperature)
  * because every OpenAI-compatible host accepts it. Newer OpenAI models
  * (gpt-5 and the o-series) reject those two parameters with a 400 that
@@ -31,34 +38,62 @@ final class Completions
 
         $key = trim((string) config('services.bespoke.key'));
         $base = rtrim(trim((string) config('services.bespoke.base_url')), '/');
-        $model = trim((string) config('services.bespoke.model'));
 
         $chat = array_merge(
             [['role' => 'system', 'content' => $system]],
             $messages,
         );
 
-        $result = self::request($key, $base, $model, [
-            'model' => $model,
-            'temperature' => 0.2,
-            'max_tokens' => 700,
-            'messages' => $chat,
-        ]);
-
-        if ($result['retry']) {
+        foreach (self::models() as $model) {
             $result = self::request($key, $base, $model, [
                 'model' => $model,
-                'max_completion_tokens' => 1500,
+                'temperature' => 0.2,
+                'max_tokens' => 700,
                 'messages' => $chat,
             ]);
+
+            if ($result['retry']) {
+                $result = self::request($key, $base, $model, [
+                    'model' => $model,
+                    'max_completion_tokens' => 1500,
+                    'messages' => $chat,
+                ]);
+            }
+
+            if ($result['text'] !== null || ! $result['next']) {
+                return $result['text'];
+            }
         }
 
-        return $result['text'];
+        return null;
     }
 
     /**
+     * Configured models in order of preference.
+     *
+     * @return list<string>
+     */
+    public static function models(): array
+    {
+        $raw = (string) config('services.bespoke.model');
+        $models = [];
+        foreach (explode(',', $raw) as $model) {
+            $model = trim($model);
+            if ($model !== '' && ! in_array($model, $models, true)) {
+                $models[] = $model;
+            }
+        }
+
+        return $models;
+    }
+
+    /**
+     * `retry` asks for the same model in the newer dialect; `next` says
+     * this host does not know the model and the next listed one should
+     * be tried.
+     *
      * @param  array<string, mixed>  $payload
-     * @return array{text: ?string, retry: bool}
+     * @return array{text: ?string, retry: bool, next: bool}
      */
     private static function request(string $key, string $base, string $model, array $payload): array
     {
@@ -75,7 +110,7 @@ final class Completions
         } catch (\Throwable $e) {
             Log::warning('Bespoke AI request failed', $context + ['error' => $e->getMessage()]);
 
-            return ['text' => null, 'retry' => false];
+            return ['text' => null, 'retry' => false, 'next' => false];
         }
 
         if (! $response->successful()) {
@@ -91,7 +126,12 @@ final class Completions
                 && array_key_exists('max_tokens', $payload)
                 && preg_match('/max_tokens|temperature/i', $message) === 1;
 
-            return ['text' => null, 'retry' => $retry];
+            $code = $response->json('error.code');
+            $next = in_array($code, ['model_not_found', 'model_decommissioned'], true)
+                || ($response->status() === 404 && preg_match('/\\bmodel\\b/i', $message) === 1)
+                || preg_match('/decommissioned/i', $message) === 1;
+
+            return ['text' => null, 'retry' => $retry, 'next' => $next];
         }
 
         $text = $response->json('choices.0.message.content');
@@ -101,10 +141,10 @@ final class Completions
                 'message' => Str::limit(self::errorMessage($response), 300),
             ]);
 
-            return ['text' => null, 'retry' => false];
+            return ['text' => null, 'retry' => false, 'next' => false];
         }
 
-        return ['text' => trim($text), 'retry' => false];
+        return ['text' => trim($text), 'retry' => false, 'next' => false];
     }
 
     private static function errorMessage(Response $response): string

@@ -38,6 +38,8 @@ class BespokeAccessTest extends TestCase
         $this->actingAs($admin)->postJson('/portal/bespoke/chat', [
             'messages' => [['role' => 'user', 'content' => 'Where is File Library?']],
         ])->assertNotFound();
+        $this->actingAs($admin)->getJson('/portal/bespoke/conversations')->assertNotFound();
+        $this->actingAs($admin)->get('/bespoke-ai')->assertNotFound();
     }
 
     public function test_logged_out_json_is_unauthorized_not_a_404_from_the_flag(): void
@@ -45,6 +47,7 @@ class BespokeAccessTest extends TestCase
         config(['services.bespoke.enabled' => true]);
 
         $this->getJson('/portal/bespoke/suggestions')->assertUnauthorized();
+        $this->getJson('/portal/bespoke/conversations')->assertUnauthorized();
         $this->postJson('/portal/bespoke/chat', [
             'messages' => [['role' => 'user', 'content' => 'Hello']],
         ])->assertUnauthorized();
@@ -281,7 +284,11 @@ class BespokeAccessTest extends TestCase
 
     public function test_a_rejected_key_logs_the_provider_message_and_falls_back(): void
     {
-        config(['services.bespoke.enabled' => true, 'services.bespoke.key' => 'sk-bad']);
+        config([
+            'services.bespoke.enabled' => true,
+            'services.bespoke.key' => 'sk-bad',
+            'services.bespoke.model' => 'gpt-4o-mini, gpt-4.1-mini',
+        ]);
         Http::fake([
             'api.openai.com/*' => Http::response([
                 'error' => [
@@ -314,5 +321,135 @@ class BespokeAccessTest extends TestCase
                 && $context['host'] === 'api.openai.com'
                 && str_contains($context['message'], 'Incorrect API key')),
         );
+    }
+
+    public function test_a_retired_model_hands_over_to_the_next_listed_model(): void
+    {
+        config([
+            'services.bespoke.enabled' => true,
+            'services.bespoke.key' => 'gsk_test',
+            'services.bespoke.base_url' => 'https://api.groq.com/openai/v1',
+            'services.bespoke.model' => 'llama-3.3-70b-versatile, openai/gpt-oss-120b, openai/gpt-oss-20b',
+        ]);
+        Http::fake([
+            'api.groq.com/*' => Http::sequence()
+                ->push([
+                    'error' => [
+                        'message' => 'The model `llama-3.3-70b-versatile` does not exist or you do not have access to it.',
+                        'type' => 'invalid_request_error',
+                        'code' => 'model_not_found',
+                    ],
+                ], 404)
+                ->push([
+                    'choices' => [[
+                        'message' => ['role' => 'assistant', 'content' => 'Open [File Library](/folders/all).'],
+                        'finish_reason' => 'stop',
+                    ]],
+                ], 200),
+        ]);
+
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+
+        $payload = $this->actingAs($officer)
+            ->postJson('/portal/bespoke/chat', [
+                'messages' => [['role' => 'user', 'content' => 'Where is File Library?']],
+                'clientContext' => ['path' => '/'],
+            ])
+            ->assertOk()
+            ->json();
+
+        $this->assertSame('model', $payload['source']);
+        $this->assertStringContainsString('/folders/all', $payload['reply']);
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($request) => $request->data()['model'] === 'llama-3.3-70b-versatile');
+        Http::assertSent(fn ($request) => $request->data()['model'] === 'openai/gpt-oss-120b'
+            && str_starts_with($request->url(), 'https://api.groq.com/openai/v1/chat/completions'));
+        Http::assertNotSent(fn ($request) => $request->data()['model'] === 'openai/gpt-oss-20b');
+    }
+
+    public function test_the_assistant_page_is_open_to_every_approved_account_when_the_flag_is_on(): void
+    {
+        config(['services.bespoke.enabled' => true]);
+
+        $this->actingAs($this->user(Role::CLIENT))->get('/bespoke-ai')->assertOk();
+        $this->actingAs($this->user(Role::REVIEWING_OFFICER))->get('/bespoke-ai')->assertOk();
+        $this->actingAs($this->user(Role::ADMINISTRATOR))->get('/bespoke-ai')->assertOk();
+    }
+
+    public function test_chat_persists_and_another_account_cannot_read_it(): void
+    {
+        config([
+            'services.bespoke.enabled' => true,
+            'services.bespoke.key' => '',
+            'services.cip.enabled' => true,
+        ]);
+
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $other = $this->user(Role::CLIENT);
+        $conversationId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+
+        $this->actingAs($officer)
+            ->postJson('/portal/bespoke/chat', [
+                'messages' => [['role' => 'user', 'content' => 'What’s the difference between Save as draft and Add?']],
+                'conversationId' => $conversationId,
+                'clientContext' => ['path' => '/citizenship-applications/new', 'view' => 'clients'],
+            ])
+            ->assertOk()
+            ->assertJsonPath('conversationId', $conversationId);
+
+        $this->assertDatabaseHas('bespoke_conversations', [
+            'uuid' => $conversationId,
+            'user_id' => $officer->id,
+        ]);
+        $this->assertDatabaseHas('bespoke_messages', [
+            'role' => 'user',
+        ]);
+
+        $list = $this->actingAs($officer)
+            ->getJson('/portal/bespoke/conversations')
+            ->assertOk()
+            ->json('conversations');
+        $this->assertCount(1, $list);
+        $this->assertSame($conversationId, $list[0]['uuid']);
+
+        $this->actingAs($other)
+            ->getJson('/portal/bespoke/conversations')
+            ->assertOk()
+            ->assertJsonPath('conversations', []);
+
+        $this->actingAs($other)
+            ->getJson('/portal/bespoke/conversations/'.$conversationId)
+            ->assertNotFound();
+
+        $this->actingAs($other)
+            ->patchJson('/portal/bespoke/conversations/'.$conversationId, ['title' => 'Stolen'])
+            ->assertNotFound();
+
+        $this->actingAs($other)
+            ->deleteJson('/portal/bespoke/conversations/'.$conversationId)
+            ->assertNotFound();
+
+        $detail = $this->actingAs($officer)
+            ->getJson('/portal/bespoke/conversations/'.$conversationId)
+            ->assertOk()
+            ->json('conversation');
+        $this->assertSame($conversationId, $detail['uuid']);
+        $this->assertNotEmpty($detail['messages']);
+        $this->assertSame('user', $detail['messages'][0]['role']);
+
+        $this->actingAs($officer)
+            ->patchJson('/portal/bespoke/conversations/'.$conversationId, ['title' => 'Draft vs Add'])
+            ->assertOk()
+            ->assertJsonPath('conversation.title', 'Draft vs Add');
+
+        $this->actingAs($officer)
+            ->get('/bespoke-ai/'.$conversationId)
+            ->assertOk();
+
+        $this->actingAs($officer)
+            ->deleteJson('/portal/bespoke/conversations/'.$conversationId)
+            ->assertOk();
+
+        $this->assertDatabaseMissing('bespoke_conversations', ['uuid' => $conversationId]);
     }
 }
