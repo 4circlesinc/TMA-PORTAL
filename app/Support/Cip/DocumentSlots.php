@@ -525,7 +525,7 @@ class DocumentSlots
         $folder = Folder::find($folderId);
 
         while ($folder !== null) {
-            $person = CipPerson::where('folder_id', $folder->id)->first();
+            $person = Tree::personAt($folder);
 
             if ($person !== null) {
                 return $person;

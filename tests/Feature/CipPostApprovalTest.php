@@ -11,6 +11,7 @@ use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Company;
 use App\Models\CompanyMember;
+use App\Models\FileItem;
 use App\Models\FileVersion;
 use App\Models\Folder;
 use App\Models\User;
@@ -44,6 +45,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class CipPostApprovalTest extends TestCase
@@ -141,6 +143,75 @@ class CipPostApprovalTest extends TestCase
             ->where('name', 'Main Applicant')
             ->first();
         $this->assertNotNull($personFolder);
+
+        $packs = Folder::query()->where('parent_id', $personFolder->id)->pluck('name')->all();
+        $this->assertContains(CorRequirements::FOLDER, $packs);
+        $this->assertContains(NicRequirements::FOLDER, $packs);
+        $this->assertContains(PassportRequirements::FOLDER, $packs);
+    }
+
+    public function test_opening_a_post_approval_file_fills_in_missing_nic_and_passport_folders(): void
+    {
+        $staff = $this->staff();
+        $application = $this->application($staff);
+        $this->mainApplicant($application);
+        $application->forceFill([
+            'phase' => Phase::POST_APPROVAL,
+            'post_approval_at' => now(),
+            'status' => Status::POST_APPROVAL,
+        ])->save();
+
+        PostApproval::prepare($application->fresh(['people']), $staff);
+
+        $personFolder = Folder::query()
+            ->where('parent_id', $application->fresh()->post_approval_folder_id)
+            ->where('name', 'Main Applicant')
+            ->first();
+        $this->assertNotNull($personFolder);
+
+        Folder::query()->where('parent_id', $personFolder->id)->forceDelete();
+        $this->assertSame([], Folder::query()->where('parent_id', $personFolder->id)->pluck('name')->all());
+
+        $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk();
+
+        $packs = Folder::query()->where('parent_id', $personFolder->id)->pluck('name')->all();
+        $this->assertContains(NicRequirements::FOLDER, $packs);
+        $this->assertContains(PassportRequirements::FOLDER, $packs);
+        $this->assertContains(CorRequirements::FOLDER, $packs);
+    }
+
+    public function test_a_library_upload_in_the_post_approval_nic_folder_fills_the_slot(): void
+    {
+        $staff = $this->staff();
+        [$application, $person] = $this->intoApplyForNic($staff);
+        $personFolder = Tree::postApprovalPersonFolder($person->fresh(['application']), null, $staff);
+        $nicFolder = Folder::query()
+            ->where('parent_id', $personFolder->id)
+            ->where('name', NicRequirements::FOLDER)
+            ->first();
+        $this->assertNotNull($nicFolder);
+
+        $slot = $person->documents()->where('type', NicRequirements::R3_FORM)->first();
+        $this->assertNotNull($slot);
+        $this->assertNull($slot->file_id);
+
+        $file = FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'folder_id' => $nicFolder->id,
+            'name' => $person->fullName().' - '.$slot->label.'.pdf',
+            'extension' => 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 1000,
+            'disk' => config('filesystems.files_disk', 'local'),
+            'storage_path' => 'cip/test-r3.pdf',
+            'owner_id' => $staff->id,
+            'uploaded_by' => $staff->id,
+        ]);
+
+        $this->assertTrue(DocumentSlots::adoptOrphan($file->fresh(), $staff));
+        $this->assertSame($file->id, $slot->fresh()->file_id);
     }
 
     public function test_for_phase_filters_requirements(): void

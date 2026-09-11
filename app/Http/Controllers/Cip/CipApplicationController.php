@@ -1224,6 +1224,9 @@ class CipApplicationController extends Controller
         } else {
             Tree::provisionAdditionalDrawers($application, $request->user());
         }
+        if (($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL) {
+            Tree::provisionPostApproval($application, $request->user());
+        }
         $application->refresh();
 
         /*
@@ -1380,6 +1383,9 @@ class CipApplicationController extends Controller
                 Tree::provision($application, $user);
             } else {
                 Tree::provisionAdditionalDrawers($application, $user);
+            }
+            if (($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL) {
+                Tree::provisionPostApproval($application, $user);
             }
             $application->refresh();
             Tree::syncClientName($application);

@@ -324,9 +324,20 @@ class Tree
     /**
      * The post-approval repository tree under the client folder.
      *
-     * One drawer for the lane, then one folder per person on the file. The
-     * link lives on {@see CipApplication::$post_approval_folder_id} so uploads
-     * can be filed there without walking the tree by name.
+     * One drawer for the lane, then one folder per person, then the COR / NIC /
+     * Passport pack drawers inside each person. The link lives on
+     * {@see CipApplication::$post_approval_folder_id} so uploads can be filed
+     * there without walking the tree by name.
+     *
+     *     Post-Approval Documents
+     *       ├── Main Applicant
+     *       │     ├── COR
+     *       │     ├── NIC
+     *       │     └── Passport
+     *       └── Dependent 1
+     *             ├── COR
+     *             ├── NIC
+     *             └── Passport
      */
     public static function provisionPostApproval(CipApplication $application, ?User $actor = null): Folder
     {
@@ -343,6 +354,7 @@ class Tree
         $postRoot = self::ensureChildDrawer($root, self::POST_APPROVAL, $actor);
 
         foreach ($application->people as $person) {
+            $person->setRelation('application', $application);
             self::postApprovalPersonFolder($person, $postRoot, $actor);
         }
 
@@ -371,7 +383,65 @@ class Tree
             $postRoot = self::provisionPostApproval($person->application, $actor);
         }
 
-        return self::childNamed($postRoot, self::folderName($person), $actor);
+        $folder = self::childNamed($postRoot, self::folderName($person), $actor);
+        self::provisionPackFolders($folder, $actor);
+
+        return $folder;
+    }
+
+    /**
+     * COR, NIC and Passport drawers inside one post-approval person folder.
+     *
+     * Created empty so the Documents tab has somewhere to file each pack
+     * before the first scan lands. Uploads still go through
+     * {@see DocumentSlots}; these drawers are the filing place, not the
+     * checklist.
+     */
+    public static function provisionPackFolders(Folder $personFolder, ?User $actor = null): void
+    {
+        foreach ([Pack::COR, Pack::NIC, Pack::PASSPORT] as $pack) {
+            self::childNamed($personFolder, Pack::folder($pack), $actor);
+        }
+    }
+
+    /**
+     * The person this folder belongs to: their pre-approval repository, or
+     * their folder under Post-Approval Documents.
+     *
+     * Pack drawers (COR / NIC / Passport) are children of the person folder,
+     * so the caller walks up until this matches.
+     */
+    public static function personAt(Folder $folder): ?CipPerson
+    {
+        $person = CipPerson::where('folder_id', $folder->id)->first();
+
+        if ($person !== null) {
+            return $person;
+        }
+
+        if ($folder->parent_id === null) {
+            return null;
+        }
+
+        $application = CipApplication::query()
+            ->where('post_approval_folder_id', $folder->parent_id)
+            ->first();
+
+        if ($application === null) {
+            return null;
+        }
+
+        $application->loadMissing('people');
+
+        foreach ($application->people as $candidate) {
+            $candidate->setRelation('application', $application);
+
+            if (strcasecmp(self::folderName($candidate), $folder->name) === 0) {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     /**
