@@ -536,7 +536,7 @@ final class Knowledge
                 'id' => 'support',
                 'q' => 'Who do I contact if something is wrong?',
                 'keywords' => ['support', 'help', 'contact', 'wrong'],
-                'answer' => 'Email support@tmantoine.com. Privacy questions may use portal@tmantoinelaw.com. Include the page, account email, and application number if it is a CIP file. Do not send sign-in codes or authenticator codes.',
+                'answer' => 'Email portal@tmantoinelaw.com. Include the page, account email, and application number if it is a CIP file. Do not send sign-in codes or authenticator codes.',
             ],
             [
                 'id' => 'provider-assign',

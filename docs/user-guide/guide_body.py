@@ -1581,7 +1581,7 @@ def _activity(doc, add_title, add_h2, add_body, add_bullets, add_table, add_call
     add_h2(doc, "Emails the portal sends")
     add_body(
         doc,
-        "Typical messages include Your sign-in code, password reset, password changed, two-factor changed, invitations, and CIP notices. Wording can be edited by administrators under Templates → System Emails. Support copy in those messages uses support@tmantoine.com.",
+        "Typical messages include Your sign-in code, password reset, password changed, two-factor changed, invitations, and CIP notices. Wording can be edited by administrators under Templates → System Emails. Support copy in those messages uses portal@tmantoinelaw.com.",
     )
 
 
@@ -1700,7 +1700,7 @@ def _faq(doc, add_title, add_h2, add_body):
     add_h2(doc, "Who do I contact if something is wrong?")
     add_body(
         doc,
-        "Email support@tmantoine.com. Privacy questions may use portal@tmantoinelaw.com. A phone number for the helpdesk is not published in the portal. [Information Required] if your firm uses a different internal contact.",
+        "Email portal@tmantoinelaw.com. A phone number for the helpdesk is not published in the portal. [Information Required] if your firm uses a different internal contact.",
     )
 
 
@@ -1711,7 +1711,7 @@ def _support(doc, add_title, add_body, add_table):
         ["Item", "Detail"],
         [
             ["Portal", "https://portal.tmantoinelaw.com"],
-            ["Support email", "support@tmantoine.com"],
+            ["Support email", "portal@tmantoinelaw.com"],
             ["Privacy contact", "portal@tmantoinelaw.com"],
             ["Phone / hours", "[Information Required]"],
         ],

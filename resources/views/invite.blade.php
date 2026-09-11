@@ -50,7 +50,7 @@
             <h1 class="tma-auth__title" id="invite-title">This invitation has expired</h1>
             <p class="tma-auth__subtitle">Ask the person who invited you to send a new one.</p>
           </div>
-          <a class="tma-auth__submit" href="mailto:support@tmantoine.com?subject={{ rawurlencode('New portal invitation request') }}">Request a new invitation</a>
+          <a class="tma-auth__submit" href="mailto:portal@tmantoinelaw.com?subject={{ rawurlencode('New portal invitation request') }}">Request a new invitation</a>
           <p class="tma-auth__alt-link"><a href="{{ url('/auth/login') }}">Go to sign in</a></p>
 
         @elseif ($state === 'accepted')
@@ -65,7 +65,7 @@
             <h1 class="tma-auth__title" id="invite-title">This invitation was withdrawn</h1>
             <p class="tma-auth__subtitle">This invitation is no longer available. Contact us if you think that's a mistake.</p>
           </div>
-          <a class="tma-auth__submit" href="mailto:support@tmantoine.com">Contact support</a>
+          <a class="tma-auth__submit" href="mailto:portal@tmantoinelaw.com">Contact support</a>
 
         @elseif ($state === 'declined')
           <div class="tma-auth__intro">
@@ -79,7 +79,7 @@
             <h1 class="tma-auth__title" id="invite-title">This invitation link isn't valid</h1>
             <p class="tma-auth__subtitle">The link may be incomplete, or it may have been replaced by a newer invitation. Please request a new one.</p>
           </div>
-          <a class="tma-auth__submit" href="mailto:support@tmantoine.com?subject={{ rawurlencode('New portal invitation request') }}">Request a new invitation</a>
+          <a class="tma-auth__submit" href="mailto:portal@tmantoinelaw.com?subject={{ rawurlencode('New portal invitation request') }}">Request a new invitation</a>
           <p class="tma-auth__alt-link"><a href="{{ url('/auth/login') }}">Go to sign in</a></p>
 
         {{-- The firm has switched self-registration off in Client hub access, so
@@ -90,7 +90,7 @@
             <h1 class="tma-auth__title" id="invite-title">We'll finish setting up your account</h1>
             <p class="tma-auth__subtitle">{{ $organisation }} creates portal accounts for its clients. We'll be in touch with your sign-in details shortly.</p>
           </div>
-          <a class="tma-auth__submit" href="mailto:support@tmantoine.com?subject={{ rawurlencode('Portal account setup') }}">Contact support</a>
+          <a class="tma-auth__submit" href="mailto:portal@tmantoinelaw.com?subject={{ rawurlencode('Portal account setup') }}">Contact support</a>
           <p class="tma-auth__alt-link"><a href="{{ url('/auth/login') }}">Go to sign in</a></p>
 
         {{-- --------------------------------------------- create an account --}}
@@ -264,7 +264,7 @@
             @if ($expiresAt)
               Expires {{ $expiresAt->format('j M Y') }}.
             @endif
-            <a href="mailto:support@tmantoine.com">Contact support</a>
+            <a href="mailto:portal@tmantoinelaw.com">Contact support</a>
           </p>
         @endunless
       </div>

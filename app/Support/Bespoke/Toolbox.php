@@ -265,7 +265,7 @@ final class Toolbox
         }
 
         if ($sections === [] && $faqs === []) {
-            return ['sections' => [], 'note' => 'Nothing in the guide matches. Say so rather than guessing, and offer support@tmantoine.com.'];
+            return ['sections' => [], 'note' => 'Nothing in the guide matches. Say so rather than guessing, and offer portal@tmantoinelaw.com.'];
         }
 
         return ['sections' => $sections, 'faq' => $faqs];

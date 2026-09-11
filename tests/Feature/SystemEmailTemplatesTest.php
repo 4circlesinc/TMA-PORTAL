@@ -80,7 +80,7 @@ class SystemEmailTemplatesTest extends TestCase
         $this->actingAs($admin)
             ->patchJson('/portal/templates/system-emails/verify-email', ['fields' => [
                 'subject' => 'One more step, {{name}}',
-                'body' => "Press the button and **{{name}}** is all set.\n\nQuestions? support@tmantoine.com.",
+                'body' => "Press the button and **{{name}}** is all set.\n\nQuestions? portal@tmantoinelaw.com.",
             ]])
             ->assertOk()
             ->assertJsonPath('customized', true);
@@ -89,7 +89,7 @@ class SystemEmailTemplatesTest extends TestCase
 
         $this->assertSame('One more step, Ada', $mail->subjectLine);
         $this->assertStringContainsString('<strong>Ada</strong>', $mail->payload['bodyHtml']);
-        $this->assertStringContainsString('mailto:support@tmantoine.com', $mail->payload['bodyHtml']);
+        $this->assertStringContainsString('mailto:portal@tmantoinelaw.com', $mail->payload['bodyHtml']);
         $this->assertSame('https://portal.test/verify/abc', $mail->payload['button']['url'], 'the button URL is not editable copy');
         // Untouched fields keep the shipped copy.
         $this->assertSame('Confirm email address', $mail->payload['button']['label']);
@@ -292,7 +292,7 @@ class SystemEmailTemplatesTest extends TestCase
     public function test_the_markup_escapes_what_people_typed(): void
     {
         $html = Markup::html(
-            "See **{{name}}** at [the portal]({{url}}) or https://tma.test — write support@tmantoine.com.\n\n- one\n- two",
+            "See **{{name}}** at [the portal]({{url}}) or https://tma.test — write portal@tmantoinelaw.com.\n\n- one\n- two",
             ['name' => '<script>x</script>', 'url' => 'https://portal.test/a?b=1&c=2'],
         );
 
@@ -301,7 +301,7 @@ class SystemEmailTemplatesTest extends TestCase
         $this->assertStringContainsString('<a href="https://portal.test/a?b=1&amp;c=2"', $html);
         $this->assertStringContainsString('>the portal</a>', $html);
         $this->assertStringContainsString('<a href="https://tma.test"', $html);
-        $this->assertStringContainsString('<a href="mailto:support@tmantoine.com"', $html);
+        $this->assertStringContainsString('<a href="mailto:portal@tmantoinelaw.com"', $html);
         $this->assertStringContainsString('<ul><li>one</li><li>two</li></ul>', $html);
     }
 }
