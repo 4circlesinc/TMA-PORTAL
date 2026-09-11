@@ -1022,9 +1022,32 @@ body:has(.tma-dash--bespoke) .tma-bespoke,
   display: none !important;
 }
 
-.tma-dash--bespoke .tma-dash__main {
+.tma-dash--bespoke .tma-dash__main,
+.tma-dash.tma-dash--desktop-bar.tma-dash--bespoke .tma-dash__main {
   overflow: hidden;
   min-height: 0;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+@media (min-width: 1025px) {
+  .tma-dash--bespoke .tma-dash__main,
+  .tma-dash.tma-dash--desktop-bar.tma-dash--bespoke .tma-dash__main {
+    padding-top: 0 !important;
+  }
+}
+
+@media (max-width: 1024px) {
+  .tma-dash--bespoke .tma-dash__main {
+    padding-top: calc(var(--dash-mobile-header-h) + var(--space-12)) !important;
+    padding-bottom: calc(var(--dash-tabbar-clearance) + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .tma-dash.tma-dash--desktop-bar.tma-dash--bespoke .tma-dash__main {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
 }
 
 .tma-dash__view[data-view="bespoke"]:not([hidden]) {
@@ -1060,9 +1083,7 @@ body:has(.tma-dash--bespoke) .tma-bespoke,
   flex: 1;
   min-height: 0;
   width: 100%;
-  background: var(--color-bg-card);
-  border: 0.5px solid var(--color-border-soft);
-  border-radius: var(--radius-16);
+  background: var(--color-white);
   overflow: hidden;
   font-family: var(--font-family);
   font-feature-settings: var(--font-features);
@@ -1076,7 +1097,7 @@ body:has(.tma-dash--bespoke) .tma-bespoke,
   flex-shrink: 0;
   min-height: 0;
   border-right: 0.5px solid var(--color-border-soft);
-  background: var(--color-bg-page);
+  background: var(--color-white);
 }
 
 .tma-bespoke-page__rail-head {
@@ -1210,7 +1231,7 @@ body:has(.tma-dash--bespoke) .tma-bespoke,
   flex: 1;
   min-width: 0;
   min-height: 0;
-  background: var(--color-bg-card);
+  background: var(--color-white);
   isolation: isolate;
 }
 
@@ -1289,11 +1310,6 @@ body:has(.tma-dash--bespoke) .tma-bespoke,
 }
 
 @media (max-width: 1024px) {
-  .tma-bespoke-page {
-    border: 0;
-    border-radius: 0;
-  }
-
   .tma-bespoke-page:not(.is-thread) .tma-bespoke-page__thread {
     display: none;
   }

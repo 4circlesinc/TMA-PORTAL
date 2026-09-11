@@ -392,7 +392,7 @@
     if (window.TMABespoke || document.querySelector('script[src*="bespoke-ai.js"]')) return;
     var css = document.createElement('link');
     css.rel = 'stylesheet';
-    css.href = 'css/bespoke-ai.css?v=15';
+    css.href = 'css/bespoke-ai.css?v=17';
     (document.head || document.documentElement).appendChild(css);
     var js = document.createElement('script');
     js.src = 'js/bespoke-ai.js?v=14';
