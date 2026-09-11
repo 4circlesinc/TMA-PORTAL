@@ -302,6 +302,14 @@ class Contacts
             }
         }
 
+        if ($status === Status::DD_QUERY) {
+            $drawer = Tree::additionalDrawer($application, Tree::ADDITIONAL_DD_QUERY)
+                ?? Tree::additionalFolder($application);
+            if ($drawer) {
+                $query .= '&folder='.$drawer->uuid;
+            }
+        }
+
         return Pages::application($application->client->uid, $query);
     }
 

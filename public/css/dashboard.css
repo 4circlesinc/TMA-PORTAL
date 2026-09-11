@@ -31113,6 +31113,8 @@ button.tma-dash__header-popup-item:focus-visible {
 }
 .tma-users-picker-item-copy { display: flex; flex-direction: column; gap: 2px; }
 .tma-users-picker-item-copy span { color: var(--color-text-secondary); font-size: var(--text-size-12); }
+.tma-users-picker-role-label { margin: var(--space-8) 0 0; font-weight: 600; }
+.tma-users-picker-roles { display: flex; flex-direction: column; gap: 4px; margin: var(--space-8) 0; }
 
 [data-users-status-menu] .tma-dash__menu-item {
   display: flex;
@@ -39021,6 +39023,7 @@ span.tma-dash__messages-profile-avatar {
 .tma-portal-cip__dot--orange, .tma-portal-cip__tone--orange { --tma-cip-tone: var(--tma-status-orange, #ea580c); }
 .tma-portal-cip__dot--rose,   .tma-portal-cip__tone--rose   { --tma-cip-tone: var(--tma-status-rose, #e11d48); }
 .tma-portal-cip__dot--cyan,   .tma-portal-cip__tone--cyan   { --tma-cip-tone: var(--tma-status-cyan, #0891b2); }
+.tma-portal-cip__dot--azure,  .tma-portal-cip__tone--azure  { --tma-cip-tone: var(--tma-status-azure, #0284c7); }
 .tma-portal-cip__dot--copper, .tma-portal-cip__tone--copper { --tma-cip-tone: var(--tma-status-copper, #9a3412); }
 .tma-portal-cip__dot--emerald, .tma-portal-cip__tone--emerald { --tma-cip-tone: var(--tma-status-emerald, #059669); }
 .tma-portal-cip__dot--slate, .tma-portal-cip__tone--slate { --tma-cip-tone: var(--tma-status-slate, #475569); }

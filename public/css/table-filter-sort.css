@@ -622,6 +622,7 @@
 .tma-filter-popover__dot--orange { background: var(--tma-status-orange, #ea580c); }
 .tma-filter-popover__dot--rose   { background: var(--tma-status-rose, #e11d48); }
 .tma-filter-popover__dot--cyan   { background: var(--tma-status-cyan, #0891b2); }
+.tma-filter-popover__dot--azure  { background: var(--tma-status-azure, #0284c7); }
 .tma-filter-popover__dot--copper { background: var(--tma-status-copper, #9a3412); }
 .tma-filter-popover__dot--emerald { background: var(--tma-status-emerald, #059669); }
 .tma-filter-popover__dot--slate  { background: var(--tma-status-slate, #475569); }

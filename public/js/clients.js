@@ -204,11 +204,15 @@
   function listTabsForViewer() {
     if (isProviderCipUser()) {
       return LIST_TABS.filter(function (tab) {
-        return tab.id === 'all_applications'
+        if (tab.id === 'all_applications'
           || tab.id === 'pre_approval'
           || tab.id === 'post_approval'
           || tab.id === 'appeal'
-          || tab.id === 'closed';
+          || tab.id === 'closed') {
+          return true;
+        }
+        // Service Provider admins manage invitations from their firm card.
+        return tab.id === 'providers' && isServiceProviderAdmin();
       });
     }
 
@@ -832,6 +836,22 @@
   function isClientsAdmin() {
     var me = window.TMACurrentUser && TMACurrentUser.get && TMACurrentUser.get();
     return !!(me && me.isAdmin);
+  }
+
+  function isServiceProviderAdmin() {
+    var access = window.TMAPortalAccess;
+    if (access && typeof access.isServiceProviderAdmin === 'function' && access.isServiceProviderAdmin()) {
+      return true;
+    }
+    if (window.TMABootServiceProviderAdmin === true || window.TMABootServiceProviderAdmin === 'true') {
+      return true;
+    }
+    var me = window.TMACurrentUser && TMACurrentUser.get && TMACurrentUser.get();
+    return !!(me && me.isServiceProviderAdmin);
+  }
+
+  function canManageCompanyAccess() {
+    return isClientsAdmin() || isServiceProviderAdmin();
   }
 
   /*
@@ -2873,6 +2893,7 @@
     { value: 'pending_review', label: 'Pending Review', tone: 'orange', lane: 'pre_approval' },
     { value: 'non_compliant', label: 'Non-compliant', tone: 'rose', lane: 'pre_approval' },
     { value: 'background_check', label: 'Background Check', tone: 'cyan', lane: 'pre_approval' },
+    { value: 'dd_query', label: 'DD Query', tone: 'azure', lane: 'pre_approval' },
     { value: 'delayed', label: 'Delayed', tone: 'copper', lane: 'pre_approval' },
     { value: 'granted', label: 'Approved', tone: 'success', lane: 'pre_approval' },
     { value: 'post_approval', label: 'Post-Approval', tone: 'action', lane: 'post_approval' },
@@ -5118,6 +5139,14 @@
   function renderCompanyProfileToolbar(company) {
     if (!company) return '';
     var peopleCount = (company.people || []).length;
+    var staffActions = isClientsAdmin()
+      ? '<button type="button" class="tma-dash__clients-edit-btn" data-clients-edit-company>' +
+        '<img src="' + ICONS.PencilSimple + '" alt=""><span>Edit</span></button>' +
+        '<button type="button" class="tma-dash__clients-message-btn" data-clients-add-person>' +
+        '<img src="' + ICONS.Plus + '" alt=""><span>Add person</span></button>' +
+        '<button type="button" class="tma-dash__clients-edit-btn" data-clients-delete-company aria-label="Delete service provider">' +
+        '<img src="' + ICONS.Trash + '" alt=""></button>'
+      : '';
     return (
       '<div class="tma-dash__clients-profile-toolbar">' +
       '<div class="tma-dash__clients-profile-head">' +
@@ -5129,14 +5158,10 @@
       '<span class="tma-dash__clients-profile-subtitle">' +
       esc(peopleCount + (peopleCount === 1 ? ' contact' : ' contacts')) +
       '</span></div></div>' +
-      '<div class="tma-dash__clients-profile-actions">' +
-      '<button type="button" class="tma-dash__clients-edit-btn" data-clients-edit-company>' +
-      '<img src="' + ICONS.PencilSimple + '" alt=""><span>Edit</span></button>' +
-      '<button type="button" class="tma-dash__clients-message-btn" data-clients-add-person>' +
-      '<img src="' + ICONS.Plus + '" alt=""><span>Add person</span></button>' +
-      '<button type="button" class="tma-dash__clients-edit-btn" data-clients-delete-company aria-label="Delete service provider">' +
-      '<img src="' + ICONS.Trash + '" alt=""></button>' +
-      '</div></div>'
+      (staffActions
+        ? '<div class="tma-dash__clients-profile-actions">' + staffActions + '</div>'
+        : '') +
+      '</div>'
     );
   }
 
@@ -5856,7 +5881,7 @@
   function renderCompanyMembersBlock(state, company) {
     var members = state.companyMembers || [];
     var loading = !!state.companyMembersLoading;
-    var admin = isClientsAdmin();
+    var canManage = canManageCompanyAccess();
 
     /*
      * An email and a button. The role dropdown sat here preselected to
@@ -5865,7 +5890,7 @@
      * Each member row still carries its own role controls for the day
      * somebody really is the finance contact.
      */
-    var form = admin && !loading
+    var form = canManage && !loading
       ? '<div class="tma-dash__clients-assign-form">' +
         '<input class="tma-dash__clients-field-input" type="email" placeholder="Email address" data-company-member-email aria-label="Member email">' +
         '<button type="button" class="tma-dash__clients-assign-btn" data-company-member-add>Add</button>' +
@@ -5874,7 +5899,9 @@
 
     var list = members.length
       ? '<div class="tma-dash__clients-assigned-list">' + members.map(function (m) {
-          var meta = [companyRoleLabel(m.role)];
+          var meta = [m.accountType === 'Service Provider admin'
+            ? 'Service Provider admin'
+            : companyRoleLabel(m.role)];
           if (m.primary) meta.unshift('Primary');
           if (m.hasAccount) meta.push('Has access');
           else if (m.inviteError) meta.push('Invite failed');
@@ -5887,11 +5914,11 @@
             '<span class="tma-dash__clients-assigned-meta">' + esc(meta.join(' · ')) +
             (m.email ? ' · ' + esc(m.email) : '') + '</span>' +
             '</span>' +
-            (admin && !m.hasAccount && m.email
+            (canManage && !m.hasAccount && m.email
               ? '<button type="button" class="tma-dash__clients-message-btn" data-company-member-invite="' +
                 esc(m.id) + '">' + (m.inviteSent || m.inviteError ? 'Resend' : 'Invite') + '</button>'
               : '') +
-            (admin
+            (canManage
               ? '<button type="button" class="tma-dash__clients-row-remove" data-company-member-remove="' +
                 esc(m.id) + '" aria-label="Remove member"><img src="' + ICONS.Trash + '" alt=""></button>'
               : '') +
@@ -6530,6 +6557,7 @@
     }
 
     if (key === 'query_received') { openQueryDialog(id, uid); return; }
+    if (key === 'dd_query_received') { openDdQueryDialog(id, uid); return; }
     if (key === 'accepted') { openAcceptanceDialog(id, uid); return; }
     if (key === 'decision') { openDecisionDialog(id, uid); return; }
     if (CIP_STAGES[key]) { openStageDialog(id, uid, key); return; }
@@ -6923,18 +6951,22 @@
   }
 
   /*
-   * Section 18: the Unit asked for more. Offered from the statuses a query can
-   * actually land on. Pending review, Background check, Delayed, because
-   * that is the edge the server accepts. Pressing it from anywhere else and
-   * then being refused would be the interface hiding a rule it could have
-   * simply not shown.
+   * A compliance query (section 18) from Pending review, or a DD query once
+   * the file has been accepted. Two verbs because they land in different
+   * statuses and different Additional Documents drawers.
    */
   function renderQueryAction(app) {
     if (!canRecordSubmission()) return '';
-    if (['pending_review', 'background_check', 'delayed'].indexOf(app.status) === -1) return '';
+    if (app.status === 'pending_review') {
+      return '<button type="button" class="tma-dash__clients-appbar-action" data-cip-query>' +
+        'Query received</button>';
+    }
+    if (['background_check', 'delayed'].indexOf(app.status) !== -1) {
+      return '<button type="button" class="tma-dash__clients-appbar-action" data-cip-dd-query>' +
+        'DD Query received</button>';
+    }
 
-    return '<button type="button" class="tma-dash__clients-appbar-action" data-cip-query>' +
-      'Query received</button>';
+    return '';
   }
 
   /*
@@ -6963,7 +6995,7 @@
 
   function renderDecisionAction(app) {
     if (!canRecordDecision()) return '';
-    if (['background_check', 'delayed'].indexOf(app.status) === -1) return '';
+    if (['background_check', 'dd_query', 'delayed'].indexOf(app.status) === -1) return '';
 
     return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-decide>' +
       'Decision received</button>';
@@ -11191,7 +11223,13 @@
       return;
     }
 
-    if (to === 'background_check') {
+    if (to === 'dd_query') {
+      openDdQueryDialog(applicationId, clientUid, pickedAsOverride);
+
+      return;
+    }
+
+    if (to === 'background_check' && !(source && source.status === 'dd_query')) {
       openAcceptanceDialog(applicationId, clientUid, pickedAsOverride);
 
       return;
@@ -11353,8 +11391,10 @@
             json: body,
           })
             .then(function (res) {
-              var folder = res && res.application && res.application.additionalDocumentsFolder;
-              queueFolderOpen(folder, 'Additional Documents');
+              var response = res && res.application && res.application.responseFolder;
+              var folder = (response && response.uuid)
+                || (res && res.application && res.application.additionalDocumentsFolder);
+              queueFolderOpen(folder, (response && response.name) || 'Additional Documents');
               ui.closeModal();
               clientsToast(override && fromLabel
                 ? 'Pulled from ' + fromLabel + ' to Non-compliant, query recorded.'
@@ -11372,6 +11412,98 @@
               save.disabled = false;
               save.textContent = 'Record query';
               clientsToast((err && err.message) || 'Could not record this query.', 'negative');
+            });
+        });
+      },
+    });
+  }
+
+  /*
+   * A due-diligence query: the file passed compliance, the Unit still wants
+   * more. Response documents go in DD Query Responses, not Non-Compliance
+   * Responses — those two drawers are why this is not the same verb.
+   */
+  function openDdQueryDialog(applicationId, clientUid, override) {
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal) return;
+
+    var today = new Date().toISOString().slice(0, 10);
+
+    ui.openModal({
+      title: 'Record DD query received',
+      body:
+        '<div class="tma-dash__clients-field">' +
+        '<label class="tma-dash__clients-field-label" for="cip-dd-query-received">DD Query received date</label>' +
+        '<input type="date" id="cip-dd-query-received" class="tma-dash__clients-field-input"' +
+        ' data-cip-dd-query-received value="' + esc(today) + '">' +
+        '</div>' +
+        '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
+        '<label class="tma-dash__clients-field-label" for="cip-dd-query-message">Message to the service provider</label>' +
+        '<textarea id="cip-dd-query-message" class="tma-dash__clients-field-textarea" data-cip-dd-query-message' +
+        ' rows="4" maxlength="2000" placeholder="What the Unit has asked for"></textarea>' +
+        '</div>' +
+        '<p class="tma-portal-modal__text">' +
+        'The application will move to DD Query. Response documents go in DD Query Responses.</p>' +
+        (override ? cipOverrideFieldsHtml() : '') +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-dd-query>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-cip-save-dd-query>Record DD query</button>' +
+        '</div>',
+      onMount: function (el) {
+        var cancel = el.querySelector('[data-cip-cancel-dd-query]');
+        if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
+
+        var save = el.querySelector('[data-cip-save-dd-query]');
+        if (!save) return;
+
+        save.addEventListener('click', function () {
+          var dateEl = el.querySelector('[data-cip-dd-query-received]');
+          var date = dateEl && dateEl.value;
+          if (!date) {
+            clientsToast('Enter the DD query received date.', 'negative');
+            return;
+          }
+
+          var body = { queryReceivedAt: date };
+          var messageEl = el.querySelector('[data-cip-dd-query-message]');
+          var message = messageEl && messageEl.value ? messageEl.value.trim() : '';
+          if (message) body.message = message;
+          if (override) {
+            var reason = cipOverrideFieldsRead(el);
+            if (reason === null) return;
+            body.override = true;
+            body.note = reason;
+          }
+
+          var fromLabel = (applicationFor(clientUid) || {}).statusLabel;
+
+          save.disabled = true;
+          save.textContent = 'Recording…';
+
+          clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/dd-query', {
+            method: 'POST',
+            json: body,
+          })
+            .then(function (res) {
+              var response = res && res.application && res.application.responseFolder;
+              var folder = (response && response.uuid)
+                || (res && res.application && res.application.additionalDocumentsFolder);
+              queueFolderOpen(folder, (response && response.name) || 'DD Query Responses');
+              ui.closeModal();
+              clientsToast(override && fromLabel
+                ? 'Pulled from ' + fromLabel + ' to DD Query, query recorded.'
+                : 'DD Query recorded. Upload the response in DD Query Responses.', 'positive');
+              refreshAfterCipMove(clientUid);
+            })
+            .catch(function (err) {
+              if (!override && err && err.status === 422 && cipViewerMayOverride(clientUid)) {
+                ui.closeModal();
+                openDdQueryDialog(applicationId, clientUid, true);
+                return;
+              }
+              save.disabled = false;
+              save.textContent = 'Record DD query';
+              clientsToast((err && err.message) || 'Could not record this DD query.', 'negative');
             });
         });
       },
@@ -13917,6 +14049,14 @@
         var app = applicationFor(state.selectedId);
         if (!app) return;
         openQueryDialog(app.id, app.clientUid);
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-dd-query]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        var app = applicationFor(state.selectedId);
+        if (!app) return;
+        openDdQueryDialog(app.id, app.clientUid);
       });
     });
 

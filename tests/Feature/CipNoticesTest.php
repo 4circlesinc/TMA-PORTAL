@@ -88,6 +88,10 @@ class CipNoticesTest extends TestCase
             Notices::line(['number' => '10T1G12661P', 'applicant' => 'John Smith', 'familySize' => 4], Status::NON_COMPLIANT, $kim),
         );
         $this->assertSame(
+            'KM - DD QUERY - 10T1G12661P - JOHN SMITH (F4) - 18.08.2026',
+            Notices::line(['number' => '10T1G12661P', 'applicant' => 'John Smith', 'familySize' => 4], Status::DD_QUERY, $kim),
+        );
+        $this->assertSame(
             'KM - BACKGROUND CHECK - 10T1G12661P - JOHN SMITH (F4) - 18.08.2026',
             Notices::line(['number' => '10T1G12661P', 'applicant' => 'John Smith', 'familySize' => 4], Status::BACKGROUND_CHECK, $kim),
         );

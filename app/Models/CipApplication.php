@@ -47,6 +47,7 @@ class CipApplication extends Model
         return [
             'submitted_at' => 'date',
             'query_received_at' => 'date',
+            'dd_query_received_at' => 'date',
             'accepted_at' => 'date',
             'decided_at' => 'date',
             'appeal_lodged_at' => 'date',

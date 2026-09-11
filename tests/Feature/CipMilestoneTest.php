@@ -67,7 +67,7 @@ class CipMilestoneTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
 
         $this->assertSame(
-            ['filed', 'locked', 'submitted', 'query_received', 'accepted', 'decision'],
+            ['filed', 'locked', 'submitted', 'query_received', 'accepted', 'dd_query_received', 'decision'],
             array_column(Milestones::for($this->application($admin)), 'key'),
             'The card is a journey, and the journey has an order.',
         );
@@ -84,7 +84,7 @@ class CipMilestoneTest extends TestCase
         $this->assertTrue($milestones['filed']['reached']);
         $this->assertSame(now()->toDateString(), $milestones['filed']['date']);
 
-        foreach (['submitted', 'query_received', 'accepted', 'decision', 'locked'] as $ahead) {
+        foreach (['submitted', 'query_received', 'accepted', 'dd_query_received', 'decision', 'locked'] as $ahead) {
             $this->assertArrayHasKey($ahead, $milestones, $ahead.' is what the file has left to do, not something to hide.');
             $this->assertNull($milestones[$ahead]['date']);
             $this->assertFalse($milestones[$ahead]['reached']);
@@ -238,7 +238,7 @@ class CipMilestoneTest extends TestCase
         $new = $steps($application);
         $this->assertFalse($new['filed']['canRecord'], 'Filed always has a date, so it is never recorded');
         $this->assertTrue($new['filed']['canEdit']);
-        foreach (['submitted', 'query_received', 'accepted', 'decision'] as $ahead) {
+        foreach (['submitted', 'query_received', 'accepted', 'dd_query_received', 'decision'] as $ahead) {
             $this->assertFalse($new[$ahead]['canRecord'], $ahead.' is not one move from New');
         }
 
@@ -247,10 +247,13 @@ class CipMilestoneTest extends TestCase
         $pending = $steps($application);
         $this->assertTrue($pending['query_received']['canRecord']);
         $this->assertTrue($pending['accepted']['canRecord']);
+        $this->assertFalse($pending['dd_query_received']['canRecord']);
         $this->assertFalse($pending['decision']['canRecord'], 'nothing is decided straight out of Pending review');
 
         $application->forceFill(['status' => Status::BACKGROUND_CHECK])->save();
         $this->assertTrue($steps($application)['decision']['canRecord']);
+        $this->assertTrue($steps($application)['dd_query_received']['canRecord']);
+        $this->assertFalse($steps($application)['query_received']['canRecord']);
 
         // Never both: a day already recorded is corrected, not recorded again.
         $application->forceFill(['accepted_at' => '2026-02-17'])->save();
@@ -272,7 +275,7 @@ class CipMilestoneTest extends TestCase
             ->assertOk()
             ->json('application');
 
-        $this->assertCount(6, $body['milestones']);
+        $this->assertCount(7, $body['milestones']);
         $this->assertSame('Filed', $body['milestones'][0]['label']);
         $this->assertSame('Omar Reviewer', $body['assignedOfficer']['name']);
         $this->assertSame('omar@example.com', $body['assignedOfficer']['email']);

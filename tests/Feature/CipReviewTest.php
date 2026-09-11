@@ -22,6 +22,7 @@ use App\Support\Cip\Review;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -171,6 +172,7 @@ class CipReviewTest extends TestCase
             Status::PENDING_REVIEW,
             Status::NON_COMPLIANT,
             Status::BACKGROUND_CHECK,
+            Status::DD_QUERY,
             Status::DELAYED,
         ];
 
@@ -192,6 +194,7 @@ class CipReviewTest extends TestCase
     public function test_every_status_names_the_lane_it_belongs_to(): void
     {
         $this->assertSame(Phase::PRE_APPROVAL, Status::laneOf(Status::BACKGROUND_CHECK));
+        $this->assertSame(Phase::PRE_APPROVAL, Status::laneOf(Status::DD_QUERY));
         $this->assertSame(Phase::PRE_APPROVAL, Status::laneOf(Status::REVIEW_APPLICATION));
         $this->assertSame(Phase::POST_APPROVAL, Status::laneOf(Status::APPLY_FOR_COR));
         $this->assertSame(Phase::POST_APPROVAL, Status::laneOf(Status::CLOSED));
@@ -736,7 +739,7 @@ class CipReviewTest extends TestCase
                 && ! str_contains($mail->payload['bodyHtml'], 'Passport bio page'));
         }
 
-        $this->assertSame(2, \Illuminate\Support\Facades\DB::table('portal_notifications')
+        $this->assertSame(2, DB::table('portal_notifications')
             ->where('user_id', $contact->id)->where('type', 'cip.updates-required')->count());
     }
 

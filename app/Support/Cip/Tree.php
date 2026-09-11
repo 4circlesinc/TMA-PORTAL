@@ -246,6 +246,47 @@ class Tree
     }
 
     /**
+     * One purpose drawer inside Additional Documents, if the tree exists.
+     */
+    public static function additionalDrawer(CipApplication $application, string $canonical): ?Folder
+    {
+        $additional = self::additionalFolder($application);
+
+        return $additional ? self::existingDrawer($additional, $canonical) : null;
+    }
+
+    /**
+     * The purpose drawer the provider side should upload into, given where
+     * the file stands: Non-Compliance Responses, or DD Query Responses.
+     */
+    public static function responseFolder(CipApplication $application): ?Folder
+    {
+        $canonical = match ($application->status) {
+            Status::NON_COMPLIANT => self::ADDITIONAL_NON_COMPLIANCE,
+            Status::DD_QUERY => self::ADDITIONAL_DD_QUERY,
+            default => null,
+        };
+
+        return $canonical ? self::additionalDrawer($application, $canonical) : null;
+    }
+
+    /**
+     * @return array{uuid: string, name: string}|null
+     */
+    public static function responseFolderPayload(CipApplication $application): ?array
+    {
+        $folder = self::responseFolder($application);
+        if ($folder === null) {
+            return null;
+        }
+
+        return [
+            'uuid' => $folder->uuid,
+            'name' => $folder->name,
+        ];
+    }
+
+    /**
      * Is this the name of a managed CIP drawer, including the numbered
      * copies Graph's conflict-rename leaves behind ("Additional Documents 1")?
      */

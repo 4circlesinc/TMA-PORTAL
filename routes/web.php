@@ -518,6 +518,14 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/applications/{uuid}/query', [CipTransitionController::class, 'query'])
             ->name('applications.query');
         /*
+         * A due-diligence query during Background check. Its own verb because
+         * it writes `dd_query_received_at` and then moves the file to DD Query
+         * — a bare status change would leave the date empty. Responses go in
+         * DD Query Responses inside Additional Documents.
+         */
+        Route::post('/applications/{uuid}/dd-query', [CipTransitionController::class, 'ddQuery'])
+            ->name('applications.dd-query');
+        /*
          * Section 19: the Unit accepted the file. Its own verb because it writes
          * `accepted_at` and then moves the file to Background check — a
          * bare status change would leave the delay clock with no start.

@@ -758,6 +758,39 @@ class Postcards
     }
 
     /**
+     * A due-diligence query: the file passed compliance, the Unit still wants more.
+     *
+     * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
+     */
+    public static function cipDdQuery(
+        array $facts,
+        string $url,
+        ?string $queryReceivedAt = null,
+        ?string $recipientName = null,
+        ?User $actor = null,
+        ?string $subject = null,
+        ?string $message = null,
+    ): Postcard {
+        $subject ??= Notices::line($facts, Status::DD_QUERY, $actor);
+
+        $details = [
+            ['Application', $facts['number']],
+            ['Applicant', $facts['applicant']],
+            ['Service provider', $facts['provider']],
+        ];
+        if ($queryReceivedAt) {
+            $details[] = ['DD Query received', $queryReceivedAt];
+        }
+
+        return self::postcard('cip-dd-query', self::cipVars($facts, $recipientName) + ['url' => $url], [
+            'subject' => $subject,
+            'url' => $url,
+            'details' => $details,
+            'quote' => $message ?: null,
+        ]);
+    }
+
+    /**
      * The appeal lane's three notices.
      *
      * One method rather than three: the lane's letters differ only in which

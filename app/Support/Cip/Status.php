@@ -37,6 +37,8 @@ class Status
 
     public const BACKGROUND_CHECK = 'background_check';
 
+    public const DD_QUERY = 'dd_query';
+
     public const DELAYED = 'delayed';
 
     public const GRANTED = 'granted';
@@ -105,6 +107,7 @@ class Status
         self::PENDING_REVIEW,
         self::NON_COMPLIANT,
         self::BACKGROUND_CHECK,
+        self::DD_QUERY,
         self::DELAYED,
         self::GRANTED,
         self::POST_APPROVAL,
@@ -198,6 +201,7 @@ class Status
         self::PENDING_REVIEW => 'Pending Review',
         self::NON_COMPLIANT => 'Non-compliant',
         self::BACKGROUND_CHECK => 'Background Check',
+        self::DD_QUERY => 'DD Query',
         self::DELAYED => 'Delayed',
         self::GRANTED => 'Approved',
         self::POST_APPROVAL => 'Post-Approval',
@@ -233,6 +237,7 @@ class Status
         self::PENDING_REVIEW => 'PENDING REVIEW',
         self::NON_COMPLIANT => 'NON-COMPLIANT',
         self::BACKGROUND_CHECK => 'BACKGROUND CHECK',
+        self::DD_QUERY => 'DD QUERY',
         self::DELAYED => 'DELAYED',
         self::GRANTED => 'GRANTED',
         self::POST_APPROVAL => 'POST APPROVAL',
@@ -272,6 +277,7 @@ class Status
         self::PENDING_REVIEW => 'orange',
         self::NON_COMPLIANT => 'rose',
         self::BACKGROUND_CHECK => 'cyan',
+        self::DD_QUERY => 'azure',
         self::DELAYED => 'copper',
         self::GRANTED => 'success',
         self::POST_APPROVAL => 'action',
@@ -364,7 +370,7 @@ class Status
          * The outcomes are NOT shared. Each lane has its own pair, because
          * each is a different act with different rules: GRANTED / DENIED are
          * the Unit's decision on the application, reachable only from
-         * Background check or Delayed; POST_APPROVED / POST_DENIED are the
+         * Background check, DD Query or Delayed; POST_APPROVED / POST_DENIED are the
          * outcome of the post-approval work, reachable from where that work
          * ends. Treating one pair as belonging to both lanes is what put a
          * post-approval file in front of the pre-approval rule.

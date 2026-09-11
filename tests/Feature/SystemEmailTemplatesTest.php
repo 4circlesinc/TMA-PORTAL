@@ -257,6 +257,7 @@ class SystemEmailTemplatesTest extends TestCase
             ),
             Postcards::cipReadyToSubmit($facts, 'https://x.test', 'Priya', 'SUBJ'),
             Postcards::cipNonCompliant($facts, 'https://x.test', null, 'Priya'),
+            Postcards::cipDdQuery($facts, 'https://x.test', null, 'Priya'),
             Postcards::cipDelayed($facts, 'https://x.test', null, 180, 'Priya'),
             Postcards::cipDecision(
                 $facts,

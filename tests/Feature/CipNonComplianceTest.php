@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Mail\Postcard;
 use App\Models\CipApplication;
+use App\Models\CipApplicationAssignment;
 use App\Models\CipApplicationMessage;
 use App\Models\CipEvent;
 use App\Models\CipPerson;
@@ -398,11 +399,11 @@ class CipNonComplianceTest extends TestCase
         $officer = $this->user('Reviewing Officer', 'off@example.com', 'Olive Officer');
         // On the file, so the scope shows it to them — the refusal has to be
         // the override gate, not the application being invisible.
-        \App\Models\CipApplicationAssignment::create([
+        CipApplicationAssignment::create([
             'application_id' => $application->id,
             'user_id' => $officer->id,
             'role' => 'reviewing_officer',
-            'status' => \App\Models\CipApplicationAssignment::STATUS_ACTIVE,
+            'status' => CipApplicationAssignment::STATUS_ACTIVE,
             'assigned_by' => $staff->id,
             'starts_at' => now(),
         ]);
@@ -451,7 +452,7 @@ class CipNonComplianceTest extends TestCase
             ->count());
     }
 
-    public function test_a_query_can_land_from_background_check(): void
+    public function test_a_query_cannot_land_from_background_check(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);
         $application = $this->pending($staff);
@@ -461,11 +462,12 @@ class CipNonComplianceTest extends TestCase
             ->postJson('/portal/cip/applications/'.$application->uuid.'/query', [
                 'queryReceivedAt' => '2026-08-18',
             ])
-            ->assertOk()
-            ->assertJsonPath('application.status', Status::NON_COMPLIANT);
+            ->assertStatus(422);
+
+        $this->assertSame(Status::BACKGROUND_CHECK, $application->fresh()->status);
     }
 
-    public function test_a_query_can_land_from_delayed(): void
+    public function test_a_query_cannot_land_from_delayed(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);
         $application = $this->pending($staff);
@@ -475,8 +477,8 @@ class CipNonComplianceTest extends TestCase
             ->postJson('/portal/cip/applications/'.$application->uuid.'/query', [
                 'queryReceivedAt' => '2026-08-18',
             ])
-            ->assertOk()
-            ->assertJsonPath('application.status', Status::NON_COMPLIANT)
-            ->assertJsonPath('application.additionalDocumentsFolder', Tree::additionalFolder($application->fresh())?->uuid);
+            ->assertStatus(422);
+
+        $this->assertSame(Status::DELAYED, $application->fresh()->status);
     }
 }

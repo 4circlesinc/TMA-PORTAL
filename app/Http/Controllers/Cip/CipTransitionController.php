@@ -11,6 +11,7 @@ use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\BackgroundCheck;
 use App\Support\Cip\Confirmation;
 use App\Support\Cip\Contacts;
+use App\Support\Cip\DdQuery;
 use App\Support\Cip\Decision;
 use App\Support\Cip\DecisionLetter;
 use App\Support\Cip\Delay;
@@ -118,9 +119,14 @@ class CipTransitionController extends Controller
      *  - NON-COMPLIANT is {@see NonCompliance::record()}, which writes the
      *    Query received date. Driven bare, the status flips and the date the
      *    Unit asked is never stored.
+     *  - DD QUERY is {@see DdQuery::record()}, which writes the DD Query
+     *    received date. Driven bare, the status flips and the day the Unit
+     *    asked during the background check is never stored.
      *  - BACKGROUND CHECK is {@see BackgroundCheck::record()}, which writes
      *    the Accepted for processing date. Driven bare, the delay clock (section 20)
-     *    has nothing to measure from.
+     *    has nothing to measure from. Returning from DD Query is the
+     *    exception: the accepted date is already there, so this door may
+     *    walk the file back without asking for it again.
      *  - DELAYED is {@see Delay::flag()}, the daily job that measures 180
      *    days from that accepted date. Driven bare, a file can be labelled
      *    delayed before the clock has run, and the job's idempotent notice
@@ -143,7 +149,11 @@ class CipTransitionController extends Controller
             abort(422, 'Record the query received date instead, so the day the Unit asked is stored.');
         }
 
-        if ($status === Status::BACKGROUND_CHECK) {
+        if ($status === Status::DD_QUERY) {
+            abort(422, 'Record the DD query received date instead, so the day the Unit asked is stored.');
+        }
+
+        if ($status === Status::BACKGROUND_CHECK && $application->status !== Status::DD_QUERY) {
             abort(422, 'Record the accepted for processing date instead, so the day the Unit accepted it is stored.');
         }
 
@@ -327,6 +337,46 @@ class CipTransitionController extends Controller
 
         try {
             $application = NonCompliance::record(
+                $application,
+                $user,
+                Carbon::parse($data['queryReceivedAt']),
+                $request->boolean('override'),
+                $data['note'] ?? null,
+                $data['message'] ?? null,
+            );
+        } catch (\InvalidArgumentException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
+
+        return response()->json(['application' => $this->record($application, $user)]);
+    }
+
+    /**
+     * Record a due-diligence query: the date, then DD Query.
+     *
+     * Its own endpoint because of the column below. The generic status route
+     * refuses DD QUERY so a bare move cannot leave `dd_query_received_at`
+     * empty. Permission is still `cip.compliance`, through {@see Engine}.
+     * Responses go in DD Query Responses inside Additional Documents.
+     */
+    public function ddQuery(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $application = ApplicationScope::findOrFail($user, $uuid);
+
+        $data = $request->validate([
+            'queryReceivedAt' => ['required', 'date'],
+            'override' => ['nullable', 'boolean'],
+            'note' => ['nullable', 'string', 'max:2000'],
+            'message' => ['nullable', 'string', 'max:2000'],
+        ], [
+            'queryReceivedAt.required' => 'Enter the DD query received date.',
+        ]);
+
+        try {
+            $application = DdQuery::record(
                 $application,
                 $user,
                 Carbon::parse($data['queryReceivedAt']),
@@ -653,11 +703,13 @@ class CipTransitionController extends Controller
             'statusLabel' => Status::label($application->status),
             'statusTone' => Status::tone($application->status),
             ...Confirmation::payload($application, $actor),
-                ...Appeal::payload($application, $actor),
+            ...Appeal::payload($application, $actor),
             'submittedAt' => $application->submitted_at?->toDateString(),
             'queryReceivedAt' => $application->query_received_at?->toDateString(),
+            'ddQueryReceivedAt' => $application->dd_query_received_at?->toDateString(),
             'acceptedAt' => $application->accepted_at?->toDateString(),
             'additionalDocumentsFolder' => Tree::additionalFolder($application)?->uuid,
+            'responseFolder' => Tree::responseFolderPayload($application),
             'decision' => $application->decision,
             'decidedAt' => $application->decided_at?->toDateString(),
             'decisionLetter' => $this->decisionLetter($application),

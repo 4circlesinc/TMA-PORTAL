@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Builder;
  *
  * WHICH BUCKETS ARE PERSONAL, AND WHICH ARE THE WHOLE SLICE
  *
- * The administrator's pre-approval eleven and the service provider's seven are reports. They
+ * The administrator's pre-approval twelve and the service provider's eight are reports. They
  * count everything the reader may see, and what that is has already been
  * decided by {@see ApplicationScope}, every application for an administrator,
  * one provider firm's book for a contact there, one applicant's own record for
@@ -141,6 +141,12 @@ class Buckets
             'label' => 'Background Check',
             'short' => 'Background',
             'statuses' => [Status::BACKGROUND_CHECK],
+            'scope' => self::SCOPE_ALL,
+        ],
+        'dd_query' => [
+            'label' => 'DD Query',
+            'short' => 'DD Query',
+            'statuses' => [Status::DD_QUERY],
             'scope' => self::SCOPE_ALL,
         ],
         'delayed' => [
@@ -301,7 +307,7 @@ class Buckets
             self::ADMINISTRATOR => [
                 'new', 'review_application', 'assessment_feedback', 'update_required',
                 'ready_to_submit', 'pending_review', 'non_compliant', 'background_check',
-                'delayed', 'approved', 'denied',
+                'dd_query', 'delayed', 'approved', 'denied',
             ],
             self::REVIEWING_OFFICER => [
                 'assigned_reviews', 'reviews_pending', 'assessment_feedback_tasks',
@@ -309,7 +315,7 @@ class Buckets
             ],
             self::SERVICE_PROVIDER => [
                 'update_required', 'ready_to_submit', 'pending_review', 'non_compliant',
-                'delayed', 'approved', 'denied',
+                'dd_query', 'delayed', 'approved', 'denied',
             ],
         ],
         Phase::POST_APPROVAL => [

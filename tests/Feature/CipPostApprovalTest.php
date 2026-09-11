@@ -19,19 +19,19 @@ use App\Support\Access\Role;
 use App\Support\Cip\ApplicantType;
 use App\Support\Cip\Applications;
 use App\Support\Cip\Assignments;
+use App\Support\Cip\CipAccess;
 use App\Support\Cip\Confirmation;
 use App\Support\Cip\CorRequirements;
-use App\Support\Cip\Intake;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\Engine;
+use App\Support\Cip\Intake;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\NicRequirements;
 use App\Support\Cip\Pack;
 use App\Support\Cip\Package;
 use App\Support\Cip\PassportRequirements;
-use App\Support\Cip\CipAccess;
 use App\Support\Cip\Phase;
 use App\Support\Cip\PostApproval;
 use App\Support\Cip\Requirements;
@@ -39,6 +39,7 @@ use App\Support\Cip\Review;
 use App\Support\Cip\Stages;
 use App\Support\Cip\Status;
 use App\Support\Cip\Tree;
+use App\Support\Files\FolderTree;
 use Database\Seeders\CipDocumentRequirementSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -1056,7 +1057,7 @@ class CipPostApprovalTest extends TestCase
 
         $corDrawer = Folder::query()
             ->where('name', CorRequirements::FOLDER)
-            ->whereIn('id', array_merge([(int) $post->id], \App\Support\Files\FolderTree::descendantIds($post)))
+            ->whereIn('id', array_merge([(int) $post->id], FolderTree::descendantIds($post)))
             ->first();
         $this->assertNotNull($corDrawer);
         $this->assertTrue(Package::locksFolder($corDrawer));
@@ -1291,7 +1292,7 @@ class CipPostApprovalTest extends TestCase
 
         $this->assertSame(
             [
-                'filed', 'locked', 'submitted', 'query_received', 'accepted', 'decision',
+                'filed', 'locked', 'submitted', 'query_received', 'accepted', 'dd_query_received', 'decision',
                 'cor_submitted', 'cor_received', 'nic_submitted', 'nic_received',
                 'passport_submitted', 'passport_received', 'passport_delivered',
             ],

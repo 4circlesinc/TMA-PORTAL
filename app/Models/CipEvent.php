@@ -94,6 +94,15 @@ class CipEvent extends Model
     public const ACTION_QUERY_RECEIVED = 'query_received';
 
     /**
+     * The Unit asked for more during a background check.
+     *
+     * Its own action rather than a detail of the status change: the DD query
+     * date lives on the application, and it is not the same day as a
+     * compliance query — a file can have both.
+     */
+    public const ACTION_DD_QUERY_RECEIVED = 'dd_query_received';
+
+    /**
      * The Unit accepted the file for processing (section 19).
      *
      * Its own action rather than a detail of the status change: the accepted

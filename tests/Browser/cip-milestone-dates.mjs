@@ -62,10 +62,10 @@ try {
   await card().locator('.tma-dash__cip-tl').waitFor({ timeout: 30000 });
 
   const rows = card().locator('li');
-  check(await rows.count() === 6, `six steps on the card (saw ${await rows.count()})`);
+  check(await rows.count() === 7, `seven steps on the card (saw ${await rows.count()})`);
 
   const edits = card().locator('.tma-dash__cip-tl-edit');
-  check(await edits.count() === 6, `all six days are pressable for an administrator (saw ${await edits.count()})`);
+  check(await edits.count() === 6, `recorded days are pressable for an administrator (saw ${await edits.count()})`);
 
   // A plain day, not an instant: `new Date('2026-01-31')` is midnight UTC, so
   // a browser west of it drew the thirty-first as the thirtieth. The test runs
@@ -120,7 +120,7 @@ try {
     return ok;
   };
 
-  check(await opens('Query received', '[data-cip-query-received]'), 'an empty Query received opens Record query');
+  check(await opens('DD Query received', '[data-cip-dd-query-received]'), 'an empty DD Query received opens Record DD query');
   check(await opens('Decision', '[data-cip-decided]'), 'an empty Decision opens Record decision');
   check(await opens('Accepted', '[data-cip-milestone-input]'), 'a recorded Accepted still opens the correction');
 

@@ -160,6 +160,7 @@ class Timeline
             CipEvent::ACTION_PASSPORT_RECEIVED => self::stageSentence($meta, $who, 'recorded the passport received'),
             CipEvent::ACTION_PASSPORT_DELIVERED => self::stageSentence($meta, $who, 'recorded the passport delivered'),
             CipEvent::ACTION_QUERY_RECEIVED => self::querySentence($meta, $who),
+            CipEvent::ACTION_DD_QUERY_RECEIVED => self::ddQuerySentence($meta, $who),
             CipEvent::ACTION_ACCEPTED_FOR_PROCESSING => self::acceptedSentence($meta, $who),
             CipEvent::ACTION_MILESTONE_CORRECTED => self::milestoneSentence($meta, $who),
             CipEvent::ACTION_DELAYED => self::delayedSentence($meta, $who),
@@ -221,6 +222,7 @@ class Timeline
             $from = $event->from_status !== null
                 ? Status::label($event->from_status)
                 : 'the previous status';
+
             return "{$who} overrode the status from {$from} to ".Status::label($to);
         }
 
@@ -326,6 +328,20 @@ class Timeline
         return $date
             ? "{$who} recorded a query received on {$date}"
             : "{$who} recorded a query received from the Unit";
+    }
+
+    /**
+     * A due-diligence query, named by the day it arrived.
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    private static function ddQuerySentence(array $meta, string $who): string
+    {
+        $date = $meta['ddQueryReceivedAt'] ?? null;
+
+        return $date
+            ? "{$who} recorded a DD query received on {$date}"
+            : "{$who} recorded a DD query received from the Unit";
     }
 
     /**

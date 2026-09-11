@@ -6,6 +6,7 @@ use App\Models\CipApplication;
 use App\Models\CipEvent;
 use App\Models\User;
 use App\Support\Activity\ActivityLogger;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -40,6 +41,8 @@ class Milestones
     public const QUERY_RECEIVED = 'query_received';
 
     public const ACCEPTED = 'accepted';
+
+    public const DD_QUERY_RECEIVED = 'dd_query_received';
 
     public const DECISION = 'decision';
 
@@ -81,6 +84,7 @@ class Milestones
         self::SUBMITTED => ['submitted_at', 'Submitted', 'cip.compliance'],
         self::QUERY_RECEIVED => ['query_received_at', 'Query received', 'cip.compliance'],
         self::ACCEPTED => ['accepted_at', 'Accepted', 'cip.compliance'],
+        self::DD_QUERY_RECEIVED => ['dd_query_received_at', 'DD Query received', 'cip.compliance'],
         self::DECISION => ['decided_at', 'Decision', 'cip.decide'],
     ];
 
@@ -151,6 +155,7 @@ class Milestones
         self::SUBMITTED => Status::PENDING_REVIEW,
         self::QUERY_RECEIVED => Status::NON_COMPLIANT,
         self::ACCEPTED => Status::BACKGROUND_CHECK,
+        self::DD_QUERY_RECEIVED => Status::DD_QUERY,
         self::DECISION => Status::GRANTED,
         self::COR_SUBMITTED => Status::PENDING_COR,
         self::COR_RECEIVED => Status::APPLY_FOR_NIC,
@@ -220,8 +225,8 @@ class Milestones
      * not accepted — and none of the guards that exist to prevent exactly
      * that would have been asked.
      *
-     * @throws \InvalidArgumentException  no such step, or nothing to correct
-     * @throws \Illuminate\Auth\Access\AuthorizationException
+     * @throws \InvalidArgumentException no such step, or nothing to correct
+     * @throws AuthorizationException
      */
     public static function correct(
         CipApplication $application,

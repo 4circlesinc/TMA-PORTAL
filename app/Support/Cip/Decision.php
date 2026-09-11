@@ -6,9 +6,9 @@ use App\Models\CipApplication;
 use App\Models\CipEvent;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -59,9 +59,9 @@ class Decision
          *
          * A post-approval file records POST_APPROVED / POST_DENIED, which are
          * reachable from where its work ends; a pre-approval one records
-         * GRANTED / DENIED from Background check or Delayed. Sending the
+         * GRANTED / DENIED from Background check, DD Query or Delayed. Sending the
          * other lane's outcome here is what produced "a decision can only be
-         * recorded on an application in Background check or Delayed" on a
+         * recorded on an application in Background check, DD Query or Delayed" on a
          * file that had never been near Background check.
          */
         $phase = $application->phase ?? Phase::PRE_APPROVAL;
@@ -88,7 +88,7 @@ class Decision
             throw new \InvalidArgumentException(
                 $phase === Phase::POST_APPROVAL
                     ? 'A post-approval decision is recorded when the file enters the lane, before the COR stage begins.'
-                    : 'A decision can only be recorded on an application in Background check or Delayed.',
+                    : 'A decision can only be recorded on an application in Background check, DD Query or Delayed.',
             );
         }
 

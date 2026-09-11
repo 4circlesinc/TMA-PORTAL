@@ -40,6 +40,7 @@ class Engine
         Status::PENDING_REVIEW,
         Status::NON_COMPLIANT,
         Status::BACKGROUND_CHECK,
+        Status::DD_QUERY,
         Status::DELAYED,
         Status::GRANTED,
         Status::DENIED,
@@ -55,8 +56,9 @@ class Engine
         Status::READY_TO_SUBMIT => [Status::PENDING_REVIEW, Status::UPDATE_REQUIRED],
         Status::PENDING_REVIEW => [Status::NON_COMPLIANT, Status::BACKGROUND_CHECK],
         Status::NON_COMPLIANT => [Status::PENDING_REVIEW, Status::BACKGROUND_CHECK],
-        Status::BACKGROUND_CHECK => [Status::NON_COMPLIANT, Status::DELAYED, Status::GRANTED, Status::DENIED],
-        Status::DELAYED => [Status::NON_COMPLIANT, Status::GRANTED, Status::DENIED],
+        Status::BACKGROUND_CHECK => [Status::DD_QUERY, Status::DELAYED, Status::GRANTED, Status::DENIED],
+        Status::DD_QUERY => [Status::BACKGROUND_CHECK, Status::GRANTED, Status::DENIED],
+        Status::DELAYED => [Status::DD_QUERY, Status::GRANTED, Status::DENIED],
         Status::GRANTED => [Status::POST_APPROVAL, Status::NEW_APPEAL],
         /*
          * The lane's decision comes FIRST, not last.
@@ -119,6 +121,7 @@ class Engine
         Status::PENDING_REVIEW => 'cip.compliance',
         Status::NON_COMPLIANT => 'cip.compliance',
         Status::BACKGROUND_CHECK => 'cip.compliance',
+        Status::DD_QUERY => 'cip.compliance',
         Status::DELAYED => 'cip.compliance',
         Status::GRANTED => 'cip.decide',
         Status::POST_APPROVED => 'cip.decide',
@@ -428,7 +431,7 @@ class Engine
      * lifecycle's labels from the other's at a glance. So a file working the
      * post-approval lane — collecting COR, NIC or passport paper — is not
      * offered New Applications, Review Applications, Assessment Feedback,
-     * Pending Review, Non-compliant or Background Check, and a pre-approval
+     * Pending Review, Non-compliant, Background Check or DD Query, and a pre-approval
      * file is not offered the lane's own labels.
      *
      * The exception is a file that has not started the lane's work. Granted

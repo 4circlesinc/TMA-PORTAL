@@ -51,7 +51,7 @@ class CipTransitionTest extends TestCase
      * stores the outcome and its date.
      */
     private const OWNED_ELSEWHERE = [
-        'new', 'pending_review', 'non_compliant', 'background_check', 'delayed', 'granted', 'denied',
+        'new', 'pending_review', 'non_compliant', 'dd_query', 'background_check', 'delayed', 'granted', 'denied',
         'pending_cor', 'apply_for_nic', 'pending_nic', 'apply_for_passport',
         'pending_passport', 'ready_for_delivery', 'closed',
     ];
@@ -70,11 +70,14 @@ class CipTransitionTest extends TestCase
         [Status::PENDING_REVIEW, Status::BACKGROUND_CHECK],
         [Status::NON_COMPLIANT, Status::PENDING_REVIEW],
         [Status::NON_COMPLIANT, Status::BACKGROUND_CHECK],
-        [Status::BACKGROUND_CHECK, Status::NON_COMPLIANT],
+        [Status::BACKGROUND_CHECK, Status::DD_QUERY],
         [Status::BACKGROUND_CHECK, Status::DELAYED],
         [Status::BACKGROUND_CHECK, Status::GRANTED],
         [Status::BACKGROUND_CHECK, Status::DENIED],
-        [Status::DELAYED, Status::NON_COMPLIANT],
+        [Status::DD_QUERY, Status::BACKGROUND_CHECK],
+        [Status::DD_QUERY, Status::GRANTED],
+        [Status::DD_QUERY, Status::DENIED],
+        [Status::DELAYED, Status::DD_QUERY],
         [Status::DELAYED, Status::GRANTED],
         [Status::DELAYED, Status::DENIED],
         [Status::GRANTED, Status::POST_APPROVAL],
@@ -509,7 +512,7 @@ class CipTransitionTest extends TestCase
         $working = $this->at($this->application($admin), Status::APPLY_FOR_COR);
         $working->forceFill(['phase' => Phase::POST_APPROVAL])->save();
 
-        foreach ([Status::ASSESSMENT_FEEDBACK, Status::PENDING_REVIEW, Status::BACKGROUND_CHECK] as $preApproval) {
+        foreach ([Status::ASSESSMENT_FEEDBACK, Status::PENDING_REVIEW, Status::BACKGROUND_CHECK, Status::DD_QUERY] as $preApproval) {
             $this->assertContains($preApproval, Engine::availableOverrides($working, $admin));
             $this->assertNotContains($preApproval, Engine::availableTransitions($working, $admin));
         }
@@ -696,9 +699,9 @@ class CipTransitionTest extends TestCase
         $application = $this->at($this->application($admin), Status::BACKGROUND_CHECK);
 
         $this->postCipDecision($admin, $application->uuid, [
-                'decision' => Status::GRANTED,
-                'decidedAt' => '2026-08-10',
-            ])
+            'decision' => Status::GRANTED,
+            'decidedAt' => '2026-08-10',
+        ])
             ->assertOk()
             ->assertJsonPath('application.status', Status::GRANTED)
             ->assertJsonPath('application.statusLabel', 'Approved')
@@ -732,9 +735,9 @@ class CipTransitionTest extends TestCase
         $application = $application->fresh();
 
         $this->postCipDecision($reviewer, $application->uuid, [
-                'decision' => Status::DENIED,
-                'decidedAt' => '2026-08-10',
-            ])
+            'decision' => Status::DENIED,
+            'decidedAt' => '2026-08-10',
+        ])
             ->assertOk()
             ->assertJsonPath('application.status', Status::DENIED);
     }
