@@ -485,6 +485,7 @@
    * packageLocked() and stay exactly as frozen as they were.
    */
   function fieldsLocked() {
+    if (state.record && state.record.canEditApplication === false) return true;
     if (state.record && state.record.canEditPeople) return false;
 
     return packageLocked();
@@ -832,6 +833,8 @@
      template the settings ask of that person. One to a row: two columns of
      targets fought the fields for width. */
   function documentsCard(prefix, section) {
+    if (!showsIntakeDocuments()) return '';
+
     var fields = docFields(section || (prefix === 'sponsor.' ? 'sponsor' : 'principal'), prefix);
     if (!fields.length) return '';
 
@@ -953,7 +956,20 @@
   /* The whole ask on one page. Investment first, it is whose file this is
      and what they are filing for, then the people on it. */
   function isPostApprovalIntake() {
+    if (state.record && state.record.phase === 'post_approval') return true;
+
     return state.phase === 'post_approval';
+  }
+
+  /*
+   * Filed post-approval Edit uses the person-slot drops (canUpload), not
+   * the intake pack. Confirm submission would freeze every PAD control
+   * here, and Save cannot carry a replacement scan on a locked file.
+   */
+  function showsIntakeDocuments() {
+    if (state.applicationId && !editingDraft() && isPostApprovalIntake()) return false;
+
+    return true;
   }
 
   /*
@@ -1030,11 +1046,13 @@
       (fieldsLocked() ? ' data-cip-locked="1"' : '') + '>' +
       // Two different notices, because they are two different situations. A
       // reader who may still fix a name must not be told nothing can change.
-      (fieldsLocked()
+      (state.record && state.record.canEditApplication === false
+        ? '<p class="tma-portal-note">You can view this application. Only the firm can change it after approval.</p>'
+        : (fieldsLocked()
         ? '<p class="tma-portal-note">The original submission is locked. Submitted details and primary documents can be viewed but not changed. New files go in Additional Documents.</p>'
         : (packageLocked()
           ? '<p class="tma-portal-note">The submitted documents are locked. Details can still be corrected; new files go in Additional Documents.</p>'
-          : '')) +
+          : ''))) +
       // One summary at the top: a reader who pressed Add and nothing
       // happened deserves to be told why without hunting the page.
       (count
@@ -2463,13 +2481,15 @@
     state.applicationId = opts.applicationId || null;
     state.draftId = null;
     /*
-     * A draft names its phase even though it is opened by id, because the
-     * document requirements are fetched on it. Only an edit of a FILED
-     * application has no phase here — it reads one off the record it loads.
+     * A new filing names its phase up front. An edit reads it off the
+     * record, because the two phases ask for different document
+     * requirements and guessing pre-approval drew the wrong pack.
      */
-    state.phase = (state.applicationId && !opts.phase)
-      ? null
-      : (opts.phase === 'post_approval' ? 'post_approval' : 'pre_approval');
+    state.phase = opts.phase === 'post_approval'
+      ? 'post_approval'
+      : (opts.phase === 'pre_approval' || !state.applicationId
+        ? 'pre_approval'
+        : null);
     // One key for this filing, however many times Add is pressed or retried.
     state.submissionKey = state.applicationId ? null : mintKey();
     state.allowDuplicate = false;
@@ -2488,16 +2508,6 @@
     state.loading = true;
     render(root);
 
-    // The options and, when editing, the record to put back into them. Asked
-    // for together so the form paints once with everything it needs rather
-    // than filling in under the reader.
-    var formUrl = '/portal/cip/applications/form';
-    if (state.phase === 'post_approval') formUrl += '?phase=post_approval';
-    // Keyed by phase: the two phases ask for different document
-    // requirements, and one cache key for both served whichever was fetched
-    // first to the other.
-    var wants = [held('cip:form:' + (state.phase || 'pre_approval'), formUrl)];
-
     /*
      * A new application is a NEW application.
      *
@@ -2511,24 +2521,37 @@
      */
     var wantDraft = Promise.resolve(null);
 
-    if (state.applicationId) {
-      wants.push(held(
+    var loadRecord = state.applicationId
+      ? held(
         'cip:application-record:' + state.applicationId,
         '/portal/cip/applications/' + encodeURIComponent(state.applicationId),
-      ).then(function (json) { return json.application; }));
-    }
+      ).then(function (json) { return json.application; })
+      : Promise.resolve(null);
 
-    Promise.all([Promise.all(wants), wantDraft]).then(function (both) {
-      var answers = both[0];
-      state.options = answers[0];
+    loadRecord.then(function (record) {
+      state.record = record || null;
+      if (record && (record.phase === 'post_approval' || record.phase === 'pre_approval')) {
+        state.phase = record.phase;
+      }
+      // Keyed by phase: the two phases ask for different document
+      // requirements, and one cache key for both served whichever was fetched
+      // first to the other.
+      var formUrl = '/portal/cip/applications/form';
+      if (state.phase === 'post_approval') formUrl += '?phase=post_approval';
+
+      return Promise.all([
+        held('cip:form:' + (state.phase || 'pre_approval'), formUrl),
+        wantDraft,
+      ]);
+    }).then(function (both) {
+      state.options = both[0];
       // Nothing to choose means the answer is already known.
       if (state.options.providers && state.options.providers.length === 1) {
         state.draft.providerId = state.options.providers[0].id;
       }
       // Kept, not just poured into the draft: a save that has to be parked
       // builds what the record will say by laying the draft over this.
-      state.record = answers[1] || null;
-      if (answers[1]) prefill(answers[1]);
+      if (state.record) prefill(state.record);
       /*
        * A draft opened from the table is a filing that has not happened yet,
        * so the form behaves as a new one: it knows its phase (the filing
@@ -2540,7 +2563,7 @@
         state.submissionKey = state.submissionKey || mintKey();
         state.draftResumed = true;
         state.draftSavedAt = state.record.updatedAt ? new Date(state.record.updatedAt) : null;
-            state.draftSent = JSON.stringify([draftBody(), fileSignature()]);
+        state.draftSent = JSON.stringify([draftBody(), fileSignature()]);
       }
       /*
        * The saved draft goes in last, over the provider the form filled in

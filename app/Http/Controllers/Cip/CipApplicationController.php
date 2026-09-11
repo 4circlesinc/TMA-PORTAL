@@ -1415,16 +1415,7 @@ class CipApplicationController extends Controller
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
 
-        /*
-         * A post-approval file is the firm's working file, so the whole firm
-         * may correct the people on it — not only the officers who hold
-         * cip.create. Before the decision it is still the filing party's
-         * application and the narrower gate stands.
-         */
-        $mayEdit = ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL
-            ? CipAccess::canEditPostApprovalPeople($user) || CipAccess::canCreate($user)
-            : CipAccess::canCreate($user);
-        abort_unless($mayEdit, 404);
+        abort_unless(CipAccess::canEditApplication($user, $application), 404);
         /*
          * The freeze is the original scans. Details can still be corrected;
          * a replacement file in this body is the one thing that must not
@@ -1663,6 +1654,13 @@ class CipApplicationController extends Controller
              * offering a control that would be turned away.
              */
             'canEditCipNumber' => CipAccess::can($viewer, 'cip.compliance'),
+            /*
+             * Whether Save on the intake form will be accepted. Narrower than
+             * canEditPeople (who may propose a name correction): a filed
+             * post-approval application is the firm's to change, and the
+             * provider side is told so rather than offered a button that 404s.
+             */
+            'canEditApplication' => CipAccess::canEditApplication($viewer, $application),
             'submittedAt' => $application->submitted_at?->toDateString(),
             'queryReceivedAt' => $application->query_received_at?->toDateString(),
             'acceptedAt' => $application->accepted_at?->toDateString(),

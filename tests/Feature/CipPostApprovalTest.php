@@ -2112,6 +2112,7 @@ class CipPostApprovalTest extends TestCase
          */
         $this->assertFalse(CipAccess::canCreate($employee));
         $this->assertTrue(CipAccess::canEditPostApprovalPeople($employee));
+        $this->assertTrue(CipAccess::canEditApplication($employee, $application));
     }
 
     public function test_the_provider_side_may_not_edit_a_post_approval_file(): void
@@ -2134,6 +2135,7 @@ class CipPostApprovalTest extends TestCase
         // from the decision on, and a field changing under them is exactly
         // what this prevents.
         $this->assertFalse(CipAccess::canEditPostApprovalPeople($contact));
+        $this->assertFalse(CipAccess::canEditApplication($contact, $application));
     }
 
     private function seedCor(): void

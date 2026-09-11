@@ -945,6 +945,152 @@ class CipIntakeTest extends TestCase
     }
 
     /**
+     * Post-approval Edit is the same form as a new post-approval filing.
+     *
+     * A dependent who was not on the file at intake can be added later —
+     * the PAD tree and checklist have to open for them the same way they
+     * would have at create, or they would be a name with nowhere to file.
+     */
+    public function test_editing_a_post_approval_application_can_add_a_dependent(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($staff, $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12680P',
+        ]))->assertCreated()->json('application');
+
+        $this->assertTrue($body['canEditApplication']);
+        $this->assertSame([], $body['dependents']);
+
+        $application = CipApplication::where('uuid', $body['id'])->firstOrFail();
+
+        $saved = $this->edit($staff, $application, $this->edits($provider, [
+            'cipNumber' => '10T1G12680P',
+            'dependents' => [[
+                'firstName' => 'Lina',
+                'lastName' => 'Smith',
+                'dateOfBirth' => '2016-09-09',
+                'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+            ]],
+        ]))->assertOk()->json('application');
+
+        $this->assertCount(1, $saved['dependents']);
+        $this->assertSame('LINA SMITH', $saved['dependents'][0]['name']);
+
+        $application->refresh()->load('people.documents');
+        $lina = $application->people->firstWhere('role', CipPerson::ROLE_DEPENDENT);
+        $this->assertNotNull($lina);
+        $this->assertSame('not_started', $lina->post_approval_status);
+        $this->assertTrue(
+            $lina->documents->isNotEmpty(),
+            'A dependent added on Edit must get the post-approval checklist.',
+        );
+
+        $postRoot = Folder::find($application->post_approval_folder_id);
+        $this->assertNotNull($postRoot);
+        $this->assertContains(
+            'Dependent 1',
+            Folder::where('parent_id', $postRoot->id)->pluck('name')->all(),
+        );
+    }
+
+    public function test_an_officer_can_add_a_dependent_on_post_approval_edit(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($this->user(Role::ADMINISTRATOR), $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12681P',
+        ]))->assertCreated()->json('application');
+
+        $application = CipApplication::where('uuid', $body['id'])->firstOrFail();
+        $officer = $this->holder($application);
+
+        $this->edit($officer, $application, $this->edits($provider, [
+            'cipNumber' => '10T1G12681P',
+            'dependents' => [[
+                'firstName' => 'Omar',
+                'lastName' => 'Smith',
+                'dateOfBirth' => '2010-05-05',
+                'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+            ]],
+        ]))->assertOk();
+
+        $this->assertSame(
+            1,
+            $application->fresh()->people()->where('role', CipPerson::ROLE_DEPENDENT)->count(),
+        );
+    }
+
+    public function test_an_officer_cannot_change_a_dependents_identity_on_the_edit_form(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($this->user(Role::ADMINISTRATOR), $this->payload($provider, [
+            'dependents' => [[
+                'firstName' => 'Lina',
+                'lastName' => 'Smith',
+                'dateOfBirth' => '2016-09-09',
+                'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+            ]],
+        ]))->assertCreated()->json('application');
+
+        $application = CipApplication::where('uuid', $body['id'])->firstOrFail();
+        $officer = $this->holder($application);
+        $linaId = $body['dependents'][0]['id'];
+
+        $this->edit($officer, $application, $this->edits($provider, [
+            'dependents' => [[
+                'id' => $linaId,
+                'firstName' => 'Lina',
+                'lastName' => 'Jones',
+                'dateOfBirth' => '2016-09-09',
+                'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+            ]],
+        ]))->assertStatus(422);
+
+        $this->assertSame(
+            'SMITH',
+            $application->fresh()->people()->where('role', CipPerson::ROLE_DEPENDENT)->first()->last_name,
+        );
+    }
+
+    public function test_the_provider_side_cannot_save_a_filed_post_approval_edit(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $company = Company::create(['uid' => 'galaxy-pad', 'name' => 'Galaxy PAD']);
+        $provider = $this->provider('GAL', $company);
+
+        $contact = $this->user(Role::CLIENT);
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'user_id' => $contact->id,
+            'name' => $contact->name,
+            'email' => $contact->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+
+        $body = $this->file($contact, $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12682P',
+        ]))->assertCreated()->json('application');
+
+        $application = CipApplication::where('uuid', $body['id'])->firstOrFail();
+        $this->assertFalse(CipAccess::canEditApplication($contact, $application));
+
+        $this->edit($contact, $application, $this->edits($provider, [
+            'cipNumber' => '10T1G12682P',
+            'occupation' => 'Architect',
+        ]))->assertNotFound();
+    }
+
+    /**
      * Confirm submission freezes the scans, not the names.
      *
      * Edit application still offers the details, so Save has to land them.

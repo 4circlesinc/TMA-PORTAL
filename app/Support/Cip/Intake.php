@@ -1168,8 +1168,19 @@ class Intake
             Tree::provision($application, $actor);
             Tree::resyncNames($application);
 
-            foreach ($application->people as $person) {
-                DocumentSlots::open($person);
+            /*
+             * A post-approval edit can add a person who was not on the file
+             * at filing — a dependent born later, a spouse the letter named.
+             * {@see PostApproval::prepare} is the same door create uses: the
+             * PAD tree, the PAD checklist, and a status of Not started. Safe
+             * to call again when nobody new arrived.
+             */
+            if (($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL) {
+                $application = PostApproval::prepare($application, $actor);
+            } else {
+                foreach ($application->people as $person) {
+                    DocumentSlots::open($person);
+                }
             }
 
             if (! $locked) {
@@ -1220,8 +1231,37 @@ class Intake
             return;
         }
 
+        $application->loadMissing('people');
+
         $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
-        if ($main === null) {
+        self::rejectIdentityChange($main, $data);
+
+        $sponsor = $application->people->firstWhere('role', CipPerson::ROLE_SPONSOR);
+        if ($sponsor && (bool) ($data['sponsored'] ?? false)) {
+            self::rejectIdentityChange($sponsor, $data['sponsor'] ?? []);
+        }
+
+        foreach ($data['dependents'] ?? [] as $row) {
+            if (! is_array($row) || empty($row['id'])) {
+                continue;
+            }
+
+            $person = $application->people->firstWhere('uuid', $row['id']);
+            self::rejectIdentityChange($person, $row);
+        }
+    }
+
+    /**
+     * Refuse a correction to somebody already on the file.
+     *
+     * A row with no person is a new one (a dependant added on Edit, a
+     * sponsor the form just turned on) and is not this question.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private static function rejectIdentityChange(?CipPerson $person, array $data): void
+    {
+        if ($person === null) {
             return;
         }
 
@@ -1230,8 +1270,8 @@ class Intake
                 continue;
             }
 
-            if (PersonEdits::differs($main, $field, $data[$field])) {
-                abort(422, 'Ask an administrator to change '.$main->fullName().'’s details.');
+            if (PersonEdits::differs($person, $field, $data[$field])) {
+                abort(422, 'Ask an administrator to change '.$person->fullName().'’s details.');
             }
         }
     }

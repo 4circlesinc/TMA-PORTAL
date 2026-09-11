@@ -126,6 +126,32 @@ class CipAccess
         return Role::isStaff($user);
     }
 
+    /**
+     * May this account save the intake form for this application?
+     *
+     * A draft is still being filed, so whoever may create one may keep
+     * typing it. A filed pre-approval application stays with them too.
+     * A filed post-approval file is the firm's working file: staff may
+     * edit it (an administrator fully, everyone else except identity),
+     * and the service provider side may not.
+     */
+    public static function canEditApplication(?User $user, CipApplication $application): bool
+    {
+        if ($user === null || ! self::enabled()) {
+            return false;
+        }
+
+        if ($application->status === Status::DRAFT) {
+            return self::canCreate($user);
+        }
+
+        if (($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL) {
+            return self::canEditPostApprovalPeople($user);
+        }
+
+        return self::canCreate($user);
+    }
+
     /** An active member of a firm registered as a CIP service provider. */
     public static function isProviderContact(User $user): bool
     {

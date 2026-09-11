@@ -110,22 +110,20 @@
     return applicationFor(state.selectedId) || applicationHeldById(state.applicationId);
   }
 
-  /* Pre-approval still uses the intake form. Post-approval Edit is documents. */
+  /* Both lanes use the intake form. A draft is always the intake form. */
   function editApplicationPhase(state) {
     var app = applicationRecord(state);
 
-    /*
-     * A draft is the intake form whichever phase it belongs to.
-     *
-     * Post-approval EDIT is the documents screen, because a filed
-     * post-approval application's details are locked and what a reader does
-     * to it is file papers. A post-approval DRAFT has been filed by nobody:
-     * it is a form somebody is part-way through typing, and sending them to
-     * the documents screen would hide every answer they came back to finish.
-     */
-    if (app && app.status === 'draft') return 'pre_approval';
-
     return (app && app.phase) || null;
+  }
+
+  /* Filed post-approval Edit still offers PAD slot uploads under the form. */
+  function isFiledPostApprovalEdit(state) {
+    var app = applicationRecord(state);
+
+    return !!(state && state.screen === 'edit-application'
+      && app && app.status !== 'draft'
+      && editApplicationPhase(state) === 'post_approval');
   }
 
   /*
@@ -4470,15 +4468,12 @@
       return renderCompanyProfile(state, opts);
     }
     if (state.screen === 'new-application' || state.screen === 'edit-application') {
-      if (state.screen === 'edit-application' && editApplicationPhase(state) !== 'pre_approval') {
-        return renderPostApprovalDocumentsEdit(state);
-      }
-
       return '<div class="tma-dash__clients-detail">' +
         // --cards, not --form: the sections are cards, and a card inside the
         // panel's own fill reads as one grey block.
         '<div class="tma-dash__clients-profile tma-dash__clients-profile--cards">' +
         '<div data-cip-intake-mount data-morph-skip></div>' +
+        (isFiledPostApprovalEdit(state) ? renderPostApprovalSlotDocs(state) : '') +
         '</div></div>';
     }
     if (state.adding || state.editing) {
@@ -5226,22 +5221,15 @@
         ? ((applicationRecord(state) || {}).phase || 'pre_approval')
         : (state.applicationPhase || 'pre_approval');
       /*
-       * Post-approval Edit is not the intake wizard, so its Save is a
-       * different button doing a different thing: the wizard posts one form,
-       * this posts each person card that was actually changed. Both live in
-       * the head, because "save this screen" is one idea and a reader should
-       * not have to find a button per card to express it.
-       *
-       * Package lock is the scans, not this button. Confirm submission used
-       * to take Save off the page as well, which left a form that still
-       * accepted a name correction with nowhere to put it. Hide Save only
-       * when the people themselves are frozen for this reader.
+       * Save is the intake form in both lanes. Package lock is the scans, not
+       * this button: Confirm submission used to take Save off the page as
+       * well, which left a form that still accepted a name correction with
+       * nowhere to put it. Hide Save only when this reader cannot change the
+       * file at all.
        */
-      var postApprovalEdit = editingApp && editApplicationPhase(state) === 'post_approval';
       var peopleFrozen = editingApp && !!state.applicationLocked && state.canEditPeople === false;
-      var hideSave = peopleFrozen || (editingApp && !postApprovalEdit
-        && editApplicationPhase(state) !== 'pre_approval');
-      var saveAttr = postApprovalEdit ? 'data-cip-people-save' : 'data-cip-save';
+      var hideSave = peopleFrozen || (editingApp && state.canEditApplication === false);
+      var saveAttr = 'data-cip-save';
       toolbar = '<div class="tma-dash__clients-profile-toolbar">' +
         '<div class="tma-dash__clients-profile-head">' +
         renderClientsBackArrow(state) +
@@ -7415,17 +7403,13 @@
   }
 
   /*
-   * Post-approval Edit: pending (and replaceable) documents, grouped by
-   * person. The original application is locked; this is where those files go.
+   * Post-approval Edit is the intake form, same as pre-approval. PAD
+   * uploads still live here as per-slot drops: Confirm submission freezes
+   * the original pack, and those slots cannot travel on the intake Save.
    */
-  function renderPostApprovalDocumentsEdit(state) {
+  function renderPostApprovalSlotDocs(state) {
     var app = applicationFor(state.selectedId);
-    if (!isApplicationProfile(app)) {
-      return '<div class="tma-dash__clients-detail">' +
-        '<div class="tma-dash__clients-profile tma-dash__clients-profile--cards">' +
-        '<div class="tma-dash__clients-assigned-empty">Loading the application…</div>' +
-        '</div></div>';
-    }
+    if (!isApplicationProfile(app)) return '';
 
     var note = cipChecklistNote(app);
     var people = cipFamily(app);
@@ -7440,120 +7424,15 @@
 
       return '<div class="tma-dash__clients-card">' +
         renderCipPersonCardHead(person, app) +
-        renderCipPersonDetailsEdit(person, app) +
         drops +
         '</div>';
     }).join('');
 
-    return '<div class="tma-dash__clients-detail">' +
-      '<div class="tma-dash__clients-profile tma-dash__clients-profile--cards">' +
+    if (!note && !cards) return '';
+
+    return '<div class="tma-dash__clients-cards tma-dash__clients-cards--intake">' +
       (note || '') +
-      '<div class="tma-dash__clients-cards">' +
-      renderCipNumberEdit(app) +
-      (cards || '<div class="tma-dash__clients-assigned-empty">Nobody is on this application yet.</div>') +
-      '</div></div></div>';
-  }
-
-  /*
-   * The Unit's number on the post-approval Edit screen.
-   *
-   * A post-approval file arrives already numbered, read off an approval
-   * letter, so a mistyped digit is among the likeliest things on it to need
-   * fixing — and this screen is where somebody looking at that letter
-   * already is. It was the one detail Edit application could not touch: the
-   * cards below it edit people, and the number belongs to the application,
-   * not to any one person.
-   *
-   * The Edit CIP number dialog already knew how to do this and had no way in
-   * from anywhere; this is its entry point. Shown only to a reader the
-   * server says may change it, because the number is the reviewing officer's
-   * to correct even though the whole firm may fix a name on the same screen.
-   */
-  function renderCipNumberEdit(app) {
-    if (!app || app.phase !== 'post_approval' || !app.canEditCipNumber) return '';
-
-    return '<div class="tma-dash__clients-card">' +
-      '<header class="tma-dash__clients-card-head">' +
-      '<h3 class="tma-dash__clients-card-title">CIP application number</h3>' +
-      '</header>' +
-      '<div class="tma-dash__clients-person-edit">' +
-      '<div class="tma-portal-form-grid">' +
-      '<label class="tma-portal-field">' +
-      '<span class="tma-portal-field__label">Number from the Unit</span>' +
-      '<input class="tma-portal-input" type="text" readonly' +
-      ' value="' + esc(app.cipNumber || '') + '"' +
-      ' placeholder="Not recorded yet" autocomplete="off" spellcheck="false">' +
-      '</label>' +
-      '</div>' +
-      '<div class="tma-portal-form-actions">' +
-      '<button type="button" class="tma-no-data__btn" data-cip-edit-number>Edit number</button>' +
-      '</div></div></div>';
-  }
-
-  /*
-   * A person's own details on the post-approval Edit screen.
-   *
-   * They were not here at all: the screen showed each person's upload slots
-   * and nothing else, so a misspelt name on a file past the decision could
-   * not be fixed anywhere in the portal. The freeze that made that true is
-   * about the SCANS the Unit was handed, not about who somebody is.
-   *
-   * Two shapes, decided by the server. An administrator gets fields that
-   * save on the spot. Everyone else gets the same fields and a Request
-   * changes button, because the value moving is an administrator's call.
-   */
-  var CIP_PERSON_EDIT_FIELDS = [
-    { key: 'firstName', label: 'First name' },
-    { key: 'lastName', label: 'Last name' },
-    { key: 'dateOfBirth', label: 'Date of birth', type: 'date' },
-    { key: 'passportNumber', label: 'Passport number' },
-    { key: 'countryOfBirth', label: 'Country of birth' },
-    { key: 'countryOfResidence', label: 'Country of residence' },
-    { key: 'occupation', label: 'Occupation' },
-  ];
-
-  function renderCipPersonDetailsEdit(person, app) {
-    if (!person || !app || !app.canEditPeople) return '';
-
-    var pending = (app.pendingChanges || []).filter(function (r) {
-      return r.person === person.id;
-    })[0];
-
-    var fields = CIP_PERSON_EDIT_FIELDS.map(function (f) {
-      var raw = person[f.key] == null ? '' : String(person[f.key]);
-      if (f.key === 'firstName' || f.key === 'lastName') raw = cipUpperName(raw);
-      return '<label class="tma-portal-field' +
-        (f.key === 'firstName' || f.key === 'lastName' ? ' tma-portal-field--name' : '') + '">' +
-        '<span class="tma-portal-field__label">' + esc(f.label) + '</span>' +
-        '<input class="tma-portal-input' +
-        (f.key === 'firstName' || f.key === 'lastName' ? ' tma-portal-input--name' : '') + '"' +
-        ' type="' + (f.type || 'text') + '"' +
-        ' data-cip-person-field="' + esc(f.key) + '"' +
-        ' data-cip-person="' + esc(person.id) + '"' +
-        ' value="' + esc(raw) + '"' +
-        (f.key === 'firstName' || f.key === 'lastName' ? ' autocapitalize="characters" spellcheck="false"' : '') +
-        ' autocomplete="off">' +
-        '</label>';
-    }).join('');
-
-    // An open request is the answer to "why has my change not landed", so it
-    // is said here rather than left for somebody to wonder about.
-    var waiting = pending
-      ? '<p class="tma-portal-note">' +
-        esc((pending.by || 'Somebody') + ' asked to change ' +
-          Object.keys(pending.changes || {}).join(', ') + '.') +
-        ' Waiting on an administrator.</p>'
-      : '';
-
-    /*
-     * No button of its own. One Save in the head saves every card on the
-     * screen, so a reader who corrected a name here and a date of birth two
-     * cards down presses once rather than hunting a button per person.
-     */
-    return '<div class="tma-dash__clients-person-edit"' +
-      ' data-cip-person-block="' + esc(person.id) + '">' +
-      '<div class="tma-portal-form-grid">' + fields + '</div>' +
-      waiting +
+      (cards || '') +
       '</div>';
   }
 
@@ -13085,12 +12964,6 @@
         }
         return;
       }
-      var peopleSave = e.target.closest('[data-cip-people-save]');
-      if (peopleSave) {
-        e.preventDefault();
-        saveCipPeopleEdits(peopleSave);
-        return;
-      }
       if (e.target.closest('[data-cip-cancel]')) {
         e.preventDefault();
         // Cancel goes where Back goes. Abandoning an edit and finishing one
@@ -13101,79 +12974,6 @@
         else navigate('list');
       }
     });
-  }
-
-  /*
-   * Save every person card on post-approval Edit, in one press.
-   *
-   * Only the cards that actually changed are posted. The screen draws a card
-   * per person and a reader usually corrects one of them, so posting all six
-   * would write five audit rows saying nothing happened — and, where the
-   * reader cannot edit directly, raise five change requests for an
-   * administrator to read.
-   *
-   * The answer is one sentence, not one per card: a reader who pressed one
-   * button should be told once whether it worked. Where nothing changed it
-   * says so rather than claiming a save.
-   */
-  function saveCipPeopleEdits(btn) {
-    var state = clientsMountState;
-    var app = state && applicationFor(state.selectedId);
-    if (!app) return;
-
-    var blocks = [].slice.call(document.querySelectorAll('[data-cip-person-block]'));
-    var direct = !!app.editsPeopleDirectly;
-    var changed = [];
-
-    // The people as the server last described them, to tell a corrected
-    // field from one merely redrawn.
-    var filed = {};
-    cipFamily(app).forEach(function (person) { if (person && person.id) filed[person.id] = person; });
-
-    blocks.forEach(function (block) {
-      var personId = block.getAttribute('data-cip-person-block');
-      var was = filed[personId] || {};
-      var body = {};
-      var moved = false;
-      block.querySelectorAll('[data-cip-person-field]').forEach(function (input) {
-        var key = input.getAttribute('data-cip-person-field');
-        var value = input.value.trim();
-        if (key === 'firstName' || key === 'lastName') value = value.toLocaleUpperCase();
-        body[key] = value;
-        if (value !== String(was[key] == null ? '' : was[key]).trim()) moved = true;
-      });
-      if (moved) changed.push({ id: personId, body: body });
-    });
-
-    if (!changed.length) {
-      clientsToast('Nothing to save.', 'positive');
-      return;
-    }
-
-    var label = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = direct ? 'Saving…' : 'Sending…';
-
-    var base = '/portal/cip/applications/' + encodeURIComponent(app.id) + '/people/';
-    Promise.all(changed.map(function (row) {
-      return clientsFetch(base + encodeURIComponent(row.id) + '/details', {
-        method: 'POST',
-        json: row.body,
-      });
-    }))
-      .then(function (results) {
-        var requested = results.some(function (r) { return r && r.requested; });
-        clientsToast(requested
-          ? 'Change requested. An administrator will review it.'
-          : (changed.length === 1 ? 'Details saved.' : 'Details saved for ' + changed.length + ' people.'),
-        'positive');
-        refreshAfterCipMove(app.clientUid);
-      })
-      .catch(function (err) {
-        btn.disabled = false;
-        btn.textContent = label;
-        clientsToast((err && err.message) || 'Could not save these details.', 'negative');
-      });
   }
 
   /*
@@ -13239,45 +13039,50 @@
       ensureApplicationTable(state, render);
     }
     // The intake wizard owns its own subtree once mounted; re-mounting on a
-    // re-render would wipe a half-typed application.
+    // re-render would wipe a half-typed application. Do not treat "no form
+    // yet" as unmounted: open() paints a loading state first, and a refetch
+    // of the application (slot docs, the record's phase) lands in that
+    // window. Resetting here reopened the wizard forever and left the mount
+    // empty.
     var intakeMount = root.querySelector('[data-cip-intake-mount]');
-    if (intakeMount && !intakeMount.querySelector('[data-cip-form]')) intakeMount._cipMounted = false;
-    if (intakeMount && state.screen === 'edit-application' && editApplicationPhase(state) !== 'pre_approval') {
-      intakeMount._cipMounted = false;
-      intakeMount.innerHTML = '';
-    } else if (intakeMount) {
+    if (intakeMount) {
       var editing = state.screen === 'edit-application';
-      var wantPhase = state.applicationPhase || 'pre_approval';
-      if (intakeMount._cipPhase !== wantPhase || intakeMount._cipEditing !== editing) {
+      var wantKey = editing
+        ? ('edit:' + (state.applicationId || ''))
+        : ('new:' + (state.applicationPhase || 'pre_approval'));
+      if (intakeMount._cipKey !== wantKey) {
         intakeMount._cipMounted = false;
         intakeMount.innerHTML = '';
       }
     }
-    if (intakeMount && !intakeMount._cipMounted && window.TMACipIntake &&
-        !(state.screen === 'edit-application' && editApplicationPhase(state) !== 'pre_approval')) {
+    if (intakeMount && !intakeMount._cipMounted && window.TMACipIntake) {
       intakeMount._cipMounted = true;
       var editing = state.screen === 'edit-application';
-      intakeMount._cipPhase = state.applicationPhase || 'pre_approval';
-      intakeMount._cipEditing = editing;
+      var openPhase = editing
+        ? ((applicationRecord(state) || {}).phase || null)
+        : (state.applicationPhase || 'pre_approval');
+      intakeMount._cipKey = editing
+        ? ('edit:' + (state.applicationId || ''))
+        : ('new:' + (state.applicationPhase || 'pre_approval'));
       window.TMACipIntake.open(intakeMount, {
         applicationId: editing ? state.applicationId : null,
         /*
-         * A draft's phase travels with it.
-         *
          * The wizard asks the server for its document requirements as it
-         * opens, and that ask is keyed on the phase — so a post-approval
-         * draft opened without one was drawn with the PRE-approval
-         * checklist. An edit of a filed application still passes null: it
-         * reads the phase off the record it is loading anyway.
+         * opens, and that ask is keyed on the phase. A filed edit (and a
+         * draft) pass the record's own phase so a post-approval file is
+         * not drawn with the pre-approval checklist. The wizard also
+         * re-reads the phase off the record it loads, in case this paint
+         * happened before that record was in hand.
          */
-        phase: editing
-          ? ((applicationRecord(state) || {}).status === 'draft'
-            ? ((applicationRecord(state) || {}).phase || 'pre_approval')
-            : null)
-          : (state.applicationPhase || 'pre_approval'),
+        phase: openPhase,
         onReady: function (application) {
           state.applicationLocked = !!(application && application.locked);
           state.canEditPeople = !(application && application.canEditPeople === false);
+          state.canEditApplication = !(application && application.canEditApplication === false);
+          if (application && application.clientUid) {
+            rememberApplication(application.clientUid, application);
+            if (!state.selectedId) state.selectedId = application.clientUid;
+          }
           syncClientsDetailHead(state);
         },
         onSaving: function (saving) {
@@ -14812,7 +14617,10 @@
       // later New application would open with the last one's answers in it.
       state.applicationId = screen === 'edit-application' ? (applicationId || state.applicationId) : null;
       state.applicationLocked = screen === 'edit-application' && isApplicationLocked(state.applicationId);
-      if (screen !== 'edit-application') state.canEditPeople = true;
+      if (screen !== 'edit-application') {
+        state.canEditPeople = true;
+        state.canEditApplication = true;
+      }
       if (screen === 'new-application') {
         state.applicationPhase = state.applicationPhase || 'pre_approval';
       } else if (screen !== 'edit-application') {
@@ -14852,7 +14660,7 @@
       // only appears once you open the tab is no use to anybody.
       // Both flows show the profile: 'contact' in the split view, 'detail'
       // in the paged/mobile one.
-      if (state.screen === 'edit-application' && editApplicationPhase(state) !== 'pre_approval') {
+      if (state.screen === 'edit-application') {
         ensureEditApplicationLoaded(state, render);
       }
 
