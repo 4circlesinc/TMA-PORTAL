@@ -1017,7 +1017,11 @@
         }
       }
       if (name !== 'clients') {
-        root.classList.remove('tma-dash--clients-detail');
+        root.classList.remove(
+          'tma-dash--clients-detail',
+          'tma-dash--clients-mobile',
+          'tma-dash--clients-table'
+        );
         var clientsDetailHead = root.querySelector('[data-clients-detail-head]');
         if (clientsDetailHead) {
           clientsDetailHead.hidden = true;

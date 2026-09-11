@@ -998,7 +998,12 @@
 }
 
 .tma-dash--email .tma-dash__main-head,
-.tma-dash__main:has(> .tma-dash__view[data-view="email"]:not([hidden])) > .tma-dash__main-head {
+.tma-dash--messages .tma-dash__main-head,
+.tma-dash--feed .tma-dash__main-head,
+.tma-dash--calendar .tma-dash__main-head,
+.tma-dash--settings .tma-dash__main-head,
+.tma-dash__main:has(> .tma-dash__view[data-view="email"]:not([hidden])) > .tma-dash__main-head,
+.tma-dash__main:has(> .tma-dash__view:not([hidden]):not([data-view="clients"]):not([data-view="add-data"])) > .tma-dash__main-head {
   display: none !important;
   margin: 0 !important;
   height: 0 !important;
@@ -1006,6 +1011,12 @@
   padding: 0 !important;
   position: absolute !important;
   visibility: hidden !important;
+}
+
+.tma-dash:not(.tma-dash--clients) [data-clients-page-actions],
+.tma-dash:not(.tma-dash--clients) [data-clients-detail-head],
+.tma-dash:not(.tma-dash--clients) [data-page-head-tabs] {
+  display: none !important;
 }
 
 .tma-dash__main:has(> .tma-dash__view[data-view="email"]:not([hidden]) .tma-dash__email-toolbar) {

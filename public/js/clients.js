@@ -1409,8 +1409,26 @@
     var root = clientsMountRoot;
     if (!root || !root.isConnected) return false;
     var view = root.closest ? root.closest('.tma-dash__view') : null;
+    if (view && (view.hidden || view.hasAttribute('hidden'))) return false;
 
-    return !view || !view.hidden;
+    /*
+     * Shell chrome (tabs, Create New Application, the applicant identity row)
+     * lives in .tma-dash__main-head, outside this view. A live render after
+     * the reader has opened Messages was putting that chrome back on top of
+     * the chat: the URL still said CIP, the head said CIP, the body was the
+     * inbox. Refuse to touch the shell unless this is the only main view
+     * on screen.
+     */
+    var dash = document.querySelector('.tma-dash');
+    if (dash) {
+      var shown = dash.querySelectorAll('.tma-dash__main > .tma-dash__view:not([hidden])');
+      for (var i = 0; i < shown.length; i++) {
+        if (shown[i].getAttribute('data-view') !== 'clients') return false;
+      }
+      if (!shown.length) return false;
+    }
+
+    return true;
   }
 
   /* Set while a write is waiting for the shell to finish moving, see below. */
@@ -1878,6 +1896,7 @@
   }
 
   function syncClientsPageActions(state, navigate) {
+    if (!clientsViewShowing()) return;
     var slot = document.querySelector('[data-clients-page-actions]');
     if (!slot) return;
     clientsHeadActionsNavigate = navigate;
@@ -1941,6 +1960,7 @@
   }
 
   function syncClientsHeadTabs(state, render) {
+    if (!clientsViewShowing()) return;
     var slot = document.querySelector('[data-page-head-tabs]');
     if (!slot) return;
 
@@ -5261,6 +5281,7 @@
 
   /* Full-page detail: put identity + actions in the global page-title row. */
   function revealClientsMainHead(left) {
+    if (!clientsViewShowing()) return;
     var head = left && left.closest ? left.closest('.tma-dash__main-head') : null;
     if (!head) return;
     /*
@@ -5283,6 +5304,7 @@
   }
 
   function syncClientsDetailHead(state) {
+    if (!clientsViewShowing()) return;
     var left = document.querySelector('.tma-dash__main-head-left');
     if (!left) return;
     var titleEl = left.querySelector('[data-page-title]');
@@ -14666,6 +14688,14 @@
   function syncClientsShell(screen, viewMode) {
     var dash = document.querySelector('.tma-dash');
     if (!dash) return;
+    if (!clientsViewShowing()) {
+      dash.classList.remove(
+        'tma-dash--clients-mobile',
+        'tma-dash--clients-detail',
+        'tma-dash--clients-table'
+      );
+      return;
+    }
     var mobile = isClientsMobile();
     var listFull = !mobile && viewMode === 'list';
     dash.classList.toggle('tma-dash--clients-mobile', mobile);
@@ -15050,6 +15080,10 @@
     function syncRoute(route) {
       route = route || parseClientsPath(window.location.pathname);
       if (!route) return;
+      // A captured CIP route replayed after the reader has opened Messages
+      // (live signal, directory hydrate) must not put the applicant head
+      // back over the chat or rewrite the address to this file.
+      if (!clientsViewShowing()) return;
 
       if (route.legacyRedirect && window.history.replaceState) {
         history.replaceState(

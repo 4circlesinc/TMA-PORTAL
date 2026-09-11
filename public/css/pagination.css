@@ -70,14 +70,14 @@
  * gets it by having a footer at all. Views with a taller layout of their own —
  * the clients split view — out-specify this and keep theirs.
  */
-.tma-dash__view:has(.tma-pagination-bar--footer) {
+.tma-dash__view:not([hidden]):has(.tma-pagination-bar--footer) {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
 }
 
-.tma-dash__view:has(.tma-pagination-bar--footer) > * {
+.tma-dash__view:not([hidden]):has(.tma-pagination-bar--footer) > * {
   flex: 1 1 auto;
   min-height: 0;
 }

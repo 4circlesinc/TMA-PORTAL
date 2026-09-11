@@ -1945,7 +1945,7 @@
  * CLIENTS (Order List) page
  * ───────────────────────────────────────── */
 
-.tma-dash__view[hidden] { display: none; }
+.tma-dash__view[hidden] { display: none !important; }
 .tma-dash__view {
   flex: 0 1 auto;
   min-height: auto;
@@ -9678,7 +9678,12 @@
  * Also key off the visible email view — pin/actions have dropped
  * .tma-dash--email and reopened a ~74px band (pad 28 + title + margin 28). */
 .tma-dash--email .tma-dash__main-head,
-.tma-dash__main:has(> .tma-dash__view[data-view="email"]:not([hidden])) > .tma-dash__main-head {
+.tma-dash--messages .tma-dash__main-head,
+.tma-dash--feed .tma-dash__main-head,
+.tma-dash--calendar .tma-dash__main-head,
+.tma-dash--settings .tma-dash__main-head,
+.tma-dash__main:has(> .tma-dash__view[data-view="email"]:not([hidden])) > .tma-dash__main-head,
+.tma-dash__main:has(> .tma-dash__view:not([hidden]):not([data-view="clients"]):not([data-view="add-data"])) > .tma-dash__main-head {
   display: none !important;
   margin: 0 !important;
   height: 0 !important;
@@ -9692,6 +9697,14 @@
   width: 0 !important;
   pointer-events: none !important;
   visibility: hidden !important;
+}
+
+/* CIP list tabs / Create New Application / applicant identity belong only
+   to the CIP view. A live paint must not leave them on Messages, Email, … */
+.tma-dash:not(.tma-dash--clients) [data-clients-page-actions],
+.tma-dash:not(.tma-dash--clients) [data-clients-detail-head],
+.tma-dash:not(.tma-dash--clients) [data-page-head-tabs] {
+  display: none !important;
 }
 
 .tma-dash__email-page {
@@ -20052,7 +20065,7 @@ button.tma-file-status-chip:focus-visible,
   min-width: 0;
 }
 
-.tma-dash__head-tabs[hidden] { display: none; }
+.tma-dash__head-tabs[hidden] { display: none !important; }
 
 /* The heading and the tabs are two answers to "what page is this". */
 .tma-dash__main-head-left:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__page-title {
