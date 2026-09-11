@@ -50,6 +50,7 @@ class MeController extends Controller
             'cipReach' => CipAccess::canReach($user),
             'isProviderContact' => CipAccess::isProviderContact($user),
             'isPrivateClient' => CipAccess::isPrivateClient($user),
+            'isServiceProviderAdmin' => Role::isServiceProviderAdmin($user),
             // What this account may reach, so the sidebar, the mobile menu and
             // the global search index can hide exactly what the server would
             // refuse. Convenience only, every one of these is enforced again

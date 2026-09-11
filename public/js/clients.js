@@ -854,6 +854,16 @@
     return isClientsAdmin() || isServiceProviderAdmin();
   }
 
+  function signedInEmail() {
+    var me = window.TMACurrentUser && TMACurrentUser.get && TMACurrentUser.get();
+    return (me && me.email) ? String(me.email).toLowerCase() : '';
+  }
+
+  function isOwnCompanyMember(member) {
+    var mine = signedInEmail();
+    return !!(mine && member && member.email && String(member.email).toLowerCase() === mine);
+  }
+
   /*
    * Which profiles are actually in hand.
    *
@@ -1940,6 +1950,10 @@
     var access = window.TMAPortalAccess;
     if (access && typeof access.holds === 'function') return access.holds('clients.view');
     return !isExternalCipUser();
+  }
+
+  function canLoadCompaniesDirectory() {
+    return holdsClientDirectory() || isServiceProviderAdmin();
   }
 
   function isExternalCipUser() {
@@ -5722,9 +5736,11 @@
       // identifies the company; the pairs below are the four things you do
       // with it.
       companyCard('Details', renderCompanyDetails(company), {}) +
-      companyCard('Clients referred', renderCompanyReferredBlock(company), {
-        half: true, count: company.referredCount || 0,
-      }) +
+      (holdsClientDirectory()
+        ? companyCard('Clients referred', renderCompanyReferredBlock(company), {
+            half: true, count: company.referredCount || 0,
+          })
+        : '') +
       companyCard('Access', renderCompanyMembersBlock(state, company), { half: true }) +
       companyCard('Provider contacts', renderCompanyPeople(company), {
         half: true, count: (company.people || []).length,
@@ -5918,7 +5934,7 @@
               ? '<button type="button" class="tma-dash__clients-message-btn" data-company-member-invite="' +
                 esc(m.id) + '">' + (m.inviteSent || m.inviteError ? 'Resend' : 'Invite') + '</button>'
               : '') +
-            (canManage
+            (canManage && !isOwnCompanyMember(m)
               ? '<button type="button" class="tma-dash__clients-row-remove" data-company-member-remove="' +
                 esc(m.id) + '" aria-label="Remove member"><img src="' + ICONS.Trash + '" alt=""></button>'
               : '') +
@@ -14155,7 +14171,15 @@
     });
 
     // Staff assignment is administrator-only; a 403 here is expected for an
-    // employee and must not surface as an error.
+    // employee and must not surface as an error. Service Provider admins do
+    // not ask at all.
+    if (!isClientsAdmin()) {
+      state.companyStaff = [];
+      state.companyStaffAssignable = [];
+      state.companyStaffLoading = false;
+      return;
+    }
+
     CompanyStaffAPI.list(state.companyId).then(function (d) {
       if (stale()) return;
       state.companyStaff = (d && d.assignments) || [];
@@ -15153,13 +15177,16 @@
      * A failure is now its own state, it says so, and it offers a retry.
      */
     function loadClients() {
-      /*
-       * CIP-reach accounts mount this view for applications, not the staff
-       * directory. Asking /portal/clients and /portal/companies is a 403 the
-       * browser prints even when we catch it, and the tables never used the
-       * answer.
-       */
-      if (!holdsClientDirectory()) {
+      var staffDirectory = holdsClientDirectory();
+      var companiesDirectory = canLoadCompaniesDirectory();
+
+      if (!staffDirectory && !companiesDirectory) {
+        /*
+         * CIP-reach accounts mount this view for applications, not the staff
+         * directory. Asking /portal/clients and /portal/companies is a 403 the
+         * browser prints even when we catch it, and the tables never used the
+         * answer.
+         */
         state.loadState = 'ready';
         state.loadError = null;
         startClients();
@@ -15190,6 +15217,11 @@
 
       var paintCompanies = function (companies) {
         hydrateCompanies((companies && companies.companies) || []);
+        if (!staffDirectory) {
+          state.loadState = 'ready';
+          state.loadError = null;
+          startClients();
+        }
         if (clientsMountRoot && clientsMountRoot._clientsController) {
           clientsMountRoot._clientsController.syncRoute(
             parseClientsPath(window.location.pathname)
@@ -15197,8 +15229,22 @@
         }
       };
 
-      var listClients = function () { return ClientsAPI.list(); };
       var listCompanies = function () { return CompaniesAPI.list(); };
+
+      if (!staffDirectory) {
+        var companiesOnly = window.TMAStore
+          ? window.TMAStore.swr('clients:companies', listCompanies, paintCompanies)
+          : listCompanies().then(paintCompanies);
+        companiesOnly.catch(function () {
+          hydrateCompanies([]);
+          state.loadState = 'error';
+          state.loadError = 'The directory didn’t answer. It may just be busy.';
+          startClients();
+        });
+        return;
+      }
+
+      var listClients = function () { return ClientsAPI.list(); };
 
       // Paint the directory as soon as clients arrive. Companies are secondary
       // (company column / company view) and used to hold the whole hub hostage.
@@ -15244,10 +15290,10 @@
    */
   if (window.TMALive) {
     window.TMALive.register(window.TMALive.RESOURCES.CLIENTS, function () {
-      if (!holdsClientDirectory()) return Promise.resolve();
-      ClientsAPI.invalidateList();
+      if (!holdsClientDirectory() && !canLoadCompaniesDirectory()) return Promise.resolve();
+      if (holdsClientDirectory()) ClientsAPI.invalidateList();
       return Promise.all([
-        ClientsAPI.list({ force: true }).catch(function () { return null; }),
+        holdsClientDirectory() ? ClientsAPI.list({ force: true }).catch(function () { return null; }) : Promise.resolve(null),
         CompaniesAPI.list().catch(function () { return null; }),
       ]).then(function (results) {
         var clients = results[0];

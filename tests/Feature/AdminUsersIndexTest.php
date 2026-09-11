@@ -6,6 +6,7 @@ use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyMember;
 use App\Models\User;
+use App\Support\Access\Role;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -76,6 +77,16 @@ class AdminUsersIndexTest extends TestCase
             'uid' => 'private-one', 'name' => 'Private One', 'user_id' => $private->id, 'data' => [],
         ]);
 
+        $spAdmin = $this->staff(Role::SERVICE_PROVIDER_ADMIN);
+        CompanyMember::create([
+            'company_id' => $provider->id,
+            'user_id' => $spAdmin->id,
+            'name' => $spAdmin->name,
+            'email' => $spAdmin->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+
         $users = collect($this->actingAs($admin)->getJson('/admin/users')->assertOk()->json('users'))
             ->keyBy('id');
 
@@ -86,6 +97,8 @@ class AdminUsersIndexTest extends TestCase
         $this->assertFalse($users[$contact->id]['requireTwoFactor']);
         $this->assertSame('Service Provider Client', $users[$referred->id]['accountTypeLabel']);
         $this->assertSame('Private Client', $users[$private->id]['accountTypeLabel']);
+        $this->assertSame(Role::SERVICE_PROVIDER_ADMIN, $users[$spAdmin->id]['accountTypeLabel']);
+        $this->assertSame('Galaxy', $users[$spAdmin->id]['serviceProviders'][0]['name']);
     }
 
     public function test_non_admin_staff_cannot_list_users(): void

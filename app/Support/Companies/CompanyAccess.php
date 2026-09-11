@@ -7,7 +7,9 @@ use App\Models\Company;
 use App\Models\CompanyMember;
 use App\Models\CompanyStaffAssignment;
 use App\Models\User;
+use App\Support\Access\CompanyScope;
 use App\Support\Access\Role;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * The single answer to "what may this person do for this company?".
@@ -219,5 +221,54 @@ final class CompanyAccess
             'includesFuture' => $appliesTo === CompanyStaffAssignment::SCOPE_EXISTING_FUTURE,
             'memberCount' => CompanyMember::current()->where('company_id', $company->id)->count(),
         ];
+    }
+
+    /**
+     * A Service Provider admin who is an active member of this firm.
+     * The type alone is not enough: they only manage the company they belong to.
+     */
+    public static function isProviderAdminOf(User $user, Company $company): bool
+    {
+        return Role::isServiceProviderAdmin($user) && self::memberOf($user, $company) !== null;
+    }
+
+    /** May this account open the companies directory at all? */
+    public static function canViewDirectory(User $user): bool
+    {
+        return Role::can($user, 'clients.view') || Role::isServiceProviderAdmin($user);
+    }
+
+    /**
+     * The companies this reader may list. Staff follow {@see CompanyScope};
+     * a Service Provider admin sees only the firms they are a member of.
+     */
+    public static function directoryQuery(User $user, ?Builder $base = null): Builder
+    {
+        $query = $base ?? Company::query();
+
+        if (Role::can($user, 'clients.view')) {
+            return CompanyScope::query($user, $query);
+        }
+
+        if (! Role::isServiceProviderAdmin($user)) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $ids = self::companiesFor($user);
+        if ($ids === []) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->whereIn($query->getModel()->getQualifiedKeyName(), $ids);
+    }
+
+    public static function canViewMembers(User $user, Company $company): bool
+    {
+        return Role::can($user, 'clients.view') || self::isProviderAdminOf($user, $company);
+    }
+
+    public static function canManageMembers(User $user, Company $company): bool
+    {
+        return Role::can($user, 'clients.manage') || self::isProviderAdminOf($user, $company);
     }
 }

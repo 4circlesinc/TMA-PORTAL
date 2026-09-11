@@ -8,8 +8,9 @@ use App\Support\Clients\ClientHubSettings;
 /**
  * Who may see and do what, in one place.
  *
- * The portal has three account types on users.account_type. Client, Employee
- * and Administrator, and before this class every gate was an inline
+ * The portal stores account types on users.account_type. External people are
+ * Client or Service Provider admin; staff are Employee (parked), CRO /
+ * Reviewing officer, or Administrator. Before this class every gate was an inline
  * `in_array($user->account_type, ['Administrator', 'Employee'])` repeated
  * across ~28 files. That made "what can a client actually reach?" a question
  * only a grep could answer, and it meant a new page could ship with no gate at
@@ -27,6 +28,13 @@ use App\Support\Clients\ClientHubSettings;
 class Role
 {
     public const CLIENT = 'Client';
+
+    /**
+     * An external Service Provider contact who may invite and remove people
+     * at their own firm. Same CIP reach as a Client contact of that firm;
+     * they are not staff and hold no matrix capability.
+     */
+    public const SERVICE_PROVIDER_ADMIN = 'Service Provider admin';
 
     public const EMPLOYEE = 'Employee';
 
@@ -69,6 +77,7 @@ class Role
      */
     public const ALL = [
         self::CLIENT,
+        self::SERVICE_PROVIDER_ADMIN,
         self::EMPLOYEE,
         self::REVIEWING_OFFICER,
         'Reviewing Officer',
@@ -77,14 +86,27 @@ class Role
     ];
 
     /**
+     * External accounts: they use the client-side portal, never the staff
+     * matrix. A Service Provider admin is still this, they just manage
+     * invitations for their own firm.
+     *
+     * @var list<string>
+     */
+    public const EXTERNAL = [
+        self::CLIENT,
+        self::SERVICE_PROVIDER_ADMIN,
+    ];
+
+    /**
      * The types the Users page may hand out, the INTERNAL working roles,
      * and only them. Employee is deliberately absent (a one-way street out:
      * existing rows stay recognized and parked, nothing grants it again).
-     * Client is deliberately absent too: external people are never typed by
-     * hand, they arrive through invitations sent from a client or service
-     * provider page, always as Client accounts, and the Users page merely
-     * *describes* them (Service Provider Contact / Service Provider Client /
-     * Private Client) from their hub relationships.
+     * Client and Service Provider admin are deliberately absent too: external
+     * people are never typed by hand from this dropdown. They arrive through
+     * invitations, or a TMA administrator assigns them to a service provider
+     * (as a contact or as a Service Provider admin). The Users page describes
+     * Client accounts from their hub relationships (Service Provider Contact /
+     * Service Provider Client / Private Client).
      */
     public const ASSIGNABLE = [
         self::REVIEWING_OFFICER,
@@ -480,7 +502,12 @@ class Role
 
     public static function isClient(?User $user): bool
     {
-        return self::of($user) === self::CLIENT;
+        return in_array(self::of($user), self::EXTERNAL, true);
+    }
+
+    public static function isServiceProviderAdmin(?User $user): bool
+    {
+        return self::of($user) === self::SERVICE_PROVIDER_ADMIN;
     }
 
     /**

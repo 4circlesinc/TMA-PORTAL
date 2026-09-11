@@ -96,6 +96,7 @@ final class PortalShell
         // can read from /me anyway.
         $cipReach = CipAccess::canReach($user) ? 'true' : 'false';
         $provider = CipAccess::isProviderContact($user) ? 'true' : 'false';
+        $spAdmin = Role::isServiceProviderAdmin($user) ? 'true' : 'false';
         // Whether this reader is an administrator, before /me has answered.
         // The Workflows comment tabs need it at mount: an administrator whose
         // identity had not arrived yet asked the server for their OWN threads,
@@ -111,6 +112,7 @@ final class PortalShell
             .'window.TMABootUserId='.(int) $user->id.';'
             .'window.TMABootCipReach='.$cipReach.';'
             .'window.TMABootProviderContact='.$provider.';'
+            .'window.TMABootServiceProviderAdmin='.$spAdmin.';'
             .'window.TMABootIsAdmin='.$admin.';'
             .'window.TMABootBespoke='.$bespoke.';'
             .'window.TMACsrfToken='.$token.';</script>'."\n  ";

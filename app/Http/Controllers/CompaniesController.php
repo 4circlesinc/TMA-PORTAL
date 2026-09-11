@@ -11,6 +11,7 @@ use App\Support\Access\AccessSync;
 use App\Support\Access\ClientScope;
 use App\Support\Access\CompanyScope;
 use App\Support\Access\Role;
+use App\Support\Companies\CompanyAccess;
 use App\Support\Cip\Providers;
 use App\Support\Clients\ClientDirectory;
 use App\Support\Realtime\Live;
@@ -46,7 +47,9 @@ class CompaniesController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $this->authorizeStaff($request);
+        $this->authorizeDirectory($request);
+
+        $viewer = $request->user();
 
         /*
          * The firm-wide cache is only right for accounts that see the whole
@@ -54,15 +57,17 @@ class CompaniesController extends Controller
          * now, so a cached slice would be one officer's view served to the
          * next reader. Everyone else gets their assignment slice, computed
          * per request: a handful of rows, not worth a per-user cache.
+         * Service Provider admins are never cached: their list is their
+         * own memberships, not the firm's book.
          */
-        if (CompanyScope::seesEveryCompany($request->user())) {
+        if (Role::can($viewer, 'clients.view') && CompanyScope::seesEveryCompany($viewer)) {
             $payload = Cache::remember(
                 'companies.directory',
                 self::INDEX_TTL_SECONDS,
-                fn () => $this->directoryPayload(Company::query(), $request->user()),
+                fn () => $this->directoryPayload(Company::query(), $viewer),
             );
         } else {
-            $payload = $this->directoryPayload(CompanyScope::query($request->user()), $request->user());
+            $payload = $this->directoryPayload(CompanyAccess::directoryQuery($viewer), $viewer);
         }
 
         return response()->json($payload);
@@ -90,7 +95,7 @@ class CompaniesController extends Controller
             // toRecord() falls back to a query per count when the figure is
             // absent, which for member counts meant one round trip per company.
             ->withCount([
-                'referredClients' => fn ($q) => $this->viewerClients($viewer, $q),
+                'referredClients' => fn ($q) => $this->viewerClients($viewer, $q, true),
                 'clients' => fn ($q) => $this->viewerClients($viewer, $q),
                 'members as current_members_count' => fn ($q) => $q->current(),
             ])
@@ -187,6 +192,10 @@ class CompaniesController extends Controller
          * book is not theirs to read, and a count of three above a page that
          * shows one person reads as the page being broken.
          */
+        if (Role::isServiceProviderAdmin($viewer) && ! Role::can($viewer, 'clients.view')) {
+            return [];
+        }
+
         if (! ClientScope::seesEveryClient($viewer)) {
             $ranked->whereIn('id', ClientAssignment::query()
                 ->select('client_id')->live()->where('user_id', $viewer->id));
@@ -215,8 +224,17 @@ class CompaniesController extends Controller
      * in the directory, the company page is another window onto the same
      * records, not a way around the slice.
      */
-    private function viewerClients(User $viewer, $query)
+    private function viewerClients(User $viewer, $query, bool $referred = false)
     {
+        /*
+         * A Service Provider admin has no staff assignments. They may see
+         * the people who belong to their firm; TMA's referred caseload is
+         * not theirs to read.
+         */
+        if (Role::isServiceProviderAdmin($viewer) && ! Role::can($viewer, 'clients.view')) {
+            return $referred ? $query->whereRaw('1 = 0') : $query;
+        }
+
         if (! ClientScope::seesEveryClient($viewer)) {
             $query->whereIn($query->getModel()->getQualifiedKeyName(), ClientAssignment::query()
                 ->select('client_id')->live()->where('user_id', $viewer->id));
@@ -356,7 +374,9 @@ class CompaniesController extends Controller
 
     public function show(Request $request, string $uid): JsonResponse
     {
-        $this->authorizeStaff($request);
+        $this->authorizeDirectory($request);
+
+        $viewer = $request->user();
 
         /*
          * Every people list and count preloaded, viewer-scoped. toRecord()
@@ -364,20 +384,20 @@ class CompaniesController extends Controller
          * relation left unloaded here would hand an officer the firm's whole
          * book on the profile page the directory had correctly narrowed.
          */
-        $company = CompanyScope::query(
-            $request->user(),
+        $company = CompanyAccess::directoryQuery(
+            $viewer,
             Company::with([
                 'cipProvider:id,company_id,code',
-                'clients' => fn ($q) => $this->viewerClients($request->user(), $q)
+                'clients' => fn ($q) => $this->viewerClients($viewer, $q)
                     ->orderBy('name')->orderBy('id'),
-                'referredClients' => fn ($q) => $this->viewerClients($request->user(), $q)
+                'referredClients' => fn ($q) => $this->viewerClients($viewer, $q, true)
                     ->select(self::PERSON_COLUMNS)
                     ->addSelect('referred_by_company_id')
                     ->orderBy('name')->orderBy('id')
                     ->limit(Company::REFERRED_PREVIEW),
             ])->withCount([
-                'referredClients' => fn ($q) => $this->viewerClients($request->user(), $q),
-                'clients' => fn ($q) => $this->viewerClients($request->user(), $q),
+                'referredClients' => fn ($q) => $this->viewerClients($viewer, $q, true),
+                'clients' => fn ($q) => $this->viewerClients($viewer, $q),
             ]),
         )->where('uid', $uid)->firstOrFail();
 
@@ -558,6 +578,15 @@ class CompaniesController extends Controller
     {
         abort_unless(
             Role::can($request->user(), 'clients.view'),
+            403,
+            'Only staff can manage companies.'
+        );
+    }
+
+    private function authorizeDirectory(Request $request): void
+    {
+        abort_unless(
+            CompanyAccess::canViewDirectory($request->user()),
             403,
             'Only staff can manage companies.'
         );

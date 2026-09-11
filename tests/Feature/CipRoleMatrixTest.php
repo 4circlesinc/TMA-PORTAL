@@ -67,7 +67,7 @@ class CipRoleMatrixTest extends TestCase
     {
         // Section 10: "The Administrator assigns the file." Configuration and
         // reporting are section 26 administrator powers.
-        foreach ([Role::REVIEWING_OFFICER, Role::COMPLIANCE_OFFICER, Role::EMPLOYEE, Role::CLIENT] as $type) {
+        foreach ([Role::REVIEWING_OFFICER, Role::COMPLIANCE_OFFICER, Role::EMPLOYEE, Role::CLIENT, Role::SERVICE_PROVIDER_ADMIN] as $type) {
             $user = $this->user($type);
             foreach (['cip.assign', 'cip.configure', 'cip.report'] as $capability) {
                 $this->assertFalse(Role::can($user, $capability), $type.' must not hold '.$capability);
@@ -233,7 +233,7 @@ class CipRoleMatrixTest extends TestCase
         config(['services.cip.enabled' => false]);
 
         foreach ([Role::ADMINISTRATOR, Role::REVIEWING_OFFICER, Role::COMPLIANCE_OFFICER,
-            Role::EMPLOYEE, Role::CLIENT] as $type) {
+            Role::EMPLOYEE, Role::CLIENT, Role::SERVICE_PROVIDER_ADMIN] as $type) {
             $user = $this->user($type);
             foreach (['cip.view', 'cip.review', 'cip.compliance', 'cip.decide',
                 'cip.assign', 'cip.configure', 'cip.report'] as $capability) {

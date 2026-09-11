@@ -771,8 +771,8 @@
         ui().field('Last name', ui().input({ attrs: ' data-acct-last', value: person.lastName || '' })) +
         ui().field('Email address', ui().input({ type: 'email', attrs: ' data-acct-email', value: person.email || '' })) +
         ui().field('Account type', ui().select(
-          (person.accountType === 'Client'
-            ? ['Client']
+          (person.accountType === 'Client' || person.accountType === 'Service Provider admin'
+            ? [person.accountType]
             : (ACCOUNT_TYPES.indexOf(person.accountType) !== -1
               ? ACCOUNT_TYPES
               : [person.accountType].concat(ACCOUNT_TYPES))),

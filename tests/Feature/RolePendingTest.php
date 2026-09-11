@@ -44,7 +44,7 @@ class RolePendingTest extends TestCase
 
     public function test_every_working_role_passes_the_gate(): void
     {
-        foreach ([Role::ADMINISTRATOR, Role::REVIEWING_OFFICER, Role::CLIENT] as $type) {
+        foreach ([Role::ADMINISTRATOR, Role::REVIEWING_OFFICER, Role::CLIENT, Role::SERVICE_PROVIDER_ADMIN] as $type) {
             $this->actingAs($this->user($type))->get('/')->assertOk();
         }
     }

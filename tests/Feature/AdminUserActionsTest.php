@@ -164,6 +164,32 @@ class AdminUserActionsTest extends TestCase
         $this->assertSame('Galaxy', $users[$newbie->id]['serviceProviders'][0]['name']);
     }
 
+    public function test_a_pending_account_can_be_approved_as_a_service_provider_admin(): void
+    {
+        $admin = $this->admin();
+        $company = $this->provider();
+        $newbie = User::factory()->create([
+            'status' => 'pending',
+            'account_type' => Role::CLIENT,
+            'name' => 'Gil Admin',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson("/admin/users/{$newbie->id}/assign-service-provider", [
+                'company' => $company->uid,
+                'admin' => true,
+            ])
+            ->assertOk();
+
+        $newbie->refresh();
+        $this->assertSame('approved', $newbie->status);
+        $this->assertSame(Role::SERVICE_PROVIDER_ADMIN, $newbie->account_type);
+        $this->assertTrue(CipAccess::isProviderContact($newbie));
+
+        $users = collect($this->actingAs($admin)->getJson('/admin/users')->json('users'))->keyBy('id');
+        $this->assertSame(Role::SERVICE_PROVIDER_ADMIN, $users[$newbie->id]['accountTypeLabel']);
+    }
+
     public function test_an_approved_client_can_be_assigned_to_a_service_provider(): void
     {
         $admin = $this->admin();

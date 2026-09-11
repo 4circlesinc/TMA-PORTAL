@@ -136,6 +136,7 @@
   var boot = Array.isArray(window.TMABootCapabilities) ? window.TMABootCapabilities : null;
   var cipReach = window.TMABootCipReach === true || window.TMABootCipReach === 'true';
   var providerContact = window.TMABootProviderContact === true || window.TMABootProviderContact === 'true';
+  var serviceProviderAdmin = window.TMABootServiceProviderAdmin === true || window.TMABootServiceProviderAdmin === 'true';
 
   var caps = boot;
   var readyResolve;
@@ -350,6 +351,7 @@
     caps = Array.isArray(me.capabilities) ? me.capabilities : [];
     cipReach = !!me.cipReach;
     providerContact = !!me.isProviderContact;
+    serviceProviderAdmin = !!me.isServiceProviderAdmin;
     apply();
     readyResolve(caps);
   }
@@ -415,5 +417,6 @@
     capabilities: function () { return caps ? caps.slice() : []; },
     cipReach: function () { return !!cipReach; },
     isProviderContact: function () { return !!providerContact; },
+    isServiceProviderAdmin: function () { return !!serviceProviderAdmin; },
   };
 })();

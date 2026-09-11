@@ -151,6 +151,7 @@ class CompanyMember extends Model
             'hasAccount' => $this->hasLiveAccount(),
             'avatar' => $this->user?->photoUrl(),
             'clientUid' => $this->client?->uid,
+            'accountType' => $this->user?->account_type,
             'abilities' => $abilities,
             'addedAt' => $this->created_at?->toIso8601String(),
             'removedAt' => $this->removed_at?->toIso8601String(),

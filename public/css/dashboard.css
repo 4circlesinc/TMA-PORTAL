@@ -31115,6 +31115,13 @@ button.tma-dash__header-popup-item:focus-visible {
 .tma-users-picker-item-copy span { color: var(--color-text-secondary); font-size: var(--text-size-12); }
 .tma-users-picker-role-label { margin: var(--space-8) 0 0; font-weight: 600; }
 .tma-users-picker-roles { display: flex; flex-direction: column; gap: 4px; margin: var(--space-8) 0; }
+.tma-users-picker-role {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-size-14);
+  cursor: pointer;
+}
 
 [data-users-status-menu] .tma-dash__menu-item {
   display: flex;

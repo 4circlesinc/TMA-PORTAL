@@ -54,6 +54,10 @@ class AdminUsersController extends Controller
             return 'Pending';
         }
 
+        if ($user->account_type === Role::SERVICE_PROVIDER_ADMIN) {
+            return Role::SERVICE_PROVIDER_ADMIN;
+        }
+
         if ($user->account_type === Role::CLIENT) {
             if ($providerContactIds->has($user->id)) {
                 return 'Service Provider Contact';
@@ -735,6 +739,7 @@ class AdminUsersController extends Controller
 
         $data = $request->validate([
             'company' => ['required', 'string', 'max:96'],
+            'admin' => ['sometimes', 'boolean'],
         ]);
 
         $company = Company::query()
@@ -751,7 +756,8 @@ class AdminUsersController extends Controller
         $wasStaff = Role::isStaff($user);
         $actor = $request->user();
 
-        $fill = ['account_type' => Role::CLIENT];
+        $asAdmin = $request->boolean('admin');
+        $fill = ['account_type' => $asAdmin ? Role::SERVICE_PROVIDER_ADMIN : Role::CLIENT];
         if ($wasPending) {
             $fill['status'] = 'approved';
             $fill['approved_at'] = now();
@@ -785,6 +791,7 @@ class AdminUsersController extends Controller
             'metadata' => [
                 'companyUid' => $company->uid,
                 'companyName' => $company->name,
+                'admin' => $asAdmin,
             ],
         ]);
 

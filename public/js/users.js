@@ -155,7 +155,8 @@
 
   function isServiceProviderContact(row) {
     return (row.serviceProviders && row.serviceProviders.length > 0)
-      || row.address === 'Service Provider Contact';
+      || row.address === 'Service Provider Contact'
+      || row.address === 'Service Provider admin';
   }
 
   function mutedField(label, value) {
@@ -1345,6 +1346,13 @@ if (state.filters.user) {
         '<div class="tma-users-picker-list" data-sp-list>' +
           (window.TMASkeleton ? window.TMASkeleton.rows(3, { leading: false }) : '<p class="tma-user-info-panel__field-label">Loading…</p>') +
         '</div>' +
+        '<p class="tma-users-picker-role-label">Their role at the firm</p>' +
+        '<div class="tma-users-picker-roles">' +
+          '<label class="tma-users-picker-role"><input type="radio" name="sp-role" value="contact"' +
+            (row.address === 'Service Provider admin' ? '' : ' checked') + '> Contact</label>' +
+          '<label class="tma-users-picker-role"><input type="radio" name="sp-role" value="admin"' +
+            (row.address === 'Service Provider admin' ? ' checked' : '') + '> Service Provider admin</label>' +
+        '</div>' +
         '<p class="tma-dash__settings-change-text" data-sp-error hidden style="color: var(--color-red);"></p>' +
         '<div class="tma-users-delete-actions">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-sp-cancel>Cancel</button>' +
@@ -1406,7 +1414,11 @@ if (state.filters.user) {
       wrap.querySelector('[data-sp-confirm]').addEventListener('click', function () {
         if (!selectedId) return;
         this.disabled = true;
-        usersApi('POST', '/admin/users/' + row._id + '/assign-service-provider', { company: selectedId })
+        var asAdmin = !!(wrap.querySelector('input[name="sp-role"][value="admin"]') || {}).checked;
+        usersApi('POST', '/admin/users/' + row._id + '/assign-service-provider', {
+          company: selectedId,
+          admin: asAdmin,
+        })
           .then(function (res) {
             return res.json().catch(function () { return {}; }).then(function (j) {
               if (!res.ok) {
@@ -1417,7 +1429,9 @@ if (state.filters.user) {
                 return;
               }
               close();
-              usersToast(row.user + ' is now a service provider contact', true);
+              usersToast(row.user + (asAdmin
+                ? ' is now a Service Provider admin'
+                : ' is now a service provider contact'), true);
               loadRealUsers();
               refreshPendingBadge();
             });
@@ -1473,7 +1487,7 @@ if (state.filters.user) {
             { label: 'Two-factor', value: twoFactorLabel(r2) },
           ];
           var firms = serviceProviderNames(r2);
-          if (firms || r2.address === 'Service Provider Contact') {
+          if (firms || r2.address === 'Service Provider Contact' || r2.address === 'Service Provider admin') {
             fields.push({ label: 'Service provider', value: firms || '—' });
           }
           return fields;

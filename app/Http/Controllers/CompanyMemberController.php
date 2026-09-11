@@ -6,7 +6,9 @@ use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyMember;
 use App\Models\Invitation;
+use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Companies\CompanyAccess;
 use App\Support\Companies\CompanyMembers;
 use App\Support\Companies\CompanyRoles;
 use App\Support\Invitations\Invitations;
@@ -19,16 +21,16 @@ use Illuminate\Validation\Rule;
  * The people at a company account: who they are, what they may do, and getting
  * them invited.
  *
- * Reading the list is `clients.view`; changing it is `clients.manage`, the same
- * bar as editing the client records themselves, adding somebody to a company
- * hands them access to that company's files and invoices.
+ * Reading the list is `clients.view` for staff, or a Service Provider admin
+ * looking at their own firm. Changing it is `clients.manage` for staff, or
+ * that same Service Provider admin inviting and removing people there.
  */
 class CompanyMemberController extends Controller
 {
     public function index(Request $request, string $uid): JsonResponse
     {
-        Role::authorize($request->user(), 'clients.view');
         $company = Company::where('uid', $uid)->firstOrFail();
+        abort_unless(CompanyAccess::canViewMembers($request->user(), $company), 403);
 
         return response()->json([
             'members' => $this->present($company),
@@ -43,21 +45,23 @@ class CompanyMemberController extends Controller
 
     public function store(Request $request, string $uid): JsonResponse
     {
-        Role::authorize($request->user(), 'clients.manage');
         $company = Company::where('uid', $uid)->firstOrFail();
+        abort_unless(CompanyAccess::canManageMembers($request->user(), $company), 403);
+
+        $asProviderAdmin = CompanyAccess::isProviderAdminOf($request->user(), $company);
 
         $data = $request->validate([
             'name' => ['nullable', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],
             'jobTitle' => ['nullable', 'string', 'max:120'],
-            'role' => ['required', Rule::in(CompanyRoles::all())],
+            'role' => [$asProviderAdmin ? 'nullable' : 'required', Rule::in(CompanyRoles::all())],
             'primary' => ['sometimes', 'boolean'],
             'clientUid' => ['nullable', 'string', 'max:96'],
             'invite' => ['sometimes', 'boolean'],
             'abilities' => ['nullable', 'array'],
         ]);
 
-        $client = ! empty($data['clientUid'])
+        $client = (! $asProviderAdmin && ! empty($data['clientUid']))
             ? Client::where('uid', $data['clientUid'])->firstOrFail()
             : null;
 
@@ -68,7 +72,10 @@ class CompanyMemberController extends Controller
         );
 
         $email = $data['email'] ?? $client?->email;
-        if ($request->boolean('invite')) {
+        $this->assertNotStaffEmail($email);
+
+        $shouldInvite = $asProviderAdmin || $request->boolean('invite');
+        if ($shouldInvite) {
             CompanyMembers::assertInvitable($email);
         }
 
@@ -76,19 +83,22 @@ class CompanyMemberController extends Controller
             'name' => $data['name'] ?? $client?->name,
             'email' => $email,
             'job_title' => $data['jobTitle'] ?? null,
-            'role' => $data['role'],
-            'is_primary' => $request->boolean('primary'),
+            'role' => $asProviderAdmin ? CompanyRoles::MEMBER : $data['role'],
+            'is_primary' => $asProviderAdmin ? false : $request->boolean('primary'),
             'client_id' => $client?->id,
-        ], $this->abilityOverrides($data['abilities'] ?? [])), $request->user());
+        ], $asProviderAdmin ? [] : $this->abilityOverrides($data['abilities'] ?? [])), $request->user());
 
         $invitation = null;
-        if ($request->boolean('invite') && ! $member->hasLiveAccount()) {
+        if ($shouldInvite && ! $member->hasLiveAccount()) {
             $invitation = CompanyMembers::invite($company, $member, $request->user());
         }
 
+        $members = $this->present($company);
+        $record = collect($members)->firstWhere('id', $member->uuid) ?? $member->toRecord();
+
         return response()->json([
-            'member' => $member->toRecord(),
-            'members' => $this->present($company),
+            'member' => $record,
+            'members' => $members,
             'invitation' => $invitation ? Invitations::toRecord($invitation) : null,
         ], 201);
     }
@@ -96,12 +106,13 @@ class CompanyMemberController extends Controller
     /** Send (or re-send) this member's invitation. */
     public function invite(Request $request, string $uid, string $memberUuid): JsonResponse
     {
-        Role::authorize($request->user(), 'clients.manage');
         $company = Company::where('uid', $uid)->firstOrFail();
+        abort_unless(CompanyAccess::canManageMembers($request->user(), $company), 403);
         $member = $this->member($company, $memberUuid);
 
         abort_if($member->hasLiveAccount(), 422, 'This person already has portal access.');
         abort_if(! $member->displayEmail(), 422, 'Add an email address before inviting them.');
+        $this->assertNotStaffEmail($member->displayEmail());
 
         $invitation = CompanyMembers::invite($company, $member, $request->user());
 
@@ -155,9 +166,15 @@ class CompanyMemberController extends Controller
     /** Take a member's access away. The row stays as a record. */
     public function destroy(Request $request, string $uid, string $memberUuid): JsonResponse
     {
-        Role::authorize($request->user(), 'clients.manage');
         $company = Company::where('uid', $uid)->firstOrFail();
+        abort_unless(CompanyAccess::canManageMembers($request->user(), $company), 403);
         $member = $this->member($company, $memberUuid);
+
+        abort_if(
+            (int) $member->user_id === (int) $request->user()->id,
+            422,
+            'You cannot remove your own access.',
+        );
 
         CompanyMembers::remove($company, $member, $request->user());
 
@@ -185,6 +202,17 @@ class CompanyMemberController extends Controller
         }
 
         return $out;
+    }
+
+    private function assertNotStaffEmail(?string $email): void
+    {
+        $email = $email ? Str::lower(trim($email)) : '';
+        if ($email === '') {
+            return;
+        }
+
+        $existing = User::query()->whereRaw('LOWER(email) = ?', [$email])->first();
+        abort_if($existing && Role::isStaff($existing), 422, 'That address belongs to a staff account.');
     }
 
     private function member(Company $company, string $uuid): CompanyMember
