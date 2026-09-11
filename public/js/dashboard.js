@@ -12,7 +12,7 @@
 (function () {
   'use strict';
 
-  var NAV_SHELL_VERSION = '2026-09-11-bespoke-ai';
+  var NAV_SHELL_VERSION = '2026-09-11-bespoke-ai-logo';
   var CIP_APPLICATIONS_PATH = '/citizenship-applications';
 
   function cipApplicationsRest(pathname) {

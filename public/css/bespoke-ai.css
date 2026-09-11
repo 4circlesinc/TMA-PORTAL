@@ -158,7 +158,7 @@
 
 .tma-dash[data-theme="dark"] .tma-bespoke__mark,
 :root[data-theme="dark"] .tma-bespoke__mark {
-  filter: brightness(1.15);
+  filter: none;
 }
 
 .tma-bespoke__panel {
@@ -901,7 +901,7 @@ body:has(.tma-dash.is-rb-open) .tma-bespoke:not(.is-open) {
 :root[data-theme="dark"] .tma-dash__nav-icon--mark img,
 .tma-dash[data-theme="dark"] .tma-dash__mrow-icon--mark,
 :root[data-theme="dark"] .tma-dash__mrow-icon--mark {
-  filter: brightness(1.15) !important;
+  filter: none !important;
 }
 
 .tma-dash--bespoke .tma-bespoke,
@@ -1108,7 +1108,7 @@ body:has(.tma-dash--bespoke) .tma-bespoke,
 
 .tma-dash[data-theme="dark"] .tma-bespoke-page__thread-mark,
 :root[data-theme="dark"] .tma-bespoke-page__thread-mark {
-  filter: brightness(1.15);
+  filter: none;
 }
 
 .tma-bespoke-page__thread-title {

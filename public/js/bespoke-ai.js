@@ -14,7 +14,7 @@
   var LS_OPEN = 'tma.bespoke.open';
   var LS_CONV = 'tma.bespoke.conversationId';
   var LS_HELLO = 'tma.bespoke.helloDismissed';
-  var MARK = 'images/brand/tma/tma-logo-mark.png';
+  var MARK = 'images/brand/tma/bespoke-ai-mark.png';
   var PLUS = 'images/icons/phosphor/Plus.svg';
   var CLOSE = 'images/icons/phosphor/X.svg';
   var SEND = 'images/icons/phosphor/PaperPlaneTilt.svg';
