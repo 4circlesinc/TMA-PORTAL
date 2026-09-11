@@ -24,13 +24,30 @@ use Illuminate\Support\Str;
  * names them; that one case is retried in their dialect instead of
  * falling to the FAQ. Every failure logs the provider's own message so
  * the reason is readable in the environment logs.
+ *
+ * With a Toolbox the call becomes a loop: the model may answer with tool
+ * calls, each is run here on the server under the reader's own identity,
+ * and the results go back until the model writes text. The loop is
+ * bounded; a model that keeps calling tools gets one last, tool-less
+ * request for a plain answer.
  */
 final class Completions
 {
+    /** Rounds of tool calls before the model is asked to just answer. */
+    public const MAX_TOOL_ROUNDS = 5;
+
     /**
      * @param  list<array{role: string, content: string}>  $messages
      */
     public static function complete(string $system, array $messages): ?string
+    {
+        return self::run($system, $messages, null);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $messages
+     */
+    public static function run(string $system, array $messages, ?Toolbox $toolbox): ?string
     {
         if (! Bespoke::configured()) {
             return null;
@@ -43,25 +60,12 @@ final class Completions
             [['role' => 'system', 'content' => $system]],
             $messages,
         );
+        $tools = $toolbox ? $toolbox->definitions() : [];
 
         foreach (self::models() as $model) {
-            $result = self::request($key, $base, $model, [
-                'model' => $model,
-                'temperature' => 0.2,
-                'max_tokens' => 700,
-                'messages' => $chat,
-            ]);
-
-            if ($result['retry']) {
-                $result = self::request($key, $base, $model, [
-                    'model' => $model,
-                    'max_completion_tokens' => 1500,
-                    'messages' => $chat,
-                ]);
-            }
-
-            if ($result['text'] !== null || ! $result['next']) {
-                return $result['text'];
+            $outcome = self::converse($key, $base, $model, $chat, $tools, $toolbox);
+            if ($outcome['text'] !== null || ! $outcome['next']) {
+                return $outcome['text'];
             }
         }
 
@@ -88,12 +92,99 @@ final class Completions
     }
 
     /**
-     * `retry` asks for the same model in the newer dialect; `next` says
+     * The tool loop for one model.
+     *
+     * @param  list<array<string, mixed>>  $chat
+     * @param  list<array<string, mixed>>  $tools
+     * @return array{text: ?string, next: bool}
+     */
+    private static function converse(string $key, string $base, string $model, array $chat, array $tools, ?Toolbox $toolbox): array
+    {
+        $modern = false;
+
+        for ($round = 0; $round < self::MAX_TOOL_ROUNDS; $round++) {
+            $result = self::request($key, $base, $model, self::payload($model, $chat, $tools, $modern));
+            if ($result['retry'] && ! $modern) {
+                $modern = true;
+                $result = self::request($key, $base, $model, self::payload($model, $chat, $tools, true));
+            }
+            if ($result['message'] === null) {
+                return ['text' => null, 'next' => $result['next']];
+            }
+
+            $message = $result['message'];
+            $calls = is_array($message['tool_calls'] ?? null) ? array_values($message['tool_calls']) : [];
+            if ($calls === [] || $toolbox === null) {
+                return ['text' => self::text($message), 'next' => false];
+            }
+
+            $chat[] = [
+                'role' => 'assistant',
+                'content' => is_string($message['content'] ?? null) ? $message['content'] : null,
+                'tool_calls' => $calls,
+            ];
+            foreach ($calls as $call) {
+                $name = (string) ($call['function']['name'] ?? '');
+                $raw = $call['function']['arguments'] ?? '{}';
+                $args = is_string($raw) ? json_decode($raw, true) : $raw;
+                $chat[] = [
+                    'role' => 'tool',
+                    'tool_call_id' => (string) ($call['id'] ?? ''),
+                    'content' => json_encode(
+                        $toolbox->call($name, is_array($args) ? $args : []),
+                        JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+                    ),
+                ];
+            }
+        }
+
+        // Out of rounds: one plain request, no tools, so the reader still
+        // gets an answer rather than the FAQ.
+        $result = self::request($key, $base, $model, self::payload($model, $chat, [], $modern));
+
+        return [
+            'text' => $result['message'] !== null ? self::text($result['message']) : null,
+            'next' => false,
+        ];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $chat
+     * @param  list<array<string, mixed>>  $tools
+     * @return array<string, mixed>
+     */
+    private static function payload(string $model, array $chat, array $tools, bool $modern): array
+    {
+        $payload = ['model' => $model, 'messages' => $chat];
+        if ($modern) {
+            $payload['max_completion_tokens'] = 1800;
+        } else {
+            $payload['temperature'] = 0.2;
+            $payload['max_tokens'] = 900;
+        }
+        if ($tools !== []) {
+            $payload['tools'] = $tools;
+            $payload['tool_choice'] = 'auto';
+        }
+
+        return $payload;
+    }
+
+    /** @param  array<string, mixed>  $message */
+    private static function text(array $message): ?string
+    {
+        $text = $message['content'] ?? null;
+
+        return is_string($text) && trim($text) !== '' ? trim($text) : null;
+    }
+
+    /**
+     * `retry` asks for the same request in the newer dialect; `next` says
      * this host does not know the model and the next listed one should
-     * be tried.
+     * be tried. `message` is choices.0.message, or null on any failure.
      *
      * @param  array<string, mixed>  $payload
-     * @return array{text: ?string, retry: bool, next: bool}
+     * @return array{message: ?array<string, mixed>, retry: bool, next: bool}
      */
     private static function request(string $key, string $base, string $model, array $payload): array
     {
@@ -110,7 +201,7 @@ final class Completions
         } catch (\Throwable $e) {
             Log::warning('Bespoke AI request failed', $context + ['error' => $e->getMessage()]);
 
-            return ['text' => null, 'retry' => false, 'next' => false];
+            return ['message' => null, 'retry' => false, 'next' => false];
         }
 
         if (! $response->successful()) {
@@ -131,20 +222,21 @@ final class Completions
                 || ($response->status() === 404 && preg_match('/\\bmodel\\b/i', $message) === 1)
                 || preg_match('/decommissioned/i', $message) === 1;
 
-            return ['text' => null, 'retry' => $retry, 'next' => $next];
+            return ['message' => null, 'retry' => $retry, 'next' => $next];
         }
 
-        $text = $response->json('choices.0.message.content');
-        if (! is_string($text) || trim($text) === '') {
+        $message = $response->json('choices.0.message');
+        $hasCalls = is_array($message) && ! empty($message['tool_calls']);
+        if (! is_array($message) || (self::text($message) === null && ! $hasCalls)) {
             Log::warning('Bespoke AI empty reply', $context + [
                 'finish' => $response->json('choices.0.finish_reason'),
                 'message' => Str::limit(self::errorMessage($response), 300),
             ]);
 
-            return ['text' => null, 'retry' => false, 'next' => false];
+            return ['message' => null, 'retry' => false, 'next' => false];
         }
 
-        return ['text' => trim($text), 'retry' => false, 'next' => false];
+        return ['message' => $message, 'retry' => false, 'next' => false];
     }
 
     private static function errorMessage(Response $response): string

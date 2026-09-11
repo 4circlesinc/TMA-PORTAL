@@ -11,6 +11,7 @@ use App\Support\Bespoke\Knowledge;
 use App\Support\Bespoke\Page;
 use App\Support\Bespoke\Prompt;
 use App\Support\Bespoke\Suggestions;
+use App\Support\Bespoke\Toolbox;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -94,12 +95,14 @@ class BespokeController extends Controller
         $local = Knowledge::match($user, $identity, $page, $lastUser, $fieldHints);
         $source = 'local';
         $reply = is_array($local) ? (string) $local['answer'] : null;
+        $toolbox = new Toolbox($user, $identity, $page);
 
         if ($configured) {
             $history = array_slice($messages, -12);
-            $model = Completions::complete(
+            $model = Completions::run(
                 Prompt::system($user, $identity, $page, $fieldHints),
                 $history,
+                $toolbox,
             );
             if (is_string($model) && $model !== '') {
                 $reply = $model;
@@ -130,6 +133,7 @@ class BespokeController extends Controller
                 'conversation' => $conversationId,
                 'configured' => $configured,
                 'source' => $source,
+                'tools' => $toolbox->used(),
             ],
         ]);
 
@@ -139,6 +143,8 @@ class BespokeController extends Controller
             'source' => $source,
             'conversationId' => $conversationId,
             'title' => $conversation->title,
+            'actions' => $toolbox->actions(),
+            'choices' => $toolbox->choices(),
         ]);
     }
 

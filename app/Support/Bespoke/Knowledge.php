@@ -549,6 +549,16 @@ final class Knowledge
         ];
     }
 
+    /**
+     * How well a raw question matches one FAQ entry (4 or more is a match).
+     *
+     * @param  array<string, mixed>  $faq
+     */
+    public static function scoreFor(string $query, array $faq): int
+    {
+        return self::score(self::fold($query), $faq);
+    }
+
     /** @param  array<string, mixed>  $faq */
     private static function score(string $q, array $faq): int
     {
