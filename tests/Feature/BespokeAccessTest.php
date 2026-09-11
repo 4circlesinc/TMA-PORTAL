@@ -71,6 +71,7 @@ class BespokeAccessTest extends TestCase
             ->assertSee('window.TMABootBespoke=true', escape: false)
             ->assertSee('data-nav="bespoke"', escape: false)
             ->assertSee('Bespoke AI Assistant')
+            ->assertSee('>Bespoke AI</span>', escape: false)
             ->assertSee('images/brand/tma/bespoke-ai-mark.png', escape: false);
     }
 

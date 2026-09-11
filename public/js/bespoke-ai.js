@@ -1431,7 +1431,7 @@
       a.innerHTML = '<span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>' +
         '<span class="tma-dash__nav-icon tma-dash__nav-icon--mark" aria-hidden="true">' +
         '<img src="' + MARK + '" alt="" width="20" height="20"></span>' +
-        '<span>Bespoke AI Assistant</span>';
+        '<span>Bespoke AI</span>';
       if (users && users.parentNode) users.parentNode.insertBefore(a, users);
     }
 
@@ -1449,7 +1449,7 @@
       m.setAttribute('data-title', 'Bespoke AI Assistant');
       m.setAttribute('data-crumb', 'Bespoke AI Assistant');
       m.setAttribute('data-view', 'bespoke');
-      m.innerHTML = '<img class="tma-dash__mrow-icon tma-dash__mrow-icon--mark" src="' + MARK + '" alt=""><span>Bespoke AI Assistant</span>';
+      m.innerHTML = '<img class="tma-dash__mrow-icon tma-dash__mrow-icon--mark" src="' + MARK + '" alt=""><span>Bespoke AI</span>';
       if (mUsers) pagesCard.insertBefore(m, mUsers);
       else pagesCard.insertBefore(m, pagesCard.firstChild);
     }

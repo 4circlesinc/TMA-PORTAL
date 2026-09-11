@@ -905,6 +905,70 @@ body:has(.tma-dash.is-rb-open) .tma-bespoke:not(.is-open) {
   filter: none !important;
 }
 
+/* Expanded menu only: a soft wash of the mark's cyan / magenta / green.
+   The collapsed icon rail stays a plain row — the colour logo is the cue. */
+.tma-dash__sidebar-nav [data-nav="bespoke"],
+.tma-dash__mrow[data-nav="bespoke"] {
+  --bespoke-nav-wash: linear-gradient(
+    105deg,
+    rgba(34, 211, 238, 0.18) 0%,
+    rgba(168, 85, 247, 0.12) 36%,
+    rgba(244, 114, 182, 0.14) 68%,
+    rgba(52, 211, 153, 0.18) 100%
+  );
+  background: var(--bespoke-nav-wash);
+}
+
+.tma-dash__sidebar-nav [data-nav="bespoke"]:hover,
+.tma-dash__sidebar-nav [data-nav="bespoke"].tma-dash__nav-item--active,
+.tma-dash__mrow[data-nav="bespoke"]:hover,
+.tma-dash__mrow[data-nav="bespoke"].tma-dash__mrow--active {
+  --bespoke-nav-wash: linear-gradient(
+    105deg,
+    rgba(34, 211, 238, 0.26) 0%,
+    rgba(168, 85, 247, 0.18) 36%,
+    rgba(244, 114, 182, 0.20) 68%,
+    rgba(52, 211, 153, 0.24) 100%
+  );
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__sidebar-nav [data-nav="bespoke"],
+:root[data-theme="dark"] .tma-dash__sidebar-nav [data-nav="bespoke"],
+.tma-dash[data-theme="dark"] .tma-dash__mrow[data-nav="bespoke"],
+:root[data-theme="dark"] .tma-dash__mrow[data-nav="bespoke"] {
+  --bespoke-nav-wash: linear-gradient(
+    105deg,
+    rgba(34, 211, 238, 0.22) 0%,
+    rgba(168, 85, 247, 0.18) 36%,
+    rgba(244, 114, 182, 0.18) 68%,
+    rgba(52, 211, 153, 0.20) 100%
+  );
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__sidebar-nav [data-nav="bespoke"]:hover,
+:root[data-theme="dark"] .tma-dash__sidebar-nav [data-nav="bespoke"]:hover,
+.tma-dash[data-theme="dark"] .tma-dash__sidebar-nav [data-nav="bespoke"].tma-dash__nav-item--active,
+:root[data-theme="dark"] .tma-dash__sidebar-nav [data-nav="bespoke"].tma-dash__nav-item--active,
+.tma-dash[data-theme="dark"] .tma-dash__mrow[data-nav="bespoke"]:hover,
+:root[data-theme="dark"] .tma-dash__mrow[data-nav="bespoke"]:hover,
+.tma-dash[data-theme="dark"] .tma-dash__mrow[data-nav="bespoke"].tma-dash__mrow--active,
+:root[data-theme="dark"] .tma-dash__mrow[data-nav="bespoke"].tma-dash__mrow--active {
+  --bespoke-nav-wash: linear-gradient(
+    105deg,
+    rgba(34, 211, 238, 0.32) 0%,
+    rgba(168, 85, 247, 0.24) 36%,
+    rgba(244, 114, 182, 0.24) 68%,
+    rgba(52, 211, 153, 0.28) 100%
+  );
+}
+
+@media (min-width: 1025px) {
+  .tma-dash.is-sidebar-collapsed:not(.tma-dash--sidebar-standard):not(:has(.tma-dash__sidebar:hover, .tma-dash__sidebar:focus-within)) .tma-dash__sidebar-nav [data-nav="bespoke"],
+  .tma-dash.is-sidebar-collapsed.tma-dash--sidebar-standard .tma-dash__sidebar-nav [data-nav="bespoke"] {
+    background: transparent;
+  }
+}
+
 .tma-dash--bespoke .tma-bespoke,
 body:has(.tma-dash--bespoke) .tma-bespoke,
 .tma-dash--bespoke .tma-dash__footer {
