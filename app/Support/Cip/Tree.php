@@ -5,10 +5,15 @@ namespace App\Support\Cip;
 use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\Client;
+use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\User;
+use App\Support\Files\CommentReads;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Files\FolderTree;
+use App\Support\Files\Naming;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -169,9 +174,21 @@ class Tree
             $root = self::provision($application, $actor);
         }
 
-        $additional = self::childNamed($root, self::ADDITIONAL, $actor);
+        /*
+         * One drawer, found by purpose, not by the exact letters currently
+         * painted on it.
+         *
+         * SharePoint's create-folder conflict rule is `rename`, which yields
+         * "Additional Documents 1" (no parentheses). Inbound sync used to
+         * copy that name back onto the portal row, after which the next
+         * provision could not see the drawer it had just made and minted
+         * another. Opening a client then showed Additional Documents 1, 3,
+         * 5, 8… each with the four empty purpose folders. Numbered siblings
+         * are the same drawer; they are folded back into one here.
+         */
+        $additional = self::ensureChildDrawer($root, self::ADDITIONAL, $actor);
         foreach (self::ADDITIONAL_DRAWERS as $name) {
-            self::childNamed($additional, $name, $actor);
+            self::ensureChildDrawer($additional, $name, $actor);
         }
 
         return $additional;
@@ -194,7 +211,7 @@ class Tree
             $root = self::provision($application, $actor);
         }
 
-        return self::childNamed($root, self::APPEAL, $actor);
+        return self::ensureChildDrawer($root, self::APPEAL, $actor);
     }
 
     /** The Appeal Documents drawer, if this application already has a tree. */
@@ -204,10 +221,9 @@ class Tree
             return null;
         }
 
-        return Folder::query()
-            ->where('parent_id', $application->folder_id)
-            ->where('name', self::APPEAL)
-            ->first();
+        $root = Folder::find($application->folder_id);
+
+        return $root ? self::existingDrawer($root, self::APPEAL) : null;
     }
 
     /** The Additional Documents drawer, if this application already has a tree. */
@@ -217,10 +233,92 @@ class Tree
             return null;
         }
 
-        return Folder::query()
-            ->where('parent_id', $application->folder_id)
-            ->where('name', self::ADDITIONAL)
-            ->first();
+        $root = Folder::find($application->folder_id);
+
+        return $root ? self::existingDrawer($root, self::ADDITIONAL) : null;
+    }
+
+    /**
+     * Is this the name of a managed CIP drawer, including the numbered
+     * copies Graph's conflict-rename leaves behind ("Additional Documents 1")?
+     */
+    public static function isDrawerVariant(string $canonical, string $name): bool
+    {
+        $name = trim($name);
+        $canonical = trim($canonical);
+        if ($name === '' || $canonical === '') {
+            return false;
+        }
+        if (strcasecmp($name, $canonical) === 0) {
+            return true;
+        }
+
+        return (bool) preg_match(
+            '/^'.preg_quote($canonical, '/').'(?:\s+\(?\d+\)?)?$/iu',
+            $name,
+        );
+    }
+
+    /** The canonical drawer this name is a copy of, if it is one. */
+    public static function canonicalDrawerName(string $name): ?string
+    {
+        foreach (array_merge(
+            [self::ADDITIONAL, self::APPEAL, self::POST_APPROVAL],
+            self::ADDITIONAL_DRAWERS,
+        ) as $canonical) {
+            if (self::isDrawerVariant($canonical, $name)) {
+                return $canonical;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Drawers hanging off these parents whose names match any of the
+     * canonical labels, including numbered copies.
+     *
+     * @param  list<int>  $parentIds
+     * @param  list<string>  $canonicals
+     * @return Collection<int, Folder>
+     */
+    public static function drawersNamed(array $parentIds, array $canonicals, bool $trashed = false): Collection
+    {
+        $parentIds = array_values(array_unique(array_filter($parentIds)));
+        if ($parentIds === [] || $canonicals === []) {
+            return collect();
+        }
+
+        $query = $trashed ? Folder::onlyTrashed() : Folder::query();
+
+        return $query
+            ->whereIn('parent_id', $parentIds)
+            ->get()
+            ->filter(function (Folder $folder) use ($canonicals) {
+                foreach ($canonicals as $canonical) {
+                    if (self::isDrawerVariant($canonical, $folder->name)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            })
+            ->values();
+    }
+
+    /** The existing managed drawer under this parent, if there is one. */
+    public static function existingDrawer(Folder $parent, string $canonical, ?int $exceptId = null): ?Folder
+    {
+        $matches = Folder::query()
+            ->where('parent_id', $parent->id)
+            ->get()
+            ->filter(fn (Folder $child) => self::isDrawerVariant($canonical, $child->name))
+            ->when($exceptId, fn ($rows) => $rows->reject(fn (Folder $child) => $child->id === $exceptId))
+            ->sortBy('id')
+            ->values();
+
+        return $matches->first(fn (Folder $child) => strcasecmp($child->name, $canonical) === 0)
+            ?? $matches->first();
     }
 
     /**
@@ -242,7 +340,7 @@ class Tree
             $root = self::provision($application, $actor);
         }
 
-        $postRoot = self::childNamed($root, self::POST_APPROVAL, $actor);
+        $postRoot = self::ensureChildDrawer($root, self::POST_APPROVAL, $actor);
 
         foreach ($application->people as $person) {
             self::postApprovalPersonFolder($person, $postRoot, $actor);
@@ -280,8 +378,8 @@ class Tree
      * Give every folder in the tree the client it sits under.
      *
      * `folders.client_id` is a denormalisation the readers lean on:
-     * {@see \App\Support\Cip\Attention} and
-     * {@see \App\Support\Files\CommentReads::unreadByClient} find a
+     * {@see Attention} and
+     * {@see CommentReads::unreadByClient} find a
      * client's documents by joining it, so a folder that does not carry it is
      * a folder whose conversations no indicator can see.
      *
@@ -568,6 +666,88 @@ class Tree
             return $existing;
         }
 
+        return self::createChild($parent, $name, $actor);
+    }
+
+    /**
+     * One managed drawer under this parent: found, healed, or created.
+     *
+     * Numbered copies ("Additional Documents 1") are the same drawer as
+     * the canonical name. They are folded into the oldest row and renamed
+     * back, so a later provision cannot mistake the copy for a missing
+     * folder and mint another.
+     */
+    private static function ensureChildDrawer(Folder $parent, string $canonical, ?User $actor): Folder
+    {
+        return DB::transaction(function () use ($parent, $canonical, $actor) {
+            Folder::query()->whereKey($parent->id)->lockForUpdate()->first();
+
+            $matches = Folder::query()
+                ->where('parent_id', $parent->id)
+                ->get()
+                ->filter(fn (Folder $child) => self::isDrawerVariant($canonical, $child->name))
+                ->sortBy('id')
+                ->values();
+
+            if ($matches->isEmpty()) {
+                return self::createChild($parent, $canonical, $actor);
+            }
+
+            $keeper = $matches->first(
+                fn (Folder $child) => strcasecmp($child->name, $canonical) === 0,
+            ) ?? $matches->first();
+
+            if (strcasecmp($keeper->name, $canonical) !== 0) {
+                $keeper->forceFill(['name' => $canonical])->save();
+            }
+
+            foreach ($matches as $dupe) {
+                if ($dupe->id === $keeper->id) {
+                    continue;
+                }
+                self::absorbFolder($dupe, $keeper, $actor);
+            }
+
+            return $keeper->refresh();
+        });
+    }
+
+    /** Move everything in $source into $target, then recycle the empty shell. */
+    private static function absorbFolder(Folder $source, Folder $target, ?User $actor): void
+    {
+        foreach (FileItem::query()->where('folder_id', $source->id)->get() as $file) {
+            $name = Naming::nextAvailable(
+                $file->name,
+                fn (string $candidate) => FileItem::query()
+                    ->where('folder_id', $target->id)
+                    ->whereRaw('LOWER(name) = ?', [mb_strtolower($candidate)])
+                    ->exists(),
+            );
+            $file->forceFill([
+                'folder_id' => $target->id,
+                'name' => $name,
+            ])->save();
+        }
+
+        foreach (Folder::query()->where('parent_id', $source->id)->get() as $child) {
+            $wanted = Str::lower($child->name);
+            $existing = Folder::query()
+                ->where('parent_id', $target->id)
+                ->get()
+                ->first(fn (Folder $sibling) => Str::lower($sibling->name) === $wanted);
+
+            if ($existing) {
+                self::absorbFolder($child, $existing, $actor);
+            } else {
+                $child->forceFill(['parent_id' => $target->id])->save();
+            }
+        }
+
+        FolderTree::softDeleteTree($source, (int) ($actor?->id ?? $source->owner_id));
+    }
+
+    private static function createChild(Folder $parent, string $name, ?User $actor): Folder
+    {
         return Folder::create([
             'uuid' => (string) Str::uuid(),
             'name' => $name,

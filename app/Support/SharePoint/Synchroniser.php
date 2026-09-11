@@ -8,6 +8,7 @@ use App\Models\SharePointConnection;
 use App\Models\SharePointItem;
 use App\Models\SharePointSyncLog;
 use App\Models\User;
+use App\Support\Cip\Tree;
 use App\Support\Files\Activity;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Files\FolderTree;
@@ -580,6 +581,24 @@ class Synchroniser
         $name = Naming::clean($item['name'] ?? 'Untitled');
 
         if ($isFolder) {
+            /*
+             * Graph's folder create-conflict rule is `rename`, so a second
+             * push of Additional Documents arrives as "Additional Documents 1".
+             * Mapping that onto a new portal row is how a client grew a
+             * numbered stack of empty copies. The numbered name is the same
+             * CIP drawer; attach the Graph item to the one already here.
+             */
+            $canonical = Tree::canonicalDrawerName($name);
+            if ($canonical && $parentFolder && $existing = Tree::existingDrawer($parentFolder, $canonical)) {
+                self::rememberMapping(self::mapFolder($connection, $item, $existing));
+                $stats['created']++;
+
+                return;
+            }
+            if ($canonical) {
+                $name = $canonical;
+            }
+
             $folder = Folder::create([
                 'uuid' => (string) Str::uuid(),
                 'name' => $name,
@@ -605,6 +624,7 @@ class Synchroniser
         $name = Naming::clean($item['name'] ?? 'Untitled');
 
         if ($isFolder && $mapping->folder) {
+            $name = self::portalDrawerName($mapping->folder, $name);
             $mapping->folder->update([
                 'name' => $name,
                 'parent_id' => self::resolveParentFolder($connection, $item)?->id,
@@ -923,6 +943,26 @@ class Synchroniser
             'failure_count' => 0,
             'last_synced_at' => now(),
         ]);
+    }
+
+    /**
+     * Keep a CIP drawer on its canonical name when Graph has renamed the
+     * remote copy ("Additional Documents 1"). Copying that suffix back is
+     * what made the next provision miss the drawer and mint another.
+     */
+    private static function portalDrawerName(Folder $folder, string $incoming): string
+    {
+        $canonical = Tree::canonicalDrawerName($folder->name) ?? Tree::canonicalDrawerName($incoming);
+        if ($canonical === null) {
+            return $incoming;
+        }
+
+        $parent = $folder->parent;
+        if ($parent && Tree::existingDrawer($parent, $canonical, $folder->id)) {
+            return strcasecmp($folder->name, $canonical) === 0 ? $canonical : $folder->name;
+        }
+
+        return $canonical;
     }
 
     private static function markFailed(SharePointConnection $connection, array $item, string $error): void

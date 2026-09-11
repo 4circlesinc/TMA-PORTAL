@@ -1221,8 +1221,10 @@ class CipApplicationController extends Controller
 
         if ($application->folder_id === null) {
             Tree::provision($application, $request->user());
-            $application->refresh();
+        } else {
+            Tree::provisionAdditionalDrawers($application, $request->user());
         }
+        $application->refresh();
 
         /*
          * A draft minted the hub as "Application {number}" before the
@@ -1376,8 +1378,10 @@ class CipApplicationController extends Controller
         if ($application) {
             if ($application->folder_id === null) {
                 Tree::provision($application, $user);
-                $application->refresh();
+            } else {
+                Tree::provisionAdditionalDrawers($application, $user);
             }
+            $application->refresh();
             Tree::syncClientName($application);
             Requirements::materialiseApplication($application);
             $application->unsetRelation('people');

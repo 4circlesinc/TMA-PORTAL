@@ -9,8 +9,6 @@ use App\Models\CipPerson;
 use App\Models\Folder;
 use App\Models\User;
 use App\Support\Activity\ActivityLogger;
-use App\Support\Cip\ApplicationScope;
-use App\Support\Cip\CipAccess;
 use App\Support\Files\FolderTree;
 use App\Support\Realtime\Live;
 use Illuminate\Support\Facades\DB;
@@ -240,10 +238,11 @@ class Removal
             ->pluck('folder_id');
         $drawers = $appFolderIds->isEmpty()
             ? collect()
-            : Folder::onlyTrashed()
-                ->whereIn('parent_id', $appFolderIds)
-                ->whereIn('name', [Tree::ADDITIONAL, Tree::APPEAL])
-                ->pluck('id');
+            : Tree::drawersNamed(
+                $appFolderIds->all(),
+                [Tree::ADDITIONAL, Tree::APPEAL],
+                trashed: true,
+            )->pluck('id');
 
         return $personFolders
             ->merge($postApproval)
@@ -322,11 +321,11 @@ class Removal
         $ids[] = $application->post_approval_folder_id;
 
         if ($application->folder_id) {
-            $ids = array_merge($ids, Folder::onlyTrashed()
-                ->where('parent_id', $application->folder_id)
-                ->whereIn('name', [Tree::ADDITIONAL, Tree::APPEAL])
-                ->pluck('id')
-                ->all());
+            $ids = array_merge($ids, Tree::drawersNamed(
+                [$application->folder_id],
+                [Tree::ADDITIONAL, Tree::APPEAL],
+                trashed: true,
+            )->pluck('id')->all());
         }
 
         $ids = array_values(array_unique(array_filter($ids)));

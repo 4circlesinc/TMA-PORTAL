@@ -328,11 +328,10 @@ class Package
             // them. Whether the appeal drawer may be written to at any given
             // moment is a separate question, and Confirmation::appealAllowsUpload
             // answers it.
-            $additional = $rootIds === [] ? [] : Folder::query()
-                ->whereIn('parent_id', $rootIds)
-                ->whereIn('name', [Tree::ADDITIONAL, Tree::APPEAL])
-                ->pluck('id')
-                ->all();
+            $additional = $rootIds === [] ? [] : Tree::drawersNamed(
+                $rootIds,
+                [Tree::ADDITIONAL, Tree::APPEAL],
+            )->pluck('id')->all();
 
             $postOpen = $original
                 ->pluck('post_approval_folder_id')
@@ -378,9 +377,7 @@ class Package
         if ($closedRoots !== []) {
             $additional = array_merge(
                 $additional,
-                Folder::query()
-                    ->whereIn('parent_id', $closedRoots)
-                    ->whereIn('name', [Tree::ADDITIONAL, Tree::APPEAL])
+                Tree::drawersNamed($closedRoots, [Tree::ADDITIONAL, Tree::APPEAL])
                     ->pluck('id')
                     ->all(),
             );
@@ -467,12 +464,7 @@ class Package
         $ids = array_merge([(int) $root->id], FolderTree::descendantIds($root));
         $skip = [];
 
-        foreach (
-            Folder::query()
-                ->where('parent_id', $root->id)
-                ->whereIn('name', [Tree::ADDITIONAL, Tree::POST_APPROVAL])
-                ->get() as $open
-        ) {
+        foreach (Tree::drawersNamed([$root->id], [Tree::ADDITIONAL, Tree::POST_APPROVAL]) as $open) {
             $skip[] = (int) $open->id;
             $skip = array_merge($skip, FolderTree::descendantIds($open));
         }
