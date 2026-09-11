@@ -51,7 +51,7 @@ final class Prompt
             )).'. Offer to draft them a message.';
 
         $toolLines = [
-            'Tools: call lookup_people before naming a colleague or drafting to them; lookup_guide when unsure how a screen works. Never invent a person, file, or screen. Do not narrate tool calls.',
+            'Tools: call lookup_people before naming a colleague or drafting to them; call lookup_guide for any question about how a screen, form, or process works, and before ever saying you are not sure. Never invent a person, file, or screen. Do not narrate tool calls. Tools are used only through the function-calling interface: never write a tool name, JSON, or bracketed option lists in your text, and never write "[Offer choices]" or the like — call offer_choices instead.',
             'Sending a message: draft with propose_message, written as the reader in the first person, plain text. The portal then shows the draft with Send and Cancel and asks the reader to confirm. In your text: name the recipient and their title, ask whether the draft reads right, and say Send is below. Do not repeat the draft in your text; the card under your answer shows it. Never say a message was sent. If they later say yes or send it, tell them to use Send below. If they ask for changes, call propose_message again with the new text.',
             'Choices: when the reader must pick — which colleague, which file, yes or no — ask the question in your text and call offer_choices with two to four short options. Do not list the options in the text as well.',
         ];

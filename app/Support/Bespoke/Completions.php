@@ -36,6 +36,12 @@ final class Completions
     /** Rounds of tool calls before the model is asked to just answer. */
     public const MAX_TOOL_ROUNDS = 5;
 
+    /** Longest single wait on a 429 before giving the turn up, in seconds. */
+    public const MAX_RATE_WAIT = 8.0;
+
+    /** @var (callable(float): void)|null  Sleeps between rate-limited tries; tests replace it. */
+    public static $sleeper = null;
+
     /**
      * @param  list<array{role: string, content: string}>  $messages
      */
@@ -156,11 +162,17 @@ final class Completions
     private static function payload(string $model, array $chat, array $tools, bool $modern): array
     {
         $payload = ['model' => $model, 'messages' => $chat];
+        // Reasoning models spend the budget thinking before they answer; a
+        // tool round with a guide section in it ran out at 900 and came
+        // back empty. gpt-oss also takes a reasoning_effort knob on Groq.
         if ($modern) {
-            $payload['max_completion_tokens'] = 1800;
+            $payload['max_completion_tokens'] = 3000;
         } else {
             $payload['temperature'] = 0.2;
-            $payload['max_tokens'] = 900;
+            $payload['max_tokens'] = 2000;
+        }
+        if (preg_match('/gpt-oss/i', $model) === 1) {
+            $payload['reasoning_effort'] = 'low';
         }
         if ($tools !== []) {
             $payload['tools'] = $tools;
@@ -186,7 +198,7 @@ final class Completions
      * @param  array<string, mixed>  $payload
      * @return array{message: ?array<string, mixed>, retry: bool, next: bool}
      */
-    private static function request(string $key, string $base, string $model, array $payload): array
+    private static function request(string $key, string $base, string $model, array $payload, int $attempt = 0): array
     {
         $context = [
             'model' => $model,
@@ -202,6 +214,20 @@ final class Completions
             Log::warning('Bespoke AI request failed', $context + ['error' => $e->getMessage()]);
 
             return ['message' => null, 'retry' => false, 'next' => false];
+        }
+
+        // A per-minute token limit (Groq's on-demand tier: 8k TPM on
+        // gpt-oss-120b, and a tool round is ~3k) answers 429 with the wait
+        // it wants. Waiting it out once or twice beats telling the reader
+        // the model is unreachable.
+        if ($response->status() === 429 && $attempt < 2) {
+            $wait = self::retryAfter($response);
+            if ($wait !== null && $wait <= self::MAX_RATE_WAIT) {
+                Log::info('Bespoke AI rate limited; waiting', $context + ['seconds' => $wait, 'attempt' => $attempt + 1]);
+                (self::$sleeper ?? fn (float $s) => usleep((int) ($s * 1_000_000)))($wait);
+
+                return self::request($key, $base, $model, $payload, $attempt + 1);
+            }
         }
 
         if (! $response->successful()) {
@@ -237,6 +263,22 @@ final class Completions
         }
 
         return ['message' => $message, 'retry' => false, 'next' => false];
+    }
+
+    /** Seconds the provider asked us to wait, from the header or its message. */
+    private static function retryAfter(Response $response): ?float
+    {
+        $header = $response->header('Retry-After');
+        if (is_string($header) && is_numeric(trim($header))) {
+            return max(0.5, (float) trim($header));
+        }
+        if (preg_match('/try again in ([0-9.]+)\s*(ms|s)\b/i', self::errorMessage($response), $m) === 1) {
+            $value = (float) $m[1];
+
+            return max(0.5, strtolower($m[2]) === 'ms' ? $value / 1000 : $value);
+        }
+
+        return 2.0;
     }
 
     private static function errorMessage(Response $response): string

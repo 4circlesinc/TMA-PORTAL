@@ -98,6 +98,25 @@ final class Toolbox
         return array_values(array_unique($this->used));
     }
 
+    /**
+     * Some models write a tool call as text instead of calling it. A blob
+     * such as `[Offer choices]{"options": [...]}` in the answer becomes the
+     * real thing here, and the blob leaves the text.
+     */
+    public function adoptLeakedChoices(string $reply): string
+    {
+        $pattern = '/\s*(?:\[[^\]\n]{0,40}\]\s*)?\{\s*"options"\s*:\s*\[(.*?)\]\s*\}/s';
+        if (preg_match($pattern, $reply, $m) !== 1) {
+            return $reply;
+        }
+        $decoded = json_decode('['.$m[1].']', true);
+        if (is_array($decoded) && $this->choices === []) {
+            $this->offerChoices(['options' => $decoded]);
+        }
+
+        return trim((string) preg_replace($pattern, '', $reply, 1));
+    }
+
     public function cipAvailable(): bool
     {
         return $this->identity['cipEnabled']

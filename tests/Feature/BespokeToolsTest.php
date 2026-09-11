@@ -282,6 +282,81 @@ class BespokeToolsTest extends TestCase
         $this->assertSame('CIP Applications are not available for this account type.', $box->call('list_applications', [])['error']);
     }
 
+    public function test_a_tool_call_written_as_text_becomes_real_choices_and_leaves_the_answer(): void
+    {
+        $client = $this->user(Role::CLIENT);
+        Http::fake([
+            'api.groq.com/*' => Http::response($this->textResponse(
+                "That isn’t available for your account type.\nWould you like to message an administrator?\n[Offer choices]{\n \"options\": [\n \"Message Ada Admin\",\n \"No thanks\"\n ]\n}"
+            )),
+        ]);
+
+        $payload = $this->actingAs($client)
+            ->postJson('/portal/bespoke/chat', ['messages' => [['role' => 'user', 'content' => 'How do I open the Users page?']]])
+            ->assertOk()
+            ->json();
+
+        $this->assertSame("That isn’t available for your account type.\nWould you like to message an administrator?", $payload['reply']);
+        $this->assertSame(['Message Ada Admin', 'No thanks'], $payload['choices']);
+    }
+
+    public function test_gpt_oss_requests_ask_for_low_reasoning_effort_and_a_real_budget(): void
+    {
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        Http::fake(['api.groq.com/*' => Http::response($this->textResponse('ok'))]);
+
+        $this->actingAs($officer)->postJson('/portal/bespoke/chat', ['messages' => [['role' => 'user', 'content' => 'hi']]])->assertOk();
+
+        Http::assertSent(fn ($request) => $request->data()['reasoning_effort'] === 'low' && $request->data()['max_tokens'] >= 2000);
+    }
+
+    public function test_a_rate_limit_is_waited_out_rather_than_reported_as_unreachable(): void
+    {
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $waits = [];
+        \App\Support\Bespoke\Completions::$sleeper = function (float $s) use (&$waits) { $waits[] = $s; };
+        Http::fake([
+            'api.groq.com/*' => Http::sequence()
+                ->push(['error' => ['message' => 'Rate limit reached for model `openai/gpt-oss-120b` on tokens per minute (TPM): Limit 8000, Used 6969, Requested 1595. Please try again in 4.23s.', 'type' => 'tokens', 'code' => 'rate_limit_exceeded']], 429)
+                ->push($this->textResponse('Here you go.')),
+        ]);
+
+        try {
+            $payload = $this->actingAs($officer)
+                ->postJson('/portal/bespoke/chat', ['messages' => [['role' => 'user', 'content' => 'hi']]])
+                ->assertOk()
+                ->json();
+        } finally {
+            \App\Support\Bespoke\Completions::$sleeper = null;
+        }
+
+        $this->assertSame('model', $payload['source']);
+        $this->assertSame('Here you go.', $payload['reply']);
+        $this->assertSame([4.23], $waits);
+        Http::assertSentCount(2);
+    }
+
+    public function test_a_long_rate_limit_wait_is_not_attempted(): void
+    {
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        \App\Support\Bespoke\Completions::$sleeper = fn () => throw new \RuntimeException('should not sleep');
+        Http::fake([
+            'api.groq.com/*' => Http::response(['error' => ['message' => 'Please try again in 41s.', 'code' => 'rate_limit_exceeded']], 429),
+        ]);
+
+        try {
+            $payload = $this->actingAs($officer)
+                ->postJson('/portal/bespoke/chat', ['messages' => [['role' => 'user', 'content' => 'hi']]])
+                ->assertOk()
+                ->json();
+        } finally {
+            \App\Support\Bespoke\Completions::$sleeper = null;
+        }
+
+        $this->assertSame('local', $payload['source']);
+        Http::assertSentCount(1);
+    }
+
     // -------------------------------------------------------------- chips
 
     public function test_the_empty_chat_offers_the_new_abilities_only_when_the_model_is_live(): void

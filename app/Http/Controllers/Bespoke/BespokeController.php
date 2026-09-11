@@ -120,7 +120,7 @@ class BespokeController extends Controller
                 $toolbox,
             );
             if (is_string($model) && $model !== '') {
-                $reply = $model;
+                $reply = $toolbox->adoptLeakedChoices($model);
                 $source = 'model';
             }
         }
