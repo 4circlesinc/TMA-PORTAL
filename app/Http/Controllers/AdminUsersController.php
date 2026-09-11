@@ -340,7 +340,10 @@ class AdminUsersController extends Controller
             'last_name' => ['required', 'string', 'max:100'],
             'gender' => ['nullable', Rule::in(['Female', 'Male', 'Non-binary', 'Prefer not to say'])],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
-            'account_type' => ['nullable', Rule::in(self::ACCOUNT_TYPES)],
+            'account_type' => ['nullable', Rule::in(array_merge(self::ACCOUNT_TYPES, [
+                Role::CLIENT,
+                Role::SERVICE_PROVIDER_ADMIN,
+            ]))],
             'note' => ['nullable', 'string', 'max:2000'],
             'avatar_photo' => ['nullable', 'image', 'mimes:jpeg,jpg,png,webp', 'max:8192'],
             'phone' => ['nullable', 'string', 'max:32', 'regex:/^\+?[0-9 ()\-]{7,32}$/'],
@@ -352,17 +355,38 @@ class AdminUsersController extends Controller
             'linkedin_url.regex' => 'Enter a LinkedIn profile address, like linkedin.com/in/their-name.',
         ]);
 
+        $newType = $data['account_type'] ?? null;
+
         // Demoting an administrator must never leave the portal without one.
         if (
             Role::isAdmin($user)
-            && ($data['account_type'] ?? null)
-            && $data['account_type'] !== 'Administrator'
+            && $newType
+            && $newType !== 'Administrator'
         ) {
             $otherAdmins = User::where('account_type', 'Administrator')
                 ->where('status', 'approved')
                 ->where('id', '!=', $user->id)
                 ->exists();
             abort_unless($otherAdmins, 422, 'The portal needs at least one active administrator.');
+        }
+
+        if ($newType === Role::SERVICE_PROVIDER_ADMIN) {
+            abort_unless(
+                $this->belongsToServiceProvider($user),
+                422,
+                'Assign them to a service provider first.',
+            );
+            $this->assertNotLastAdmin($user);
+        }
+
+        // Client is only accepted here as a demotion of Service Provider admin
+        // back to a contact of the same firm. Staff are not stripped this way.
+        if ($newType === Role::CLIENT) {
+            abort_unless(
+                Role::isServiceProviderAdmin($user) && $this->belongsToServiceProvider($user),
+                422,
+                'That account type cannot be set from here.',
+            );
         }
 
         $fill = [
@@ -380,8 +404,9 @@ class AdminUsersController extends Controller
         if ($request->has('note')) {
             $fill['admin_note'] = $data['note'] ?? '';
         }
-        if ($data['account_type'] ?? null) {
-            $fill['account_type'] = $data['account_type'];
+        $wasStaff = Role::isStaff($user);
+        if ($newType) {
+            $fill['account_type'] = $newType;
         }
         if ($request->hasFile('avatar_photo')) {
             $fill['avatar_url'] = AvatarService::storeUploaded($request->file('avatar_photo'), $user->avatar_url);
@@ -397,6 +422,10 @@ class AdminUsersController extends Controller
         $user->forceFill($fill);
         $user->syncDisplayName();
         $user->save();
+
+        if ($newType === Role::SERVICE_PROVIDER_ADMIN && $wasStaff) {
+            $this->endStaffGrants($user, $request->user());
+        }
 
         $this->record($user->id, 'account_updated');
 
@@ -612,6 +641,18 @@ class AdminUsersController extends Controller
             immediate: true,
         );
         $this->clearPendingApprovalNotifications($user);
+    }
+
+    private function belongsToServiceProvider(User $user): bool
+    {
+        return CompanyMember::query()
+            ->active()
+            ->where('user_id', $user->id)
+            ->whereHas(
+                'company.cipProvider',
+                fn ($q) => $q->where('active', true)->whereNotNull('company_id')
+            )
+            ->exists();
     }
 
     private function assertNotLastAdmin(User $user): void

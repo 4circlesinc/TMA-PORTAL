@@ -104,6 +104,74 @@ class ServiceProviderAdminTest extends TestCase
         $this->assertSame('Galaxy', $users[$spAdmin->id]['serviceProviders'][0]['name']);
     }
 
+    public function test_the_users_page_can_promote_a_contact_to_admin(): void
+    {
+        $tma = $this->user(Role::ADMINISTRATOR);
+        [$company] = $this->providerFirm();
+        $person = $this->user(Role::CLIENT, [
+            'email' => 'pat@galaxy.example',
+            'first_name' => 'Pat',
+            'last_name' => 'Reed',
+        ]);
+        $this->attach($company, $person, $tma);
+
+        $this->actingAs($tma)
+            ->patchJson("/admin/users/{$person->id}", [
+                'first_name' => 'Pat',
+                'last_name' => 'Reed',
+                'email' => $person->email,
+                'account_type' => Role::SERVICE_PROVIDER_ADMIN,
+            ])
+            ->assertOk();
+
+        $this->assertSame(Role::SERVICE_PROVIDER_ADMIN, $person->fresh()->account_type);
+        $this->assertTrue(CompanyAccess::isProviderAdminOf($person->fresh(), $company));
+    }
+
+    public function test_the_users_page_cannot_set_admin_without_a_firm(): void
+    {
+        $tma = $this->user(Role::ADMINISTRATOR);
+        $person = $this->user(Role::CLIENT, [
+            'first_name' => 'Pat',
+            'last_name' => 'Reed',
+        ]);
+
+        $this->actingAs($tma)
+            ->patchJson("/admin/users/{$person->id}", [
+                'first_name' => 'Pat',
+                'last_name' => 'Reed',
+                'email' => $person->email,
+                'account_type' => Role::SERVICE_PROVIDER_ADMIN,
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Assign them to a service provider first.');
+    }
+
+    public function test_the_users_page_can_demote_an_admin_to_a_contact(): void
+    {
+        $tma = $this->user(Role::ADMINISTRATOR);
+        [$company] = $this->providerFirm();
+        $person = $this->user(Role::SERVICE_PROVIDER_ADMIN, [
+            'email' => 'gil@galaxy.example',
+            'first_name' => 'Gil',
+            'last_name' => 'Admin',
+        ]);
+        $this->attach($company, $person, $tma);
+
+        $this->actingAs($tma)
+            ->patchJson("/admin/users/{$person->id}", [
+                'first_name' => 'Gil',
+                'last_name' => 'Admin',
+                'email' => $person->email,
+                'account_type' => Role::CLIENT,
+            ])
+            ->assertOk();
+
+        $this->assertSame(Role::CLIENT, $person->fresh()->account_type);
+        $this->assertFalse(Role::isServiceProviderAdmin($person->fresh()));
+        $this->assertTrue(CipAccess::isProviderContact($person->fresh()));
+    }
+
     public function test_assigning_as_admin_sets_the_account_type(): void
     {
         $tma = $this->user(Role::ADMINISTRATOR);

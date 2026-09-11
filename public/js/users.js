@@ -159,6 +159,37 @@
       || row.address === 'Service Provider admin';
   }
 
+  function isServiceProviderAdminRow(row) {
+    return row.address === 'Service Provider admin';
+  }
+
+  function accountTypeOptions(row) {
+    var types = ACCOUNT_TYPES.slice();
+    types.push('Service Provider Contact');
+    types.push('Service Provider admin');
+    if (row.address && types.indexOf(row.address) === -1) {
+      types = [row.address].concat(types);
+    }
+    return types;
+  }
+
+  function accountTypePayload(row, address) {
+    if (ACCOUNT_TYPES.indexOf(address) !== -1) return address;
+    if (address === 'Service Provider admin') return 'Service Provider admin';
+    if (address === 'Service Provider Contact' && isServiceProviderAdminRow(row)) return 'Client';
+    return null;
+  }
+
+  function spTypeMenuItem(row, type, selected) {
+    return '<button type="button" role="menuitem" class="tma-portal-context-menu__item"' +
+      ' data-uctx-type="' + escapeHtml(type) + '"' + (selected ? ' data-selected' : '') + '>' +
+      '<img class="tma-portal-context-menu__icon" src="' +
+        (selected ? ICONS.SealCheck : ICONS.Buildings) +
+        '" alt="" width="16" height="16">' +
+      '<span class="tma-portal-context-menu__label">' + escapeHtml(type) + '</span>' +
+      '</button>';
+  }
+
   function mutedField(label, value) {
     return '<div class="tma-user-info-panel__field tma-user-info-panel__field--muted">' +
       '<p class="tma-user-info-panel__field-label">' + escapeHtml(label) + '</p>' +
@@ -956,13 +987,8 @@ if (state.filters.user) {
           '</button>';
       }).join('') +
         '<div class="tma-portal-context-menu__sep" role="separator"></div>' +
-        '<button type="button" role="menuitem" class="tma-portal-context-menu__item"' +
-          ' data-uctx-type="service-provider"' + (isServiceProviderContact(row) ? ' data-selected' : '') + '>' +
-          '<img class="tma-portal-context-menu__icon" src="' +
-            (isServiceProviderContact(row) ? ICONS.SealCheck : ICONS.Buildings) +
-            '" alt="" width="16" height="16">' +
-          '<span class="tma-portal-context-menu__label">Service provider</span>' +
-        '</button>';
+        spTypeMenuItem(row, 'Service Provider Contact', isServiceProviderContact(row) && !isServiceProviderAdminRow(row)) +
+        spTypeMenuItem(row, 'Service Provider admin', isServiceProviderAdminRow(row));
       document.body.appendChild(uCtxSubEl);
 
       var rect = parentBtn.getBoundingClientRect();
@@ -973,8 +999,9 @@ if (state.filters.user) {
         if (!btn) return;
         var type = btn.getAttribute('data-uctx-type');
         closeUserCtx();
-        if (type === 'service-provider') {
-          openServiceProviderPicker(row);
+        if (type === 'Service Provider Contact' || type === 'Service Provider admin') {
+          if (type === row.address) return;
+          setServiceProviderRole(row, type === 'Service Provider admin');
           return;
         }
         if (type === row.address) return;
@@ -1096,7 +1123,8 @@ if (state.filters.user) {
           return statusMenuItem('approve', 'Approve as ' + type,
             type === 'Administrator' ? ICONS.UserGear : ICONS.User, { type: type });
         }).join('') +
-          statusMenuItem('approve-sp', 'Approve as service provider', ICONS.Buildings);
+          statusMenuItem('approve-sp', 'Approve as Service Provider Contact', ICONS.Buildings) +
+          statusMenuItem('approve-sp-admin', 'Approve as Service Provider admin', ICONS.Buildings);
       } else if (row._status === 'suspended') {
         items = statusMenuItem('reactivate', 'Reactivate account', ICONS.ArrowClockwise);
       } else if (!row._self) {
@@ -1139,7 +1167,8 @@ if (state.filters.user) {
         var kind = act.getAttribute('data-ustatus-act');
         closeStatusMenu();
         if (kind === 'approve') statusAction('/admin/users/' + row._id + '/approve', { account_type: act.getAttribute('data-ustatus-type') });
-        if (kind === 'approve-sp') openServiceProviderPicker(row);
+        if (kind === 'approve-sp') openServiceProviderPicker(row, { admin: false });
+        if (kind === 'approve-sp-admin') openServiceProviderPicker(row, { admin: true });
         if (kind === 'suspend') statusAction('/admin/users/' + row._id + '/suspend');
         if (kind === 'reactivate') statusAction('/admin/users/' + row._id + '/reactivate');
         if (kind === 'require-2fa') {
@@ -1327,7 +1356,32 @@ if (state.filters.user) {
       });
     }
 
-    function openServiceProviderPicker(row) {
+    function setServiceProviderRole(row, asAdmin) {
+      var firmId = (row.serviceProviders && row.serviceProviders[0] && row.serviceProviders[0].id) || '';
+      if (!firmId) {
+        openServiceProviderPicker(row, { admin: !!asAdmin });
+        return;
+      }
+      usersApi('POST', '/admin/users/' + row._id + '/assign-service-provider', {
+        company: firmId,
+        admin: !!asAdmin,
+      }).then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (j) {
+          if (!res.ok) {
+            usersToast((j && j.message) || 'Could not change the account type.', false);
+            return;
+          }
+          usersToast(row.user + (asAdmin
+            ? ' is now a Service Provider admin'
+            : ' is now a service provider contact'), true);
+          loadRealUsers();
+        });
+      }).catch(function () { usersToast('Could not change the account type.', false); });
+    }
+
+    function openServiceProviderPicker(row, opts) {
+      opts = opts || {};
+      var preferAdmin = opts.admin === true || (opts.admin !== false && row.address === 'Service Provider admin');
       var existing = document.querySelector('[data-users-sp-picker]');
       if (existing) existing.remove();
       var wrap = document.createElement('div');
@@ -1336,7 +1390,9 @@ if (state.filters.user) {
       wrap.setAttribute('role', 'dialog');
       wrap.setAttribute('aria-modal', 'true');
       wrap.setAttribute('aria-label', 'Assign service provider');
-      var heading = row._status === 'pending' ? 'Approve as service provider' : 'Assign to a service provider';
+      var heading = row._status === 'pending'
+        ? (preferAdmin ? 'Approve as Service Provider admin' : 'Approve as service provider')
+        : 'Assign to a service provider';
       wrap.innerHTML =
         '<div class="tma-dash__settings-popup-backdrop" aria-hidden="true"></div>' +
         '<div class="tma-dash__settings-change-card tma-users-dialog tma-users-picker">' +
@@ -1349,9 +1405,9 @@ if (state.filters.user) {
         '<p class="tma-users-picker-role-label">Their role at the firm</p>' +
         '<div class="tma-users-picker-roles">' +
           '<label class="tma-users-picker-role"><input type="radio" name="sp-role" value="contact"' +
-            (row.address === 'Service Provider admin' ? '' : ' checked') + '> Contact</label>' +
+            (preferAdmin ? '' : ' checked') + '> Contact</label>' +
           '<label class="tma-users-picker-role"><input type="radio" name="sp-role" value="admin"' +
-            (row.address === 'Service Provider admin' ? ' checked' : '') + '> Service Provider admin</label>' +
+            (preferAdmin ? ' checked' : '') + '> Service Provider admin</label>' +
         '</div>' +
         '<p class="tma-dash__settings-change-text" data-sp-error hidden style="color: var(--color-red);"></p>' +
         '<div class="tma-users-delete-actions">' +
@@ -1469,11 +1525,7 @@ if (state.filters.user) {
         index: filteredIndex,
         fieldLabels: state.live ? { address: 'Account type' } : null,
         hideDuplicate: !!state.live,
-        addressOptions: state.live
-          ? (ACCOUNT_TYPES.indexOf(row.address) !== -1
-            ? ACCOUNT_TYPES
-            : [row.address].concat(ACCOUNT_TYPES))
-          : null,
+        addressOptions: state.live ? accountTypeOptions(row) : null,
         avatarChoices: state.live ? SYSTEM_AVATARS : null,
         profileFields: !!state.live,
         nameParts: !!state.live,
@@ -1494,12 +1546,19 @@ if (state.filters.user) {
         } : null,
         onSave: function (targetRow, index, data) {
           if (state.live) {
+            if (data.address === 'Service Provider admin' || data.address === 'Service Provider Contact') {
+              var hasFirm = targetRow.serviceProviders && targetRow.serviceProviders.length;
+              if (!hasFirm) {
+                openServiceProviderPicker(targetRow, { admin: data.address === 'Service Provider admin' });
+                return;
+              }
+            }
             usersApi('PATCH', '/admin/users/' + targetRow._id, {
               first_name: data.firstName,
               middle_name: data.middleName,
               last_name: data.lastName,
               email: data.email,
-              account_type: ACCOUNT_TYPES.indexOf(data.address) !== -1 ? data.address : null,
+              account_type: accountTypePayload(targetRow, data.address),
               note: data.note,
               avatar: SYSTEM_AVATARS.indexOf(data.avatar) !== -1 ? data.avatar : null,
               phone: data.phone,
@@ -1522,7 +1581,11 @@ if (state.filters.user) {
                 targetRow.user = [data.firstName, data.middleName, data.lastName]
                   .filter(function (s) { return s; }).join(' ');
                 targetRow.email = data.email;
-                if (ACCOUNT_TYPES.indexOf(data.address) !== -1) targetRow.address = data.address;
+                if (ACCOUNT_TYPES.indexOf(data.address) !== -1
+                  || data.address === 'Service Provider admin'
+                  || data.address === 'Service Provider Contact') {
+                  targetRow.address = data.address;
+                }
                 targetRow.note = data.note;
                 targetRow.phone = data.phone;
                 targetRow.jobTitle = data.jobTitle;
