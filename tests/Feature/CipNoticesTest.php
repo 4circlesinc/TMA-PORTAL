@@ -227,6 +227,102 @@ class CipNoticesTest extends TestCase
         ]);
     }
 
+    /**
+     * The Assessment Feedback fork.
+     *
+     * After review the file sits at ASSESSMENT FEEDBACK and goes one of two
+     * ways. Updates Required is the provider's to act on, so their contact is
+     * told; Ready to Submit carries the file on toward submission. Both are
+     * status changes, so both are section 22 notices — this pins which of them
+     * reaches the service provider, and that the fork offers nothing else.
+     */
+    public function test_assessment_feedback_tells_the_provider_when_updates_are_required(): void
+    {
+        Mail::fake();
+
+        $ada = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+        $gil = $this->user(Role::CLIENT, 'gil@galaxy.example', 'Gil Contact');
+
+        $company = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy', 'created_by' => $ada->id]);
+        $provider = CipProvider::create([
+            'name' => 'Galaxy',
+            'code' => 'GAL',
+            'company_id' => $company->id,
+        ]);
+        CompanyMember::create([
+            'company_id' => $company->id, 'user_id' => $gil->id,
+            'name' => 'Gil Contact', 'email' => 'gil@galaxy.example',
+            'role' => 'member', 'status' => CompanyMember::STATUS_ACTIVE,
+            'invited_by' => $ada->id,
+        ]);
+
+        $application = Applications::create($provider, $ada);
+        CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Chen', 'last_name' => 'Wei',
+        ]);
+        Assignments::assign($application->fresh(), $rita, $ada);
+
+        // Assigning is what starts the review, so the file is already at
+        // Review Applications by the time the officer has assessed it.
+        Engine::apply($application->fresh(), Status::ASSESSMENT_FEEDBACK, $rita);
+
+        // The fork itself: those two, and nothing else.
+        $at = $application->fresh();
+        $this->assertTrue(Engine::canTransition($at, Status::UPDATE_REQUIRED));
+        $this->assertTrue(Engine::canTransition($at, Status::READY_TO_SUBMIT));
+        $this->assertFalse(Engine::canTransition($at, Status::PENDING_REVIEW));
+        $this->assertFalse(Engine::canTransition($at, Status::GRANTED));
+
+        Mail::fake();
+        Engine::apply($application->fresh(), Status::UPDATE_REQUIRED, $rita);
+
+        $this->assertSame(Status::UPDATE_REQUIRED, $application->fresh()->status);
+
+        $expected = 'RO - UPDATE REQUIRED - '.$application->fresh()->displayNumber()
+            .' - CHEN WEI (F1) - 18.08.2026';
+
+        // The service provider is told, in the filing subject format.
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->subjectLine === $expected
+            && $mail->hasTo('gil@galaxy.example'));
+
+        // And it reaches them in the portal, not only by email.
+        $this->assertDatabaseHas('portal_notifications', [
+            'user_id' => $gil->id,
+            'subject_id' => $application->id,
+            'subject_type' => CipApplication::class,
+        ]);
+    }
+
+    public function test_ready_to_submit_carries_the_file_toward_submission(): void
+    {
+        Mail::fake();
+
+        $ada = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+
+        $application = Applications::create($provider, $ada);
+        CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Chen', 'last_name' => 'Wei',
+        ]);
+        Assignments::assign($application->fresh(), $rita, $ada);
+
+        // Assigning is what starts the review, so the file is already at
+        // Review Applications by the time the officer has assessed it.
+        Engine::apply($application->fresh(), Status::ASSESSMENT_FEEDBACK, $rita);
+        Engine::apply($application->fresh(), Status::READY_TO_SUBMIT, $rita);
+
+        $this->assertSame(Status::READY_TO_SUBMIT, $application->fresh()->status);
+
+        // Submission is the next step, not a second trip through the feedback.
+        $this->assertTrue(Engine::canTransition($application->fresh(), Status::PENDING_REVIEW));
+    }
+
     public function test_a_person_in_two_classes_is_still_one_mailbox(): void
     {
         Mail::fake();
