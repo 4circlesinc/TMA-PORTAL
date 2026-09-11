@@ -27,10 +27,9 @@ use Illuminate\Support\Str;
  *       ├── Dependent 1
  *       ├── Dependent 2
  *       └── Additional Documents
- *             ├── Queries
- *             ├── Non-Compliance Requests
- *             ├── Supplementary Documents
- *             └── Unit Requests
+ *             ├── Non-Compliance Responses
+ *             ├── Queries Responses
+ *             └── DD Query Responses
  *
  * **Where it hangs.** Every application's main applicant gets a lightweight
  * client-hub record, created here if the applicant is not already one, and
@@ -56,20 +55,29 @@ class Tree
     public const ADDITIONAL = 'Additional Documents';
 
     /** Section 17 — what still accepts paper after the original package is frozen. */
-    public const ADDITIONAL_QUERIES = 'Queries';
+    public const ADDITIONAL_NON_COMPLIANCE = 'Non-Compliance Responses';
 
-    public const ADDITIONAL_NON_COMPLIANCE = 'Non-Compliance Requests';
+    public const ADDITIONAL_QUERIES = 'Queries Responses';
 
-    public const ADDITIONAL_SUPPLEMENTARY = 'Supplementary Documents';
-
-    public const ADDITIONAL_UNIT = 'Unit Requests';
+    public const ADDITIONAL_DD_QUERY = 'DD Query Responses';
 
     /** @var list<string> */
     public const ADDITIONAL_DRAWERS = [
-        self::ADDITIONAL_QUERIES,
         self::ADDITIONAL_NON_COMPLIANCE,
-        self::ADDITIONAL_SUPPLEMENTARY,
-        self::ADDITIONAL_UNIT,
+        self::ADDITIONAL_QUERIES,
+        self::ADDITIONAL_DD_QUERY,
+    ];
+
+    /**
+     * Names the three drawers used to wear, so a later provision can rename
+     * them rather than mint empty copies beside the files already filed.
+     *
+     * @var array<string, list<string>>
+     */
+    private const ADDITIONAL_DRAWER_ALIASES = [
+        self::ADDITIONAL_NON_COMPLIANCE => ['Non-Compliance Requests'],
+        self::ADDITIONAL_QUERIES => ['Queries'],
+        self::ADDITIONAL_DD_QUERY => ['Unit Requests', 'Supplementary Documents'],
     ];
 
     public const POST_APPROVAL = 'Post-Approval Documents';
@@ -94,10 +102,9 @@ class Tree
      *       ├── Dependent 1
      *       ├── Dependent 2
      *       └── Additional Documents
-     *             ├── Queries
-     *             ├── Non-Compliance Requests
-     *             ├── Supplementary Documents
-     *             └── Unit Requests
+     *             ├── Non-Compliance Responses
+     *             ├── Queries Responses
+     *             └── DD Query Responses
      *
      * Not under a folder named for the application. Somebody opening a client
      * wants the people, and a numbered folder holding one more folder called
@@ -160,9 +167,9 @@ class Tree
     }
 
     /**
-     * Additional Documents and the four drawers section 17 names for paper that
-     * arrives after confirm: queries, non-compliance, supplementary files,
-     * and Unit requests. Safe to call again; missing drawers are filled in.
+     * Additional Documents and the three response drawers: non-compliance,
+     * queries, and DD queries. Safe to call again; missing drawers are filled
+     * in, and the older names are renamed into these.
      */
     public static function provisionAdditionalDrawers(
         CipApplication $application,
@@ -183,7 +190,7 @@ class Tree
          * copy that name back onto the portal row, after which the next
          * provision could not see the drawer it had just made and minted
          * another. Opening a client then showed Additional Documents 1, 3,
-         * 5, 8… each with the four empty purpose folders. Numbered siblings
+         * 5, 8… each with the empty purpose folders. Numbered siblings
          * are the same drawer; they are folded back into one here.
          */
         $additional = self::ensureChildDrawer($root, self::ADDITIONAL, $actor);
@@ -249,12 +256,34 @@ class Tree
         if ($name === '' || $canonical === '') {
             return false;
         }
-        if (strcasecmp($name, $canonical) === 0) {
+        foreach (self::labelsForDrawer($canonical) as $label) {
+            if (self::nameMatchesDrawer($label, $name)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function labelsForDrawer(string $canonical): array
+    {
+        return array_values(array_unique(array_merge(
+            [$canonical],
+            self::ADDITIONAL_DRAWER_ALIASES[$canonical] ?? [],
+        )));
+    }
+
+    private static function nameMatchesDrawer(string $label, string $name): bool
+    {
+        if (strcasecmp($name, $label) === 0) {
             return true;
         }
 
         return (bool) preg_match(
-            '/^'.preg_quote($canonical, '/').'(?:\s+\(?\d+\)?)?$/iu',
+            '/^'.preg_quote($label, '/').'(?:\s+\(?\d+\)?)?$/iu',
             $name,
         );
     }

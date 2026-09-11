@@ -426,10 +426,9 @@ class CipLockingTest extends TestCase
             ->all();
 
         $this->assertSame([
+            Tree::ADDITIONAL_DD_QUERY,
             Tree::ADDITIONAL_NON_COMPLIANCE,
             Tree::ADDITIONAL_QUERIES,
-            Tree::ADDITIONAL_SUPPLEMENTARY,
-            Tree::ADDITIONAL_UNIT,
         ], $names);
 
         $queries = Folder::query()

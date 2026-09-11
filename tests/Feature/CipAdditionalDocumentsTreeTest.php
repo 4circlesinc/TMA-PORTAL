@@ -23,7 +23,7 @@ use Tests\TestCase;
  * SharePoint's folder-create conflict rule renames a second push to
  * "Additional Documents 1". Copying that name back onto the portal row made
  * the next provision miss the drawer and mint another, so a client ended up
- * with Additional Documents 1, 3, 5, 8… each holding the four empty purpose
+ * with Additional Documents 1, 3, 5, 8… each holding the empty purpose
  * folders. Provisioning must reuse the numbered copies and fold them into one.
  */
 class CipAdditionalDocumentsTreeTest extends TestCase
@@ -48,10 +48,9 @@ class CipAdditionalDocumentsTreeTest extends TestCase
             $this->additionalNames($root),
         );
         $this->assertSame([
+            Tree::ADDITIONAL_DD_QUERY,
             Tree::ADDITIONAL_NON_COMPLIANCE,
             Tree::ADDITIONAL_QUERIES,
-            Tree::ADDITIONAL_SUPPLEMENTARY,
-            Tree::ADDITIONAL_UNIT,
         ], $this->drawerNames(
             Tree::additionalFolder($application->fresh()),
         ));
@@ -123,10 +122,9 @@ class CipAdditionalDocumentsTreeTest extends TestCase
         $this->assertTrue($eleven->fresh()->trashed());
         $this->assertTrue($fourteen->fresh()->trashed());
         $this->assertSame([
+            Tree::ADDITIONAL_DD_QUERY,
             Tree::ADDITIONAL_NON_COMPLIANCE,
             Tree::ADDITIONAL_QUERIES,
-            Tree::ADDITIONAL_SUPPLEMENTARY,
-            Tree::ADDITIONAL_UNIT,
         ], $this->drawerNames($kept));
     }
 
@@ -156,6 +154,40 @@ class CipAdditionalDocumentsTreeTest extends TestCase
         $this->assertFalse(Tree::isDrawerVariant(Tree::ADDITIONAL, 'Additional Documents Backup'));
         $this->assertFalse(Tree::isDrawerVariant(Tree::ADDITIONAL, 'Main Applicant'));
         $this->assertSame(Tree::ADDITIONAL, Tree::canonicalDrawerName('Additional Documents 8'));
+        $this->assertSame(Tree::ADDITIONAL_QUERIES, Tree::canonicalDrawerName('Queries'));
+        $this->assertSame(Tree::ADDITIONAL_QUERIES, Tree::canonicalDrawerName('Queries Responses'));
+        $this->assertSame(Tree::ADDITIONAL_NON_COMPLIANCE, Tree::canonicalDrawerName('Non-Compliance Requests'));
+        $this->assertSame(Tree::ADDITIONAL_DD_QUERY, Tree::canonicalDrawerName('Unit Requests'));
+        $this->assertSame(Tree::ADDITIONAL_DD_QUERY, Tree::canonicalDrawerName('Supplementary Documents'));
+    }
+
+    public function test_legacy_purpose_drawers_are_renamed_on_provision(): void
+    {
+        ['staff' => $staff, 'application' => $application] = $this->filed();
+
+        $additional = Tree::additionalFolder($application);
+        $this->assertNotNull($additional);
+
+        Folder::query()->where('parent_id', $additional->id)->forceDelete();
+        foreach (['Queries', 'Non-Compliance Requests', 'Unit Requests', 'Supplementary Documents'] as $name) {
+            Folder::create([
+                'uuid' => (string) Str::uuid(),
+                'name' => $name,
+                'folder_type' => Folder::TYPE_USER,
+                'parent_id' => $additional->id,
+                'client_id' => $additional->client_id,
+                'owner_id' => $additional->owner_id,
+                'created_by' => $staff->id,
+            ]);
+        }
+
+        Tree::provision($application->fresh(), $staff);
+
+        $this->assertSame([
+            Tree::ADDITIONAL_DD_QUERY,
+            Tree::ADDITIONAL_NON_COMPLIANCE,
+            Tree::ADDITIONAL_QUERIES,
+        ], $this->drawerNames(Tree::additionalFolder($application->fresh())));
     }
 
     /**
