@@ -32632,6 +32632,85 @@ button.tma-dash__header-popup-item:focus-visible {
   cursor: pointer;
 }
 
+/* ── skeleton rows ─────────────────────────────────────────────────
+ *
+ * Shaped like the conversations and bubbles they stand in for, so the pane
+ * fills in rather than jumping from centred text to a list. Uses the shared
+ * .tma-skeleton shimmer from portal.css, which already answers dark mode.
+ */
+.tma-dash__messages-list-skeleton,
+.tma-dash__messages-chat-skeleton {
+  display: flex;
+  flex-direction: column;
+}
+
+.tma-dash__messages-list-skeleton {
+  gap: 2px;
+  padding: var(--space-4) 0;
+}
+
+/* The same grid as a real row, so the avatar and text columns line up with
+   the list that replaces it. */
+.tma-dash__messages-row--skeleton {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: var(--space-12);
+  row-gap: 6px;
+  align-items: center;
+  width: 100%;
+  padding: var(--space-8);
+  pointer-events: none;
+}
+
+.tma-dash__messages-skeleton-avatar.tma-skeleton {
+  grid-row: span 2;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.tma-dash__messages-skeleton-line {
+  display: block;
+  height: 10px;
+  border-radius: var(--radius-4, 4px);
+}
+
+.tma-dash__messages-skeleton-line--name { width: 42%; max-width: 160px; }
+.tma-dash__messages-skeleton-line--preview { width: 72%; }
+
+.tma-dash__messages-skeleton-time {
+  display: block;
+  width: 30px;
+  height: 10px;
+  border-radius: var(--radius-4, 4px);
+}
+
+/* A thread fills from the bottom, the way a real conversation sits. */
+.tma-dash__messages-chat-skeleton {
+  flex: 1;
+  justify-content: flex-end;
+  gap: var(--space-12);
+  padding: var(--space-16) var(--space-20);
+}
+
+.tma-dash__messages-skeleton-bubble.tma-skeleton {
+  max-width: min(560px, 70%);
+  height: 38px;
+  border-radius: var(--radius-8) var(--radius-8) var(--radius-8) var(--radius-4);
+}
+
+.tma-dash__messages-skeleton-bubble--in { align-self: flex-start; }
+
+.tma-dash__messages-skeleton-bubble--out {
+  align-self: flex-end;
+  border-radius: var(--radius-8) var(--radius-8) var(--radius-4) var(--radius-8);
+}
+
+/* Varied widths, so it reads as conversation rather than as a stack of bars. */
+.tma-dash__messages-skeleton-bubble--sm { width: 34%; }
+.tma-dash__messages-skeleton-bubble--md { width: 52%; }
+.tma-dash__messages-skeleton-bubble--lg { width: 66%; height: 56px; }
+
 /* "Draft:" marker in a chat-list row preview. */
 .tma-dash__messages-row-draft {
   color: var(--color-text-primary);

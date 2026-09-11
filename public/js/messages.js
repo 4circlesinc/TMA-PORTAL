@@ -1656,7 +1656,49 @@
     return html;
   }
 
-  /* Loading / empty / error stand-ins. Never sample content. */
+  /*
+   * Loading / empty / error stand-ins. Never sample content.
+   *
+   * The two loading cases are skeletons rather than a line of centred text:
+   * the shape of what is coming is already known, so the pane can hold it
+   * instead of collapsing to a sentence and jumping when the data lands.
+   * Both are aria-hidden behind one role="status" label, so a screen reader
+   * hears "Loading conversations" once rather than reading out the bars.
+   */
+  function renderListSkeleton(label) {
+    var rows = '';
+    for (var i = 0; i < 7; i++) {
+      rows +=
+        '<div class="tma-dash__messages-row--skeleton" aria-hidden="true">' +
+        '<span class="tma-skeleton tma-dash__messages-skeleton-avatar"></span>' +
+        '<span class="tma-skeleton tma-dash__messages-skeleton-line' +
+        ' tma-dash__messages-skeleton-line--name"></span>' +
+        '<span class="tma-skeleton tma-dash__messages-skeleton-time"></span>' +
+        '<span class="tma-skeleton tma-dash__messages-skeleton-line' +
+        ' tma-dash__messages-skeleton-line--preview"></span>' +
+        '<span></span>' +
+        '</div>';
+    }
+    return '<div class="tma-dash__messages-list-skeleton" role="status"' +
+      ' aria-label="' + esc(label || 'Loading conversations') + '">' + rows + '</div>';
+  }
+
+  /* Alternating sides and uneven widths: a stack of identical bars does not
+     read as a conversation waiting to arrive. */
+  var CHAT_SKELETON_SHAPE = [
+    ['in', 'md'], ['out', 'sm'], ['in', 'lg'], ['out', 'md'], ['in', 'sm'],
+  ];
+
+  function renderChatSkeleton() {
+    var bubbles = CHAT_SKELETON_SHAPE.map(function (shape) {
+      return '<span class="tma-skeleton tma-dash__messages-skeleton-bubble' +
+        ' tma-dash__messages-skeleton-bubble--' + shape[0] +
+        ' tma-dash__messages-skeleton-bubble--' + shape[1] + '" aria-hidden="true"></span>';
+    }).join('');
+    return '<div class="tma-dash__messages-chat-skeleton" role="status"' +
+      ' aria-label="Loading messages">' + bubbles + '</div>';
+  }
+
   function renderListPlaceholder(state) {
     if (STORE.loadError) {
       return (
@@ -1668,7 +1710,7 @@
     }
 
     if (!STORE.loaded) {
-      return '<div class="tma-dash__messages-list-state" role="status">Loading conversations…</div>';
+      return renderListSkeleton();
     }
 
     if ((state.search || '').trim()) {
@@ -1825,10 +1867,10 @@
     // The log is server-backed (see loadMessagesCalls): show its loading and
     // error states rather than a misleading empty one while it is in flight.
     if (state.callsLoading && !(state.callLog || []).length) {
-      return (
-        '<div class="tma-dash__messages-media">' +
-        '<div class="tma-dash__messages-media-note">Loading calls…</div></div>'
-      );
+      // Call rows carry the same avatar-and-two-lines shape as the inbox, so
+      // they wait on the same skeleton rather than a second one.
+      return '<div class="tma-dash__messages-media">' +
+        renderListSkeleton('Loading calls') + '</div>';
     }
 
     if (state.callsError) {
@@ -3872,7 +3914,7 @@
     var messages = bucket.messages;
 
     if (!bucket.loaded && !messages.length) {
-      return '<div class="tma-dash__messages-chat-state" role="status">Loading messages…</div>';
+      return renderChatSkeleton();
     }
 
     if (bucket.error) {
