@@ -374,4 +374,65 @@ class CipNoticesTest extends TestCase
                 && $mail->hasTo('ada@example.com');
         });
     }
+
+    /**
+     * Settings › Notifications › Copy me on service provider emails.
+     *
+     * The firm's own people are copied on what the provider side is sent, and
+     * that copy is theirs to decline: the email stops, the bell does not. An
+     * administrator is copied on every application and an officer on the
+     * files they hold, so the switch reaches exactly that far. The provider
+     * side is the addressee rather than a copy, and the same flag on a
+     * contact's account changes nothing.
+     */
+    public function test_a_staff_member_may_decline_the_email_copy_and_keep_the_bell(): void
+    {
+        Mail::fake();
+
+        $ada = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $bob = $this->user(Role::ADMINISTRATOR, 'bob@example.com', 'Bob Admin');
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+        $gil = $this->user(Role::CLIENT, 'gil@galaxy.example', 'Gil Contact');
+
+        foreach ([$bob, $rita, $gil] as $declined) {
+            $declined->forceFill(['preferences' => ['notifyProviderCopies' => false]])->save();
+        }
+
+        $company = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy', 'created_by' => $ada->id]);
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL', 'company_id' => $company->id]);
+        CompanyMember::create([
+            'company_id' => $company->id, 'user_id' => $gil->id,
+            'name' => 'Gil Contact', 'email' => 'gil@galaxy.example',
+            'role' => 'member', 'status' => CompanyMember::STATUS_ACTIVE,
+            'invited_by' => $ada->id,
+        ]);
+
+        $application = Applications::create($provider, $ada);
+        CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Chen', 'last_name' => 'Wei',
+        ]);
+
+        Assignments::assign($application->fresh(), $rita, $ada);
+
+        // The provider side and the administrator who kept the copy are written to.
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('gil@galaxy.example'));
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('ada@example.com'));
+        // The two who declined are not, and nothing was recorded as sent to them.
+        Mail::assertNotQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('bob@example.com'));
+        Mail::assertNotQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('rita@example.com'));
+        Mail::assertQueuedCount(2);
+        $this->assertDatabaseMissing('email_deliveries', ['recipient' => 'bob@example.com']);
+        $this->assertDatabaseMissing('email_deliveries', ['recipient' => 'rita@example.com']);
+
+        // Declining the copy silences nothing in the portal.
+        foreach ([$bob, $rita] as $declined) {
+            $this->assertDatabaseHas('portal_notifications', [
+                'user_id' => $declined->id,
+                'subject_id' => $application->id,
+                'subject_type' => CipApplication::class,
+            ]);
+        }
+    }
 }

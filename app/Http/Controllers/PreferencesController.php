@@ -28,6 +28,13 @@ class PreferencesController extends Controller
         // Email notifications even while actively using the portal, off means
         // "don't email me what the bell already showed me".
         'notifyAlwaysEmail' => false,
+        // Staff only: the email copy of every CIP notice the service
+        // provider is sent. Administrators are copied on every application
+        // and officers on the files they hold, that scope is the notice
+        // list's (Cip\Contacts), this only says whether to send the copy.
+        // On by default like every other channel; the bell is unaffected.
+        // Read by Cip\Copies.
+        'notifyProviderCopies' => true,
         // Theme panel. These used to live only in localStorage, so the look
         // reset on every new browser, they follow the account now.
         //
@@ -86,6 +93,7 @@ class PreferencesController extends Controller
         'voice' => ['string', 'max:32'],
         'sidebarStyle' => ['string', 'in:standard,hover'],
         'notifyAlwaysEmail' => ['boolean'],
+        'notifyProviderCopies' => ['boolean'],
         'themeMode' => ['string', 'in:system,light,dark'],
         'fontScale' => ['integer', 'between:1,5'],
         'accentColor' => ['string', 'in:indigo,yellow,red,blue,orange,green'],
@@ -192,7 +200,7 @@ class PreferencesController extends Controller
         $current = $user->preferences ?? [];
         $booleans = [
             'autoTimezone', 'calendarSidebarOpen', 'notifyAlwaysEmail',
-            'dashboardWorkflowStrip',
+            'notifyProviderCopies', 'dashboardWorkflowStrip',
         ];
         foreach ($data as $key => $value) {
             if ($key === 'toasts') {

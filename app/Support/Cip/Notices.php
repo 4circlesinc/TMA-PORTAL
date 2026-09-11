@@ -276,6 +276,10 @@ class Notices
      * bell goes with the email channel off, so the Notifier cannot send a
      * second, differently-worded copy of the same fact.
      *
+     * A staff mailbox is a copy of what the provider side is sent, and
+     * {@see Copies} lets its owner decline that copy. The bell still rings
+     * for them: the switch is about email, not about hearing of the change.
+     *
      * @param  callable(?string): Postcard  $card
      */
     private static function fanOut(
@@ -296,17 +300,21 @@ class Notices
                 continue;
             }
 
+            $user = $recipient['userId'] !== null ? User::find($recipient['userId']) : null;
+
             // Queue: a status click must not wait on the mailbox. Walking
             // Assessment feedback then Updates Required would otherwise send
             // eight letters before the chip could move.
-            Deliveries::send($card($recipient['name']), $recipient['email'], $application, $template);
+            if (Copies::wanted($user)) {
+                Deliveries::send($card($recipient['name']), $recipient['email'], $application, $template);
+            }
 
-            if ($recipient['userId'] === null) {
+            if ($user === null) {
                 continue;
             }
 
             Notifier::send([
-                'user' => User::find($recipient['userId']),
+                'user' => $user,
                 'actor' => $actor,
                 'type' => $type,
                 'title' => $title,

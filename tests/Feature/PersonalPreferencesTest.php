@@ -246,4 +246,23 @@ class PersonalPreferencesTest extends TestCase
         // POSIX Etc zones carry inverted signs: UTC-5 is Etc/GMT+5.
         $this->assertSame('Etc/GMT+5', $calendar->fresh()->timezone);
     }
+
+    public function test_service_provider_email_copies_default_on_and_round_trip(): void
+    {
+        $user = $this->user();
+
+        // On like every other channel: a fresh account is copied until it says otherwise.
+        $this->actingAs($user)->getJson('/me/preferences')
+            ->assertOk()
+            ->assertJsonPath('notifyProviderCopies', true);
+
+        $this->actingAs($user)->putJson('/me/preferences', [
+            'notifyProviderCopies' => false,
+        ])->assertOk()
+            ->assertJsonPath('notifyProviderCopies', false);
+
+        $this->actingAs($user)->getJson('/me/preferences')
+            ->assertOk()
+            ->assertJsonPath('notifyProviderCopies', false);
+    }
 }

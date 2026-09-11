@@ -126,7 +126,8 @@
       ? '<a class="' + rowClass + '" href="' + esc(opts.href) + '"'
       : '<button type="button" class="' + rowClass + '"' + (opts.disabled ? ' disabled' : '');
     var attrs = open +
-      (opts.action ? ' data-settings-action="' + esc(opts.action) + '"' : '') + '>';
+      (opts.action ? ' data-settings-action="' + esc(opts.action) + '"' : '') +
+      (opts.attrs ? ' ' + opts.attrs : '') + '>';
     var valueClass = 'tma-dash__settings-row-value' +
       (opts.value ? '' : ' tma-dash__settings-row-value--icon-only') +
       (opts.valueMuted ? ' tma-dash__settings-row-value--muted' : '');
@@ -398,6 +399,7 @@
     'tma.timezone': 'timezone',
     'tma.language': 'language',
     'tma.notify.alwaysEmail': 'notifyAlwaysEmail',
+    'tma.notify.providerCopies': 'notifyProviderCopies',
     'tma.voice': 'voice',
     'tma.sidebarStyle': 'sidebarStyle',
     'tma.themeMode': 'themeMode',
@@ -425,6 +427,7 @@
   var PREF_CODECS = {
     autoTimezone: prefBoolCodec(),
     notifyAlwaysEmail: prefBoolCodec(),
+    notifyProviderCopies: prefBoolCodec(),
     // Without a codec this round-trips as the string "true"/"false", and the
     // column wants a real boolean, the validator rejects the string.
     fileSyncNoticeDismissed: prefBoolCodec(),
@@ -1133,6 +1136,7 @@
 
   var NOTIFY_STORAGE_KEYS = {
     'always-email': 'tma.notify.alwaysEmail',
+    'provider-copies': 'tma.notify.providerCopies',
   };
 
   var PICKER_STORAGE_KEYS = {
@@ -1200,7 +1204,24 @@
   function readNotificationsPrefs() {
     return {
       alwaysEmail: store.get('tma.notify.alwaysEmail', '0') === '1',
+      // On until turned off, like every other channel (server default true).
+      providerCopies: store.get('tma.notify.providerCopies', '1') === '1',
     };
+  }
+
+  /* Staff only. Whether the account is staff comes from /me, which may land
+     after the panel is drawn, so the rows carry a marker and
+     syncStaffOnlyRows() settles them once it has. */
+  function isStaffViewer() {
+    var me = window.TMACurrentUser && window.TMACurrentUser.get();
+    return !!(me && me.isStaff);
+  }
+
+  function syncStaffOnlyRows(root) {
+    var staff = isStaffViewer();
+    root.querySelectorAll('[data-settings-staff-only]').forEach(function (el) {
+      el.hidden = !staff;
+    });
   }
 
   /* The per-module preference map, cached once loaded so the master switch
@@ -1340,6 +1361,17 @@
         switchAttrs: 'data-settings-notify="always-email"',
         chevron: false,
       }) +
+      '<hr class="tma-dash__settings-profile-inner-divider" aria-hidden="true" data-settings-staff-only' + (isStaffViewer() ? '' : ' hidden') + '>' +
+      renderRow({
+        label: 'Copy me on service provider emails',
+        desc: 'Get a copy of each CIP application email sent to service providers.',
+        switch: true,
+        switchChecked: prefs.providerCopies,
+        switchLabel: 'Copy me on service provider emails',
+        switchAttrs: 'data-settings-notify="provider-copies"',
+        attrs: 'data-settings-staff-only' + (isStaffViewer() ? '' : ' hidden'),
+        chevron: false,
+      }) +
       '</div>' +
       renderToastSettingsGroup() +
       renderNotificationPrefsGroup() +
@@ -1450,7 +1482,9 @@
       var key = input.getAttribute('data-settings-notify');
       if (key === 'email') input.checked = notifEmailMasterOn();
       else if (key === 'always-email') input.checked = prefs.alwaysEmail;
+      else if (key === 'provider-copies') input.checked = prefs.providerCopies;
     });
+    syncStaffOnlyRows(root);
 
     root.querySelectorAll('[data-settings-toast-pref]').forEach(function (input) {
       var key = input.getAttribute('data-settings-toast-pref');
@@ -4823,6 +4857,7 @@
       window.TMACurrentUser.onChange(function () {
         if (!root.isConnected) return;
         hydrateProfileFromCurrentUser(root);
+        syncStaffOnlyRows(root);
       });
     }
     if (opts && opts.openChangeEmail) openChangeEmailPopup(root);

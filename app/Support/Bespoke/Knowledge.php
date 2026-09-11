@@ -459,6 +459,14 @@ final class Knowledge
                 'answer' => "Two steps. Do not add them on Users.\n\n1. Register the firm: [CIP Applications](/citizenship-applications) → Create New Application → **New service provider** → name → Create.\n2. Invite people: administrators open the provider → **Access** → email → Add (toast: Invitation sent). A CRO uses **Invite to portal** on the contact instead.\n\nThey arrive as **Client** accounts linked to that firm. They see that provider’s CIP files — not Users, not CIP Console, not other firms.",
             ],
             [
+                'id' => 'provider-copies',
+                'q' => 'How do I stop getting copies of the emails sent to service providers?',
+                'keywords' => ['copy', 'copies', 'cc', 'service provider emails', 'cip emails', 'too many emails', 'notification emails'],
+                'cipOnly' => true,
+                'staffOnly' => true,
+                'answer' => "[Settings → Notifications](/account-settings?settings-page=notifications) → **Copy me on service provider emails**. Off stops the email; the bell in the portal still shows every change.\n\nWhat you are copied on follows your account: administrators get every application, CROs the files they hold.",
+            ],
+            [
                 'id' => 'pin-folder',
                 'q' => 'How do I pin a folder?',
                 'keywords' => ['pin', 'shortcut', 'folder shortcuts', 'star', 'favorites'],

@@ -44,6 +44,12 @@
 
 .tma-dash__nav-item[hidden] { display: none !important; }
 
+/* Settings rows shown to staff only (the service-provider copy switch).
+   The row class sets display:flex, which would win over the UA rule for
+   the hidden attribute. */
+.tma-dash__settings-row[hidden],
+.tma-dash__settings-profile-inner-divider[hidden] { display: none !important; }
+
 /* Corner-badge sizing/position for .tma-dash__nav-count now lives solely in
    dashboard.css — this used to be a separate pre-redesign copy (inline
    flex layout, not a positioned corner badge) that silently won the

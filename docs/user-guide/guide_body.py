@@ -1447,7 +1447,7 @@ def _settings(doc, add_title, add_h2, add_body, add_bullets, add_table, add_call
     add_h2(doc, "Notifications")
     add_body(
         doc,
-        "Email notifications, always send email, toast behaviour, and per-module Portal / Email / Desktop / Sound. Security & Approvals on the portal channel stays on.",
+        "Email notifications, always send email, copy me on service provider emails (staff: administrators are copied on every CIP application, CROs on the files they hold; the bell still shows every change), toast behaviour, and per-module Portal / Email / Desktop / Sound. Security & Approvals on the portal channel stays on.",
     )
     add_h2(doc, "Privacy")
     add_body(
