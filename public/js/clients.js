@@ -110,22 +110,6 @@
     return applicationFor(state.selectedId) || applicationHeldById(state.applicationId);
   }
 
-  /* Both lanes use the intake form. A draft is always the intake form. */
-  function editApplicationPhase(state) {
-    var app = applicationRecord(state);
-
-    return (app && app.phase) || null;
-  }
-
-  /* Filed post-approval Edit still offers PAD slot uploads under the form. */
-  function isFiledPostApprovalEdit(state) {
-    var app = applicationRecord(state);
-
-    return !!(state && state.screen === 'edit-application'
-      && app && app.status !== 'draft'
-      && editApplicationPhase(state) === 'post_approval');
-  }
-
   /*
    * Client uids that belong to a CIP application, even while the file itself
    * is being refetched.
@@ -4473,7 +4457,6 @@
         // panel's own fill reads as one grey block.
         '<div class="tma-dash__clients-profile tma-dash__clients-profile--cards">' +
         '<div data-cip-intake-mount data-morph-skip></div>' +
-        (isFiledPostApprovalEdit(state) ? renderPostApprovalSlotDocs(state) : '') +
         '</div></div>';
     }
     if (state.adding || state.editing) {
@@ -7215,10 +7198,44 @@
     rememberCipApplicant(state.selectedId);
     forgetApplication(state.selectedId);
     state.applicationFreshFor = null;
-    ensureApplicationLoaded(state, render);
+    ensureApplicationLoaded(state, function (opts) {
+      render(opts);
+      if (state.screen !== 'edit-application') return;
+      var app = applicationRecord(state);
+      if (app && window.TMACipIntake && window.TMACipIntake.applyRecord) {
+        window.TMACipIntake.applyRecord(app);
+      }
+    });
   }
 
   var CIP_SLOT_MAX_MB = 10;
+
+  function wireCipDocumentControls(root, state, render) {
+    if (!root) return;
+    wireCipSlotUploads(root, state, render);
+
+    MORPH.unwired(root, '[data-cip-file]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        openCipFile(state, btn.getAttribute('data-cip-file'), render);
+      });
+      MORPH.on(btn, 'contextmenu', function (e) {
+        openCipFileMenu(state, e, btn.getAttribute('data-cip-file'), render);
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-file-status]').forEach(function (chip) {
+      MORPH.on(chip, 'click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openCipFileStatusMenu(state, chip, render);
+      });
+      MORPH.on(chip, 'keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        openCipFileStatusMenu(state, chip, render);
+      });
+    });
+  }
 
   function wireCipSlotUploads(root, state, render) {
     MORPH.unwired(root, '[data-cip-slot-file-btn]').forEach(function (btn) {
@@ -7403,38 +7420,42 @@
   }
 
   /*
-   * Post-approval Edit is the intake form, same as pre-approval. PAD
-   * uploads still live here as per-slot drops: Confirm submission freezes
-   * the original pack, and those slots cannot travel on the intake Save.
+   * Documents column for filed post-approval Edit: the same card the intake
+   * form already puts beside a person, filled with PAD slot drops rather
+   * than the original pack (those cannot ride on Save).
    */
-  function renderPostApprovalSlotDocs(state) {
-    var app = applicationFor(state.selectedId);
-    if (!isApplicationProfile(app)) return '';
-
-    var note = cipChecklistNote(app);
-    var people = cipFamily(app);
-    var cards = people.map(function (person) {
-      var docs = (person && person.documents) || [];
-      var drops = docs.length
-        ? '<div class="tma-portal-drops">' +
-          docs.map(function (d) { return renderCipRequirementDrop(d); }).join('') +
-          '</div>'
-        : '<p class="tma-dash__clients-checklist-empty">' +
-          'No document requirements are assigned to this person for post-approval.</p>';
-
-      return '<div class="tma-dash__clients-card">' +
-        renderCipPersonCardHead(person, app) +
-        drops +
+  function renderPadDocumentsCard(person, app, opts) {
+    opts = opts || {};
+    var note = opts.note ? cipChecklistNote(app) : '';
+    var docs = (person && person.documents) || [];
+    var body;
+    if (!person || !person.id) {
+      body = '<p class="tma-dash__clients-checklist-empty">' +
+        'Save the application to open this person’s document slots.</p>';
+    } else if (!docs.length) {
+      body = '<p class="tma-dash__clients-checklist-empty">' +
+        'No document requirements are assigned to this person for post-approval.</p>';
+    } else {
+      body = '<div class="tma-portal-drops">' +
+        docs.map(function (d) { return renderCipRequirementDrop(d); }).join('') +
         '</div>';
-    }).join('');
+    }
 
-    if (!note && !cards) return '';
-
-    return '<div class="tma-dash__clients-cards tma-dash__clients-cards--intake">' +
-      (note || '') +
-      (cards || '') +
-      '</div>';
+    return '<section class="tma-dash__clients-card tma-dash__clients-card--docs">' +
+      '<header class="tma-dash__clients-card-head">' +
+      '<h3 class="tma-dash__clients-card-title">Documents</h3></header>' +
+      note + body +
+      '</section>';
   }
+
+  window.TMACipSlots = {
+    docsCard: renderPadDocumentsCard,
+    wire: function (root) {
+      if (!clientsMountRoot || !clientsMountRoot._clientsController) return;
+      var ctrl = clientsMountRoot._clientsController;
+      wireCipDocumentControls(root, ctrl.state, ctrl.render);
+    },
+  };
 
   function cipDocFileIcon(name) {
     if (window.TMAFileIcons && window.TMAFileIcons.fileIconSrc) {
@@ -13960,29 +13981,7 @@
       });
     });
 
-    MORPH.unwired(root, '[data-cip-file]').forEach(function (btn) {
-      MORPH.on(btn, 'click', function () {
-        openCipFile(state, btn.getAttribute('data-cip-file'), render);
-      });
-      MORPH.on(btn, 'contextmenu', function (e) {
-        openCipFileMenu(state, e, btn.getAttribute('data-cip-file'), render);
-      });
-    });
-
-    wireCipSlotUploads(root, state, render);
-
-    MORPH.unwired(root, '[data-cip-file-status]').forEach(function (chip) {
-      MORPH.on(chip, 'click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        openCipFileStatusMenu(state, chip, render);
-      });
-      MORPH.on(chip, 'keydown', function (e) {
-        if (e.key !== 'Enter' && e.key !== ' ') return;
-        e.preventDefault();
-        openCipFileStatusMenu(state, chip, render);
-      });
-    });
+    wireCipDocumentControls(root, state, render);
   }
 
   /* The client's invitation, loaded alongside their assigned staff. Kept

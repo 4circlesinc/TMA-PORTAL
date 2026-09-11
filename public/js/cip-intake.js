@@ -833,6 +833,7 @@
      template the settings ask of that person. One to a row: two columns of
      targets fought the fields for width. */
   function documentsCard(prefix, section) {
+    if (filedPadEdit()) return padDocumentsCard(prefix);
     if (!showsIntakeDocuments()) return '';
 
     var fields = docFields(section || (prefix === 'sponsor.' ? 'sponsor' : 'principal'), prefix);
@@ -965,9 +966,45 @@
    * Filed post-approval Edit uses the person-slot drops (canUpload), not
    * the intake pack. Confirm submission would freeze every PAD control
    * here, and Save cannot carry a replacement scan on a locked file.
+   * Those slots still sit in this column, beside the person, the same
+   * two-column row pre-approval Edit already uses.
    */
+  function filedPadEdit() {
+    return !!(state.applicationId && !editingDraft() && isPostApprovalIntake());
+  }
+
+  function padPersonForPrefix(prefix) {
+    var rec = state.record;
+    if (!rec) return null;
+    if (!prefix) return rec.applicant || null;
+    if (prefix === 'sponsor.') return rec.sponsor || null;
+    var match = String(prefix).match(/^dependents\.(\d+)\./);
+    if (!match) return null;
+    var id = state.draft[prefix + 'id'];
+    var deps = rec.dependents || [];
+    if (id) {
+      for (var i = 0; i < deps.length; i++) {
+        if (deps[i] && deps[i].id === id) return deps[i];
+      }
+    }
+
+    return deps[Number(match[1])] || null;
+  }
+
+  function padDocumentsCard(prefix) {
+    if (window.TMACipSlots && window.TMACipSlots.docsCard) {
+      return window.TMACipSlots.docsCard(padPersonForPrefix(prefix), state.record, {
+        note: prefix === '',
+      });
+    }
+
+    return card('Documents',
+      '<p class="tma-dash__clients-checklist-empty">Save the application to open this person’s document slots.</p>',
+      { modifier: 'tma-dash__clients-card--docs' });
+  }
+
   function showsIntakeDocuments() {
-    if (state.applicationId && !editingDraft() && isPostApprovalIntake()) return false;
+    if (filedPadEdit()) return false;
 
     return true;
   }
@@ -1117,6 +1154,7 @@
     wireDocuments(root);
     wireDependents(root);
     wireDraft(root);
+    if (window.TMACipSlots && window.TMACipSlots.wire) window.TMACipSlots.wire(root);
   }
 
   /*
@@ -2625,5 +2663,11 @@
   // like every other form in the hub, so its actions live where they do.
   /* submit() is the page toolbar's Add; saveDraft() its Save as draft. Both
      live in the head with Cancel, so both are called from there. */
-  window.TMACipIntake = { open: open, submit: submit, saveDraft: saveDraft };
+  function applyRecord(record) {
+    if (!record || !state.root) return;
+    state.record = record;
+    render(state.root);
+  }
+
+  window.TMACipIntake = { open: open, submit: submit, saveDraft: saveDraft, applyRecord: applyRecord };
 })();
