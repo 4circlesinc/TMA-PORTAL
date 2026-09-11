@@ -8,6 +8,7 @@ use App\Support\Bespoke\Actions\SendMessage;
 use App\Support\Bespoke\Attachments;
 use App\Support\Bespoke\Bespoke;
 use App\Support\Bespoke\Completions;
+use App\Support\Bespoke\Confidential;
 use App\Support\Bespoke\Conversations;
 use App\Support\Bespoke\Knowledge;
 use App\Support\Bespoke\Page;
@@ -104,7 +105,14 @@ class BespokeController extends Controller
         $reply = is_array($local) ? (string) $local['answer'] : null;
         $toolbox = new Toolbox($user, $identity, $page, $conversation);
 
-        if ($configured) {
+        // How the portal is built, secured, hosted, or paid for is not the
+        // model's to discuss; the question never reaches it.
+        $confidential = Confidential::asks($lastUser);
+        if ($confidential) {
+            $reply = Confidential::REFUSAL;
+        }
+
+        if ($configured && ! $confidential) {
             $history = array_slice($messages, -12);
             // What was just dropped in rides with the question itself; older
             // files stay reachable through read_attachment.
@@ -122,6 +130,10 @@ class BespokeController extends Controller
             if (is_string($model) && $model !== '') {
                 $reply = $toolbox->adoptLeakedChoices($model);
                 $source = 'model';
+                if (Confidential::leaks($reply)) {
+                    $reply = Confidential::REFUSAL;
+                    $source = 'local';
+                }
             }
         }
 
@@ -152,6 +164,7 @@ class BespokeController extends Controller
                 'configured' => $configured,
                 'source' => $source,
                 'tools' => $toolbox->used(),
+                'confidential' => $confidential,
             ],
         ]);
 
