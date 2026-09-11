@@ -13283,10 +13283,11 @@
         onSaving: function (saving) {
           var btn = document.querySelector('[data-cip-save]');
           if (!btn) return;
+          var filingNew = !editing || ((applicationRecord(state) || {}).status === 'draft');
           btn.disabled = !!saving;
           btn.textContent = saving
-            ? (editing ? 'Saving…' : 'Adding…')
-            : (editing ? 'Save' : 'Add');
+            ? (filingNew ? 'Adding…' : 'Saving…')
+            : (filingNew ? 'Add' : 'Save');
         },
         onDone: function (application, meta) {
           /*
@@ -13298,11 +13299,12 @@
            * record it hands back, the answers laid over the filed copy, is
            * held locally so the profile behind them shows what they typed.
            */
+          var filingNew = !editing || ((applicationRecord(state) || {}).status === 'draft');
           if (meta && meta.queued) {
             if (application) rememberApplication(state.selectedId, application);
-            clientsToast(editing
-              ? 'Saved on this device, it will sync when you’re back online'
-              : 'Saved on this device, it will be filed when you’re back online',
+            clientsToast(filingNew
+              ? 'Saved on this device, it will be filed when you’re back online'
+              : 'Saved on this device, it will sync when you’re back online',
             'warning');
             navigate('list');
 
@@ -13316,7 +13318,7 @@
             rememberApplication(state.selectedId, application);
             // The list refetches itself from the live signal the write raised.
             clientsToast('Application ' + application.number +
-              (editing ? ' saved' : ' created'), 'positive');
+              (filingNew ? ' created' : ' saved'), 'positive');
           }
           navigate('list');
         },

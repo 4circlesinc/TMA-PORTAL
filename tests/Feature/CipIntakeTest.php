@@ -37,6 +37,7 @@ use App\Support\Clients\ClientDirectory;
 use App\Support\Files\FolderProvisioner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
@@ -186,7 +187,7 @@ class CipIntakeTest extends TestCase
             return ApplicantType::DEPENDENT_16_OVER;
         }
 
-        $birth = \Illuminate\Support\Carbon::parse($dob);
+        $birth = Carbon::parse($dob);
 
         return $birth->copy()->addYears(ApplicantType::cutoff())->isAfter(now())
             ? ApplicantType::DEPENDENT_UNDER_16
@@ -2078,7 +2079,7 @@ class CipIntakeTest extends TestCase
         $this->file($staff, $this->payload($provider))->assertCreated();
     }
 
-    public function test_editing_demands_a_required_document_added_in_settings(): void
+    public function test_editing_saves_details_even_when_a_required_document_is_still_outstanding(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
@@ -2092,13 +2093,23 @@ class CipIntakeTest extends TestCase
             'required' => true,
         ])->assertCreated();
 
-        $this->edit($staff, $application, $this->edits($provider))
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('proofOfFunds');
+        $body = $this->edit($staff, $application, $this->edits($provider, [
+            'occupation' => 'Retired Engineer',
+        ]))->assertOk()->json('application');
 
-        $this->edit($staff, $application, $this->payload($provider, [
+        $this->assertSame('Retired Engineer', $body['applicant']['occupation']);
+        $this->assertContains(
+            'Proof of funds',
+            $body['applicant']['outstanding'],
+            'the new required row stays on the checklist rather than blocking Save',
+        );
+
+        $filled = $this->edit($staff, $application, $this->payload($provider, [
+            'occupation' => 'Retired Engineer',
             'proofOfFunds' => [$this->scan('funds.pdf')],
-        ]))->assertOk();
+        ]))->assertOk()->json('application');
+
+        $this->assertNotContains('Proof of funds', $filled['applicant']['outstanding']);
     }
 
     public function test_the_form_marks_required_documents_at_filing(): void

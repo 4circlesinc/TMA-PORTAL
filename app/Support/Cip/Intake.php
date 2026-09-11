@@ -242,11 +242,12 @@ class Intake
      * already sitting on that row: the wizard does not re-send a photo it
      * has already kept, and asking for it again is the form showing the
      * picture and calling it missing. Sending one replaces it; sending
-     * nothing leaves it alone. A required slot that was never answered is
-     * still demanded — Document Requirements settings apply to an edit the
-     * same way they apply to Add. The provider is not in the list at all:
-     * its code is minted into the internal number, so changing it afterwards
-     * would leave the number naming a firm that did not file.
+     * nothing leaves it alone. Outstanding pack scans stay on the checklist
+     * rather than blocking Save — Document Requirements gate Add, not a
+     * name correction on a file the firm already has. The provider is not
+     * in the list at all: its code is minted into the internal number, so
+     * changing it afterwards would leave the number naming a firm that did
+     * not file.
      * @param  CipApplication|null  $draft  the row this filing completes, when
      *                                      there is one: files already on it
      *                                      count as answered
@@ -390,21 +391,22 @@ class Intake
     }
 
     /**
-     * Uploads Document Requirements marks required gate Add, and an edit of
-     * a filed application. Typing into a draft through the update door does
-     * not — that is still a form that is not finished, and Save as draft is
-     * the other half of the same fact.
+     * Uploads Document Requirements marks required gate Add — including
+     * filing a draft through the create door. An edit of a row that already
+     * exists does not: Save has to land a detail correction even when the
+     * pack is still outstanding, and the checklist is where those rows stay
+     * visible. Sending a file on an edit still files it.
      */
-    private static function demandsUploads(bool $editing, ?CipApplication $existing): bool
+    private static function demandsUploads(bool $editing): bool
     {
-        return ! ($editing && $existing && $existing->status === Status::DRAFT);
+        return ! $editing;
     }
 
     /**
      * The uploads Document Requirements asks of the main applicant.
      *
-     * Required rows gate Add and an edit; a file already on the draft or
-     * the filed application counts as answered. Optional rows never do.
+     * Required rows gate Add; a file already on the draft counts as
+     * answered. An edit does not re-demand them. Optional rows never do.
      * A scan is a LIST. One requirement is not always one sheet of paper, a
      * bio page can be a passport's two pages, a birth certificate can arrive
      * with its translation, and a control that takes only the last file
@@ -415,7 +417,7 @@ class Intake
     {
         $phase = self::rulesPhase($existing);
         $gender = request()->input('gender');
-        $demand = self::demandsUploads($editing, $existing);
+        $demand = self::demandsUploads($editing);
 
         $photo = self::photoTemplate(ApplicantType::PRINCIPAL_APPLICANT, $phase);
         $photoKept = self::draftHolds($existing, DocumentTypes::PASSPORT_PHOTO);
@@ -522,14 +524,14 @@ class Intake
      * they have a face in the portal like everyone else. Their document list
      * is the Document Requirements settings for the sponsor type: required
      * rows gate filing, optional rows do not. A file already on the draft
-     * or the filed application counts as answered.
+     * counts as answered; an edit does not re-demand them.
      */
     private static function sponsorRules(?CipApplication $existing = null, bool $editing = false): array
     {
         $sponsored = fn () => filter_var(request()->input('sponsored'), FILTER_VALIDATE_BOOLEAN);
         $phase = self::rulesPhase($existing);
         $gender = request()->input('sponsor.gender');
-        $demand = self::demandsUploads($editing, $existing);
+        $demand = self::demandsUploads($editing);
 
         $rules = [];
         foreach (self::personRules('sponsor.') as $field => $rule) {
@@ -561,7 +563,7 @@ class Intake
     private static function dependentRules(?CipApplication $existing = null, bool $editing = false): array
     {
         $phase = self::rulesPhase($existing);
-        $demand = self::demandsUploads($editing, $existing);
+        $demand = self::demandsUploads($editing);
 
         $rules = [
             'dependents' => ['nullable', 'array', 'max:20'],

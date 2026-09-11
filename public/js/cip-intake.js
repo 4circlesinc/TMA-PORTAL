@@ -382,7 +382,9 @@
       }
     });
 
-    if (!packageLocked()) {
+    // Pack scans gate Add, not Save on a file already on record. Outstanding
+    // rows stay on the checklist; sending one on an edit still files it.
+    if (!packageLocked() && isFiling()) {
       requiredFiles().forEach(function (path) {
         if (!photoChosen(path)) found[path] = labelFor(path) + ' is required';
       });
@@ -1039,7 +1041,7 @@
         ? '<p class="tma-portal-modal__error" role="alert">' +
           // Neutral about why: a field can be empty or, in a photo's case,
           // filled with something that cannot be filed.
-          esc(count === 1 ? 'Check one answer.' : 'Check ' + count + ' answers.') +
+          esc(checkAnswersMessage(count)) +
           '</p>'
         : '') +
       resumedNotice() +
@@ -1548,7 +1550,7 @@
 
     // A draft being filed is posting to the create endpoint, so it sends
     // everything a new filing sends — and names the row it completes.
-    var filing = !state.applicationId || editingDraft();
+    var filing = isFiling();
 
     if (filing && state.phase) {
       out.push({ name: 'phase', value: state.phase });
@@ -1631,6 +1633,42 @@
   /* The application on screen is one nobody has filed yet. */
   function editingDraft() {
     return !!(state.record && state.record.status === 'draft');
+  }
+
+  /* Add, or filing a draft from the table. Not Save on a file already on record. */
+  function isFiling() {
+    return !state.applicationId || editingDraft();
+  }
+
+  function applyErrors(errors) {
+    state.errors = {};
+    Object.keys(errors || {}).forEach(function (k) {
+      var msg = errors[k];
+      state.errors[fieldForError(k)] = Array.isArray(msg) ? msg[0] : msg;
+    });
+  }
+
+  function firstError(errors) {
+    var keys = Object.keys(errors || {});
+    if (!keys.length) return '';
+    var msg = errors[keys[0]];
+
+    return Array.isArray(msg) ? String(msg[0] || '') : String(msg || '');
+  }
+
+  function checkAnswersMessage(count) {
+    return count === 1 ? 'Check one answer.' : 'Check ' + count + ' answers.';
+  }
+
+  function httpFailure(res, json) {
+    if (json && json.message) return json.message;
+    if (res.status === 413) return 'Those files are too large to send together. Upload fewer at a time.';
+    if (res.status === 419) return 'Your session expired. Refresh and try again.';
+    if (res.status === 408 || res.status === 502 || res.status === 504) {
+      return 'The server timed out. Try again with fewer files.';
+    }
+
+    return isFiling() ? 'Could not file this application' : 'Could not save this application';
   }
 
   /*
@@ -1883,6 +1921,22 @@
       return res.json().catch(function () { return {}; }).then(function (json) {
         state.draftSaving = false;
         if (announce) setDraftButtonBusy(opts.button, false);
+        if (res.status === 422 && json.errors) {
+          /*
+           * The payload was wrong, not the save path. Painting the fields
+           * keeps autosave on — a missing provider is something they can
+           * fix, and turning the timer off for that left the next keystroke
+           * unsaved.
+           */
+          applyErrors(json.errors);
+          render(state.root);
+          if (announce || state.draftAnnounce) {
+            ui().toastError(firstError(json.errors) || 'Could not save this draft');
+          }
+          state.draftAnnounce = false;
+
+          return;
+        }
         if (!res.ok) {
           /*
            * The server refused. Not shouted about when it was the timer — the
@@ -2059,6 +2113,7 @@
       var first = root.querySelector('.is-invalid [data-cip-field], .is-invalid');
       if (first && first.scrollIntoView) first.scrollIntoView({ block: 'center', behavior: 'smooth' });
       if (first && first.focus) first.focus();
+      ui().toastError(checkAnswersMessage(Object.keys(found).length));
 
       return;
     }
@@ -2077,9 +2132,9 @@
      * completes that row rather than numbering a second one. Only an
      * application somebody has actually filed posts to its own URL.
      */
-    var url = state.applicationId && !editingDraft()
-      ? '/portal/cip/applications/' + encodeURIComponent(state.applicationId)
-      : '/portal/cip/applications';
+    var url = isFiling()
+      ? '/portal/cip/applications'
+      : '/portal/cip/applications/' + encodeURIComponent(state.applicationId);
 
     fetch(url, {
       method: 'POST',
@@ -2096,11 +2151,9 @@
           // The server's word, field by field, already keyed to our paths,
           // except that one file in a list objects as `passportBioPage.0` and
           // the control it belongs to is `passportBioPage`.
-          state.errors = {};
-          Object.keys(json.errors).forEach(function (k) {
-            state.errors[fieldForError(k)] = json.errors[k][0];
-          });
+          applyErrors(json.errors);
           render(root);
+          ui().toastError(checkAnswersMessage(Object.keys(state.errors).length));
 
           return;
         }
@@ -2114,8 +2167,7 @@
         }
 
         if (!res.ok) {
-          ui().toastError((json && json.message)
-            || (state.applicationId ? 'Could not save this application' : 'Could not file this application'));
+          ui().toastError(httpFailure(res, json));
 
           return;
         }

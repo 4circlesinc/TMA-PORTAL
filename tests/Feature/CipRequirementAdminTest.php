@@ -384,7 +384,8 @@ class CipRequirementAdminTest extends TestCase
      *
      * The official checklist is long on purpose. Settings is still the
      * source of truth: a required row is demanded at filing, an optional
-     * row is not, and a draft may be saved without either.
+     * row is not, and a draft — or Save on a file already on record — may
+     * be kept without either.
      */
     public function test_a_required_principal_requirement_gates_filing(): void
     {
