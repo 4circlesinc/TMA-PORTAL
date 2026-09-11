@@ -4,7 +4,9 @@ The signature editor, the signing page and the sidebar are the parts of the
 portal PHPUnit can't reach: pdf.js rendering, canvas painting, pointer-driven
 field placement and drawing, and computed CSS only exist in a browser.
 
-- **`bespoke-actions.mjs`** — Bespoke AI's action cards. The model is stubbed
+- **`bespoke-actions.mjs`** — Bespoke AI's greeting, action cards, files and
+  the 2×2 photo. The greeting beside the mark names the reader, a dismissal
+  lasts the day across a reload, and clicking it opens the panel. The model is stubbed
   at the network layer (`POST /portal/bespoke/chat` is intercepted), because
   what only a browser can check is the flow around it: a drafted message
   arrives as a card with an editable body, Send asks once more, No goes back
@@ -15,6 +17,9 @@ field placement and drawing, and computed CSS only exist in a browser.
   last step drops the real `fixtures/contract.pdf` into the composer with the
   stub removed: pdf.js reads its text in the browser, the upload stages it,
   the real chat claims it, and the reopened thread carries it with `hasText`.
+  Then two `photo2x2` actions, one from `fixtures/message-large.png` and one
+  from page 1 of the PDF: each must yield a square image of at least 600 px,
+  a Download named `…-2x2.jpg`, and a derived copy kept on the server.
 
   Seed the standard throwaway server plus a second administrator whose job
   title carries "IT", and serve with `FEATURE_BESPOKE=true`:

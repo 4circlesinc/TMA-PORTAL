@@ -32,10 +32,92 @@
 }
 
 .tma-bespoke__fab,
-.tma-bespoke__panel {
+.tma-bespoke__panel,
+.tma-bespoke__hello {
   pointer-events: auto;
 }
 
+/* The greeting beside the mark. */
+.tma-bespoke__hello {
+  position: absolute;
+  right: calc(48px + var(--space-8));
+  bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: min(260px, calc(100vw - 96px));
+  padding: 6px 6px 6px 12px;
+  border: 0.5px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  box-shadow: var(--shadow-popup);
+  white-space: nowrap;
+}
+
+.tma-bespoke__hello[hidden],
+.tma-bespoke.is-open .tma-bespoke__hello {
+  display: none;
+}
+
+.tma-bespoke__hello::after {
+  content: '';
+  position: absolute;
+  right: -5px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  border-right: 0.5px solid var(--color-border-soft);
+  border-top: 0.5px solid var(--color-border-soft);
+  background: var(--color-white);
+  transform: rotate(45deg);
+}
+
+.tma-bespoke__hello-text {
+  appearance: none;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tma-bespoke__hello-close {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.tma-bespoke__hello-close:hover {
+  background: var(--color-hover);
+}
+
+.tma-bespoke__hello-close img {
+  display: block;
+  width: 10px;
+  height: 10px;
+}
+
+.tma-dash[data-theme="dark"] .tma-bespoke__hello-close img,
+:root[data-theme="dark"] .tma-bespoke__hello-close img {
+  filter: invert(1);
+}
 
 .tma-bespoke__fab {
   appearance: none;

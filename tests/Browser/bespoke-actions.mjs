@@ -102,10 +102,43 @@ await page.route('**/portal/bespoke/chat', async (route) => {
   });
 });
 
-// ── open the launcher and ask ────────────────────────────────────────────
+// A thrown step must still leave evidence: the screenshot and the page's own errors.
+async function onFailure(err) {
+  console.log('STEP FAILED:', String(err).split('\n')[0]);
+  try { await page.screenshot({ path: 'tests/Browser/_scratch-bespoke-fail.png' }); } catch (e) { /* ignore */ }
+  if (errors.length) { console.log('page errors:'); errors.forEach((e) => console.log('  ' + e)); }
+  try {
+    console.log('url at failure:', page.url());
+    console.log('state:', await page.evaluate(() => JSON.stringify({
+      boot: window.TMABootBespoke,
+      me: window.TMACurrentUser && window.TMACurrentUser.get && (window.TMACurrentUser.get() || {}).bespoke,
+      host: (document.querySelector('.tma-bespoke') || {}).outerHTML ? document.querySelector('.tma-bespoke').outerHTML.slice(0, 200) : null,
+      dash: !!document.querySelector('.tma-dash'),
+      navOpen: !!document.querySelector('.tma-dash.is-nav-open'),
+    })));
+  } catch (e) { console.log('state unavailable:', String(e).slice(0, 120)); }
+  process.exit(1);
+}
+process.on('unhandledRejection', onFailure);
+process.on('uncaughtException', onFailure);
+
+// ── the greeting beside the mark ─────────────────────────────────────────
 await page.waitForSelector('[data-bespoke-fab]', { timeout: 15000 });
-await page.click('[data-bespoke-fab]');
+await page.waitForSelector('[data-bespoke-hello]:not([hidden])', { timeout: 8000 });
+const hello = (await page.textContent('[data-bespoke-hello-open]')).trim();
+check(hello.startsWith('Hi Test.'), `the greeting names the reader (${hello})`);
+await page.click('[data-bespoke-hello-close]');
+check(await page.evaluate(() => document.querySelector('[data-bespoke-hello]').hidden), 'dismissing hides the greeting');
+await page.reload({ waitUntil: 'networkidle' });
+await page.waitForSelector('[data-bespoke-fab]', { timeout: 15000 });
+await page.waitForTimeout(1800);
+check(await page.evaluate(() => document.querySelector('[data-bespoke-hello]').hidden), 'a dismissal lasts the day, across a reload');
+await page.evaluate(() => localStorage.removeItem('tma.bespoke.helloDismissed'));
+await page.reload({ waitUntil: 'networkidle' });
+await page.waitForSelector('[data-bespoke-hello]:not([hidden])', { timeout: 15000 });
+await page.click('[data-bespoke-hello-open]');
 await page.waitForSelector('.tma-bespoke.is-open [data-bespoke-input]', { timeout: 8000 });
+check(await page.evaluate(() => document.querySelector('[data-bespoke-hello]').hidden), 'clicking the greeting opens the panel and retires the bubble');
 
 scripted = {
   reply: 'Here is a draft to Vernon Francis (IT & Web Solutions Specialist). Does it read right? Send is below.',
