@@ -34,7 +34,9 @@ final class Suggestions
             default => self::generic($cip, $staff, $client, $kind),
         };
 
-        if (! $configured) {
+        if ($configured) {
+            $chips = array_merge($chips, self::abilities($user, $identity, $kind));
+        } else {
             $chips = array_values(array_filter(
                 $chips,
                 fn (array $chip) => ($chip['id'] ?? '') !== 'compose-updates' && ($chip['id'] ?? '') !== 'rewrite',
@@ -42,6 +44,36 @@ final class Suggestions
         }
 
         return array_values(array_slice($chips, 0, 6));
+    }
+
+    /**
+     * What the live assistant can do beyond answering: draft a message to
+     * the person who looks after the portal, read an attached PDF, make a
+     * 2×2 photo, list the reader's own files. Two per screen at most, so
+     * the page's own chips stay first.
+     *
+     * @param  array<string, mixed>  $identity
+     * @return list<array<string, string>>
+     */
+    private static function abilities(User $user, array $identity, string $kind): array
+    {
+        $chips = [];
+        $cip = $identity['cipEnabled'] && ($identity['cipReach'] || Bespoke::can($user, 'clients.view'));
+
+        if ($kind === 'cip-intake' || $kind === 'cip-file') {
+            $chips[] = ['id' => 'photo-2x2', 'label' => 'Make a 2×2 photo', 'prompt' => 'I will attach a photo. Make it a 2×2 passport photo.'];
+        }
+        if ($cip && ($kind === 'dashboard' || $kind === 'cip-list' || $kind === 'overview')) {
+            $chips[] = ['id' => 'my-apps', 'label' => 'Show my recent applications', 'prompt' => 'Show my recent applications.'];
+        }
+        if ($kind === 'dashboard' || $kind === 'settings' || $kind === 'page' || $kind === 'bespoke') {
+            $chips[] = ['id' => 'report-issue', 'label' => 'Report a portal problem', 'prompt' => 'Draft a message to whoever looks after the portal: I am having a problem with a page.'];
+        }
+        if ($kind === 'files' || $kind === 'bespoke' || $kind === 'email') {
+            $chips[] = ['id' => 'summarize-pdf', 'label' => 'Summarize a PDF', 'prompt' => 'I will attach a PDF. Summarize it in a few lines.'];
+        }
+
+        return array_slice($chips, 0, 2);
     }
 
     public static function subtitle(array $page): string

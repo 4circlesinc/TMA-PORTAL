@@ -282,6 +282,26 @@ class BespokeToolsTest extends TestCase
         $this->assertSame('CIP Applications are not available for this account type.', $box->call('list_applications', [])['error']);
     }
 
+    // -------------------------------------------------------------- chips
+
+    public function test_the_empty_chat_offers_the_new_abilities_only_when_the_model_is_live(): void
+    {
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+
+        $ids = fn (array $chips) => array_column($chips, 'id');
+
+        $home = $this->actingAs($officer)->getJson('/portal/bespoke/suggestions?path=/')->assertOk()->json('chips');
+        $this->assertContains('report-issue', $ids($home));
+        $this->assertLessThanOrEqual(6, count($home));
+
+        $intake = $this->actingAs($officer)->getJson('/portal/bespoke/suggestions?path=/citizenship-applications/new')->assertOk()->json('chips');
+        $this->assertContains('photo-2x2', $ids($intake));
+
+        config(['services.bespoke.key' => '']);
+        $dark = $this->actingAs($officer)->getJson('/portal/bespoke/suggestions?path=/')->assertOk()->json('chips');
+        $this->assertNotContains('report-issue', $ids($dark));
+    }
+
     // -------------------------------------------------------------- guide
 
     public function test_the_guide_lookup_hides_staff_sections_from_clients(): void
