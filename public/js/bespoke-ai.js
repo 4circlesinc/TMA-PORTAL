@@ -866,10 +866,9 @@
         var canvas = document.createElement('canvas');
         canvas.width = Math.round(viewport.width);
         canvas.height = Math.round(viewport.height);
-        var c = canvas.getContext('2d');
-        c.fillStyle = '#fff';
-        c.fillRect(0, 0, canvas.width, canvas.height);
-        return page.render({ canvasContext: c, viewport: viewport }).promise.then(function () {
+        // pdf.js 6 takes the canvas itself and paints the white background;
+        // taking a 2d context before render() leaves the page blank.
+        return page.render({ canvas: canvas, viewport: viewport, background: '#ffffff' }).promise.then(function () {
           try { doc.destroy(); } catch (e) { /* ignore */ }
           return { canvas: canvas, trim: true };
         });
