@@ -152,7 +152,7 @@
     "3. Tick Enable automatic detection when the pin is set.",
     "4. Click Save locations.",
     "5. Use Reset if you need to clear a pin.",
-    "The browser must be allowed to share location. A live call can override an office pin while you are on that call. Manual status still wins if you pick one yourself.",
+    "The browser or the Mac / Windows / Android app must be allowed to share location. On the desktop apps the prompt comes from the system (Location Services). If you previously blocked it, turn Location on for TM ANTOINE Portal in System Settings, then quit and reopen the app. A live call can override an office pin while you are on that call. Manual status still wins if you pick one yourself.",
     "## Scheduled statuses",
     "On Presence settings, open Scheduled statuses. The hint reads: Schedule Away, meetings, or focus time with start and end dates.",
     "1. Choose a Status: Out of Office, At a Meeting, Do Not Disturb, or Focus Time.",
@@ -671,7 +671,7 @@
     "What you see: Email tile says connect a mailbox; What to do: Settings → Connectors, or Connect email account on Email.",
     "What you see: Windows download says not commonly downloaded / not verified; What to do: Click Keep, then Keep anyway. Open the installer. If SmartScreen appears, More info → Run anyway.",
     "What you see: macOS will not open the app; What to do: System Settings → Privacy & Security → allow / Open Anyway.",
-    "What you see: Status will not switch to In Office by itself; What to do: Enable automatic detection, allow location, and confirm you are inside the office radius. A call or a manual status can override it.",
+    "What you see: Status will not switch to In Office by itself; What to do: Enable automatic detection and allow location when asked. In the Mac or Windows app, that is System Settings → Privacy → Location Services for TM ANTOINE Portal; then quit and reopen the app. Confirm you are inside the office radius. A call or a manual status can override it.",
     "What you see: Signed out unexpectedly; What to do: Sign in again. If the session expired, the portal says so on Sign in.",
     "What you see: Authenticator required; What to do: Settings → Account Security and complete two-factor. You cannot skip this if policy requires it."
    ]

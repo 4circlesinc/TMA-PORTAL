@@ -24,6 +24,9 @@
       if (typeof url !== 'string') return;
       try { host.openInBrowser(url); } catch (e) { /* ignore */ }
     },
+    openLocationSettings: function () {
+      try { host.openLocationSettings(); } catch (e) { /* ignore */ }
+    },
   };
 
   var RELAYS = [

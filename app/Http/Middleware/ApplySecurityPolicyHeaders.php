@@ -48,9 +48,12 @@ class ApplySecurityPolicyHeaders
         $response->headers->set('X-Content-Type-Options', 'nosniff');
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
         $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
+        // geolocation=(self): office/remote presence pins use the Geolocation
+        // API. An empty allowlist (geolocation=()) made Chromium — the Mac and
+        // Windows apps, Chrome, Edge, Android WebView — deny without a prompt.
         $response->headers->set(
             'Permissions-Policy',
-            'camera=(self), microphone=(self), geolocation=(), payment=(), usb=(), interest-cohort=()'
+            'camera=(self), microphone=(self), geolocation=(self), payment=(), usb=(), interest-cohort=()'
         );
 
         if ($this->secure($request)) {

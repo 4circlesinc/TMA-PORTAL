@@ -978,11 +978,22 @@ async function ensureMediaAccess() {
   return granted.every(Boolean);
 }
 
+function permissionPageUrl(webContents, requestingOrigin) {
+  const url = (webContents && typeof webContents.getURL === 'function' && webContents.getURL())
+    || requestingOrigin
+    || '';
+  return url;
+}
+
 function applyPermissionPolicy() {
-  const allowed = ['media', 'notifications', 'clipboard-sanitized-write', 'fullscreen', 'idle-detection'];
+  // geolocation: office/remote presence. Chromium will not show the OS Location
+  // prompt unless this shell allows the permission; a miss here looks like the
+  // app "never asks". Granting it is what makes macOS / Windows ask, the way
+  // askForMediaAccess is what makes the camera prompt appear.
+  const allowed = ['media', 'notifications', 'clipboard-sanitized-write', 'fullscreen', 'idle-detection', 'geolocation'];
 
   session.defaultSession.setPermissionRequestHandler(async (webContents, permission, callback) => {
-    if (!isPortalUrl(webContents.getURL()) || !allowed.includes(permission)) {
+    if (!isPortalUrl(permissionPageUrl(webContents)) || !allowed.includes(permission)) {
       return callback(false);
     }
 
@@ -995,8 +1006,10 @@ function applyPermissionPolicy() {
 
   // getUserMedia and enumerateDevices consult this rather than the request
   // handler; without it, device labels come back empty and calls fail silently.
-  session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
-    const url = webContents ? webContents.getURL() : '';
+  // getCurrentPosition does the same for geolocation: a false check skips the
+  // request handler, so the OS never prompts.
+  session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin) => {
+    const url = permissionPageUrl(webContents, requestingOrigin);
     return isPortalUrl(url) && allowed.includes(permission);
   });
 
@@ -1434,6 +1447,20 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('tma:open-in-browser', (event, url) => {
       if (!event.sender || event.sender.isDestroyed()) return false;
       const href = safeExternalUrl(url);
+      if (!href) return false;
+      shell.openExternal(href).catch(() => {});
+      return true;
+    });
+
+    // Presence settings, after Location was blocked. Not run through
+    // safeExternalUrl: these are OS settings URLs, not web links.
+    ipcMain.handle('tma:open-location-settings', (event) => {
+      if (!event.sender || event.sender.isDestroyed()) return false;
+      const href = IS_MAC
+        ? 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices'
+        : process.platform === 'win32'
+          ? 'ms-settings:privacy-location'
+          : null;
       if (!href) return false;
       shell.openExternal(href).catch(() => {});
       return true;

@@ -8,7 +8,9 @@ import android.net.Uri
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.webkit.CookieManager
+import android.webkit.GeolocationPermissions
 import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
@@ -88,6 +90,7 @@ class PortalWebHost(
             domStorageEnabled = true
             databaseEnabled = true
             mediaPlaybackRequiresUserGesture = false
+            setGeolocationEnabled(true)
             javaScriptCanOpenWindowsAutomatically = true
             setSupportMultipleWindows(false)
             useWideViewPort = true
@@ -192,6 +195,15 @@ class PortalWebHost(
         @JavascriptInterface fun notify(json: String) { runCatching { JSONObject(json) }.getOrNull()?.let { n -> main.post { listener.onNotification(n) } } }
         @JavascriptInterface fun closeNotification(id: Int) { main.post { listener.onCloseNotification(id) } }
         @JavascriptInterface fun openInBrowser(url: String) { main.post { listener.onOpenOutside(url) } }
+        @JavascriptInterface fun openLocationSettings() {
+            main.post {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", appContext.packageName, null)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                runCatching { appContext.startActivity(intent) }
+            }
+        }
         @JavascriptInterface fun version(): String = versionName
         @JavascriptInterface fun notificationsAllowed(): Boolean = listener.notificationsAllowed()
         @JavascriptInterface fun requestNotifications() { main.post { listener.requestNotifications() } }
@@ -273,6 +285,18 @@ class PortalWebHost(
                 if (PermissionRequest.RESOURCE_VIDEO_CAPTURE in wanted) add(android.Manifest.permission.CAMERA)
             }.toTypedArray()
             listener.requestPermissions(permissions) { granted -> if (granted) request.grant(wanted.toTypedArray()) else request.deny() }
+        }
+
+        override fun onGeolocationPermissionsShowPrompt(origin: String, callback: GeolocationPermissions.Callback) {
+            val from = origin.trimEnd('/')
+            if (from != this@PortalWebHost.origin.trimEnd('/')) {
+                callback.invoke(origin, false, false)
+                return
+            }
+            listener.requestPermissions(arrayOf(
+                android.Manifest.permission.ACCESS_FINE_LOCATION,
+                android.Manifest.permission.ACCESS_COARSE_LOCATION,
+            )) { granted -> callback.invoke(origin, granted, true) }
         }
 
         override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {

@@ -185,6 +185,7 @@ a browser tab cannot do, mirroring `desktop/main.js` piece by piece:
 | Loading layer | `splash.js` | `core/ui/splash/BootSplash.kt` until `onPageFinished` |
 | OS notifications | Chromium `Notification` | polyfill → `web/WebNotifications.kt` (channel "portal"); a tap brings the app forward and calls the page's `onclick` |
 | Media permissions | `setPermissionRequestHandler` | `onPermissionRequest` → RECORD_AUDIO / CAMERA runtime permissions |
+| Location | `geolocation` in the same handlers + `NSLocationWhenInUseUsageDescription` | `onGeolocationPermissionsShowPrompt` → ACCESS_FINE/COARSE_LOCATION |
 | Downloads / uploads | Chromium | `DownloadManager` with the page's cookies; `onShowFileChooser` |
 | Call phase | `applyCallPhase` (panel, dock bounce, power blocker) | `data-tma-call` + `data-tma-call-info` → `web/CallNotifications.kt` (CallStyle, Accept/Decline) and `web/CallService.kt` (foreground service, microphone + camera); screen stays on |
 | Theme | `tma:theme` | `data-theme` → status bar icon colour |

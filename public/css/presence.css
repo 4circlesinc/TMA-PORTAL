@@ -428,6 +428,24 @@
   margin: 0 0 12px;
 }
 
+.tma-presence-loc__permission {
+  font-size: 13px;
+  color: var(--color-text-secondary, #64748b);
+  background: var(--color-hover, #f1f5f9);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 0 0 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.tma-presence-loc__permission[hidden] {
+  display: none;
+}
+
 .tma-presence-loc__search {
   display: flex;
   gap: var(--space-8, 8px);

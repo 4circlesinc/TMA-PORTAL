@@ -62,7 +62,9 @@ class PortalHardeningTest extends TestCase
         $this->assertStringContainsString('frame-ancestors', $csp);
         $response->assertHeader('X-Content-Type-Options', 'nosniff');
         $response->assertHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-        $this->assertStringContainsString('camera=(self)', (string) $response->headers->get('Permissions-Policy'));
+        $policy = (string) $response->headers->get('Permissions-Policy');
+        $this->assertStringContainsString('camera=(self)', $policy);
+        $this->assertStringContainsString('geolocation=(self)', $policy);
     }
 
     public function test_turnstile_is_skipped_when_keys_are_empty(): void

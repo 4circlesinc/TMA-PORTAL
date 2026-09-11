@@ -17,6 +17,8 @@
   var locationMaps = {};
   var leafletPromise = null;
   var DEFAULT_MAP = { lat: 45.5017, lng: -73.5673, zoom: 12 };
+  var geoPermission = 'unknown';
+  var locationDeniedToastShown = false;
 
   var STATUS = {
     online: { label: 'Online', icon: 'green' },
@@ -141,7 +143,7 @@
     var link = document.createElement('link');
     link.id = 'tma-presence-css-link';
     link.rel = 'stylesheet';
-    link.href = (ROOT || '') + 'css/presence.css?v=13';
+    link.href = (ROOT || '') + 'css/presence.css?v=14';
     document.head.appendChild(link);
   }
 
@@ -257,6 +259,81 @@
       });
   }
 
+  function isDesktopShell() {
+    return !!(window.TMADesktop && window.TMADesktop.isDesktop);
+  }
+
+  function canOpenLocationSettings() {
+    return !!(window.TMADesktop && typeof window.TMADesktop.openLocationSettings === 'function');
+  }
+
+  function locationPermissionHelp() {
+    if (window.TMADesktop && window.TMADesktop.isAndroid) {
+      return 'Location is blocked for this app. Allow location for TM ANTOINE Portal in Android settings, then try again.';
+    }
+    if (isDesktopShell()) {
+      return 'Location is blocked for this app. Allow Location for TM ANTOINE Portal in System Settings, then quit and reopen the app.';
+    }
+    return 'Location is blocked for this site. Allow location in your browser settings, then try again.';
+  }
+
+  function locationErrorMessage(err) {
+    if (err && err.code === 2) return 'Location unavailable. Turn on Location Services and try again.';
+    if (err && err.code === 3) return 'Location request timed out. Try again.';
+    return locationPermissionHelp();
+  }
+
+  function onGeoPermission(state) {
+    geoPermission = state;
+    var modal = document.querySelector('[data-presence-settings-modal]');
+    paintLocationPermissionNotice(modal ? settingsModalRoot(modal) : null);
+  }
+
+  function paintLocationPermissionNotice(root) {
+    var el = root && root.querySelector('[data-loc-permission]');
+    if (!el) return;
+    if (geoPermission !== 'denied') {
+      el.hidden = true;
+      el.innerHTML = '';
+      return;
+    }
+    el.hidden = false;
+    var html = '<span>' + esc(locationPermissionHelp()) + '</span>'
+      + '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-loc-request>Allow location</button>';
+    if (canOpenLocationSettings()) {
+      html += '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-loc-open-settings>Open system settings</button>';
+    }
+    el.innerHTML = html;
+  }
+
+  function watchGeoPermission() {
+    if (!navigator.permissions || !navigator.permissions.query) return;
+    navigator.permissions.query({ name: 'geolocation' }).then(function (status) {
+      onGeoPermission(status.state);
+      status.onchange = function () { onGeoPermission(status.state); };
+    }).catch(function () {});
+  }
+
+  function requestGeoAccess() {
+    if (!navigator.geolocation) {
+      toast('Location is not supported in this browser.', false);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      function () {
+        onGeoPermission('granted');
+        locationDeniedToastShown = false;
+        requestLocationIfEnabled();
+        toast('Location access allowed.', true);
+      },
+      function (err) {
+        if (err && err.code === 1) onGeoPermission('denied');
+        toast(locationErrorMessage(err), false);
+      },
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+    );
+  }
+
   function useCurrentLocation(root, prefix, mapsReady) {
     if (!navigator.geolocation) {
       toast('Location is not supported in this browser.', false);
@@ -281,6 +358,8 @@
         var lat = pos.coords.latitude;
         var lng = pos.coords.longitude;
         var fallbackAddress = Number(lat).toFixed(6) + ', ' + Number(lng).toFixed(6);
+        onGeoPermission('granted');
+        locationDeniedToastShown = false;
 
         function placeOnMap() {
           applyLocationOnMap(root, prefix, lat, lng, fallbackAddress);
@@ -295,10 +374,8 @@
         else placeOnMap();
       },
       function (err) {
-        var msg = 'Location permission denied.';
-        if (err && err.code === 2) msg = 'Location unavailable. Check your device settings.';
-        if (err && err.code === 3) msg = 'Location request timed out. Try again.';
-        toast(msg, false);
+        if (err && err.code === 1) onGeoPermission('denied');
+        toast(locationErrorMessage(err), false);
         done();
       },
       { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
@@ -735,6 +812,7 @@
       '<div class="tma-presence-settings">' +
       '<div class="tma-presence-settings__panel" data-panel="locations">' +
       '<p class="tma-presence-loc__intro">Allow location access to automatically detect whether you\'re working from the office or remotely. Your exact location is never shown to others.</p>' +
+      '<p class="tma-presence-loc__permission" data-loc-permission hidden></p>' +
       locationBlockHtml('office', 'Office location', office) +
       locationBlockHtml('remote', 'Remote location', remote) +
       '</div>' +
@@ -771,6 +849,8 @@
     });
 
     var mapsReady = initAllLocationMaps(root, office, remote);
+    watchGeoPermission();
+    paintLocationPermissionNotice(root);
 
     root.querySelectorAll('[data-loc-office-address], [data-loc-remote-address]').forEach(function (input) {
       input.addEventListener('keydown', function (e) {
@@ -787,6 +867,11 @@
       if (e.target.closest('[data-loc-remote-search]')) { searchLocationAddress(root, 'remote'); return; }
       if (e.target.closest('[data-loc-office-current]')) { useCurrentLocation(root, 'office', mapsReady); return; }
       if (e.target.closest('[data-loc-remote-current]')) { useCurrentLocation(root, 'remote', mapsReady); return; }
+      if (e.target.closest('[data-loc-request]')) { requestGeoAccess(); return; }
+      if (e.target.closest('[data-loc-open-settings]')) {
+        if (canOpenLocationSettings()) window.TMADesktop.openLocationSettings();
+        return;
+      }
       if (e.target.closest('[data-loc-office-reset]')) { resetLocation('office', root); return; }
       if (e.target.closest('[data-loc-remote-reset]')) { resetLocation('remote', root); return; }
       var del = e.target.closest('[data-schedule-del]');
@@ -1029,13 +1114,23 @@
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       function (pos) {
+        onGeoPermission('granted');
+        locationDeniedToastShown = false;
         api('POST', '/me/availability/location', {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
           accuracyM: pos.coords.accuracy,
         }).then(applyPayload).catch(function () {});
       },
-      function () {},
+      function (err) {
+        if (err && err.code === 1) {
+          onGeoPermission('denied');
+          if (!locationDeniedToastShown) {
+            locationDeniedToastShown = true;
+            toast(locationPermissionHelp(), false);
+          }
+        }
+      },
       { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 }
     );
   }
@@ -1166,6 +1261,7 @@
     loadCss();
     ensureSlots();
     paintHeader();
+    watchGeoPermission();
 
     /* Portal morph may rebuild the header, re-mount the pill beside icons. */
     if (!document.documentElement.dataset.tmaPresenceHeaderWatch) {

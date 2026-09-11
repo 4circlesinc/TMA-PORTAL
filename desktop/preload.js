@@ -3,8 +3,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 // Almost nothing from Node is exposed to the portal. isDesktop exists so
 // page code can tell it is running inside the desktop shell (e.g. to hide
 // "install the app" prompts) without gaining privileges. openInBrowser is
-// the one exception: a clicked email link has to leave the app, and main
-// still validates the URL before shell.openExternal.
+// a clicked email link leaving the app (main still validates the URL).
+// openLocationSettings opens the OS Location pane after a deny.
 contextBridge.exposeInMainWorld('TMADesktop', {
   isDesktop: true,
   platform: process.platform,
@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('TMADesktop', {
     if (typeof url !== 'string') return;
     ipcRenderer.invoke('tma:open-in-browser', url);
   },
+  openLocationSettings: () => ipcRenderer.invoke('tma:open-location-settings'),
 });
 
 /*

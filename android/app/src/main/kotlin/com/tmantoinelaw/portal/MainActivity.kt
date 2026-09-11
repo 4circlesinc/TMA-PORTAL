@@ -59,8 +59,16 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
     private var showingCallPermissionDialog = false
 
     private var permissionCallback: ((Boolean) -> Unit)? = null
+    private val locationPermissions = setOf(
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION,
+    )
+    private fun locationGranted(): Boolean =
+        locationPermissions.any { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }
     private val askPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        permissionCallback?.invoke(result.values.all { it }); permissionCallback = null
+        val locationOnly = result.isNotEmpty() && result.keys.all { it in locationPermissions }
+        val ok = if (locationOnly) result.values.any { it } || locationGranted() else result.values.all { it }
+        permissionCallback?.invoke(ok); permissionCallback = null
     }
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         host.evaluate("window.__tmaNotificationPermission && __tmaNotificationPermission($granted)")
@@ -252,7 +260,11 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
         askingCallPermission = false
     }
     override fun requestPermissions(permissions: Array<String>, done: (Boolean) -> Unit) {
-        if (permissions.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) { done(true); return }
+        val locationOnly = permissions.isNotEmpty() && permissions.all { it in locationPermissions }
+        val already = if (locationOnly) locationGranted() else permissions.all {
+            ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+        }
+        if (already) { done(true); return }
         permissionCallback = done
         askPermissions.launch(permissions)
     }

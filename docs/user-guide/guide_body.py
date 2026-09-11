@@ -415,7 +415,7 @@ def _status(doc, add_title, add_h2, add_body, add_bullets, add_table, add_callou
     add_callout(
         doc,
         "NOTE",
-        "The browser must be allowed to share location. A live call can override an office pin while you are on that call. Manual status still wins if you pick one yourself.",
+        "Allow location when the browser or the Mac / Windows / Android app asks. On the desktop apps that prompt comes from the system (Location Services). If you previously blocked it, turn Location on for TM ANTOINE Portal in System Settings (Mac or Windows) or the app’s permissions (Android), then quit and reopen the app. A live call can override an office pin while you are on that call. Manual status still wins if you pick one yourself.",
     )
     add_h2(doc, "Scheduled statuses")
     add_body(
@@ -1647,7 +1647,7 @@ def _trouble(doc, add_title, add_table):
             ["Email tile says connect a mailbox", "Settings → Connectors, or Connect email account on Email."],
             ["Windows download says not commonly downloaded / not verified", "Click Keep, then Keep anyway. Open the installer. If SmartScreen appears, More info → Run anyway."],
             ["macOS will not open the app", "System Settings → Privacy & Security → allow / Open Anyway."],
-            ["Status will not switch to In Office by itself", "Enable automatic detection, allow location, and confirm you are inside the office radius. A call or a manual status can override it."],
+            ["Status will not switch to In Office by itself", "Enable automatic detection and allow location when asked. In the Mac or Windows app, that is System Settings → Privacy → Location Services for TM ANTOINE Portal; then quit and reopen the app. Confirm you are inside the office radius. A call or a manual status can override it."],
             ["Signed out unexpectedly", "Sign in again. If the session expired, the portal says so on Sign in."],
             ["Authenticator required", "Settings → Account Security and complete two-factor. You cannot skip this if policy requires it."],
         ],

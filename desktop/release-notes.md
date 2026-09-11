@@ -1,2 +1,3 @@
+- Office / remote status can ask for Location on Mac and Windows — the app was refusing the prompt, so automatic detection never ran
 - Offline now opens the portal as it looked, not a page of unstyled blue links — the hashed CSS and JavaScript the shell actually asks for now ship inside the app
 - A dead network no longer wipes who you are, so cached clients, files and the board still have an account to open under

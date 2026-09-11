@@ -37,10 +37,11 @@
  * alone cannot catch this. Hence the explicit flag check at the end.
  *
  * Entitlements are omitted for the same reason: outside the sandbox and the
- * hardened runtime they do nothing. Camera and microphone prompts come from the
- * NSCameraUsageDescription / NSMicrophoneUsageDescription keys that
- * `mac.extendInfo` already writes into Info.plist. `entitlements.mac.plist`
- * still applies to real Developer ID builds, which electron-builder signs.
+ * hardened runtime they do nothing. Camera, microphone, and location prompts
+ * come from the NSCameraUsageDescription / NSMicrophoneUsageDescription /
+ * NSLocationWhenInUseUsageDescription keys that `mac.extendInfo` already
+ * writes into Info.plist. `entitlements.mac.plist` still applies to real
+ * Developer ID builds, which electron-builder signs.
  */
 
 const { execFileSync, spawnSync } = require('child_process');
