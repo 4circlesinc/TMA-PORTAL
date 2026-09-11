@@ -8,6 +8,7 @@ use App\Models\CipDocument;
 use App\Models\CipDocumentComment;
 use App\Support\Cip\DocumentComments;
 use App\Support\Cip\Notices;
+use App\Support\Files\ReviewAuto;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -47,6 +48,8 @@ class CipDocumentCommentController extends Controller
         $parent = empty($data['parent']) ? null : $this->comment($document, $data['parent']);
 
         $comment = DocumentComments::create($document, $user, $data['body'], $parent);
+
+        ReviewAuto::documentCommented($document, $user, $comment);
 
         try {
             Notices::documentComment($document, $user, $comment->body);

@@ -8,6 +8,7 @@ use App\Support\Files\CommentPresenter;
 use App\Support\Files\CommentReads;
 use App\Support\Files\Comments;
 use App\Support\Files\FileAccess;
+use App\Support\Files\Presenter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -103,10 +104,14 @@ class FileCommentController extends BaseFilesController
 
         $comment = Comments::create($file, $user, $data['body'], $parent, $data['mentions'] ?? [], $data['anchor'] ?? null);
 
-        return response()->json(
-            CommentPresenter::comment($comment->fresh()->load('author'), $user, $file) + ['replies' => []],
-            201,
-        );
+        $file = $file->fresh();
+        $payload = CommentPresenter::comment($comment->fresh()->load('author'), $user, $file) + ['replies' => []];
+        $presented = (new Presenter($user))->file($file);
+        if (! empty($presented['status'])) {
+            $payload['file'] = $presented;
+        }
+
+        return response()->json($payload, 201);
     }
 
     public function update(Request $request, string $uuid, string $commentUuid): JsonResponse

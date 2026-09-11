@@ -261,7 +261,7 @@ class ClientDocumentReviewTest extends TestCase
 
     /* ── automatic transitions ────────────────────────────────────── */
 
-    public function test_a_comment_does_not_rename_application_review(): void
+    public function test_a_staff_comment_marks_update_required_with_the_same_reason(): void
     {
         $staff = $this->staff();
         $client = $this->client($staff);
@@ -270,19 +270,17 @@ class ClientDocumentReviewTest extends TestCase
 
         $this->assertSame(ReviewStatus::APPLICATION_REVIEW, $file->fresh()->review_status);
 
-        $c = FileComment::create([
-            'uuid' => (string) Str::uuid(),
-            'file_id' => $file->id,
-            'author_id' => $staff->id,
-            'body' => 'Checking the dates on page 2.',
-        ]);
-        $c->forceFill(['root_id' => $c->id])->save();
+        $this->actingAs($staff)
+            ->postJson("/portal/files/files/{$file->uuid}/comments", [
+                'body' => 'Checking the dates on page 2.',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('file.review.status', ReviewStatus::UPDATE_REQUIRED)
+            ->assertJsonPath('file.review.note', 'Checking the dates on page 2.');
 
-        $this->assertSame(
-            ReviewStatus::APPLICATION_REVIEW,
-            $file->fresh()->review_status,
-            'Application review already means somebody is looking at it.',
-        );
+        $file->refresh();
+        $this->assertSame(ReviewStatus::UPDATE_REQUIRED, $file->review_status);
+        $this->assertSame('Checking the dates on page 2.', $file->review_note);
     }
 
     public function test_an_approval_request_and_its_outcome_move_the_document(): void
@@ -312,31 +310,50 @@ class ClientDocumentReviewTest extends TestCase
         $this->assertSame(ReviewStatus::READY_FOR_SUBMISSION, $file->fresh()->review_status);
     }
 
-    public function test_activity_never_overrules_a_person(): void
+    public function test_a_staff_comment_sends_an_approved_document_back(): void
     {
         $staff = $this->staff();
         $client = $this->client($staff);
         $folder = $this->clientFolder($client, $staff);
         $file = $this->file(['folder_id' => $folder->id, 'owner_id' => $staff->id, 'uploaded_by' => $staff->id]);
 
-        // A reviewer settles it by hand.
         $this->actingAs($staff)
             ->patchJson("/portal/files/files/{$file->uuid}/review", ['status' => ReviewStatus::READY_FOR_SUBMISSION])
             ->assertOk();
 
-        $c = FileComment::create([
-            'uuid' => (string) Str::uuid(),
-            'file_id' => $file->id,
-            'author_id' => $staff->id,
-            'body' => 'Nice one.',
-        ]);
-        $c->forceFill(['root_id' => $c->id])->save();
+        $this->actingAs($staff)
+            ->postJson("/portal/files/files/{$file->uuid}/comments", [
+                'body' => 'The stamp is not visible. Please rescan.',
+            ])
+            ->assertCreated();
 
-        $this->assertSame(
-            ReviewStatus::READY_FOR_SUBMISSION,
-            $file->fresh()->review_status,
-            'A remark about finished work is not a reason to reopen it.'
-        );
+        $file->refresh();
+        $this->assertSame(ReviewStatus::UPDATE_REQUIRED, $file->review_status);
+        $this->assertSame('The stamp is not visible. Please rescan.', $file->review_note);
+    }
+
+    public function test_a_reply_does_not_change_the_reason(): void
+    {
+        $staff = $this->staff();
+        $client = $this->client($staff);
+        $folder = $this->clientFolder($client, $staff);
+        $file = $this->file(['folder_id' => $folder->id, 'owner_id' => $staff->id, 'uploaded_by' => $staff->id]);
+
+        $root = $this->actingAs($staff)
+            ->postJson("/portal/files/files/{$file->uuid}/comments", [
+                'body' => 'The bio page is cropped.',
+            ])
+            ->assertCreated()
+            ->json('id');
+
+        $this->actingAs($staff)
+            ->postJson("/portal/files/files/{$file->uuid}/comments", [
+                'body' => 'Looking at page 2 now.',
+                'parent' => $root,
+            ])
+            ->assertCreated();
+
+        $this->assertSame('The bio page is cropped.', $file->fresh()->review_note);
     }
 
     public function test_an_ordinary_library_file_is_untouched_by_comments(): void

@@ -51,10 +51,9 @@ final class ReviewStatus
     /**
      * Settled by a person, the review round is over, whichever way it went.
      *
-     * Automatic moves stop at these. A comment arriving on a document somebody
-     * has already accepted is a remark about finished work, not a reason to
-     * quietly reopen it and lose their decision. A reviewer may still send it
-     * back by hand; that is a verdict, not an automatic move.
+     * Workflow auto-moves stop at these so an approval request changing state
+     * cannot quietly reopen a document somebody accepted. A staff comment is
+     * a verdict of its own, and still sends the file back.
      */
     public const FINAL = [self::READY_FOR_SUBMISSION];
 

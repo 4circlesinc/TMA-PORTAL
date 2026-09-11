@@ -26,7 +26,7 @@ class ReviewActivityObserver
     public function created(Model $model): void
     {
         if ($model instanceof FileComment) {
-            ReviewAuto::commented(FileItem::find($model->file_id));
+            ReviewAuto::commented($model);
 
             return;
         }

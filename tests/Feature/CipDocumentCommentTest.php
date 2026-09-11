@@ -10,10 +10,12 @@ use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Company;
 use App\Models\CompanyMember;
+use App\Models\FileItem;
 use App\Models\User;
-use App\Support\Cip\Applications;
 use App\Support\Access\Role;
+use App\Support\Cip\Applications;
 use App\Support\Cip\Assignments;
+use App\Support\Cip\DocumentStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -330,5 +332,66 @@ class CipDocumentCommentTest extends TestCase
         $this->actingAs($staff)
             ->postJson('/portal/cip/documents/'.$slot->uuid.'/comments', ['body' => '   '])
             ->assertStatus(422);
+    }
+
+    public function test_a_staff_comment_on_a_filed_document_marks_update_required(): void
+    {
+        $staff = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
+        $slot = $this->filedSlot($staff);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/documents/'.$slot->uuid.'/comments', [
+                'body' => 'The stamp is not visible.',
+            ])
+            ->assertCreated();
+
+        $this->assertSame(DocumentStatus::UPDATE_REQUIRED, $slot->fresh()->status);
+        $this->assertSame('The stamp is not visible.', $slot->file->fresh()->review_note);
+        $this->assertSame(1, $slot->comments()->count());
+    }
+
+    public function test_a_provider_comment_does_not_mark_update_required(): void
+    {
+        $staff = $this->user('Administrator', 'ada@example.com');
+        $company = null;
+        $slot = $this->filedSlot($staff, $company);
+
+        $contact = $this->user('Service Provider', 'contact@galaxy.example', 'Gil Contact');
+        CompanyMember::create([
+            'company_id' => $company->id, 'user_id' => $contact->id,
+            'role' => 'general', 'status' => 'active', 'invited_by' => $staff->id,
+        ]);
+
+        $this->actingAs($contact)
+            ->postJson('/portal/cip/documents/'.$slot->uuid.'/comments', [
+                'body' => 'The original is in the post.',
+            ])
+            ->assertCreated();
+
+        $this->assertSame(DocumentStatus::APPLICATION_REVIEW, $slot->fresh()->status);
+        $this->assertNull($slot->file->fresh()->review_note);
+    }
+
+    /** A filled slot sitting in Application review. */
+    private function filedSlot(User $staff, ?Company &$company = null): CipDocument
+    {
+        $slot = $this->slot($staff, $company);
+        $file = FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Police certificate.pdf',
+            'extension' => 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 1024,
+            'disk' => 'local',
+            'storage_path' => 'vault/police.pdf',
+            'owner_id' => $staff->id,
+            'uploaded_by' => $staff->id,
+        ]);
+        $slot->forceFill([
+            'file_id' => $file->id,
+            'status' => DocumentStatus::APPLICATION_REVIEW,
+        ])->save();
+
+        return $slot->fresh(['file']);
     }
 }

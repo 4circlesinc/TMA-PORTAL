@@ -3842,9 +3842,10 @@
         method: 'POST',
         json: { body: body, mentions: mentions.map(function (m) { return m.id; }), anchor: anchor },
       })
-        .then(function () {
+        .then(function (res) {
           commentInFlight = false;
           e.comments = null;
+          applyCommentReview(f, res);
           // The whole column, not just the feed: the composer has to leave
           // the screen with the words it delivered.
           var cbody = lb.querySelector('[data-lb-comments-body]');
@@ -7133,6 +7134,20 @@
     }
 
     return { id: status, label: status, tone: reviewTone(status) };
+  }
+
+  function applyCommentReview(item, res) {
+    if (!item || !res || !res.file) return;
+    var next = res.file;
+    if (next.review) item.review = next.review;
+    if (next.status) item.status = next.status;
+    paintFileStatusEverywhere(item.id, item);
+    emitFileReview({
+      file: item,
+      status: (item.status && item.status.status) || '',
+      note: (item.review && item.review.note) || '',
+      response: res,
+    });
   }
 
   function applyReviewToItem(item, status, note) {

@@ -9,6 +9,7 @@ use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\ClientAssignment;
+use App\Models\FileComment;
 use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\User;
@@ -183,15 +184,51 @@ class CipDocumentFileStatusTest extends TestCase
             ->assertJsonPath('application.status', Status::UPDATE_REQUIRED);
 
         $this->assertSame(DocumentStatus::UPDATE_REQUIRED, $slot->fresh()->status);
+        $this->assertSame(1, $slot->comments()->count(), 'The reason is one comment, not a second copy from the observer.');
         $this->assertTrue($slot->comments()->exists(), 'The reason lands on the slot, where the checklist reads it.');
         $this->assertDatabaseHas('file_comments', [
             'file_id' => $file->id,
             'body' => 'The bio page is cropped. Please rescan.',
         ]);
+        $this->assertSame(1, FileComment::where('file_id', $file->id)->count());
         $this->actingAs($staff)
             ->getJson('/portal/files/workflows/comments?scope=all')
             ->assertOk()
             ->assertJsonFragment(['body' => 'The bio page is cropped. Please rescan.']);
+        $this->assertSame(Status::UPDATE_REQUIRED, $slot->application->fresh()->status);
+
+        $clientUid = $slot->application->fresh()->loadMissing('client')->client->uid;
+        $docs = $this->actingAs($staff)
+            ->getJson('/portal/cip/clients/'.$clientUid.'/application')
+            ->assertOk()
+            ->json('application.applicant.documents');
+        $this->assertSame(
+            'The bio page is cropped. Please rescan.',
+            collect($docs)->firstWhere('id', $slot->uuid)['updateReason'] ?? null,
+        );
+    }
+
+    public function test_a_library_comment_marks_update_required_with_the_same_reason(): void
+    {
+        [$slot, $file, , $staff] = $this->filed(DocumentStatus::APPLICATION_REVIEW);
+        $slot->loadMissing('application');
+        $slot->application->forceFill(['status' => Status::REVIEW_APPLICATION])->save();
+
+        $this->actingAs($staff)
+            ->postJson('/portal/files/files/'.$file->uuid.'/comments', [
+                'body' => 'The bio page is cropped. Please rescan.',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('file.review.status', DocumentStatus::UPDATE_REQUIRED)
+            ->assertJsonPath('file.review.note', 'The bio page is cropped. Please rescan.');
+
+        $this->assertSame(DocumentStatus::UPDATE_REQUIRED, $slot->fresh()->status);
+        $this->assertSame('The bio page is cropped. Please rescan.', $file->fresh()->review_note);
+        $this->assertSame(1, $slot->comments()->count());
+        $this->assertSame(
+            'The bio page is cropped. Please rescan.',
+            $slot->comments()->value('body'),
+        );
         $this->assertSame(Status::UPDATE_REQUIRED, $slot->application->fresh()->status);
 
         $clientUid = $slot->application->fresh()->loadMissing('client')->client->uid;
