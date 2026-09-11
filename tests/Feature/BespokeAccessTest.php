@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Support\Access\Role;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 /**
@@ -233,5 +234,85 @@ class BespokeAccessTest extends TestCase
             ->assertOk()
             ->assertJsonPath('bespoke.enabled', true)
             ->assertJsonPath('bespoke.configured', false);
+    }
+
+    public function test_the_model_path_retries_in_the_newer_dialect_when_max_tokens_is_rejected(): void
+    {
+        config([
+            'services.bespoke.enabled' => true,
+            'services.bespoke.key' => "sk-test\n",
+            'services.bespoke.model' => 'gpt-5-mini',
+        ]);
+        Http::fake([
+            'api.openai.com/*' => Http::sequence()
+                ->push([
+                    'error' => [
+                        'message' => "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
+                        'type' => 'invalid_request_error',
+                        'code' => 'unsupported_parameter',
+                    ],
+                ], 400)
+                ->push([
+                    'choices' => [[
+                        'message' => ['role' => 'assistant', 'content' => 'Open [File Library](/folders/all).'],
+                    ]],
+                ], 200),
+        ]);
+
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+
+        $payload = $this->actingAs($officer)
+            ->postJson('/portal/bespoke/chat', [
+                'messages' => [['role' => 'user', 'content' => 'Where is File Library?']],
+                'clientContext' => ['path' => '/'],
+            ])
+            ->assertOk()
+            ->json();
+
+        $this->assertSame('model', $payload['source']);
+        $this->assertStringContainsString('/folders/all', $payload['reply']);
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($request) => array_key_exists('max_tokens', $request->data())
+            && $request->hasHeader('Authorization', 'Bearer sk-test'));
+        Http::assertSent(fn ($request) => array_key_exists('max_completion_tokens', $request->data())
+            && ! array_key_exists('max_tokens', $request->data())
+            && ! array_key_exists('temperature', $request->data()));
+    }
+
+    public function test_a_rejected_key_logs_the_provider_message_and_falls_back(): void
+    {
+        config(['services.bespoke.enabled' => true, 'services.bespoke.key' => 'sk-bad']);
+        Http::fake([
+            'api.openai.com/*' => Http::response([
+                'error' => [
+                    'message' => 'Incorrect API key provided: sk-bad.',
+                    'type' => 'invalid_request_error',
+                    'code' => 'invalid_api_key',
+                ],
+            ], 401),
+        ]);
+        Log::spy();
+
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+
+        $payload = $this->actingAs($officer)
+            ->postJson('/portal/bespoke/chat', [
+                'messages' => [['role' => 'user', 'content' => 'Can you write an email?']],
+                'clientContext' => ['path' => '/'],
+            ])
+            ->assertOk()
+            ->json();
+
+        $this->assertTrue($payload['configured']);
+        $this->assertSame('local', $payload['source']);
+        $this->assertStringContainsString('could not reach the language model', $payload['reply']);
+        Http::assertSentCount(1);
+        Log::shouldHaveReceived('warning')->once()->with(
+            'Bespoke AI HTTP error',
+            \Mockery::on(fn (array $context) => $context['status'] === 401
+                && $context['code'] === 'invalid_api_key'
+                && $context['host'] === 'api.openai.com'
+                && str_contains($context['message'], 'Incorrect API key')),
+        );
     }
 }

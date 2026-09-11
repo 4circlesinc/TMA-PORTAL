@@ -25,7 +25,7 @@ final class Bespoke
     {
         $key = config('services.bespoke.key');
 
-        return is_string($key) && $key !== '';
+        return is_string($key) && trim($key) !== '';
     }
 
     public static function abortUnlessEnabled(): void
