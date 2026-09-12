@@ -7421,8 +7421,33 @@
   }
 
   /* What this person owes, and what they have handed over. */
+  /*
+   * The order a checklist reads in: by what needs a hand, most first.
+   *
+   * Something sent back for an update is the reader's to act on today;
+   * something awaiting a decision is next; something accepted needs
+   * nothing; and an empty slot, which has not started, sits at the end
+   * where it stops burying the rows that have. Within a band the firm's
+   * own arrangement (Document Requirements' sort_order) holds, so two
+   * documents in the same state keep the order the firm gave them.
+   */
+  var DOC_STATUS_ORDER = { update_required: 0, application_review: 1, ready_for_submission: 2 };
+
+  function docOrderBand(d) {
+    if (!d || !d.uploaded) return 3;
+    var band = DOC_STATUS_ORDER[d.status];
+    return band === undefined ? 1 : band;
+  }
+
+  function orderDocs(docs) {
+    return (docs || [])
+      .map(function (d, i) { return { d: d, i: i }; })
+      .sort(function (a, b) { return (docOrderBand(a.d) - docOrderBand(b.d)) || (a.i - b.i); })
+      .map(function (x) { return x.d; });
+  }
+
   function renderCipChecklist(person, app) {
-    var docs = (person && person.documents) || [];
+    var docs = orderDocs((person && person.documents) || []);
     var postApproval = app && app.phase === 'post_approval';
 
     if (!docs.length) {
@@ -7475,7 +7500,7 @@
   function renderPadDocumentsCard(person, app, opts) {
     opts = opts || {};
     var note = opts.note ? cipChecklistNote(app) : '';
-    var docs = (person && person.documents) || [];
+    var docs = orderDocs((person && person.documents) || []);
     var body;
     if (!person || !person.id) {
       body = '<p class="tma-dash__clients-checklist-empty">' +
@@ -7498,6 +7523,8 @@
 
   window.TMACipSlots = {
     docsCard: renderPadDocumentsCard,
+    checklist: renderCipChecklist,
+    orderDocs: orderDocs,
     wire: function (root) {
       if (!clientsMountRoot || !clientsMountRoot._clientsController) return;
       var ctrl = clientsMountRoot._clientsController;
@@ -7713,7 +7740,7 @@
       : '';
 
     return (
-      '<li class="tma-dash__clients-checklist-row">' +
+      '<li class="tma-dash__clients-checklist-row"' + (d.id ? ' data-key="doc-' + esc(d.id) + '"' : '') + '>' +
       '<input type="checkbox" class="tma-dash__check"' + (filed ? ' checked' : '') +
       ' disabled tabindex="-1" aria-hidden="true">' +
       body +

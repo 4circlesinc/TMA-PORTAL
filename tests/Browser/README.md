@@ -422,6 +422,20 @@ field placement and drawing, and computed CSS only exist in a browser.
   ```sh
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/cip-offline.mjs
   ```
+- **`cip-document-order.mjs`** — the order a person's documents read in
+  on a CIP application: Update required, then Application review, then
+  Ready for submission, then the empty Pending upload slots last, on the
+  detail checklist and the post-approval Edit card alike; within a band the
+  firm's Document Requirements order holds, and a filed document with no
+  decision yet sits with those awaiting one. Both renderers
+  (`TMACipSlots.checklist`, `TMACipSlots.docsCard`) are called with a made-up
+  person whose firm order is the reverse of the priority order, two per
+  band, so manual and priority can never be mistaken for one another; the
+  sort is checked to be a view that leaves the person's own list alone.
+  Only the e2e admin and the bundle are needed.
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/cip-document-order.mjs
+  ```
 - **`cip-document-sort.mjs`** — the Order control on Templates → Document
   requirements. The checklists are kept in the firm's own arrangement, and
   this reads the same rows A-Z without disturbing it.
