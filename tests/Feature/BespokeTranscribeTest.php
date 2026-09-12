@@ -8,6 +8,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as ClientRequest;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 /**
@@ -79,13 +80,106 @@ class BespokeTranscribeTest extends TestCase
 
     public function test_the_model_follows_the_host_unless_set(): void
     {
-        $this->assertSame('whisper-large-v3-turbo', Transcription::model());
+        $this->assertSame(['whisper-large-v3-turbo', 'whisper-large-v3'], Transcription::models());
 
         config(['services.bespoke.base_url' => 'https://api.openai.com/v1']);
-        $this->assertSame('whisper-1', Transcription::model());
+        $this->assertSame(['whisper-1'], Transcription::models());
 
-        config(['services.bespoke.transcribe_model' => 'distil-whisper-large-v3-en']);
+        config(['services.bespoke.transcribe_model' => ' distil-whisper-large-v3-en , whisper-large-v3 ']);
+        $this->assertSame(['distil-whisper-large-v3-en', 'whisper-large-v3'], Transcription::models());
         $this->assertSame('distil-whisper-large-v3-en', Transcription::model());
+
+        // Production once carried BESPOKE_AI_TRANSCRIBE_MODEL=true: a switch,
+        // not a model, and every clip was refused as model "true".
+        config(['services.bespoke.base_url' => 'https://api.groq.com/openai/v1']);
+        foreach (['true', 'TRUE', 'on', '1', 'yes', 'default'] as $notAModel) {
+            config(['services.bespoke.transcribe_model' => $notAModel]);
+            $this->assertSame(['whisper-large-v3-turbo', 'whisper-large-v3'], Transcription::models(), $notAModel);
+        }
+        config(['services.bespoke.transcribe_model' => 'true,whisper-large-v3']);
+        $this->assertSame(['whisper-large-v3'], Transcription::models());
+    }
+
+    public function test_a_retired_model_hands_over_to_the_next(): void
+    {
+        Http::fake([
+            'https://api.groq.com/openai/v1/audio/transcriptions' => Http::sequence()
+                ->push(['error' => ['message' => 'The model `whisper-large-v3-turbo` has been decommissioned', 'code' => 'model_decommissioned']], 404)
+                ->push(['text' => 'second model answered'], 200),
+        ]);
+
+        $this->actingAs($this->user())
+            ->post('/portal/bespoke/transcribe', ['audio' => $this->clip()], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJson(['text' => 'second model answered']);
+
+        $models = [];
+        Http::assertSent(function (ClientRequest $request) use (&$models) {
+            foreach ($request->data() as $part) {
+                if (($part['name'] ?? null) === 'model') {
+                    $models[] = $part['contents'];
+                }
+            }
+
+            return true;
+        });
+        $this->assertSame(['whisper-large-v3-turbo', 'whisper-large-v3'], $models);
+    }
+
+    public function test_a_bad_clip_does_not_try_the_next_model(): void
+    {
+        Http::fake([
+            'https://api.groq.com/openai/v1/audio/transcriptions' => Http::response(['error' => ['message' => 'file is too short', 'code' => 'invalid_request_error']], 400),
+        ]);
+
+        $this->actingAs($this->user())
+            ->post('/portal/bespoke/transcribe', ['audio' => $this->clip()], ['Accept' => 'application/json'])
+            ->assertStatus(502);
+
+        Http::assertSentCount(1);
+    }
+
+    public function test_the_clip_part_declares_its_audio_type(): void
+    {
+        Http::fake([
+            'https://api.groq.com/openai/v1/audio/transcriptions' => Http::response(['text' => 'ok'], 200),
+        ]);
+
+        $this->actingAs($this->user())
+            ->post('/portal/bespoke/transcribe', ['audio' => $this->clip('audio/mp4', 'speech.m4a')], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        Http::assertSent(function (ClientRequest $request) {
+            foreach ($request->data() as $part) {
+                if (($part['name'] ?? null) === 'file') {
+                    return ($part['filename'] ?? null) === 'speech.m4a'
+                        && (($part['headers']['Content-Type'] ?? null) === 'audio/mp4');
+                }
+            }
+
+            return false;
+        });
+        $this->assertSame('audio/webm', Transcription::partType('speech.webm'));
+        $this->assertSame('application/octet-stream', Transcription::partType('speech.bin'));
+    }
+
+    public function test_a_rejected_clip_is_logged_with_what_arrived(): void
+    {
+        Http::fake();
+        Log::spy();
+
+        $this->actingAs($this->user())
+            ->post('/portal/bespoke/transcribe', ['audio' => $this->clip(), 'language' => 'english'], ['Accept' => 'application/json'])
+            ->assertStatus(422);
+
+        Log::shouldHaveReceived('warning')->withArgs(function (string $message, array $context) {
+            return $message === 'Bespoke AI transcription rejected'
+                && $context['hasAudio'] === true
+                && $context['bytes'] === 256
+                && $context['language'] === 'english'
+                && count($context['errors']) === 1;
+        })->once();
+        Http::assertNothingSent();
     }
 
     public function test_the_filename_carries_the_container(): void

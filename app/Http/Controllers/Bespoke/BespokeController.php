@@ -18,6 +18,10 @@ use App\Support\Bespoke\Toolbox;
 use App\Support\Bespoke\Transcription;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 /**
@@ -225,19 +229,42 @@ class BespokeController extends Controller
     {
         Bespoke::abortUnlessEnabled();
 
-        $validated = $request->validate([
+        $validator = Validator::make($request->all(), [
             'audio' => ['required', 'file', 'max:'.(Transcription::MAX_BYTES / 1024)],
             'language' => ['sometimes', 'nullable', 'string', 'regex:/^[A-Za-z]{2}$/'],
         ]);
+        if ($validator->fails()) {
+            // A validation failure is never logged by itself, and a clip the
+            // server would not take looks, from the stage, like a clip it
+            // could not understand. Say which, with what arrived.
+            $audio = $request->file('audio');
+            Log::warning('Bespoke AI transcription rejected', [
+                'errors' => $validator->errors()->all(),
+                'hasAudio' => $request->hasFile('audio'),
+                'bytes' => $audio instanceof UploadedFile ? $audio->getSize() : null,
+                'mime' => $audio instanceof UploadedFile ? $audio->getClientMimeType() : null,
+                'uploadError' => $audio instanceof UploadedFile ? $audio->getError() : null,
+                'language' => $request->input('language'),
+                'contentLength' => $request->header('Content-Length'),
+            ]);
+            throw new ValidationException($validator);
+        }
+        $validated = $validator->validated();
 
         if (! Bespoke::configured()) {
             return response()->json(['message' => 'Voice isn’t available here.'], 503);
         }
 
+        $started = microtime(true);
         $text = Transcription::transcribe($validated['audio'], $validated['language'] ?? null);
         if ($text === null) {
             return response()->json(['message' => 'The clip could not be transcribed.'], 502);
         }
+        Log::info('Bespoke AI transcription', [
+            'bytes' => $validated['audio']->getSize(),
+            'ms' => (int) round((microtime(true) - $started) * 1000),
+            'chars' => strlen($text),
+        ]);
 
         return response()->json(['text' => $text]);
     }

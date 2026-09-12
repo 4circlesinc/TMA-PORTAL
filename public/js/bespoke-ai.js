@@ -1648,9 +1648,25 @@
     }).catch(function (err) {
       if (!live.active) return;
       live.micOff = true;
-      var gone = err && (err.notFound || err.status === 503);
-      setLiveMode(ctx, 'idle', gone ? 'Voice isn’t available here.' : 'I couldn’t hear you. Tap the mic to try again.');
+      try { console.warn('Bespoke AI transcription failed', err && err.status, err && err.data ? err.data : err); } catch (e) { /* no console */ }
+      setLiveMode(ctx, 'idle', transcribeFailure(err));
     });
+  }
+
+  /* What to say when a clip came back without words. Each server answer
+   * has its own line, since "couldn't hear you" hid a session that had
+   * expired, a clip the server would not take, and a provider that was
+   * down behind one sentence. */
+  function transcribeFailure(err) {
+    var status = err && err.status;
+    if (!err || (err.notFound || status === 503)) return 'Voice isn’t available here.';
+    if (status === 419 || status === 401) return 'Your session has expired. Reload and try again.';
+    if (status === 413) return 'That clip was too long. Try a shorter one.';
+    if (status === 422) return 'The clip wasn’t accepted. Tap the mic to try again.';
+    if (status === 429) return 'Too many tries at once. Wait a moment.';
+    if (status === 502) return 'I couldn’t make out the words. Tap the mic to try again.';
+    if (typeof status !== 'number') return 'I couldn’t reach the portal. Check the connection and try again.';
+    return 'I couldn’t hear you. Tap the mic to try again.';
   }
 
   function stopListening(ctx) {
