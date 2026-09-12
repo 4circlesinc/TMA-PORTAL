@@ -38,63 +38,37 @@ field placement and drawing, and computed CSS only exist in a browser.
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/bespoke-actions.mjs
   ```
 
-- **`bespoke-live.mjs`** — Bespoke AI's live voice. The Talk live button
-  beside Send swaps the log, chips and composer for a stage (the mark in an
-  orb, five bars, a status line, a caption) on both the launcher and the full
-  page. The browser's own speech recognition hears the reader, the transcript
-  goes through `POST /portal/bespoke/chat` exactly as typing would (same
-  page context), the reply is captioned with its links intact and read aloud
-  with the markdown stripped, and the stage listens again on its own. Muting
-  the voice skips the reading; tapping the mic while listening turns it off;
-  Back to chat brings the log back with every spoken turn in it; Escape
-  closes the launcher and with it the session; leaving the full page ends
-  its session. It also pins that the listening mic wears the wash with a
-  dark glyph *after* the 200 ms background transition — the first screenshot
-  caught it mid-transition and looked broken.
+- **`bespoke-dictation.mjs`** — Bespoke AI's microphone. Beside Send on
+  both the launcher and the full page: tap it and what the reader says
+  lands in the message box — tentative words as they form, then the final
+  ones — after any text already there; it keeps listening across phrases,
+  a session the browser ends after silence is started again, and tapping
+  the mic, typing, Enter, Escape (panel stays open), closing the panel or
+  leaving the full page stops it, keeping whatever was said. Enter sends
+  the dictated words through `POST /portal/bespoke/chat` exactly as typing
+  would. The model is stubbed at the network layer, and so is
+  `/portal/bespoke/suggestions` (rewritten to `configured: true`, or a
+  keyless harness server makes the widget refuse the server ear).
 
-  Headless Chromium has `webkitSpeechRecognition` but no service behind it
-  (every start ends in `network`), and `speechSynthesis` has no voices, so
-  both are **faked in `addInitScript`** before the portal loads: recognition
-  delivers whatever the test queued on `window.__fakeSpeech.queue` (a silent
-  pass takes 1.5 s, close to a real browser's no-speech wait — a fast fake
-  exhausted the two silent passes before the test had queued its question),
-  synthesis records what it was asked to say in `spoken[]`. The model is
-  stubbed at the network layer as in `bespoke-actions.mjs`, and so is
-  `/portal/bespoke/suggestions` (rewritten to `configured: true`, because a
-  keyless harness server would otherwise make the widget refuse the server
-  ear). Same seed and serve as that script; only the e2e admin is needed.
-
-  A second browser then plays the desktop shell, where recognition exists
-  but every start fails with `network` (Chromium's ear is a Google service
-  Electron, Brave and unbranded builds do not carry): the stage must hand
-  the ear to the server without the reader seeing a failure, remember that
-  choice per browser, record a real clip with `MediaRecorder` on Chromium's
-  fake microphone (`--use-fake-device-for-media-stream` plus
+  Headless Chromium has `webkitSpeechRecognition` but every start ends in
+  `network`, so recognition is **faked in `addInitScript`**: continuous,
+  taking whatever the test queues on `window.__fakeSpeech.queue` as an
+  interim then a final result, and holding a silent session open while
+  `hold` is on (released once to pin the restart). A second browser plays
+  the desktop shell — recognition fails with `network` every time — with
+  Chromium's fake microphone (`--use-fake-device-for-media-stream` plus
   `--use-file-for-fake-audio-capture=` a looped WAV of 1 s silence, 1.5 s
-  tone, 3 s silence written by the script), let the real level meter decide
-  when the reader has finished, upload it to `POST /portal/bespoke/transcribe`
-  (stubbed like the model; the multipart is checked for the container name
-  and the language — scan the whole body, the audio part comes first) and
-  put the words through the chat. Two empty transcriptions rest the mic. A
-  fresh page in that browser must not try the failing ear at all. The panel
-  stays open across pages (`tma.bespoke.open`), so the second page checks
-  before clicking the launcher or it toggles the panel shut.
-  The representative — the face in the stage — is checked in the first
-  browser: `public/js/vendor/bespoke-representative.mjs` and the 6 MB model
-  arrive on demand, the mark fades for the canvas, `TMABespoke.live().rep.debug()`
-  reports ready and the mode, and while the fake voice reads (it now fires a
-  word boundary every 90 ms with a `charIndex`, as Chrome does) the mouth
-  passes through at least three `viseme_*` shapes and closes when the voice
-  stops. Software WebGL makes headless Chromium slow, so the fake holds a
-  silent pass open (`__fakeSpeech.hold`) while the test drives — otherwise
-  its own restart after silence races the test's clicks and the mic rests
-  mid-step — and a `relisten()` helper toggles the mic so a fresh pass
-  starts *after* a line is queued (the fake takes its text at `start()`).
-  With a stubbed model "thinking" lasts a frame; wait on what lasts (the
-  `spoken[]` list, the caption). The hold is released once at the end to
-  pin that two silent passes rest the mic.
+  tone, 3 s silence the script writes): the real MediaRecorder and level
+  meter cut each phrase, `POST /portal/bespoke/transcribe` is stubbed like
+  the model (the multipart is checked for the container name and the
+  language — scan the whole body, the audio part comes first), the words
+  land in the box phrase after phrase, and a fresh page in that browser
+  must not try the failing ear at all. The panel stays open across pages
+  (`tma.bespoke.open`), so a second page checks before clicking the
+  launcher or it toggles the panel shut. Same seed and serve as
+  `bespoke-actions.mjs`; only the e2e admin is needed.
   ```sh
-  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/bespoke-live.mjs
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/bespoke-dictation.mjs
   ```
 
 - **`signature-editor.mjs`** — log in, pick a library file, add recipients,

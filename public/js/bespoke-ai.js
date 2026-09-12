@@ -26,15 +26,8 @@
   var BACK = 'images/icons/phosphor/ArrowLeft.svg';
   var PENDING_COMPOSE_KEY = 'tma.mail.pending-compose';
   var CLIP = 'images/icons/phosphor/Paperclip.svg';
-  var VOICE = 'images/icons/phosphor/Waveform.svg';
   var MIC = 'images/icons/phosphor/Microphone.svg';
-  var MIC_OFF = 'images/icons/phosphor/MicrophoneSlash.svg';
-  var SPEAKER = 'images/icons/phosphor/SpeakerHigh.svg';
-  var SPEAKER_OFF = 'images/icons/phosphor/SpeakerSlash.svg';
-  var LS_VOICE_OFF = 'tma.bespoke.voiceOff';
   var LS_VOICE_ENGINE = 'tma.bespoke.voiceEngine';
-  var REP_MODULE = '/js/vendor/bespoke-representative.mjs?v=1';
-  var REP_MODEL = '/models/bespoke-representative.glb?v=1';
   var ICON_PDF = 'images/icons/phosphor/FilePdf.svg';
   var ICON_IMAGE = 'images/icons/phosphor/Image.svg';
   var ICON_FILE = 'images/icons/phosphor/File.svg';
@@ -1019,6 +1012,7 @@
   function ask(ctx, text) {
     text = String(text || '').trim();
     if (!ctx || ctx.busy) return;
+    stopDictation(ctx);
     var files = readyAttachments(ctx);
     if ((ctx.pending || []).some(function (e) { return e.status === 'uploading'; })) {
       toast('Still uploading. One moment.', true);
@@ -1067,7 +1061,6 @@
       renderActions(ctx, data.actions || []);
       renderChoices(ctx, data.choices || []);
       if (typeof ctx.afterReply === 'function') ctx.afterReply(data);
-      liveAnswer(ctx, reply, data);
     }).catch(function (err) {
       if (err && err.notFound) {
         destroy();
@@ -1078,7 +1071,6 @@
         : 'I could not reach Bespoke AI. Try a suggestion, or ask an administrator.';
       ctx.messages.push({ role: 'assistant', content: fallback });
       typeInto(ctx, bubble, fallback);
-      liveAnswer(ctx, fallback, null);
     }).then(function () {
       ctx.busy = false;
       if (ctx.sendBtn) ctx.sendBtn.disabled = !String(ctx.inputEl && ctx.inputEl.value || '').trim();
@@ -1086,30 +1078,26 @@
     });
   }
 
-  /* ── Live voice ─────────────────────────────────────────────────
-   * Talk to the assistant out loud. The browser's own speech recognition
-   * hears the reader, the same chat endpoint answers, and the browser's own
-   * speech synthesis reads the reply while the mark moves with it. Every
-   * turn still lands in the log and the saved conversation as text, so
-   * nothing is sent that typing would not have sent. Free of any outside
-   * service: no browser support means no button. */
+  /* ── Dictation ───────────────────────────────────────────────────
+   * The microphone beside Send: tap it, speak, and the words land in the
+   * box as they are heard; tap again, type, or send to stop. Nothing goes
+   * anywhere until the reader presses Send. Two ears: the browser's own
+   * recognition first — free, no round trip, words as you say them — but
+   * Chromium's is a call to a Google service the desktop shell, Brave and
+   * unbranded builds do not carry, and every start there ends in
+   * `network`. Then a clip is recorded here, phrase by phrase, and
+   * transcribed by the server through the chat provider. The switch is
+   * remembered per browser so the next tap does not fail first. */
 
   function recognitionClass() {
     return window.SpeechRecognition || window.webkitSpeechRecognition || null;
   }
 
-  /* Two ears. The browser's own recognition first: free, no round trip,
-   * interim words. But Chromium's is a call to a Google service the
-   * desktop shell, Brave and unbranded builds do not carry — every start
-   * there ends in `network`. Then the clip is recorded here and
-   * transcribed by the server through the chat provider. The switch is
-   * remembered per browser so the next session does not fail first. */
   function recorderSupported() {
     return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && typeof window.MediaRecorder === 'function');
   }
 
-  function liveSupported() {
-    if (!window.speechSynthesis || typeof window.SpeechSynthesisUtterance !== 'function') return false;
+  function dictationSupported() {
     return !!(recognitionClass() || recorderSupported());
   }
 
@@ -1135,7 +1123,7 @@
     return 'webm';
   }
 
-  function liveLang() {
+  function dictationLang() {
     var lang = String(document.documentElement.getAttribute('lang') || '').trim();
     var nav = navigator.language || 'en-US';
     if (!lang) return nav;
@@ -1143,423 +1131,233 @@
     return lang;
   }
 
-  /* The best voice the device has for the page's language: the natural /
-   * cloud ones first, the novelty ones never. */
-  function pickVoice(lang) {
-    var synth = window.speechSynthesis;
-    var voices = synth && synth.getVoices ? synth.getVoices() : [];
-    if (!voices || !voices.length) return null;
-    var want = String(lang || 'en').toLowerCase().replace('_', '-');
-    var prefix = want.slice(0, 2);
-    var best = null;
-    var bestScore = -1;
-    voices.forEach(function (v) {
-      var vl = String(v.lang || '').toLowerCase().replace('_', '-');
-      var name = String(v.name || '');
-      var score = 0;
-      if (vl === want) score += 6;
-      else if (vl.indexOf(prefix) === 0) score += 3;
-      else return;
-      if (/natural|neural|premium|enhanced/i.test(name)) score += 4;
-      if (/google/i.test(name)) score += 3;
-      if (/samantha|karen|moira|tessa|daniel|aria|jenny|libby|sonia|zira|ava|allison/i.test(name)) score += 2;
-      if (v.default) score += 1;
-      if (/compact|eloquence|espeak|albert|bad news|bells|boing|bubbles|cellos|deranged|good news|hysterical|junior|organ|trinoids|whisper|zarvox|wobble|jester/i.test(name)) score -= 6;
-      if (score > bestScore) {
-        bestScore = score;
-        best = v;
-      }
-    });
-    return best;
-  }
-
-  /* The reply as it should be read aloud: links become their label, portal
-   * paths and markdown marks go, arrows become "then". */
-  function speakable(text) {
-    var s = String(text || '');
-    s = s.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
-    s = s.replace(/(^|[\s(])\/[A-Za-z0-9._~\/-]+/g, '$1');
-    s = s.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1');
-    s = s.replace(/^\s*[-*]\s+/gm, '').replace(/^\s*\d+\.\s+/gm, '');
-    s = s.replace(/\s*(→|->)\s*/g, ', then ');
-    s = s.replace(/[•←]/g, ' ');
-    s = s.replace(/\(\s*\)/g, '');
-    s = s.replace(/\s+([.,;:!?])/g, '$1');
-    s = s.replace(/\s+/g, ' ').trim();
-    return s;
-  }
-
-  /* Chrome stops a long utterance mid-sentence after about fifteen seconds,
-   * so the text is read one short run of sentences at a time. */
-  function sentences(text) {
-    var MAX = 200;
-    var pieces = String(text || '').match(/[^.!?]+(?:[.!?]+["')\]]*|$)/g) || [];
-    var flat = [];
-    pieces.forEach(function (p) {
-      p = p.trim();
-      if (!p) return;
-      if (p.length <= MAX) {
-        flat.push(p);
-        return;
-      }
-      p.split(/,\s+/).forEach(function (part) {
-        part = part.trim();
-        while (part.length > MAX) {
-          var cut = part.lastIndexOf(' ', MAX);
-          if (cut < 40) cut = MAX;
-          flat.push(part.slice(0, cut).trim());
-          part = part.slice(cut).trim();
-        }
-        if (part) flat.push(part);
-      });
-    });
-    var out = [];
-    var buf = '';
-    flat.forEach(function (p) {
-      if (buf && (buf + ' ' + p).length > MAX) {
-        out.push(buf);
-        buf = p;
-      } else {
-        buf = buf ? buf + ' ' + p : p;
-      }
-    });
-    if (buf) out.push(buf);
-    return out;
-  }
-
-  function liveMarkup() {
-    return '<div class="tma-bespoke__live-stage">' +
-        '<div class="tma-bespoke__rep" data-bespoke-rep>' +
-          '<span class="tma-bespoke__orb-ring"></span>' +
-          '<span class="tma-bespoke__orb-ring"></span>' +
-          '<div class="tma-bespoke__orb" data-bespoke-orb>' +
-            '<img class="tma-bespoke__orb-mark" src="' + MARK + '" alt="" width="72" height="72">' +
-          '</div>' +
-          '<div class="tma-bespoke__rep-face" data-bespoke-face></div>' +
-        '</div>' +
-        '<div class="tma-bespoke__bars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>' +
-        '<p class="tma-bespoke__live-status" data-bespoke-live-status aria-live="polite"></p>' +
-        '<div class="tma-bespoke__live-caption tma-bespoke__bubble" data-bespoke-live-caption hidden></div>' +
-      '</div>' +
-      '<div class="tma-bespoke__live-controls">' +
-        '<button type="button" class="tma-bespoke__live-btn" data-bespoke-live-speaker aria-label="Mute the voice" title="Voice" aria-pressed="false"><img src="' + SPEAKER + '" alt=""></button>' +
-        '<button type="button" class="tma-bespoke__live-mic" data-bespoke-live-mic aria-label="Talk" title="Microphone" aria-pressed="false"><img src="' + MIC + '" alt=""></button>' +
-        '<button type="button" class="tma-bespoke__live-btn" data-bespoke-live-end aria-label="Back to chat" title="Back to chat"><img src="' + CLOSE + '" alt=""></button>' +
-      '</div>';
-  }
-
-  function liveState(ctx) {
-    if (!ctx.live) {
-      ctx.live = {
+  function dictationState(ctx) {
+    if (!ctx.dictation) {
+      ctx.dictation = {
         active: false,
-        mode: 'idle',
-        view: null,
-        rec: null,
         engine: 'browser',
+        rec: null,
         capture: null,
-        level: 0,
-        listening: false,
-        speaking: false,
-        speech: null,
-        utter: null,
-        micOff: false,
-        speakerOff: storeGet(LS_VOICE_OFF, '') === '1',
-        noSpeech: 0,
         meter: null,
-        rep: null,
-        repLoading: false,
-        repFailed: false
+        level: 0,
+        base: '',
+        committed: '',
+        interim: '',
+        placeholder: '',
+        restarts: 0,
+        busy: false
       };
     }
-    return ctx.live;
+    return ctx.dictation;
   }
 
-  function liveView(ctx) {
-    var live = liveState(ctx);
-    if (live.view) return live.view;
-    var el = document.createElement('div');
-    el.className = 'tma-bespoke__live';
-    el.setAttribute('data-bespoke-stage', '');
-    el.setAttribute('data-mode', 'idle');
-    el.hidden = true;
-    el.innerHTML = liveMarkup();
-    ctx.surfaceEl.appendChild(el);
-    live.view = el;
-    live.orbEl = el.querySelector('[data-bespoke-orb]');
-    live.repEl = el.querySelector('[data-bespoke-rep]');
-    live.faceEl = el.querySelector('[data-bespoke-face]');
-    live.statusEl = el.querySelector('[data-bespoke-live-status]');
-    live.captionEl = el.querySelector('[data-bespoke-live-caption]');
-    live.micBtn = el.querySelector('[data-bespoke-live-mic]');
-    live.speakerBtn = el.querySelector('[data-bespoke-live-speaker]');
-    live.micBtn.addEventListener('click', function () { toggleMic(ctx); });
-    live.speakerBtn.addEventListener('click', function () { toggleSpeaker(ctx); });
-    el.querySelector('[data-bespoke-live-end]').addEventListener('click', function () { closeLive(ctx); });
-    live.captionEl.addEventListener('click', onNavClick);
-    paintSpeaker(ctx);
-    paintMic(ctx);
-    return el;
+  function toggleDictation(ctx) {
+    var d = dictationState(ctx);
+    if (d.active) stopDictation(ctx);
+    else startDictation(ctx);
   }
 
-  function setLiveMode(ctx, mode, status) {
-    var live = liveState(ctx);
-    live.mode = mode;
-    if (live.rep) live.rep.setMode(mode);
-    if (live.view) {
-      live.view.setAttribute('data-mode', mode);
-      if (mode !== 'listening') live.view.style.setProperty('--level', '0');
-      if (live.statusEl && status !== undefined && status !== null) live.statusEl.textContent = status;
-    }
-    paintMic(ctx);
+  function startDictation(ctx) {
+    var d = dictationState(ctx);
+    if (d.active || !ctx.inputEl || ctx.busy || !dictationSupported()) return;
+    d.active = true;
+    d.engine = preferredEngine();
+    d.restarts = 0;
+    d.busy = false;
+    var current = String(ctx.inputEl.value || '');
+    d.base = current.trim() ? current.replace(/\s+$/, '') + ' ' : '';
+    d.committed = '';
+    d.interim = '';
+    d.placeholder = ctx.inputEl.getAttribute('placeholder') || '';
+    ctx.inputEl.setAttribute('placeholder', 'Listening…');
+    paintDictation(ctx);
+    // With a pointer, the box keeps focus so Enter sends what was said;
+    // on a touch screen that would raise the keyboard over the words.
+    try {
+      if (window.matchMedia && window.matchMedia('(hover: hover)').matches) ctx.inputEl.focus();
+    } catch (e) { /* no matchMedia */ }
+    dictationListen(ctx);
   }
 
-  function showCaption(ctx, who, text) {
-    var live = ctx.live;
-    if (!live || !live.captionEl) return;
-    text = String(text || '').trim();
-    live.captionEl.hidden = !text;
-    live.captionEl.className = 'tma-bespoke__live-caption tma-bespoke__bubble' + (who ? ' tma-bespoke__live-caption--' + who : '');
-    live.captionEl.innerHTML = who === 'ai' ? renderLite(text) : '<p>' + escapeHtml(text) + '</p>';
-    live.captionEl.scrollTop = 0;
-  }
-
-  function openLive(ctx) {
-    if (!ctx || !ctx.surfaceEl || !liveSupported()) return;
-    var live = liveState(ctx);
-    var view = liveView(ctx);
-    if (live.active) return;
-    live.active = true;
-    live.noSpeech = 0;
-    live.micOff = false;
-    live.engine = preferredEngine();
-    view.hidden = false;
-    ctx.surfaceEl.classList.add('is-live');
-    showCaption(ctx, '', '');
-    ensureRepresentative(ctx);
-    if (live.rep) live.rep.start();
-    startMeter(ctx);
-    try { window.speechSynthesis.getVoices(); } catch (e) { /* voices arrive later */ }
-    setLiveMode(ctx, 'idle', 'Say something. I’m listening.');
-    liveListen(ctx);
-    if (live.micBtn) live.micBtn.focus();
-  }
-
-  function closeLive(ctx) {
-    var live = ctx && ctx.live;
-    if (!live || !live.active) return;
-    live.active = false;
-    stopListening(ctx);
-    stopSpeaking(ctx);
+  /* Whatever was still tentative is kept: the reader tapped stop after
+   * saying it, not instead of it. */
+  function stopDictation(ctx) {
+    var d = ctx && ctx.dictation;
+    if (!d || !d.active) return;
+    d.active = false;
+    haltEar(ctx);
     stopMeter(ctx);
-    if (live.rep) live.rep.stop();
-    if (live.view) live.view.hidden = true;
-    if (ctx.surfaceEl) ctx.surfaceEl.classList.remove('is-live');
-    setLiveMode(ctx, 'idle', '');
-    showCaption(ctx, '', '');
-    if (ctx.logEl) ctx.logEl.scrollTop = ctx.logEl.scrollHeight;
-    if (ctx.inputEl) ctx.inputEl.focus();
+    if (d.interim && d.interim !== '…') d.committed += d.interim.replace(/\s+$/, '') + ' ';
+    d.interim = '';
+    renderDictation(ctx);
+    if (ctx.inputEl) ctx.inputEl.setAttribute('placeholder', d.placeholder || 'Ask about this portal');
+    paintDictation(ctx);
   }
 
-  /* ── The representative ────────────────────────────────────────
-   * A person's face in place of the mark: three.js and the avatar model
-   * arrive on first use, a few hundred KB and a few MB, and only where
-   * WebGL works. Until then, and wherever it cannot, the mark stays. The
-   * face does not speak; the voice does, and it is told each word. */
-  var repModulePromise = null;
-
-  function loadRepresentativeModule() {
-    if (repModulePromise) return repModulePromise;
-    var root = window.__TMA_SITE_ROOT || '';
-    repModulePromise = import(root + REP_MODULE).catch(function (err) {
-      repModulePromise = null;
-      throw err;
-    });
-    return repModulePromise;
+  function failDictation(ctx, message) {
+    stopDictation(ctx);
+    toast(message, true);
   }
 
-  function ensureRepresentative(ctx) {
-    var live = liveState(ctx);
-    if (live.rep || live.repLoading || live.repFailed || !live.faceEl) return;
-    live.repLoading = true;
-    var root = window.__TMA_SITE_ROOT || '';
-    loadRepresentativeModule().then(function (mod) {
-      if (!mod.supported()) throw new Error('no webgl');
-      return mod.mount(live.faceEl, { url: root + REP_MODEL });
-    }).then(function (rep) {
-      live.repLoading = false;
-      if (!live.view || !live.view.isConnected) {
-        rep.dispose();
-        return;
+  function renderDictation(ctx) {
+    var d = dictationState(ctx);
+    if (!ctx.inputEl) return;
+    ctx.inputEl.value = d.base + d.committed + d.interim;
+    resizeInput(ctx);
+    ctx.inputEl.scrollTop = ctx.inputEl.scrollHeight;
+  }
+
+  function paintDictation(ctx) {
+    var d = ctx.dictation;
+    if (!ctx.micBtn) return;
+    var on = !!(d && d.active);
+    ctx.micBtn.classList.toggle('is-listening', on);
+    ctx.micBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    ctx.micBtn.setAttribute('aria-label', on ? 'Stop dictating' : 'Dictate');
+    ctx.micBtn.setAttribute('title', on ? 'Stop' : 'Dictate');
+  }
+
+  function dictationListen(ctx) {
+    var d = dictationState(ctx);
+    if (!d.active) return;
+    if (d.engine === 'server') serverEar(ctx);
+    else browserEar(ctx);
+  }
+
+  function haltEar(ctx) {
+    var d = dictationState(ctx);
+    var rec = d.rec;
+    var capture = d.capture;
+    d.rec = null;
+    d.capture = null;
+    if (capture) {
+      if (capture.timer) clearInterval(capture.timer);
+      if (capture.rec) {
+        try {
+          capture.rec.ondataavailable = null;
+          capture.rec.onstop = null;
+          if (capture.rec.state !== 'inactive') capture.rec.stop();
+        } catch (e) { /* already stopped */ }
       }
-      live.rep = rep;
-      rep.setMode(live.mode);
-      if (live.repEl) live.repEl.classList.add('is-ready');
-      if (!live.active) rep.stop();
-    }).catch(function () {
-      live.repLoading = false;
-      live.repFailed = true;
-    });
+    }
+    if (rec) {
+      try {
+        rec.onresult = null;
+        rec.onerror = null;
+        rec.onend = null;
+        rec.abort();
+      } catch (e) { /* already stopped */ }
+    }
   }
 
-  /* The surface is going away: the face's WebGL context goes with it. */
-  function disposeLive(ctx) {
-    var live = ctx && ctx.live;
-    if (!live) return;
-    closeLive(ctx);
-    if (live.rep) {
-      live.rep.dispose();
-      live.rep = null;
-    }
-    if (live.view && live.view.parentNode) live.view.parentNode.removeChild(live.view);
-    live.view = null;
-    live.faceEl = null;
-    live.repEl = null;
-  }
-
-  function liveListen(ctx) {
-    var live = liveState(ctx);
-    if (!live.active || live.micOff || live.listening || ctx.busy) return;
-    if (live.engine === 'server') {
-      captureListen(ctx);
-      return;
-    }
+  /* The browser's ear: continuous, with the tentative words shown as
+   * they form. Chrome ends a session after a stretch of silence; it is
+   * started again until the reader stops. */
+  function browserEar(ctx) {
+    var d = dictationState(ctx);
     var Rec = recognitionClass();
     if (!Rec) {
-      live.engine = 'server';
-      captureListen(ctx);
+      d.engine = 'server';
+      serverEar(ctx);
       return;
     }
-    stopSpeaking(ctx);
     var rec;
     try {
       rec = new Rec();
     } catch (e) {
-      live.micOff = true;
-      setLiveMode(ctx, 'idle', 'Voice isn’t available in this browser.');
+      failDictation(ctx, 'Voice isn’t available in this browser.');
       return;
     }
-    rec.lang = liveLang();
+    rec.lang = dictationLang();
     rec.interimResults = true;
-    rec.continuous = false;
+    rec.continuous = true;
     rec.maxAlternatives = 1;
-    var heard = '';
-    var finalText = '';
-    live.rec = rec;
-    live.listening = true;
-    setLiveMode(ctx, 'listening', 'Listening…');
+    d.rec = rec;
+    var switched = false;
     rec.onresult = function (e) {
       var interim = '';
       for (var i = e.resultIndex || 0; i < e.results.length; i++) {
         var r = e.results[i];
-        var t = (r[0] && r[0].transcript) || '';
-        if (r.isFinal) finalText += t;
-        else interim += t;
+        var t = String((r[0] && r[0].transcript) || '');
+        if (r.isFinal) {
+          t = t.replace(/\s+/g, ' ').trim();
+          if (t) d.committed += t + ' ';
+        } else {
+          interim += t;
+        }
       }
-      heard = (finalText + ' ' + interim).replace(/\s+/g, ' ').trim();
-      showCaption(ctx, 'you', heard);
+      d.interim = interim.replace(/\s+/g, ' ').replace(/^\s+/, '');
+      d.restarts = 0;
+      renderDictation(ctx);
     };
     rec.onerror = function (e) {
       var code = (e && e.error) || '';
-      if (code === 'aborted') return;
-      if (code === 'no-speech') {
-        live.noSpeech++;
-        return;
-      }
+      if (code === 'aborted' || code === 'no-speech') return;
       if (code === 'network' || code === 'service-not-allowed') {
-        // No service behind the browser's ear: the server has one.
         if (recorderSupported() && configured) {
-          live.engine = 'server';
+          d.engine = 'server';
           storeSet(LS_VOICE_ENGINE, 'server');
+          switched = true;
           return;
         }
-        live.micOff = true;
-        setLiveMode(ctx, 'idle', 'Voice recognition isn’t available here.');
+        failDictation(ctx, 'Voice recognition isn’t available here.');
         return;
       }
-      live.micOff = true;
-      if (code === 'not-allowed') {
-        setLiveMode(ctx, 'idle', 'Microphone access is blocked. Allow it in your browser settings.');
-      } else if (code === 'audio-capture') {
-        setLiveMode(ctx, 'idle', 'No microphone was found.');
-      } else {
-        setLiveMode(ctx, 'idle', 'I couldn’t hear you. Tap the mic to try again.');
-      }
+      if (code === 'not-allowed') failDictation(ctx, 'Microphone access is blocked. Allow it in your browser settings.');
+      else if (code === 'audio-capture') failDictation(ctx, 'No microphone was found.');
+      else failDictation(ctx, 'I couldn’t hear you. Tap the mic to try again.');
     };
     rec.onend = function () {
-      if (live.rec !== rec) return;
-      live.rec = null;
-      live.listening = false;
-      if (!live.active) return;
-      var text = String(finalText || heard || '').replace(/\s+/g, ' ').trim();
-      if (text) {
-        live.noSpeech = 0;
-        liveHeard(ctx, text);
+      if (d.rec !== rec) return;
+      d.rec = null;
+      if (!d.active) return;
+      if (switched) {
+        serverEar(ctx);
         return;
       }
-      afterSilence(ctx);
+      if (d.restarts++ < 20) {
+        setTimeout(function () {
+          if (d.active && !d.rec) browserEar(ctx);
+        }, 120);
+        return;
+      }
+      stopDictation(ctx);
     };
     try {
       rec.start();
     } catch (e) {
-      live.rec = null;
-      live.listening = false;
-      live.micOff = true;
-      setLiveMode(ctx, 'idle', 'Voice isn’t available right now.');
+      d.rec = null;
+      failDictation(ctx, 'Voice isn’t available right now.');
     }
   }
 
-  /* A pass that heard nothing: try again, and after two of them rest the
-   * mic rather than listen to an empty room forever. Either ear. */
-  function afterSilence(ctx) {
-    var live = liveState(ctx);
-    if (!live.active) return;
-    if (live.micOff) {
-      paintMic(ctx);
-      return;
-    }
-    if (live.noSpeech >= 2) {
-      live.noSpeech = 0;
-      live.micOff = true;
-      setLiveMode(ctx, 'idle', 'I didn’t catch that. Tap the mic to talk.');
-      return;
-    }
-    setTimeout(function () { liveListen(ctx); }, 150);
-  }
-
-  /* The server ear: record until the reader has spoken and then gone quiet
-   * (the meter's level is the voice detector), send the clip, take the
-   * words back. Seven quiet seconds with no voice at all is a silent pass;
-   * thirty seconds is the longest clip. */
+  /* The server ear: record until the reader has spoken and then paused
+   * (the meter's level is the voice detector), send the phrase, put the
+   * words in the box, record the next. Eight quiet seconds with no voice
+   * is a silent pass; thirty seconds is the longest phrase. */
   var CAPTURE_VOICE = 0.1;
   var CAPTURE_QUIET_MS = 1100;
-  var CAPTURE_WAIT_MS = 7000;
+  var CAPTURE_WAIT_MS = 8000;
   var CAPTURE_MAX_MS = 30000;
 
-  function captureListen(ctx) {
-    var live = liveState(ctx);
+  function serverEar(ctx) {
+    var d = dictationState(ctx);
+    if (!d.active || d.capture || d.busy) return;
     if (!recorderSupported()) {
-      live.micOff = true;
-      setLiveMode(ctx, 'idle', 'Voice isn’t available in this browser.');
+      failDictation(ctx, 'Voice isn’t available in this browser.');
       return;
     }
-    stopSpeaking(ctx);
-    live.listening = true;
-    setLiveMode(ctx, 'listening', 'Listening…');
     var ticket = {};
-    live.capture = ticket;
+    d.capture = ticket;
     ensureMeter(ctx).then(function (meter) {
-      if (live.capture !== ticket) return;
-      if (!live.active || live.micOff || ctx.busy) {
-        live.capture = null;
-        live.listening = false;
-        paintMic(ctx);
+      if (d.capture !== ticket) return;
+      if (!d.active) {
+        d.capture = null;
         return;
       }
       if (!meter || !meter.stream) {
-        live.capture = null;
-        live.listening = false;
-        live.micOff = true;
-        setLiveMode(ctx, 'idle', 'Microphone access is blocked. Allow it in your browser settings.');
+        d.capture = null;
+        failDictation(ctx, 'Microphone access is blocked. Allow it in your browser settings.');
         return;
       }
       var mime = recorderMime();
@@ -1567,10 +1365,8 @@
       try {
         rec = mime ? new MediaRecorder(meter.stream, { mimeType: mime }) : new MediaRecorder(meter.stream);
       } catch (e) {
-        live.capture = null;
-        live.listening = false;
-        live.micOff = true;
-        setLiveMode(ctx, 'idle', 'Voice isn’t available in this browser.');
+        d.capture = null;
+        failDictation(ctx, 'Voice isn’t available in this browser.');
         return;
       }
       var chunks = [];
@@ -1583,24 +1379,23 @@
         if (e.data && e.data.size) chunks.push(e.data);
       };
       rec.onstop = function () {
-        if (live.capture !== ticket) return;
-        live.capture = null;
-        live.listening = false;
-        if (!live.active) return;
+        if (d.capture !== ticket) return;
+        d.capture = null;
+        if (!d.active) return;
         if (!spoke || !chunks.length) {
-          live.noSpeech++;
-          afterSilence(ctx);
+          if (d.restarts++ < 6) serverEar(ctx);
+          else failDictation(ctx, 'I didn’t catch that. Tap the mic to try again.');
           return;
         }
-        transcribe(ctx, new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' }));
+        transcribeInto(ctx, new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' }));
       };
       ticket.timer = setInterval(function () {
-        if (live.capture !== ticket) {
+        if (d.capture !== ticket) {
           clearInterval(ticket.timer);
           return;
         }
         var now = Date.now();
-        if ((live.level || 0) > CAPTURE_VOICE) {
+        if ((d.level || 0) > CAPTURE_VOICE) {
           voiced++;
           if (voiced >= 2) {
             spoke = true;
@@ -1621,47 +1416,50 @@
         rec.start(250);
       } catch (e) {
         clearInterval(ticket.timer);
-        live.capture = null;
-        live.listening = false;
-        live.micOff = true;
-        setLiveMode(ctx, 'idle', 'Voice isn’t available right now.');
+        d.capture = null;
+        failDictation(ctx, 'Voice isn’t available right now.');
       }
     });
   }
 
-  function transcribe(ctx, blob) {
-    var live = liveState(ctx);
-    setLiveMode(ctx, 'thinking', 'Thinking…');
+  /* The phrase comes back as words. A reader who tapped stop while it was
+   * on its way still said it, so it lands either way. */
+  function transcribeInto(ctx, blob) {
+    var d = dictationState(ctx);
+    d.busy = true;
+    d.interim = '…';
+    renderDictation(ctx);
     var form = new FormData();
     form.append('audio', blob, 'speech.' + recorderExt(blob.type));
-    form.append('language', liveLang().slice(0, 2).toLowerCase());
+    form.append('language', dictationLang().slice(0, 2).toLowerCase());
     apiForm('/portal/bespoke/transcribe', form).then(function (data) {
-      if (!live.active) return;
+      d.busy = false;
+      d.interim = '';
       var text = String((data && data.text) || '').replace(/\s+/g, ' ').trim();
-      if (!text) {
-        live.noSpeech++;
-        afterSilence(ctx);
-        return;
+      if (text) {
+        d.committed += text + ' ';
+        d.restarts = 0;
       }
-      live.noSpeech = 0;
-      liveHeard(ctx, text);
+      renderDictation(ctx);
+      if (d.active) serverEar(ctx);
     }).catch(function (err) {
-      if (!live.active) return;
-      live.micOff = true;
+      d.busy = false;
+      d.interim = '';
+      renderDictation(ctx);
       try { console.warn('Bespoke AI transcription failed', err && err.status, err && err.data ? err.data : err); } catch (e) { /* no console */ }
-      setLiveMode(ctx, 'idle', transcribeFailure(err));
+      failDictation(ctx, transcribeFailure(err));
     });
   }
 
-  /* What to say when a clip came back without words. Each server answer
-   * has its own line, since "couldn't hear you" hid a session that had
-   * expired, a clip the server would not take, and a provider that was
+  /* What to say when a phrase came back without words. Each server answer
+   * has its own line, since "couldn't hear you" once hid a session that
+   * had expired, a clip the server would not take, and a provider that was
    * down behind one sentence. */
   function transcribeFailure(err) {
     var status = err && err.status;
     if (!err || (err.notFound || status === 503)) return 'Voice isn’t available here.';
     if (status === 419 || status === 401) return 'Your session has expired. Reload and try again.';
-    if (status === 413) return 'That clip was too long. Try a shorter one.';
+    if (status === 413) return 'That was too long for one go. Try a shorter phrase.';
     if (status === 422) return 'The clip wasn’t accepted. Tap the mic to try again.';
     if (status === 429) return 'Too many tries at once. Wait a moment.';
     if (status === 502) return 'I couldn’t make out the words. Tap the mic to try again.';
@@ -1669,135 +1467,13 @@
     return 'I couldn’t hear you. Tap the mic to try again.';
   }
 
-  function stopListening(ctx) {
-    var live = liveState(ctx);
-    var rec = live.rec;
-    var capture = live.capture;
-    live.rec = null;
-    live.capture = null;
-    live.listening = false;
-    if (capture) {
-      if (capture.timer) clearInterval(capture.timer);
-      if (capture.rec) {
-        try {
-          capture.rec.ondataavailable = null;
-          capture.rec.onstop = null;
-          if (capture.rec.state !== 'inactive') capture.rec.stop();
-        } catch (e) { /* already stopped */ }
-      }
-    }
-    if (!rec) return;
-    try {
-      rec.onresult = null;
-      rec.onerror = null;
-      rec.onend = null;
-      rec.abort();
-    } catch (e) { /* already stopped */ }
-  }
-
-  function liveHeard(ctx, text) {
-    showCaption(ctx, 'you', text);
-    setLiveMode(ctx, 'thinking', 'Thinking…');
-    ask(ctx, text);
-  }
-
-  /* Called from ask() with every answer, spoken or typed; only a live
-   * session acts on it. */
-  function liveAnswer(ctx, text, data) {
-    var live = ctx && ctx.live;
-    if (!live || !live.active) return;
-    var spoken = speakable(text);
-    if (data && Array.isArray(data.actions) && data.actions.length) spoken += ' The draft is in the chat.';
-    showCaption(ctx, 'ai', text);
-    if (live.speakerOff || !spoken) {
-      setLiveMode(ctx, 'idle', '');
-      setTimeout(function () { liveListen(ctx); }, 800);
-      return;
-    }
-    liveSpeak(ctx, spoken);
-  }
-
-  function liveSpeak(ctx, text) {
-    var live = liveState(ctx);
-    var synth = window.speechSynthesis;
-    stopSpeaking(ctx);
-    var chunks = sentences(text);
-    if (!chunks.length) {
-      setLiveMode(ctx, 'idle', '');
-      setTimeout(function () { liveListen(ctx); }, 300);
-      return;
-    }
-    var lang = liveLang();
-    var voice = pickVoice(lang);
-    var token = {};
-    live.speech = token;
-    live.speaking = true;
-    setLiveMode(ctx, 'speaking', 'Speaking…');
-    var i = 0;
-    function next() {
-      if (live.speech !== token || !live.active) return;
-      if (i >= chunks.length) {
-        live.speaking = false;
-        live.speech = null;
-        live.utter = null;
-        if (live.rep) live.rep.speakEnd();
-        setLiveMode(ctx, 'idle', '');
-        setTimeout(function () { liveListen(ctx); }, 250);
-        return;
-      }
-      var text = chunks[i++];
-      var u = new SpeechSynthesisUtterance(text);
-      u.lang = lang;
-      if (voice) u.voice = voice;
-      u.rate = 1;
-      u.pitch = 1;
-      u.onstart = function () {
-        if (live.rep && live.speech === token) live.rep.speakStart(text);
-      };
-      u.onboundary = function (e) {
-        bump(ctx);
-        if (live.rep && live.speech === token && (!e || !e.name || e.name === 'word')) live.rep.speakBoundary((e && e.charIndex) || 0);
-      };
-      u.onend = next;
-      u.onerror = function (e) {
-        var code = (e && e.error) || '';
-        if (code === 'interrupted' || code === 'canceled') return;
-        next();
-      };
-      // Chrome drops the callbacks of an utterance nothing references.
-      live.utter = u;
-      synth.speak(u);
-    }
-    setTimeout(next, 30);
-  }
-
-  function stopSpeaking(ctx) {
-    var live = liveState(ctx);
-    live.speech = null;
-    live.speaking = false;
-    live.utter = null;
-    if (live.rep) live.rep.speakEnd();
-    try {
-      if (window.speechSynthesis) window.speechSynthesis.cancel();
-    } catch (e) { /* nothing was speaking */ }
-  }
-
-  /* A word boundary while speaking: a nudge to the mark. */
-  function bump(ctx) {
-    var live = ctx.live;
-    if (!live || !live.orbEl) return;
-    live.orbEl.classList.remove('is-bump');
-    void live.orbEl.offsetWidth;
-    live.orbEl.classList.add('is-bump');
-  }
-
-  /* The reader's own voice, as a level for the bars and the orb. Best
-   * effort: if the microphone stream is refused, recognition says so. */
+  /* The microphone stream and a level from it, for the server ear's voice
+   * detector. Best effort: a refused stream is reported by the caller. */
   function startMeter(ctx) {
-    var live = liveState(ctx);
-    if (live.meter) return live.meter.ready;
+    var d = dictationState(ctx);
+    if (d.meter) return d.meter.ready;
     var meter = { stream: null, audio: null, raf: 0, dead: false, ready: null };
-    live.meter = meter;
+    d.meter = meter;
     var AC = window.AudioContext || window.webkitAudioContext;
     if (!AC || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       meter.ready = Promise.resolve(meter);
@@ -1827,86 +1503,32 @@
         }
         var level = Math.min(1, Math.sqrt(sum / data.length) * 6);
         smooth = smooth * 0.7 + level * 0.3;
-        live.level = smooth;
-        if (live.rep) live.rep.setLevel(smooth);
-        if (live.view && live.mode === 'listening') live.view.style.setProperty('--level', smooth.toFixed(3));
+        d.level = smooth;
         meter.raf = requestAnimationFrame(tick);
       }
       tick();
       return meter;
     }).catch(function () {
-      // The browser ear reports its own permission errors; the server ear
-      // reads the missing stream.
       return meter;
     });
     return meter.ready;
   }
 
   function ensureMeter(ctx) {
-    var live = liveState(ctx);
-    return live.meter ? live.meter.ready : startMeter(ctx);
+    var d = dictationState(ctx);
+    return d.meter ? d.meter.ready : startMeter(ctx);
   }
 
   function stopMeter(ctx) {
-    var live = liveState(ctx);
-    var meter = live.meter;
-    live.level = 0;
+    var d = dictationState(ctx);
+    var meter = d.meter;
+    d.level = 0;
     if (!meter) return;
-    live.meter = null;
+    d.meter = null;
     meter.dead = true;
     if (meter.raf) cancelAnimationFrame(meter.raf);
     if (meter.stream) meter.stream.getTracks().forEach(function (t) { t.stop(); });
     if (meter.audio && meter.audio.close) meter.audio.close().catch(function () { /* already closed */ });
-    if (live.view) live.view.style.removeProperty('--level');
-  }
-
-  function toggleMic(ctx) {
-    var live = liveState(ctx);
-    if (!live.active) return;
-    if (live.listening) {
-      live.micOff = true;
-      stopListening(ctx);
-      setLiveMode(ctx, 'idle', 'Microphone off. Tap to talk.');
-      return;
-    }
-    if (live.mode === 'thinking') return;
-    live.micOff = false;
-    live.noSpeech = 0;
-    liveListen(ctx);
-  }
-
-  function paintMic(ctx) {
-    var live = ctx.live;
-    if (!live || !live.micBtn) return;
-    var off = !!live.micOff && !live.listening;
-    live.micBtn.classList.toggle('is-off', off);
-    live.micBtn.classList.toggle('is-listening', !!live.listening);
-    live.micBtn.setAttribute('aria-pressed', live.listening ? 'true' : 'false');
-    live.micBtn.setAttribute('aria-label', live.listening ? 'Stop listening' : (live.speaking ? 'Interrupt and talk' : 'Talk'));
-    var img = live.micBtn.querySelector('img');
-    if (img) img.src = off ? MIC_OFF : MIC;
-  }
-
-  function toggleSpeaker(ctx) {
-    var live = liveState(ctx);
-    live.speakerOff = !live.speakerOff;
-    storeSet(LS_VOICE_OFF, live.speakerOff ? '1' : '0');
-    paintSpeaker(ctx);
-    if (live.speakerOff && live.speaking) {
-      stopSpeaking(ctx);
-      setLiveMode(ctx, 'idle', '');
-      setTimeout(function () { liveListen(ctx); }, 200);
-    }
-  }
-
-  function paintSpeaker(ctx) {
-    var live = ctx.live;
-    if (!live || !live.speakerBtn) return;
-    live.speakerBtn.classList.toggle('is-off', !!live.speakerOff);
-    live.speakerBtn.setAttribute('aria-pressed', live.speakerOff ? 'true' : 'false');
-    live.speakerBtn.setAttribute('aria-label', live.speakerOff ? 'Unmute the voice' : 'Mute the voice');
-    var img = live.speakerBtn.querySelector('img');
-    if (img) img.src = live.speakerOff ? SPEAKER_OFF : SPEAKER;
   }
 
   function bindComposer(ctx) {
@@ -1923,10 +1545,14 @@
         ctx.fileEl.value = '';
       });
     }
-    if (ctx.voiceBtn) {
-      if (!liveSupported()) ctx.voiceBtn.hidden = true;
-      else ctx.voiceBtn.addEventListener('click', function () { openLive(ctx); });
+    if (ctx.micBtn) {
+      if (!dictationSupported()) ctx.micBtn.hidden = true;
+      else ctx.micBtn.addEventListener('click', function () { toggleDictation(ctx); });
     }
+    // A key in the box means the reader is typing; the ear steps back.
+    ctx.inputEl.addEventListener('input', function () {
+      if (ctx.dictation && ctx.dictation.active) stopDictation(ctx);
+    });
     ctx.inputEl.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -2015,7 +1641,7 @@
           '<button type="button" class="tma-bespoke__clip" data-bespoke-page-clip aria-label="Attach files"><img src="' + CLIP + '" alt=""></button>' +
           '<input type="file" data-bespoke-page-file multiple accept="' + ACCEPT + '" hidden>' +
           '<textarea class="tma-bespoke__input" data-bespoke-page-input rows="1" placeholder="Ask about this portal" aria-label="Message Bespoke AI Assistant"></textarea>' +
-          '<button type="button" class="tma-bespoke__voice" data-bespoke-page-voice aria-label="Talk live" title="Talk live"><img src="' + VOICE + '" alt=""></button>' +
+          '<button type="button" class="tma-bespoke__mic" data-bespoke-page-mic aria-label="Dictate" title="Dictate" aria-pressed="false"><img src="' + MIC + '" alt=""></button>' +
           '<button type="submit" class="tma-bespoke__send" data-bespoke-page-send disabled aria-label="Send"><img src="' + SEND + '" alt=""></button>' +
         '</form>' +
       '</section>' +
@@ -2163,7 +1789,7 @@
   function mountPage(root, opts) {
     if (!root || !enabled()) return;
     opts = opts || {};
-    if (page) disposeLive(page);
+    if (page) stopDictation(page);
     root.innerHTML = pageMarkup();
     var shell = root.querySelector('.tma-bespoke-page');
     var ctx = {
@@ -2180,8 +1806,7 @@
       attachEl: root.querySelector('[data-bespoke-page-attach]'),
       clipBtn: root.querySelector('[data-bespoke-page-clip]'),
       fileEl: root.querySelector('[data-bespoke-page-file]'),
-      voiceBtn: root.querySelector('[data-bespoke-page-voice]'),
-      surfaceEl: root.querySelector('.tma-bespoke-page__thread'),
+      micBtn: root.querySelector('[data-bespoke-page-mic]'),
       pending: [],
       titleEl: root.querySelector('[data-bespoke-page-title]'),
       messages: [],
@@ -2331,7 +1956,7 @@
           '<button type="button" class="tma-bespoke__clip" data-bespoke-clip aria-label="Attach files"><img src="' + CLIP + '" alt=""></button>' +
           '<input type="file" data-bespoke-file multiple accept="' + ACCEPT + '" hidden>' +
           '<textarea class="tma-bespoke__input" data-bespoke-input rows="1" placeholder="Ask about this portal" aria-label="Message Bespoke AI Assistant"></textarea>' +
-          '<button type="button" class="tma-bespoke__voice" data-bespoke-voice aria-label="Talk live" title="Talk live"><img src="' + VOICE + '" alt=""></button>' +
+          '<button type="button" class="tma-bespoke__mic" data-bespoke-mic aria-label="Dictate" title="Dictate" aria-pressed="false"><img src="' + MIC + '" alt=""></button>' +
           '<button type="submit" class="tma-bespoke__send" data-bespoke-send disabled aria-label="Send"><img src="' + SEND + '" alt=""></button>' +
         '</form>' +
       '</div>';
@@ -2436,7 +2061,7 @@
       }, 40);
       return;
     }
-    closeLive(widget);
+    stopDictation(widget);
     if (lastFocus && typeof lastFocus.focus === 'function') {
       lastFocus.focus();
     } else if (fab) {
@@ -2453,10 +2078,13 @@
   }
 
   function onKey(e) {
-    if (e.key === 'Escape' && page && page.live && page.live.active) {
+    // Escape while dictating stops the ear and nothing else.
+    var dictating = (open && widget && widget.dictation && widget.dictation.active) ? widget
+      : (page && page.dictation && page.dictation.active) ? page : null;
+    if (e.key === 'Escape' && dictating) {
       e.preventDefault();
       e.stopPropagation();
-      closeLive(page);
+      stopDictation(dictating);
       return;
     }
     if (e.key === 'Escape' && open) {
@@ -2493,8 +2121,8 @@
       window.dispatchEvent(new Event('tma:bespoke-route'));
     });
     window.addEventListener('tma:bespoke-route', function () {
-      // The page's live voice ends with the page; the launcher's rides along.
-      if (page && page.live && page.live.active && !isPagePath()) closeLive(page);
+      // The page's dictation ends with the page; the launcher's rides along.
+      if (page && page.dictation && page.dictation.active && !isPagePath()) stopDictation(page);
       if (open && widget) refreshSuggestions(widget);
       else refreshHello('');
     });
@@ -2524,8 +2152,7 @@
       attachEl: host.querySelector('[data-bespoke-attach]'),
       clipBtn: host.querySelector('[data-bespoke-clip]'),
       fileEl: host.querySelector('[data-bespoke-file]'),
-      voiceBtn: host.querySelector('[data-bespoke-voice]'),
-      surfaceEl: panel,
+      micBtn: host.querySelector('[data-bespoke-mic]'),
       pending: [],
       messages: [],
       conversationId: storeGet(LS_CONV, ''),
@@ -2564,7 +2191,7 @@
   }
 
   function destroy() {
-    disposeLive(widget);
+    stopDictation(widget);
     document.removeEventListener('keydown', onKey, true);
     document.removeEventListener('keydown', trap, true);
     if (host && host.parentNode) host.parentNode.removeChild(host);
@@ -2616,7 +2243,7 @@
     close: function () { setOpen(false); },
     toggle: toggle,
     mount: mountWidget,
-    // The launcher's live state, for the browser harness.
-    live: function () { return widget ? widget.live : null; }
+    // The launcher's dictation state, for the browser harness.
+    dictation: function () { return widget ? widget.dictation : null; }
   };
 })();
