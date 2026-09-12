@@ -117,8 +117,9 @@ class TrustedDevices
             name: self::COOKIE,
             value: $token,
             minutes: self::days() * 24 * 60,
+            path: '/',
             httpOnly: true,
-            secure: $request->isSecure(),
+            secure: $request->isSecure() || (bool) config('session.secure'),
             sameSite: 'lax',
         );
     }

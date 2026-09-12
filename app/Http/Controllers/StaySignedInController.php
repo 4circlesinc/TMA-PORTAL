@@ -41,7 +41,7 @@ class StaySignedInController extends Controller
         $data = $validator->validated();
 
         if ($data['stay'] === 'yes') {
-            StaySignedIn::applyRemember($request);
+            StaySignedIn::grant($request);
         }
 
         StaySignedIn::clearNeeded($request);

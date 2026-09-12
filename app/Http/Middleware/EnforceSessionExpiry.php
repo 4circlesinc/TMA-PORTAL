@@ -9,9 +9,9 @@ use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Absolute sign-in lifetime. Idle timeout (SESSION_LIFETIME) still applies;
- * this is the "everyone signs in again every N days" cap, including people
- * who chose Stay signed in.
+ * Absolute sign-in lifetime. Idle timeout follows the same N-day policy
+ * (session.lifetime is set from it at boot); this is the "everyone signs
+ * in again every N days" cap, including people who chose Stay signed in.
  *
  * Accounts that never got a stamp (tests using actingAs, sessions from before
  * this shipped) are left alone rather than kicked out on deploy — unless a

@@ -494,7 +494,8 @@ class SocialAuthController extends Controller
         // unless this is a browser the user already signed in on. A new
         // browser without an authenticator app confirms by email instead.
         // Remember-me is applied in StaySignedIn::afterAuthenticated when
-        // the browser already chose to stay signed in (or on the prompt).
+        // this browser is already trusted, already chose to stay signed in,
+        // or is about to answer the prompt.
         if (LoginChallenge::needsAuthenticator($user, $request)) {
             $request->session()->put([
                 'login.id' => $user->getKey(),

@@ -80,4 +80,12 @@ class SessionExpiryTest extends TestCase
 
         $this->actingAs($user)->getJson('/me')->assertOk();
     }
+
+    public function test_idle_lifetime_follows_the_sign_in_policy(): void
+    {
+        $this->assertSame(
+            \App\Support\SecurityPolicies::sessionDays() * 24 * 60,
+            (int) config('session.lifetime')
+        );
+    }
 }

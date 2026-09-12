@@ -6,6 +6,7 @@ use App\Mail\Transport\MicrosoftGraphTransport;
 use App\Support\Notifications\FcmClient;
 use App\Support\Notifications\PushTransport;
 use App\Support\Realtime;
+use App\Support\SecurityPolicies;
 use App\Support\StaySignedIn;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Console\Migrations\RollbackCommand;
@@ -46,6 +47,14 @@ class AppServiceProvider extends ServiceProvider
          */
         DB::prohibitDestructiveCommands(! $this->app->runningUnitTests());
         RollbackCommand::prohibit(false);
+
+        /*
+         * Idle lifetime follows the same "sign-in expires after N days"
+         * policy as stay-signed-in, trusted devices, and the absolute cap.
+         * A leftover SESSION_LIFETIME=120 in .env used to log everyone out
+         * overnight even after they ticked "trust this browser".
+         */
+        config(['session.lifetime' => SecurityPolicies::sessionDays() * 24 * 60]);
 
         /*
          * The 'database' session driver, minus the UPDATE nothing needed:

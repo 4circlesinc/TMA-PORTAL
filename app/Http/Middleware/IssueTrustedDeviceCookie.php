@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\StaySignedIn;
 use App\Support\TrustedDevices;
 use Closure;
 use Illuminate\Http\Request;
@@ -10,9 +11,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * After a successful sign-in, remember this browser so the next visit from
- * it skips the email / authenticator challenge. Fortify owns the password
- * and authenticator controllers, so the cookie is attached here. A public
- * computer can opt out from the challenge screens.
+ * it skips the email / authenticator challenge and stays signed in. Fortify
+ * owns the password and authenticator controllers, so the cookie is attached
+ * here. A public computer opts out from the challenge screens or by answering
+ * "Not this time" on Stay signed in.
  */
 class IssueTrustedDeviceCookie
 {
@@ -33,10 +35,19 @@ class IssueTrustedDeviceCookie
             return $request->isMethod('POST') && $request->boolean('trust_device');
         }
 
-        if ($request->isMethod('POST') && $request->routeIs('login.store')) {
-            return true;
+        if ($request->routeIs('stay-signed-in.store')) {
+            return $request->isMethod('POST') && $request->input('stay') === 'yes';
         }
 
-        return $request->routeIs('social.callback');
+        if (! $request->isMethod('POST') && ! $request->routeIs('social.callback')) {
+            return false;
+        }
+
+        if (! $request->routeIs('login.store', 'social.callback')) {
+            return false;
+        }
+
+        return StaySignedIn::wantsRemember($request)
+            || (string) $request->cookie(TrustedDevices::COOKIE) !== '';
     }
 }

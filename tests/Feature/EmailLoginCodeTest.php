@@ -172,6 +172,63 @@ class EmailLoginCodeTest extends TestCase
         $this->assertSame(1, $user->fresh()->trustedDevices()->count());
     }
 
+    public function test_trusting_the_browser_stays_signed_in_without_another_prompt(): void
+    {
+        $user = $this->user();
+        $this->priorLogin($user);
+
+        Mail::fake();
+
+        $this->post('/auth/login', [
+            'email' => $user->email,
+            'password' => 'password',
+        ])->assertRedirect(route('login-code.show'));
+
+        $code = null;
+        Mail::assertSent(Postcard::class, function (Postcard $mail) use (&$code) {
+            $code = $mail->payload['code'] ?? null;
+
+            return is_string($code);
+        });
+
+        $response = $this->post(route('login-code.store'), [
+            'code' => $code,
+            'trust_device' => '1',
+        ]);
+
+        $response->assertRedirect('/')
+            ->assertCookie(StaySignedIn::COOKIE, 'yes');
+
+        $this->assertAuthenticatedAs($user->fresh());
+        $this->assertNotNull($response->getCookie(TrustedDevices::COOKIE));
+        $this->assertNotNull($response->getCookie(Auth::guard('web')->getRecallerName()));
+        $this->assertSame(1, $user->fresh()->trustedDevices()->count());
+    }
+
+    public function test_skipping_trust_still_asks_whether_to_stay_signed_in(): void
+    {
+        $user = $this->user();
+        $this->priorLogin($user);
+
+        Mail::fake();
+
+        $this->post('/auth/login', [
+            'email' => $user->email,
+            'password' => 'password',
+        ]);
+
+        $code = null;
+        Mail::assertSent(Postcard::class, function (Postcard $mail) use (&$code) {
+            $code = $mail->payload['code'] ?? null;
+
+            return is_string($code);
+        });
+
+        $this->post(route('login-code.store'), ['code' => $code])
+            ->assertRedirect(route('stay-signed-in.show'))
+            ->assertCookieMissing(StaySignedIn::COOKIE);
+    }
+
     public function test_a_wrong_code_is_rejected(): void
     {
         $user = $this->user();

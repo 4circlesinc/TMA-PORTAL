@@ -9,12 +9,14 @@ use Illuminate\Support\Facades\Cookie;
 use Symfony\Component\HttpFoundation\Cookie as SymfonyCookie;
 
 /**
- * Post-login "Stay signed in?" prompt, separate from TrustedDevices (2FA skip).
+ * Post-login "Stay signed in?" prompt, paired with TrustedDevices (code skip).
  *
  * After Google, Microsoft, or email sign-in, browsers that have not answered
  * yet are asked whether they trust this device to keep them signed in.
- * Choosing yes issues Laravel's remember cookie; choosing no leaves the
- * normal SESSION_LIFETIME session alone. The answer is stored in a cookie
+ * Choosing yes — or ticking "Trust this browser" on a code screen — issues
+ * Laravel's remember cookie and a trusted-device cookie so the next N days
+ * skip both a fresh password prompt (idle) and a second-factor code.
+ * Choosing no leaves idle expiry alone. The answer is stored in a cookie
  * so we don't re-prompt on every visit.
  */
 class StaySignedIn
@@ -86,12 +88,37 @@ class StaySignedIn
     }
 
     /**
-     * After login: show the trust prompt when unanswered, otherwise re-apply
-     * remember-me when this browser already said yes (so later logins stay
-     * durable, the preference cookie alone does not keep you signed in).
+     * Trust this browser: stay signed in and skip the extra prompt.
+     */
+    public static function grant(Request $request): void
+    {
+        self::applyRemember($request);
+        self::clearNeeded($request);
+
+        foreach (self::answerCookies($request, 'yes') as $cookie) {
+            Cookie::queue($cookie);
+        }
+    }
+
+    /**
+     * After login: a trusted browser (existing cookie or the code-screen
+     * checkbox) stays signed in and is not asked again. Otherwise show the
+     * prompt when unanswered, and re-apply remember-me when this browser
+     * already said yes (the preference cookie alone does not keep you in).
      */
     public static function afterAuthenticated(Request $request): ?RedirectResponse
     {
+        $user = $request->user();
+
+        if (
+            $request->boolean('trust_device')
+            || ($user && TrustedDevices::trusts($user, $request))
+        ) {
+            self::grant($request);
+
+            return null;
+        }
+
         if (self::shouldAsk($request)) {
             self::markNeeded($request);
 
@@ -111,13 +138,14 @@ class StaySignedIn
     public static function answerCookies(Request $request, string $answer): array
     {
         $minutes = self::minutes();
-        $secure = $request->isSecure();
+        $secure = $request->isSecure() || (bool) config('session.secure');
 
         return [
             Cookie::make(
                 name: self::COOKIE,
                 value: $answer,
                 minutes: $minutes,
+                path: '/',
                 httpOnly: true,
                 secure: $secure,
                 sameSite: 'lax',

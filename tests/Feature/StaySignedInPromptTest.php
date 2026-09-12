@@ -60,6 +60,22 @@ class StaySignedInPromptTest extends TestCase
             ->assertCookie(StaySignedIn::COOKIE, 'yes');
     }
 
+    public function test_answering_yes_trusts_the_browser_and_stays_signed_in(): void
+    {
+        $user = $this->user();
+
+        $response = $this->actingAs($user)
+            ->withSession([StaySignedIn::SESSION_KEY => true])
+            ->post('/auth/stay-signed-in', ['stay' => 'yes']);
+
+        $response->assertRedirect('/')
+            ->assertCookie(StaySignedIn::COOKIE, 'yes');
+
+        $this->assertNotNull($response->getCookie(\App\Support\TrustedDevices::COOKIE));
+        $this->assertSame(1, $user->fresh()->trustedDevices()->count());
+        $this->assertNotNull($response->getCookie(auth()->guard('web')->getRecallerName()));
+    }
+
     public function test_answering_no_releases_it_too(): void
     {
         $this->actingAs($this->user())
