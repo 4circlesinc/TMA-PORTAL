@@ -41,7 +41,9 @@ try { writeFileSync(LOG, ''); } catch (e) { /* no log yet */ }
 // makes every recognition start fail the way Chromium does where no Google
 // speech service backs the API (the desktop shell, Brave).
 const fakeSpeech = ({ mode }) => {
-  const fake = { queue: [], starts: 0, active: false, spoken: [], cancels: 0, lastLang: '', mode };
+  const fake = { queue: [], starts: 0, active: false, spoken: [], cancels: 0, lastLang: '', mode, log: [], hold: mode === 'ok' };
+  const T0 = Date.now();
+  fake.note = (what) => { fake.log.push(((Date.now() - T0) / 1000).toFixed(2) + ' ' + what); };
   window.__fakeSpeech = fake;
   class FakeRecognition {
     constructor() { this.lang = ''; this.interimResults = false; this.continuous = false; }
@@ -50,6 +52,8 @@ const fakeSpeech = ({ mode }) => {
       fake.active = true;
       fake.lastLang = this.lang;
       const self = this;
+      const text = fake.mode === 'network' ? null : fake.queue.shift();
+      fake.note('start#' + fake.starts + (text ? ' text=' + JSON.stringify(text) : ' silent'));
       if (fake.mode === 'network') {
         setTimeout(() => {
           fake.active = false;
@@ -58,11 +62,14 @@ const fakeSpeech = ({ mode }) => {
         }, 60);
         return;
       }
-      const text = fake.queue.shift();
-      // A real browser waits several seconds of silence before no-speech.
+      // A real browser waits several seconds of silence before no-speech;
+      // software WebGL makes the page slow, so the pass must outlast a
+      // few round trips of the test.
+      if (!text && fake.hold) return; // held open until the test says otherwise
       setTimeout(() => {
         if (!fake.active || self._aborted) return;
         if (!text) {
+          fake.note('no-speech#' + fake.starts);
           self.onerror && self.onerror({ error: 'no-speech' });
           fake.active = false;
           self.onend && self.onend();
@@ -76,9 +83,9 @@ const fakeSpeech = ({ mode }) => {
           fake.active = false;
           self.onend && self.onend();
         }, 120);
-      }, text ? 120 : 1500);
+      }, text ? 120 : 3000);
     }
-    abort() { this._aborted = true; fake.active = false; }
+    abort() { fake.note('abort'); this._aborted = true; fake.active = false; }
     stop() { this.abort(); }
   }
   window.SpeechRecognition = FakeRecognition;
@@ -95,13 +102,18 @@ const fakeSpeech = ({ mode }) => {
       fake.spoken.push(u.text);
       current = u;
       synth.speaking = true;
-      setTimeout(() => { if (current === u) u.onboundary && u.onboundary({ name: 'word' }); }, 30);
+      const words = [...String(u.text).matchAll(/\S+/g)];
+      const per = 90;
+      setTimeout(() => { if (current === u) u.onstart && u.onstart(); }, 10);
+      words.forEach((m, i) => {
+        setTimeout(() => { if (current === u) u.onboundary && u.onboundary({ name: 'word', charIndex: m.index, charLength: m[0].length }); }, 20 + i * per);
+      });
       setTimeout(() => {
         if (current !== u) return;
         current = null;
         synth.speaking = false;
         u.onend && u.onend();
-      }, 160);
+      }, 40 + Math.max(1, words.length) * per);
     },
     cancel() {
       fake.cancels++;
@@ -133,6 +145,7 @@ async function onFailure(err) {
   if (errors.length) { console.log('page errors:'); errors.forEach((e) => console.log('  ' + e)); }
   try {
     console.log('url at failure:', page.url());
+    console.log('trace:', await page.evaluate(() => JSON.stringify((window.__fakeSpeech.log || []).slice(-30))));
     console.log('state:', await page.evaluate(() => JSON.stringify({
       fake: window.__fakeSpeech,
       mode: (document.querySelector('[data-bespoke-stage]') || {}).getAttribute ? document.querySelector('[data-bespoke-stage]').getAttribute('data-mode') : null,
@@ -218,6 +231,18 @@ await signIn(page);
 await stubModel(page);
 
 const mode = () => page.getAttribute('.tma-bespoke [data-bespoke-stage]', 'data-mode');
+// A fresh listening pass that starts after the queue is filled: the fake
+// takes its text at start(), so a pass already running would miss it.
+async function relisten() {
+  const mic = '.tma-bespoke [data-bespoke-live-mic]';
+  const before = await page.evaluate(() => window.__fakeSpeech.starts);
+  if (!(await page.evaluate(() => document.querySelector('.tma-bespoke [data-bespoke-live-mic]').classList.contains('is-off')))) {
+    await page.click(mic);
+    await waitMode('idle', 4000);
+  }
+  await page.click(mic);
+  await page.waitForFunction((n) => window.__fakeSpeech.starts > n, before, { timeout: 4000 });
+}
 const waitMode = (want, timeout = 6000) => page.waitForFunction(
   (w) => { const el = document.querySelector('.tma-bespoke [data-bespoke-stage]'); return !!el && el.getAttribute('data-mode') === w; },
   want, { timeout }
@@ -249,21 +274,49 @@ const micStyle = await page.evaluate(() => {
 check(micStyle.image === 'linear-gradient' && micStyle.filter === 'none', `the listening mic wears the wash with a dark glyph (${JSON.stringify(micStyle)})`);
 await page.screenshot({ path: 'tests/Browser/bespoke-live.png' });
 
+// ── the representative ───────────────────────────────────────────────────
+// three.js and the model arrive on demand; software WebGL in headless
+// Chromium is slow, so the wait is generous.
+await page.waitForSelector('.tma-bespoke [data-bespoke-rep].is-ready', { timeout: 60000 });
+check(await page.evaluate(() => !!document.querySelector('.tma-bespoke [data-bespoke-face] canvas')), 'the face renders into the stage');
+const repState = await page.evaluate(() => window.TMABespoke.live().rep.debug());
+check(repState.ready && repState.running && repState.mode === 'listening', `the face is ready and follows the mode (${JSON.stringify({ ready: repState.ready, running: repState.running, mode: repState.mode })})`);
+check(await page.evaluate(() => getComputedStyle(document.querySelector('.tma-bespoke [data-bespoke-orb]')).opacity === '0'), 'the mark steps aside for the face');
+await page.waitForTimeout(600);
+await page.screenshot({ path: 'tests/Browser/bespoke-live-face.png' });
+
 // ── a spoken question, an answered reply ─────────────────────────────────
 scripted = { reply: 'Open **All Files** from [File Library](/folders/all). Then choose a folder → Upload.', actions: [], choices: [] };
 const before = await page.evaluate(() => window.__fakeSpeech.spoken.length);
 await page.evaluate(() => { window.__fakeSpeech.queue.push('where is the file library'); });
-// The current pass hears silence, ends, and the next start takes the queued text.
-await waitMode('thinking', 8000);
-check(await page.isVisible('.tma-bespoke [data-bespoke-live-caption]'), 'the transcript is captioned while it thinks');
-await waitMode('speaking', 8000);
+await relisten();
+// The turn is quick with a stubbed model and a fake voice; wait on what
+// lasts — the voice having been asked to read — not on a passing mode.
+await page.waitForFunction((n) => window.__fakeSpeech.spoken.length > n, before, { timeout: 15000 });
+// While the voice reads, the mouth shapes follow the words.
+const mouth = await page.evaluate(() => new Promise((resolve) => {
+  const seen = {};
+  const start = Date.now();
+  (function poll() {
+    const d = window.TMABespoke.live().rep.debug();
+    for (const k of Object.keys(d.shapes)) if (k.indexOf('viseme_') === 0 && d.shapes[k] > 0.1) seen[k] = Math.max(seen[k] || 0, d.shapes[k]);
+    const over = Date.now() - start;
+    if ((d.mode !== 'speaking' && over > 500) || over > 8000) return resolve({ seen, speaking: d.speaking });
+    setTimeout(poll, 30);
+  })();
+}));
+check(Object.keys(mouth.seen).length >= 3, `the mouth moves through several shapes while speaking (${Object.keys(mouth.seen).join(', ')})`);
+await page.screenshot({ path: 'tests/Browser/bespoke-live-speaking.png' });
 const lastUser = lastChatBody && lastChatBody.messages.filter((m) => m.role === 'user').pop();
 check(lastUser && lastUser.content === 'where is the file library', 'the transcript goes through the chat endpoint as the reader\'s message');
 check(lastChatBody && lastChatBody.clientContext && lastChatBody.clientContext.path === '/', 'the page context rides along as it does when typing');
 const caption = await page.textContent('.tma-bespoke [data-bespoke-live-caption]');
 check(caption.includes('Open All Files from File Library'), 'the reply is captioned');
 check(await page.evaluate(() => !!document.querySelector('.tma-bespoke [data-bespoke-live-caption] a[data-bespoke-nav="/folders/all"]')), 'links in the caption stay links');
-await waitMode('listening', 8000);
+await waitMode('listening', 12000);
+await page.waitForTimeout(400);
+const mouthAfter = await page.evaluate(() => window.TMABespoke.live().rep.debug());
+check(!mouthAfter.speaking && !Object.keys(mouthAfter.shapes).some((k) => k.indexOf('viseme_') === 0), 'the mouth closes when the voice stops');
 const spoken = await page.evaluate(() => window.__fakeSpeech.spoken);
 check(spoken.length === before + 1 && spoken[spoken.length - 1] === 'Open All Files from File Library. Then choose a folder, then Upload.', `the reply is read without its markdown (${JSON.stringify(spoken.slice(-1)[0])})`);
 check(await page.evaluate(() => window.__fakeSpeech.starts >= 2), 'it listens again after speaking');
@@ -274,8 +327,9 @@ check((await page.getAttribute('.tma-bespoke [data-bespoke-live-speaker]', 'aria
 scripted = { reply: 'Quiet answer.', actions: [], choices: [] };
 const spokenBefore = await page.evaluate(() => window.__fakeSpeech.spoken.length);
 await page.evaluate(() => { window.__fakeSpeech.queue.push('say something quietly'); });
-await waitMode('thinking', 8000);
-await waitMode('listening', 8000);
+await relisten();
+await page.waitForFunction(() => /Quiet answer\./.test(document.querySelector('.tma-bespoke [data-bespoke-live-caption]').textContent), null, { timeout: 15000 });
+await waitMode('listening', 12000);
 check((await page.evaluate(() => window.__fakeSpeech.spoken.length)) === spokenBefore, 'a muted voice reads nothing aloud');
 check((await page.textContent('.tma-bespoke [data-bespoke-live-caption]')).includes('Quiet answer.'), 'the reply is still captioned');
 await page.click('.tma-bespoke [data-bespoke-live-speaker]');
@@ -304,6 +358,19 @@ await waitMode('listening');
 await page.keyboard.press('Escape');
 await page.waitForFunction(() => !document.querySelector('.tma-bespoke').classList.contains('is-open'), null, { timeout: 4000 });
 check(await page.evaluate(() => window.__fakeSpeech.active === false && document.querySelector('.tma-bespoke [data-bespoke-stage]').hidden), 'closing the panel ends the live session');
+
+// With the hold released, two silent passes rest the mic rather than
+// listen to an empty room forever.
+await page.evaluate(() => { window.__fakeSpeech.hold = false; });
+await page.click('[data-bespoke-fab]');
+await page.waitForSelector('.tma-bespoke.is-open [data-bespoke-input]', { timeout: 8000 });
+await page.click('[data-bespoke-voice]');
+await waitMode('listening');
+await page.waitForFunction(() => /didn’t catch that/.test(document.querySelector('.tma-bespoke [data-bespoke-live-status]').textContent), null, { timeout: 15000 });
+check(await page.evaluate(() => document.querySelector('.tma-bespoke [data-bespoke-live-mic]').classList.contains('is-off')), 'two silent passes rest the mic');
+await page.evaluate(() => { window.__fakeSpeech.hold = true; });
+await page.keyboard.press('Escape');
+await page.waitForFunction(() => !document.querySelector('.tma-bespoke').classList.contains('is-open'), null, { timeout: 4000 });
 
 // ── the full page ────────────────────────────────────────────────────────
 await page.click('.tma-dash__sidebar [data-nav="bespoke"]');

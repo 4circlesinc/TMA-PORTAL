@@ -33,6 +33,8 @@
   var SPEAKER_OFF = 'images/icons/phosphor/SpeakerSlash.svg';
   var LS_VOICE_OFF = 'tma.bespoke.voiceOff';
   var LS_VOICE_ENGINE = 'tma.bespoke.voiceEngine';
+  var REP_MODULE = '/js/vendor/bespoke-representative.mjs?v=1';
+  var REP_MODEL = '/models/bespoke-representative.glb?v=1';
   var ICON_PDF = 'images/icons/phosphor/FilePdf.svg';
   var ICON_IMAGE = 'images/icons/phosphor/Image.svg';
   var ICON_FILE = 'images/icons/phosphor/File.svg';
@@ -1227,10 +1229,13 @@
 
   function liveMarkup() {
     return '<div class="tma-bespoke__live-stage">' +
-        '<div class="tma-bespoke__orb" data-bespoke-orb>' +
+        '<div class="tma-bespoke__rep" data-bespoke-rep>' +
           '<span class="tma-bespoke__orb-ring"></span>' +
           '<span class="tma-bespoke__orb-ring"></span>' +
-          '<img class="tma-bespoke__orb-mark" src="' + MARK + '" alt="" width="72" height="72">' +
+          '<div class="tma-bespoke__orb" data-bespoke-orb>' +
+            '<img class="tma-bespoke__orb-mark" src="' + MARK + '" alt="" width="72" height="72">' +
+          '</div>' +
+          '<div class="tma-bespoke__rep-face" data-bespoke-face></div>' +
         '</div>' +
         '<div class="tma-bespoke__bars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>' +
         '<p class="tma-bespoke__live-status" data-bespoke-live-status aria-live="polite"></p>' +
@@ -1260,7 +1265,10 @@
         micOff: false,
         speakerOff: storeGet(LS_VOICE_OFF, '') === '1',
         noSpeech: 0,
-        meter: null
+        meter: null,
+        rep: null,
+        repLoading: false,
+        repFailed: false
       };
     }
     return ctx.live;
@@ -1278,6 +1286,8 @@
     ctx.surfaceEl.appendChild(el);
     live.view = el;
     live.orbEl = el.querySelector('[data-bespoke-orb]');
+    live.repEl = el.querySelector('[data-bespoke-rep]');
+    live.faceEl = el.querySelector('[data-bespoke-face]');
     live.statusEl = el.querySelector('[data-bespoke-live-status]');
     live.captionEl = el.querySelector('[data-bespoke-live-caption]');
     live.micBtn = el.querySelector('[data-bespoke-live-mic]');
@@ -1294,6 +1304,7 @@
   function setLiveMode(ctx, mode, status) {
     var live = liveState(ctx);
     live.mode = mode;
+    if (live.rep) live.rep.setMode(mode);
     if (live.view) {
       live.view.setAttribute('data-mode', mode);
       if (mode !== 'listening') live.view.style.setProperty('--level', '0');
@@ -1324,6 +1335,8 @@
     view.hidden = false;
     ctx.surfaceEl.classList.add('is-live');
     showCaption(ctx, '', '');
+    ensureRepresentative(ctx);
+    if (live.rep) live.rep.start();
     startMeter(ctx);
     try { window.speechSynthesis.getVoices(); } catch (e) { /* voices arrive later */ }
     setLiveMode(ctx, 'idle', 'Say something. I’m listening.');
@@ -1338,12 +1351,69 @@
     stopListening(ctx);
     stopSpeaking(ctx);
     stopMeter(ctx);
+    if (live.rep) live.rep.stop();
     if (live.view) live.view.hidden = true;
     if (ctx.surfaceEl) ctx.surfaceEl.classList.remove('is-live');
     setLiveMode(ctx, 'idle', '');
     showCaption(ctx, '', '');
     if (ctx.logEl) ctx.logEl.scrollTop = ctx.logEl.scrollHeight;
     if (ctx.inputEl) ctx.inputEl.focus();
+  }
+
+  /* ── The representative ────────────────────────────────────────
+   * A person's face in place of the mark: three.js and the avatar model
+   * arrive on first use, a few hundred KB and a few MB, and only where
+   * WebGL works. Until then, and wherever it cannot, the mark stays. The
+   * face does not speak; the voice does, and it is told each word. */
+  var repModulePromise = null;
+
+  function loadRepresentativeModule() {
+    if (repModulePromise) return repModulePromise;
+    var root = window.__TMA_SITE_ROOT || '';
+    repModulePromise = import(root + REP_MODULE).catch(function (err) {
+      repModulePromise = null;
+      throw err;
+    });
+    return repModulePromise;
+  }
+
+  function ensureRepresentative(ctx) {
+    var live = liveState(ctx);
+    if (live.rep || live.repLoading || live.repFailed || !live.faceEl) return;
+    live.repLoading = true;
+    var root = window.__TMA_SITE_ROOT || '';
+    loadRepresentativeModule().then(function (mod) {
+      if (!mod.supported()) throw new Error('no webgl');
+      return mod.mount(live.faceEl, { url: root + REP_MODEL });
+    }).then(function (rep) {
+      live.repLoading = false;
+      if (!live.view || !live.view.isConnected) {
+        rep.dispose();
+        return;
+      }
+      live.rep = rep;
+      rep.setMode(live.mode);
+      if (live.repEl) live.repEl.classList.add('is-ready');
+      if (!live.active) rep.stop();
+    }).catch(function () {
+      live.repLoading = false;
+      live.repFailed = true;
+    });
+  }
+
+  /* The surface is going away: the face's WebGL context goes with it. */
+  function disposeLive(ctx) {
+    var live = ctx && ctx.live;
+    if (!live) return;
+    closeLive(ctx);
+    if (live.rep) {
+      live.rep.dispose();
+      live.rep = null;
+    }
+    if (live.view && live.view.parentNode) live.view.parentNode.removeChild(live.view);
+    live.view = null;
+    live.faceEl = null;
+    live.repEl = null;
   }
 
   function liveListen(ctx) {
@@ -1654,16 +1724,24 @@
         live.speaking = false;
         live.speech = null;
         live.utter = null;
+        if (live.rep) live.rep.speakEnd();
         setLiveMode(ctx, 'idle', '');
         setTimeout(function () { liveListen(ctx); }, 250);
         return;
       }
-      var u = new SpeechSynthesisUtterance(chunks[i++]);
+      var text = chunks[i++];
+      var u = new SpeechSynthesisUtterance(text);
       u.lang = lang;
       if (voice) u.voice = voice;
       u.rate = 1;
       u.pitch = 1;
-      u.onboundary = function () { bump(ctx); };
+      u.onstart = function () {
+        if (live.rep && live.speech === token) live.rep.speakStart(text);
+      };
+      u.onboundary = function (e) {
+        bump(ctx);
+        if (live.rep && live.speech === token && (!e || !e.name || e.name === 'word')) live.rep.speakBoundary((e && e.charIndex) || 0);
+      };
       u.onend = next;
       u.onerror = function (e) {
         var code = (e && e.error) || '';
@@ -1682,6 +1760,7 @@
     live.speech = null;
     live.speaking = false;
     live.utter = null;
+    if (live.rep) live.rep.speakEnd();
     try {
       if (window.speechSynthesis) window.speechSynthesis.cancel();
     } catch (e) { /* nothing was speaking */ }
@@ -1733,6 +1812,7 @@
         var level = Math.min(1, Math.sqrt(sum / data.length) * 6);
         smooth = smooth * 0.7 + level * 0.3;
         live.level = smooth;
+        if (live.rep) live.rep.setLevel(smooth);
         if (live.view && live.mode === 'listening') live.view.style.setProperty('--level', smooth.toFixed(3));
         meter.raf = requestAnimationFrame(tick);
       }
@@ -2067,7 +2147,7 @@
   function mountPage(root, opts) {
     if (!root || !enabled()) return;
     opts = opts || {};
-    if (page) closeLive(page);
+    if (page) disposeLive(page);
     root.innerHTML = pageMarkup();
     var shell = root.querySelector('.tma-bespoke-page');
     var ctx = {
@@ -2468,7 +2548,7 @@
   }
 
   function destroy() {
-    closeLive(widget);
+    disposeLive(widget);
     document.removeEventListener('keydown', onKey, true);
     document.removeEventListener('keydown', trap, true);
     if (host && host.parentNode) host.parentNode.removeChild(host);
@@ -2519,6 +2599,8 @@
     open: function () { setOpen(true); },
     close: function () { setOpen(false); },
     toggle: toggle,
-    mount: mountWidget
+    mount: mountWidget,
+    // The launcher's live state, for the browser harness.
+    live: function () { return widget ? widget.live : null; }
   };
 })();

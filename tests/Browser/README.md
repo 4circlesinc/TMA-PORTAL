@@ -79,6 +79,20 @@ field placement and drawing, and computed CSS only exist in a browser.
   fresh page in that browser must not try the failing ear at all. The panel
   stays open across pages (`tma.bespoke.open`), so the second page checks
   before clicking the launcher or it toggles the panel shut.
+  The representative — the face in the stage — is checked in the first
+  browser: `public/js/vendor/bespoke-representative.mjs` and the 6 MB model
+  arrive on demand, the mark fades for the canvas, `TMABespoke.live().rep.debug()`
+  reports ready and the mode, and while the fake voice reads (it now fires a
+  word boundary every 90 ms with a `charIndex`, as Chrome does) the mouth
+  passes through at least three `viseme_*` shapes and closes when the voice
+  stops. Software WebGL makes headless Chromium slow, so the fake holds a
+  silent pass open (`__fakeSpeech.hold`) while the test drives — otherwise
+  its own restart after silence races the test's clicks and the mic rests
+  mid-step — and a `relisten()` helper toggles the mic so a fresh pass
+  starts *after* a line is queued (the fake takes its text at `start()`).
+  With a stubbed model "thinking" lasts a frame; wait on what lasts (the
+  `spoken[]` list, the caption). The hold is released once at the end to
+  pin that two silent passes rest the mic.
   ```sh
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/bespoke-live.mjs
   ```

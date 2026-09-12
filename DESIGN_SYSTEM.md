@@ -555,6 +555,18 @@ Live examples: the sidebar nav (`.tma-dash__nav-icon--*`) and every call control
 
 **Testing a masked icon:** assert the *resolved* mask URL, not just size and colour - a mask that failed to resolve leaves a correctly sized, correctly coloured solid block that looks fine in a screenshot. `tests/Browser/call-float.mjs` and `folder-shortcuts.mjs` both do this.
 
+### 3D models (`public/models/`)
+
+One so far: `bespoke-representative.glb`, the face of Bespoke AI's live
+voice, rendered by `public/js/vendor/bespoke-representative.mjs` (built from
+`resources/js/bespoke-representative/` with `node scripts/build-representative.mjs`;
+three.js is a dev dependency, never loaded from a CDN). Provenance, licence
+(CC0) and the size recipe are in `public/models/README.md`. A replacement
+must carry Mixamo bone names and the Oculus viseme + ARKit blendshape names;
+Ready Player Me exports with `morphTargets=ARKit,Oculus Visemes` qualify.
+The circle it sits in (`.tma-bespoke__rep`) keeps the Bespoke wash as the
+backdrop and the mark as the placeholder — no new visual language.
+
 ### Brand Logos (app identity)
 
 | Asset | Path | JS helper |
