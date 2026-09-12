@@ -38,6 +38,33 @@ field placement and drawing, and computed CSS only exist in a browser.
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/bespoke-actions.mjs
   ```
 
+- **`bespoke-live.mjs`** — Bespoke AI's live voice. The Talk live button
+  beside Send swaps the log, chips and composer for a stage (the mark in an
+  orb, five bars, a status line, a caption) on both the launcher and the full
+  page. The browser's own speech recognition hears the reader, the transcript
+  goes through `POST /portal/bespoke/chat` exactly as typing would (same
+  page context), the reply is captioned with its links intact and read aloud
+  with the markdown stripped, and the stage listens again on its own. Muting
+  the voice skips the reading; tapping the mic while listening turns it off;
+  Back to chat brings the log back with every spoken turn in it; Escape
+  closes the launcher and with it the session; leaving the full page ends
+  its session. It also pins that the listening mic wears the wash with a
+  dark glyph *after* the 200 ms background transition — the first screenshot
+  caught it mid-transition and looked broken.
+
+  Headless Chromium has `webkitSpeechRecognition` but no service behind it
+  (every start ends in `network`), and `speechSynthesis` has no voices, so
+  both are **faked in `addInitScript`** before the portal loads: recognition
+  delivers whatever the test queued on `window.__fakeSpeech.queue` (a silent
+  pass takes 1.5 s, close to a real browser's no-speech wait — a fast fake
+  exhausted the two silent passes before the test had queued its question),
+  synthesis records what it was asked to say in `spoken[]`. The model is
+  stubbed at the network layer as in `bespoke-actions.mjs`. Same seed and
+  serve as that script; only the e2e admin is needed.
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/bespoke-live.mjs
+  ```
+
 - **`signature-editor.mjs`** — log in, pick a library file, add recipients,
   place fields on the rendered PDF, drag one, confirm the coordinates persist
   as page-relative fractions.

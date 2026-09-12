@@ -202,6 +202,13 @@ await waitMode('listening');
 check(await page.evaluate(() => window.__fakeSpeech.starts >= 1), 'listening starts on its own');
 check((await page.evaluate(() => window.__fakeSpeech.lastLang)) === 'en-US', `recognition speaks the page language (${await page.evaluate(() => window.__fakeSpeech.lastLang)})`);
 check(await page.evaluate(() => document.querySelector('.tma-bespoke [data-bespoke-live-mic]').classList.contains('is-listening')), 'the mic button shows it is listening');
+await page.waitForTimeout(400); // past the background transition
+const micStyle = await page.evaluate(() => {
+  const b = document.querySelector('.tma-bespoke [data-bespoke-live-mic]');
+  const cs = getComputedStyle(b);
+  return { color: cs.backgroundColor, image: cs.backgroundImage.slice(0, 15), filter: getComputedStyle(b.querySelector('img')).filter };
+});
+check(micStyle.image === 'linear-gradient' && micStyle.filter === 'none', `the listening mic wears the wash with a dark glyph (${JSON.stringify(micStyle)})`);
 await page.screenshot({ path: 'tests/Browser/bespoke-live.png' });
 
 // ── a spoken question, an answered reply ─────────────────────────────────
