@@ -147,6 +147,15 @@
     document.head.appendChild(link);
   }
 
+  /*
+   * Leaflet is served from the portal itself (public/js/vendor/leaflet), never
+   * from a CDN: the Content-Security-Policy allows scripts and stylesheets
+   * from 'self' only, so a copy fetched from a CDN was refused by the browser, the
+   * Mac and Windows apps and the Android app alike, and every office and
+   * remote map fell to "Map unavailable".
+   */
+  var LEAFLET_ROOT = (ROOT || '') + 'js/vendor/leaflet/';
+
   function loadLeaflet() {
     if (window.L) return Promise.resolve(window.L);
     if (leafletPromise) return leafletPromise;
@@ -155,13 +164,19 @@
         var css = document.createElement('link');
         css.id = 'tma-leaflet-css';
         css.rel = 'stylesheet';
-        css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        css.href = LEAFLET_ROOT + 'leaflet.css';
         document.head.appendChild(css);
       }
       var script = document.createElement('script');
-      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-      script.onload = function () { resolve(window.L); };
-      script.onerror = function () { reject(new Error('Map library failed to load')); };
+      script.src = LEAFLET_ROOT + 'leaflet.js';
+      script.onload = function () {
+        if (window.L) resolve(window.L);
+        else reject(new Error('Map library failed to load'));
+      };
+      script.onerror = function () {
+        leafletPromise = null;
+        reject(new Error('Map library failed to load'));
+      };
       document.head.appendChild(script);
     });
     return leafletPromise;
@@ -399,9 +414,9 @@
 
       delete L.Icon.Default.prototype._getIconUrl;
       L.Icon.Default.mergeOptions({
-        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+        iconRetinaUrl: LEAFLET_ROOT + 'images/marker-icon-2x.png',
+        iconUrl: LEAFLET_ROOT + 'images/marker-icon.png',
+        shadowUrl: LEAFLET_ROOT + 'images/marker-shadow.png',
       });
 
       var savedCoords = loc && loc.latitude != null && loc.longitude != null

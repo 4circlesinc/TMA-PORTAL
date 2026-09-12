@@ -36,3 +36,30 @@ cp -R node_modules/pdfjs-dist/standard_fonts public/js/vendor/
 cp -R node_modules/pdfjs-dist/wasm public/js/vendor/
 cp -R node_modules/pdfjs-dist/iccs public/js/vendor/
 ```
+
+## Leaflet (`leaflet/`)
+
+- **Version**: 1.9.4
+- **Licence**: BSD-2-Clause — see `leaflet/LICENSE`
+- **Source**: https://leafletjs.com
+- **Used by**: `public/js/presence-status.js` — the office and remote maps in
+  Status settings, where a pin and a radius decide automatic In Office /
+  Working Remote detection.
+
+Vendored because the Content-Security-Policy
+(`App\Http\Middleware\ApplySecurityPolicyHeaders`) allows scripts and
+stylesheets from `'self'` only. Loading the library from unpkg.com was refused
+by the browser, the Mac and Windows apps and the Android app alike, and every
+map fell to "Map unavailable". Map tiles still come from openstreetmap.org
+(`img-src https:` allows that); geocoding goes through the portal's own
+`/me/availability/geocode` routes.
+
+To update:
+
+```sh
+V=1.9.4
+for f in leaflet.js leaflet.css; do curl -sfL -o public/js/vendor/leaflet/$f https://unpkg.com/leaflet@$V/dist/$f; done
+for f in marker-icon.png marker-icon-2x.png marker-shadow.png layers.png layers-2x.png; do curl -sfL -o public/js/vendor/leaflet/images/$f https://unpkg.com/leaflet@$V/dist/images/$f; done
+curl -sfL -o public/js/vendor/leaflet/LICENSE https://unpkg.com/leaflet@$V/LICENSE
+```
+
