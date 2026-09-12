@@ -138,6 +138,10 @@ return [
         'key' => env('BESPOKE_AI_API_KEY', env('OPENAI_API_KEY')),
         'model' => env('BESPOKE_AI_MODEL', 'gpt-4o-mini'),
         'base_url' => env('BESPOKE_AI_BASE_URL', 'https://api.openai.com/v1'),
+        // Speech to text for the live voice, on the same host and key.
+        // Empty picks by host: Whisper large-v3-turbo on Groq, whisper-1
+        // elsewhere. See App\Support\Bespoke\Transcription.
+        'transcribe_model' => env('BESPOKE_AI_TRANSCRIBE_MODEL'),
     ],
 
     'sharepoint' => [

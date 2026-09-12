@@ -32,6 +32,7 @@
   var SPEAKER = 'images/icons/phosphor/SpeakerHigh.svg';
   var SPEAKER_OFF = 'images/icons/phosphor/SpeakerSlash.svg';
   var LS_VOICE_OFF = 'tma.bespoke.voiceOff';
+  var LS_VOICE_ENGINE = 'tma.bespoke.voiceEngine';
   var ICON_PDF = 'images/icons/phosphor/FilePdf.svg';
   var ICON_IMAGE = 'images/icons/phosphor/Image.svg';
   var ICON_FILE = 'images/icons/phosphor/File.svg';
@@ -1095,8 +1096,41 @@
     return window.SpeechRecognition || window.webkitSpeechRecognition || null;
   }
 
+  /* Two ears. The browser's own recognition first: free, no round trip,
+   * interim words. But Chromium's is a call to a Google service the
+   * desktop shell, Brave and unbranded builds do not carry — every start
+   * there ends in `network`. Then the clip is recorded here and
+   * transcribed by the server through the chat provider. The switch is
+   * remembered per browser so the next session does not fail first. */
+  function recorderSupported() {
+    return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && typeof window.MediaRecorder === 'function');
+  }
+
   function liveSupported() {
-    return !!(recognitionClass() && window.speechSynthesis && typeof window.SpeechSynthesisUtterance === 'function');
+    if (!window.speechSynthesis || typeof window.SpeechSynthesisUtterance !== 'function') return false;
+    return !!(recognitionClass() || recorderSupported());
+  }
+
+  function preferredEngine() {
+    if (storeGet(LS_VOICE_ENGINE, '') === 'server' && recorderSupported()) return 'server';
+    return recognitionClass() ? 'browser' : 'server';
+  }
+
+  function recorderMime() {
+    var list = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+    if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return '';
+    for (var i = 0; i < list.length; i++) {
+      if (MediaRecorder.isTypeSupported(list[i])) return list[i];
+    }
+    return '';
+  }
+
+  function recorderExt(mime) {
+    mime = String(mime || '').toLowerCase();
+    if (mime.indexOf('mp4') !== -1) return 'm4a';
+    if (mime.indexOf('ogg') !== -1) return 'ogg';
+    if (mime.indexOf('wav') !== -1) return 'wav';
+    return 'webm';
   }
 
   function liveLang() {
@@ -1216,6 +1250,9 @@
         mode: 'idle',
         view: null,
         rec: null,
+        engine: 'browser',
+        capture: null,
+        level: 0,
         listening: false,
         speaking: false,
         speech: null,
@@ -1283,6 +1320,7 @@
     live.active = true;
     live.noSpeech = 0;
     live.micOff = false;
+    live.engine = preferredEngine();
     view.hidden = false;
     ctx.surfaceEl.classList.add('is-live');
     showCaption(ctx, '', '');
@@ -1311,8 +1349,16 @@
   function liveListen(ctx) {
     var live = liveState(ctx);
     if (!live.active || live.micOff || live.listening || ctx.busy) return;
+    if (live.engine === 'server') {
+      captureListen(ctx);
+      return;
+    }
     var Rec = recognitionClass();
-    if (!Rec) return;
+    if (!Rec) {
+      live.engine = 'server';
+      captureListen(ctx);
+      return;
+    }
     stopSpeaking(ctx);
     var rec;
     try {
@@ -1349,13 +1395,22 @@
         live.noSpeech++;
         return;
       }
+      if (code === 'network' || code === 'service-not-allowed') {
+        // No service behind the browser's ear: the server has one.
+        if (recorderSupported() && configured) {
+          live.engine = 'server';
+          storeSet(LS_VOICE_ENGINE, 'server');
+          return;
+        }
+        live.micOff = true;
+        setLiveMode(ctx, 'idle', 'Voice recognition isn’t available here.');
+        return;
+      }
       live.micOff = true;
-      if (code === 'not-allowed' || code === 'service-not-allowed') {
+      if (code === 'not-allowed') {
         setLiveMode(ctx, 'idle', 'Microphone access is blocked. Allow it in your browser settings.');
       } else if (code === 'audio-capture') {
         setLiveMode(ctx, 'idle', 'No microphone was found.');
-      } else if (code === 'network') {
-        setLiveMode(ctx, 'idle', 'Voice recognition isn’t available here.');
       } else {
         setLiveMode(ctx, 'idle', 'I couldn’t hear you. Tap the mic to try again.');
       }
@@ -1371,17 +1426,7 @@
         liveHeard(ctx, text);
         return;
       }
-      if (live.micOff) {
-        paintMic(ctx);
-        return;
-      }
-      if (live.noSpeech >= 2) {
-        live.noSpeech = 0;
-        live.micOff = true;
-        setLiveMode(ctx, 'idle', 'I didn’t catch that. Tap the mic to talk.');
-        return;
-      }
-      setTimeout(function () { liveListen(ctx); }, 150);
+      afterSilence(ctx);
     };
     try {
       rec.start();
@@ -1393,11 +1438,168 @@
     }
   }
 
+  /* A pass that heard nothing: try again, and after two of them rest the
+   * mic rather than listen to an empty room forever. Either ear. */
+  function afterSilence(ctx) {
+    var live = liveState(ctx);
+    if (!live.active) return;
+    if (live.micOff) {
+      paintMic(ctx);
+      return;
+    }
+    if (live.noSpeech >= 2) {
+      live.noSpeech = 0;
+      live.micOff = true;
+      setLiveMode(ctx, 'idle', 'I didn’t catch that. Tap the mic to talk.');
+      return;
+    }
+    setTimeout(function () { liveListen(ctx); }, 150);
+  }
+
+  /* The server ear: record until the reader has spoken and then gone quiet
+   * (the meter's level is the voice detector), send the clip, take the
+   * words back. Seven quiet seconds with no voice at all is a silent pass;
+   * thirty seconds is the longest clip. */
+  var CAPTURE_VOICE = 0.1;
+  var CAPTURE_QUIET_MS = 1100;
+  var CAPTURE_WAIT_MS = 7000;
+  var CAPTURE_MAX_MS = 30000;
+
+  function captureListen(ctx) {
+    var live = liveState(ctx);
+    if (!recorderSupported()) {
+      live.micOff = true;
+      setLiveMode(ctx, 'idle', 'Voice isn’t available in this browser.');
+      return;
+    }
+    stopSpeaking(ctx);
+    live.listening = true;
+    setLiveMode(ctx, 'listening', 'Listening…');
+    var ticket = {};
+    live.capture = ticket;
+    ensureMeter(ctx).then(function (meter) {
+      if (live.capture !== ticket) return;
+      if (!live.active || live.micOff || ctx.busy) {
+        live.capture = null;
+        live.listening = false;
+        paintMic(ctx);
+        return;
+      }
+      if (!meter || !meter.stream) {
+        live.capture = null;
+        live.listening = false;
+        live.micOff = true;
+        setLiveMode(ctx, 'idle', 'Microphone access is blocked. Allow it in your browser settings.');
+        return;
+      }
+      var mime = recorderMime();
+      var rec;
+      try {
+        rec = mime ? new MediaRecorder(meter.stream, { mimeType: mime }) : new MediaRecorder(meter.stream);
+      } catch (e) {
+        live.capture = null;
+        live.listening = false;
+        live.micOff = true;
+        setLiveMode(ctx, 'idle', 'Voice isn’t available in this browser.');
+        return;
+      }
+      var chunks = [];
+      var spoke = false;
+      var voiced = 0;
+      var startedAt = Date.now();
+      var lastVoice = 0;
+      ticket.rec = rec;
+      rec.ondataavailable = function (e) {
+        if (e.data && e.data.size) chunks.push(e.data);
+      };
+      rec.onstop = function () {
+        if (live.capture !== ticket) return;
+        live.capture = null;
+        live.listening = false;
+        if (!live.active) return;
+        if (!spoke || !chunks.length) {
+          live.noSpeech++;
+          afterSilence(ctx);
+          return;
+        }
+        transcribe(ctx, new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' }));
+      };
+      ticket.timer = setInterval(function () {
+        if (live.capture !== ticket) {
+          clearInterval(ticket.timer);
+          return;
+        }
+        var now = Date.now();
+        if ((live.level || 0) > CAPTURE_VOICE) {
+          voiced++;
+          if (voiced >= 2) {
+            spoke = true;
+            lastVoice = now;
+          }
+        } else {
+          voiced = 0;
+        }
+        var done = spoke
+          ? now - lastVoice > CAPTURE_QUIET_MS
+          : now - startedAt > CAPTURE_WAIT_MS;
+        if (done || now - startedAt > CAPTURE_MAX_MS) {
+          clearInterval(ticket.timer);
+          try { rec.stop(); } catch (e) { rec.onstop(); }
+        }
+      }, 100);
+      try {
+        rec.start(250);
+      } catch (e) {
+        clearInterval(ticket.timer);
+        live.capture = null;
+        live.listening = false;
+        live.micOff = true;
+        setLiveMode(ctx, 'idle', 'Voice isn’t available right now.');
+      }
+    });
+  }
+
+  function transcribe(ctx, blob) {
+    var live = liveState(ctx);
+    setLiveMode(ctx, 'thinking', 'Thinking…');
+    var form = new FormData();
+    form.append('audio', blob, 'speech.' + recorderExt(blob.type));
+    form.append('language', liveLang().slice(0, 2).toLowerCase());
+    apiForm('/portal/bespoke/transcribe', form).then(function (data) {
+      if (!live.active) return;
+      var text = String((data && data.text) || '').replace(/\s+/g, ' ').trim();
+      if (!text) {
+        live.noSpeech++;
+        afterSilence(ctx);
+        return;
+      }
+      live.noSpeech = 0;
+      liveHeard(ctx, text);
+    }).catch(function (err) {
+      if (!live.active) return;
+      live.micOff = true;
+      var gone = err && (err.notFound || err.status === 503);
+      setLiveMode(ctx, 'idle', gone ? 'Voice isn’t available here.' : 'I couldn’t hear you. Tap the mic to try again.');
+    });
+  }
+
   function stopListening(ctx) {
     var live = liveState(ctx);
     var rec = live.rec;
+    var capture = live.capture;
     live.rec = null;
+    live.capture = null;
     live.listening = false;
+    if (capture) {
+      if (capture.timer) clearInterval(capture.timer);
+      if (capture.rec) {
+        try {
+          capture.rec.ondataavailable = null;
+          capture.rec.onstop = null;
+          if (capture.rec.state !== 'inactive') capture.rec.stop();
+        } catch (e) { /* already stopped */ }
+      }
+    }
     if (!rec) return;
     try {
       rec.onresult = null;
@@ -1498,15 +1700,18 @@
    * effort: if the microphone stream is refused, recognition says so. */
   function startMeter(ctx) {
     var live = liveState(ctx);
-    if (live.meter || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
-    var AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
-    var meter = { stream: null, audio: null, raf: 0, dead: false };
+    if (live.meter) return live.meter.ready;
+    var meter = { stream: null, audio: null, raf: 0, dead: false, ready: null };
     live.meter = meter;
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      meter.ready = Promise.resolve(meter);
+      return meter.ready;
+    }
+    meter.ready = navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
       if (meter.dead) {
         stream.getTracks().forEach(function (t) { t.stop(); });
-        return;
+        return meter;
       }
       meter.stream = stream;
       var audio = new AC();
@@ -1527,16 +1732,29 @@
         }
         var level = Math.min(1, Math.sqrt(sum / data.length) * 6);
         smooth = smooth * 0.7 + level * 0.3;
+        live.level = smooth;
         if (live.view && live.mode === 'listening') live.view.style.setProperty('--level', smooth.toFixed(3));
         meter.raf = requestAnimationFrame(tick);
       }
       tick();
-    }).catch(function () { /* recognition reports its own errors */ });
+      return meter;
+    }).catch(function () {
+      // The browser ear reports its own permission errors; the server ear
+      // reads the missing stream.
+      return meter;
+    });
+    return meter.ready;
+  }
+
+  function ensureMeter(ctx) {
+    var live = liveState(ctx);
+    return live.meter ? live.meter.ready : startMeter(ctx);
   }
 
   function stopMeter(ctx) {
     var live = liveState(ctx);
     var meter = live.meter;
+    live.level = 0;
     if (!meter) return;
     live.meter = null;
     meter.dead = true;

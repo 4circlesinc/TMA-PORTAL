@@ -59,8 +59,26 @@ field placement and drawing, and computed CSS only exist in a browser.
   pass takes 1.5 s, close to a real browser's no-speech wait — a fast fake
   exhausted the two silent passes before the test had queued its question),
   synthesis records what it was asked to say in `spoken[]`. The model is
-  stubbed at the network layer as in `bespoke-actions.mjs`. Same seed and
-  serve as that script; only the e2e admin is needed.
+  stubbed at the network layer as in `bespoke-actions.mjs`, and so is
+  `/portal/bespoke/suggestions` (rewritten to `configured: true`, because a
+  keyless harness server would otherwise make the widget refuse the server
+  ear). Same seed and serve as that script; only the e2e admin is needed.
+
+  A second browser then plays the desktop shell, where recognition exists
+  but every start fails with `network` (Chromium's ear is a Google service
+  Electron, Brave and unbranded builds do not carry): the stage must hand
+  the ear to the server without the reader seeing a failure, remember that
+  choice per browser, record a real clip with `MediaRecorder` on Chromium's
+  fake microphone (`--use-fake-device-for-media-stream` plus
+  `--use-file-for-fake-audio-capture=` a looped WAV of 1 s silence, 1.5 s
+  tone, 3 s silence written by the script), let the real level meter decide
+  when the reader has finished, upload it to `POST /portal/bespoke/transcribe`
+  (stubbed like the model; the multipart is checked for the container name
+  and the language — scan the whole body, the audio part comes first) and
+  put the words through the chat. Two empty transcriptions rest the mic. A
+  fresh page in that browser must not try the failing ear at all. The panel
+  stays open across pages (`tma.bespoke.open`), so the second page checks
+  before clicking the launcher or it toggles the panel shut.
   ```sh
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/bespoke-live.mjs
   ```

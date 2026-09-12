@@ -191,6 +191,9 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/attachments', [BespokeController::class, 'uploadAttachment'])
             ->middleware('throttle:60,1')
             ->name('attachments.store');
+        Route::post('/transcribe', [BespokeController::class, 'transcribe'])
+            ->middleware('throttle:30,1')
+            ->name('transcribe');
         Route::get('/attachments/{uuid}', [BespokeController::class, 'showAttachment'])
             ->name('attachments.show');
         Route::post('/actions/send-message', [BespokeController::class, 'sendMessage'])

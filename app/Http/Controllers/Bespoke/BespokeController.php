@@ -15,6 +15,7 @@ use App\Support\Bespoke\Page;
 use App\Support\Bespoke\Prompt;
 use App\Support\Bespoke\Suggestions;
 use App\Support\Bespoke\Toolbox;
+use App\Support\Bespoke\Transcription;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
@@ -213,6 +214,32 @@ class BespokeController extends Controller
         }
 
         return response()->json(['attachment' => Attachments::payload($attachment)], 201);
+    }
+
+    /**
+     * Speech to text for the live voice, for browsers whose own recognition
+     * has no service behind it (the desktop shell, Brave). The clip goes to
+     * the same provider as the chat and is not kept.
+     */
+    public function transcribe(Request $request): JsonResponse
+    {
+        Bespoke::abortUnlessEnabled();
+
+        $validated = $request->validate([
+            'audio' => ['required', 'file', 'max:'.(Transcription::MAX_BYTES / 1024)],
+            'language' => ['sometimes', 'nullable', 'string', 'regex:/^[A-Za-z]{2}$/'],
+        ]);
+
+        if (! Bespoke::configured()) {
+            return response()->json(['message' => 'Voice isn’t available here.'], 503);
+        }
+
+        $text = Transcription::transcribe($validated['audio'], $validated['language'] ?? null);
+        if ($text === null) {
+            return response()->json(['message' => 'The clip could not be transcribed.'], 502);
+        }
+
+        return response()->json(['text' => $text]);
     }
 
     /** The bytes, to the reader who uploaded them and nobody else. */
