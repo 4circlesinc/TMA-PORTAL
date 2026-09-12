@@ -26,6 +26,12 @@
   var BACK = 'images/icons/phosphor/ArrowLeft.svg';
   var PENDING_COMPOSE_KEY = 'tma.mail.pending-compose';
   var CLIP = 'images/icons/phosphor/Paperclip.svg';
+  var VOICE = 'images/icons/phosphor/Waveform.svg';
+  var MIC = 'images/icons/phosphor/Microphone.svg';
+  var MIC_OFF = 'images/icons/phosphor/MicrophoneSlash.svg';
+  var SPEAKER = 'images/icons/phosphor/SpeakerHigh.svg';
+  var SPEAKER_OFF = 'images/icons/phosphor/SpeakerSlash.svg';
+  var LS_VOICE_OFF = 'tma.bespoke.voiceOff';
   var ICON_PDF = 'images/icons/phosphor/FilePdf.svg';
   var ICON_IMAGE = 'images/icons/phosphor/Image.svg';
   var ICON_FILE = 'images/icons/phosphor/File.svg';
@@ -1058,6 +1064,7 @@
       renderActions(ctx, data.actions || []);
       renderChoices(ctx, data.choices || []);
       if (typeof ctx.afterReply === 'function') ctx.afterReply(data);
+      liveAnswer(ctx, reply, data);
     }).catch(function (err) {
       if (err && err.notFound) {
         destroy();
@@ -1068,11 +1075,524 @@
         : 'I could not reach Bespoke AI. Try a suggestion, or ask an administrator.';
       ctx.messages.push({ role: 'assistant', content: fallback });
       typeInto(ctx, bubble, fallback);
+      liveAnswer(ctx, fallback, null);
     }).then(function () {
       ctx.busy = false;
       if (ctx.sendBtn) ctx.sendBtn.disabled = !String(ctx.inputEl && ctx.inputEl.value || '').trim();
       if (ctx.inputEl) ctx.inputEl.focus();
     });
+  }
+
+  /* ── Live voice ─────────────────────────────────────────────────
+   * Talk to the assistant out loud. The browser's own speech recognition
+   * hears the reader, the same chat endpoint answers, and the browser's own
+   * speech synthesis reads the reply while the mark moves with it. Every
+   * turn still lands in the log and the saved conversation as text, so
+   * nothing is sent that typing would not have sent. Free of any outside
+   * service: no browser support means no button. */
+
+  function recognitionClass() {
+    return window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  }
+
+  function liveSupported() {
+    return !!(recognitionClass() && window.speechSynthesis && typeof window.SpeechSynthesisUtterance === 'function');
+  }
+
+  function liveLang() {
+    var lang = String(document.documentElement.getAttribute('lang') || '').trim();
+    var nav = navigator.language || 'en-US';
+    if (!lang) return nav;
+    if (lang.length === 2 && nav.toLowerCase().indexOf(lang.toLowerCase() + '-') === 0) return nav;
+    return lang;
+  }
+
+  /* The best voice the device has for the page's language: the natural /
+   * cloud ones first, the novelty ones never. */
+  function pickVoice(lang) {
+    var synth = window.speechSynthesis;
+    var voices = synth && synth.getVoices ? synth.getVoices() : [];
+    if (!voices || !voices.length) return null;
+    var want = String(lang || 'en').toLowerCase().replace('_', '-');
+    var prefix = want.slice(0, 2);
+    var best = null;
+    var bestScore = -1;
+    voices.forEach(function (v) {
+      var vl = String(v.lang || '').toLowerCase().replace('_', '-');
+      var name = String(v.name || '');
+      var score = 0;
+      if (vl === want) score += 6;
+      else if (vl.indexOf(prefix) === 0) score += 3;
+      else return;
+      if (/natural|neural|premium|enhanced/i.test(name)) score += 4;
+      if (/google/i.test(name)) score += 3;
+      if (/samantha|karen|moira|tessa|daniel|aria|jenny|libby|sonia|zira|ava|allison/i.test(name)) score += 2;
+      if (v.default) score += 1;
+      if (/compact|eloquence|espeak|albert|bad news|bells|boing|bubbles|cellos|deranged|good news|hysterical|junior|organ|trinoids|whisper|zarvox|wobble|jester/i.test(name)) score -= 6;
+      if (score > bestScore) {
+        bestScore = score;
+        best = v;
+      }
+    });
+    return best;
+  }
+
+  /* The reply as it should be read aloud: links become their label, portal
+   * paths and markdown marks go, arrows become "then". */
+  function speakable(text) {
+    var s = String(text || '');
+    s = s.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+    s = s.replace(/(^|[\s(])\/[A-Za-z0-9._~\/-]+/g, '$1');
+    s = s.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1');
+    s = s.replace(/^\s*[-*]\s+/gm, '').replace(/^\s*\d+\.\s+/gm, '');
+    s = s.replace(/\s*(→|->)\s*/g, ', then ');
+    s = s.replace(/[•←]/g, ' ');
+    s = s.replace(/\(\s*\)/g, '');
+    s = s.replace(/\s+([.,;:!?])/g, '$1');
+    s = s.replace(/\s+/g, ' ').trim();
+    return s;
+  }
+
+  /* Chrome stops a long utterance mid-sentence after about fifteen seconds,
+   * so the text is read one short run of sentences at a time. */
+  function sentences(text) {
+    var MAX = 200;
+    var pieces = String(text || '').match(/[^.!?]+(?:[.!?]+["')\]]*|$)/g) || [];
+    var flat = [];
+    pieces.forEach(function (p) {
+      p = p.trim();
+      if (!p) return;
+      if (p.length <= MAX) {
+        flat.push(p);
+        return;
+      }
+      p.split(/,\s+/).forEach(function (part) {
+        part = part.trim();
+        while (part.length > MAX) {
+          var cut = part.lastIndexOf(' ', MAX);
+          if (cut < 40) cut = MAX;
+          flat.push(part.slice(0, cut).trim());
+          part = part.slice(cut).trim();
+        }
+        if (part) flat.push(part);
+      });
+    });
+    var out = [];
+    var buf = '';
+    flat.forEach(function (p) {
+      if (buf && (buf + ' ' + p).length > MAX) {
+        out.push(buf);
+        buf = p;
+      } else {
+        buf = buf ? buf + ' ' + p : p;
+      }
+    });
+    if (buf) out.push(buf);
+    return out;
+  }
+
+  function liveMarkup() {
+    return '<div class="tma-bespoke__live-stage">' +
+        '<div class="tma-bespoke__orb" data-bespoke-orb>' +
+          '<span class="tma-bespoke__orb-ring"></span>' +
+          '<span class="tma-bespoke__orb-ring"></span>' +
+          '<img class="tma-bespoke__orb-mark" src="' + MARK + '" alt="" width="72" height="72">' +
+        '</div>' +
+        '<div class="tma-bespoke__bars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>' +
+        '<p class="tma-bespoke__live-status" data-bespoke-live-status aria-live="polite"></p>' +
+        '<div class="tma-bespoke__live-caption tma-bespoke__bubble" data-bespoke-live-caption hidden></div>' +
+      '</div>' +
+      '<div class="tma-bespoke__live-controls">' +
+        '<button type="button" class="tma-bespoke__live-btn" data-bespoke-live-speaker aria-label="Mute the voice" title="Voice" aria-pressed="false"><img src="' + SPEAKER + '" alt=""></button>' +
+        '<button type="button" class="tma-bespoke__live-mic" data-bespoke-live-mic aria-label="Talk" title="Microphone" aria-pressed="false"><img src="' + MIC + '" alt=""></button>' +
+        '<button type="button" class="tma-bespoke__live-btn" data-bespoke-live-end aria-label="Back to chat" title="Back to chat"><img src="' + CLOSE + '" alt=""></button>' +
+      '</div>';
+  }
+
+  function liveState(ctx) {
+    if (!ctx.live) {
+      ctx.live = {
+        active: false,
+        mode: 'idle',
+        view: null,
+        rec: null,
+        listening: false,
+        speaking: false,
+        speech: null,
+        utter: null,
+        micOff: false,
+        speakerOff: storeGet(LS_VOICE_OFF, '') === '1',
+        noSpeech: 0,
+        meter: null
+      };
+    }
+    return ctx.live;
+  }
+
+  function liveView(ctx) {
+    var live = liveState(ctx);
+    if (live.view) return live.view;
+    var el = document.createElement('div');
+    el.className = 'tma-bespoke__live';
+    el.setAttribute('data-bespoke-stage', '');
+    el.setAttribute('data-mode', 'idle');
+    el.hidden = true;
+    el.innerHTML = liveMarkup();
+    ctx.surfaceEl.appendChild(el);
+    live.view = el;
+    live.orbEl = el.querySelector('[data-bespoke-orb]');
+    live.statusEl = el.querySelector('[data-bespoke-live-status]');
+    live.captionEl = el.querySelector('[data-bespoke-live-caption]');
+    live.micBtn = el.querySelector('[data-bespoke-live-mic]');
+    live.speakerBtn = el.querySelector('[data-bespoke-live-speaker]');
+    live.micBtn.addEventListener('click', function () { toggleMic(ctx); });
+    live.speakerBtn.addEventListener('click', function () { toggleSpeaker(ctx); });
+    el.querySelector('[data-bespoke-live-end]').addEventListener('click', function () { closeLive(ctx); });
+    live.captionEl.addEventListener('click', onNavClick);
+    paintSpeaker(ctx);
+    paintMic(ctx);
+    return el;
+  }
+
+  function setLiveMode(ctx, mode, status) {
+    var live = liveState(ctx);
+    live.mode = mode;
+    if (live.view) {
+      live.view.setAttribute('data-mode', mode);
+      if (mode !== 'listening') live.view.style.setProperty('--level', '0');
+      if (live.statusEl && status !== undefined && status !== null) live.statusEl.textContent = status;
+    }
+    paintMic(ctx);
+  }
+
+  function showCaption(ctx, who, text) {
+    var live = ctx.live;
+    if (!live || !live.captionEl) return;
+    text = String(text || '').trim();
+    live.captionEl.hidden = !text;
+    live.captionEl.className = 'tma-bespoke__live-caption tma-bespoke__bubble' + (who ? ' tma-bespoke__live-caption--' + who : '');
+    live.captionEl.innerHTML = who === 'ai' ? renderLite(text) : '<p>' + escapeHtml(text) + '</p>';
+    live.captionEl.scrollTop = 0;
+  }
+
+  function openLive(ctx) {
+    if (!ctx || !ctx.surfaceEl || !liveSupported()) return;
+    var live = liveState(ctx);
+    var view = liveView(ctx);
+    if (live.active) return;
+    live.active = true;
+    live.noSpeech = 0;
+    live.micOff = false;
+    view.hidden = false;
+    ctx.surfaceEl.classList.add('is-live');
+    showCaption(ctx, '', '');
+    startMeter(ctx);
+    try { window.speechSynthesis.getVoices(); } catch (e) { /* voices arrive later */ }
+    setLiveMode(ctx, 'idle', 'Say something. I’m listening.');
+    liveListen(ctx);
+    if (live.micBtn) live.micBtn.focus();
+  }
+
+  function closeLive(ctx) {
+    var live = ctx && ctx.live;
+    if (!live || !live.active) return;
+    live.active = false;
+    stopListening(ctx);
+    stopSpeaking(ctx);
+    stopMeter(ctx);
+    if (live.view) live.view.hidden = true;
+    if (ctx.surfaceEl) ctx.surfaceEl.classList.remove('is-live');
+    setLiveMode(ctx, 'idle', '');
+    showCaption(ctx, '', '');
+    if (ctx.logEl) ctx.logEl.scrollTop = ctx.logEl.scrollHeight;
+    if (ctx.inputEl) ctx.inputEl.focus();
+  }
+
+  function liveListen(ctx) {
+    var live = liveState(ctx);
+    if (!live.active || live.micOff || live.listening || ctx.busy) return;
+    var Rec = recognitionClass();
+    if (!Rec) return;
+    stopSpeaking(ctx);
+    var rec;
+    try {
+      rec = new Rec();
+    } catch (e) {
+      live.micOff = true;
+      setLiveMode(ctx, 'idle', 'Voice isn’t available in this browser.');
+      return;
+    }
+    rec.lang = liveLang();
+    rec.interimResults = true;
+    rec.continuous = false;
+    rec.maxAlternatives = 1;
+    var heard = '';
+    var finalText = '';
+    live.rec = rec;
+    live.listening = true;
+    setLiveMode(ctx, 'listening', 'Listening…');
+    rec.onresult = function (e) {
+      var interim = '';
+      for (var i = e.resultIndex || 0; i < e.results.length; i++) {
+        var r = e.results[i];
+        var t = (r[0] && r[0].transcript) || '';
+        if (r.isFinal) finalText += t;
+        else interim += t;
+      }
+      heard = (finalText + ' ' + interim).replace(/\s+/g, ' ').trim();
+      showCaption(ctx, 'you', heard);
+    };
+    rec.onerror = function (e) {
+      var code = (e && e.error) || '';
+      if (code === 'aborted') return;
+      if (code === 'no-speech') {
+        live.noSpeech++;
+        return;
+      }
+      live.micOff = true;
+      if (code === 'not-allowed' || code === 'service-not-allowed') {
+        setLiveMode(ctx, 'idle', 'Microphone access is blocked. Allow it in your browser settings.');
+      } else if (code === 'audio-capture') {
+        setLiveMode(ctx, 'idle', 'No microphone was found.');
+      } else if (code === 'network') {
+        setLiveMode(ctx, 'idle', 'Voice recognition isn’t available here.');
+      } else {
+        setLiveMode(ctx, 'idle', 'I couldn’t hear you. Tap the mic to try again.');
+      }
+    };
+    rec.onend = function () {
+      if (live.rec !== rec) return;
+      live.rec = null;
+      live.listening = false;
+      if (!live.active) return;
+      var text = String(finalText || heard || '').replace(/\s+/g, ' ').trim();
+      if (text) {
+        live.noSpeech = 0;
+        liveHeard(ctx, text);
+        return;
+      }
+      if (live.micOff) {
+        paintMic(ctx);
+        return;
+      }
+      if (live.noSpeech >= 2) {
+        live.noSpeech = 0;
+        live.micOff = true;
+        setLiveMode(ctx, 'idle', 'I didn’t catch that. Tap the mic to talk.');
+        return;
+      }
+      setTimeout(function () { liveListen(ctx); }, 150);
+    };
+    try {
+      rec.start();
+    } catch (e) {
+      live.rec = null;
+      live.listening = false;
+      live.micOff = true;
+      setLiveMode(ctx, 'idle', 'Voice isn’t available right now.');
+    }
+  }
+
+  function stopListening(ctx) {
+    var live = liveState(ctx);
+    var rec = live.rec;
+    live.rec = null;
+    live.listening = false;
+    if (!rec) return;
+    try {
+      rec.onresult = null;
+      rec.onerror = null;
+      rec.onend = null;
+      rec.abort();
+    } catch (e) { /* already stopped */ }
+  }
+
+  function liveHeard(ctx, text) {
+    showCaption(ctx, 'you', text);
+    setLiveMode(ctx, 'thinking', 'Thinking…');
+    ask(ctx, text);
+  }
+
+  /* Called from ask() with every answer, spoken or typed; only a live
+   * session acts on it. */
+  function liveAnswer(ctx, text, data) {
+    var live = ctx && ctx.live;
+    if (!live || !live.active) return;
+    var spoken = speakable(text);
+    if (data && Array.isArray(data.actions) && data.actions.length) spoken += ' The draft is in the chat.';
+    showCaption(ctx, 'ai', text);
+    if (live.speakerOff || !spoken) {
+      setLiveMode(ctx, 'idle', '');
+      setTimeout(function () { liveListen(ctx); }, 800);
+      return;
+    }
+    liveSpeak(ctx, spoken);
+  }
+
+  function liveSpeak(ctx, text) {
+    var live = liveState(ctx);
+    var synth = window.speechSynthesis;
+    stopSpeaking(ctx);
+    var chunks = sentences(text);
+    if (!chunks.length) {
+      setLiveMode(ctx, 'idle', '');
+      setTimeout(function () { liveListen(ctx); }, 300);
+      return;
+    }
+    var lang = liveLang();
+    var voice = pickVoice(lang);
+    var token = {};
+    live.speech = token;
+    live.speaking = true;
+    setLiveMode(ctx, 'speaking', 'Speaking…');
+    var i = 0;
+    function next() {
+      if (live.speech !== token || !live.active) return;
+      if (i >= chunks.length) {
+        live.speaking = false;
+        live.speech = null;
+        live.utter = null;
+        setLiveMode(ctx, 'idle', '');
+        setTimeout(function () { liveListen(ctx); }, 250);
+        return;
+      }
+      var u = new SpeechSynthesisUtterance(chunks[i++]);
+      u.lang = lang;
+      if (voice) u.voice = voice;
+      u.rate = 1;
+      u.pitch = 1;
+      u.onboundary = function () { bump(ctx); };
+      u.onend = next;
+      u.onerror = function (e) {
+        var code = (e && e.error) || '';
+        if (code === 'interrupted' || code === 'canceled') return;
+        next();
+      };
+      // Chrome drops the callbacks of an utterance nothing references.
+      live.utter = u;
+      synth.speak(u);
+    }
+    setTimeout(next, 30);
+  }
+
+  function stopSpeaking(ctx) {
+    var live = liveState(ctx);
+    live.speech = null;
+    live.speaking = false;
+    live.utter = null;
+    try {
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+    } catch (e) { /* nothing was speaking */ }
+  }
+
+  /* A word boundary while speaking: a nudge to the mark. */
+  function bump(ctx) {
+    var live = ctx.live;
+    if (!live || !live.orbEl) return;
+    live.orbEl.classList.remove('is-bump');
+    void live.orbEl.offsetWidth;
+    live.orbEl.classList.add('is-bump');
+  }
+
+  /* The reader's own voice, as a level for the bars and the orb. Best
+   * effort: if the microphone stream is refused, recognition says so. */
+  function startMeter(ctx) {
+    var live = liveState(ctx);
+    if (live.meter || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    var meter = { stream: null, audio: null, raf: 0, dead: false };
+    live.meter = meter;
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      if (meter.dead) {
+        stream.getTracks().forEach(function (t) { t.stop(); });
+        return;
+      }
+      meter.stream = stream;
+      var audio = new AC();
+      meter.audio = audio;
+      if (audio.resume) audio.resume().catch(function () { /* gesture needed */ });
+      var analyser = audio.createAnalyser();
+      analyser.fftSize = 512;
+      audio.createMediaStreamSource(stream).connect(analyser);
+      var data = new Uint8Array(analyser.fftSize);
+      var smooth = 0;
+      function tick() {
+        if (meter.dead) return;
+        analyser.getByteTimeDomainData(data);
+        var sum = 0;
+        for (var i = 0; i < data.length; i++) {
+          var v = (data[i] - 128) / 128;
+          sum += v * v;
+        }
+        var level = Math.min(1, Math.sqrt(sum / data.length) * 6);
+        smooth = smooth * 0.7 + level * 0.3;
+        if (live.view && live.mode === 'listening') live.view.style.setProperty('--level', smooth.toFixed(3));
+        meter.raf = requestAnimationFrame(tick);
+      }
+      tick();
+    }).catch(function () { /* recognition reports its own errors */ });
+  }
+
+  function stopMeter(ctx) {
+    var live = liveState(ctx);
+    var meter = live.meter;
+    if (!meter) return;
+    live.meter = null;
+    meter.dead = true;
+    if (meter.raf) cancelAnimationFrame(meter.raf);
+    if (meter.stream) meter.stream.getTracks().forEach(function (t) { t.stop(); });
+    if (meter.audio && meter.audio.close) meter.audio.close().catch(function () { /* already closed */ });
+    if (live.view) live.view.style.removeProperty('--level');
+  }
+
+  function toggleMic(ctx) {
+    var live = liveState(ctx);
+    if (!live.active) return;
+    if (live.listening) {
+      live.micOff = true;
+      stopListening(ctx);
+      setLiveMode(ctx, 'idle', 'Microphone off. Tap to talk.');
+      return;
+    }
+    if (live.mode === 'thinking') return;
+    live.micOff = false;
+    live.noSpeech = 0;
+    liveListen(ctx);
+  }
+
+  function paintMic(ctx) {
+    var live = ctx.live;
+    if (!live || !live.micBtn) return;
+    var off = !!live.micOff && !live.listening;
+    live.micBtn.classList.toggle('is-off', off);
+    live.micBtn.classList.toggle('is-listening', !!live.listening);
+    live.micBtn.setAttribute('aria-pressed', live.listening ? 'true' : 'false');
+    live.micBtn.setAttribute('aria-label', live.listening ? 'Stop listening' : (live.speaking ? 'Interrupt and talk' : 'Talk'));
+    var img = live.micBtn.querySelector('img');
+    if (img) img.src = off ? MIC_OFF : MIC;
+  }
+
+  function toggleSpeaker(ctx) {
+    var live = liveState(ctx);
+    live.speakerOff = !live.speakerOff;
+    storeSet(LS_VOICE_OFF, live.speakerOff ? '1' : '0');
+    paintSpeaker(ctx);
+    if (live.speakerOff && live.speaking) {
+      stopSpeaking(ctx);
+      setLiveMode(ctx, 'idle', '');
+      setTimeout(function () { liveListen(ctx); }, 200);
+    }
+  }
+
+  function paintSpeaker(ctx) {
+    var live = ctx.live;
+    if (!live || !live.speakerBtn) return;
+    live.speakerBtn.classList.toggle('is-off', !!live.speakerOff);
+    live.speakerBtn.setAttribute('aria-pressed', live.speakerOff ? 'true' : 'false');
+    live.speakerBtn.setAttribute('aria-label', live.speakerOff ? 'Unmute the voice' : 'Mute the voice');
+    var img = live.speakerBtn.querySelector('img');
+    if (img) img.src = live.speakerOff ? SPEAKER_OFF : SPEAKER;
   }
 
   function bindComposer(ctx) {
@@ -1088,6 +1608,10 @@
         attachFiles(ctx, ctx.fileEl.files);
         ctx.fileEl.value = '';
       });
+    }
+    if (ctx.voiceBtn) {
+      if (!liveSupported()) ctx.voiceBtn.hidden = true;
+      else ctx.voiceBtn.addEventListener('click', function () { openLive(ctx); });
     }
     ctx.inputEl.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -1177,6 +1701,7 @@
           '<button type="button" class="tma-bespoke__clip" data-bespoke-page-clip aria-label="Attach files"><img src="' + CLIP + '" alt=""></button>' +
           '<input type="file" data-bespoke-page-file multiple accept="' + ACCEPT + '" hidden>' +
           '<textarea class="tma-bespoke__input" data-bespoke-page-input rows="1" placeholder="Ask about this portal" aria-label="Message Bespoke AI Assistant"></textarea>' +
+          '<button type="button" class="tma-bespoke__voice" data-bespoke-page-voice aria-label="Talk live" title="Talk live"><img src="' + VOICE + '" alt=""></button>' +
           '<button type="submit" class="tma-bespoke__send" data-bespoke-page-send disabled aria-label="Send"><img src="' + SEND + '" alt=""></button>' +
         '</form>' +
       '</section>' +
@@ -1324,6 +1849,7 @@
   function mountPage(root, opts) {
     if (!root || !enabled()) return;
     opts = opts || {};
+    if (page) closeLive(page);
     root.innerHTML = pageMarkup();
     var shell = root.querySelector('.tma-bespoke-page');
     var ctx = {
@@ -1340,6 +1866,8 @@
       attachEl: root.querySelector('[data-bespoke-page-attach]'),
       clipBtn: root.querySelector('[data-bespoke-page-clip]'),
       fileEl: root.querySelector('[data-bespoke-page-file]'),
+      voiceBtn: root.querySelector('[data-bespoke-page-voice]'),
+      surfaceEl: root.querySelector('.tma-bespoke-page__thread'),
       pending: [],
       titleEl: root.querySelector('[data-bespoke-page-title]'),
       messages: [],
@@ -1489,6 +2017,7 @@
           '<button type="button" class="tma-bespoke__clip" data-bespoke-clip aria-label="Attach files"><img src="' + CLIP + '" alt=""></button>' +
           '<input type="file" data-bespoke-file multiple accept="' + ACCEPT + '" hidden>' +
           '<textarea class="tma-bespoke__input" data-bespoke-input rows="1" placeholder="Ask about this portal" aria-label="Message Bespoke AI Assistant"></textarea>' +
+          '<button type="button" class="tma-bespoke__voice" data-bespoke-voice aria-label="Talk live" title="Talk live"><img src="' + VOICE + '" alt=""></button>' +
           '<button type="submit" class="tma-bespoke__send" data-bespoke-send disabled aria-label="Send"><img src="' + SEND + '" alt=""></button>' +
         '</form>' +
       '</div>';
@@ -1591,7 +2120,10 @@
       setTimeout(function () {
         if (widget && widget.inputEl) widget.inputEl.focus();
       }, 40);
-    } else if (lastFocus && typeof lastFocus.focus === 'function') {
+      return;
+    }
+    closeLive(widget);
+    if (lastFocus && typeof lastFocus.focus === 'function') {
       lastFocus.focus();
     } else if (fab) {
       fab.focus();
@@ -1607,6 +2139,12 @@
   }
 
   function onKey(e) {
+    if (e.key === 'Escape' && page && page.live && page.live.active) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeLive(page);
+      return;
+    }
     if (e.key === 'Escape' && open) {
       e.preventDefault();
       e.stopPropagation();
@@ -1641,6 +2179,8 @@
       window.dispatchEvent(new Event('tma:bespoke-route'));
     });
     window.addEventListener('tma:bespoke-route', function () {
+      // The page's live voice ends with the page; the launcher's rides along.
+      if (page && page.live && page.live.active && !isPagePath()) closeLive(page);
       if (open && widget) refreshSuggestions(widget);
       else refreshHello('');
     });
@@ -1670,6 +2210,8 @@
       attachEl: host.querySelector('[data-bespoke-attach]'),
       clipBtn: host.querySelector('[data-bespoke-clip]'),
       fileEl: host.querySelector('[data-bespoke-file]'),
+      voiceBtn: host.querySelector('[data-bespoke-voice]'),
+      surfaceEl: panel,
       pending: [],
       messages: [],
       conversationId: storeGet(LS_CONV, ''),
@@ -1708,6 +2250,7 @@
   }
 
   function destroy() {
+    closeLive(widget);
     document.removeEventListener('keydown', onKey, true);
     document.removeEventListener('keydown', trap, true);
     if (host && host.parentNode) host.parentNode.removeChild(host);

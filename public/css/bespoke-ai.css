@@ -202,7 +202,7 @@
   bottom: calc(48px + var(--space-12));
   display: flex;
   flex-direction: column;
-  width: 380px;
+  width: 420px;
   height: 560px;
   max-height: calc(100vh - 96px);
   max-width: calc(100vw - 32px);
@@ -525,7 +525,9 @@ a.tma-bespoke__file:hover {
   height: 10px;
 }
 
-.tma-bespoke__clip {
+.tma-bespoke__clip,
+.tma-bespoke__voice,
+.tma-bespoke__live-btn {
   appearance: none;
   display: grid;
   place-items: center;
@@ -539,23 +541,37 @@ a.tma-bespoke__file:hover {
   flex-shrink: 0;
 }
 
-.tma-bespoke__clip:hover {
+.tma-bespoke__clip:hover,
+.tma-bespoke__voice:hover,
+.tma-bespoke__live-btn:hover {
   background: var(--color-hover);
 }
 
-.tma-bespoke__clip:focus-visible {
+.tma-bespoke__clip:focus-visible,
+.tma-bespoke__voice:focus-visible,
+.tma-bespoke__live-btn:focus-visible {
   outline: none;
   box-shadow: 0 0 0 4px var(--color-overlay-4);
 }
 
-.tma-bespoke__clip img {
+.tma-bespoke__clip img,
+.tma-bespoke__voice img,
+.tma-bespoke__live-btn img {
   width: 16px;
   height: 16px;
   display: block;
 }
 
+.tma-bespoke__voice[hidden] {
+  display: none;
+}
+
 .tma-dash[data-theme="dark"] .tma-bespoke__clip img,
 :root[data-theme="dark"] .tma-bespoke__clip img,
+.tma-dash[data-theme="dark"] .tma-bespoke__voice img,
+:root[data-theme="dark"] .tma-bespoke__voice img,
+.tma-dash[data-theme="dark"] .tma-bespoke__live-btn img,
+:root[data-theme="dark"] .tma-bespoke__live-btn img,
 .tma-dash[data-theme="dark"] .tma-bespoke__file img,
 :root[data-theme="dark"] .tma-bespoke__file img,
 .tma-dash[data-theme="dark"] .tma-bespoke__file-remove img,
@@ -876,6 +892,261 @@ a.tma-bespoke__card-btn {
   filter: none;
 }
 
+/* ── Live voice ───────────────────────────────────────────────────
+   Talking out loud. The stage takes the place of the log, chips and
+   composer while it runs; the head above it stays. The mark sits in an
+   orb whose rings ripple while listening, whose mark breathes while
+   thinking and bobs while speaking; five bars follow the reader's
+   microphone and then the voice. */
+.tma-bespoke__panel.is-live > :not(.tma-bespoke__head):not(.tma-bespoke__live),
+.tma-bespoke-page__thread.is-live > :not(.tma-bespoke-page__thread-head):not(.tma-bespoke__live) {
+  display: none;
+}
+
+.tma-bespoke__live {
+  --level: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.tma-bespoke__live[hidden] {
+  display: none;
+}
+
+.tma-bespoke__live-stage {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-12);
+  padding: var(--space-16);
+  text-align: center;
+}
+
+.tma-bespoke__orb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 128px;
+  height: 128px;
+  flex-shrink: 0;
+  border: 0.5px solid var(--color-border-soft);
+  border-radius: 50%;
+  background: var(--bespoke-wash);
+  transition: transform 120ms ease;
+}
+
+.tma-bespoke__orb-mark {
+  display: block;
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  transition: transform 140ms ease;
+}
+
+.tma-bespoke__orb-ring {
+  position: absolute;
+  inset: -6px;
+  border: 1.5px solid rgba(34, 211, 238, 0.55);
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tma-bespoke__orb-ring + .tma-bespoke__orb-ring {
+  border-color: rgba(168, 85, 247, 0.45);
+}
+
+.tma-bespoke__live[data-mode="listening"] .tma-bespoke__orb {
+  transform: scale(calc(1 + var(--level) * 0.08));
+}
+
+.tma-bespoke__live[data-mode="listening"] .tma-bespoke__orb-ring {
+  animation: tma-bespoke-ripple 2.2s ease-out infinite;
+}
+
+.tma-bespoke__live[data-mode="listening"] .tma-bespoke__orb-ring + .tma-bespoke__orb-ring {
+  animation-delay: 1.1s;
+}
+
+.tma-bespoke__live[data-mode="thinking"] .tma-bespoke__orb-mark {
+  animation: tma-bespoke-breathe 1.4s ease-in-out infinite;
+}
+
+.tma-bespoke__live[data-mode="speaking"] .tma-bespoke__orb {
+  animation: tma-bespoke-bob 1.6s ease-in-out infinite;
+}
+
+.tma-bespoke__live[data-mode="speaking"] .tma-bespoke__orb-ring:first-child {
+  animation: tma-bespoke-glow 1.6s ease-in-out infinite;
+}
+
+.tma-bespoke__orb.is-bump .tma-bespoke__orb-mark {
+  transform: scale(1.1);
+}
+
+@keyframes tma-bespoke-ripple {
+  0% { transform: scale(0.96); opacity: 0.8; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+@keyframes tma-bespoke-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.06); opacity: 1; }
+}
+
+@keyframes tma-bespoke-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes tma-bespoke-glow {
+  0%, 100% { transform: scale(1); opacity: 0.3; }
+  50% { transform: scale(1.08); opacity: 0.7; }
+}
+
+.tma-bespoke__bars {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+}
+
+.tma-bespoke__bars span {
+  width: 4px;
+  height: 6px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(34, 211, 238, 0.95), rgba(168, 85, 247, 0.95));
+  transition: height 90ms ease;
+}
+
+.tma-bespoke__live[data-mode="listening"] .tma-bespoke__bars span:nth-child(1) { height: calc(6px + var(--level) * 12px); }
+.tma-bespoke__live[data-mode="listening"] .tma-bespoke__bars span:nth-child(2) { height: calc(6px + var(--level) * 20px); }
+.tma-bespoke__live[data-mode="listening"] .tma-bespoke__bars span:nth-child(3) { height: calc(6px + var(--level) * 22px); }
+.tma-bespoke__live[data-mode="listening"] .tma-bespoke__bars span:nth-child(4) { height: calc(6px + var(--level) * 18px); }
+.tma-bespoke__live[data-mode="listening"] .tma-bespoke__bars span:nth-child(5) { height: calc(6px + var(--level) * 10px); }
+
+.tma-bespoke__live[data-mode="thinking"] .tma-bespoke__bars span {
+  animation: tma-bespoke-dot 1s ease infinite;
+}
+
+.tma-bespoke__live[data-mode="speaking"] .tma-bespoke__bars span {
+  animation: tma-bespoke-wave 0.9s ease-in-out infinite;
+}
+
+.tma-bespoke__live .tma-bespoke__bars span:nth-child(2) { animation-delay: 0.12s; }
+.tma-bespoke__live .tma-bespoke__bars span:nth-child(3) { animation-delay: 0.24s; }
+.tma-bespoke__live .tma-bespoke__bars span:nth-child(4) { animation-delay: 0.36s; }
+.tma-bespoke__live .tma-bespoke__bars span:nth-child(5) { animation-delay: 0.48s; }
+
+@keyframes tma-bespoke-wave {
+  0%, 100% { height: 6px; }
+  50% { height: 24px; }
+}
+
+.tma-bespoke__live-status {
+  margin: 0;
+  min-height: var(--text-lh-12);
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-bespoke__live-caption.tma-bespoke__bubble {
+  width: 100%;
+  max-width: 100%;
+  max-height: 132px;
+  overflow-y: auto;
+  padding: 0;
+  text-align: left;
+}
+
+.tma-bespoke__live-caption[hidden] {
+  display: none;
+}
+
+.tma-bespoke__live-caption--you {
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.tma-bespoke__live-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-16);
+  padding: var(--space-12) var(--space-16) var(--space-16);
+  border-top: 0.5px solid var(--color-border-soft);
+  flex-shrink: 0;
+}
+
+.tma-bespoke__live-mic {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 0.5px solid transparent;
+  border-radius: 50%;
+  background: var(--color-black);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 200ms ease, box-shadow 120ms ease;
+}
+
+.tma-bespoke__live-mic:hover {
+  background: var(--color-primary-dark);
+}
+
+.tma-bespoke__live-mic:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--color-overlay-4);
+}
+
+.tma-bespoke__live-mic img {
+  display: block;
+  width: 22px;
+  height: 22px;
+  filter: invert(1);
+}
+
+.tma-bespoke__live-mic.is-listening {
+  border-color: var(--color-border-soft);
+  background: var(--bespoke-wash-hot);
+  box-shadow: 0 0 0 calc(2px + var(--level) * 10px) var(--color-overlay-4);
+}
+
+.tma-bespoke__live-mic.is-off {
+  border-color: var(--color-border-medium);
+  background: var(--color-white);
+}
+
+.tma-bespoke__live-mic.is-off:hover {
+  background: var(--color-hover);
+}
+
+.tma-bespoke__live-mic.is-listening img,
+.tma-bespoke__live-mic.is-off img {
+  filter: none;
+}
+
+.tma-dash[data-theme="dark"] .tma-bespoke__live-mic img,
+:root[data-theme="dark"] .tma-bespoke__live-mic img {
+  filter: none;
+}
+
+.tma-dash[data-theme="dark"] .tma-bespoke__live-mic.is-listening img,
+:root[data-theme="dark"] .tma-bespoke__live-mic.is-listening img,
+.tma-dash[data-theme="dark"] .tma-bespoke__live-mic.is-off img,
+:root[data-theme="dark"] .tma-bespoke__live-mic.is-off img {
+  filter: invert(1);
+}
+
 html.tma-dash--compose-popout .tma-bespoke,
 .tma-dash--compose-popout .tma-bespoke {
   display: none !important;
@@ -923,6 +1194,19 @@ body:has(.tma-dash.is-rb-open) .tma-bespoke:not(.is-open) {
   .tma-bespoke__typing span {
     animation: none;
     opacity: 0.7;
+  }
+
+  .tma-bespoke__orb,
+  .tma-bespoke__orb-mark,
+  .tma-bespoke__orb-ring,
+  .tma-bespoke__bars span {
+    animation: none !important;
+    transition: none;
+  }
+
+  .tma-bespoke__live[data-mode="listening"] .tma-bespoke__orb-ring:first-child,
+  .tma-bespoke__live[data-mode="speaking"] .tma-bespoke__orb-ring:first-child {
+    opacity: 0.6;
   }
 }
 
