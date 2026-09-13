@@ -252,7 +252,21 @@ try {
   check(mismatches === 0, `${mismatches} of 500 random applications disagree`);
   check(await page.evaluate(() => window.TMAFeeCalculator.MAX_DEPENDANTS) === 15, 'the cap is 15');
 
-  step(11, 'On a phone the page fits the screen');
+  step(11, 'A narrow desktop window still shows two columns');
+  await page.setViewportSize({ width: 820, height: 900 });
+  await openByUrl();
+  const narrow = await page.evaluate(() => {
+    const a = document.querySelector('[data-fee-summary]').getBoundingClientRect();
+    const b = document.querySelector('[data-fee-inputs]').getBoundingClientRect();
+    return { sideBySide: Math.abs(a.top - b.top) < 2 && a.right <= b.left, over: document.documentElement.scrollWidth - window.innerWidth };
+  });
+  check(narrow.sideBySide, 'the total is still left of the questions at 820px');
+  check(narrow.over <= 0, `no sideways scroll at 820px (${narrow.over}px over)`);
+  await page.mouse.move(600, 700);
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: 'tests/Browser/fee-calculator-narrow.png' });
+
+  step(12, 'On a phone the page fits the screen');
   await page.setViewportSize({ width: 390, height: 844 });
   await openByUrl();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -275,7 +289,7 @@ try {
   await page.waitForTimeout(600);
   await page.screenshot({ path: 'tests/Browser/fee-calculator.png' });
 
-  step(12, 'No script errors along the way');
+  step(13, 'No script errors along the way');
   const noise = /Origin not allowed|favicon|net::ERR_|Failed to load resource|ResizeObserver/i;
   const real = pageErrors.filter((m) => !noise.test(m));
   check(real.length === 0, real.length ? `page errors: ${real.join(' | ')}` : 'no page errors');

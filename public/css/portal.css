@@ -6606,14 +6606,19 @@ audio.call-recordings__player { background: transparent; }
  * Page-layout glue only; every component on the page is documented
  * elsewhere (section card, field label, select, chip, ghost button). */
 
-.fee-calc { max-width: 1120px; }
+.fee-calc {
+  max-width: 1120px;
+  container-type: inline-size;
+}
 
-/* Two columns, the total on the left of the questions, side by side for
-   as long as each keeps a readable width; then one column, questions
-   first. Each column spaces its sections the way the page does. */
+/* Two columns, the total on the left of the questions. They hold until the
+   page itself (not the screen: a Standard-width rail plus the right panel
+   leave a laptop far less than its width) is too narrow for a dependant row
+   in each; then one column, questions first. Each column spaces its
+   sections the way the page does. */
 .fee-calc__columns {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--space-20);
   align-items: start;
 }
@@ -6623,9 +6628,11 @@ audio.call-recordings__player { background: transparent; }
   flex-direction: column;
   gap: var(--space-20);
   min-width: 0;
+  container-type: inline-size;
 }
 
-@media (max-width: 799px) {
+@container (max-width: 639px) {
+  .fee-calc__columns { grid-template-columns: minmax(0, 1fr); }
   .fee-calc__column--inputs { order: -1; }
 }
 
@@ -6713,7 +6720,8 @@ audio.call-recordings__player { background: transparent; }
   font-variant-numeric: tabular-nums;
 }
 
-@media (max-width: 480px) {
+/* A narrow column puts each question's label above its control. */
+@container (max-width: 399px) {
   .fee-calc__row { flex-wrap: wrap; }
   .fee-calc__row-label { flex-basis: 100%; }
   .fee-calc__row .tma-portal-select { flex: 1 1 auto; }
