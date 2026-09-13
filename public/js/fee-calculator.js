@@ -93,12 +93,14 @@
       '</div>';
   }
 
+  /* The firm's own notes, word for word. */
   function feeStructure() {
     return '<ul>' +
-      '<li>Applying alone: ' + money(BASE_ALONE) + '</li>' +
-      '<li>With a spouse: ' + money(BASE_WITH_SPOUSE) + '</li>' +
-      '<li>Dependants 1 to 4: ' + money(FEE_UNDER_18) + ' under 18, ' + money(FEE_18_AND_OVER) + ' at 18 and over</li>' +
-      '<li>With a spouse, dependants from the 5th: ' + money(FEE_18_AND_OVER) + ' each, any age</li>' +
+      '<li>Applying Alone: Admin Fee = US ' + money(BASE_ALONE) + '</li>' +
+      '<li>Applying With Spouse: Admin Fee = US ' + money(BASE_WITH_SPOUSE) + '</li>' +
+      '<li>Dependants (up to 4): Under 18 &mdash; ' + money(FEE_UNDER_18) + ' each &middot; 18 and Over &mdash; ' + money(FEE_18_AND_OVER) + ' each</li>' +
+      '<li>If a spouse is included <strong>and</strong> there are more than 4 dependants, all dependants from the 5th onward are ' + money(FEE_18_AND_OVER) + ' each, regardless of age.</li>' +
+      '<li>Dependants must be entered in the correct order &mdash; fees are calculated exactly as entered.</li>' +
       '</ul>';
   }
 
@@ -132,7 +134,7 @@
         '<span class="fee-calc__total-amount" data-fee-total>' + money(BASE_ALONE) + '</span>' +
         '</div>' +
         '<p class="tma-portal-note">Estimates only.</p>') +
-      ui().section('Fee structure', feeStructure());
+      ui().section('Fee Structure Notes', feeStructure());
 
     // The questions on the left, the answer on the right; one column on a
     // phone, questions first.
