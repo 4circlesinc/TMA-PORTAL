@@ -134,13 +134,13 @@
         '<p class="tma-portal-note">Estimates only.</p>') +
       ui().section('Fee structure', feeStructure());
 
-    // The answer on the left, the questions on the right; one column on a
-    // phone, questions first, as the page read before it had columns.
+    // The questions on the left, the answer on the right; one column on a
+    // phone, questions first.
     root.innerHTML =
       '<div class="tma-portal-page fee-calc">' +
       '<div class="fee-calc__columns">' +
-      '<div class="fee-calc__column fee-calc__column--summary" data-fee-summary>' + summary + '</div>' +
       '<div class="fee-calc__column fee-calc__column--inputs" data-fee-inputs>' + inputs + '</div>' +
+      '<div class="fee-calc__column fee-calc__column--summary" data-fee-summary>' + summary + '</div>' +
       '</div>' +
       '</div>';
   }

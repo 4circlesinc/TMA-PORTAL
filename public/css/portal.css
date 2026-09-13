@@ -6611,11 +6611,11 @@ audio.call-recordings__player { background: transparent; }
   container-type: inline-size;
 }
 
-/* Two columns, the total on the left of the questions. They hold until the
-   page itself (not the screen: a Standard-width rail plus the right panel
-   leave a laptop far less than its width) is too narrow for a dependant row
-   in each; then one column, questions first. Each column spaces its
-   sections the way the page does. */
+/* Two columns, the questions on the left and the total on the right. They
+   hold until the page itself (not the screen: a Standard-width rail plus
+   the right panel leave a laptop far less than its width) is too narrow
+   for a dependant row in each; then one column, questions first. Each
+   column spaces its sections the way the page does. */
 .fee-calc__columns {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -6633,7 +6633,6 @@ audio.call-recordings__player { background: transparent; }
 
 @container (max-width: 639px) {
   .fee-calc__columns { grid-template-columns: minmax(0, 1fr); }
-  .fee-calc__column--inputs { order: -1; }
 }
 
 .fee-calc .tma-portal-form-actions { flex-wrap: wrap; }

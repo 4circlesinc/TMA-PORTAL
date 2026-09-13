@@ -166,9 +166,9 @@ try {
   const desk = await page.evaluate(() => {
     const a = document.querySelector('[data-fee-summary]').getBoundingClientRect();
     const b = document.querySelector('[data-fee-inputs]').getBoundingClientRect();
-    return { summaryLeft: a.left, summaryRight: a.right, inputsLeft: b.left, sameRow: Math.abs(a.top - b.top) < 2 };
+    return { summaryLeft: a.left, inputsLeft: b.left, inputsRight: b.right, sameRow: Math.abs(a.top - b.top) < 2 };
   });
-  check(desk.sameRow && desk.summaryRight <= desk.inputsLeft, `the total sits in a column to the left of the questions (${Math.round(desk.summaryLeft)} < ${Math.round(desk.inputsLeft)})`);
+  check(desk.sameRow && desk.inputsRight <= desk.summaryLeft, `the questions sit in a column to the left of the total (${Math.round(desk.inputsLeft)} < ${Math.round(desk.summaryLeft)})`);
 
   step(2, 'A fresh application: one dependant row, nothing chosen, $30,000');
   check(await rowCount() === 1, 'one dependant row');
@@ -258,9 +258,9 @@ try {
   const narrow = await page.evaluate(() => {
     const a = document.querySelector('[data-fee-summary]').getBoundingClientRect();
     const b = document.querySelector('[data-fee-inputs]').getBoundingClientRect();
-    return { sideBySide: Math.abs(a.top - b.top) < 2 && a.right <= b.left, over: document.documentElement.scrollWidth - window.innerWidth };
+    return { sideBySide: Math.abs(a.top - b.top) < 2 && b.right <= a.left, over: document.documentElement.scrollWidth - window.innerWidth };
   });
-  check(narrow.sideBySide, 'the total is still left of the questions at 820px');
+  check(narrow.sideBySide, 'the questions are still left of the total at 820px');
   check(narrow.over <= 0, `no sideways scroll at 820px (${narrow.over}px over)`);
   await page.mouse.move(600, 700);
   await page.waitForTimeout(400);
