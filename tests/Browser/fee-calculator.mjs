@@ -163,6 +163,12 @@ try {
   const iconMask = await row.locator('.tma-dash__nav-icon').evaluate((el) => getComputedStyle(el).maskImage || getComputedStyle(el).webkitMaskImage);
   check(/data:image\/svg\+xml/.test(iconMask), 'the row icon resolves to inlined artwork');
   check((await page.locator('[data-mrow][data-nav="calculator"]').count()) === 1, 'the phone menu carries the row too');
+  const desk = await page.evaluate(() => {
+    const a = document.querySelector('[data-fee-summary]').getBoundingClientRect();
+    const b = document.querySelector('[data-fee-inputs]').getBoundingClientRect();
+    return { summaryLeft: a.left, summaryRight: a.right, inputsLeft: b.left, sameRow: Math.abs(a.top - b.top) < 2 };
+  });
+  check(desk.sameRow && desk.summaryRight <= desk.inputsLeft, `the total sits in a column to the left of the questions (${Math.round(desk.summaryLeft)} < ${Math.round(desk.inputsLeft)})`);
 
   step(2, 'A fresh application: one dependant row, nothing chosen, $30,000');
   check(await rowCount() === 1, 'one dependant row');
@@ -251,6 +257,12 @@ try {
   await openByUrl();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   check(overflow <= 0, `no sideways scroll (${overflow}px over)`);
+  const phone = await page.evaluate(() => {
+    const a = document.querySelector('[data-fee-summary]').getBoundingClientRect();
+    const b = document.querySelector('[data-fee-inputs]').getBoundingClientRect();
+    return { stacked: b.bottom <= a.top + 1, inputsFirst: b.top < a.top };
+  });
+  check(phone.stacked && phone.inputsFirst, 'one column on a phone, the questions above the total');
   await clickTimes('[data-fee-add]', 2);
   await setAge(1, '18 and Over');
   await agrees('phone', false, ['', '18 and Over', '']);

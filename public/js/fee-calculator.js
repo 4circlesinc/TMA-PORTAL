@@ -103,8 +103,7 @@
   }
 
   function render(root) {
-    root.innerHTML =
-      '<div class="tma-portal-page fee-calc">' +
+    var inputs =
       ui().section('Application',
         '<div class="fee-calc__row">' +
         '<span class="tma-portal-field__label fee-calc__row-label">Applying with a spouse?</span>' +
@@ -123,7 +122,9 @@
         ui().btn({ label: 'Add dependant', icon: 'Plus', variant: 'ghost', attrs: ' data-fee-add' }) +
         ui().btn({ label: 'Remove dependant', icon: 'Minus', variant: 'ghost', attrs: ' data-fee-remove' }) +
         '</div>',
-        { description: 'In the order they are on the application.' }) +
+        { description: 'In the order they are on the application.' });
+
+    var summary =
       ui().section('Total',
         '<div class="fee-calc__lines" data-fee-lines></div>' +
         '<div class="fee-calc__total">' +
@@ -131,7 +132,16 @@
         '<span class="fee-calc__total-amount" data-fee-total>' + money(BASE_ALONE) + '</span>' +
         '</div>' +
         '<p class="tma-portal-note">Estimates only.</p>') +
-      ui().section('Fee structure', feeStructure()) +
+      ui().section('Fee structure', feeStructure());
+
+    // The answer on the left, the questions on the right; one column on a
+    // phone, questions first, as the page read before it had columns.
+    root.innerHTML =
+      '<div class="tma-portal-page fee-calc">' +
+      '<div class="fee-calc__columns">' +
+      '<div class="fee-calc__column fee-calc__column--summary" data-fee-summary>' + summary + '</div>' +
+      '<div class="fee-calc__column fee-calc__column--inputs" data-fee-inputs>' + inputs + '</div>' +
+      '</div>' +
       '</div>';
   }
 
