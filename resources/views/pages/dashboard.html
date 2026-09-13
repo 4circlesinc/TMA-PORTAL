@@ -197,6 +197,12 @@
           <span>Call Recordings</span>
         </a>
 
+        <a class="tma-dash__nav-item" href="/calculator" data-nav="calculator" data-title="Fee Calculator" data-crumb="Fee Calculator" data-view="calculator">
+          <span class="tma-dash__nav-caret tma-dash__nav-caret--hidden"></span>
+          <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--calculator" aria-hidden="true"></span>
+          <span>Fee Calculator</span>
+        </a>
+
         <button type="button" class="tma-dash__nav-item tma-dash__nav-item--expand" data-expand="people" aria-expanded="false">
           <span class="tma-dash__nav-caret"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           <span class="tma-dash__nav-icon tma-dash__nav-icon--ink tma-dash__nav-icon--userlist" aria-hidden="true"></span>
@@ -374,6 +380,10 @@
       </div>
 
       <div class="tma-dash__view" data-view="call-recordings" hidden>
+        <div data-portal-mount></div>
+      </div>
+
+      <div class="tma-dash__view" data-view="calculator" hidden>
         <div data-portal-mount></div>
       </div>
 
@@ -575,6 +585,9 @@
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="call-recordings" data-title="Call Recordings" data-crumb="Call Recordings" data-view="call-recordings">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/PhoneCall.svg" alt=""><span>Call Recordings</span>
         </button>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="calculator" data-title="Fee Calculator" data-crumb="Fee Calculator" data-view="calculator">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/Calculator.svg" alt=""><span>Fee Calculator</span>
+        </button>
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="people-home" data-title="Manage Users" data-crumb="People / Manage Users" data-view="people">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/UserList.svg" alt=""><span>People</span>
         </button>
@@ -709,6 +722,7 @@
   <script src="js/portal-file-requests.js?v=1" defer></script>
   <script src="js/portal-files.js?v=58" defer></script>
   <script src="js/call-recordings.js?v=4" defer></script>
+  <script src="js/fee-calculator.js?v=1" defer></script>
   <script src="js/bespoke-ai.js?v=17" defer></script>
   <script src="js/portal-shortcuts.js" defer></script>
   <script src="js/portal-home-library.js?v=28" defer></script>

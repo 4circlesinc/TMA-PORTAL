@@ -36,6 +36,9 @@ class LegacyPageController extends Controller
         // Open to every approved account while FEATURE_BESPOKE is on.
         'bespoke-ai',
         'calendar',
+        // The Fee Calculator. Open to every approved account: arithmetic on
+        // the reader's own inputs, nothing the server holds.
+        'calculator',
         // Staff-only (Role::PAGE_CAPABILITIES): recordings of client calls.
         'call-recordings',
         'citizenship-applications',

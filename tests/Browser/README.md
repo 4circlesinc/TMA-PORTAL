@@ -71,6 +71,23 @@ field placement and drawing, and computed CSS only exist in a browser.
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/bespoke-dictation.mjs
   ```
 
+- **`fee-calculator.mjs`** — the Fee Calculator (`/calculator`), opened as
+  a client because that is the role that reaches the least of the portal.
+  The sidebar row and the phone menu row are there, a hard refresh on the
+  address serves the shell, and the numbers on screen match the firm's
+  standalone calculator: the oracle in the script is that page's own
+  `calcDepFee`, ported line for line. It walks the spouse answer, five
+  dependants (the 5th flips to $10,000 the moment a spouse is included and
+  back to their age's fee when the spouse goes), an age left unchosen, Add
+  stopping at 15 and Remove at 1, entries surviving a trip to the dashboard
+  and back with one click adding one row (nothing double-bound), a clean
+  reload, a phone width with no sideways scroll, and
+  `window.TMAFeeCalculator.compute` against the oracle on 500 random
+  applications. Standard throwaway server plus a Client account
+  (`client@example.com`, `password12345`):
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8931 node tests/Browser/fee-calculator.mjs
+  ```
 - **`signature-editor.mjs`** — log in, pick a library file, add recipients,
   place fields on the rendered PDF, drag one, confirm the coordinates persist
   as page-relative fractions.

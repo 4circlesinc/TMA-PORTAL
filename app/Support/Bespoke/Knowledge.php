@@ -267,6 +267,7 @@ final class Knowledge
         $paths = [
             '/',
             '/calendar',
+            '/calculator',
             '/signatures',
             '/social/messages',
             '/folders/recent',

@@ -833,6 +833,7 @@ Reference: `public/js/settings.js` (`renderAddPaymentMethodPopup`, `renderChange
 | 2026-07-07 | **Classic design preserved** - previous shell restored at `/classic` (`public/classic/index.html`, `window.TMA_CLASSIC` mode in `dashboard.js`); two-way links between designs; removed redundant "Dashboard" title row on the new portal home |
 | 2026-07-07 | **Primary accent = TMA brand blue** - `--color-indigo` remapped to `var(--color-primary-dark)` (`#136da0`); accent picker "indigo" swatch updated in `dashboard.js`; rule documented under Design Tokens › Colors. Purple/indigo must not be used for primary accents |
 | 2026-07-07 | **Global accent sweep** - `--color-purple` remapped to brand blue; added `--color-accent`, `--color-accent-bg`, `--color-accent-bg-hover`; replaced hardcoded `#9747ff` in component CSS; portal selection toolbar + table checkboxes use brand blue |
+| 2026-09-13 | **Fee Calculator page** - `/calculator` (`public/js/fee-calculator.js`, open to every account, absent from `Role::PAGE_CAPABILITIES`); the sidebar row sits in the Pages group with a masked `Calculator` icon; the page composes `ui().section` / `ui().select` / `ui().btn` (ghost) and `.tma-portal-chip`, with only layout glue (`.fee-calc*`) added to `portal.css` |
 
 ---
 

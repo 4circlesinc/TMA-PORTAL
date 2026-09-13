@@ -6602,6 +6602,102 @@ audio.call-recordings__player { background: transparent; }
   gap: var(--space-12);
 }
 
+/* ── Fee Calculator (/calculator) ───────────────────────────────────
+ * Page-layout glue only; every component on the page is documented
+ * elsewhere (section card, field label, select, chip, ghost button). */
+
+.fee-calc { max-width: 720px; }
+
+.fee-calc .tma-portal-form-actions { flex-wrap: wrap; }
+
+.fee-calc__dependants {
+  display: flex;
+  flex-direction: column;
+}
+
+/* One question per line: the label, then its control, then (for a
+   dependant) what that row charges. Rows in the list are ruled apart. */
+.fee-calc__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  min-width: 0;
+}
+
+.fee-calc__dependants .fee-calc__row {
+  padding: var(--space-8) 0;
+  border-bottom: 1px solid var(--color-overlay-4);
+}
+
+.fee-calc__dependants .fee-calc__row:first-child { padding-top: 0; }
+
+.fee-calc__dependants .fee-calc__row:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.fee-calc__row-label { flex: 1 1 auto; }
+
+.fee-calc__row .tma-portal-select {
+  width: auto;
+  flex: 0 1 180px;
+}
+
+.fee-calc__fee {
+  flex: none;
+  min-width: 64px;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.fee-calc__lines {
+  display: flex;
+  flex-direction: column;
+}
+
+.fee-calc__line {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-16);
+  padding: var(--space-6) 0;
+  border-bottom: 1px solid var(--color-overlay-4);
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.fee-calc__line:first-child { padding-top: 0; }
+
+.fee-calc__total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-16);
+  flex-wrap: wrap;
+}
+
+.fee-calc__total-label {
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.fee-calc__total-amount {
+  font-size: var(--text-size-24);
+  line-height: var(--text-lh-32);
+  font-weight: 600;
+  color: var(--color-black);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 480px) {
+  .fee-calc__row { flex-wrap: wrap; }
+  .fee-calc__row-label { flex-basis: 100%; }
+  .fee-calc__row .tma-portal-select { flex: 1 1 auto; }
+}
+
 /* ── the sync indicator ───────────────────────────────
    One pill in the bottom-left of the CONTENT, shown only when the connection
    has gone or the write queue is holding something. See portal-sync-status.js.

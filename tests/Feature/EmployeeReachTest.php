@@ -96,7 +96,7 @@ class EmployeeReachTest extends TestCase
 
         $this->assertSame([
             'account', 'account-info', 'account-settings', 'bespoke-ai', 'billing-details',
-            'billing-details/card', 'calendar', 'call-recordings',
+            'billing-details/card', 'calculator', 'calendar', 'call-recordings',
             'choose-account-type',
             'citizenship-applications', 'classic', 'email', 'email/compose', 'email/templates', 'folders/all',
             'folders/clients', 'folders/favorites', 'folders/filebox', 'folders/personal',
@@ -110,7 +110,7 @@ class EmployeeReachTest extends TestCase
         // organization-wide ones (All Files, Shared Folders) are staff.
         $this->assertSame([
             'account', 'account-info', 'account-settings', 'bespoke-ai', 'billing-details',
-            'billing-details/card', 'calendar', 'choose-account-type',
+            'billing-details/card', 'calculator', 'calendar', 'choose-account-type',
             'classic', 'folders/clients', 'folders/favorites', 'folders/filebox',
             'folders/personal', 'folders/recent', 'folders/recycle',
             'folders/shared-with-me',
