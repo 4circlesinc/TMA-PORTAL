@@ -6,6 +6,7 @@ use App\Jobs\SyncProviderCalendar;
 use App\Models\Calendar;
 use App\Models\ConnectedAccount;
 use App\Models\User;
+use App\Support\Calendar\Sync\CalendarSyncException;
 use App\Support\Calendar\Sync\ProviderFactory;
 use Illuminate\Support\Str;
 
@@ -20,8 +21,7 @@ class CalendarImporter
     /**
      * @return array{found: int, added: Calendar[], skipped: int, failed: array}
      *
-     * @throws \App\Support\Calendar\Sync\CalendarSyncException when the
-     *         provider cannot list calendars (bad token, revoked consent).
+     * @throws CalendarSyncException when the provider cannot list calendars (bad token, revoked consent).
      */
     public static function importAll(User $user, ConnectedAccount $account, string $direction = 'two_way', int $monthsBack = 3): array
     {
@@ -86,7 +86,12 @@ class CalendarImporter
                     $calendar,
                     context: ['provider' => $account->provider, 'bulk' => true],
                 );
-                SyncProviderCalendar::dispatch($calendar->id);
+                // Stagger Outlook calendars so Graph's mailbox concurrency
+                // limit (4) is not blown on connect-all. Google can start now.
+                $pending = SyncProviderCalendar::dispatch($calendar->id);
+                if ($account->provider === 'microsoft' && count($added) > 0) {
+                    $pending->delay(now()->addSeconds(count($added) * 15));
+                }
 
                 $added[] = $calendar;
                 $already[] = $externalId;

@@ -7,6 +7,7 @@ use App\Models\Calendar;
 use App\Models\CalendarAuditEvent;
 use App\Models\CalendarEvent;
 use App\Models\ConnectedAccount;
+use App\Models\Notification;
 use App\Models\User;
 use App\Support\Calendar\CalendarAudit;
 use App\Support\Calendar\GroupMembership;
@@ -368,6 +369,48 @@ class CalendarProviderSyncTest extends TestCase
         $this->assertSame(1, $calendar->subscription_failures);
     }
 
+    public function test_a_throttled_sync_is_retried_without_paging_the_user(): void
+    {
+        Queue::fake();
+
+        [$user, $calendar] = $this->connectedCalendar();
+
+        $provider = new FakeCalendarProvider([]);
+        $provider->throttle = true;
+        $this->fakeProvider($provider);
+
+        (new SyncProviderCalendar($calendar->id))->handle();
+
+        $calendar->refresh();
+        $this->assertSame('syncing', $calendar->subscription_status);
+        $this->assertNull($calendar->subscription_error);
+        $this->assertSame(0, (int) $calendar->subscription_failures);
+        $this->assertSame(0, Notification::where('user_id', $user->id)->where('type', 'calendar.sync_error')->count());
+        $this->assertSame(0, CalendarAuditEvent::where('action', CalendarAudit::SYNC_FAILED)->count());
+
+        Queue::assertPushed(SyncProviderCalendar::class, fn (SyncProviderCalendar $j) => $j->calendarId === $calendar->id);
+    }
+
+    public function test_microsoft_calendars_on_one_account_share_a_mailbox_lock(): void
+    {
+        [, $google] = $this->connectedCalendar();
+
+        $user = $this->user();
+        $account = $this->account($user, ['Calendars.ReadWrite']);
+        $account->forceFill([
+            'provider' => 'microsoft',
+            'provider_id' => 'ms-'.$user->id,
+        ])->save();
+
+        [, $outlook] = $this->connectedCalendar([
+            'name' => 'Outlook',
+            'source' => Calendar::SOURCE_MICROSOFT,
+        ], $user, $account);
+
+        $this->assertCount(1, (new SyncProviderCalendar($google->id))->middleware());
+        $this->assertCount(2, (new SyncProviderCalendar($outlook->id))->middleware());
+    }
+
     /* ── connect flow ────────────────────────────────────────── */
 
     public function test_connecting_a_provider_calendar_creates_a_mirror_and_queues_sync(): void
@@ -726,6 +769,8 @@ class FakeCalendarProvider implements CalendarProvider
 
     public ?string $failCreateWith = null;
 
+    public bool $throttle = false;
+
     /** @var array<int, array<string, mixed>> */
     public array $calendars = [
         ['id' => 'primary', 'name' => 'Primary', 'colour' => null, 'primary' => true, 'canWrite' => true],
@@ -752,6 +797,10 @@ class FakeCalendarProvider implements CalendarProvider
     {
         if ($this->failWith) {
             throw new CalendarSyncException($this->failWith);
+        }
+
+        if ($this->throttle) {
+            throw new CalendarSyncException('slow down', throttled: true, retryAfter: 15);
         }
 
         // Simulate an expired incremental token on the first attempt.

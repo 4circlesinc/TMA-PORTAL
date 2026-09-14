@@ -6,6 +6,7 @@ use App\Models\ConnectedAccount;
 use App\Support\Mail\MailTokens;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -260,15 +261,25 @@ class GoogleCalendarProvider implements CalendarProvider
 
     private function request(int $timeout = 30): PendingRequest
     {
-        return Http::withToken(MailTokens::accessToken($this->account))
-            ->acceptJson()
-            ->timeout($timeout);
+        return ThrottledHttp::configure(
+            Http::withToken(MailTokens::accessToken($this->account))
+                ->acceptJson()
+                ->timeout($timeout)
+        );
     }
 
-    private function assertOk($response, string $what): void
+    private function assertOk(Response $response, string $what): void
     {
         if ($response->successful()) {
             return;
+        }
+
+        if (ThrottledHttp::isThrottled($response)) {
+            throw new CalendarSyncException(
+                'Google is temporarily rate-limiting calendar access.',
+                throttled: true,
+                retryAfter: ThrottledHttp::retryAfter($response),
+            );
         }
 
         if ($response->status() === 401 || $response->status() === 403) {

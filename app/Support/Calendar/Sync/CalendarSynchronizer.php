@@ -67,7 +67,9 @@ class CalendarSynchronizer
 
             $this->finishRun($stats);
         } catch (CalendarSyncException $e) {
-            $this->recordFailure($e->getMessage());
+            if (! $e->throttled) {
+                $this->recordFailure($e->getMessage());
+            }
             throw $e;
         }
 
@@ -99,7 +101,10 @@ class CalendarSynchronizer
 
                 return;
             }
-        } catch (CalendarSyncException) {
+        } catch (CalendarSyncException $e) {
+            if ($e->throttled) {
+                throw $e;
+            }
             // Discovery failed, leave null and continue the sync; a later
             // run can heal once the provider is reachable again.
         }
@@ -422,6 +427,9 @@ class CalendarSynchronizer
 
                 $stats['pushed']++;
             } catch (CalendarSyncException $e) {
+                if ($e->throttled) {
+                    throw $e;
+                }
                 // One event must not fail the whole calendar (e.g. a single
                 // rejected write on an otherwise healthy sync).
                 $stats['failed'] = ($stats['failed'] ?? 0) + 1;

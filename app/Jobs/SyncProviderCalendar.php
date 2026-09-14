@@ -17,8 +17,12 @@ use Illuminate\Queue\Middleware\WithoutOverlapping;
  * trip. A failure is recorded on the calendar row by the synchronizer and
  * surfaced against that one entry in the sidebar; it never takes down the
  * page or the other calendars, which is section 24 of the brief.
+ *
+ * Microsoft Graph allows only four concurrent requests per mailbox. Connecting
+ * Birthdays + Calendar + Upcoming Events at once 429s all of them, so Outlook
+ * calendars on the same account run one at a time and wait their turn.
  */
-class SyncProviderCalendar implements ShouldQueue, ShouldBeUniqueUntilProcessing
+class SyncProviderCalendar implements ShouldBeUniqueUntilProcessing, ShouldQueue
 {
     use Queueable;
 
@@ -43,14 +47,32 @@ class SyncProviderCalendar implements ShouldQueue, ShouldBeUniqueUntilProcessing
     }
 
     /**
-     * Two syncs of the same calendar would race on the cursor, so overlapping
-     * runs are dropped. Mirrors SyncMailbox.
+     * Two syncs of the same calendar would race on the cursor, so a second
+     * run waits rather than overlapping. Microsoft calendars on one mailbox
+     * also share a lock, because Graph 429s a stampede.
+     *
+     * releaseAfter, not dontRelease: a throttled run re-queues itself after
+     * Retry-After, and dropping that follow-up left the calendar failed.
      *
      * @return array<int, object>
      */
     public function middleware(): array
     {
-        return [(new WithoutOverlapping('calendar-sync:'.$this->calendarId))->dontRelease()->expireAfter(180)];
+        $locks = [
+            (new WithoutOverlapping('calendar-sync:'.$this->calendarId))->releaseAfter(10)->expireAfter(180),
+        ];
+
+        $calendar = Calendar::query()
+            ->select(['id', 'source', 'connected_account_id'])
+            ->find($this->calendarId);
+
+        if ($calendar?->source === Calendar::SOURCE_MICROSOFT && $calendar->connected_account_id) {
+            $locks[] = (new WithoutOverlapping('calendar-mailbox:'.$calendar->connected_account_id))
+                ->releaseAfter(15)
+                ->expireAfter(180);
+        }
+
+        return $locks;
     }
 
     public function handle(): void
@@ -63,7 +85,16 @@ class SyncProviderCalendar implements ShouldQueue, ShouldBeUniqueUntilProcessing
 
         try {
             (new CalendarSynchronizer($calendar))->run();
-        } catch (CalendarSyncException) {
+        } catch (CalendarSyncException $e) {
+            if ($e->throttled) {
+                // Stay 'syncing' so the connect panel keeps polling. A new
+                // dispatch, not $this->release(): release burns tries and
+                // the overlap lock would drop a retry that landed too soon.
+                static::dispatch($this->calendarId)
+                    ->delay(now()->addSeconds($e->retryAfter));
+
+                return;
+            }
             // Already recorded on the calendar by the synchronizer. Swallowed
             // so a provider outage doesn't spill into failed_jobs on every
             // scheduler tick; the row's error state is the record.
