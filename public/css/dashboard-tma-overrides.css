@@ -1556,14 +1556,20 @@ body::-webkit-scrollbar,
  *    strip, wrapping chrome. ── */
 @media (max-width: 1024px) {
   /* The detail pane is the scroller; the profile section releases its own
-     inner scroll so the facts strip and panels travel together. */
-  .tma-dash__clients-page--detail .tma-dash__clients-detail {
+     inner scroll so the facts strip and panels travel together.
+
+     Not --flowing: the new and edit application screens are one long form
+     with no tab row to keep on screen. Making their pane a scroller here
+     clamps the form to the viewport and, with overscroll-behavior: contain,
+     leaves the wheel in a dead box — the people below the applicant become
+     unreachable. Those screens scroll with the page instead. */
+  .tma-dash__clients-page--detail:not(.tma-dash__clients-page--flowing) .tma-dash__clients-detail {
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
   }
 
-  .tma-dash__clients-page--detail .tma-dash__clients-profile {
+  .tma-dash__clients-page--detail:not(.tma-dash__clients-page--flowing) .tma-dash__clients-profile {
     flex: 0 0 auto !important;
     min-height: 0;
     overflow: visible !important;

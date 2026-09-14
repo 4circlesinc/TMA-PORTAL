@@ -21096,19 +21096,33 @@ button.tma-file-status-chip:focus-visible,
   padding-top: var(--space-8);
 }
 
+/* --flowing excluded: the intake form's page element must keep the visible
+   overflow the lift above gives it, and these rules are later. */
 .tma-dash__clients-page--list,
-.tma-dash__clients-page--detail {
+.tma-dash__clients-page--detail:not(.tma-dash__clients-page--flowing) {
   flex-direction: column;
   gap: var(--space-16);
   overflow: hidden;
   width: 100%;
 }
 
+.tma-dash__clients-page--flowing {
+  flex-direction: column;
+  gap: var(--space-16);
+  width: 100%;
+}
+
 .tma-dash--clients-mobile .tma-dash__clients-page--list,
-.tma-dash--clients-mobile .tma-dash__clients-page--detail {
+.tma-dash--clients-mobile .tma-dash__clients-page--detail:not(.tma-dash__clients-page--flowing) {
   flex-direction: column;
   gap: var(--space-16);
   overflow: hidden;
+  width: 100%;
+}
+
+.tma-dash--clients-mobile .tma-dash__clients-page--flowing {
+  flex-direction: column;
+  gap: var(--space-16);
   width: 100%;
 }
 
@@ -21146,15 +21160,26 @@ button.tma-file-status-chip:focus-visible,
  * needs to stick and nothing needs a background painted behind it to hide what
  * is passing underneath, because the row is no longer in the moving part.
  */
-.tma-dash__clients-page--detail .tma-dash__clients-detail,
-.tma-dash--clients-mobile .tma-dash__clients-page--detail .tma-dash__clients-detail {
+/*
+ * Not the intake form, which is a document and scrolls as one.
+ *
+ * A tabbed file pins its tab row and scrolls the panels under it. The new and
+ * edit application screens have no tab row: they are one long form, and the
+ * rule above lifts the height clamps off their whole chain so the shell's main
+ * region does the scrolling. Both screens carry --detail, so without this
+ * exclusion these two rules land on them last and clamp the form back to the
+ * viewport — the reader reaches the bottom of the applicant and the people
+ * below have nowhere to go.
+ */
+.tma-dash__clients-page--detail:not(.tma-dash__clients-page--flowing) .tma-dash__clients-detail,
+.tma-dash--clients-mobile .tma-dash__clients-page--detail:not(.tma-dash__clients-page--flowing) .tma-dash__clients-detail {
   flex: 1;
   min-height: 0;
   overflow: hidden;
 }
 
-.tma-dash__clients-page--detail .tma-dash__clients-profile,
-.tma-dash--clients-mobile .tma-dash__clients-page--detail .tma-dash__clients-profile {
+.tma-dash__clients-page--detail:not(.tma-dash__clients-page--flowing) .tma-dash__clients-profile,
+.tma-dash--clients-mobile .tma-dash__clients-page--detail:not(.tma-dash__clients-page--flowing) .tma-dash__clients-profile {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
