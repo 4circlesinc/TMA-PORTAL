@@ -156,22 +156,43 @@ class Pusher
             return null;
         }
 
+        $named = SharePointItem::query()
+            ->where('connection_id', $connection->id)
+            ->where('graph_parent_id', $parentGraphId)
+            ->where('name', $folder->name)
+            ->first();
+        if ($named) {
+            if ($named->folder_id === null) {
+                $named->update(['folder_id' => $folder->id]);
+            }
+
+            return $named->graph_item_id;
+        }
+
         $created = Drive::createFolder($connection->drive_id, $parentGraphId, $folder->name);
 
-        SharePointItem::create([
-            'connection_id' => $connection->id,
-            'graph_item_id' => $created['id'],
-            'graph_parent_id' => $parentGraphId,
-            'item_type' => 'folder',
-            'folder_id' => $folder->id,
-            'etag' => $created['eTag'] ?? null,
-            'name' => $created['name'] ?? $folder->name,
-            'web_url' => $created['webUrl'] ?? null,
-            'sync_status' => SharePointItem::SYNCED,
-            'last_synced_at' => now(),
-        ]);
+        $mapped = SharePointItem::query()->firstOrCreate(
+            [
+                'connection_id' => $connection->id,
+                'graph_item_id' => $created['id'],
+            ],
+            [
+                'graph_parent_id' => $parentGraphId,
+                'item_type' => 'folder',
+                'folder_id' => $folder->id,
+                'etag' => $created['eTag'] ?? null,
+                'name' => $created['name'] ?? $folder->name,
+                'web_url' => $created['webUrl'] ?? null,
+                'sync_status' => SharePointItem::SYNCED,
+                'last_synced_at' => now(),
+            ],
+        );
 
-        return $created['id'];
+        if ($mapped->folder_id === null) {
+            $mapped->update(['folder_id' => $folder->id]);
+        }
+
+        return $mapped->graph_item_id;
     }
 
     /**
@@ -456,13 +477,16 @@ class Pusher
             return ['status' => 'skipped'];
         }
 
-        $connection = self::connectionForFile($file) ?? self::connectionForMapping($file);
+        $mapping = SharePointItem::query()
+            ->where('file_id', $file->id)
+            ->orderBy('id')
+            ->first();
+        $connection = $mapping?->connection
+            ?? self::connectionForFile($file)
+            ?? self::connectionForMapping($file);
         if (! $connection) {
             return ['status' => 'not-linked'];
         }
-
-        $mapping = SharePointItem::where('connection_id', $connection->id)
-            ->where('file_id', $file->id)->first();
 
         if (! $mapping) {
             return self::pushFile($file);
