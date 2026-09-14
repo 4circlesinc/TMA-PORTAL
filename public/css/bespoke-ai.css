@@ -1382,26 +1382,25 @@ body:has(.tma-dash--bespoke) .tma-bespoke,
   }
 }
 
-/* Past chats inside the launcher: over the log, under the head, so the
- * reader keeps the clock button they opened it with. */
-.tma-bespoke__head {
-  position: relative;
-  z-index: 3;
-}
-
+/* Past chats inside the launcher: it takes the log's place in the
+ * panel's column, so the head keeps the clock button that opened it. */
 .tma-bespoke__history {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  z-index: 2;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--color-white);
 }
 
 .tma-bespoke__history[hidden] {
+  display: none;
+}
+
+/* While the list is up, the thread and its composer stand down. */
+.tma-bespoke__panel.is-history .tma-bespoke__log,
+.tma-bespoke__panel.is-history .tma-bespoke__chips,
+.tma-bespoke__panel.is-history .tma-bespoke__attach,
+.tma-bespoke__panel.is-history .tma-bespoke__composer {
   display: none;
 }
 

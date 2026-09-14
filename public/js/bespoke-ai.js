@@ -2158,6 +2158,7 @@
     if (!widget || !widget.historyEl) return;
     widget.historyOpen = !!next;
     widget.historyEl.hidden = !widget.historyOpen;
+    if (panel) panel.classList.toggle('is-history', widget.historyOpen);
     var btn = host && host.querySelector('[data-bespoke-history]');
     if (btn) btn.setAttribute('aria-pressed', widget.historyOpen ? 'true' : 'false');
     if (!widget.historyOpen) return;
