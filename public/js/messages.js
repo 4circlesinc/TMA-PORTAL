@@ -6921,8 +6921,8 @@
    * Open (or create) the direct conversation with one person.
    *
    * `media` places a call as soon as it is open. A call needs a *conversation*
-   * id, which callers outside Messages never have, the Dashboard's Employees
-   * board knows a user id and nothing else, so "call this colleague" has to
+   * id, which callers outside Messages never have, the Dashboard's People
+   * board knows a user id and nothing else, so "call this person" has to
    * resolve the conversation first and then ring. Doing it here rather than in
    * each caller keeps the conversation lookup, the subscription and the call in
    * the order the rest of the page expects.

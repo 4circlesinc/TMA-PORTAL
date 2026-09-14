@@ -5,17 +5,17 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\WorkDay;
 use App\Support\Access\Role;
-use App\Support\Messaging\PresenceService;
 use App\Support\Presence\AvailabilityService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Team board for the portal home: approved staff with online presence and
- * today's work-plan status (office, remote, sick leave, …).
+ * Presence board for the portal home: every approved account (staff, clients
+ * and service-provider contacts) with online presence, plus today's work-plan
+ * status for staff (office, remote, sick leave, …).
  *
- * Staff-only. Clients get `{ staff: false }` so the dashboard can hide the
- * widget without treating the response as an error.
+ * Staff-only to view. Clients get `{ staff: false }` so the dashboard can hide
+ * the widget without treating the response as an error.
  */
 class StaffPresenceController extends Controller
 {
@@ -28,21 +28,20 @@ class StaffPresenceController extends Controller
         }
 
         /*
-         * Everyone who works here, which is Role::STAFF and not a hand-written
-         * list. This read was ['Administrator', 'Employee'], written before the
-         * officer account type existed, so the board showed exactly the wrong
-         * half of the firm: the parked Employee rows (who are held on the
-         * role-pending screen and cannot open the portal at all) were counted,
-         * and every CRO / Reviewing officer was left out.
+         * Everyone with a live login, not only Role::STAFF. The board used to
+         * be the payroll; it is now the firm, so a client who is signed in
+         * counts the same as a colleague. Work-plan status still belongs to
+         * staff only - clients do not keep one.
          */
         $users = User::query()
-            ->whereIn('account_type', Role::STAFF)
             ->where('status', User::STATUS_APPROVED)
             ->with('presence')
             ->orderBy('name')
             ->get();
 
-        $workStatuses = WorkDay::publicStatusesForUsers($users);
+        $workStatuses = WorkDay::publicStatusesForUsers(
+            $users->filter(fn (User $user) => Role::isStaff($user))
+        );
         // Availability costs four queries a head when asked one at a time.
         AvailabilityService::primeStates($users->pluck('id'));
 

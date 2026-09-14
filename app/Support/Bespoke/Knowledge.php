@@ -385,7 +385,7 @@ final class Knowledge
                 'id' => 'dashboard',
                 'q' => 'What’s on this dashboard?',
                 'keywords' => ['dashboard', 'home', 'tiles', 'kpi', 'greeting', 'edit dashboard'],
-                'answer' => "The Dashboard is home after you sign in. Staff see a greeting, optional KPI cards, tiles (Recent Files, Email, Messages, Shortcuts, Employees, Favorites, Upcoming Events, CIP Applications, Requests, Comments), then Recent Files and Default Folders.\n\nClick **Edit Dashboard** (grid icon) to hide tiles. A tile that needs a permission you do not hold is not offered.\n\nOpen it: [/](/)",
+                'answer' => "The Dashboard is home after you sign in. Staff see a greeting, optional KPI cards, tiles (Recent Files, Email, Messages, Shortcuts, People, Favorites, Upcoming Events, CIP Applications, Requests, Comments), then Recent Files and Default Folders.\n\nClick **Edit Dashboard** (grid icon) to hide tiles. A tile that needs a permission you do not hold is not offered.\n\nOpen it: [/](/)",
             ],
             [
                 'id' => 'start-cip',

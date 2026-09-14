@@ -10,8 +10,8 @@ use Illuminate\Support\Carbon;
 /**
  * How the portal says when somebody was last around.
  *
- * One formatter for every presence display - the Employees board, the People
- * directory, the account table, the messaging header - so "last seen" reads
+ * One formatter for every presence display - the People board, the directory,
+ * the account table, the messaging header - so "last seen" reads
  * the same wherever it appears. Before this, three call sites each reached for
  * Carbon's diffForHumans() and produced three different sentences ("2 hours
  * ago", "Last seen 2h ago", a raw date) for one fact.

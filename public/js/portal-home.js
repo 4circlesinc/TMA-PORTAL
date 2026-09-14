@@ -464,7 +464,7 @@
     );
   }
 
-  /* Staff team board, online / offline + today's work-plan status. */
+  /* Firm presence board: everyone with a login, online / offline. */
   var homeStaffLoaded = false;
   var homeStaff = null;
   var homeStaffInflight = null;
@@ -559,7 +559,7 @@
 
   function employeesSkeleton() {
     return tileShell(
-      'employees', 'panel-employees', 'Employees', panelHead('Employees'),
+      'employees', 'panel-employees', 'People', panelHead('People'),
       '<div class="tma-portal-employees" aria-hidden="true">' +
       new Array(5).fill(
         '<div class="tma-portal-employee tma-portal-employee--skeleton">' +
@@ -612,12 +612,12 @@
     }).join('');
 
     return tileShell(
-      'employees', 'panel-employees', 'Employees',
-      panelHead('Employees', onlineCount + ' of ' + people.length + ' online'),
+      'employees', 'panel-employees', 'People',
+      panelHead('People', onlineCount + ' of ' + people.length + ' online'),
       // A fixed-height list that scrolls, rather than a card that grows with
-      // the payroll: the board stays the same size at 4 employees and at 40.
+      // the firm: the board stays the same size at 4 people and at 40.
       '<div class="tma-portal-employees tma-portal-employees--scroll">' +
-      (rows || '<p class="tma-portal-panel__note">No employees to show.</p>') +
+      (rows || '<p class="tma-portal-panel__note">No people to show.</p>') +
       '</div>',
       'tma-portal-panel--employees'
     );
@@ -765,7 +765,7 @@
         }
       });
 
-    // Keep inbox fresh while the home view is open (same cadence as Employees).
+    // Keep inbox fresh while the home view is open (same cadence as People).
     if (!homeEmailTimer && !opts.skipTimer) {
       homeEmailTimer = setInterval(function () {
         // Hidden tabs skip the poll; the visibilitychange below catches up.
@@ -1349,7 +1349,7 @@
      * a card. /me settles well before this payload does, and six shimmering
      * rows that resolve into nothing would have announced a module to somebody
      * who does not have one, the exact thing the silences below are careful
-     * not to do. The KPI row and Employees both shimmer first and vanish
+     * not to do. The KPI row and People both shimmer first and vanish
      * second, which is right for them: those two are *staff* only, and the
      * board they sit on is the staff board, so the flash is rare. This card is
      * staff only AND CIP only, and its readers are the smaller set.
@@ -2358,11 +2358,11 @@
     { id: 'email', label: 'Recent Email', desc: 'Your latest inbox messages, ready to open.', preview: 'email', cap: 'mail.use' },
     { id: 'messages', label: 'Messages', desc: 'Your five most recent chats, with unread counts.', preview: 'messages' },
     { id: 'shortcuts', label: 'Shortcuts', desc: 'Frequently used actions, as well as quick access to certain folders.', preview: 'shortcuts' },
-    { id: 'employees', label: 'Employees', desc: 'Who is online, and today\'s work status (office, remote, leave).', preview: 'employees', staffOnly: true },
+    { id: 'employees', label: 'People', desc: 'Who is online across the portal - staff and clients.', preview: 'employees', staffOnly: true },
     { id: 'favorites', label: 'Favorites', desc: 'Files and folders you marked as favorite.', preview: 'favorites' },
     { id: 'road', label: 'Upcoming Events', desc: 'Upcoming events for the selected day.', preview: 'road' },
     /*
-     * staffOnly keeps Employees out of the Edit Dashboard list for a client
+     * staffOnly keeps People out of the Edit Dashboard list for a client
      * account. CIP is a different question: a Service Provider contact is a
      * client account and still gets this card, so the editor asks `card`
      * rather than staffhood. Without the flag, every client would be offered a
@@ -2377,7 +2377,7 @@
   // Shipped default board (3 equal columns, masonry):
   //   Recent Files → Favorites
   //   Recent Email → What's on the road?
-  //   CIP Applications → Shortcuts → Employees
+  //   CIP Applications → Shortcuts → People
   // Messages, Requests and Comments then land in whichever column is shortest,
   // in that order — they are listed last so adding them left the three columns
   // above exactly where the board already had them.
@@ -2547,7 +2547,7 @@
     var packed = packHomeTiles(items, width, gap);
 
     // Stretch the bottom card in each column so column bottoms line up
-    // (Favorites / Employees meet What's on the road?).
+    // (Favorites / People meet What's on the road?).
     var maxBottom = 0;
     packed.forEach(function (p) {
       if (p.y + p.h > maxBottom) maxBottom = p.y + p.h;

@@ -1,6 +1,6 @@
 /**
  * TMA - Overview → Employees tab
- * Staff presence (online/offline) + today's work-plan status.
+ * Firm presence (online/offline) + today's work-plan status for staff.
  * Global: window.TMAOverviewEmployees
  */
 (function () {
@@ -87,11 +87,11 @@
         container.innerHTML = window.TMANoData
           ? window.TMANoData.render({
               illustrationName: 'Illustration14',
-              title: 'Employees are for staff',
-              subtitle: 'This board shows who’s online and their work status.',
+              title: 'This board is for staff',
+              subtitle: 'It shows who’s online across the portal.',
               showButton: false,
             })
-          : '<p class="tma-dash__overview-empty">Employees are only available to staff accounts.</p>';
+          : '<p class="tma-dash__overview-empty">This board is only available to staff accounts.</p>';
         return;
       }
 
@@ -106,18 +106,18 @@
         container.innerHTML = window.TMANoData
           ? window.TMANoData.render({
               illustrationName: 'Illustration14',
-              title: 'No employees yet',
-              subtitle: 'Approved staff accounts will show up here with presence and work status.',
+              title: 'No people yet',
+              subtitle: 'Approved accounts will show up here with presence.',
               showButton: false,
             })
-          : '<p class="tma-dash__overview-empty">No employees yet.</p>';
+          : '<p class="tma-dash__overview-empty">No people yet.</p>';
         return;
       }
 
       container.innerHTML =
         '<div class="tma-dash__overview-employees">' +
         '<div class="tma-dash__overview-employees__head">' +
-        '<h3 class="tma-dash__overview-employees__title">Team</h3>' +
+        '<h3 class="tma-dash__overview-employees__title">People</h3>' +
         '<span class="tma-dash__overview-employees__meta">' + online + ' of ' + people.length + ' online</span>' +
         '</div>' +
         '<div class="tma-dash__overview-employees__list">' +

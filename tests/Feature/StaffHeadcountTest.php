@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Group;
 use App\Models\User;
+use App\Models\WorkDay;
 use App\Support\Access\Role;
 use App\Support\Calendar\GroupMembership;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -37,13 +38,18 @@ class StaffHeadcountTest extends TestCase
         ], $overrides));
     }
 
-    public function test_the_team_board_lists_every_account_type_that_works_here(): void
+    public function test_the_presence_board_lists_every_approved_account(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $officer = $this->user(Role::REVIEWING_OFFICER, ['name' => 'Officer Onboard']);
         $legacy = $this->user('Reviewing Officer', ['name' => 'Officer Legacy']);
         $parked = $this->user(Role::EMPLOYEE, ['name' => 'Parked Employee']);
         $client = $this->user(Role::CLIENT, ['name' => 'A Client']);
+        $provider = $this->user(Role::SERVICE_PROVIDER_ADMIN, ['name' => 'A Provider']);
+        $pending = $this->user(Role::CLIENT, [
+            'name' => 'Pending Client',
+            'status' => User::STATUS_PENDING,
+        ]);
 
         $ids = collect(
             $this->actingAs($admin)->getJson('/portal/dashboard/staff')->assertOk()->json('employees')
@@ -53,8 +59,31 @@ class StaffHeadcountTest extends TestCase
         $this->assertTrue($ids->contains($legacy->id), 'a legacy officer spelling is staff');
         $this->assertTrue($ids->contains($admin->id));
         $this->assertTrue($ids->contains($parked->id));
-        $this->assertFalse($ids->contains($client->id), 'a client is not on the team board');
-        $this->assertCount(4, $ids);
+        $this->assertTrue($ids->contains($client->id), 'a client is on the presence board');
+        $this->assertTrue($ids->contains($provider->id), 'a service-provider contact is on the presence board');
+        $this->assertFalse($ids->contains($pending->id), 'a pending account is not on the board');
+        $this->assertCount(6, $ids);
+    }
+
+    public function test_the_presence_board_keeps_work_plans_to_staff(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $officer = $this->user(Role::REVIEWING_OFFICER, ['name' => 'Officer Onboard']);
+        $client = $this->user(Role::CLIENT, ['name' => 'A Client']);
+
+        WorkDay::create([
+            'user_id' => $officer->id,
+            'work_date' => now()->toDateString(),
+            'status' => 'remote',
+            'visibility' => 'colleagues',
+        ]);
+
+        $rows = collect(
+            $this->actingAs($admin)->getJson('/portal/dashboard/staff')->assertOk()->json('employees')
+        )->keyBy('id');
+
+        $this->assertSame('remote', $rows[$officer->id]['workStatus']['status'] ?? null);
+        $this->assertNull($rows[$client->id]['workStatus']);
     }
 
     public function test_an_auto_join_group_counts_the_members_it_actually_has(): void

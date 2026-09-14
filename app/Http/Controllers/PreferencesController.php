@@ -129,7 +129,7 @@ class PreferencesController extends Controller
     /**
      * Default home board, mirrors the client masonry columns:
      * Recent Files → Favorites | Recent Email → Road |
-     * CIP Applications → Shortcuts → Employees (Messages, Requests and
+     * CIP Applications → Shortcuts → People (Messages, Requests and
      * Comments fill whichever column is shortest).
      */
     private const DEFAULT_DASHBOARD_ORDER = [

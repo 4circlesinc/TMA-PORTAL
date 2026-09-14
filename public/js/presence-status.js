@@ -1245,7 +1245,7 @@
    * on purpose — presence moves under a list that is already on screen, so
    * somebody coming online has to rise to the top on the event rather than on
    * the next poll thirty seconds later. Both surfaces that draw the team
-   * (the home board's Employees tile and Overview's) sort through here, so
+   * (the home board's People tile and Overview's) sort through here, so
    * they cannot disagree about it.
    */
   function lastSeenMs(person) {

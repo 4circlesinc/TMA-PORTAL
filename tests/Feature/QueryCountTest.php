@@ -307,7 +307,7 @@ class QueryCountTest extends TestCase
     }
 
     /*
-     * The Dashboard's Employees card.
+     * The Dashboard's People card.
      *
      * Availability was resolved one person at a time, and resolving it cost
      * four queries a head: two purge deletes, the layered states, and a

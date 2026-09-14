@@ -28,7 +28,7 @@ class AvailabilityService
      *
      * Reading one person's availability costs four queries, two purge
      * deletes, the states themselves, and a re-read of the presence row, and
-     * the Dashboard's Employees card reads every member of staff. That is 4n
+     * the Dashboard's People card reads every approved account. That is 4n
      * round trips for a card showing thirteen faces: ten seconds against the
      * remote database, on the same page load as everything else.
      *

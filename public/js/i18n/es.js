@@ -213,6 +213,7 @@ window.TMAI18nDict = {
     ["^(\\d[\\d,]*) of (\\d[\\d,]*) messages$", "$1 de $2 mensajes"],
     ["^(\\d[\\d,]*) of (\\d[\\d,]*) items$", "$1 de $2 elementos"],
     ["^(\\d[\\d,]*) of (\\d[\\d,]*) calendars$", "$1 de $2 calendarios"],
+    ["^(\\d[\\d,]*) of (\\d[\\d,]*) online$", "$1 de $2 en línea"],
     ["^(\\d[\\d,]*) messages$", "$1 mensajes"],
     ["^(\\d[\\d,]*) items$", "$1 elementos"],
     ["^(\\d+) of (\\d+) complete$", "$1 de $2 completados"],
