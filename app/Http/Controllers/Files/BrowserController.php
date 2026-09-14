@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Package;
 use App\Support\Cip\Removal;
+use App\Support\Cip\Tree;
 use App\Support\Files\FileAccess;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Files\SyncScope;
@@ -61,6 +62,7 @@ class BrowserController extends BaseFilesController
         if ($uuid = $request->query('folder')) {
             $current = $this->findFolder($uuid);
             FileAccess::authorize($user, 'view', $current);
+            Tree::healPostApprovalListing($current, $user);
         }
 
         [$folderQuery, $fileQuery] = $this->queriesFor($section, $user, $current, $request);

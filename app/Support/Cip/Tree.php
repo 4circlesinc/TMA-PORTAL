@@ -436,14 +436,48 @@ class Tree
     }
 
     /**
+     * Collapse numbered person-folder copies when someone opens the
+     * post-approval drawer in the file browser.
+     *
+     * Opening the CIP file already does this. The Documents tab lists through
+     * the files API, and without this it would keep showing Dependent 1 11,
+     * Dependent 1 14… until somebody opened the application itself.
+     */
+    public static function healPostApprovalListing(Folder $folder, ?User $actor = null): void
+    {
+        if (self::canonicalDrawerName($folder->name) !== self::POST_APPROVAL) {
+            return;
+        }
+
+        $application = CipApplication::query()
+            ->where('post_approval_folder_id', $folder->id)
+            ->first();
+
+        if ($application === null && $folder->parent_id) {
+            $application = CipApplication::query()
+                ->where('folder_id', $folder->parent_id)
+                ->where('phase', Phase::POST_APPROVAL)
+                ->orderBy('id')
+                ->first();
+        }
+
+        if ($application === null) {
+            return;
+        }
+
+        self::provisionPostApproval($application, $actor);
+    }
+
+    /**
      * One person's folder inside the post-approval tree.
      *
-     * The id is the link, not the name. Finding it by name alone is what let
-     * one file grow a hundred person folders: SharePoint renames a colliding
-     * push to "Dependent 1 39" ({@see Drive::createFolder}'s conflictBehavior)
-     * and the inbound sync writes that name onto the portal row, so the next
-     * provision no longer recognised the folder and made another. Remembering
-     * which folder is whose ends that, whatever the name says today.
+     * The id is the link, not the name. Finding it by the exact letters is
+     * what let one file grow a hundred person folders: SharePoint renames a
+     * colliding push to "Dependent 1 39" ({@see Drive::createFolder}'s
+     * conflictBehavior) and the inbound sync used to copy that suffix onto
+     * the portal row, so the next provision no longer recognised the folder
+     * and made another. Numbered copies are the same folder; they are folded
+     * back into one here, and the id remembers which folder is whose.
      */
     public static function postApprovalPersonFolder(
         CipPerson $person,
@@ -461,20 +495,17 @@ class Tree
         }
 
         $name = self::folderName($person);
+        $folder = self::ensurePersonFolder(
+            $postRoot,
+            $name,
+            $person->post_approval_folder_id,
+            $actor,
+        );
 
-        if ($person->post_approval_folder_id
-            && $folder = Folder::find($person->post_approval_folder_id)) {
-            // Renamed remotely, or renumbered here: the folder is still theirs.
-            if ($folder->name !== $name) {
-                $folder->forceFill(['name' => $name])->save();
-            }
-            self::provisionPackFolders($folder, $actor);
-
-            return $folder;
+        if ($person->post_approval_folder_id !== $folder->id) {
+            $person->forceFill(['post_approval_folder_id' => $folder->id])->save();
         }
 
-        $folder = self::childNamed($postRoot, $name, $actor);
-        $person->forceFill(['post_approval_folder_id' => $folder->id])->save();
         self::provisionPackFolders($folder, $actor);
 
         return $folder;
@@ -508,6 +539,43 @@ class Tree
     }
 
     /**
+     * Is this the name of a managed person folder, including the numbered
+     * copies Graph's conflict-rename leaves behind ("Dependent 1 14")?
+     */
+    public static function isPersonFolderVariant(string $canonical, string $name): bool
+    {
+        $name = trim($name);
+        $canonical = trim($canonical);
+        if ($name === '' || $canonical === '') {
+            return false;
+        }
+        if (strcasecmp($name, $canonical) === 0) {
+            return true;
+        }
+
+        return self::canonicalPersonName($name) === $canonical;
+    }
+
+    /**
+     * The existing person folder under this parent, if there is one.
+     *
+     * Numbered copies ("Dependent 1 14") count as the canonical name.
+     */
+    public static function existingPersonFolder(Folder $parent, string $canonical, ?int $exceptId = null): ?Folder
+    {
+        $matches = Folder::query()
+            ->where('parent_id', $parent->id)
+            ->get()
+            ->filter(fn (Folder $child) => self::isPersonFolderVariant($canonical, $child->name))
+            ->when($exceptId, fn ($rows) => $rows->reject(fn (Folder $child) => $child->id === $exceptId))
+            ->sortBy('id')
+            ->values();
+
+        return $matches->first(fn (Folder $child) => strcasecmp($child->name, $canonical) === 0)
+            ?? $matches->first();
+    }
+
+    /**
      * COR, NIC and Passport drawers inside one post-approval person folder.
      *
      * Created empty so the Documents tab has somewhere to file each pack
@@ -518,7 +586,7 @@ class Tree
     public static function provisionPackFolders(Folder $personFolder, ?User $actor = null): void
     {
         foreach ([Pack::COR, Pack::NIC, Pack::PASSPORT] as $pack) {
-            self::childNamed($personFolder, Pack::folder($pack), $actor);
+            self::ensureChildDrawer($personFolder, Pack::folder($pack), $actor);
         }
     }
 
@@ -531,7 +599,8 @@ class Tree
      */
     public static function personAt(Folder $folder): ?CipPerson
     {
-        $person = CipPerson::where('folder_id', $folder->id)->first();
+        $person = CipPerson::where('folder_id', $folder->id)->first()
+            ?? CipPerson::where('post_approval_folder_id', $folder->id)->first();
 
         if ($person !== null) {
             return $person;
@@ -554,7 +623,8 @@ class Tree
         foreach ($application->people as $candidate) {
             $candidate->setRelation('application', $application);
 
-            if (strcasecmp(self::folderName($candidate), $folder->name) === 0) {
+            $wanted = self::folderName($candidate);
+            if (self::isPersonFolderVariant($wanted, $folder->name)) {
                 return $candidate;
             }
         }
@@ -697,17 +767,11 @@ class Tree
     public static function personFolder(CipPerson $person, Folder $root, ?User $actor = null): Folder
     {
         $name = self::folderName($person);
+        $folder = self::ensurePersonFolder($root, $name, $person->folder_id, $actor);
 
-        if ($person->folder_id && $folder = Folder::find($person->folder_id)) {
-            if ($folder->name !== $name) {
-                $folder->forceFill(['name' => $name])->save();
-            }
-
-            return $folder;
+        if ($person->folder_id !== $folder->id) {
+            $person->forceFill(['folder_id' => $folder->id])->save();
         }
-
-        $folder = self::childNamed($root, $name, $actor);
-        $person->forceFill(['folder_id' => $folder->id])->save();
 
         return $folder;
     }
@@ -860,6 +924,76 @@ class Tree
         }
 
         return self::createChild($parent, $name, $actor);
+    }
+
+    /**
+     * One managed person folder under this parent: found, healed, or created.
+     *
+     * Numbered copies ("Dependent 1 14") are the same folder as "Dependent 1".
+     * They are folded into the linked row (or the oldest) and renamed back,
+     * so a later provision cannot mistake the copy for a missing person and
+     * mint another. "Dependent 2" is a different person and is left alone.
+     */
+    private static function ensurePersonFolder(
+        Folder $parent,
+        string $canonical,
+        ?int $preferredId,
+        ?User $actor,
+    ): Folder {
+        return DB::transaction(function () use ($parent, $canonical, $preferredId, $actor) {
+            Folder::query()->whereKey($parent->id)->lockForUpdate()->first();
+
+            $matches = Folder::query()
+                ->where('parent_id', $parent->id)
+                ->get()
+                ->filter(fn (Folder $child) => self::isPersonFolderVariant($canonical, $child->name))
+                ->sortBy('id')
+                ->values();
+
+            $preferred = $preferredId
+                ? $matches->first(fn (Folder $child) => $child->id === $preferredId)
+                : null;
+
+            /*
+             * A folder already linked to this person stays theirs even when
+             * somebody renamed it off the Dependent / Main Applicant pattern.
+             * The numbered copies still fold into it.
+             */
+            if ($preferred === null && $preferredId) {
+                $linked = Folder::query()
+                    ->whereKey($preferredId)
+                    ->where('parent_id', $parent->id)
+                    ->first();
+                if ($linked) {
+                    $preferred = $linked;
+                    $matches = $matches
+                        ->reject(fn (Folder $child) => $child->id === $linked->id)
+                        ->prepend($linked)
+                        ->values();
+                }
+            }
+
+            if ($matches->isEmpty()) {
+                return self::createChild($parent, $canonical, $actor);
+            }
+
+            $keeper = $preferred
+                ?? $matches->first(fn (Folder $child) => strcasecmp($child->name, $canonical) === 0)
+                ?? $matches->first();
+
+            if (strcasecmp($keeper->name, $canonical) !== 0) {
+                $keeper->forceFill(['name' => $canonical])->save();
+            }
+
+            foreach ($matches as $dupe) {
+                if ($dupe->id === $keeper->id) {
+                    continue;
+                }
+                self::absorbFolder($dupe, $keeper, $actor);
+            }
+
+            return $keeper->refresh();
+        });
     }
 
     /**

@@ -10,11 +10,13 @@ use App\Models\Folder;
 use App\Models\SharePointConnection;
 use App\Models\SharePointItem;
 use App\Models\User;
+use App\Support\Cip\Tree;
 use App\Support\Files\FolderProvisioner;
+use App\Support\Security\Envelope;
 use App\Support\SharePoint\Pusher;
+use App\Support\SharePoint\QuickXorHash;
 use App\Support\SharePoint\RemoteContent;
 use App\Support\SharePoint\Synchroniser;
-use App\Support\Security\Envelope;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;
@@ -808,7 +810,7 @@ class SharePointSyncTest extends TestCase
         $file = FileItem::firstOrFail();
         RemoteContent::ensure($file);   // the bytes the "failed" push sent
 
-        $hasher = new \App\Support\SharePoint\QuickXorHash;
+        $hasher = new QuickXorHash;
         $hasher->update($this->content);
         $remote = $this->fileItem('i-1', 'Brief.txt', 'c:2');   // cTag moved…
         $remote['file']['hashes'] = ['quickXorHash' => $hasher->base64()];   // …to our bytes
@@ -1176,7 +1178,7 @@ class SharePointSyncTest extends TestCase
         // both walk the same delta cursor - which is how the library grew
         // duplicate folders. A heartbeat inside the window must refuse.
         $this->connection->update([
-            'status' => \App\Models\SharePointConnection::STATUS_SYNCING,
+            'status' => SharePointConnection::STATUS_SYNCING,
             'last_synced_at' => now(),
         ]);
 
@@ -1190,7 +1192,7 @@ class SharePointSyncTest extends TestCase
     {
         $this->fakeGraph([]);
         $this->connection->update([
-            'status' => \App\Models\SharePointConnection::STATUS_SYNCING,
+            'status' => SharePointConnection::STATUS_SYNCING,
             'last_synced_at' => now()->subMinutes(10),
         ]);
 
@@ -1209,7 +1211,7 @@ class SharePointSyncTest extends TestCase
         // pusher is suspended - created here any other way, the observer
         // would push them out and map them, dissolving the very orphanhood
         // this test exists to repair.
-        \App\Support\SharePoint\Pusher::suspend(fn () => $this->buildTwinFixture($lib));
+        Pusher::suspend(fn () => $this->buildTwinFixture($lib));
 
         $this->artisan('sharepoint:merge-duplicates')->assertSuccessful();
 
@@ -1273,7 +1275,7 @@ class SharePointSyncTest extends TestCase
     {
         $lib = $this->connection->folder;
         // Two same-named siblings, NEITHER mapped: no safe canonical.
-        \App\Support\SharePoint\Pusher::suspend(function () use ($lib) {
+        Pusher::suspend(function () use ($lib) {
             foreach ([1, 2] as $i) {
                 Folder::create([
                     'uuid' => (string) Str::uuid(), 'name' => 'MYSTERY', 'parent_id' => $lib->id,
@@ -1285,5 +1287,74 @@ class SharePointSyncTest extends TestCase
         $this->artisan('sharepoint:merge-duplicates')->assertSuccessful();
 
         $this->assertSame(2, Folder::where('parent_id', $lib->id)->whereRaw("lower(name) = 'mystery'")->count());
+    }
+
+    public function test_a_numbered_person_folder_from_sharepoint_maps_onto_the_existing_one(): void
+    {
+        $existing = Pusher::suspend(fn () => Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Dependent 1',
+            'parent_id' => $this->connection->folder_id,
+            'owner_id' => $this->owner->id,
+            'created_by' => $this->owner->id,
+        ]));
+
+        $this->fakeGraph([
+            [
+                'id' => 'dep-14',
+                'name' => 'Dependent 1 14',
+                'folder' => ['childCount' => 3],
+                'parentReference' => ['id' => 'root-1'],
+                'eTag' => '"dep-14"',
+            ],
+        ], [['id' => 'dep-14']]);
+
+        $stats = Synchroniser::sync($this->connection);
+
+        $this->assertSame(1, $stats['created']);
+        $names = Folder::query()
+            ->where('parent_id', $this->connection->folder_id)
+            ->pluck('name')
+            ->all();
+        $this->assertSame(['Dependent 1'], array_values(array_filter(
+            $names,
+            fn ($name) => Tree::canonicalPersonName($name) === 'Dependent 1',
+        )));
+        $this->assertSame($existing->id, SharePointItem::where('graph_item_id', 'dep-14')->value('folder_id'));
+    }
+
+    public function test_inbound_sync_does_not_copy_a_person_folder_suffix_onto_the_portal_row(): void
+    {
+        $folder = Pusher::suspend(fn () => Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Dependent 1',
+            'parent_id' => $this->connection->folder_id,
+            'owner_id' => $this->owner->id,
+            'created_by' => $this->owner->id,
+        ]));
+
+        $this->fakeGraph([
+            [
+                'id' => 'dep-1',
+                'name' => 'Dependent 1',
+                'folder' => ['childCount' => 3],
+                'parentReference' => ['id' => 'root-1'],
+                'eTag' => '"dep-1,1"',
+            ],
+        ], [['id' => 'dep-1']]);
+        Synchroniser::sync($this->connection);
+
+        $renamed = [
+            'id' => 'dep-1',
+            'name' => 'Dependent 1 39',
+            'folder' => ['childCount' => 3],
+            'parentReference' => ['id' => 'root-1'],
+            'eTag' => '"dep-1,2"',
+        ];
+        $this->fakeGraph([$renamed], [['id' => 'dep-1']]);
+        Synchroniser::sync($this->connection->fresh());
+
+        $this->assertSame('Dependent 1', $folder->fresh()->name);
+        $this->assertSame(1, Folder::query()->where('parent_id', $this->connection->folder_id)->count());
     }
 }

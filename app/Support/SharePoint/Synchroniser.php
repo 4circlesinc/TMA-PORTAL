@@ -595,8 +595,23 @@ class Synchroniser
 
                 return;
             }
+            /*
+             * Person folders take the same suffix ("Dependent 1 14"). Mapping
+             * that onto a new portal row is how Post-Approval Documents grew
+             * a numbered stack of empty Dependent 1 copies, each with its
+             * own COR / NIC / Passport drawers.
+             */
+            $personCanonical = Tree::canonicalPersonName($name);
+            if ($personCanonical && $parentFolder && $existing = Tree::existingPersonFolder($parentFolder, $personCanonical)) {
+                self::rememberMapping(self::mapFolder($connection, $item, $existing));
+                $stats['created']++;
+
+                return;
+            }
             if ($canonical) {
                 $name = $canonical;
+            } elseif ($personCanonical) {
+                $name = $personCanonical;
             }
 
             $folder = Folder::create([
@@ -946,30 +961,49 @@ class Synchroniser
     }
 
     /**
-     * Keep a CIP drawer on its canonical name when Graph has renamed the
-     * remote copy ("Additional Documents 1"). Copying that suffix back is
-     * what made the next provision miss the drawer and mint another.
+     * Keep a CIP drawer or person folder on its canonical name when Graph
+     * has renamed the remote copy ("Additional Documents 1", "Dependent 1 14").
+     * Copying that suffix back is what made the next provision miss the
+     * folder and mint another.
      */
     private static function portalDrawerName(Folder $folder, string $incoming): string
     {
         $canonical = Tree::canonicalDrawerName($folder->name) ?? Tree::canonicalDrawerName($incoming);
+        $personCanonical = Tree::canonicalPersonName($folder->name)
+            ?? Tree::canonicalPersonName($incoming);
 
-        /*
-         * Person folders wear the same suffix for the same reason, and copying
-         * it back renamed "Dependent 1" to "Dependent 1 39" on every sync while
-         * the next provision minted a fresh one beside it. The tree is the
-         * portal's to name, so a person's folder keeps the name it has.
-         */
-        if ($canonical === null && Tree::canonicalPersonName($folder->name) !== null) {
-            return $folder->name;
+        if ($canonical === null && $personCanonical !== null) {
+            return self::keepCanonicalPortalName(
+                $folder,
+                $personCanonical,
+                fn (Folder $parent, string $label, int $exceptId) => Tree::existingPersonFolder($parent, $label, $exceptId),
+            );
         }
 
         if ($canonical === null) {
             return $incoming;
         }
 
+        return self::keepCanonicalPortalName(
+            $folder,
+            $canonical,
+            fn (Folder $parent, string $label, int $exceptId) => Tree::existingDrawer($parent, $label, $exceptId),
+        );
+    }
+
+    /**
+     * Restore the portal name, unless a sibling already holds it.
+     *
+     * Two "Dependent 1" rows under the same parent is worse than leaving the
+     * numbered copy until provision folds it. The sibling check is what stops
+     * inbound sync from colliding names that provision still has to merge.
+     *
+     * @param  callable(Folder, string, int): ?Folder  $findSibling
+     */
+    private static function keepCanonicalPortalName(Folder $folder, string $canonical, callable $findSibling): string
+    {
         $parent = $folder->parent;
-        if ($parent && Tree::existingDrawer($parent, $canonical, $folder->id)) {
+        if ($parent && $findSibling($parent, $canonical, $folder->id)) {
             return strcasecmp($folder->name, $canonical) === 0 ? $canonical : $folder->name;
         }
 
