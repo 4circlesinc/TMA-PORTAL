@@ -445,8 +445,23 @@ class DocumentSlots
         }
 
         foreach ($person->documents as $slot) {
+            $files = self::filesForSlot($slot);
+            if ($files === []) {
+                continue;
+            }
+
             $template = $slot->requirement ?? self::template($person, $slot->type);
-            if ($template === null || ! self::filesInPostApprovalFolder($template)) {
+            $belongsInPost = $template !== null && self::filesInPostApprovalFolder($template);
+            $homeless = collect($files)->contains(fn (FileItem $file) => self::fileHasNoLiveFolder($file));
+
+            /*
+             * Carry-forward intake scans (passport photo, bio page) stay in
+             * the original person folder when there is one. A file filed
+             * straight into post-approval has no such folder, so those scans
+             * were attached to the checklist with folder_id NULL and never
+             * appeared in Client documents.
+             */
+            if (! $belongsInPost && ! $homeless) {
                 continue;
             }
 
@@ -455,7 +470,7 @@ class DocumentSlots
                 continue;
             }
 
-            foreach (self::filesForSlot($slot) as $file) {
+            foreach ($files as $file) {
                 self::moveFileTo($file, $destId);
             }
         }
@@ -473,6 +488,17 @@ class DocumentSlots
         $file = FileItem::withTrashed()->find($slot->file_id);
 
         return $file ? [$file] : [];
+    }
+
+    private static function fileHasNoLiveFolder(FileItem $file): bool
+    {
+        if ($file->trashed() || $file->folder_id === null) {
+            return true;
+        }
+
+        $folder = Folder::withTrashed()->find($file->folder_id);
+
+        return $folder === null || $folder->trashed();
     }
 
     private static function moveFileTo(FileItem $file, int $destId): void

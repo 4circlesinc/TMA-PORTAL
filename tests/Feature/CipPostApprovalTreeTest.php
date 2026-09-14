@@ -271,6 +271,27 @@ class CipPostApprovalTreeTest extends TestCase
         $this->assertSame($holding->id, $file->fresh()->folder_id);
     }
 
+    public function test_a_homeless_passport_photo_lands_in_the_post_approval_person_folder(): void
+    {
+        ['staff' => $staff, 'application' => $application] = $this->filed();
+        $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $this->assertNull($main->folder_id, 'a file opened in post-approval has no original person folder');
+
+        $template = $this->postTemplate($main, 'passport_photo', 'Passport photo');
+        $template->forceFill([
+            'at_pre_approval' => true,
+            'carry_forward' => true,
+            'folder' => null,
+        ])->save();
+
+        $file = $this->fileOn($staff, null, 'ABDEL MADJID DJELOUADJI - Passport photo.jpg');
+        $this->slot($application, $main, $template, $file, $staff);
+
+        Tree::provisionPostApproval($application->fresh(['people']), $staff);
+
+        $this->assertSame($main->fresh()->post_approval_folder_id, $file->fresh()->folder_id);
+    }
+
     /**
      * @return array{staff: User, application: CipApplication, dependent: CipPerson, root: Folder}
      */
