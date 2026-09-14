@@ -6608,6 +6608,7 @@ audio.call-recordings__player { background: transparent; }
 
 .fee-calc {
   max-width: 1120px;
+  margin-inline: auto;
   container-type: inline-size;
 }
 
