@@ -166,7 +166,7 @@ class CipApplicationTableTest extends TestCase
         $application = $this->application($staff, $this->provider($staff), 1, false);
 
         $officer = User::create(['name' => 'Omar Reviewer', 'email' => 'omar@example.com', 'password' => bcrypt('password12345')]);
-        $officer->forceFill(['status' => 'approved', 'account_type' => 'Employee'])->save();
+        $officer->forceFill(['status' => 'approved', 'account_type' => 'Employee', 'job_title' => 'Attorney'])->save();
 
         ClientAssignment::create([
             'client_id' => $application->client_id, 'user_id' => $officer->id,
@@ -186,6 +186,7 @@ class CipApplicationTableTest extends TestCase
          */
         $this->assertCount(1, $row['assignedTo']);
         $this->assertSame('Omar Reviewer', $row['assignedTo'][0]['name']);
+        $this->assertSame(['Attorney'], $row['assignedTo'][0]['roles']);
     }
 
     public function test_an_assignment_that_has_ended_is_not_shown_as_assigned(): void

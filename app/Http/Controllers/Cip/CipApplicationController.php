@@ -14,7 +14,6 @@ use App\Support\Access\Role;
 use App\Support\Cip\Appeal;
 use App\Support\Cip\ApplicantType;
 use App\Support\Cip\ApplicationScope;
-use App\Support\Cip\Assignments;
 use App\Support\Cip\Attention;
 use App\Support\Cip\Buckets;
 use App\Support\Cip\CipAccess;
@@ -542,7 +541,7 @@ class CipApplicationController extends Controller
                 // Live only, with their people: the column names who holds the
                 // file now, and an ended assignment is somebody who has
                 // stopped. Eager, because this is fifty rows.
-                'assignments' => fn ($q) => $q->live()->with('user:id,name,email,avatar_url,provider_avatar_url'),
+                'assignments' => fn ($q) => $q->live()->with('user:id,name,email,job_title,account_type,avatar_url,provider_avatar_url'),
                 /*
                  * Who is on this applicant.
                  *
@@ -553,7 +552,7 @@ class CipApplicationController extends Controller
                  * client, and section 8's column asks who is.
                  */
                 'client.assignments' => fn ($q) => $q->live()
-                    ->with('user:id,name,email,avatar_url,provider_avatar_url')
+                    ->with('user:id,name,email,job_title,account_type,avatar_url,provider_avatar_url')
                     ->orderByDesc('is_primary'),
                 /*
                  * Pre-approval lists need only the main applicant's name.
@@ -1160,7 +1159,12 @@ class CipApplicationController extends Controller
      * reviewer, and picking one of them to display would be the column
      * quietly choosing whose work counts.
      *
-     * @return list<array{name:string|null,email:string|null,avatar:string|null,role:string|null}>
+     * `roles` is who they are (job title, else account type), not the CIP
+     * job they were handed the file as. That job is reviewing officer for
+     * almost everyone, and the hover card would otherwise name every
+     * colleague the same.
+     *
+     * @return list<array{name:string|null,first:string|null,email:string|null,avatar:string|null,userId:int,roles:list<string>}>
      */
     private function assignees($application): array
     {
@@ -1178,19 +1182,19 @@ class CipApplicationController extends Controller
          * assigned, that person has stopped working on this, and section 8's column
          * asks who is.
          */
-        $person = fn ($a, string $role) => [
+        $person = fn ($a) => [
             'name' => $a->user->name,
             'first' => Str::of($a->user->name)->trim()->explode(' ')->first(),
             'email' => $a->user->email,
             'avatar' => $a->user->photoUrl(),
             'userId' => $a->user_id,
-            'roles' => [$role],
+            'roles' => array_values(array_filter([$a->user->roleName()])),
         ];
 
         if ($application->client !== null) {
             $fromClient = collect($application->client->assignments)
                 ->filter(fn ($a) => $a->user !== null)
-                ->map(fn ($a) => $person($a, $a->roleLabel()))
+                ->map($person)
                 ->values()
                 ->all();
 
@@ -1209,7 +1213,7 @@ class CipApplicationController extends Controller
          */
         return $application->assignments
             ->filter(fn ($a) => $a->user !== null)
-            ->map(fn ($a) => $person($a, Assignments::roleLabel($a->role)))
+            ->map($person)
             ->values()
             ->all();
     }
@@ -1763,9 +1767,9 @@ class CipApplicationController extends Controller
     private static function assigneeRelations(): array
     {
         return [
-            'assignments' => fn ($q) => $q->live()->with('user:id,name,email,avatar_url,provider_avatar_url'),
+            'assignments' => fn ($q) => $q->live()->with('user:id,name,email,job_title,account_type,avatar_url,provider_avatar_url'),
             'client.assignments' => fn ($q) => $q->live()
-                ->with('user:id,name,email,avatar_url,provider_avatar_url')
+                ->with('user:id,name,email,job_title,account_type,avatar_url,provider_avatar_url')
                 ->orderByDesc('is_primary'),
         ];
     }

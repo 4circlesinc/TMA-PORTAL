@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Listeners\RecordAuthEvent;
 use App\Notifications\PortalResetPassword;
 use App\Notifications\PortalVerifyEmail;
+use App\Support\Access\Role;
 use App\Support\SecurityPolicies;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -132,6 +133,25 @@ class User extends Authenticatable implements MustVerifyEmail
     public function photoUrl(): ?string
     {
         return $this->avatar_url ?: $this->provider_avatar_url;
+    }
+
+    /**
+     * Who this person is at the firm, for a card that names them.
+     *
+     * Job title when they have one, otherwise the account type they hold.
+     * Not the CIP assignment job: that defaults to reviewing officer for
+     * whoever is handed a file, so an administrator would otherwise read
+     * as "Reviewing officer" on every hover.
+     */
+    public function roleName(): string
+    {
+        $title = trim((string) $this->job_title);
+
+        if ($title !== '') {
+            return $title;
+        }
+
+        return (string) (Role::of($this) ?? $this->account_type ?? '');
     }
 
     /** The administrator who moved this account to the Recycle Bin. */

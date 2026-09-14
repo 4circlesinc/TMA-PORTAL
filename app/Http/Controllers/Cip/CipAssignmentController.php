@@ -244,6 +244,9 @@ class CipAssignmentController extends Controller
                     'name' => $a->user?->name,
                     'email' => $a->user?->email,
                     'avatar' => $a->user?->photoUrl(),
+                    'jobTitle' => $a->user?->job_title,
+                    'accountType' => $a->user?->account_type,
+                    'personRole' => $a->user?->roleName(),
                     'role' => $a->role,
                     'roleLabel' => $a->roleLabel(),
                     'assignedAt' => ($a->starts_at ?? $a->created_at)?->toIso8601String(),
@@ -256,6 +259,9 @@ class CipAssignmentController extends Controller
                 'name' => $a->user?->name,
                 'email' => $a->user?->email,
                 'avatar' => $a->user?->photoUrl(),
+                'jobTitle' => $a->user?->job_title,
+                'accountType' => $a->user?->account_type,
+                'personRole' => $a->user?->roleName(),
                 'role' => $a->role,
                 'roleLabel' => Assignments::roleLabel($a->role),
                 'assignedAt' => ($a->starts_at ?? $a->created_at)?->toIso8601String(),
@@ -291,6 +297,8 @@ class CipAssignmentController extends Controller
                     'email' => $u->email,
                     'avatar' => $u->photoUrl(),
                     'accountType' => $u->account_type,
+                    'jobTitle' => $u->job_title,
+                    'personRole' => $u->roleName(),
                     'role' => Role::isAdmin($u)
                         ? CipAccess::REVIEWING_OFFICER
                         : (CipAccess::officerRoles($u)[0] ?? null),

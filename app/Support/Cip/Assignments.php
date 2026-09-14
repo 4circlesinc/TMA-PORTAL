@@ -223,7 +223,7 @@ class Assignments
             ->where('application_id', $application->id)
             // Both photo columns, because photoUrl() falls back from one to
             // the other and a column that was never selected reads as empty.
-            ->with('user:id,name,email,avatar_url,provider_avatar_url')
+            ->with('user:id,name,email,job_title,account_type,avatar_url,provider_avatar_url')
             ->orderBy('id')
             ->get();
     }
@@ -267,7 +267,7 @@ class Assignments
             ->where('status', User::STATUS_APPROVED)
             ->whereNotIn('id', $held->unique()->all())
             ->orderBy('name')
-            ->get(['id', 'name', 'email', 'avatar_url', 'provider_avatar_url', 'account_type']);
+            ->get(['id', 'name', 'email', 'avatar_url', 'provider_avatar_url', 'account_type', 'job_title']);
     }
 
     /**

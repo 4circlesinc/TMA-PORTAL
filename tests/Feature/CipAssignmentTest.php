@@ -285,6 +285,7 @@ class CipAssignmentTest extends TestCase
             ->json('applications.0');
 
         $this->assertSame('Rita Reviewer', $row['assignedTo'][0]['name'] ?? null);
+        $this->assertSame([Role::REVIEWING_OFFICER], $row['assignedTo'][0]['roles'] ?? null);
         $this->assertDatabaseHas('client_assignments', [
             'client_id' => $application->client_id,
             'user_id' => $officer->id,
@@ -336,6 +337,7 @@ class CipAssignmentTest extends TestCase
             ->json('applications.0');
 
         $this->assertSame('Ada Admin', $row['assignedTo'][0]['name'] ?? null);
+        $this->assertSame(['Administrator'], $row['assignedTo'][0]['roles'] ?? null);
         $this->assertDatabaseHas('cip_application_assignments', [
             'application_id' => $application->id,
             'user_id' => $admin->id,

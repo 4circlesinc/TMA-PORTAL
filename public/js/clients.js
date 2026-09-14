@@ -3715,6 +3715,19 @@
       : '';
   }
 
+  /* Who this person is at the firm, not the CIP job they were handed the
+     file as. That job defaults to reviewing officer for everyone, so the
+     card and the picker would otherwise name every colleague the same. */
+  function personRoleLabel(person) {
+    if (!person) return '';
+    if (person.personRole) return String(person.personRole);
+    if (person.jobTitle) return String(person.jobTitle);
+    if (person.accountType) return String(person.accountType);
+    if (person.roles && person.roles[0]) return String(person.roles[0]);
+
+    return officerRoleLabel(person);
+  }
+
   /* What an officer would hold this file as, from the account type the server
      sent, the same derivation the assignment endpoint makes when a request
      names no role. */
@@ -3753,7 +3766,7 @@
 
           return {
             label: a.name || a.email || 'Somebody',
-            meta: a.roleLabel || '',
+            meta: personRoleLabel(a),
             face: personFace(a),
             on: true,
             remove: function () { changeAssignment(applicationId, 'DELETE', a.userId); },
@@ -3766,7 +3779,7 @@
           if (held[String(o.id)]) return;
           items.push({
             label: o.name || o.email,
-            meta: officerRoleLabel(o),
+            meta: personRoleLabel(o),
             face: personFace(o),
             fn: function () { changeAssignment(applicationId, 'POST', o.id); },
           });
