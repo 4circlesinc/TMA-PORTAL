@@ -46,6 +46,17 @@ final class CompanyAccess
             ->all();
     }
 
+    /** The firm this Service Provider admin lands on, if they have one. */
+    public static function homeCompany(User $user): ?Company
+    {
+        $ids = self::companiesFor($user);
+        if ($ids === []) {
+            return null;
+        }
+
+        return Company::query()->whereIn('id', $ids)->orderBy('name')->first();
+    }
+
     /** This staff member's live assignment to the company, if any. */
     public static function staffAssignment(User $user, Company $company): ?CompanyStaffAssignment
     {

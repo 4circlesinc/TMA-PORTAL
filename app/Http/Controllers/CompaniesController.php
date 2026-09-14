@@ -11,9 +11,9 @@ use App\Support\Access\AccessSync;
 use App\Support\Access\ClientScope;
 use App\Support\Access\CompanyScope;
 use App\Support\Access\Role;
-use App\Support\Companies\CompanyAccess;
 use App\Support\Cip\Providers;
 use App\Support\Clients\ClientDirectory;
+use App\Support\Companies\CompanyAccess;
 use App\Support\Realtime\Live;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -406,9 +406,9 @@ class CompaniesController extends Controller
 
     public function update(Request $request, string $uid): JsonResponse
     {
-        $this->authorizeStaff($request);
+        $company = CompanyAccess::directoryQuery($request->user())->where('uid', $uid)->firstOrFail();
+        $this->authorizeCompanyWrite($request, $company);
 
-        $company = CompanyScope::findOrFail($request->user(), $uid);
         $data = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'website' => ['nullable', 'string', 'max:255'],
@@ -425,6 +425,11 @@ class CompaniesController extends Controller
             'status' => ['nullable', 'in:active,prospect,archived'],
             'cipCode' => ['nullable', 'string', 'max:8', 'alpha_num'],
         ]);
+
+        if (CompanyAccess::isProviderAdminOf($request->user(), $company)
+            && ! Role::can($request->user(), 'clients.view')) {
+            unset($data['cipCode'], $data['status']);
+        }
 
         if (array_key_exists('name', $data)) {
             $company->name = $data['name'];
@@ -578,6 +583,20 @@ class CompaniesController extends Controller
     {
         abort_unless(
             Role::can($request->user(), 'clients.view'),
+            403,
+            'Only staff can manage companies.'
+        );
+    }
+
+    private function authorizeCompanyWrite(Request $request, Company $company): void
+    {
+        $user = $request->user();
+        if (Role::can($user, 'clients.view')) {
+            return;
+        }
+
+        abort_unless(
+            CompanyAccess::isProviderAdminOf($user, $company),
             403,
             'Only staff can manage companies.'
         );

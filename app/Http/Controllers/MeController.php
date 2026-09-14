@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use App\Models\WorkDay;
 use App\Support\Access\Role;
 use App\Support\AuthenticatorNudge;
 use App\Support\AvatarService;
 use App\Support\Bespoke\Bespoke;
 use App\Support\Cip\CipAccess;
+use App\Support\Companies\CompanyAccess;
 use App\Support\Messaging\MessagingSettings;
 use App\Support\Notifications\ToastSettings;
 use App\Support\Presence\AvailabilityService;
@@ -51,6 +53,7 @@ class MeController extends Controller
             'isProviderContact' => CipAccess::isProviderContact($user),
             'isPrivateClient' => CipAccess::isPrivateClient($user),
             'isServiceProviderAdmin' => Role::isServiceProviderAdmin($user),
+            'serviceProvider' => self::serviceProviderPayload($user),
             // What this account may reach, so the sidebar, the mobile menu and
             // the global search index can hide exactly what the server would
             // refuse. Convenience only, every one of these is enforced again
@@ -145,5 +148,17 @@ class MeController extends Controller
         $user->forceFill(['avatar_url' => $avatar])->save();
 
         return response()->json(['status' => 'ok', 'avatar' => $avatar]);
+    }
+
+    /** @return array{id: string, name: string}|null */
+    private static function serviceProviderPayload(User $user): ?array
+    {
+        if (! Role::isServiceProviderAdmin($user)) {
+            return null;
+        }
+
+        $company = CompanyAccess::homeCompany($user);
+
+        return $company ? ['id' => $company->uid, 'name' => $company->name] : null;
     }
 }

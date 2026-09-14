@@ -137,6 +137,12 @@
   var cipReach = window.TMABootCipReach === true || window.TMABootCipReach === 'true';
   var providerContact = window.TMABootProviderContact === true || window.TMABootProviderContact === 'true';
   var serviceProviderAdmin = window.TMABootServiceProviderAdmin === true || window.TMABootServiceProviderAdmin === 'true';
+  var providerCompany = parseProviderCompany(window.TMABootProviderCompany);
+
+  function parseProviderCompany(raw) {
+    if (!raw || typeof raw !== 'object' || !raw.id) return null;
+    return { id: String(raw.id), name: raw.name ? String(raw.name) : '' };
+  }
 
   var caps = boot;
   var readyResolve;
@@ -269,6 +275,26 @@
     });
   }
 
+  /*
+   * Service Provider admins land on their firm, not the applications table.
+   * The label is the firm name when we have it; the href is the company page.
+   */
+  function rewriteProviderAdminNav(scope) {
+    if (!serviceProviderAdmin) return;
+
+    scope.querySelectorAll('[data-nav="clients"]').forEach(function (el) {
+      var label = (providerCompany && providerCompany.name) ? providerCompany.name : 'Service provider';
+      el.setAttribute('data-title', label);
+      el.setAttribute('data-crumb', label);
+      if (providerCompany && providerCompany.id) {
+        el.setAttribute('href', '/citizenship-applications/companies/' + encodeURIComponent(providerCompany.id));
+      }
+      var spans = el.querySelectorAll('span');
+      var text = spans[spans.length - 1];
+      if (text && !text.className) text.textContent = label;
+    });
+  }
+
   function pruneTabs(scope) {
     scope.querySelectorAll('[data-tab]').forEach(function (el) {
       var need = TAB_CAPABILITIES[el.getAttribute('data-tab')];
@@ -290,6 +316,7 @@
     var sections = navSections(scope);
     pruneNavItems(scope);
     relabelNavItems(scope);
+    rewriteProviderAdminNav(scope);
     pruneEmptyGroups(scope);
     pruneEmptySections(sections);
     pruneTabs(scope);
@@ -352,6 +379,7 @@
     cipReach = !!me.cipReach;
     providerContact = !!me.isProviderContact;
     serviceProviderAdmin = !!me.isServiceProviderAdmin;
+    if (me.serviceProvider) providerCompany = parseProviderCompany(me.serviceProvider);
     apply();
     readyResolve(caps);
   }

@@ -2,11 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Support\Realtime\Live;
 use App\Models\Client;
 use App\Models\Company;
+use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Access\AccessSync;
+use App\Support\Access\AccountRecycle;
 use App\Support\Access\ClientScope;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
@@ -14,8 +15,11 @@ use App\Support\Cip\Pages;
 use App\Support\Clients\Assignments;
 use App\Support\Clients\ClientCustomFields;
 use App\Support\Clients\ClientDirectory;
+use App\Support\Companies\CompanyAccess;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Notifications\Notifier;
+use App\Support\Realtime\Live;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -112,14 +116,14 @@ class ClientsController extends Controller
      * holds, and the alternative is a client that can never recover from a
      * corrupt value it stored itself.
      */
-    private function syncCursorTime(?string $value): ?\Carbon\CarbonImmutable
+    private function syncCursorTime(?string $value): ?CarbonImmutable
     {
         if ($value === null || trim($value) === '') {
             return null;
         }
 
         try {
-            return \Carbon\CarbonImmutable::parse($value);
+            return CarbonImmutable::parse($value);
         } catch (\Throwable) {
             return null;
         }
@@ -216,6 +220,10 @@ class ClientsController extends Controller
         $this->authorizeManage($request);
 
         $data = $this->validated($request, requireUid: true);
+        $this->assertProviderAdminCompany(
+            $request,
+            $this->resolveCompany($data['companyId'] ?? null, $data['profile']['work']['company'] ?? null),
+        );
 
         // Never trust a collided uid: the UI proposes one, we make it unique.
         $uid = $this->uniqueUid($data['uid']);
@@ -269,7 +277,7 @@ class ClientsController extends Controller
 
     public function show(Request $request, string $uid): JsonResponse
     {
-        $this->authorizeStaff($request);
+        $this->authorizeClientRead($request);
 
         $client = ClientScope::query($request->user())
             ->with(['folder', 'companyRecord', 'referredByCompany'])
@@ -284,7 +292,11 @@ class ClientsController extends Controller
         $this->authorizeManage($request);
 
         $client = ClientScope::findOrFail($request->user(), $uid);
+        $this->assertProviderAdminCompany($request, $client->companyRecord);
         $data = $this->validated($request, requireUid: false);
+        if ($this->isProviderAdminOnly($request->user())) {
+            $data['companyId'] = $client->companyRecord?->uid;
+        }
 
         $client->fill($this->columns($uid, $data, $client->creator));
         $client->save();
@@ -313,6 +325,7 @@ class ClientsController extends Controller
         $this->authorizeManage($request);
 
         $client = ClientScope::findOrFail($request->user(), $uid);
+        $this->assertProviderAdminCompany($request, $client->companyRecord);
         ActivityLogger::log([
             'actor' => $request->user(),
             'type' => 'client.deleted',
@@ -320,6 +333,7 @@ class ClientsController extends Controller
             'subject' => $client,
             'client' => $client,
         ]);
+        $this->recycleLinkedLogin($client, $request->user());
         // Settle the access before the record goes: a soft-deleted client must
         // not leave live assignments or an invitation somebody could accept.
         AccessSync::clientArchived($client, $request->user());
@@ -333,6 +347,7 @@ class ClientsController extends Controller
     public function bulkDestroy(Request $request): JsonResponse
     {
         $this->authorizeManage($request);
+        abort_if($this->isProviderAdminOnly($request->user()), 403);
 
         $data = $request->validate([
             'uids' => ['required', 'array', 'min:1'],
@@ -352,6 +367,7 @@ class ClientsController extends Controller
     public function duplicate(Request $request, string $uid): JsonResponse
     {
         $this->authorizeManage($request);
+        abort_if($this->isProviderAdminOnly($request->user()), 403);
 
         $source = ClientScope::findOrFail($request->user(), $uid);
 
@@ -546,9 +562,17 @@ class ClientsController extends Controller
      * It is switchable from Account settings > Client hub access now, which
      * only means anything if the write paths ask. Checked before validation,
      * so a refusal reads as a refusal rather than a form error.
+     *
+     * A Service Provider admin may write contacts at their own firm without
+     * holding the staff capability; {@see assertProviderAdminCompany} keeps
+     * that write on their company.
      */
     private function authorizeManage(Request $request): void
     {
+        if ($this->isProviderAdminOnly($request->user())) {
+            return;
+        }
+
         $this->authorizeStaff($request);
 
         abort_unless(
@@ -556,5 +580,56 @@ class ClientsController extends Controller
             403,
             'You do not have permission to change client records.'
         );
+    }
+
+    private function authorizeClientRead(Request $request): void
+    {
+        if ($this->isProviderAdminOnly($request->user())) {
+            return;
+        }
+
+        $this->authorizeStaff($request);
+    }
+
+    private function isProviderAdminOnly(User $user): bool
+    {
+        return Role::isServiceProviderAdmin($user) && ! Role::can($user, 'clients.view');
+    }
+
+    private function assertProviderAdminCompany(Request $request, ?Company $company): void
+    {
+        if (! $this->isProviderAdminOnly($request->user())) {
+            return;
+        }
+
+        abort_unless(
+            $company && CompanyAccess::isProviderAdminOf($request->user(), $company),
+            403,
+            'You can only add contacts at your firm.',
+        );
+    }
+
+    /**
+     * A Service Provider admin deleting a person parks their portal login
+     * when that login is a member of the same firm. The Recycle Bin stays
+     * administrator-only; they do not restore from it.
+     */
+    private function recycleLinkedLogin(Client $client, User $actor): void
+    {
+        if (! $this->isProviderAdminOnly($actor) || ! $client->user_id || ! $client->company_id) {
+            return;
+        }
+
+        $member = CompanyMember::query()
+            ->where('company_id', $client->company_id)
+            ->where('user_id', $client->user_id)
+            ->first();
+
+        $user = $member?->user;
+        if (! $user || Role::isStaff($user)) {
+            return;
+        }
+
+        AccountRecycle::park($user, $actor);
     }
 }

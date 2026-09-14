@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\CipAccess;
+use App\Support\Companies\CompanyAccess;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Session;
 
@@ -83,10 +84,8 @@ final class PortalShell
 
     private static function bootScript(User $user): string
     {
-        $json = json_encode(
-            array_values(Role::capabilities($user)),
-            JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR,
-        );
+        $flags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR;
+        $json = json_encode(array_values(Role::capabilities($user)), $flags);
 
         // Who the shell was served to, so anything a view caches per-tab can
         // be discarded the moment a different account is in it. Sign-out does
@@ -97,6 +96,11 @@ final class PortalShell
         $cipReach = CipAccess::canReach($user) ? 'true' : 'false';
         $provider = CipAccess::isProviderContact($user) ? 'true' : 'false';
         $spAdmin = Role::isServiceProviderAdmin($user) ? 'true' : 'false';
+        $firm = Role::isServiceProviderAdmin($user) ? CompanyAccess::homeCompany($user) : null;
+        $firmJson = json_encode(
+            $firm ? ['id' => $firm->uid, 'name' => $firm->name] : null,
+            $flags,
+        );
         // Whether this reader is an administrator, before /me has answered.
         // The Workflows comment tabs need it at mount: an administrator whose
         // identity had not arrived yet asked the server for their OWN threads,
@@ -113,6 +117,7 @@ final class PortalShell
             .'window.TMABootCipReach='.$cipReach.';'
             .'window.TMABootProviderContact='.$provider.';'
             .'window.TMABootServiceProviderAdmin='.$spAdmin.';'
+            .'window.TMABootProviderCompany='.$firmJson.';'
             .'window.TMABootIsAdmin='.$admin.';'
             .'window.TMABootBespoke='.$bespoke.';'
             .'window.TMACsrfToken='.$token.';</script>'."\n  ";

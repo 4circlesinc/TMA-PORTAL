@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Mail\Postcard;
 use App\Models\CipProvider;
+use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyMember;
 use App\Models\Invitation;
@@ -411,6 +412,158 @@ class ServiceProviderAdminTest extends TestCase
             ->assertJsonPath('isServiceProviderAdmin', true)
             ->assertJsonPath('isProviderContact', true)
             ->assertJsonPath('isStaff', false)
-            ->assertJsonPath('isAdmin', false);
+            ->assertJsonPath('isAdmin', false)
+            ->assertJsonPath('serviceProvider.id', $company->uid)
+            ->assertJsonPath('serviceProvider.name', 'Galaxy');
+    }
+
+    public function test_they_reach_cip_when_their_firm_has_no_provider_row(): void
+    {
+        $tma = $this->user(Role::ADMINISTRATOR);
+        $company = Company::create([
+            'uid' => 'plain-firm',
+            'name' => 'Plain Firm',
+            'status' => 'active',
+        ]);
+        $spAdmin = $this->user(Role::SERVICE_PROVIDER_ADMIN, ['email' => 'gil@plain.example']);
+        $this->attach($company, $spAdmin, $tma);
+
+        $this->assertTrue(CipAccess::canReach($spAdmin));
+        $this->assertTrue(CipAccess::isProviderContact($spAdmin));
+
+        $this->actingAs($spAdmin)->getJson("/portal/companies/{$company->uid}")
+            ->assertOk()
+            ->assertJsonPath('company.name', 'Plain Firm');
+    }
+
+    public function test_the_shell_bakes_their_firm_into_the_nav(): void
+    {
+        $tma = $this->user(Role::ADMINISTRATOR);
+        [$company] = $this->providerFirm();
+        $spAdmin = $this->user(Role::SERVICE_PROVIDER_ADMIN, ['email' => 'gil@galaxy.example']);
+        $this->attach($company, $spAdmin, $tma);
+
+        $this->actingAs($spAdmin)->get('/citizenship-applications')
+            ->assertOk()
+            ->assertSee('window.TMABootProviderCompany=', false)
+            ->assertSee('"id":"gal-firm"', false)
+            ->assertSee('"name":"Galaxy"', false);
+    }
+
+    public function test_they_can_add_and_edit_a_contact_at_their_firm(): void
+    {
+        $tma = $this->user(Role::ADMINISTRATOR);
+        [$company] = $this->providerFirm();
+        $spAdmin = $this->user(Role::SERVICE_PROVIDER_ADMIN, ['email' => 'gil@galaxy.example']);
+        $this->attach($company, $spAdmin, $tma);
+
+        $created = $this->actingAs($spAdmin)->postJson('/portal/clients', [
+            'uid' => 'dana-reed',
+            'name' => 'Dana Reed',
+            'companyId' => $company->uid,
+            'profile' => [
+                'firstName' => 'Dana',
+                'lastName' => 'Reed',
+                'emails' => [['type' => 'work', 'value' => 'dana@galaxy.example']],
+            ],
+        ])->assertOk();
+
+        $this->assertSame($company->uid, $created->json('client.companyId'));
+        $uid = $created->json('client.id');
+
+        $this->actingAs($spAdmin)->patchJson("/portal/clients/{$uid}", [
+            'name' => 'Dana R. Reed',
+            'companyId' => $company->uid,
+            'profile' => [
+                'firstName' => 'Dana',
+                'lastName' => 'R. Reed',
+            ],
+        ])->assertOk()
+            ->assertJsonPath('client.name', 'Dana R. Reed');
+    }
+
+    public function test_they_cannot_add_a_contact_at_another_firm(): void
+    {
+        $tma = $this->user(Role::ADMINISTRATOR);
+        [$galaxy] = $this->providerFirm();
+        [$bluemina] = $this->providerFirm('Bluemina', 'BLU');
+        $spAdmin = $this->user(Role::SERVICE_PROVIDER_ADMIN, ['email' => 'gil@galaxy.example']);
+        $this->attach($galaxy, $spAdmin, $tma);
+
+        $this->actingAs($spAdmin)->postJson('/portal/clients', [
+            'uid' => 'eve-blue',
+            'name' => 'Eve Blue',
+            'companyId' => $bluemina->uid,
+            'profile' => ['firstName' => 'Eve', 'lastName' => 'Blue'],
+        ])->assertForbidden();
+    }
+
+    public function test_they_can_rename_their_firm_but_not_its_code(): void
+    {
+        $tma = $this->user(Role::ADMINISTRATOR);
+        [$company] = $this->providerFirm();
+        $spAdmin = $this->user(Role::SERVICE_PROVIDER_ADMIN, ['email' => 'gil@galaxy.example']);
+        $this->attach($company, $spAdmin, $tma);
+
+        $this->actingAs($spAdmin)->patchJson("/portal/companies/{$company->uid}", [
+            'name' => 'Galaxy Partners',
+            'cipCode' => 'HACK',
+        ])->assertOk()
+            ->assertJsonPath('company.name', 'Galaxy Partners');
+
+        $this->assertSame('GAL', $company->fresh()->cipProvider->code);
+    }
+
+    public function test_they_can_edit_member_details_but_not_roles(): void
+    {
+        $tma = $this->user(Role::ADMINISTRATOR);
+        [$company] = $this->providerFirm();
+        $spAdmin = $this->user(Role::SERVICE_PROVIDER_ADMIN, ['email' => 'gil@galaxy.example']);
+        $this->attach($company, $spAdmin, $tma);
+        $contact = $this->user(Role::CLIENT, ['email' => 'dana@galaxy.example', 'name' => 'Dana Reed']);
+        $member = $this->attach($company, $contact, $tma);
+
+        $this->actingAs($spAdmin)
+            ->patchJson("/portal/companies/{$company->uid}/members/{$member->uuid}", [
+                'name' => 'Dana R.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('member.name', 'Dana R.');
+
+        $this->actingAs($spAdmin)
+            ->patchJson("/portal/companies/{$company->uid}/members/{$member->uuid}", [
+                'role' => 'primary',
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_deleting_a_contact_parks_their_login_in_the_recycle_bin(): void
+    {
+        $tma = $this->user(Role::ADMINISTRATOR);
+        [$company] = $this->providerFirm();
+        $spAdmin = $this->user(Role::SERVICE_PROVIDER_ADMIN, ['email' => 'gil@galaxy.example']);
+        $this->attach($company, $spAdmin, $tma);
+
+        $person = $this->user(Role::CLIENT, [
+            'email' => 'dana@galaxy.example',
+            'name' => 'Dana Reed',
+        ]);
+        $this->attach($company, $person, $tma);
+        $client = Client::create([
+            'uid' => 'dana-reed',
+            'name' => 'Dana Reed',
+            'email' => $person->email,
+            'company_id' => $company->id,
+            'user_id' => $person->id,
+            'data' => [],
+        ]);
+
+        $this->actingAs($spAdmin)->deleteJson("/portal/clients/{$client->uid}")->assertOk();
+
+        $this->assertSoftDeleted('clients', ['id' => $client->id]);
+        $this->assertSoftDeleted('users', ['id' => $person->id]);
+
+        $this->actingAs($spAdmin)->getJson('/portal/admin/recycle-bin')->assertForbidden();
+        $this->actingAs($tma)->getJson('/portal/admin/recycle-bin')->assertOk();
     }
 }

@@ -155,11 +155,22 @@ class CipAccess
     /** An active member of a firm registered as a CIP service provider. */
     public static function isProviderContact(User $user): bool
     {
-        return CompanyMember::query()
+        $companyIds = CompanyMember::query()
             ->active()
             ->where('user_id', $user->id)
-            ->whereIn('company_id', CipProvider::query()->select('company_id')->whereNotNull('company_id'))
-            ->exists();
+            ->pluck('company_id');
+
+        if ($companyIds->isEmpty()) {
+            return false;
+        }
+
+        if (CipProvider::query()->whereIn('company_id', $companyIds)->whereNotNull('company_id')->exists()) {
+            return true;
+        }
+
+        // A Service Provider admin still reaches CIP when their firm has no
+        // provider row yet — they land on the company page, not an application.
+        return Role::isServiceProviderAdmin($user);
     }
 
     /**

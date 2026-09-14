@@ -211,8 +211,12 @@
           || tab.id === 'closed') {
           return true;
         }
-        // Service Provider admins add contacts from their firm card.
-        return tab.id === 'providers' && isServiceProviderAdmin();
+        // Service Provider admins add contacts from their firm card and the
+        // Provider contacts tab. Regular contacts do not see either.
+        if (isServiceProviderAdmin()) {
+          return tab.id === 'providers' || tab.id === 'people';
+        }
+        return false;
       });
     }
 
@@ -858,6 +862,27 @@
     return isServiceProviderAdmin() && !isClientsAdmin();
   }
 
+  function clientsListTabInUrl() {
+    try {
+      return !!new URLSearchParams(window.location.search || '').get('listTab');
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /* The one firm a Service Provider admin belongs to, from boot, /me, or the
+     companies listing once it has arrived. */
+  function providerAdminHomeCompanyId() {
+    if (!isProviderAdminViewer()) return null;
+    var boot = window.TMABootProviderCompany;
+    if (boot && boot.id) return String(boot.id);
+    var me = window.TMACurrentUser && TMACurrentUser.get && TMACurrentUser.get();
+    if (me && me.serviceProvider && me.serviceProvider.id) return String(me.serviceProvider.id);
+    if (COMPANIES.length === 1) return COMPANIES[0].id;
+    if (COMPANIES.length > 1) return COMPANIES[0].id;
+    return null;
+  }
+
   /* Toolbar / row menu "Add contact" lands on the Access email field once
      that form is on screen. The field is omitted while members are loading. */
   function maybeFocusMemberEmail(root, state) {
@@ -1282,7 +1307,13 @@
     var rest = cipApplicationsRest(p);
     if (rest !== null) {
       var legacy = isLegacyCipPath(p);
-      if (rest === '') return { screen: 'list', legacyRedirect: legacy };
+      if (rest === '') {
+        var home = providerAdminHomeCompanyId();
+        if (home && !clientsListTabInUrl()) {
+          return { screen: 'company', companyId: home, legacyRedirect: legacy };
+        }
+        return { screen: 'list', legacyRedirect: legacy };
+      }
       if (rest === '/applications/new') {
         return { screen: 'new-application', applicationPhase: parseNewApplicationPhase(), legacyRedirect: legacy };
       }
@@ -5173,20 +5204,20 @@
 
   function renderCompanyProfileToolbar(company) {
     if (!company) return '';
-    var peopleCount = isProviderAdminViewer()
-      ? (company.memberCount || 0)
-      : (company.people || []).length;
-    var staffActions = isClientsAdmin()
-      ? '<button type="button" class="tma-dash__clients-edit-btn" data-clients-edit-company>' +
+    var peopleCount = (company.people || []).length;
+    var staffActions = '';
+    if (canManageCompanyAccess()) {
+      staffActions +=
+        '<button type="button" class="tma-dash__clients-edit-btn" data-clients-edit-company>' +
         '<img src="' + ICONS.PencilSimple + '" alt=""><span>Edit</span></button>' +
         '<button type="button" class="tma-dash__clients-message-btn" data-clients-add-person>' +
-        '<img src="' + ICONS.Plus + '" alt=""><span>Add person</span></button>' +
-        '<button type="button" class="tma-dash__clients-edit-btn" data-clients-delete-company aria-label="Delete service provider">' +
-        '<img src="' + ICONS.Trash + '" alt=""></button>'
-      : (isServiceProviderAdmin()
-        ? '<button type="button" class="tma-dash__clients-message-btn" data-clients-add-contact>' +
-          '<img src="' + ICONS.Plus + '" alt=""><span>Add contact</span></button>'
-        : '');
+        '<img src="' + ICONS.Plus + '" alt=""><span>Add person</span></button>';
+      if (isClientsAdmin()) {
+        staffActions +=
+          '<button type="button" class="tma-dash__clients-edit-btn" data-clients-delete-company aria-label="Delete service provider">' +
+          '<img src="' + ICONS.Trash + '" alt=""></button>';
+      }
+    }
     return (
       '<div class="tma-dash__clients-profile-toolbar">' +
       '<div class="tma-dash__clients-profile-head">' +
@@ -5209,7 +5240,9 @@
     var draft = state.draft || emptyDraft({ companyId: state.prefillCompanyId || '' });
     var isNew = !!state.adding;
     var contact = isNew ? null : contactFor(state.selectedId);
-    var title = isNew ? 'New application' : 'Edit application';
+    var title = isNew
+      ? (isProviderAdminViewer() ? 'New contact' : 'New application')
+      : (isProviderAdminViewer() ? 'Edit contact' : 'Edit application');
     return (
       '<div class="tma-dash__clients-profile-toolbar">' +
       '<div class="tma-dash__clients-profile-head">' + renderClientsBackArrow(state) +
@@ -5436,7 +5469,7 @@
   }
 
   function renderCompanySelect(selectedId) {
-    var opts = '<option value="">No company</option>' +
+    var opts = (isProviderAdminViewer() ? '' : '<option value="">No company</option>') +
       COMPANIES.map(function (c) {
         return '<option value="' + esc(c.id) + '"' + (c.id === selectedId ? ' selected' : '') + '>' + esc(c.name) + '</option>';
       }).join('');
@@ -5720,8 +5753,9 @@
         '<div class="tma-dash__clients-form-grid">' +
         renderFormField('Service provider name', 'companyName', draft.name) +
         renderFormField('Website', 'companyWebsite', draft.website, { type: 'url', placeholder: 'https://' }) +
-        // Filled in from the name as it is typed; still editable.
-        renderFormField('CIP code', 'companyCipCode', draft.cipCode, { placeholder: 'From the name' }) +
+        (isProviderAdminViewer()
+          ? ''
+          : renderFormField('CIP code', 'companyCipCode', draft.cipCode, { placeholder: 'From the name' })) +
         '</div>' +
         '<label class="tma-dash__clients-form-field tma-dash__clients-form-field--full">' +
         '<span class="tma-dash__clients-form-label">Notes</span>' +
@@ -5746,6 +5780,10 @@
     opts = opts || {};
     var company = companyFor(state.companyId);
     if (!company) {
+      if (state.companyLoadError) {
+        return '<div class="tma-dash__clients-detail">' +
+          clientsEmpty(state.companyLoadError, 'Illustration07') + '</div>';
+      }
       return '<div class="tma-dash__clients-detail">' +
         clientsEmpty('You’re not assigned to this service provider.', 'Illustration07') + '</div>';
     }
@@ -5768,11 +5806,9 @@
           })
         : '') +
       companyCard('Access', renderCompanyMembersBlock(state, company), { half: true }) +
-      (isProviderAdminViewer()
-        ? ''
-        : companyCard('Provider contacts', renderCompanyPeople(company), {
-            half: true, count: (company.people || []).length,
-          })) +
+      companyCard('Provider contacts', renderCompanyPeople(company), {
+        half: true, count: (company.people || []).length,
+      }) +
       companyCard('Assigned staff', renderCompanyStaffBlock(state, company), { half: true }) +
       '</div></div></div>'
     );
@@ -5832,10 +5868,17 @@
 
   function renderCompanyPeople(company) {
     var people = company.people || [];
-    if (!people.length) return clientsEmpty('No contacts yet', 'Illustration04');
+    var form = canManageCompanyAccess()
+      ? '<div class="tma-dash__clients-assign-form">' +
+        '<button type="button" class="tma-dash__clients-assign-btn" data-clients-add-person>' +
+        'Add contact</button></div>'
+      : '';
+    var list = people.length
+      ? '<div class="tma-dash__clients-company-people">' +
+        people.map(companyPersonRow).join('') + '</div>'
+      : clientsEmpty('No contacts yet', 'Illustration04');
 
-    return '<div class="tma-dash__clients-company-people">' +
-      people.map(companyPersonRow).join('') + '</div>';
+    return form + list;
   }
 
   /*
@@ -5975,7 +6018,9 @@
         }).join('') + '</div>'
       : (loading
         ? '<div class="tma-dash__clients-assigned-empty">Loading…</div>'
-        : clientsEmpty('No portal access yet', 'Illustration09'));
+        : (state.companyMembersError
+          ? clientsEmpty(state.companyMembersError, 'Illustration07')
+          : clientsEmpty('No portal access yet', 'Illustration09')));
 
     return '<div class="tma-dash__clients-access-block">' +
       form + list + '</div>';
@@ -10286,7 +10331,10 @@
     if (local) return Promise.resolve(local);
     return CompaniesAPI.get(id).then(function (data) {
       return (data && data.company) || null;
-    }).catch(function () { return null; });
+    }).catch(function (err) {
+      clientsToast((err && err.message) || 'Could not open this service provider', 'negative');
+      return null;
+    });
   }
 
   function confirmCompanyDelete(company, onConfirm) {
@@ -10544,7 +10592,16 @@
     if (kind === 'company' && isProviderAdminViewer()) {
       return [
         { act: 'open', label: 'Open', icon: 'ArrowUpRight' },
-        { act: 'add-contact', label: 'Add contact', icon: 'Plus' },
+        { act: 'edit', label: 'Edit', icon: 'PencilSimple' },
+        { act: 'add-person', label: 'Add person', icon: 'Plus' },
+      ];
+    }
+    if ((kind === 'client' || kind === 'person') && isProviderAdminViewer()) {
+      return [
+        { act: 'open', label: 'Open', icon: 'ArrowUpRight' },
+        { act: 'edit', label: 'Edit', icon: 'PencilSimple' },
+        { sep: true },
+        { act: 'delete', label: 'Delete', icon: 'Trash', danger: true },
       ];
     }
 
@@ -13481,7 +13538,20 @@
           var savedId = res && res.client && res.client.id ? res.client.id : id;
           saveContactRecord(savedId, draft, !directoryItemFor(savedId));
           if (res && res.client) rememberMeta(res.client);
-          clientsToast(adding ? 'Client added' : 'Changes saved', 'positive');
+          var added = isProviderAdminViewer() ? 'Contact added' : 'Client added';
+          clientsToast(adding ? added : 'Changes saved', 'positive');
+          if (isProviderAdminViewer()) {
+            var firmId = state.companyId || (draft && draft.companyId) || providerAdminHomeCompanyId();
+            CompaniesAPI.list().then(function (payload) {
+              hydrateCompanies((payload && payload.companies) || COMPANIES);
+              if (firmId) navigate('company', null, { companyId: firmId });
+              else navigate('detail', savedId);
+            }).catch(function () {
+              if (firmId) navigate('company', null, { companyId: firmId });
+              else navigate('detail', savedId);
+            });
+            return;
+          }
           navigate('detail', savedId, { forceFull: adding && !usesPagedClientsFlow(state) });
         }).catch(function (err) {
           saveBtn.disabled = false;
@@ -13528,7 +13598,9 @@
     function refreshFormHeadAvatar() {
       if (!formHead) return;
       var contact = state.adding ? null : contactFor(state.selectedId);
-      var title = state.adding ? 'New application' : 'Edit application';
+      var title = state.adding
+        ? (isProviderAdminViewer() ? 'New contact' : 'New application')
+        : (isProviderAdminViewer() ? 'Edit contact' : 'Edit application');
       formHead.innerHTML =
         renderFormHeadAvatar(state.draft, contact, !!state.adding) +
         '<span class="tma-dash__clients-profile-name">' + esc(title) + '</span>';
@@ -13647,13 +13719,13 @@
       });
     }
 
-    var addPersonBtn = unwiredClientsChrome(root, '[data-clients-add-person]');
-    if (addPersonBtn) {
+    var addPersonBtns = unwiredAllClientsChrome(root, '[data-clients-add-person]');
+    addPersonBtns.forEach(function (addPersonBtn) {
       addPersonBtn.addEventListener('click', function () {
-        state.prefillCompanyId = state.companyId || '';
+        state.prefillCompanyId = state.companyId || providerAdminHomeCompanyId() || '';
         navigate('add');
       });
-    }
+    });
 
     var addContactBtn = unwiredClientsChrome(root, '[data-clients-add-contact]');
     if (addContactBtn) {
@@ -13709,8 +13781,10 @@
           name: nameEl ? nameEl.value.trim() : '',
           website: websiteEl ? websiteEl.value.trim() : '',
           notes: notesEl ? notesEl.value.trim() : '',
-          cipCode: cipCodeEl ? cipCodeEl.value.trim() : '',
         };
+        if (!isProviderAdminViewer()) {
+          payload.cipCode = cipCodeEl ? cipCodeEl.value.trim() : '';
+        }
         if (!payload.name) {
           clientsToast('Service provider name is required', 'negative');
           return;
@@ -14228,13 +14302,45 @@
   /* The client's invitation, loaded alongside their assigned staff. Kept
      separate from ensureAssignmentsLoaded so a client hub without the
      assignments capability still shows portal access. */
-  /* Members and assigned staff for the open company. Guarded per company so
-     re-rendering does not refetch. */
+  /* Fetch the open company when the listing has not arrived yet, and surface
+     a 403 rather than an empty "not assigned" card. */
+  function ensureCompanyLoaded(state, render) {
+    if (!state.companyId) return;
+    if (companyFor(state.companyId)) {
+      state.companyLoadError = null;
+      return;
+    }
+    if (state.companyLoadingFor === state.companyId) return;
+    state.companyLoadingFor = state.companyId;
+    state.companyLoadError = null;
+
+    CompaniesAPI.get(state.companyId).then(function (data) {
+      if (state.companyId !== state.companyLoadingFor) return;
+      var company = data && data.company;
+      if (company) {
+        if (!companyFor(company.id)) COMPANIES.push(company);
+        else Object.assign(companyFor(company.id), company);
+        hydrateCompanies(COMPANIES);
+        state.companyLoadError = null;
+      } else {
+        state.companyLoadError = 'This service provider could not be opened.';
+      }
+      state.companyLoadingFor = null;
+      render();
+    }).catch(function (err) {
+      if (state.companyId !== state.companyLoadingFor) return;
+      state.companyLoadError = (err && err.message) || 'You cannot open this service provider.';
+      state.companyLoadingFor = null;
+      render();
+    });
+  }
+
   function ensureCompanyPanelsLoaded(state, render) {
     if (!state.companyId) return;
     if (state.companyPanelsFor === state.companyId) return;
     state.companyPanelsFor = state.companyId;
     state.companyMembersLoading = true;
+    state.companyMembersError = null;
     state.companyStaffLoading = true;
 
     var redraw = function () {
@@ -14247,11 +14353,13 @@
       if (stale()) return;
       state.companyMembers = (d && d.members) || [];
       state.companyMembersLoading = false;
+      state.companyMembersError = null;
       redraw();
-    }).catch(function () {
+    }).catch(function (err) {
       if (stale()) return;
       state.companyMembers = [];
       state.companyMembersLoading = false;
+      state.companyMembersError = (err && err.message) || 'Could not load portal access.';
       redraw();
     });
 
@@ -14792,9 +14900,12 @@
       companyStaff: [],
       companyStaffAssignable: [],
       companyMembersLoading: false,
+      companyMembersError: null,
       focusMemberEmail: false,
       companyStaffLoading: false,
       companyPanelsFor: null,
+      companyLoadError: null,
+      companyLoadingFor: null,
       listScrollTop: 0,
       search: '',
       searchFocused: false,
@@ -14926,11 +15037,12 @@
       }
 
       if (state.screen === 'company' && state.companyId) {
+        ensureCompanyLoaded(state, render);
         ensureCompanyPanelsLoaded(state, render);
       }
 
       if (screen === 'add') {
-        state.draft = emptyDraft({ companyId: state.prefillCompanyId || '' });
+        state.draft = emptyDraft({ companyId: state.prefillCompanyId || providerAdminHomeCompanyId() || '' });
         state.prefillCompanyId = '';
         state.profileTab = 'info';
         state.companyDraft = null;
@@ -15207,6 +15319,24 @@
       }
 
       render();
+
+      if (state.screen === 'company' && state.companyId && window.history.replaceState) {
+        var companyPath = pathForClientsScreen('company', null, state.companyId);
+        if ((window.location.pathname.replace(/\/+$/, '') || '/') !== companyPath) {
+          history.replaceState(
+            {
+              navId: 'clients',
+              view: 'clients',
+              title: meta.title,
+              crumb: meta.crumb,
+              clientsScreen: 'company',
+              companyId: state.companyId,
+            },
+            '',
+            companyPath
+          );
+        }
+      }
 
       if (state.screen !== 'list') {
         requestAnimationFrame(function () {

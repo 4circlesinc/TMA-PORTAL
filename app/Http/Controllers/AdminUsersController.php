@@ -14,6 +14,7 @@ use App\Models\Notification;
 use App\Models\User;
 use App\Models\WorkDay;
 use App\Support\Access\AccessSync;
+use App\Support\Access\AccountRecycle;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
 use App\Support\AvatarService;
@@ -920,46 +921,7 @@ class AdminUsersController extends Controller
     private function moveToRecycleBin(User $user, User $actor): void
     {
         $this->record($user->id, 'account_deleted');
-
-        DB::table('sessions')->where('user_id', $user->id)->delete();
-        AccessSync::userSuspended($user, $actor);
-
-        /*
-         * Tell the person. A closed account can never sign in again, so the
-         * portal has no way left to reach them — email is it. Inline and
-         * tracked, like approval and denial: a queued message waits behind a
-         * worker that may not be running, and one that never arrives is
-         * indistinguishable from never having been sent.
-         *
-         * Sent before the row goes, so the delivery is recorded against a user
-         * that is still there to be recorded against.
-         */
-        if ($user->email) {
-            Deliveries::send(
-                Postcards::accountDeleted($user->email, $user->first_name ?: null),
-                $user->email,
-                $user,
-                'accountDeleted',
-                immediate: true,
-            );
-        }
-
-        $user->forceFill(['deleted_by' => $actor->id])->save();
-        $user->delete();
-
-        ClientDirectory::flush();
-        Cache::forget('companies.directory');
-        Live::staff(Live::CLIENTS);
-        Live::staff(Live::COMPANIES);
-        Live::staff(Live::CIP);
-
-        ActivityLogger::log([
-            'actor' => $actor,
-            'type' => 'account.deleted',
-            'module' => 'account',
-            'description' => $actor->name.' moved the account for '.$user->email.' to the Recycle Bin',
-            'subject' => $user,
-        ]);
+        AccountRecycle::park($user, $actor);
     }
 
     public function reactivate(Request $request, User $user): JsonResponse

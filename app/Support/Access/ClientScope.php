@@ -5,6 +5,7 @@ namespace App\Support\Access;
 use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\User;
+use App\Support\Companies\CompanyAccess;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
@@ -37,6 +38,15 @@ class ClientScope
 
         if ($user === null) {
             return $query->whereRaw('1 = 0');
+        }
+
+        if (Role::isServiceProviderAdmin($user) && ! Role::can($user, 'clients.view')) {
+            $companyIds = CompanyAccess::companiesFor($user);
+            if ($companyIds === []) {
+                return $query->whereRaw('1 = 0');
+            }
+
+            return $query->whereIn('company_id', $companyIds);
         }
 
         // whereIn + subquery rather than whereHas: the planner can use the

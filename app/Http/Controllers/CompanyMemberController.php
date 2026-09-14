@@ -124,18 +124,52 @@ class CompanyMemberController extends Controller
         ]);
     }
 
-    /** Change role, permissions or the primary flag. */
+    /** Change role, permissions, the primary flag, or the contact's details. */
     public function update(Request $request, string $uid, string $memberUuid): JsonResponse
     {
-        Role::authorize($request->user(), 'clients.manage');
         $company = Company::where('uid', $uid)->firstOrFail();
+        abort_unless(CompanyAccess::canManageMembers($request->user(), $company), 403);
         $member = $this->member($company, $memberUuid);
+        $asProviderAdmin = CompanyAccess::isProviderAdminOf($request->user(), $company)
+            && ! Role::can($request->user(), 'clients.manage');
 
         $data = $request->validate([
+            'name' => ['nullable', 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'jobTitle' => ['nullable', 'string', 'max:120'],
             'role' => ['nullable', Rule::in(CompanyRoles::all())],
             'primary' => ['sometimes', 'boolean'],
             'abilities' => ['nullable', 'array'],
         ]);
+
+        abort_if(
+            $asProviderAdmin && (
+                array_key_exists('role', $data)
+                || array_key_exists('primary', $data)
+                || array_key_exists('abilities', $data)
+            ),
+            403,
+            'You cannot change roles at this firm.',
+        );
+
+        $details = array_filter([
+            'name' => $data['name'] ?? null,
+            'email' => isset($data['email']) ? Str::lower(trim($data['email'])) : null,
+            'job_title' => $data['jobTitle'] ?? null,
+        ], fn ($value) => $value !== null && $value !== '');
+
+        if ($details !== []) {
+            $member->forceFill($details)->save();
+            $linked = $member->user;
+            if ($linked && ! Role::isStaff($linked)) {
+                $linked->forceFill(array_filter([
+                    'name' => $details['name'] ?? null,
+                    'email' => $details['email'] ?? null,
+                    'job_title' => $details['job_title'] ?? null,
+                ]))->save();
+            }
+            $member = $member->fresh(['user']);
+        }
 
         if (! empty($data['role']) && $data['role'] !== $member->role) {
             $member = CompanyMembers::changeRole(
