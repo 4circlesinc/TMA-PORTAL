@@ -98,9 +98,9 @@
     return '<ul>' +
       '<li>Applying Alone: Admin Fee = US ' + money(BASE_ALONE) + '</li>' +
       '<li>Applying With Spouse: Admin Fee = US ' + money(BASE_WITH_SPOUSE) + '</li>' +
-      '<li>Dependants (up to 4): Under 18 &mdash; ' + money(FEE_UNDER_18) + ' each &middot; 18 and Over &mdash; ' + money(FEE_18_AND_OVER) + ' each</li>' +
+      '<li>Dependants (up to 4): Under 18 - ' + money(FEE_UNDER_18) + ' each &middot; 18 and Over - ' + money(FEE_18_AND_OVER) + ' each</li>' +
       '<li>If a spouse is included <strong>and</strong> there are more than 4 dependants, all dependants from the 5th onward are ' + money(FEE_18_AND_OVER) + ' each, regardless of age.</li>' +
-      '<li>Dependants must be entered in the correct order &mdash; fees are calculated exactly as entered.</li>' +
+      '<li>Dependants must be entered in the correct order - fees are calculated exactly as entered.</li>' +
       '</ul>';
   }
 

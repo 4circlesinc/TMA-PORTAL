@@ -127,6 +127,10 @@ These rules apply to **every page and view** in the application shell - main con
 - Reuse spacing tokens from `tokens.css` / `theme.css`. Where the app shell defines shared inset/gap variables, use those rather than one-off values.
 - Reference implementations: `public/css/dashboard.css`, `public/css/card.css` - patterns there should be copied to new pages, not re-invented.
 
+### Rule 10 - Copy uses a hyphen, never an em dash
+
+Every string a reader sees in the product - labels, notes, hints, list items, messages, email copy - separates with a plain hyphen between spaces (`Under 18 - $5,000 each`), **never** an em dash (`—`, `&mdash;`) or an en dash (`–`). Copy brought in from elsewhere (a standalone calculator, a brief, a template, a paste from a document) is normalised before it ships: replace `— ` with `- `. Set by the owner on 2026-09-13 after the Fee Calculator's notes arrived with em dashes.
+
 ---
 
 ## Required Workflow (Before Writing Code)
@@ -834,6 +838,7 @@ Reference: `public/js/settings.js` (`renderAddPaymentMethodPopup`, `renderChange
 | 2026-07-07 | **Primary accent = TMA brand blue** - `--color-indigo` remapped to `var(--color-primary-dark)` (`#136da0`); accent picker "indigo" swatch updated in `dashboard.js`; rule documented under Design Tokens › Colors. Purple/indigo must not be used for primary accents |
 | 2026-07-07 | **Global accent sweep** - `--color-purple` remapped to brand blue; added `--color-accent`, `--color-accent-bg`, `--color-accent-bg-hover`; replaced hardcoded `#9747ff` in component CSS; portal selection toolbar + table checkboxes use brand blue |
 | 2026-09-13 | **Fee Calculator page** - `/calculator` (`public/js/fee-calculator.js`, open to every account, absent from `Role::PAGE_CAPABILITIES`); the sidebar row sits in the Pages group with a masked `Calculator` icon; the page composes `ui().section` / `ui().select` / `ui().btn` (ghost) and `.tma-portal-chip`, with only layout glue (`.fee-calc*`) added to `portal.css` |
+| 2026-09-13 | **Rule 10 - no em dashes in copy** - product copy uses ` - `, never `—`/`&mdash;`/`–`; pasted copy is normalised first (Fee Calculator notes were the case) |
 
 ---
 
