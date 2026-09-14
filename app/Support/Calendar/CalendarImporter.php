@@ -90,7 +90,7 @@ class CalendarImporter
                 // limit (4) is not blown on connect-all. Google can start now.
                 $pending = SyncProviderCalendar::dispatch($calendar->id);
                 if ($account->provider === 'microsoft' && count($added) > 0) {
-                    $pending->delay(now()->addSeconds(count($added) * 15));
+                    $pending->delay(now()->addSeconds(count($added) * 45));
                 }
 
                 $added[] = $calendar;

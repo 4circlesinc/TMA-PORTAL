@@ -391,6 +391,43 @@ class CalendarProviderSyncTest extends TestCase
         Queue::assertPushed(SyncProviderCalendar::class, fn (SyncProviderCalendar $j) => $j->calendarId === $calendar->id);
     }
 
+    public function test_a_legacy_429_message_is_retried_instead_of_paging_the_user(): void
+    {
+        Queue::fake();
+
+        [$user, $calendar] = $this->connectedCalendar();
+        $calendar->forceFill([
+            'subscription_status' => 'error',
+            'subscription_error' => 'Microsoft could not list events (HTTP 429): Application is over its MailboxConcurrency limit.',
+            'subscription_failures' => 3,
+        ])->save();
+
+        $provider = new FakeCalendarProvider([]);
+        $provider->failWith = 'Microsoft could not list events (HTTP 429): Application is over its MailboxConcurrency limit.';
+        $this->fakeProvider($provider);
+
+        (new SyncProviderCalendar($calendar->id))->handle();
+
+        $calendar->refresh();
+        $this->assertNotSame('error', $calendar->subscription_status);
+        $this->assertNull($calendar->subscription_error);
+        $this->assertSame(0, (int) $calendar->subscription_failures);
+        $this->assertSame(0, Notification::where('user_id', $user->id)->where('type', 'calendar.sync_error')->count());
+        Queue::assertPushed(SyncProviderCalendar::class);
+    }
+
+    public function test_a_429_calendar_is_due_again_after_two_minutes(): void
+    {
+        [, $calendar] = $this->connectedCalendar([
+            'subscription_status' => 'error',
+            'subscription_error' => 'Microsoft could not list events (HTTP 429): Application is over its MailboxConcurrency limit.',
+            'subscription_failures' => 3,
+            'subscription_attempted_at' => now()->subMinutes(3),
+        ]);
+
+        $this->assertTrue($calendar->providerSyncIsDue());
+    }
+
     public function test_microsoft_calendars_on_one_account_share_a_mailbox_lock(): void
     {
         [, $google] = $this->connectedCalendar();

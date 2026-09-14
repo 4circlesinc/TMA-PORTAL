@@ -4,6 +4,7 @@ namespace App\Support\Calendar\Sync;
 
 use App\Models\ConnectedAccount;
 use App\Support\Mail\MailTokens;
+use App\Support\Microsoft\MailboxGate;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
@@ -346,10 +347,13 @@ class MicrosoftCalendarProvider implements CalendarProvider
 
     private function request(int $timeout = 30): PendingRequest
     {
-        return ThrottledHttp::configure(
-            Http::withToken(MailTokens::accessToken($this->account))
-                ->acceptJson()
-                ->timeout($timeout)
+        return MailboxGate::bind(
+            ThrottledHttp::configure(
+                Http::withToken(MailTokens::accessToken($this->account))
+                    ->acceptJson()
+                    ->timeout($timeout)
+            ),
+            $this->account,
         );
     }
 

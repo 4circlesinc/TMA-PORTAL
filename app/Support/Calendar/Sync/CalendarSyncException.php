@@ -22,4 +22,17 @@ class CalendarSyncException extends \RuntimeException
     ) {
         parent::__construct($message);
     }
+
+    public static function looksThrottled(string $message): bool
+    {
+        $m = strtolower($message);
+
+        return str_contains($m, 'http 429')
+            || str_contains($m, 'too many requests')
+            || str_contains($m, 'mailboxconcurrency')
+            || str_contains($m, 'applicationthrottled')
+            || str_contains($m, 'application is over its')
+            || str_contains($m, 'rate-limiting')
+            || str_contains($m, 'mailbox is busy');
+    }
 }

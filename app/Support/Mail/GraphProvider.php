@@ -3,6 +3,7 @@
 namespace App\Support\Mail;
 
 use App\Models\ConnectedAccount;
+use App\Support\Microsoft\MailboxGate;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -1213,9 +1214,12 @@ class GraphProvider implements MailProvider
      */
     private function request(int $timeout = 30, int $tries = 2): PendingRequest
     {
-        return Http::withToken(MailTokens::accessToken($this->account))
-            ->timeout($timeout)
-            ->retry($tries, 200, throw: false);
+        return MailboxGate::bind(
+            Http::withToken(MailTokens::accessToken($this->account))
+                ->timeout($timeout)
+                ->retry($tries, 200, throw: false),
+            $this->account,
+        );
     }
 
     /**

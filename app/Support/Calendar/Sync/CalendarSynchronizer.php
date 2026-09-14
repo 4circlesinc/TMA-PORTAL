@@ -47,6 +47,7 @@ class CalendarSynchronizer
         $this->calendar->forceFill([
             'subscription_status' => 'syncing',
             'subscription_attempted_at' => now(),
+            'subscription_error' => null,
         ])->save();
 
         $stats = ['pulled' => 0, 'pushed' => 0, 'deleted' => 0, 'conflicts' => 0, 'failed' => 0];
@@ -67,7 +68,7 @@ class CalendarSynchronizer
 
             $this->finishRun($stats);
         } catch (CalendarSyncException $e) {
-            if (! $e->throttled) {
+            if (! $e->throttled && ! CalendarSyncException::looksThrottled($e->getMessage())) {
                 $this->recordFailure($e->getMessage());
             }
             throw $e;

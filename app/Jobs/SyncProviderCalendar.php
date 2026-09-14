@@ -3,8 +3,10 @@
 namespace App\Jobs;
 
 use App\Models\Calendar;
+use App\Models\Notification;
 use App\Support\Calendar\Sync\CalendarSyncException;
 use App\Support\Calendar\Sync\CalendarSynchronizer;
+use App\Support\Microsoft\MailboxBusyException;
 use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -28,7 +30,7 @@ class SyncProviderCalendar implements ShouldBeUniqueUntilProcessing, ShouldQueue
 
     public int $tries = 2;
 
-    public int $timeout = 120;
+    public int $timeout = 180;
 
     /**
      * Identical syncs stop piling into the jobs table while one is queued:
@@ -59,7 +61,7 @@ class SyncProviderCalendar implements ShouldBeUniqueUntilProcessing, ShouldQueue
     public function middleware(): array
     {
         $locks = [
-            (new WithoutOverlapping('calendar-sync:'.$this->calendarId))->releaseAfter(10)->expireAfter(180),
+            (new WithoutOverlapping('calendar-sync:'.$this->calendarId))->releaseAfter(10)->expireAfter(210),
         ];
 
         $calendar = Calendar::query()
@@ -69,7 +71,7 @@ class SyncProviderCalendar implements ShouldBeUniqueUntilProcessing, ShouldQueue
         if ($calendar?->source === Calendar::SOURCE_MICROSOFT && $calendar->connected_account_id) {
             $locks[] = (new WithoutOverlapping('calendar-mailbox:'.$calendar->connected_account_id))
                 ->releaseAfter(15)
-                ->expireAfter(180);
+                ->expireAfter(210);
         }
 
         return $locks;
@@ -85,13 +87,13 @@ class SyncProviderCalendar implements ShouldBeUniqueUntilProcessing, ShouldQueue
 
         try {
             (new CalendarSynchronizer($calendar))->run();
+        } catch (MailboxBusyException $e) {
+            $this->rescheduleThrottle($calendar, $e->retryAfter);
+
+            return;
         } catch (CalendarSyncException $e) {
-            if ($e->throttled) {
-                // Stay 'syncing' so the connect panel keeps polling. A new
-                // dispatch, not $this->release(): release burns tries and
-                // the overlap lock would drop a retry that landed too soon.
-                static::dispatch($this->calendarId)
-                    ->delay(now()->addSeconds($e->retryAfter));
+            if ($e->throttled || CalendarSyncException::looksThrottled($e->getMessage())) {
+                $this->rescheduleThrottle($calendar, max(30, $e->retryAfter));
 
                 return;
             }
@@ -121,9 +123,36 @@ class SyncProviderCalendar implements ShouldBeUniqueUntilProcessing, ShouldQueue
     {
         $calendar = Calendar::find($this->calendarId);
 
-        if ($calendar && $calendar->subscription_status === 'syncing') {
-            $this->recordInterruption($calendar, $e);
+        if (! $calendar || $calendar->subscription_status !== 'syncing') {
+            return;
         }
+
+        if ($e instanceof MailboxBusyException
+            || ($e instanceof CalendarSyncException && ($e->throttled || CalendarSyncException::looksThrottled($e->getMessage())))
+            || ($e && CalendarSyncException::looksThrottled($e->getMessage()))) {
+            $this->rescheduleThrottle($calendar, 30);
+
+            return;
+        }
+
+        $this->recordInterruption($calendar, $e);
+    }
+
+    private function rescheduleThrottle(Calendar $calendar, int $retryAfter): void
+    {
+        $calendar->forceFill([
+            'subscription_error' => null,
+            'subscription_failures' => 0,
+        ])->save();
+
+        Notification::query()
+            ->where('type', 'calendar.sync_error')
+            ->where('dedupe_key', 'calendar.sync_error:'.$calendar->id)
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        static::dispatch($this->calendarId)
+            ->delay(now()->addSeconds(max(30, $retryAfter)));
     }
 
     private function recordInterruption(Calendar $calendar, ?\Throwable $e): void

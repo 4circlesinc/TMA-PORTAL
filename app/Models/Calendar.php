@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Calendar\Sync\CalendarSyncException;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -130,6 +131,14 @@ class Calendar extends Model
         }
 
         $failures = (int) $this->subscription_failures;
+
+        // A 429 is Graph asking us to wait, not a broken calendar. Do not
+        // apply the exponential error backoff that used to strand Outlook
+        // calendars for 20+ minutes after one hot mailbox.
+        if (CalendarSyncException::looksThrottled((string) $this->subscription_error)) {
+            return $this->subscription_attempted_at === null
+                || $this->subscription_attempted_at->lte(now()->subMinutes(2));
+        }
 
         if ($failures === 0) {
             return true;

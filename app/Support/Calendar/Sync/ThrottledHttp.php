@@ -15,7 +15,7 @@ use Illuminate\Http\Client\Response;
  */
 final class ThrottledHttp
 {
-    public static function configure(PendingRequest $request, int $attempts = 5): PendingRequest
+    public static function configure(PendingRequest $request, int $attempts = 2): PendingRequest
     {
         return $request->retry(
             $attempts,
@@ -44,10 +44,18 @@ final class ThrottledHttp
             : null;
 
         if ($header !== null && $header !== '') {
+            if (! is_numeric($header)) {
+                $until = strtotime($header);
+
+                return $until ? min(10_000, max(0, ($until - time()) * 1000)) : 5_000;
+            }
+
             return min(10_000, max(0, (int) $header) * 1000);
         }
 
-        return min(8_000, (2 ** $attempt) * 400);
+        // MailboxConcurrency 429s often omit Retry-After. Retrying in
+        // hundreds of milliseconds is what kept the mailbox hot.
+        return min(8_000, max(5_000, (2 ** $attempt) * 400));
     }
 
     private static function shouldRetry(mixed $exception): bool
