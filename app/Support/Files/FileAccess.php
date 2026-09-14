@@ -588,7 +588,7 @@ class FileAccess
             return false;
         }
 
-        if (! in_array($ability, self::CAPS[$role] ?? [], true)) {
+        if (! self::roleGrants($role, $ability, $item)) {
             return false;
         }
 
@@ -721,7 +721,7 @@ class FileAccess
         $out = [];
 
         foreach ($abilities as $ability) {
-            if (! in_array($ability, $caps, true)) {
+            if (! self::roleGrants($role, $ability, $item)) {
                 $out[$ability] = false;
 
                 continue;
@@ -758,6 +758,28 @@ class FileAccess
     public static function lineage(?int $folderId): Collection
     {
         return self::chainFolders($folderId);
+    }
+
+    /**
+     * Whether this role grants the ability, including the Documents-tab rule:
+     * anyone who can open a client's file or folder may download it.
+     *
+     * Viewer vs downloader is a File Library share distinction — preview
+     * without taking a copy. Client records are a working folder for the
+     * assigned team (and anyone else who can already open them). Withholding
+     * download there is what sends the same PDF around in email. Firm-wide
+     * viewer shares on ordinary library files stay preview-only.
+     */
+    private static function roleGrants(?string $role, string $ability, FileItem|Folder $item): bool
+    {
+        $caps = self::CAPS[$role] ?? [];
+        if (in_array($ability, $caps, true)) {
+            return true;
+        }
+
+        return $ability === 'download'
+            && self::inClientTree($item)
+            && (in_array('preview', $caps, true) || in_array('view', $caps, true));
     }
 
     /**

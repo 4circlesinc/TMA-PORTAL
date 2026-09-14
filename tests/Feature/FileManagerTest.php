@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\RefreshFolderStats;
 use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\User;
+use App\Support\Files\FileAccess;
 use App\Support\Files\FolderProvisioner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -100,7 +102,7 @@ class FileManagerTest extends TestCase
 
         $before = $root->fresh()->updated_at;
 
-        (new \App\Jobs\RefreshFolderStats)->handle();
+        (new RefreshFolderStats)->handle();
 
         $root->refresh();
         $this->assertSame(1334, (int) $root->subtree_size);
@@ -662,6 +664,83 @@ class FileManagerTest extends TestCase
             ->assertOk()
             ->assertJsonPath('folders.0.name', 'Passports')
             ->assertJsonPath('files.0.name', 'welcome.pdf');
+    }
+
+    /**
+     * The Documents tab is a working folder. View-only assignment still
+     * opens the client's files; it must also let them take a copy. Viewer
+     * vs downloader stays a File Library share distinction for ordinary
+     * firm files, not a way to hide a passport behind a right-click.
+     */
+    public function test_view_only_assigned_staff_may_download_client_documents_and_folders(): void
+    {
+        $admin = $this->approvedUser(['account_type' => 'Administrator']);
+        $staff = $this->approvedUser(['account_type' => 'Reviewing Officer']);
+        $stranger = $this->approvedUser(['account_type' => 'Reviewing Officer']);
+        $client = Client::create([
+            'uid' => 'acme-dl',
+            'name' => 'Acme Co',
+            'email' => 'owner@acme.test',
+            'initial' => 'A',
+            'initial_color' => 'blue',
+            'data' => [],
+        ]);
+
+        $clientFolder = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Acme Co',
+            'folder_type' => Folder::TYPE_CLIENT,
+            'client_id' => $client->id,
+            'owner_id' => $admin->id,
+            'created_by' => $admin->id,
+        ]);
+        $child = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Passports',
+            'folder_type' => Folder::TYPE_USER,
+            'parent_id' => $clientFolder->id,
+            'client_id' => $client->id,
+            'owner_id' => $admin->id,
+            'created_by' => $admin->id,
+        ]);
+        $file = FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'folder_id' => $child->id,
+            'name' => 'passport.pdf',
+            'extension' => 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 100,
+            'disk' => 'local',
+            'storage_path' => 'tests/passport.pdf',
+            'owner_id' => $admin->id,
+            'uploaded_by' => $admin->id,
+        ]);
+
+        ClientAssignment::create([
+            'client_id' => $client->id,
+            'user_id' => $staff->id,
+            'role' => 'general',
+            'permission_level' => 'view_only',
+            'is_primary' => true,
+            'status' => ClientAssignment::STATUS_ACTIVE,
+            'assigned_by' => $admin->id,
+        ]);
+
+        $this->assertSame('viewer', FileAccess::fileRole($staff, $file));
+        $this->assertTrue(FileAccess::can($staff, 'preview', $file));
+        $this->assertTrue(FileAccess::can($staff, 'download', $file));
+        $this->assertTrue(FileAccess::can($staff, 'download', $child));
+        $this->assertTrue(FileAccess::can($staff, 'download', $clientFolder));
+        $this->assertFalse(FileAccess::can($staff, 'upload', $file));
+        $this->assertFalse(FileAccess::can($stranger, 'download', $file));
+        $this->assertFalse(FileAccess::can($stranger, 'view', $clientFolder));
+
+        $this->actingAs($staff)
+            ->getJson('/portal/files/?folder='.$child->uuid.'&perPage=0')
+            ->assertOk()
+            ->assertJsonPath('files.0.permissions.download', true)
+            ->assertJsonPath('folder.permissions.download', true)
+            ->assertJsonPath('folder.permissions.upload', false);
     }
 
     public function test_the_clients_section_lists_assigned_client_folders_only(): void

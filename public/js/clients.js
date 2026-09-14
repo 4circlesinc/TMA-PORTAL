@@ -7980,6 +7980,8 @@
           '<img src="' + ICONS.Plus + '" alt=""><span>New folder</span></button>' +
           '<button type="button" class="tma-dash__clients-folders-add" data-clients-folder-upload>' +
           '<img src="images/icons/phosphor/ArrowLineUp.svg" alt=""><span>Upload</span></button>' +
+          '<button type="button" class="tma-dash__clients-folders-add" data-clients-folder-download>' +
+          '<img src="images/icons/phosphor/ArrowLineDown.svg" alt=""><span>Download</span></button>' +
           // Collecting documents from the client is the other half of uploading
           // them on the client's behalf, so it sits beside it and targets the
           // same folder the panel is currently showing.
@@ -7989,6 +7991,8 @@
           '<img src="' + ICONS.FolderNotch + '" alt=""><span>Open in File Library</span></button>' +
           '<div class="tma-dash__toolbar-bulk" data-clients-folder-bulk hidden>' +
           '<span class="tma-dash__toolbar-selection" data-clients-folder-bulk-count>0 Selected</span>' +
+          '<button type="button" class="tma-dash__clients-folders-add" data-clients-folder-bulk-download>' +
+          '<img src="images/icons/phosphor/ArrowLineDown.svg" alt=""><span>Download</span></button>' +
           '<button type="button" class="tma-dash__clients-folders-add" data-clients-folder-bulk-status>' +
           '<img src="images/icons/phosphor/Flag.svg" alt=""><span>Change status</span></button>' +
           '</div>' +
@@ -8172,16 +8176,15 @@
     if (!bar) return;
 
     var picked = clientFolderSelectedRows();
-    var files = picked.filter(function (r) { return r && r.type === 'file'; });
-    var n = files.length;
+    var n = picked.length;
     bar.hidden = n === 0;
 
     var count = bar.querySelector('[data-clients-folder-bulk-count]');
     if (count) count.textContent = n === 1 ? '1 Selected' : n + ' Selected';
 
+    var files = picked.filter(function (r) { return r && r.type === 'file'; });
     var statusBtn = bar.querySelector('[data-clients-folder-bulk-status]');
-    if (!statusBtn) return;
-    statusBtn.hidden = n === 0;
+    if (statusBtn) statusBtn.hidden = files.length === 0;
   }
 
   function clientFolderCanvas(root) {
@@ -8304,6 +8307,7 @@
   function applyClientFolderWriteAccess(root, res) {
     var folder = res && res.folder;
     var canUpload = !(folder && folder.permissions && folder.permissions.upload === false);
+    var canDownload = !(folder && folder.permissions && folder.permissions.download === false);
     var locked = !!(folder && folder.packageLocked);
     var wrap = root.querySelector('[data-clients-folder-drop]');
     if (wrap) {
@@ -8320,6 +8324,8 @@
       var btn = root.querySelector(sel);
       if (btn) btn.hidden = !canUpload;
     });
+    var downloadBtn = root.querySelector('[data-clients-folder-download]');
+    if (downloadBtn) downloadBtn.hidden = !canDownload;
   }
 
   function clientFolderAllowsUpload(root, destId) {
@@ -8329,6 +8335,35 @@
     }
     var wrap = root && root.querySelector('[data-clients-folder-drop]');
     return !(wrap && wrap.hasAttribute('data-folder-readonly'));
+  }
+
+  /*
+   * Take copies of what is on this tab.
+   *
+   * A selection downloads those rows (files and folders). With nothing
+   * picked, the folder currently on screen comes down as a ZIP — the same
+   * as right-clicking it in the File Library. TMAFileActions.download is
+   * the library's own path, so a Documents tab download is not a second
+   * implementation of the same request.
+   */
+  function downloadClientFolderItems(root, selectedOnly) {
+    var acts = window.TMAFileActions;
+    if (!acts || !acts.download) {
+      clientsToast('Download isn’t available right now', 'negative');
+      return;
+    }
+    var picked = clientFolderSelectedRows();
+    if (picked.length) {
+      picked.forEach(function (row) { acts.download(row); });
+      return;
+    }
+    if (selectedOnly) return;
+    var uuid = clientFolderCurrentUuid(root);
+    if (!uuid) {
+      clientsToast('Nothing to download', 'warning');
+      return;
+    }
+    acts.download({ type: 'folder', id: uuid });
   }
 
   /* One tab's count chip, patched in place.
@@ -8870,6 +8905,12 @@
     var fileInput = root.querySelector('[data-clients-folder-fileinput]');
     MORPH.unwired(root, '[data-clients-folder-upload]').forEach(function (btn) {
       btn.addEventListener('click', function () { if (fileInput) fileInput.click(); });
+    });
+    MORPH.unwired(root, '[data-clients-folder-download]').forEach(function (btn) {
+      btn.addEventListener('click', function () { downloadClientFolderItems(root, false); });
+    });
+    MORPH.unwired(root, '[data-clients-folder-bulk-download]').forEach(function (btn) {
+      btn.addEventListener('click', function () { downloadClientFolderItems(root, true); });
     });
     if (fileInput) {
       MORPH.unwired(root, '[data-clients-folder-fileinput]').forEach(function (input) {
