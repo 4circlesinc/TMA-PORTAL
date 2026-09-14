@@ -31,20 +31,31 @@ class CompanyStaffController extends Controller
 {
     public function index(Request $request, string $uid): JsonResponse
     {
-        Role::authorize($request->user(), 'clients.view');
         $company = Company::where('uid', $uid)->firstOrFail();
+        abort_unless(CompanyAccess::canViewStaff($request->user(), $company), 403);
+
+        $asProviderAdmin = CompanyAccess::isProviderAdminOf($request->user(), $company)
+            && ! Role::can($request->user(), 'clients.view');
 
         return response()->json([
-            'assignments' => $this->present($company),
-            'history' => CompanyStaffAssignment::where('company_id', $company->id)
-                ->where('status', CompanyStaffAssignment::STATUS_ENDED)
-                ->with(['user', 'assigner'])->latest('ended_at')->limit(20)->get()
-                ->map(fn (CompanyStaffAssignment $a) => $a->toRecord())->values(),
-            'assignable' => $this->assignableStaff($company),
-            'roles' => collect(ClientAssignment::ROLES)
-                ->map(fn ($l, $v) => ['value' => $v, 'label' => $l])->values(),
-            'scopes' => collect(CompanyStaffAssignment::SCOPES)
-                ->map(fn ($l, $v) => ['value' => $v, 'label' => $l])->values(),
+            'assignments' => $asProviderAdmin
+                ? $this->presentForProvider($company)
+                : $this->present($company),
+            'history' => $asProviderAdmin
+                ? []
+                : CompanyStaffAssignment::where('company_id', $company->id)
+                    ->where('status', CompanyStaffAssignment::STATUS_ENDED)
+                    ->with(['user', 'assigner'])->latest('ended_at')->limit(20)->get()
+                    ->map(fn (CompanyStaffAssignment $a) => $a->toRecord())->values(),
+            'assignable' => $asProviderAdmin ? [] : $this->assignableStaff($company),
+            'roles' => $asProviderAdmin
+                ? []
+                : collect(ClientAssignment::ROLES)
+                    ->map(fn ($l, $v) => ['value' => $v, 'label' => $l])->values(),
+            'scopes' => $asProviderAdmin
+                ? []
+                : collect(CompanyStaffAssignment::SCOPES)
+                    ->map(fn ($l, $v) => ['value' => $v, 'label' => $l])->values(),
         ]);
     }
 
@@ -219,6 +230,28 @@ class CompanyStaffController extends Controller
             ->get()
             ->map(fn (CompanyStaffAssignment $a) => $a->toRecord())
             ->values()->all();
+    }
+
+    /**
+     * Name, role, and reach — not notes or who assigned them.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function presentForProvider(Company $company): array
+    {
+        return array_map(fn (array $row) => [
+            'userId' => $row['userId'],
+            'name' => $row['name'],
+            'email' => $row['email'],
+            'avatar' => $row['avatar'],
+            'role' => $row['role'],
+            'roleLabel' => $row['roleLabel'],
+            'level' => $row['level'],
+            'primary' => $row['primary'],
+            'appliesToClients' => $row['appliesToClients'],
+            'appliesLabel' => $row['appliesLabel'],
+            'live' => $row['live'],
+        ], $this->present($company));
     }
 
     /** @return array<int, array<string, mixed>> */

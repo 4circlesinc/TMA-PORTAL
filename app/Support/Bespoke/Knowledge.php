@@ -475,6 +475,14 @@ final class Knowledge
                 'answer' => "You can invite a colleague at your firm from here. Give me their email and confirm **Add** on the invitation card. They join as a service provider contact and see this firm’s CIP files.\n\nYou can also open your firm from the sidebar → **Access** → type the email → Add.\n\nYou cannot create a new service-provider firm or promote someone to Service Provider admin — that is TMA administration.",
             ],
             [
+                'id' => 'who-assigned-to-firm',
+                'q' => 'Who is assigned to my firm?',
+                'keywords' => ['assigned', 'staff', 'officer', 'who is looking after', 'tma staff'],
+                'cipOnly' => true,
+                'spAdminOnly' => true,
+                'answer' => "Open your firm from the sidebar. **Assigned staff** lists the TMA people looking after you — name, role, and how far that assignment reaches.\n\nYou cannot assign or remove them. That is TMA administration.",
+            ],
+            [
                 'id' => 'provider-copies',
                 'q' => 'How do I stop getting copies of the emails sent to service providers?',
                 'keywords' => ['copy', 'copies', 'cc', 'service provider emails', 'cip emails', 'too many emails', 'notification emails'],

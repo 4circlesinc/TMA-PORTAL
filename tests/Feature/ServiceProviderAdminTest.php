@@ -7,6 +7,7 @@ use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyMember;
+use App\Models\CompanyStaffAssignment;
 use App\Models\Invitation;
 use App\Models\User;
 use App\Support\Access\Role;
@@ -565,5 +566,67 @@ class ServiceProviderAdminTest extends TestCase
 
         $this->actingAs($spAdmin)->getJson('/portal/admin/recycle-bin')->assertForbidden();
         $this->actingAs($tma)->getJson('/portal/admin/recycle-bin')->assertOk();
+    }
+
+    /* ── assigned TMA staff ─────────────────────────────────────────── */
+
+    public function test_they_can_see_who_is_assigned_to_their_firm_but_cannot_assign(): void
+    {
+        $tma = $this->user(Role::ADMINISTRATOR);
+        [$company] = $this->providerFirm();
+        [$other] = $this->providerFirm('Other', 'OTH');
+        $spAdmin = $this->user(Role::SERVICE_PROVIDER_ADMIN, ['email' => 'gil@galaxy.example']);
+        $this->attach($company, $spAdmin, $tma);
+
+        $officer = $this->user(Role::REVIEWING_OFFICER, [
+            'name' => 'Ava Chen',
+            'email' => 'ava@tma.example',
+        ]);
+        CompanyStaffAssignment::create([
+            'company_id' => $company->id,
+            'user_id' => $officer->id,
+            'role' => 'general',
+            'permission_level' => 'editor',
+            'applies_to_clients' => CompanyStaffAssignment::SCOPE_EXISTING_FUTURE,
+            'status' => CompanyStaffAssignment::STATUS_ACTIVE,
+            'assigned_by' => $tma->id,
+            'notes' => 'internal note',
+        ]);
+
+        $this->actingAs($spAdmin)->getJson("/portal/companies/{$company->uid}/staff")
+            ->assertOk()
+            ->assertJsonPath('assignments.0.name', 'Ava Chen')
+            ->assertJsonPath('assignments.0.email', 'ava@tma.example')
+            ->assertJsonPath('assignments.0.roleLabel', 'Assigned staff')
+            ->assertJsonPath('assignable', [])
+            ->assertJsonPath('history', [])
+            ->assertJsonPath('roles', [])
+            ->assertJsonMissingPath('assignments.0.notes');
+
+        $this->actingAs($spAdmin)->getJson("/portal/companies/{$other->uid}/staff")
+            ->assertForbidden();
+
+        $otherOfficer = $this->user(Role::REVIEWING_OFFICER, ['email' => 'other@tma.example']);
+        $this->actingAs($spAdmin)->postJson("/portal/companies/{$company->uid}/staff", [
+            'userId' => $otherOfficer->id,
+            'level' => 'editor',
+        ])->assertForbidden();
+
+        $this->actingAs($spAdmin)
+            ->deleteJson("/portal/companies/{$company->uid}/staff/{$officer->id}")
+            ->assertForbidden();
+
+        $this->assertTrue(
+            CompanyStaffAssignment::live()
+                ->where('company_id', $company->id)
+                ->where('user_id', $officer->id)
+                ->exists()
+        );
+
+        $asAdmin = $this->actingAs($tma)->getJson("/portal/companies/{$company->uid}/staff")
+            ->assertOk()
+            ->assertJsonPath('assignments.0.notes', 'internal note');
+        $this->assertIsArray($asAdmin->json('assignable'));
+        $this->assertNotSame([], $asAdmin->json('roles'));
     }
 }

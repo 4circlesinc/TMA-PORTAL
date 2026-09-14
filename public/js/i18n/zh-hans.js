@@ -121,6 +121,7 @@ window.TMAI18nDict = {
     // Clients & people
     "Company": "公司", "No company": "无公司", "Contact": "联系人",
     "Finance contact": "财务联系人", "Assigned staff": "指派的员工",
+    "No staff assigned": "尚未指派员工",
     "Previously assigned": "曾经指派", "Portal access": "门户访问权限",
     "Company access": "公司访问权限", "Create company": "创建公司",
     "Create person": "创建联系人", "Import clients": "导入客户",

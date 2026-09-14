@@ -282,4 +282,10 @@ final class CompanyAccess
     {
         return Role::can($user, 'clients.manage') || self::isProviderAdminOf($user, $company);
     }
+
+    /** May this account see who from TMA is assigned to the firm. */
+    public static function canViewStaff(User $user, Company $company): bool
+    {
+        return Role::can($user, 'clients.view') || self::isProviderAdminOf($user, $company);
+    }
 }

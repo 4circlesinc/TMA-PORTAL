@@ -121,6 +121,7 @@ window.TMAI18nDict = {
     // Clients & people
     "Company": "Empresa", "No company": "Sin empresa", "Contact": "Contacto",
     "Finance contact": "Contacto financiero", "Assigned staff": "Personal asignado",
+    "No staff assigned": "Ningún personal asignado",
     "Previously assigned": "Asignado anteriormente", "Portal access": "Acceso al portal",
     "Company access": "Acceso de la empresa", "Create company": "Crear empresa",
     "Create person": "Crear persona", "Import clients": "Importar clientes",

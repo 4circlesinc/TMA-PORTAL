@@ -862,6 +862,10 @@
     return isServiceProviderAdmin() && !isClientsAdmin();
   }
 
+  function canViewCompanyStaff() {
+    return isClientsAdmin() || isProviderAdminViewer();
+  }
+
   function clientsListTabInUrl() {
     try {
       return !!new URLSearchParams(window.location.search || '').get('listTab');
@@ -5809,7 +5813,9 @@
       companyCard('Provider contacts', renderCompanyPeople(company), {
         half: true, count: (company.people || []).length,
       }) +
-      companyCard('Assigned staff', renderCompanyStaffBlock(state, company), { half: true }) +
+      companyCard('Assigned staff', renderCompanyStaffBlock(state, company), {
+        half: true, count: (state.companyStaff || []).length,
+      }) +
       '</div></div></div>'
     );
   }
@@ -6028,11 +6034,12 @@
 
   /* The firm's own people looking after this company. */
   function renderCompanyStaffBlock(state, company) {
-    if (!isClientsAdmin()) return '';
+    if (!canViewCompanyStaff()) return '';
 
     var items = state.companyStaff || [];
     var assignable = state.companyStaffAssignable || [];
     var loading = !!state.companyStaffLoading;
+    var canAssign = isClientsAdmin();
 
     /*
      * A picker, the reach, and a button, the level dropdown is gone from
@@ -6041,7 +6048,7 @@
      * stays, because company-only versus every-client is a real decision
      * with real consequences the label spells out.
      */
-    var form = !loading
+    var form = canAssign && !loading
       ? '<div class="tma-dash__clients-assign-form">' +
         staffPicker('data-company-staff-user', assignable, state.companyStaffPick, 'Assign staff…') +
         '<select class="tma-dash__clients-field-select" data-company-staff-scope aria-label="How far this reaches">' +
@@ -6055,17 +6062,21 @@
 
     var list = items.length
       ? '<div class="tma-dash__clients-assigned-list">' + items.map(function (a) {
-          var meta = [a.roleLabel || 'Assigned staff', assignmentLevelLabel(a.level)];
+          var meta = [a.roleLabel || 'Assigned staff'];
+          if (!isProviderAdminViewer()) meta.push(assignmentLevelLabel(a.level));
           if (a.primary) meta.unshift('Primary');
           if (a.appliesLabel) meta.push(a.appliesLabel);
+          if (a.email && isProviderAdminViewer()) meta.push(a.email);
           return '<div class="tma-dash__clients-assigned">' +
             '<span class="tma-dash__clients-assigned-icon" aria-hidden="true">' + staffAvatarHtml(a) + '</span>' +
             '<span class="tma-dash__clients-assigned-main">' +
             '<span class="tma-dash__clients-assigned-title">' + esc(a.name || 'Staff') + '</span>' +
             '<span class="tma-dash__clients-assigned-meta">' + esc(meta.join(' · ')) + '</span>' +
             '</span>' +
-            '<button type="button" class="tma-dash__clients-row-remove" data-company-staff-remove="' +
-            esc(String(a.userId)) + '" aria-label="End assignment"><img src="' + ICONS.Trash + '" alt=""></button>' +
+            (canAssign
+              ? '<button type="button" class="tma-dash__clients-row-remove" data-company-staff-remove="' +
+                esc(String(a.userId)) + '" aria-label="End assignment"><img src="' + ICONS.Trash + '" alt=""></button>'
+              : '') +
             '</div>';
         }).join('') + '</div>'
       : (loading
@@ -14363,10 +14374,10 @@
       redraw();
     });
 
-    // Staff assignment is administrator-only; a 403 here is expected for an
-    // employee and must not surface as an error. Service Provider admins do
-    // not ask at all.
-    if (!isClientsAdmin()) {
+    // Assigning staff is administrator-only. Service Provider admins still
+    // load the list so they can see who from TMA is looking after them; a
+    // 403 is expected for an ordinary employee and must not surface.
+    if (!canViewCompanyStaff()) {
       state.companyStaff = [];
       state.companyStaffAssignable = [];
       state.companyStaffLoading = false;
@@ -14376,7 +14387,7 @@
     CompanyStaffAPI.list(state.companyId).then(function (d) {
       if (stale()) return;
       state.companyStaff = (d && d.assignments) || [];
-      state.companyStaffAssignable = (d && d.assignable) || [];
+      state.companyStaffAssignable = isClientsAdmin() ? ((d && d.assignable) || []) : [];
       state.companyStaffLoading = false;
       redraw();
     }).catch(function () {
