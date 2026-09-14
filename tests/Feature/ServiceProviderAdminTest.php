@@ -445,9 +445,9 @@ class ServiceProviderAdminTest extends TestCase
 
         $this->actingAs($spAdmin)->get('/citizenship-applications')
             ->assertOk()
+            ->assertSee('CIP Applications')
             ->assertSee('window.TMABootProviderCompany=', false)
-            ->assertSee('"id":"gal-firm"', false)
-            ->assertSee('"name":"Galaxy"', false);
+            ->assertSee('"id":"gal-firm"', false);
     }
 
     public function test_they_can_add_and_edit_a_contact_at_their_firm(): void

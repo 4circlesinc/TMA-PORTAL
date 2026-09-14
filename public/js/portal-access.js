@@ -277,21 +277,13 @@
 
   /*
    * Service Provider admins land on their firm, not the applications table.
-   * The label is the firm name when we have it; the href is the company page.
+   * The row stays labelled CIP Applications; only the href changes.
    */
   function rewriteProviderAdminNav(scope) {
-    if (!serviceProviderAdmin) return;
+    if (!serviceProviderAdmin || !providerCompany || !providerCompany.id) return;
 
     scope.querySelectorAll('[data-nav="clients"]').forEach(function (el) {
-      var label = (providerCompany && providerCompany.name) ? providerCompany.name : 'Service provider';
-      el.setAttribute('data-title', label);
-      el.setAttribute('data-crumb', label);
-      if (providerCompany && providerCompany.id) {
-        el.setAttribute('href', '/citizenship-applications/companies/' + encodeURIComponent(providerCompany.id));
-      }
-      var spans = el.querySelectorAll('span');
-      var text = spans[spans.length - 1];
-      if (text && !text.className) text.textContent = label;
+      el.setAttribute('href', '/citizenship-applications/companies/' + encodeURIComponent(providerCompany.id));
     });
   }
 
