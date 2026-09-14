@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Support\Companies\ContactIdentity;
 use App\Support\Files\FileType;
 use App\Support\Files\FolderProvisioner;
+use App\Support\Files\Naming;
 use App\Support\Files\Vault;
 use App\Support\Files\Versions;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -424,7 +425,79 @@ class DocumentSlots
             return null;
         }
 
-        return self::destination($person, self::template($person, $slot->type), $actor);
+        return self::destination($person, $slot->requirement ?? self::template($person, $slot->type), $actor);
+    }
+
+    /**
+     * Put this person's post-approval slot files in the pack drawers.
+     *
+     * Uploads attach to the checklist even when the FileItem landed outside
+     * the post-approval tree: a null folder, the original package folder, or
+     * a numbered SharePoint copy that was later recycled. Opening the file
+     * (or the Documents tab) files them where the tree actually is.
+     */
+    public static function placePostApprovalFiles(CipPerson $person, ?User $actor = null): void
+    {
+        $person->loadMissing(['application', 'documents.file', 'documents.requirement']);
+
+        if (($person->application?->phase ?? Phase::PRE_APPROVAL) !== Phase::POST_APPROVAL) {
+            return;
+        }
+
+        foreach ($person->documents as $slot) {
+            $template = $slot->requirement ?? self::template($person, $slot->type);
+            if ($template === null || ! self::filesInPostApprovalFolder($template)) {
+                continue;
+            }
+
+            $destId = self::destination($person, $template, $actor);
+            if ($destId === null) {
+                continue;
+            }
+
+            foreach (self::filesForSlot($slot) as $file) {
+                self::moveFileTo($file, $destId);
+            }
+        }
+    }
+
+    /**
+     * @return list<FileItem>
+     */
+    private static function filesForSlot(CipDocument $slot): array
+    {
+        if (! $slot->file_id) {
+            return [];
+        }
+
+        $file = FileItem::withTrashed()->find($slot->file_id);
+
+        return $file ? [$file] : [];
+    }
+
+    private static function moveFileTo(FileItem $file, int $destId): void
+    {
+        if ($file->trashed()) {
+            $file->restore();
+        }
+
+        if ((int) $file->folder_id === $destId) {
+            return;
+        }
+
+        $name = Naming::nextAvailable(
+            $file->name,
+            fn (string $candidate) => FileItem::query()
+                ->where('folder_id', $destId)
+                ->whereKeyNot($file->id)
+                ->whereRaw('LOWER(name) = ?', [mb_strtolower($candidate)])
+                ->exists(),
+        );
+
+        $file->forceFill([
+            'folder_id' => $destId,
+            'name' => $name,
+        ])->save();
     }
 
     private static function template(CipPerson $person, string $type): ?CipDocumentRequirement
@@ -435,19 +508,24 @@ class DocumentSlots
             ->first();
     }
 
-    private static function destination(CipPerson $person, ?CipDocumentRequirement $template, User $actor): ?int
+    private static function destination(CipPerson $person, ?CipDocumentRequirement $template, ?User $actor): ?int
     {
         $person->loadMissing('application');
         $application = $person->application;
 
+        $intoPost = ($application?->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL
+            && ($template === null || self::filesInPostApprovalFolder($template));
+
         $parent = null;
 
-        if ($application?->phase === Phase::POST_APPROVAL
-            && $template !== null
-            && self::filesInPostApprovalFolder($template)) {
+        if ($intoPost) {
             $parent = Tree::postApprovalPersonFolder($person, null, $actor);
         } elseif ($person->folder_id) {
             $parent = Folder::find($person->folder_id);
+        }
+
+        if ($parent === null && ($application?->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL) {
+            $parent = Tree::postApprovalPersonFolder($person, null, $actor);
         }
 
         if ($parent === null) {

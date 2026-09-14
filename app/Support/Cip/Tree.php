@@ -423,13 +423,14 @@ class Tree
 
         $postRoot = self::ensureChildDrawer($root, self::POST_APPROVAL, $actor);
 
+        if ($application->post_approval_folder_id !== $postRoot->id) {
+            $application->forceFill(['post_approval_folder_id' => $postRoot->id])->save();
+        }
+
         foreach ($application->people as $person) {
             $person->setRelation('application', $application);
             self::postApprovalPersonFolder($person, $postRoot, $actor);
-        }
-
-        if ($application->post_approval_folder_id !== $postRoot->id) {
-            $application->forceFill(['post_approval_folder_id' => $postRoot->id])->save();
+            DocumentSlots::placePostApprovalFiles($person, $actor);
         }
 
         return $postRoot;
@@ -890,7 +891,7 @@ class Tree
      */
     public static function subfolder(Folder $parent, string $name, ?User $actor = null): Folder
     {
-        return self::childNamed($parent, $name, $actor);
+        return self::ensureChildDrawer($parent, $name, $actor);
     }
 
     /**

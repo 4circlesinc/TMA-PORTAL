@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\CipApplication;
+use App\Models\CipDocument;
+use App\Models\CipDocumentRequirement;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Company;
@@ -10,7 +12,9 @@ use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\ApplicantType;
 use App\Support\Cip\Applications;
+use App\Support\Cip\CorRequirements;
 use App\Support\Cip\Pack;
 use App\Support\Cip\Phase;
 use App\Support\Cip\PostApproval;
@@ -195,6 +199,78 @@ class CipPostApprovalTreeTest extends TestCase
         $this->assertSame(['Dependent 1', 'Main Applicant'], $this->personNames($application->fresh()));
     }
 
+    public function test_attached_post_approval_files_move_into_the_pack_drawer(): void
+    {
+        ['staff' => $staff, 'application' => $application] = $this->filed();
+        $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $template = $this->postTemplate($main, CorRequirements::OATH_OF_ALLEGIANCE, 'Oath of Allegiance');
+
+        $file = $this->fileOn($staff, $main->folder_id, 'oath.pdf');
+        $this->slot($application, $main, $template, $file, $staff);
+
+        Tree::provisionPostApproval($application->fresh(['people']), $staff);
+
+        $cor = Folder::query()
+            ->where('parent_id', $main->fresh()->post_approval_folder_id)
+            ->where('name', Pack::folder(Pack::COR))
+            ->firstOrFail();
+
+        $this->assertSame($cor->id, $file->fresh()->folder_id);
+        $this->assertNull($file->fresh()->deleted_at);
+    }
+
+    public function test_a_recycled_slot_file_is_restored_into_the_pack_drawer(): void
+    {
+        ['staff' => $staff, 'application' => $application] = $this->filed();
+        $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $template = $this->postTemplate($main, CorRequirements::OATH_OF_ALLEGIANCE, 'Oath of Allegiance');
+
+        $file = $this->fileOn($staff, $main->folder_id, 'oath.pdf');
+        $this->slot($application, $main, $template, $file, $staff);
+        $file->delete();
+        $this->assertNotNull($file->fresh()->deleted_at);
+
+        Tree::provisionPostApproval($application->fresh(['people']), $staff);
+
+        $cor = Folder::query()
+            ->where('parent_id', $main->fresh()->post_approval_folder_id)
+            ->where('name', Pack::folder(Pack::COR))
+            ->firstOrFail();
+
+        $this->assertNull($file->fresh()->deleted_at);
+        $this->assertSame($cor->id, $file->fresh()->folder_id);
+    }
+
+    public function test_carried_forward_files_stay_out_of_the_post_approval_tree(): void
+    {
+        ['staff' => $staff, 'application' => $application, 'root' => $root] = $this->filed();
+        $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $template = $this->postTemplate($main, 'passport_photo', 'Passport photo');
+        $template->forceFill([
+            'at_pre_approval' => true,
+            'carry_forward' => true,
+            'folder' => null,
+        ])->save();
+
+        $holding = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Main Applicant',
+            'folder_type' => Folder::TYPE_USER,
+            'parent_id' => $root->id,
+            'client_id' => $root->client_id,
+            'owner_id' => $root->owner_id,
+            'created_by' => $staff->id,
+        ]);
+        $main->forceFill(['folder_id' => $holding->id])->save();
+
+        $file = $this->fileOn($staff, $holding->id, 'photo.jpg');
+        $this->slot($application, $main, $template, $file, $staff);
+
+        Tree::provisionPostApproval($application->fresh(['people']), $staff);
+
+        $this->assertSame($holding->id, $file->fresh()->folder_id);
+    }
+
     /**
      * @return array{staff: User, application: CipApplication, dependent: CipPerson, root: Folder}
      */
@@ -262,6 +338,85 @@ class CipPostApprovalTreeTest extends TestCase
         }
 
         return $folder;
+    }
+
+    private function postTemplate(CipPerson $person, string $key, string $label): CipDocumentRequirement
+    {
+        $row = CipDocumentRequirement::query()
+            ->where('applicant_type', ApplicantType::for($person))
+            ->where('key', $key)
+            ->first();
+
+        if ($row === null) {
+            $row = new CipDocumentRequirement;
+            $row->forceFill([
+                'applicant_type' => ApplicantType::for($person),
+                'key' => $key,
+                'label' => $label,
+                'required' => true,
+                'active' => true,
+                'sort_order' => 1,
+            ]);
+        }
+
+        $row->forceFill([
+            'label' => $label,
+            'at_pre_approval' => false,
+            'at_post_approval' => true,
+            'carry_forward' => false,
+            'folder' => CorRequirements::FOLDER,
+        ])->save();
+
+        return $row;
+    }
+
+    private function fileOn(User $staff, ?int $folderId, string $name): FileItem
+    {
+        return FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'folder_id' => $folderId,
+            'name' => $name,
+            'extension' => pathinfo($name, PATHINFO_EXTENSION) ?: 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 24,
+            'disk' => 'local',
+            'storage_path' => 'vault/'.$name,
+            'owner_id' => $staff->id,
+            'uploaded_by' => $staff->id,
+        ]);
+    }
+
+    private function slot(
+        CipApplication $application,
+        CipPerson $person,
+        CipDocumentRequirement $template,
+        FileItem $file,
+        User $staff,
+    ): CipDocument {
+        $slot = CipDocument::query()
+            ->where('person_id', $person->id)
+            ->where('type', $template->key)
+            ->first();
+
+        if ($slot === null) {
+            $slot = new CipDocument;
+            $slot->forceFill([
+                'application_id' => $application->id,
+                'person_id' => $person->id,
+                'type' => $template->key,
+            ]);
+        }
+
+        $slot->forceFill([
+            'requirement_id' => $template->id,
+            'label' => $template->label,
+            'required' => true,
+            'file_id' => $file->id,
+            'uploaded_by' => $staff->id,
+            'uploaded_at' => now(),
+        ])->save();
+
+        return $slot;
     }
 
     /** @return list<string> */
