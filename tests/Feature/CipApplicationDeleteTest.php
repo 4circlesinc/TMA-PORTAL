@@ -163,7 +163,7 @@ class CipApplicationDeleteTest extends TestCase
         $this->assertNotNull(CipApplication::query()->find($application->id));
     }
 
-    public function test_an_officer_who_does_not_hold_the_file_cannot_delete_it(): void
+    public function test_an_officer_may_delete_a_file_they_do_not_hold(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $officer = $this->user(Role::REVIEWING_OFFICER, 'cro@example.com');
@@ -171,9 +171,9 @@ class CipApplicationDeleteTest extends TestCase
 
         $this->actingAs($officer)
             ->deleteJson('/portal/cip/applications/'.$application->uuid)
-            ->assertNotFound();
+            ->assertOk();
 
-        $this->assertNotNull(CipApplication::query()->find($application->id));
+        $this->assertNull(CipApplication::query()->find($application->id));
     }
 
     public function test_deleting_an_application_twice_is_ok(): void

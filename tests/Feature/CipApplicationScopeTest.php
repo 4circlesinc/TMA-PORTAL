@@ -3,14 +3,18 @@
 namespace Tests\Feature;
 
 use App\Models\CipApplicationAssignment;
+use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyMember;
+use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
 use App\Support\Cip\ApplicationScope;
+use App\Support\Cip\Tree;
+use App\Support\Files\FileAccess;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -37,6 +41,8 @@ class CipApplicationScopeTest extends TestCase
             'status' => 'approved',
             'account_type' => $accountType,
             'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
         ]);
     }
 
@@ -96,34 +102,29 @@ class CipApplicationScopeTest extends TestCase
         );
     }
 
-    public function test_an_officer_sees_only_the_files_they_hold(): void
+    public function test_an_officer_sees_the_whole_book_even_without_an_assignment(): void
     {
         $staff = $this->user(Role::EMPLOYEE);
         [$galaxy] = $this->providerWithContact('GAL');
         $held = Applications::create($galaxy, $staff);
-        Applications::create($galaxy, $staff); // unassigned — the administrator's to see
+        $open = Applications::create($galaxy, $staff); // unassigned — still on the caseload
 
         $admin = $this->user(Role::ADMINISTRATOR);
         $this->assertCount(2, ApplicationScope::query($admin)->get(), 'the administrator reads the book');
 
-        /*
-         * Section 10: the administrator assigns, so a file nobody has been given is
-         * the administrator's and nobody else's. An officer reading the whole
-         * table would be reading applications that are not yet, and may never
-         * be, their work — which is what this pins after the scope was opened
-         * that wide by mistake.
-         */
         $officer = $this->user(Role::REVIEWING_OFFICER);
-        $this->assertCount(0, ApplicationScope::query($officer)->get(), 'nothing until something is theirs');
+        $this->assertEqualsCanonicalizing(
+            [$held->id, $open->id],
+            ApplicationScope::query($officer)->pluck('id')->all(),
+            'assignment names who is working it, it does not hide the rest',
+        );
 
-        /*
-         * Not even their own filing. The creator exception was tried and
-         * taken out on the firm's instruction: an officer who files hands the
-         * application to the administrator like any provider does, and it
-         * comes back into view the moment it is assigned to them.
-         */
         $filed = Applications::create($galaxy, $officer);
-        $this->assertCount(0, ApplicationScope::query($officer)->get(), 'filing grants no sight');
+        $this->assertEqualsCanonicalizing(
+            [$held->id, $open->id, $filed->id],
+            ApplicationScope::query($officer)->pluck('id')->all(),
+            'filing is on the same book',
+        );
 
         CipApplicationAssignment::create([
             'application_id' => $held->id,
@@ -134,14 +135,47 @@ class CipApplicationScopeTest extends TestCase
             'starts_at' => now(),
         ]);
 
-        $this->assertSame(
-            [$held->id],
+        $this->assertEqualsCanonicalizing(
+            [$held->id, $open->id, $filed->id],
             ApplicationScope::query($officer)->pluck('id')->all(),
-            'the held file, and only it',
+            'holding a file does not shrink the book',
         );
 
         // A parked Employee reaches no portal route and no slice either.
         $this->assertCount(0, ApplicationScope::query($staff)->get());
+    }
+
+    public function test_an_officer_can_open_a_colleague_s_filing_and_its_documents(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        [$galaxy] = $this->providerWithContact('GAL');
+        $application = Applications::create($galaxy, $admin);
+        CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Chen',
+            'last_name' => 'Wei',
+        ]);
+        Tree::provision($application->fresh(['people', 'provider']), $admin);
+        $application = $application->fresh(['client']);
+        $root = Folder::find($application->client->folder_id);
+
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+
+        $this->actingAs($officer)
+            ->getJson('/portal/cip/applications')
+            ->assertOk()
+            ->assertJsonPath('total', 1);
+
+        $this->actingAs($officer)
+            ->getJson('/portal/clients/'.$application->client->uid)
+            ->assertOk()
+            ->assertJsonPath('client.id', $application->client->uid);
+
+        $this->assertSame('downloader', FileAccess::folderRole($officer, $root));
+        $this->actingAs($officer)
+            ->getJson('/portal/files/?section=all&folder='.$root->uuid)
+            ->assertOk();
     }
 
     public function test_the_dark_module_shows_nobody_anything(): void

@@ -20,9 +20,9 @@ use Illuminate\Database\Eloquent\Builder;
  *
  * The administrator's pre-approval twelve and the service provider's eight are reports. They
  * count everything the reader may see, and what that is has already been
- * decided by {@see ApplicationScope}, every application for an administrator,
- * one provider firm's book for a contact there, one applicant's own record for
- * a private client. Nobody's name is in the query.
+ * decided by {@see ApplicationScope}, every application for an administrator
+ * or officer, one provider firm's book for a contact there, one applicant's
+ * own record for a private client. Nobody's name is in the query.
  *
  * The Reviewing Officer's and Compliance Officer's four are work queues.
  * They count only the files that officer holds, which is why they are scoped

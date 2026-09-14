@@ -106,13 +106,11 @@ class CipReviewTest extends TestCase
     }
 
     /**
-     * The reviewing officer, on the file.
+     * The reviewing officer, on the file when the test is about holding it.
      *
-     * On it explicitly, because holding the file is what seeing it means now:
-     * officers read only the applications they have been given (section 10 — the
-     * administrator assigns, and an unassigned file is the administrator's).
-     * These tests are about the review verbs, and a reviewer exercises them
-     * on a file that is theirs.
+     * These tests are about the review verbs. Seeing the file no longer
+     * requires an assignment; putting Rita on it still names her as the
+     * reviewer the scenario is exercising.
      */
     private function officer(?CipApplication $holds = null): User
     {

@@ -110,10 +110,10 @@ class CipBucketTest extends TestCase
         ])->save();
 
         /*
-         * The cache column alone is not an assignment any more: an officer
-         * sees only the files they hold, and holding is a live row. A fixture
-         * that wrote only the cache would be seeding files its officer cannot
-         * see.
+         * The cache column alone is not an assignment any more: an officer's
+         * queue counts only the files they hold, and holding is a live row.
+         * A fixture that wrote only the cache would be seeding files its
+         * officer's dashboard cannot count.
          */
         if ($officer !== null) {
             CipApplicationAssignment::create([

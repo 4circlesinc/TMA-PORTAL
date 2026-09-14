@@ -234,11 +234,9 @@ class CipIntakeTest extends TestCase
     }
 
     /**
-     * A reviewing officer holding this file.
-     *
-     * Holding it explicitly, because that is what seeing it means: an officer
-     * reads only the applications assigned to them (section 10), so a test
-     * about the edit form has to hand them the file first.
+     * A reviewing officer on this file, when the test is about holding it
+     * rather than merely seeing it. Seeing the caseload no longer requires
+     * an assignment; tests that name a holder still write one.
      */
     private function holder(CipApplication $application): User
     {
@@ -868,13 +866,11 @@ class CipIntakeTest extends TestCase
     }
 
     /**
-     * The same carve-out, asked of the guard itself.
+     * The identity guard, asked of itself.
      *
-     * An officer cannot reach update() for a file nobody has assigned them
-     * (ApplicationScope, section 10), so the endpoint is the wrong door to
-     * test this through — the wizard autosaves via the draft controller,
-     * which scopes by created_by. What matters here is that the identity
-     * guard does not refuse them on a draft, which is what blocked filing.
+     * The wizard autosaves via the draft controller, which scopes by
+     * created_by. What matters here is that the identity guard does not
+     * refuse them on a draft, which is what blocked filing.
      */
     public function test_the_identity_guard_lets_anyone_type_details_on_a_draft(): void
     {

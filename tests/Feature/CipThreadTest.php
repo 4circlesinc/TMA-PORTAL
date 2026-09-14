@@ -142,25 +142,19 @@ class CipThreadTest extends TestCase
         $this->assertDatabaseCount('cip_application_messages', 0);
     }
 
-    public function test_an_officer_who_does_not_hold_the_file_is_told_it_does_not_exist(): void
+    public function test_an_officer_who_does_not_hold_the_file_can_still_read_the_thread(): void
     {
-        [$staff, , $application] = $this->filed();
+        [, , $application] = $this->filed();
         $officer = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
 
         $this->actingAs($officer)
             ->getJson('/portal/cip/applications/'.$application->uuid.'/messages')
-            ->assertNotFound();
+            ->assertOk();
 
         $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/messages', [
-                'body' => 'Should not land.',
-            ])->assertNotFound();
-
-        Assignments::assign($application, $officer, $staff);
-
-        $this->actingAs($officer)
-            ->getJson('/portal/cip/applications/'.$application->uuid.'/messages')
-            ->assertOk();
+                'body' => 'Covering while Ada is out.',
+            ])->assertCreated();
     }
 
     public function test_a_provider_message_sends_exactly_one_postcard_per_other_mailbox(): void

@@ -233,8 +233,7 @@ class CipDocumentCommentTest extends TestCase
         $other = $this->user('Reviewing Officer', 'rita@example.com', 'Rita Officer');
         $slot = $this->slot($staff);
 
-        // On the file, because an officer now sees only what they hold — the
-        // commenting under test presumes a reviewer who can open the document.
+        // On the file as the reviewer this scenario is about.
         Assignments::assign($slot->application()->first(), $other, $staff);
 
         $comment = $this->actingAs($other)

@@ -11,6 +11,8 @@ use App\Support\Access\AccountRecycle;
 use App\Support\Access\ClientScope;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Cip\ApplicationScope;
+use App\Support\Cip\CipAccess;
 use App\Support\Cip\Pages;
 use App\Support\Clients\Assignments;
 use App\Support\Clients\ClientCustomFields;
@@ -279,10 +281,30 @@ class ClientsController extends Controller
     {
         $this->authorizeClientRead($request);
 
-        $client = ClientScope::query($request->user())
-            ->with(['folder', 'companyRecord', 'referredByCompany'])
+        $user = $request->user();
+        $with = ['folder', 'companyRecord', 'referredByCompany'];
+
+        $client = ClientScope::query($user)
+            ->with($with)
             ->where('uid', $uid)
-            ->firstOrFail();
+            ->first();
+
+        /*
+         * An officer looking at a CIP application they may see still has to
+         * load this record: the profile page is /citizenship-applications/{uid}
+         * and the Documents tab reads the client's folder uuid off it.
+         * ClientScope would 404 a file nobody assigned them, which is the
+         * opposite of sharing the caseload. Writes stay scoped.
+         */
+        if ($client === null && CipAccess::canReach($user)) {
+            $client = Client::query()
+                ->with($with)
+                ->where('uid', $uid)
+                ->whereIn('id', ApplicationScope::query($user)->select('client_id'))
+                ->first();
+        }
+
+        abort_unless($client, 404);
 
         return response()->json(['client' => $client->toRecord()]);
     }

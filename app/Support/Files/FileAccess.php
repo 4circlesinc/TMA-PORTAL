@@ -14,6 +14,7 @@ use App\Models\SharePointConnection;
 use App\Models\User;
 use App\Support\Access\PortalPermissions;
 use App\Support\Access\Role;
+use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Confirmation;
 use App\Support\Cip\FolderAccess;
@@ -278,6 +279,7 @@ class FileAccess
         self::$companyStaffRoles = [];
 
         FolderAccess::forget();
+        ApplicationScope::forget();
         ContactIdentity::forget();
     }
 
@@ -408,7 +410,8 @@ class FileAccess
     /**
      * Access a folder's kind grants directly - independent of shares.
      * Organization folders open to all staff, a staff member's own personal
-     * folder, and a client folder for the staff assigned to that client.
+     * folder, a client folder for the staff assigned to that client, and a
+     * client folder sitting on a CIP application the reader may already see.
      * External accounts match none of the staff rules: a provider contact
      * reaches a client folder when their firm filed it, see {@see FolderAccess}.
      */
@@ -438,9 +441,13 @@ class FileAccess
 
                 // Staff assigned to the whole company reach the folders of the
                 // contacts beneath it, when their assignment says it should.
+                // Officers also read the folder of a CIP application they may
+                // see: the caseload is firm-wide, and the Documents tab is
+                // the filing, not a second permission.
                 return self::highest(array_filter([
                     $assignment?->fileRole(),
                     self::companyStaffRole($user, $folder->client_id),
+                    self::cipApplicationFolderRole($user, (int) $folder->client_id),
                 ]));
             }
 
@@ -495,10 +502,12 @@ class FileAccess
             ->pluck('id')->all();
 
         // Directly assigned clients, plus the ones reached through a company
-        // assignment that covers the contacts beneath it.
+        // assignment that covers the contacts beneath it, plus every client
+        // sitting on a CIP application this account may already see.
         $reachable = array_unique(array_merge(
             ClientAssignment::live()->where('user_id', $user->id)->pluck('client_id')->all(),
             CompanyAccess::clientIdsThroughCompanies($user),
+            ApplicationScope::visibleClientIds($user),
         ));
 
         $clientIds = Folder::where('folder_type', Folder::TYPE_CLIENT)
@@ -528,6 +537,25 @@ class FileAccess
         $assignment = self::$liveAssignments[$key];
 
         return $assignment && $assignment->isLive() ? $assignment : null;
+    }
+
+    /**
+     * Download-and-read on a client folder because this account may already
+     * see a CIP application for that person.
+     *
+     * Assignment still names who is working the file. Seeing the rest of the
+     * caseload has to reach the Documents tab, or opening a colleague's
+     * application would paint "folder isn’t ready" over a tree that exists.
+     */
+    private static function cipApplicationFolderRole(User $user, int $clientId): ?string
+    {
+        if (! CipAccess::enabled() || ! CipAccess::canReach($user)) {
+            return null;
+        }
+
+        return in_array($clientId, ApplicationScope::visibleClientIds($user), true)
+            ? 'downloader'
+            : null;
     }
 
     private static function companyStaffRole(User $user, int $clientId): ?string

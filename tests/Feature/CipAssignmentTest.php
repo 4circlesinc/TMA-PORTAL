@@ -230,11 +230,10 @@ class CipAssignmentTest extends TestCase
         Assignments::assign($application, $rita, $admin);
         $this->assign($rita, $application->fresh(), $sam)->assertForbidden();
 
-        // An officer the file was never given cannot even see it: the same
-        // ask from them is a 404, because being refused the right to staff an
-        // application would otherwise tell them it exists.
+        // An officer the file was never given can still see it — the book is
+        // shared — so the same ask is a 403 about the verb, not a 404.
         $dana = $this->user(Role::REVIEWING_OFFICER, 'dana@example.com', 'Dana Review');
-        $this->assign($dana, $application->fresh(), $sam)->assertNotFound();
+        $this->assign($dana, $application->fresh(), $sam)->assertForbidden();
 
         // A stranger is not told the application is there at all.
         $stranger = $this->user(Role::CLIENT, 'nobody@example.com', 'Nobody');

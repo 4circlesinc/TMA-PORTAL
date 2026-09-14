@@ -78,9 +78,9 @@ class CipAssignmentController extends Controller
          * on here appears there and vice versa.
          *
          * The CIP assignment is written too, because section 10 hangs off it: the
-         * file being assigned is what moves it into review, and the reviewer
-         * verbs are gated on holding it. The client row is the one anybody
-         * looks at; this is the one the workflow reads.
+         * file being assigned is what moves it into review. Who may *see* the
+         * file is ApplicationScope (the whole firm); who is working it is this
+         * row, and the dashboard queues still read it.
          */
         $client = $application->client;
 
@@ -173,8 +173,16 @@ class CipAssignmentController extends Controller
         $firm = $application->provider?->company;
 
         if ($firm) {
-            $stillHolds = ApplicationScope::query(User::find($userId))
-                ->where('provider_id', $application->provider_id)
+            // Holding, not seeing: the caseload is firm-wide now, so
+            // ApplicationScope would keep this grant forever. The auto-row
+            // comes off when this officer no longer holds a file from the firm.
+            $stillHolds = CipApplicationAssignment::query()
+                ->live()
+                ->where('user_id', $userId)
+                ->whereHas(
+                    'application',
+                    fn ($q) => $q->where('provider_id', $application->provider_id),
+                )
                 ->exists();
 
             if (! $stillHolds) {

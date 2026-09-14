@@ -14,12 +14,13 @@ use Illuminate\Database\Eloquent\Builder;
  * Which CIP applications an account may see, the row-level gate the module's
  * capability checks cannot provide.
  *
- * Administrators and officers see every application. External accounts see
- * exactly their slice: a Service Provider contact (an active member of the
- * firm a provider is linked to) sees their firm's applications; a private
- * client sees the applications on their own client record. An employee with
- * no officer grant sees nothing, widen deliberately when the firm decides,
- * not by default.
+ * Administrators and officers see every application — the firm's book is
+ * shared, assignment names who is working a file and fills their queue, it
+ * does not hide the rest of the caseload. External accounts see exactly their
+ * slice: a Service Provider contact (an active member of the firm a provider
+ * is linked to) sees their firm's applications; a private client sees the
+ * applications on their own client record. A parked Employee cannot reach the
+ * portal and sees nothing here either.
  *
  * Use {@see self::query()} anywhere applications are listed, counted or
  * fetched; {@see self::findOrFail()} answers 404, never 403, so existence
@@ -27,6 +28,9 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class ApplicationScope
 {
+    /** @var array<int, list<int>> */
+    private static array $visibleClientIds = [];
+
     /** An application query already narrowed to what this account may see. */
     public static function query(?User $user, ?Builder $base = null): Builder
     {
@@ -37,33 +41,16 @@ class ApplicationScope
             return $query->whereRaw('1 = 0');
         }
 
-        if (Role::isAdmin($user)) {
-            return $query;
-        }
-
         /*
-         * An officer sees the files they hold. Nothing else, not the
-         * unassigned pool, and not even applications they filed themselves.
-         *
-         * Section 10 is the reason: the administrator assigns, and the assignment is
-         * what starts the review, so a file nobody has been given is the
-         * administrator's to see and nobody else's. A creator exception was
-         * tried here and taken out on the firm's own instruction: an officer
-         * who files an application hands it to the administrator like any
-         * provider does, and it comes back into their view the moment it is
-         * assigned to them.
-         *
-         * "Holds" is either assignment record, the client's list, which is
-         * what the Assigned tab and section 8's column read, or the application's own
-         * workflow row; the picker writes both together, but a file must not
-         * vanish from its officer because one half was written by an older
-         * path.
+         * The people who work here. Administrators already held the book;
+         * officers now read it too, assigned or not. Section 10 still has the
+         * administrator hand a file to an officer to start the review, and
+         * the dashboard queues still count only what that officer holds.
+         * Seeing the rest of the firm is a separate question, and the firm
+         * asked to share it.
          */
-        if (CipAccess::isOfficer($user)) {
-            return $query->where(function (Builder $q) use ($user) {
-                $q->whereHas('assignments', fn ($a) => $a->live()->where('user_id', $user->id))
-                    ->orWhereHas('client.assignments', fn ($a) => $a->live()->where('user_id', $user->id));
-            });
+        if (Role::isAdmin($user) || CipAccess::isOfficer($user)) {
+            return $query;
         }
 
         if (Role::isStaff($user)) {
@@ -96,6 +83,43 @@ class ApplicationScope
                 Client::query()->select('id')->where('user_id', $user->id)
             );
         });
+    }
+
+    /**
+     * Client ids sitting on applications this account may see.
+     *
+     * The citizenship file is the application, but opening it still loads the
+     * hub record and the client's document folder. Those surfaces used to
+     * ask ClientScope / assignment, which hid a colleague's filing the
+     * officer could already see on the caseload. One query, memoised: folder
+     * access asks this per folder, and four queries on every Documents tab
+     * would be the same cost FolderAccess already refused.
+     *
+     * @return list<int>
+     */
+    public static function visibleClientIds(?User $user): array
+    {
+        if ($user === null) {
+            return [];
+        }
+
+        $uid = (int) $user->id;
+        if (array_key_exists($uid, self::$visibleClientIds)) {
+            return self::$visibleClientIds[$uid];
+        }
+
+        return self::$visibleClientIds[$uid] = self::query($user)
+            ->whereNotNull('cip_applications.client_id')
+            ->pluck('cip_applications.client_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    public static function forget(): void
+    {
+        self::$visibleClientIds = [];
     }
 
     /** Resolve one application by uuid within the viewer's slice, or 404. */
