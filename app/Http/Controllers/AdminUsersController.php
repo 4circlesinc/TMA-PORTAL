@@ -871,7 +871,9 @@ class AdminUsersController extends Controller
                 'type' => 'account.two_factor_required',
                 'title' => 'Set up an authenticator app',
                 'message' => 'An administrator requires two-factor authentication on your account.',
-                'action_url' => '/security-settings',
+                // /security-settings is not an SPA page, it 404s. Security
+                // lives inside Settings.
+                'action_url' => '/account-settings?settings-page=security',
             ]);
         }
 

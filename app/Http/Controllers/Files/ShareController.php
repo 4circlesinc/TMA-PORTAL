@@ -198,13 +198,26 @@ class ShareController extends BaseFilesController
                 'type' => $type === 'folder' ? 'folder.shared' : 'file.shared',
                 'title' => $user->name.' shared '.($type === 'folder' ? 'a folder' : 'a file').' with you: '.$item->name,
                 'subject' => $item,
-                'action_url' => '/portal/files',
+                // /portal/files is the JSON API, not a page. Open the shared
+                // item itself: a folder by id, a file in the viewer.
+                'action_url' => $type === 'folder'
+                    ? '/folders/all?folder='.$item->uuid
+                    : '/folders/all?file='.$item->uuid,
                 'dedupe_key' => 'share:'.$type.':'.$item->id.':'.$target->id,
                 // The fileShared postcard below is the email for this moment.
                 'email' => false,
             ]);
             Mail::to($target->email)->queue(
-                Postcards::fileShared($user->name, $item->name, $type === 'folder', url('/portal/files'))
+                Postcards::fileShared(
+                    $user->name,
+                    $item->name,
+                    $type === 'folder',
+                    // Same target as the bell notification above, the API path
+                    // this used to point at is not a page.
+                    url($type === 'folder'
+                        ? '/folders/all?folder='.$item->uuid
+                        : '/folders/all?file='.$item->uuid),
+                )
             );
         }
     }

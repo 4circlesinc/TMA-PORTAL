@@ -1357,6 +1357,13 @@
           navId: navId,
           adminPage: opts.adminPage,
           folderId: opts.folderId,
+          // A notification names the record it is about, not just the page:
+          // the file to open, the comment thread inside it, the signature
+          // request to sign.
+          fileId: opts.fileId || null,
+          filePanel: opts.filePanel || null,
+          fileThread: opts.fileThread || null,
+          signatureId: opts.signatureId || null,
           /* A module may hold data back inside a revalidation window, right
              for idle navigation, wrong for somebody who has just asked for
              this page again. */
@@ -1526,6 +1533,45 @@
             title: 'Messages',
             crumb: 'Messages',
             openConversationId: params.conversation || null,
+            // "Call back" on a missed-call notification rings once the thread
+            // is open; anything else is just the conversation.
+            startCall: (params.call === 'audio' || params.call === 'video') ? params.call : null,
+          });
+          return true;
+        }
+      }
+
+      /*
+       * A notification names a record, not just a page. Without these two
+       * branches the generic leaf match below took over and dropped the
+       * query, so "Sign document" opened the signature list and "View
+       * comment" opened the File Library with the panel shut.
+       */
+      if (base === '/signatures') {
+        if (root.querySelector('.tma-dash__view[data-view="signatures"]')) {
+          activate('signatures', {
+            view: 'signatures',
+            title: 'Signature Requests',
+            crumb: 'Signatures',
+            signatureId: params.request || null,
+          });
+          return true;
+        }
+      }
+
+      if (base.indexOf('/folders/') === 0) {
+        var foldersLeaf = leaves.filter(function (l) {
+          return normalizePath(l.getAttribute('href') || '') === base;
+        })[0];
+        if (foldersLeaf && root.querySelector('.tma-dash__view[data-view="folders"]')) {
+          activate(foldersLeaf.getAttribute('data-nav'), {
+            view: 'folders',
+            title: foldersLeaf.getAttribute('data-title') || 'Files',
+            crumb: foldersLeaf.getAttribute('data-crumb') || undefined,
+            folderId: params.folder || null,
+            fileId: params.file || null,
+            filePanel: params.panel || null,
+            fileThread: params.thread || null,
           });
           return true;
         }

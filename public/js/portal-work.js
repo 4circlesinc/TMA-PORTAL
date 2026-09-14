@@ -4383,12 +4383,21 @@
     });
   }
 
-  function mountSignatures(el) {
+  function mountSignatures(el, opts) {
+    opts = opts || {};
     sig.el = el;
     // Remounting returns to the list; a wizard left open belongs to the
     // request the user was editing, not to this fresh navigation.
     sig.editingId = null;
     sig.wizardStep = 'files';
+
+    /*
+     * "Sign document" names the request it is about. Without this the
+     * notification landed on the list and left the reader to find it.
+     */
+    var wanted = opts.signatureId || sigUrlParam('request');
+    if (wanted) sig.pendingOpenId = wanted;
+
     renderSignatures();
     loadSignatures().then(function () {
       // Arriving from "Send for signature" in the File Library: open the draft
@@ -4398,6 +4407,16 @@
       sig.pendingOpenId = null;
       if (record) openSignatureWizard(record);
     });
+  }
+
+  /* The shell strips the query as it settles the route, so this is read at
+     mount, the same trap the File Library's deep links hit. */
+  function sigUrlParam(name) {
+    try {
+      return new URLSearchParams(window.location.search || '').get(name);
+    } catch (e) {
+      return null;
+    }
   }
 
   /* Formats the signing pipeline can handle. Mirrors App\Support\Signatures\

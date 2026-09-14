@@ -454,7 +454,8 @@ final class CompanyMembers
                 ? 'You now have access to '.$company->name.'’s applications as '.$role.'.'
                 : 'You now have access to '.$company->name.' as '.$role.'.',
             'subject' => $company,
-            'action_url' => $provider ? Pages::HOME : '/',
+            // "Open company" means this company, not the applications list.
+            'action_url' => Pages::company($company->uid),
             'email' => false,
         ]);
 
@@ -542,7 +543,7 @@ final class CompanyMembers
                 ? 'Your service provider has been switched to '.$company->name.'. You are a '.$role.' there.'
                 : 'You have been added to '.$company->name.' as a '.$role.'.',
             'subject' => $company,
-            'action_url' => Pages::HOME,
+            'action_url' => Pages::company($company->uid),
             'email' => false,
         ]);
 

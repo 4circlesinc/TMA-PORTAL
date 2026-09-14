@@ -24,4 +24,15 @@ final class Pages
 
         return $query === '' ? $path : $path.'?'.$query;
     }
+
+    /**
+     * One service provider's page. "Open company" used to land on HOME, the
+     * applications list, which is not the company it named.
+     */
+    public static function company(string $companyUid, string $query = ''): string
+    {
+        $path = self::HOME.'/companies/'.$companyUid;
+
+        return $query === '' ? $path : $path.'?'.$query;
+    }
 }

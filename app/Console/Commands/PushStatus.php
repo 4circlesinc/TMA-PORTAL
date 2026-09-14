@@ -65,7 +65,8 @@ class PushStatus extends Command
                 'type' => 'system.sync_completed',
                 'title' => 'Push test',
                 'message' => 'If you can read this in your phone\'s notifications, push works.',
-                'action_url' => '/notifications',
+                // There is no /notifications page; the inbox is an Overview tab.
+                'action_url' => '/overview?tab=notifications',
                 'email' => false,
             ]);
             $this->line($sent

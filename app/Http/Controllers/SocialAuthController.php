@@ -556,7 +556,9 @@ class SocialAuthController extends Controller
                 'type' => 'security.account_connected',
                 'title' => $providerName.' mailbox connected',
                 'message' => $account->email.': import is starting in the background.',
-                'action_url' => '/email',
+                // A security notice ("Review security activity") belongs in
+                // Security, where a mailbox connection can be checked or undone.
+                'action_url' => '/account-settings?settings-page=security',
                 'dedupe_key' => 'mailbox.connected:'.$account->id,
             ]);
         }

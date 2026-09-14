@@ -263,9 +263,18 @@ class Comments
         try {
             $mentioned = $comment->mentions()->pluck('user_id')->all();
 
+            /*
+             * The thread the notification should open, not the reply that
+             * caused it: threading is one level deep, so a reply's anchor is
+             * its root. The viewer addresses threads by the root's uuid.
+             */
+            $threadUuid = $parent
+                ? ($parent->root_id === $parent->id ? $parent->uuid : (FileComment::find($parent->root_id)?->uuid ?? $parent->uuid))
+                : $comment->uuid;
+
             foreach ($mentioned as $userId) {
                 self::notifyOne($userId, 'file.mention', $file, $author,
-                    $author->name.' mentioned you in a comment on '.$file->name, $comment->body);
+                    $author->name.' mentioned you in a comment on '.$file->name, $comment->body, null, $threadUuid);
             }
 
             $told = array_flip($mentioned);
@@ -275,7 +284,7 @@ class Comments
             if ($parent && ! isset($told[$parent->author_id])) {
                 $told[$parent->author_id] = true;
                 self::notifyOne($parent->author_id, 'file.comment_reply', $file, $author,
-                    $author->name.' replied to your comment on '.$file->name, $comment->body);
+                    $author->name.' replied to your comment on '.$file->name, $comment->body, null, $threadUuid);
             }
 
             // Everyone else already in this thread, plus the file's owner, plus
@@ -288,7 +297,7 @@ class Comments
             foreach ($others as $userId) {
                 self::notifyOne($userId, 'file.comment', $file, $author,
                     $author->name.' commented on '.$file->name, $comment->body,
-                    'file.comment:'.$file->id);
+                    'file.comment:'.$file->id, $threadUuid);
             }
         } catch (\Throwable $e) {
             // A comment that saved but failed to notify is a smaller problem
@@ -319,8 +328,18 @@ class Comments
             });
     }
 
-    private static function notifyOne(int $userId, string $type, FileItem $file, User $actor, string $title, ?string $message = null, ?string $dedupeKey = null): void
+    private static function notifyOne(int $userId, string $type, FileItem $file, User $actor, string $title, ?string $message = null, ?string $dedupeKey = null, ?string $threadUuid = null): void
     {
+        /*
+         * "View comment" used to open the file with the comments panel shut,
+         * leaving the reader to find the thread among all the others. The
+         * thread id opens that panel on the thread the notification is about.
+         */
+        $url = '/folders/all?file='.$file->uuid.'&panel=comments';
+        if ($threadUuid) {
+            $url .= '&thread='.$threadUuid;
+        }
+
         Notifier::send([
             'user' => $userId,
             'actor' => $actor,
@@ -328,7 +347,7 @@ class Comments
             'title' => $title,
             'message' => $message ? Str::limit($message, 140) : null,
             'subject' => $file,
-            'action_url' => '/folders/all?file='.$file->uuid,
+            'action_url' => $url,
             'dedupe_key' => $dedupeKey,
         ]);
     }

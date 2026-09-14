@@ -56,7 +56,10 @@ final class NotificationType
         'calendar.response' => ['module' => 'calendar', 'level' => Notification::LEVEL_INFO,     'icon' => 'CalendarCheck', 'priority' => 'low',    'pref' => 'calendar', 'action_label' => 'View event'],
         'calendar.shared' => ['module' => 'calendar', 'level' => Notification::LEVEL_INFO,     'icon' => 'CalendarBlank', 'priority' => 'normal', 'pref' => 'calendar', 'action_label' => 'View event'],
         'calendar.group_added' => ['module' => 'calendar', 'level' => Notification::LEVEL_INFO,     'icon' => 'CalendarBlank', 'priority' => 'normal', 'pref' => 'calendar', 'action_label' => 'View event'],
-        'calendar.sync_error' => ['module' => 'calendar', 'level' => Notification::LEVEL_ERROR,    'icon' => 'WarningCircle', 'priority' => 'high',   'pref' => 'calendar', 'action_label' => 'Retry synchronization'],
+        // "Retry synchronization" promised a verb the Calendar page does not
+        // offer — there is no calendar retry endpoint, unlike mail's. The
+        // button opens the calendar, so it says so.
+        'calendar.sync_error' => ['module' => 'calendar', 'level' => Notification::LEVEL_ERROR,    'icon' => 'WarningCircle', 'priority' => 'high',   'pref' => 'calendar', 'action_label' => 'Open Calendar'],
         'calendar.conflict' => ['module' => 'calendar', 'level' => Notification::LEVEL_WARNING,  'icon' => 'Warning',       'priority' => 'normal', 'pref' => 'calendar', 'action_label' => 'View event'],
 
         // ── Files & Folders ────────────────────────────────────
@@ -126,6 +129,9 @@ final class NotificationType
         'cip.granted' => ['module' => 'clients', 'level' => Notification::LEVEL_SUCCESS, 'icon' => 'CheckCircle', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Open the application'],
         'cip.post-approval' => ['module' => 'clients', 'level' => Notification::LEVEL_ACTION, 'icon' => 'AddressBook', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Open the documents'],
         'cip.denied' => ['module' => 'clients', 'level' => Notification::LEVEL_WARNING, 'icon' => 'Xcircle', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Open the application'],
+        // Raised at Notices::personChanged with a path, but unregistered until
+        // now, so the link it carried never rendered a button.
+        'cip.person-change' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO, 'icon' => 'AddressBook', 'priority' => 'normal', 'pref' => 'clients', 'action_label' => 'Open the application'],
 
         // ── Account & Security ─────────────────────────────────
         'account.pending' => ['module' => 'account',  'level' => Notification::LEVEL_APPROVAL, 'icon' => 'UserCirclePlus', 'priority' => 'high',   'pref' => 'approvals', 'action_label' => 'Review Account'],
@@ -138,6 +144,14 @@ final class NotificationType
         'security.account_connected' => ['module' => 'security', 'level' => Notification::LEVEL_SECURITY, 'icon' => 'PlugsConnected', 'priority' => 'normal', 'pref' => 'security',  'action_label' => 'Review security activity'],
         'security.connection_expired' => ['module' => 'security', 'level' => Notification::LEVEL_WARNING,  'icon' => 'PlugsConnected', 'priority' => 'high',   'pref' => 'security',  'action_label' => 'Reconnect'],
         'security.permission_changed' => ['module' => 'security', 'level' => Notification::LEVEL_SECURITY, 'icon' => 'Key',            'priority' => 'high',   'pref' => 'security',  'action_label' => 'Review security activity'],
+        /*
+         * These three were raised with an action_url but never registered, so
+         * they took FALLBACK — whose action_label is null — and rendered with
+         * no button at all. A registry row is what gives a notification its
+         * button, so an unregistered type silently loses the link it carries.
+         */
+        'account.two_factor_required' => ['module' => 'account',  'level' => Notification::LEVEL_ACTION,   'icon' => 'ShieldCheck',    'priority' => 'high',   'pref' => 'security',  'action_label' => 'Set up two-factor'],
+        'security.firm_alert' => ['module' => 'security', 'level' => Notification::LEVEL_SECURITY, 'icon' => 'ShieldWarning',  'priority' => 'urgent', 'pref' => 'security',  'action_label' => 'Review security activity'],
 
         // ── Feed ───────────────────────────────────────────────
         // The internal communications feed (section 8). These all sit in one

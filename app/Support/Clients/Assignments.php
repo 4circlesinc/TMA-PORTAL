@@ -280,7 +280,9 @@ final class Assignments
             'message' => 'You can reach them through the portal at any time.',
             'subject' => $client,
             'client' => $client,
-            'action_url' => '/social/messages',
+            // Their own file, not the message list: this tells a client who
+            // their staff contact now is.
+            'action_url' => Pages::application($client->uid),
             // The clientStaffAssigned postcard below is the email.
             'email' => false,
         ]);

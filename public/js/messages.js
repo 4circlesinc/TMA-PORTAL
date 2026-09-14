@@ -5930,12 +5930,16 @@
    * Staff landing from a client file's Message button get an unsent thread
    * that the inbox omits on purpose. History still loads, so they can compose.
    */
-  function openConversationFromId(root, state, render, conversationId) {
+  /* `media` ('audio' | 'video') rings once the thread is open — how "Call
+     back" on a missed-call notification places the call rather than just
+     showing the conversation it was missed in. */
+  function openConversationFromId(root, state, render, conversationId, media) {
     if (!conversationId) return;
     showMessagesChats(state);
     if (findThread(conversationId)) {
       openConversation(root, state, render, conversationId);
       subscribeToConversation(root, state, render, conversationId);
+      ringConversation(conversationId, media);
       return;
     }
     window.TMAMessagingAPI.messages(conversationId)
@@ -5943,8 +5947,23 @@
         if (data.conversation) replaceThread(data.conversation);
         openConversation(root, state, render, conversationId);
         subscribeToConversation(root, state, render, conversationId);
+        ringConversation(conversationId, media);
       })
       .catch(function () {});
+  }
+
+  /* The same start the call buttons use; see startConversationWith. */
+  function ringConversation(conversationId, media) {
+    if (!media || !window.TMAMessagingCalls) return;
+    var row = findThread(conversationId);
+    if (!row) return;
+    window.TMAMessagingCalls.start(
+      conversationId,
+      media === 'video' ? 'video' : 'audio',
+      row.name || 'Contact',
+      row.photo || null,
+      (STORE.me || {}).id
+    );
   }
 
   function openConversation(root, state, render, conversationId) {
@@ -9280,7 +9299,7 @@
       // (the shell mounts Messages on load, whichever view is showing).
       var reopen = opts.openConversationId || takePendingConversationId();
       if (reopen) {
-        openConversationFromId(root, state, render, reopen);
+        openConversationFromId(root, state, render, reopen, opts.startCall || takePendingCallMedia());
       }
       return;
     }
@@ -9452,7 +9471,7 @@
       // same place an in-shell navigation does.
       var wanted = opts.openConversationId || takePendingConversationId();
       if (wanted) {
-        openConversationFromId(root, state, render, wanted);
+        openConversationFromId(root, state, render, wanted, opts.startCall || takePendingCallMedia());
       }
     });
   }
@@ -9477,6 +9496,29 @@
     var id = pendingConversationId;
     pendingConversationId = '';
     return id;
+  }
+
+  /*
+   * ?call=audio|video, the "Call back" verb on a missed-call notification.
+   *
+   * Read here for the same reason the conversation id is: an in-shell
+   * navigation hands this over as opts.startCall, but a cold load of
+   * /social/messages?conversation=…&call=audio never passes through the
+   * shell's router, and the address is rewritten before the inbox loads.
+   */
+  var pendingCallMedia = (function () {
+    try {
+      var v = new URLSearchParams(window.location.search).get('call') || '';
+      return (v === 'audio' || v === 'video') ? v : '';
+    } catch (e) {
+      return '';
+    }
+  })();
+
+  function takePendingCallMedia() {
+    var media = pendingCallMedia;
+    pendingCallMedia = '';
+    return media;
   }
 
   /* Return the inbox column to the chat list, whatever panel is over it. */

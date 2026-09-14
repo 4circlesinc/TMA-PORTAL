@@ -154,7 +154,13 @@ final class MessageNotifier
                         ? $from.' called the group'
                         : $from.' tried to reach you',
                     'subject' => $conversation,
-                    'action_url' => self::url($conversation),
+                    /*
+                     * "Call back" is a verb, so it calls: the thread opens and
+                     * rings, rather than leaving the reader to find the call
+                     * button themselves.
+                     */
+                    'action_url' => self::url($conversation).'&call='.
+                        (str_starts_with(mb_strtolower($label), 'video') ? 'video' : 'audio'),
                     'dedupe_key' => self::callKey($conversation),
                     'dedupe_minutes' => self::CALL_DEDUPE_MINUTES,
                     'metadata' => ['conversationId' => $conversation->uuid],

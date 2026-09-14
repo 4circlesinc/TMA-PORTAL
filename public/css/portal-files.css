@@ -899,6 +899,16 @@
   background: #fff; box-shadow: 0 2px 12px rgba(0, 0, 0, 0.28);
   font-size: var(--text-size-13);
 }
+/* The thread a "View comment" notification named, so it is findable among the
+   file's others the moment the viewer opens. It fades on its own: this says
+   "here", it is not a state the thread stays in. */
+.tma-portal-viewer__thread.is-highlighted {
+  animation: tma-thread-found 2.4s ease-out forwards;
+}
+@keyframes tma-thread-found {
+  0%, 55% { box-shadow: 0 0 0 2px var(--color-primary), 0 2px 12px rgba(0, 0, 0, 0.28); }
+  100% { box-shadow: 0 2px 12px rgba(0, 0, 0, 0.28); }
+}
 .tma-portal-viewer__thread.is-resolved {
   /* Solid, not opacity: a translucent card let the document (and the Files
      table behind the viewer) print through the bubble. */

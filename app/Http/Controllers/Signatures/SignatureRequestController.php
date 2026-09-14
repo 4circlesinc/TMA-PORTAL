@@ -387,7 +387,9 @@ class SignatureRequestController extends Controller
                 'type' => 'signature.requested',
                 'title' => $actor->name.' requested your signature on "'.$title.'"',
                 'subject' => $signatureRequest,
-                'action_url' => '/signatures',
+                // Name the request: "Sign document" landed on the list, where
+                // the reader had to find it themselves.
+                'action_url' => '/signatures?request='.$signatureRequest->uuid,
                 'dedupe_key' => 'signature:'.$signatureRequest->id.':'.$user->id,
                 // Sender.php mails every recipient their signing link already.
                 'email' => false,

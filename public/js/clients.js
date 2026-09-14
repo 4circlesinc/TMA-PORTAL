@@ -1573,6 +1573,13 @@
       provider: params.get('provider') || null,
       sort: params.get('sort') || null,
       dir: params.get('dir') || null,
+      // A notice about an application whose client record has gone names the
+      // application number instead. Without this the term was dropped and the
+      // link landed on the unfiltered list.
+      search: params.get('search') || null,
+      // Ready to submit / Apply for COR ask the provider to confirm; the
+      // notification carries the intent so the dialog opens itself.
+      confirm: params.get('confirm') === '1',
     };
   })();
 
@@ -14524,6 +14531,25 @@
       watchCipThread(state, render);
       if (usesPagedClientsFlow(state)) render();
       else render({ detailOnly: true });
+
+      /*
+       * "Confirm submission" asked for the dialog, not just the file. Fired
+       * here because this is the first moment the application is actually
+       * loaded — the dialog reads applicationFor(selectedId) and would
+       * silently do nothing while the request was still out.
+       *
+       * Claimed once, and only for someone the server says may confirm: a
+       * reader without the verb (staff, or a package already locked) gets the
+       * file, not a dialog that cannot be completed.
+       */
+      if (BOOT_POSITION.confirm) {
+        var app = applicationFor(id);
+        var open = app && app.canConfirm &&
+          ((app.status === 'ready_to_submit' && !app.locked) ||
+           (app.status === 'apply_for_cor' && !app.corLocked));
+        BOOT_POSITION.confirm = false;
+        if (open) openConfirmSubmissionDialog(state, render);
+      }
     };
 
     var request = window.TMAStore
@@ -15437,6 +15463,14 @@
     });
 
     function startClients() {
+      /*
+       * A notice about an application whose client record has gone names the
+       * application number instead of a file to open. Claimed once, like the
+       * other boot positions: it belongs to the link that carried it.
+       */
+      var booted = takeBootPosition('search');
+      if (booted) state.search = booted;
+
       // Point the default selection at a real client once loaded, so the
       // split view opens on someone who exists rather than seed data.
       if (!directoryItemFor(state.selectedId)) {

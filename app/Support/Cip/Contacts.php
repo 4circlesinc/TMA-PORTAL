@@ -290,10 +290,22 @@ class Contacts
         $application->loadMissing('client');
 
         if (! $application->client) {
-            return Pages::home('q='.urlencode($application->displayNumber()));
+            // `search`, not `q`: the applications list reads that one. A `q`
+            // link landed on the unfiltered list with the term dropped.
+            return Pages::home('search='.urlencode($application->displayNumber()));
         }
 
         $query = 'tab=folders';
+
+        /*
+         * Ready to submit / Apply for COR ask the provider to press Confirm
+         * submission. Carry that intent so the button opens the confirm
+         * dialog itself instead of dropping the reader on the folders tab to
+         * hunt for it. The dialog still does the confirming — this only opens it.
+         */
+        if ($status === Status::READY_TO_SUBMIT || $status === Status::APPLY_FOR_COR) {
+            $query = 'tab=overview&confirm=1';
+        }
 
         if ($status === Status::NON_COMPLIANT) {
             $additional = Tree::additionalFolder($application);

@@ -2248,6 +2248,25 @@
    */
   var restoringFromUrl = false;
 
+  /*
+   * What a "View comment" notification asked for, held until the viewer is on
+   * screen to receive it.
+   *
+   * The link names a file and a thread; the file has to be fetched and the
+   * lightbox painted before either can be acted on, so the intent is parked
+   * here at mount and claimed once, at first paint. Claimed, not read: it
+   * belongs to the link that carried it, and must not reapply to the next
+   * file the reader opens by hand.
+   */
+  var pendingViewerIntent = null;
+
+  function takeViewerIntent() {
+    var intent = pendingViewerIntent;
+    pendingViewerIntent = null;
+
+    return intent;
+  }
+
   function syncUrl(replace) {
     if (restoringFromUrl) return;
     if (!window.history || !window.history.pushState) return;
@@ -2508,6 +2527,47 @@
 
     /* ── the shell, painted once ─────────────────────── */
 
+    /*
+     * Act on what the link asked for, once the viewer is painted.
+     *
+     * Only for the file the intent named: a link carries one file and one
+     * thread, and the gallery arrows step through the rest, which must not
+     * inherit somebody else's conversation. The thread is scrolled to once
+     * its panel has rendered, comments load asynchronously, so the node may
+     * not exist on this frame.
+     */
+    function applyViewerIntent(f) {
+      var intent = takeViewerIntent();
+      if (!intent || !f) return;
+
+      if (intent.panel === 'comments') {
+        viewerPrefs.comments = true;
+        viewerPrefs.panel = false;
+        var panel = lb.querySelector('[data-lb-panel]');
+        if (panel) panel.hidden = true;
+        var head = lb.querySelector('.tma-portal-viewer__head');
+        if (head) head.outerHTML = viewerHead(f);
+        paintCommentsPanel();
+      }
+
+      if (!intent.thread) return;
+
+      // The thread is drawn when its comments arrive; poll briefly rather than
+      // guess a delay, and give up rather than hunt for a deleted thread.
+      var tries = 0;
+      (function findThread() {
+        if (!lb || current().id !== f.id) return;
+        var node = lb.querySelector('.tma-portal-viewer__thread[data-thread="' + intent.thread + '"]');
+        if (node) {
+          node.scrollIntoView({ block: 'center' });
+          node.classList.add('is-highlighted');
+          return;
+        }
+        if (++tries > 20) return;
+        setTimeout(findThread, 150);
+      })();
+    }
+
     function paintShell() {
       var f = current();
       lb.innerHTML =
@@ -2538,6 +2598,7 @@
 
       paintPanel();
       paintCommentsPanel();
+      applyViewerIntent(f);
       bindAnchorSelect();
       subscribeToFile(f);
       startPresence(f);
@@ -8048,6 +8109,17 @@
     state.folder = opts.folderId || urlParam('folder') || null;
     state.selected = {};
     state.page = 1;
+
+    /*
+     * "View comment" carries the thread it is about, so the viewer opens on
+     * the conversation rather than leaving the reader to find it among the
+     * file's other threads with the panel shut.
+     */
+    var wantPanel = opts.filePanel || urlParam('panel');
+    var wantThread = opts.fileThread || urlParam('thread');
+    pendingViewerIntent = (wantPanel || wantThread)
+      ? { panel: wantPanel || null, thread: wantThread || null }
+      : null;
     restorePageSize();
     state.error = null;
 
@@ -8056,7 +8128,9 @@
      * file parameter (nothing is open yet at this point), so reading it
      * afterwards returns null every time and the viewer never reopens.
      */
-    var wanted = opts.folderId ? null : urlParam('file');
+    // opts.fileId is how the Dashboard's lists and global search name a file;
+    // it used to be passed and never read, so those links opened the folder.
+    var wanted = opts.fileId || (opts.folderId ? null : urlParam('file'));
 
     // Replace rather than push: this entry *is* the page just arrived at, and
     // pushing a copy of it would make the first Back a no-op.

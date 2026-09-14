@@ -151,7 +151,7 @@ class CompanyStaffController extends Controller
                 'title' => $request->user()->name.' assigned you to '.$company->name,
                 'message' => $reach['label'] ?: null,
                 'subject' => $company,
-                'action_url' => Pages::HOME,
+                'action_url' => Pages::company($company->uid),
             ]);
         }
 
