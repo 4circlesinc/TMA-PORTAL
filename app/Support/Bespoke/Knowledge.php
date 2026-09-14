@@ -42,6 +42,12 @@ final class Knowledge
         if (! empty($faq['adminOnly']) && ! $identity['isAdmin']) {
             return false;
         }
+        if (! empty($faq['spAdminOnly']) && empty($identity['isServiceProviderAdmin'])) {
+            return false;
+        }
+        if (! empty($faq['hideFromSpAdmin']) && ! empty($identity['isServiceProviderAdmin'])) {
+            return false;
+        }
         if (! empty($faq['needs']) && ! Bespoke::can($user, (string) $faq['needs'])) {
             return false;
         }
@@ -457,7 +463,16 @@ final class Knowledge
                 'keywords' => ['invite', 'service provider', 'provider access', 'new service provider'],
                 'cipOnly' => true,
                 'staffOnly' => true,
-                'answer' => "Two steps. Do not add them on Users.\n\n1. Register the firm: [CIP Applications](/citizenship-applications) → Create New Application → **New service provider** → name → Create.\n2. Invite people. TMA administrators open the provider → **Access** → email → Add (toast: Invitation sent). A CRO uses **Invite to portal** on the contact instead. A Service Provider admin’s sidebar opens their firm: **Add person** for Provider contacts, or Access → contact email for portal login. They cannot change the CIP code.\n\nThey arrive as **Client** accounts linked to that firm. They see that provider’s CIP files — not Users, not CIP Console, not other firms.",
+                'hideFromSpAdmin' => true,
+                'answer' => "Two steps. Do not add them on Users.\n\n1. Register the firm: [CIP Applications](/citizenship-applications) → Create New Application → **New service provider** → name → Create.\n2. Invite people. TMA administrators open the provider → **Access** → email → Add (toast: Invitation sent). A CRO uses **Invite to portal** on the contact instead.\n\nThey arrive as **Client** accounts linked to that firm. They see that provider’s CIP files — not Users, not CIP Console, not other firms.",
+            ],
+            [
+                'id' => 'add-firm-colleague',
+                'q' => 'How do I add someone at my firm to the portal?',
+                'keywords' => ['add', 'invite', 'access', 'portal', 'email', 'colleague', 'service provider', 'sign in'],
+                'cipOnly' => true,
+                'spAdminOnly' => true,
+                'answer' => "You can invite a colleague at your firm from here. Give me their email and confirm **Add** on the invitation card. They join as a service provider contact and see this firm’s CIP files.\n\nYou can also open your firm from the sidebar → **Access** → type the email → Add.\n\nYou cannot create a new service-provider firm or promote someone to Service Provider admin — that is TMA administration.",
             ],
             [
                 'id' => 'provider-copies',

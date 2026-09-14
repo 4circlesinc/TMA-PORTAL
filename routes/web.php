@@ -199,6 +199,9 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/actions/send-message', [BespokeController::class, 'sendMessage'])
             ->middleware('throttle:30,1')
             ->name('actions.send-message');
+        Route::post('/actions/invite-provider-contact', [BespokeController::class, 'inviteProviderContact'])
+            ->middleware('throttle:30,1')
+            ->name('actions.invite-provider-contact');
         Route::get('/conversations', [BespokeController::class, 'conversations'])->name('conversations.index');
         Route::get('/conversations/{uuid}', [BespokeController::class, 'showConversation'])
             ->whereUuid('uuid')

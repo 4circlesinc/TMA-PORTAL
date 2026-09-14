@@ -7,6 +7,7 @@ use App\Models\BespokeConversation;
 use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\User;
+use App\Support\Bespoke\Actions\InviteProviderContact;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
@@ -128,6 +129,11 @@ final class Toolbox
         return Bespoke::can($this->user, 'mail.use');
     }
 
+    public function inviteAvailable(): bool
+    {
+        return InviteProviderContact::firm($this->user) !== null;
+    }
+
     /**
      * OpenAI-style tool definitions, only the ones this reader may use.
      *
@@ -201,6 +207,16 @@ final class Toolbox
                 ['to', 'subject', 'body']);
         }
 
+        if ($this->inviteAvailable()) {
+            $tools[] = self::define('invite_provider_contact',
+                'Invite an email as a service provider contact at this reader’s firm so they can sign in. Call this when they ask to add someone, give an address portal access, or add a colleague as a service provider. They join as a Client contact, not as a Service Provider admin. The portal shows Add and Cancel; this call does not send the invitation.',
+                [
+                    'email' => ['type' => 'string', 'description' => 'The address to invite.'],
+                    'name' => ['type' => 'string', 'description' => 'Their name, if the reader gave one.'],
+                ],
+                ['email']);
+        }
+
         return $tools;
     }
 
@@ -220,6 +236,7 @@ final class Toolbox
             'lookup_guide' => $this->lookupGuide($args),
             'propose_message' => $this->proposeMessage($args),
             'propose_email' => $this->proposeEmail($args),
+            'invite_provider_contact' => $this->inviteProviderContact($args),
             'offer_choices' => $this->offerChoices($args),
             'list_applications' => $this->listApplications($args),
             'get_application' => $this->getApplication($args),
@@ -327,6 +344,44 @@ final class Toolbox
         return [
             'ok' => true,
             'note' => 'The draft is on screen with Open in Email. The reader sends it from the Email page. Do not say it was sent.',
+        ];
+    }
+
+    /** @param  array<string, mixed>  $args */
+    private function inviteProviderContact(array $args): array
+    {
+        $prepared = InviteProviderContact::inspect(
+            $this->user,
+            (string) ($args['email'] ?? ''),
+            isset($args['name']) ? (string) $args['name'] : null,
+        );
+        if (isset($prepared['error'])) {
+            return $prepared;
+        }
+
+        $this->actions[] = [
+            'type' => 'invite-provider-contact',
+            'email' => $prepared['email'],
+            'name' => $prepared['name'],
+            'company' => $prepared['company'],
+            'url' => $prepared['url'],
+            'existingAccount' => $prepared['existingAccount'],
+            'willResend' => $prepared['willResend'],
+        ];
+
+        $note = $prepared['existingAccount']
+            ? 'The card adds this existing account as a service provider contact at '.$prepared['company']['name'].'. Tell the reader Add is below. Do not say they were added.'
+            : ($prepared['willResend']
+                ? 'The card resends the invitation. Tell the reader Add is below. Do not say it was sent.'
+                : 'The card invites this address as a service provider contact at '.$prepared['company']['name'].'. Tell the reader Add is below. Do not say the invitation was sent.');
+
+        return [
+            'ok' => true,
+            'email' => $prepared['email'],
+            'company' => $prepared['company'],
+            'existingAccount' => $prepared['existingAccount'],
+            'willResend' => $prepared['willResend'],
+            'note' => $note,
         ];
     }
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Bespoke;
 
 use App\Http\Controllers\Controller;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Bespoke\Actions\InviteProviderContact;
 use App\Support\Bespoke\Actions\SendMessage;
 use App\Support\Bespoke\Attachments;
 use App\Support\Bespoke\Bespoke;
@@ -320,6 +321,68 @@ class BespokeController extends Controller
             'ok' => true,
             'recipient' => $sent['recipient'],
             'url' => $sent['url'],
+            'note' => $note,
+        ]);
+    }
+
+    /**
+     * The reader's own click on Add. The draft came from a tool, but reach
+     * is checked again here; the model's word is never what invites.
+     */
+    public function inviteProviderContact(Request $request): JsonResponse
+    {
+        Bespoke::abortUnlessEnabled();
+
+        $validated = $request->validate([
+            'email' => ['required', 'email', 'max:255'],
+            'name' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'conversationId' => ['sometimes', 'nullable', 'uuid'],
+        ]);
+
+        $user = $request->user();
+        $sent = InviteProviderContact::run(
+            $user,
+            (string) $validated['email'],
+            isset($validated['name']) ? (string) $validated['name'] : null,
+        );
+
+        $firm = $sent['company']['name'];
+        $who = $sent['name'] !== '' ? $sent['name'] : $sent['email'];
+        $note = $sent['existingAccount']
+            ? 'Added '.$who.' to '.$firm.' as a service provider contact. [Open '.$firm.']('.$sent['url'].')'
+            : 'Invited '.$sent['email'].' to '.$firm.' as a service provider contact. [Open '.$firm.']('.$sent['url'].')';
+
+        $conversationId = isset($validated['conversationId']) ? (string) $validated['conversationId'] : null;
+        if ($conversationId !== null) {
+            $thread = Conversations::findOwned($user, $conversationId);
+            if ($thread) {
+                Conversations::appendNote($thread, $note);
+            }
+        }
+
+        ActivityLogger::log([
+            'type' => 'bespoke.invited_provider_contact',
+            'description' => $sent['existingAccount']
+                ? 'Added '.$sent['email'].' to '.$firm.' from Bespoke AI'
+                : 'Invited '.$sent['email'].' to '.$firm.' from Bespoke AI',
+            'actor' => $user,
+            'metadata' => [
+                'email' => $sent['email'],
+                'company' => $sent['company']['id'],
+                'conversation' => $conversationId,
+                'existingAccount' => $sent['existingAccount'],
+                'invited' => $sent['invited'],
+            ],
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'email' => $sent['email'],
+            'name' => $sent['name'],
+            'company' => $sent['company'],
+            'url' => $sent['url'],
+            'existingAccount' => $sent['existingAccount'],
+            'invited' => $sent['invited'],
             'note' => $note,
         ]);
     }

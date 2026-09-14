@@ -829,6 +829,79 @@
     return card;
   }
 
+  /* Invite a colleague at this Service Provider admin's firm. Add asks once
+   * more, then the reader's own click posts it — the model never invites. */
+  function renderInviteCard(ctx, action) {
+    var email = String(action.email || '');
+    var name = String(action.name || '');
+    var company = action.company || {};
+    var firm = String(company.name || 'your firm');
+    var url = String(action.url || '/citizenship-applications');
+    var existing = !!action.existingAccount;
+    var resend = !!action.willResend;
+    var who = name ? name + ' (' + email + ')' : email;
+    var head = existing
+      ? 'Add as service provider contact'
+      : (resend ? 'Resend invitation' : 'Invite as service provider contact');
+    var ask = existing
+      ? 'Add ' + who + ' to ' + firm + '? They already have a portal account.'
+      : (resend
+        ? 'Resend the invitation to ' + email + ' for ' + firm + '?'
+        : 'Invite ' + who + ' to ' + firm + '? They will join as a service provider contact.');
+
+    var card = cardShell(ctx, 'invite');
+    card.innerHTML =
+      '<p class="tma-bespoke__card-head">' + escapeHtml(head) + ' <span class="tma-bespoke__card-muted">· ' + escapeHtml(firm) + '</span></p>' +
+      '<p class="tma-bespoke__card-ask">' + escapeHtml(ask) + '</p>' +
+      '<div class="tma-bespoke__card-foot" data-bespoke-card-foot></div>';
+    var foot = card.querySelector('[data-bespoke-card-foot]');
+
+    function idle() {
+      foot.innerHTML = '';
+      var add = cardButton('Add', 'primary');
+      var cancel = cardButton('Cancel', 'ghost');
+      add.addEventListener('click', confirm);
+      cancel.addEventListener('click', function () { cardDone(card, 'Invitation discarded.'); });
+      foot.appendChild(add);
+      foot.appendChild(cancel);
+    }
+
+    function confirm() {
+      foot.innerHTML = '<span class="tma-bespoke__card-ask">Add them to ' + escapeHtml(firm) + '?</span>';
+      var yes = cardButton('Yes, add', 'primary');
+      var no = cardButton('No', 'ghost');
+      yes.addEventListener('click', doInvite);
+      no.addEventListener('click', idle);
+      foot.appendChild(yes);
+      foot.appendChild(no);
+      yes.focus();
+    }
+
+    function doInvite() {
+      foot.innerHTML = '<span class="tma-bespoke__card-ask">Adding…</span>';
+      api('/portal/bespoke/actions/invite-provider-contact', {
+        method: 'POST',
+        body: { email: email, name: name || null, conversationId: ctx.conversationId || null }
+      }).then(function (data) {
+        var dest = data && data.url ? String(data.url) : url;
+        var done = data && data.existingAccount
+          ? 'Added to ' + escapeHtml(firm) + '.'
+          : 'Invitation sent.';
+        cardDone(card, done + ' <a href="' + escapeHtml(dest) + '" data-bespoke-nav="' + escapeHtml(dest) + '">Open ' + escapeHtml(firm) + '</a>');
+        toast(data && data.existingAccount ? 'Added to ' + firm : 'Invitation sent');
+        var note = (data && data.note) || done;
+        ctx.messages.push({ role: 'assistant', content: note });
+        if (typeof ctx.afterReply === 'function') ctx.afterReply({});
+      }).catch(function () {
+        toast('They could not be added.', true);
+        idle();
+      });
+    }
+
+    idle();
+    return card;
+  }
+
   /* ── 2×2 passport photo ─────────────────────────────────────────
    * Done here in the browser: pdf.js paints page 1, canvas crops. A PDF page
    * is trimmed of its white margins first (a photo on a page); an image is
@@ -1005,6 +1078,7 @@
       if (!action || typeof action !== 'object') return;
       if (action.type === 'message') renderMessageCard(ctx, action);
       else if (action.type === 'email') renderEmailCard(ctx, action);
+      else if (action.type === 'invite-provider-contact') renderInviteCard(ctx, action);
       else if (action.type === 'photo2x2') renderPhotoCard(ctx, action);
     });
   }

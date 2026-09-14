@@ -60,6 +60,13 @@ final class Suggestions
         $chips = [];
         $cip = $identity['cipEnabled'] && ($identity['cipReach'] || Bespoke::can($user, 'clients.view'));
 
+        if (! empty($identity['isServiceProviderAdmin']) && in_array($kind, ['dashboard', 'cip-list', 'overview', 'bespoke'], true)) {
+            array_unshift($chips, [
+                'id' => 'invite-colleague',
+                'label' => 'Add a colleague to the portal',
+                'prompt' => 'Add a colleague at my firm so they can sign in.',
+            ]);
+        }
         if ($kind === 'cip-intake' || $kind === 'cip-file') {
             $chips[] = ['id' => 'photo-2x2', 'label' => 'Make a 2×2 photo', 'prompt' => 'I will attach a photo. Make it a 2×2 passport photo.'];
         }

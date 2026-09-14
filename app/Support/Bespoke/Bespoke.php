@@ -5,6 +5,7 @@ namespace App\Support\Bespoke;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\CipAccess;
+use App\Support\Companies\CompanyAccess;
 
 /**
  * Whether Bespoke AI exists in this environment, and who may use it.
@@ -43,6 +44,8 @@ final class Bespoke
      *     isStaff: bool,
      *     isClient: bool,
      *     isProviderContact: bool,
+     *     isServiceProviderAdmin: bool,
+     *     serviceProvider: array{id: string, name: string}|null,
      *     cipEnabled: bool,
      *     cipReach: bool,
      *     capabilities: list<string>,
@@ -53,6 +56,7 @@ final class Bespoke
     public static function identity(User $user): array
     {
         $prefs = is_array($user->preferences) ? $user->preferences : [];
+        $firm = Role::isServiceProviderAdmin($user) ? CompanyAccess::homeCompany($user) : null;
 
         return [
             'accountType' => (string) (Role::of($user) ?: $user->account_type ?: 'Client'),
@@ -60,6 +64,8 @@ final class Bespoke
             'isStaff' => Role::isStaff($user),
             'isClient' => Role::isClient($user),
             'isProviderContact' => CipAccess::isProviderContact($user),
+            'isServiceProviderAdmin' => Role::isServiceProviderAdmin($user),
+            'serviceProvider' => $firm ? ['id' => $firm->uid, 'name' => $firm->name] : null,
             'cipEnabled' => CipAccess::enabled(),
             'cipReach' => CipAccess::canReach($user),
             'capabilities' => Role::capabilities($user),
