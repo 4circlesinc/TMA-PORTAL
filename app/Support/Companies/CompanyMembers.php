@@ -31,7 +31,7 @@ final class CompanyMembers
      *
      * @param  array<string, mixed>  $attrs
      */
-    public static function add(Company $company, array $attrs, User $by): CompanyMember
+    public static function add(Company $company, array $attrs, User $by, bool $notify = true): CompanyMember
     {
         $email = isset($attrs['email']) ? Str::lower(trim($attrs['email'])) : null;
         $role = $attrs['role'] ?? CompanyRoles::MEMBER;
@@ -94,7 +94,9 @@ final class CompanyMembers
 
         $member->unsetRelation('user');
         if ($member->user) {
-            self::mailAdded($company, $member, $by);
+            if ($notify) {
+                self::mailAdded($company, $member, $by);
+            }
             ClientConversations::attachLogin($member->user);
         }
 
@@ -241,7 +243,7 @@ final class CompanyMembers
      * cancelled, so re-entering the same address later starts clean instead
      * of reviving a stale name.
      */
-    public static function remove(Company $company, CompanyMember $member, User $by): CompanyMember
+    public static function remove(Company $company, CompanyMember $member, User $by, bool $notify = true): CompanyMember
     {
         if (! $member->user_id) {
             Invitation::query()
@@ -282,11 +284,71 @@ final class CompanyMembers
             'metadata' => ['companyUid' => $company->uid],
         ]);
 
-        if ($member->user) {
+        if ($member->user && $notify) {
             self::mailRemoved($company, $member, $by);
         }
 
         return $member->fresh();
+    }
+
+    /**
+     * Place an existing account at a CIP service provider firm.
+     *
+     * One firm at a time: they leave any other provider firm without the
+     * generic removed notice, and the dedicated added or switched postcard
+     * is what they receive — never the company-member copy, and never a
+     * combined "added or switched" letter.
+     */
+    public static function assignToProvider(Company $company, User $user, User $by, bool $asAdmin): void
+    {
+        $previous = CompanyMember::query()
+            ->active()
+            ->where('user_id', $user->id)
+            ->whereHas(
+                'company.cipProvider',
+                fn ($q) => $q->where('active', true)->whereNotNull('company_id'),
+            )
+            ->with('company:id,uid,name')
+            ->get();
+
+        $alreadyHere = $previous->first(fn (CompanyMember $member) => $member->company_id === $company->id);
+        $leaving = $previous->filter(fn (CompanyMember $member) => $member->company_id !== $company->id);
+
+        foreach ($leaving as $member) {
+            $from = $member->company ?? Company::query()->find($member->company_id);
+            if ($from) {
+                self::remove($from, $member, $by, notify: false);
+            }
+        }
+
+        if (! $alreadyHere) {
+            self::add($company, [
+                'email' => $user->email,
+                'name' => $user->name,
+                'role' => CompanyRoles::MEMBER,
+            ], $by, notify: false);
+        }
+
+        $switched = $leaving->isNotEmpty();
+        if (! $switched && $alreadyHere) {
+            return;
+        }
+
+        $previousCompany = $leaving
+            ->map(fn (CompanyMember $member) => $member->company?->name)
+            ->filter()
+            ->unique()
+            ->values()
+            ->implode(', ');
+
+        self::mailProviderAssigned(
+            $company,
+            $user,
+            $by,
+            $asAdmin,
+            $switched,
+            $previousCompany !== '' ? $previousCompany : null,
+        );
     }
 
     /** Exactly one primary contact per company. */
@@ -434,6 +496,58 @@ final class CompanyMembers
             $user->email,
             $company,
             'companyMemberRemoved',
+            immediate: true,
+        );
+    }
+
+    /**
+     * Bell + postcard for a Users-page assignment to a service provider.
+     * Added and switched each have their own admin and contact templates.
+     */
+    private static function mailProviderAssigned(
+        Company $company,
+        User $user,
+        User $by,
+        bool $asAdmin,
+        bool $switched,
+        ?string $previousCompany,
+    ): void {
+        $role = $asAdmin ? 'Service Provider admin' : 'service provider contact';
+
+        Notifier::send([
+            'user' => $user,
+            'actor' => $by,
+            'type' => $switched ? 'company.role_changed' : 'company.member_added',
+            'title' => $switched
+                ? 'Your service provider was switched to '.$company->name
+                : 'You were added to '.$company->name,
+            'message' => $switched
+                ? 'Your service provider has been switched to '.$company->name.'. You are a '.$role.' there.'
+                : 'You have been added to '.$company->name.' as a '.$role.'.',
+            'subject' => $company,
+            'action_url' => Pages::HOME,
+            'email' => false,
+        ]);
+
+        if (! $user->email) {
+            return;
+        }
+
+        Deliveries::send(
+            Postcards::serviceProviderAssigned(
+                $asAdmin,
+                $switched,
+                $user->first_name ?: $user->name,
+                $company->name,
+                self::portalUrl($company),
+                $by->name,
+                $previousCompany,
+            ),
+            $user->email,
+            $company,
+            $switched
+                ? ($asAdmin ? 'serviceProviderAdminSwitched' : 'serviceProviderContactSwitched')
+                : ($asAdmin ? 'serviceProviderAdminAdded' : 'serviceProviderContactAdded'),
             immediate: true,
         );
     }

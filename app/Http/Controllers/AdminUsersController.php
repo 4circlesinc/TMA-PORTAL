@@ -20,7 +20,6 @@ use App\Support\AvatarService;
 use App\Support\Cip\Assignments;
 use App\Support\Clients\ClientDirectory;
 use App\Support\Companies\CompanyMembers;
-use App\Support\Companies\CompanyRoles;
 use App\Support\DeviceName;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Invitations\Invitations;
@@ -811,11 +810,7 @@ class AdminUsersController extends Controller
             $this->endStaffGrants($user, $actor);
         }
 
-        CompanyMembers::add($company, [
-            'email' => $user->email,
-            'name' => $user->name,
-            'role' => CompanyRoles::MEMBER,
-        ], $actor);
+        CompanyMembers::assignToProvider($company, $user, $actor, $asAdmin);
 
         $this->record($user->id, 'assigned_service_provider', $company->name);
         if ($wasPending) {

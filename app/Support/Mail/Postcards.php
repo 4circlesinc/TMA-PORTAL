@@ -395,6 +395,47 @@ class Postcards
         ]);
     }
 
+    /**
+     * Told when an account is assigned to a CIP service provider from Users.
+     *
+     * Four templates, never one combined notice: first assignment as admin or
+     * contact, and a move to a different firm as admin or contact.
+     */
+    public static function serviceProviderAssigned(
+        bool $asAdmin,
+        bool $switched,
+        ?string $name,
+        string $companyName,
+        string $url,
+        ?string $by = null,
+        ?string $previousCompany = null,
+    ): Postcard {
+        $key = match (true) {
+            $asAdmin && $switched => 'service-provider-admin-switched',
+            $asAdmin => 'service-provider-admin-added',
+            $switched => 'service-provider-contact-switched',
+            default => 'service-provider-contact-added',
+        };
+        $role = $asAdmin ? 'Service Provider admin' : 'service provider contact';
+
+        return self::postcard($key, [
+            'name' => $name,
+            'company' => $companyName,
+            'addedBy' => $switched ? null : $by,
+            'switchedBy' => $switched ? $by : null,
+            'previousCompany' => $previousCompany,
+            'url' => $url,
+        ], [
+            'url' => $url,
+            'details' => array_values(array_filter([
+                ['Company', e($companyName)],
+                ['Your role', e($role)],
+                $previousCompany ? ['Previous firm', e($previousCompany)] : null,
+                $by ? [$switched ? 'Switched by' : 'Added by', e($by)] : null,
+            ])),
+        ]);
+    }
+
     /** Told to someone whose company access has just been taken away. */
     public static function companyMemberRemoved(
         ?string $name,
