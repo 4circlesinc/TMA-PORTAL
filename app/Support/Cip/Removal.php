@@ -229,7 +229,19 @@ class Removal
      */
     public static function recycledFolderIds(): array
     {
-        $personFolders = CipPerson::onlyTrashed()->whereNotNull('folder_id')->pluck('folder_id');
+        // Both of a person's repositories: the package folder and the one
+        // under Post-Approval Documents. A person holds two folders now, and
+        // recycling only the first left the other loose in the bin's shadow.
+        $personFolders = CipPerson::onlyTrashed()
+            ->whereNotNull('folder_id')
+            ->pluck('folder_id')
+            ->merge(
+                CipPerson::onlyTrashed()
+                    ->whereNotNull('post_approval_folder_id')
+                    ->pluck('post_approval_folder_id')
+            )
+            ->unique()
+            ->values();
         $postApproval = CipApplication::onlyTrashed()
             ->whereNotNull('post_approval_folder_id')
             ->pluck('post_approval_folder_id');
@@ -271,8 +283,12 @@ class Removal
 
         $ids = [];
         foreach ($application->people as $person) {
-            if (self::isOwnedFolder($person->folder_id, $clientFolderId)) {
-                $ids[] = $person->folder_id;
+            // The package folder and the post-approval one both belong to the
+            // person, so a deleted file takes both with it.
+            foreach ([$person->folder_id, $person->post_approval_folder_id] as $folderId) {
+                if (self::isOwnedFolder($folderId, $clientFolderId)) {
+                    $ids[] = $folderId;
+                }
             }
         }
 

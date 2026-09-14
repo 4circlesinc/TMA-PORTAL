@@ -437,6 +437,13 @@ class Tree
 
     /**
      * One person's folder inside the post-approval tree.
+     *
+     * The id is the link, not the name. Finding it by name alone is what let
+     * one file grow a hundred person folders: SharePoint renames a colliding
+     * push to "Dependent 1 39" ({@see Drive::createFolder}'s conflictBehavior)
+     * and the inbound sync writes that name onto the portal row, so the next
+     * provision no longer recognised the folder and made another. Remembering
+     * which folder is whose ends that, whatever the name says today.
      */
     public static function postApprovalPersonFolder(
         CipPerson $person,
@@ -453,10 +460,51 @@ class Tree
             $postRoot = self::provisionPostApproval($person->application, $actor);
         }
 
-        $folder = self::childNamed($postRoot, self::folderName($person), $actor);
+        $name = self::folderName($person);
+
+        if ($person->post_approval_folder_id
+            && $folder = Folder::find($person->post_approval_folder_id)) {
+            // Renamed remotely, or renumbered here: the folder is still theirs.
+            if ($folder->name !== $name) {
+                $folder->forceFill(['name' => $name])->save();
+            }
+            self::provisionPackFolders($folder, $actor);
+
+            return $folder;
+        }
+
+        $folder = self::childNamed($postRoot, $name, $actor);
+        $person->forceFill(['post_approval_folder_id' => $folder->id])->save();
         self::provisionPackFolders($folder, $actor);
 
         return $folder;
+    }
+
+    /**
+     * The person-folder name this one is a numbered copy of, if it is one.
+     *
+     * "Dependent 1 39" and "Main Applicant 44" are the same folder as
+     * "Dependent 1" and "Main Applicant": SharePoint appends the number when a
+     * pushed folder collides with one already there. Deliberately NOT part of
+     * {@see self::canonicalDrawerName}, which answers about the shared drawers
+     * and must keep saying "no" for a person's folder.
+     */
+    public static function canonicalPersonName(string $name): ?string
+    {
+        $name = trim($name);
+
+        foreach (['Main Applicant', 'Sponsor'] as $label) {
+            if (preg_match('/^'.preg_quote($label, '/').'(?:\s+\(?\d+\)?)?$/iu', $name)) {
+                return $label;
+            }
+        }
+
+        // "Dependent 2" keeps its own number; only a SECOND one is the copy.
+        if (preg_match('/^Dependent\s+(\d+)(?:\s+\(?\d+\)?)?$/iu', $name, $m)) {
+            return 'Dependent '.$m[1];
+        }
+
+        return null;
     }
 
     /**
@@ -675,14 +723,19 @@ class Tree
         self::syncClientName($application, force: true);
 
         foreach ($application->people as $person) {
-            if (! $person->folder_id) {
-                continue;
-            }
             $person->setRelation('application', $application);
-            $folder = Folder::find($person->folder_id);
             $name = self::folderName($person);
-            if ($folder && $folder->name !== $name) {
-                $folder->forceFill(['name' => $name])->save();
+
+            // Both trees answer to the same numbering: a dependant who becomes
+            // the first is "Dependent 1" in the package and in post-approval.
+            foreach ([$person->folder_id, $person->post_approval_folder_id] as $folderId) {
+                if (! $folderId) {
+                    continue;
+                }
+                $folder = Folder::find($folderId);
+                if ($folder && $folder->name !== $name) {
+                    $folder->forceFill(['name' => $name])->save();
+                }
             }
         }
     }

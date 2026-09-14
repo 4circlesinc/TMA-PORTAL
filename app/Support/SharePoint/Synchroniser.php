@@ -953,6 +953,17 @@ class Synchroniser
     private static function portalDrawerName(Folder $folder, string $incoming): string
     {
         $canonical = Tree::canonicalDrawerName($folder->name) ?? Tree::canonicalDrawerName($incoming);
+
+        /*
+         * Person folders wear the same suffix for the same reason, and copying
+         * it back renamed "Dependent 1" to "Dependent 1 39" on every sync while
+         * the next provision minted a fresh one beside it. The tree is the
+         * portal's to name, so a person's folder keeps the name it has.
+         */
+        if ($canonical === null && Tree::canonicalPersonName($folder->name) !== null) {
+            return $folder->name;
+        }
+
         if ($canonical === null) {
             return $incoming;
         }
