@@ -86,11 +86,13 @@ class CompanyMemberController extends Controller
             'role' => $asProviderAdmin ? CompanyRoles::MEMBER : $data['role'],
             'is_primary' => $asProviderAdmin ? false : $request->boolean('primary'),
             'client_id' => $client?->id,
-        ], $asProviderAdmin ? [] : $this->abilityOverrides($data['abilities'] ?? [])), $request->user());
+        ], $asProviderAdmin ? [] : $this->abilityOverrides($data['abilities'] ?? [])), $request->user(), notify: ! $asProviderAdmin);
 
         $invitation = null;
         if ($shouldInvite && ! $member->hasLiveAccount()) {
             $invitation = CompanyMembers::invite($company, $member, $request->user());
+        } elseif ($asProviderAdmin && $member->hasLiveAccount()) {
+            CompanyMembers::notifyProviderContactAdded($company, $member, $request->user());
         }
 
         $members = $this->present($company);

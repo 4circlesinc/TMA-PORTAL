@@ -47,6 +47,8 @@ window.TMAI18nDict = {
     "Disable link": "Désactiver le lien", "Leave group": "Quitter le groupe",
     "Rename group": "Renommer le groupe", "Clear messages": "Effacer les messages",
     "Add people": "Ajouter des personnes", "Add person": "Ajouter une personne",
+    "Add contact": "Ajouter un contact", "Contact email": "E-mail du contact",
+    "Contact added": "Contact ajouté",
     "Add people or groups": "Ajouter des personnes ou des groupes", "Voice call": "Appel vocal",
     "Sign out": "Se déconnecter", "Keep this": "Conserver ceci", "Restore this": "Restaurer ceci",
     "Your version": "Votre version", "Tap to remove": "Touchez pour retirer",

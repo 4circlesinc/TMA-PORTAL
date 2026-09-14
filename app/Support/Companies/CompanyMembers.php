@@ -351,6 +351,21 @@ final class CompanyMembers
         );
     }
 
+    /**
+     * A Service Provider admin adding an existing portal account at their
+     * firm. Same added-as-contact letter as the Users-page assignment, never
+     * the generic company-member copy.
+     */
+    public static function notifyProviderContactAdded(Company $company, CompanyMember $member, User $by): void
+    {
+        $user = $member->user;
+        if (! $user) {
+            return;
+        }
+
+        self::mailProviderAssigned($company, $user, $by, asAdmin: false, switched: false, previousCompany: null);
+    }
+
     /** Exactly one primary contact per company. */
     public static function makePrimary(Company $company, CompanyMember $member): void
     {
@@ -501,8 +516,10 @@ final class CompanyMembers
     }
 
     /**
-     * Bell + postcard for a Users-page assignment to a service provider.
-     * Added and switched each have their own admin and contact templates.
+     * Bell + postcard when someone is placed at a service provider — from
+     * the Users page, or when a Service Provider admin adds an existing
+     * contact. Added and switched each have their own admin and contact
+     * templates.
      */
     private static function mailProviderAssigned(
         Company $company,

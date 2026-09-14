@@ -457,7 +457,7 @@ final class Knowledge
                 'keywords' => ['invite', 'service provider', 'provider access', 'new service provider'],
                 'cipOnly' => true,
                 'staffOnly' => true,
-                'answer' => "Two steps. Do not add them on Users.\n\n1. Register the firm: [CIP Applications](/citizenship-applications) → Create New Application → **New service provider** → name → Create.\n2. Invite people: administrators open the provider → **Access** → email → Add (toast: Invitation sent). A CRO uses **Invite to portal** on the contact instead.\n\nThey arrive as **Client** accounts linked to that firm. They see that provider’s CIP files — not Users, not CIP Console, not other firms.",
+                'answer' => "Two steps. Do not add them on Users.\n\n1. Register the firm: [CIP Applications](/citizenship-applications) → Create New Application → **New service provider** → name → Create.\n2. Invite people. TMA administrators open the provider → **Access** → email → Add (toast: Invitation sent). A CRO uses **Invite to portal** on the contact instead. A Service Provider admin opens their firm → **Add contact** (or Access → contact email).\n\nThey arrive as **Client** accounts linked to that firm. They see that provider’s CIP files — not Users, not CIP Console, not other firms.",
             ],
             [
                 'id' => 'provider-copies',

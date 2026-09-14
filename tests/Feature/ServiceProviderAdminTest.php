@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Mail\Postcard;
 use App\Models\CipProvider;
 use App\Models\Company;
 use App\Models\CompanyMember;
@@ -234,6 +235,82 @@ class ServiceProviderAdminTest extends TestCase
 
         $this->assertSame(0, CompanyMember::query()->where('uuid', $uuid)->count());
         $this->assertSame('cancelled', Invitation::first()->status);
+    }
+
+    public function test_inviting_a_new_address_sends_an_invitation_not_the_added_letter(): void
+    {
+        $tma = $this->user(Role::ADMINISTRATOR);
+        [$company] = $this->providerFirm();
+        $spAdmin = $this->user(Role::SERVICE_PROVIDER_ADMIN, [
+            'email' => 'gil@galaxy.example',
+            'first_name' => 'Gil',
+        ]);
+        $this->attach($company, $spAdmin, $tma);
+        Mail::fake();
+
+        $this->actingAs($spAdmin)->postJson("/portal/companies/{$company->uid}/members", [
+            'name' => 'Dana Reed',
+            'email' => 'dana@galaxy.example',
+        ])->assertCreated()
+            ->assertJsonPath('member.role', 'member');
+
+        Mail::assertSent(Postcard::class, 1);
+        Mail::assertSent(Postcard::class, function (Postcard $mail) {
+            return $mail->hasTo('dana@galaxy.example')
+                && str_contains(strtolower($mail->subjectLine), 'invited');
+        });
+        Mail::assertNotSent(Postcard::class, function (Postcard $mail) {
+            return str_contains($mail->subjectLine, 'You have been added')
+                || str_contains($mail->subjectLine, 'You now have access');
+        });
+    }
+
+    public function test_adding_an_existing_account_sends_the_contact_added_letter(): void
+    {
+        $tma = $this->user(Role::ADMINISTRATOR);
+        [$company] = $this->providerFirm();
+        $spAdmin = $this->user(Role::SERVICE_PROVIDER_ADMIN, [
+            'email' => 'gil@galaxy.example',
+            'first_name' => 'Gil',
+        ]);
+        $this->attach($company, $spAdmin, $tma);
+        $contact = $this->user(Role::CLIENT, [
+            'email' => 'dana@galaxy.example',
+            'name' => 'Dana Reed',
+            'first_name' => 'Dana',
+        ]);
+        Mail::fake();
+
+        $this->actingAs($spAdmin)->postJson("/portal/companies/{$company->uid}/members", [
+            'name' => 'Dana Reed',
+            'email' => $contact->email,
+        ])->assertCreated()
+            ->assertJsonPath('member.role', 'member')
+            ->assertJsonPath('invitation', null);
+
+        Mail::assertSent(Postcard::class, 1);
+        Mail::assertSent(Postcard::class, function (Postcard $mail) {
+            return $mail->hasTo('dana@galaxy.example')
+                && str_contains($mail->subjectLine, 'You have been added')
+                && str_contains($mail->subjectLine, 'service provider contact');
+        });
+        Mail::assertNotSent(Postcard::class, function (Postcard $mail) {
+            return str_contains($mail->subjectLine, 'You now have access')
+                || str_contains($mail->subjectLine, 'Service Provider admin')
+                || str_contains(strtolower($mail->subjectLine), 'switched');
+        });
+
+        $this->assertDatabaseHas('portal_notifications', [
+            'user_id' => $contact->id,
+            'type' => 'company.member_added',
+        ]);
+        $this->assertTrue(
+            CompanyMember::query()
+                ->where('company_id', $company->id)
+                ->where('user_id', $contact->id)
+                ->current()
+                ->exists()
+        );
     }
 
     public function test_they_cannot_remove_themselves(): void

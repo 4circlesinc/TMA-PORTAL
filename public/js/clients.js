@@ -211,7 +211,7 @@
           || tab.id === 'closed') {
           return true;
         }
-        // Service Provider admins manage invitations from their firm card.
+        // Service Provider admins add contacts from their firm card.
         return tab.id === 'providers' && isServiceProviderAdmin();
       });
     }
@@ -852,6 +852,27 @@
 
   function canManageCompanyAccess() {
     return isClientsAdmin() || isServiceProviderAdmin();
+  }
+
+  function isProviderAdminViewer() {
+    return isServiceProviderAdmin() && !isClientsAdmin();
+  }
+
+  /* Toolbar / row menu "Add contact" lands on the Access email field once
+     that form is on screen. The field is omitted while members are loading. */
+  function maybeFocusMemberEmail(root, state) {
+    if (!state || !state.focusMemberEmail) return;
+    var emailEl = root && root.querySelector('[data-company-member-email]');
+    if (!emailEl) return;
+    state.focusMemberEmail = false;
+    window.requestAnimationFrame(function () {
+      try {
+        emailEl.focus();
+        if (typeof emailEl.scrollIntoView === 'function') {
+          emailEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+      } catch (e) { /* unmounted */ }
+    });
   }
 
   function signedInEmail() {
@@ -5152,7 +5173,9 @@
 
   function renderCompanyProfileToolbar(company) {
     if (!company) return '';
-    var peopleCount = (company.people || []).length;
+    var peopleCount = isProviderAdminViewer()
+      ? (company.memberCount || 0)
+      : (company.people || []).length;
     var staffActions = isClientsAdmin()
       ? '<button type="button" class="tma-dash__clients-edit-btn" data-clients-edit-company>' +
         '<img src="' + ICONS.PencilSimple + '" alt=""><span>Edit</span></button>' +
@@ -5160,7 +5183,10 @@
         '<img src="' + ICONS.Plus + '" alt=""><span>Add person</span></button>' +
         '<button type="button" class="tma-dash__clients-edit-btn" data-clients-delete-company aria-label="Delete service provider">' +
         '<img src="' + ICONS.Trash + '" alt=""></button>'
-      : '';
+      : (isServiceProviderAdmin()
+        ? '<button type="button" class="tma-dash__clients-message-btn" data-clients-add-contact>' +
+          '<img src="' + ICONS.Plus + '" alt=""><span>Add contact</span></button>'
+        : '');
     return (
       '<div class="tma-dash__clients-profile-toolbar">' +
       '<div class="tma-dash__clients-profile-head">' +
@@ -5742,9 +5768,11 @@
           })
         : '') +
       companyCard('Access', renderCompanyMembersBlock(state, company), { half: true }) +
-      companyCard('Provider contacts', renderCompanyPeople(company), {
-        half: true, count: (company.people || []).length,
-      }) +
+      (isProviderAdminViewer()
+        ? ''
+        : companyCard('Provider contacts', renderCompanyPeople(company), {
+            half: true, count: (company.people || []).length,
+          })) +
       companyCard('Assigned staff', renderCompanyStaffBlock(state, company), { half: true }) +
       '</div></div></div>'
     );
@@ -5908,8 +5936,13 @@
      */
     var form = canManage && !loading
       ? '<div class="tma-dash__clients-assign-form">' +
-        '<input class="tma-dash__clients-field-input" type="email" placeholder="Email address" data-company-member-email aria-label="Member email">' +
-        '<button type="button" class="tma-dash__clients-assign-btn" data-company-member-add>Add</button>' +
+        '<input class="tma-dash__clients-field-input" type="email" placeholder="' +
+          (isProviderAdminViewer() ? 'Contact email' : 'Email address') +
+          '" data-company-member-email aria-label="' +
+          (isProviderAdminViewer() ? 'Contact email' : 'Member email') + '">' +
+        '<button type="button" class="tma-dash__clients-assign-btn" data-company-member-add>' +
+          (isProviderAdminViewer() ? 'Add contact' : 'Add') +
+        '</button>' +
         '</div>'
       : '';
 
@@ -10508,6 +10541,13 @@
   }
 
   function clientsContextItems(kind, extra, clientUid) {
+    if (kind === 'company' && isProviderAdminViewer()) {
+      return [
+        { act: 'open', label: 'Open', icon: 'ArrowUpRight' },
+        { act: 'add-contact', label: 'Add contact', icon: 'Plus' },
+      ];
+    }
+
     var items = [
       { act: 'open', label: 'Open', icon: 'ArrowUpRight' },
       // On section 8's table the row IS an application, so Edit means the
@@ -12457,6 +12497,10 @@
         state.prefillCompanyId = id;
         return navigate('add');
       }
+      if (act === 'add-contact') {
+        state.focusMemberEmail = true;
+        return navigate('company', null, { companyId: id });
+      }
       if (act === 'delete') {
         resolveCompany(id).then(function (company) {
           if (!company) { clientsToast('Could not open this service provider', 'negative'); return; }
@@ -13611,6 +13655,14 @@
       });
     }
 
+    var addContactBtn = unwiredClientsChrome(root, '[data-clients-add-contact]');
+    if (addContactBtn) {
+      addContactBtn.addEventListener('click', function () {
+        state.focusMemberEmail = true;
+        maybeFocusMemberEmail(root, state);
+      });
+    }
+
     /*
      * The code follows the name until somebody takes it over.
      *
@@ -13787,9 +13839,13 @@
           invite: true,
         }).then(function (res) {
           var sent = !!(res && res.invitation);
-          clientsToast(sent ? 'Invitation sent' : 'Member added', 'positive');
+          var added = isProviderAdminViewer() ? 'Contact added' : 'Member added';
+          clientsToast(sent ? 'Invitation sent' : added, 'positive');
           if (emailEl) emailEl.value = '';
           memberAdd.disabled = false;
+          var members = res && res.members;
+          var company = companyFor(state.companyId);
+          if (company && members) company.memberCount = members.length;
           refreshCompanyPanels();
         }).catch(function (err) {
           memberAdd.disabled = false;
@@ -13798,6 +13854,8 @@
         });
       });
     }
+
+    maybeFocusMemberEmail(root, state);
 
     MORPH.unwired(root, '[data-company-member-invite]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -14734,6 +14792,7 @@
       companyStaff: [],
       companyStaffAssignable: [],
       companyMembersLoading: false,
+      focusMemberEmail: false,
       companyStaffLoading: false,
       companyPanelsFor: null,
       listScrollTop: 0,
