@@ -2,11 +2,14 @@
 
 namespace App\Support\Cip;
 
+use App\Models\CipApplicationAssignment;
 use App\Models\CipProvider;
 use App\Models\ClientAssignment;
 use App\Models\User;
 use App\Support\Access\Role;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The values section 8's filter menu offers, and how many rows sit behind each one.
@@ -47,7 +50,7 @@ use Illuminate\Database\Eloquent\Builder;
  *
  * Same reason {@see Buckets} gives. An officer who takes a file and watches
  * their own count sit still concludes the portal is broken, and the whole set
- * costs two grouped counts.
+ * costs a handful of grouped counts.
  */
 class Facets
 {
@@ -74,10 +77,12 @@ class Facets
      *
      * WHO COUNTS AS HOLDING IT
      *
-     * Whoever is on the client, which is the one list section 8's Assigned To column
-     * draws and the profile's Assigned tab edits. The menu and the column used
-     * to read different tables, and a facet that counts differently from the
-     * cell beside it is the one thing this class exists to prevent.
+     * The same people section 8's Assigned To column names: whoever is live
+     * on the client, or — when that list is empty — whoever holds the
+     * application's own assignment. The cell falls back that way so an
+     * officer who was handed the file (intake, or a filing with no hub
+     * record yet) is not drawn as Unassigned; the menu has to ask the same
+     * question or ticking Unassigned would open onto rows that name someone.
      *
      * The unassigned row leads, because "what has nobody picked up" is the
      * question an administrator opens this menu to ask, and it is the one
@@ -94,10 +99,7 @@ class Facets
          * behind every load of a table that already has eleven thousand rows
          * in production, the shape this module was redesigned to avoid.
          */
-        $held = self::liveAssignments(ApplicationScope::query($reader))
-            ->selectRaw('client_assignments.user_id, COUNT(DISTINCT cip_applications.id) as total')
-            ->groupBy('client_assignments.user_id')
-            ->pluck('total', 'user_id');
+        $held = self::countsHeld($reader);
 
         /*
          * The names, in one more query rather than joined into the count and
@@ -248,7 +250,7 @@ class Facets
 
         return $query->where(function (Builder $q) use ($wantsUnassigned, $ids) {
             if ($ids !== []) {
-                $q->orWhereHas('client.assignments', fn ($a) => $a->live()->whereIn('user_id', $ids));
+                $q->orWhere(fn (Builder $held) => self::whereHeldBy($held, $ids));
             }
 
             if ($wantsUnassigned) {
@@ -281,11 +283,36 @@ class Facets
     /* ── internals ─────────────────────────────────── */
 
     /**
-     * The scoped listing joined to the live assignments on each client.
+     * How many applications each officer's name would appear on in the column.
      *
-     * The same rows section 8's Assigned To column draws, one list, shared with the
-     * profile's Assigned tab, so a count here and the names in the cell
-     * cannot come apart.
+     * One round trip, not one per officer, and not one join of both tables:
+     * the column prefers the client's list, and a file that has both would
+     * otherwise count the CIP officer for a cell that does not name them.
+     * UNION ALL of the two grouped counts, then summed, so an officer with
+     * some files on the client and others only on the CIP row still adds up.
+     *
+     * @return Collection<int, int>
+     */
+    private static function countsHeld(User $reader): Collection
+    {
+        $fromClient = self::liveClientAssignments(ApplicationScope::query($reader))
+            ->selectRaw('client_assignments.user_id as holder_id, COUNT(DISTINCT cip_applications.id) as total')
+            ->groupBy('client_assignments.user_id');
+
+        $fromCip = self::liveCipFallbackAssignments(ApplicationScope::query($reader))
+            ->selectRaw('cip_application_assignments.user_id as holder_id, COUNT(DISTINCT cip_applications.id) as total')
+            ->groupBy('cip_application_assignments.user_id');
+
+        return DB::query()
+            ->fromSub($fromClient->toBase()->unionAll($fromCip->toBase()), 'held')
+            ->selectRaw('holder_id, SUM(total) as total')
+            ->groupBy('holder_id')
+            ->pluck('total', 'holder_id')
+            ->mapWithKeys(fn ($total, $id) => [(int) $id => (int) $total]);
+    }
+
+    /**
+     * The scoped listing joined to the live assignments on each client.
      *
      * A join rather than whereHas because this counts rather than filters, and
      * the count is per person: the grouped total needs a row per (application,
@@ -293,7 +320,7 @@ class Facets
      * the application id is what keeps a file two people are on from counting
      * twice for either of them.
      */
-    private static function liveAssignments(Builder $query): Builder
+    private static function liveClientAssignments(Builder $query): Builder
     {
         return $query
             ->join('clients', 'clients.id', '=', 'cip_applications.client_id')
@@ -304,6 +331,22 @@ class Facets
                         ->orWhere('client_assignments.starts_at', '<=', now()))
                     ->where(fn ($q) => $q->whereNull('client_assignments.ends_at')
                         ->orWhere('client_assignments.ends_at', '>', now()));
+            });
+    }
+
+    /**
+     * Files whose Assigned To cell falls through to the application's own
+     * officers: no live client assignment, so the CIP row is what the column
+     * actually draws.
+     */
+    private static function liveCipFallbackAssignments(Builder $query): Builder
+    {
+        return $query
+            ->whereDoesntHave('client.assignments', fn ($a) => $a->live())
+            ->join('cip_application_assignments', function ($join) {
+                $join->on('cip_application_assignments.application_id', '=', 'cip_applications.id')
+                    ->where('cip_application_assignments.status', CipApplicationAssignment::STATUS_ACTIVE)
+                    ->whereNull('cip_application_assignments.ended_at');
             });
     }
 
@@ -319,9 +362,32 @@ class Facets
         return self::whereNobodyHolds(ApplicationScope::query($reader))->count();
     }
 
-    /** The applications nobody is on. */
+    /**
+     * Files whose Assigned To cell would name one of these people.
+     *
+     * Client staff first, matching the column: a file that already names
+     * people from the hub does not also pick up a CIP officer the cell is
+     * not showing. The CIP clause is only the fallback, the same empty-client
+     * list the column uses.
+     *
+     * @param  list<int>  $ids
+     */
+    private static function whereHeldBy(Builder $query, array $ids): Builder
+    {
+        return $query->where(function (Builder $q) use ($ids) {
+            $q->whereHas('client.assignments', fn ($a) => $a->live()->whereIn('user_id', $ids))
+                ->orWhere(function (Builder $fallback) use ($ids) {
+                    $fallback->whereDoesntHave('client.assignments', fn ($a) => $a->live())
+                        ->whereHas('assignments', fn ($a) => $a->live()->whereIn('user_id', $ids));
+                });
+        });
+    }
+
+    /** The applications nobody is on — not on the client, and not on the file. */
     private static function whereNobodyHolds(Builder $query): Builder
     {
-        return $query->whereDoesntHave('client.assignments', fn ($a) => $a->live());
+        return $query
+            ->whereDoesntHave('client.assignments', fn ($a) => $a->live())
+            ->whereDoesntHave('assignments', fn ($a) => $a->live());
     }
 }

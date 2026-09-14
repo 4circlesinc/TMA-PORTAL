@@ -11,10 +11,11 @@ use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
+use App\Support\Cip\Assignments;
 use App\Support\Cip\Buckets;
 use App\Support\Cip\Facets;
 use App\Support\Cip\Status;
-use App\Support\Clients\Assignments;
+use App\Support\Clients\Assignments as ClientAssignments;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -216,7 +217,7 @@ class CipFacetsTest extends TestCase
          * assignment ended is exactly what "nobody has picked this up" means,
          * and the row stays in the table as history rather than being deleted.
          */
-        Assignments::end(
+        ClientAssignments::end(
             $handedBack->client,
             $handedBack->client->assignments()->live()->first(),
             $admin,
@@ -228,6 +229,72 @@ class CipFacetsTest extends TestCase
 
         $rows = $this->listing($admin, ['assignee' => Facets::UNASSIGNED]);
         $this->assertSame(1, $rows['total']);
+    }
+
+    /**
+     * The column names a CIP officer when the client has nobody on it.
+     *
+     * Intake hands the file to the officer who filed it without also writing
+     * a hub assignment, and a file with no client yet has only the CIP row.
+     * Unassigned used to ask only the client's list, so those rows appeared
+     * under Unassigned while Assigned To named someone.
+     */
+    public function test_unassigned_does_not_open_a_file_the_column_already_names(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com');
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+
+        $held = $this->application($provider, $admin);
+        Assignments::assign($held, $rita, $admin);
+        $this->application($provider, $admin);
+
+        $body = $this->listing($admin);
+        $named = collect($body['applications'])->first(
+            fn (array $row) => ($row['assignedTo'][0]['name'] ?? null) !== null,
+        );
+        $this->assertSame('Rita', $named['assignedTo'][0]['name'] ?? null);
+
+        $counts = $this->facet($body, 'assignees');
+        $this->assertSame(1, $counts[Facets::UNASSIGNED]);
+        $this->assertSame(1, $counts[(string) $rita->id]);
+
+        $unassigned = $this->listing($admin, ['assignee' => Facets::UNASSIGNED]);
+        $this->assertSame(1, $unassigned['total']);
+        $this->assertSame([], $unassigned['applications'][0]['assignedTo']);
+
+        $ritas = $this->listing($admin, ['assignee' => (string) $rita->id]);
+        $this->assertSame(1, $ritas['total']);
+        $this->assertSame('Rita', $ritas['applications'][0]['assignedTo'][0]['name'] ?? null);
+    }
+
+    /**
+     * A CIP row does not leak into the menu when the column is already
+     * drawing the client's staff: the cell names those people, not the
+     * officer on the file.
+     */
+    public function test_the_clients_staff_win_when_both_lists_are_filled(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com');
+        $colin = $this->user(Role::COMPLIANCE_OFFICER, 'colin@example.com');
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+
+        $application = $this->application($provider, $admin);
+        $this->putOn($application, $rita, $admin);
+        Assignments::assign($application, $colin, $admin);
+
+        $body = $this->listing($admin);
+        $this->assertSame('Rita', $body['applications'][0]['assignedTo'][0]['name'] ?? null);
+
+        $counts = $this->facet($body, 'assignees');
+        $this->assertSame(0, $counts[Facets::UNASSIGNED] ?? 0);
+        $this->assertSame(1, $counts[(string) $rita->id]);
+        $this->assertSame(0, $counts[(string) $colin->id]);
+
+        $this->assertSame(1, $this->listing($admin, ['assignee' => (string) $rita->id])['total']);
+        $this->assertSame(0, $this->listing($admin, ['assignee' => (string) $colin->id])['total']);
+        $this->assertSame(0, $this->listing($admin, ['assignee' => Facets::UNASSIGNED])['total']);
     }
 
     public function test_several_ticks_are_an_or_and_two_fields_are_an_and(): void
