@@ -15,7 +15,9 @@ use App\Support\Access\Role;
 use App\Support\Cip\ApplicantType;
 use App\Support\Cip\Applications;
 use App\Support\Cip\CorRequirements;
+use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\Pack;
+use App\Support\Cip\PassportRequirements;
 use App\Support\Cip\Phase;
 use App\Support\Cip\PostApproval;
 use App\Support\Cip\Tree;
@@ -245,7 +247,7 @@ class CipPostApprovalTreeTest extends TestCase
     {
         ['staff' => $staff, 'application' => $application, 'root' => $root] = $this->filed();
         $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
-        $template = $this->postTemplate($main, 'passport_photo', 'Passport photo');
+        $template = $this->postTemplate($main, DocumentTypes::PASSPORT_BIO_PAGE, 'Passport bio page');
         $template->forceFill([
             'at_pre_approval' => true,
             'carry_forward' => true,
@@ -263,7 +265,7 @@ class CipPostApprovalTreeTest extends TestCase
         ]);
         $main->forceFill(['folder_id' => $holding->id])->save();
 
-        $file = $this->fileOn($staff, $holding->id, 'photo.jpg');
+        $file = $this->fileOn($staff, $holding->id, 'bio.pdf');
         $this->slot($application, $main, $template, $file, $staff);
 
         Tree::provisionPostApproval($application->fresh(['people']), $staff);
@@ -271,25 +273,79 @@ class CipPostApprovalTreeTest extends TestCase
         $this->assertSame($holding->id, $file->fresh()->folder_id);
     }
 
-    public function test_a_homeless_passport_photo_lands_in_the_post_approval_person_folder(): void
+    public function test_a_homeless_passport_photo_lands_in_the_passport_folder(): void
     {
         ['staff' => $staff, 'application' => $application] = $this->filed();
         $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
         $this->assertNull($main->folder_id, 'a file opened in post-approval has no original person folder');
 
-        $template = $this->postTemplate($main, 'passport_photo', 'Passport photo');
-        $template->forceFill([
-            'at_pre_approval' => true,
-            'carry_forward' => true,
-            'folder' => null,
-        ])->save();
+        $template = $this->passportPhotoTemplate($main);
 
         $file = $this->fileOn($staff, null, 'ABDEL MADJID DJELOUADJI - Passport photo.jpg');
         $this->slot($application, $main, $template, $file, $staff);
 
         Tree::provisionPostApproval($application->fresh(['people']), $staff);
 
-        $this->assertSame($main->fresh()->post_approval_folder_id, $file->fresh()->folder_id);
+        $this->assertSame($this->passportDrawer($main)->id, $file->fresh()->folder_id);
+    }
+
+    public function test_a_carried_passport_photo_moves_into_the_passport_folder(): void
+    {
+        ['staff' => $staff, 'application' => $application, 'root' => $root] = $this->filed();
+        $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $template = $this->passportPhotoTemplate($main);
+
+        $holding = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Main Applicant',
+            'folder_type' => Folder::TYPE_USER,
+            'parent_id' => $root->id,
+            'client_id' => $root->client_id,
+            'owner_id' => $root->owner_id,
+            'created_by' => $staff->id,
+        ]);
+        $main->forceFill(['folder_id' => $holding->id])->save();
+
+        $file = $this->fileOn($staff, $holding->id, 'ABDEL MADJID DJELOUADJI - Passport photo.jpg');
+        $this->slot($application, $main, $template, $file, $staff);
+
+        Tree::provisionPostApproval($application->fresh(['people']), $staff);
+
+        $this->assertSame($this->passportDrawer($main)->id, $file->fresh()->folder_id);
+    }
+
+    public function test_a_passport_photo_on_the_person_folder_moves_into_the_passport_drawer(): void
+    {
+        ['staff' => $staff, 'application' => $application] = $this->filed();
+        $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $template = $this->passportPhotoTemplate($main);
+
+        $file = $this->fileOn($staff, $main->post_approval_folder_id, 'ABDEL MADJID DJELOUADJI - Passport photo.jpg');
+        $this->slot($application, $main, $template, $file, $staff);
+
+        Tree::provisionPostApproval($application->fresh(['people']), $staff);
+
+        $this->assertSame($this->passportDrawer($main)->id, $file->fresh()->folder_id);
+    }
+
+    private function passportPhotoTemplate(CipPerson $person): CipDocumentRequirement
+    {
+        $template = $this->postTemplate($person, DocumentTypes::PASSPORT_PHOTO, 'Passport photo');
+        $template->forceFill([
+            'at_pre_approval' => true,
+            'carry_forward' => true,
+            'folder' => null,
+        ])->save();
+
+        return $template;
+    }
+
+    private function passportDrawer(CipPerson $person): Folder
+    {
+        return Folder::query()
+            ->where('parent_id', $person->fresh()->post_approval_folder_id)
+            ->where('name', PassportRequirements::FOLDER)
+            ->firstOrFail();
     }
 
     /**

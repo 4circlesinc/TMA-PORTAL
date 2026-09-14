@@ -452,16 +452,18 @@ class DocumentSlots
 
             $template = $slot->requirement ?? self::template($person, $slot->type);
             $belongsInPost = $template !== null && self::filesInPostApprovalFolder($template);
+            $intoPassport = self::isDigitalPassportPhoto($template?->key ?? $slot->type);
             $homeless = collect($files)->contains(fn (FileItem $file) => self::fileHasNoLiveFolder($file));
 
             /*
-             * Carry-forward intake scans (passport photo, bio page) stay in
-             * the original person folder when there is one. A file filed
-             * straight into post-approval has no such folder, so those scans
-             * were attached to the checklist with folder_id NULL and never
-             * appeared in Client documents.
+             * Carry-forward intake scans (bio page, birth certificate) stay
+             * in the original person folder when there is one. Passport
+             * photos are the exception: post-approval files them under the
+             * Passport drawer so Client documents shows them with the pack.
+             * A file opened straight into post-approval has no original
+             * folder, so those scans were attached with folder_id NULL.
              */
-            if (! $belongsInPost && ! $homeless) {
+            if (! $belongsInPost && ! $homeless && ! $intoPassport) {
                 continue;
             }
 
@@ -539,6 +541,20 @@ class DocumentSlots
         $person->loadMissing('application');
         $application = $person->application;
 
+        /*
+         * Digital passport photos still live on the COR checklist (they
+         * carry forward), but the post-approval library files them in the
+         * Passport drawer — the same place as the physical-photo scans.
+         */
+        if (($application?->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL
+            && self::isDigitalPassportPhoto($template?->key)) {
+            $parent = Tree::postApprovalPersonFolder($person, null, $actor);
+
+            return $parent
+                ? Tree::subfolder($parent, PassportRequirements::FOLDER, $actor)->id
+                : $person->folder_id;
+        }
+
         $intoPost = ($application?->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL
             && ($template === null || self::filesInPostApprovalFolder($template));
 
@@ -581,7 +597,8 @@ class DocumentSlots
     /**
      * Post-approval uploads land under the post-approval person folder unless
      * the requirement is only carried forward from pre-approval, in which case
-     * the existing file stays where it was filed.
+     * the existing file stays where it was filed. Digital passport photos are
+     * carried forward on the checklist but still file into the Passport drawer.
      */
     private static function filesInPostApprovalFolder(CipDocumentRequirement $template): bool
     {
@@ -594,6 +611,11 @@ class DocumentSlots
         }
 
         return true;
+    }
+
+    private static function isDigitalPassportPhoto(?string $key): bool
+    {
+        return $key === DocumentTypes::PASSPORT_PHOTO;
     }
 
     /**

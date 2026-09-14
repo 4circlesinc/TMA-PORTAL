@@ -306,6 +306,41 @@ class CipPostApprovalTest extends TestCase
         $this->assertSame($postPersonFolder->id, $slot->file->folder_id);
     }
 
+    public function test_post_approval_passport_photo_upload_lands_in_the_passport_folder(): void
+    {
+        $staff = $this->staff();
+        $application = $this->application($staff);
+        $person = $this->mainApplicant($application);
+
+        $this->template(DocumentTypes::PASSPORT_PHOTO, 'Passport photo', [
+            'at_pre_approval' => true,
+            'at_post_approval' => true,
+            'carry_forward' => true,
+            'folder' => null,
+        ]);
+
+        $application->forceFill([
+            'phase' => Phase::POST_APPROVAL,
+            'post_approval_at' => now(),
+            'status' => Status::GRANTED,
+            'decision' => CipApplication::DECISION_GRANTED,
+        ])->save();
+
+        PostApproval::prepare($application->fresh(['people']), $staff);
+
+        $upload = UploadedFile::fake()->image('photo.jpg', 400, 400);
+        $slot = DocumentSlots::fill(
+            $person->fresh(['application']),
+            DocumentTypes::PASSPORT_PHOTO,
+            $upload,
+            $staff,
+        );
+
+        $drawer = Folder::find($slot->file->folder_id);
+        $this->assertSame(PassportRequirements::FOLDER, $drawer?->name);
+        $this->assertSame($person->fresh()->post_approval_folder_id, $drawer?->parent_id);
+    }
+
     public function test_enter_post_approval_endpoint_requires_grant(): void
     {
         $staff = $this->staff();
