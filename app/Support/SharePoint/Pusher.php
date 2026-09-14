@@ -60,8 +60,24 @@ class Pusher
             $seen[$node->id] = true;
 
             $connection = SharePointConnection::where('folder_id', $node->id)->first();
-            if ($connection) {
-                return $connection->pushesBack() ? $connection : null;
+            if ($connection?->pushesBack()) {
+                return $connection;
+            }
+
+            /*
+             * CIP trees live under Citizenship Applications, whose site
+             * library is switched off. The same folders are already mapped
+             * on the portal OneDrive. A disabled ancestor must not hide
+             * that live mapping or the photos never leave the portal.
+             */
+            $mapped = SharePointItem::query()
+                ->where('folder_id', $node->id)
+                ->with('connection')
+                ->orderBy('id')
+                ->get()
+                ->first(fn (SharePointItem $item) => $item->connection?->pushesBack());
+            if ($mapped?->connection) {
+                return $mapped->connection;
             }
 
             $node = $node->parent;
@@ -449,7 +465,7 @@ class Pusher
             ->where('file_id', $file->id)->first();
 
         if (! $mapping) {
-            return ['status' => 'not-mapped'];
+            return self::pushFile($file);
         }
 
         try {

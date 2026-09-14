@@ -857,6 +857,87 @@ class SharePointSyncTest extends TestCase
         $this->assertSame('not-linked', Pusher::pushFile($loose)['status']);
     }
 
+    public function test_a_disabled_site_connection_does_not_block_a_mapped_drive_push(): void
+    {
+        $this->connection->update(['sync_enabled' => false]);
+
+        $drive = SharePointConnection::create([
+            'uuid' => (string) Str::uuid(),
+            'site_id' => 'od-site',
+            'drive_id' => 'drive-od',
+            'drive_name' => 'OneDrive',
+            'drive_kind' => 'onedrive',
+            'created_by' => $this->owner->id,
+        ]);
+
+        $passport = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Passport',
+            'parent_id' => $this->connection->folder_id,
+            'owner_id' => $this->owner->id,
+            'created_by' => $this->owner->id,
+            'folder_type' => Folder::TYPE_USER,
+        ]);
+
+        SharePointItem::create([
+            'connection_id' => $drive->id,
+            'graph_item_id' => 'od-pass',
+            'graph_parent_id' => 'od-root',
+            'item_type' => 'folder',
+            'folder_id' => $passport->id,
+            'name' => 'Passport',
+            'sync_status' => SharePointItem::SYNCED,
+        ]);
+
+        $path = 'vault/photo.jpg';
+        @mkdir($this->vaultRoot.'/vault', 0775, true);
+        file_put_contents($this->vaultRoot.'/'.$path, 'photo-bytes');
+
+        $file = FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'folder_id' => $passport->id,
+            'name' => 'photo.jpg',
+            'extension' => 'jpg',
+            'mime_type' => 'image/jpeg',
+            'size' => 11,
+            'disk' => 'local',
+            'storage_path' => $path,
+            'owner_id' => $this->owner->id,
+            'uploaded_by' => $this->owner->id,
+            'origin' => 'portal',
+        ]);
+
+        $this->assertSame($drive->id, Pusher::connectionFor($passport)?->id);
+        $this->assertSame('pushed', Pusher::pushFile($file)['status']);
+        $this->assertTrue(
+            SharePointItem::query()->where('file_id', $file->id)->where('connection_id', $drive->id)->exists(),
+        );
+    }
+
+    public function test_moving_an_unmapped_file_uploads_it_instead(): void
+    {
+        $path = 'vault/photo.jpg';
+        @mkdir($this->vaultRoot.'/vault', 0775, true);
+        file_put_contents($this->vaultRoot.'/'.$path, 'photo-bytes');
+
+        $file = Pusher::suspend(fn () => FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'folder_id' => $this->connection->folder_id,
+            'name' => 'photo.jpg',
+            'extension' => 'jpg',
+            'mime_type' => 'image/jpeg',
+            'size' => 11,
+            'disk' => 'local',
+            'storage_path' => $path,
+            'owner_id' => $this->owner->id,
+            'uploaded_by' => $this->owner->id,
+            'origin' => 'portal',
+        ]));
+
+        $this->assertSame('pushed', Pusher::pushMove($file)['status']);
+        $this->assertTrue(SharePointItem::query()->where('file_id', $file->id)->exists());
+    }
+
     public function test_a_one_way_connection_never_pushes_back(): void
     {
         $this->connection->update(['direction' => 'in']);
