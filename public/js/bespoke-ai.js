@@ -2023,6 +2023,15 @@
         '</div>' +
         '<p class="tma-bespoke__banner" data-bespoke-banner>Bespoke AI Assistant isn’t configured for live answers. Navigation and the user guide still work.</p>' +
         '<div class="tma-bespoke__log" data-bespoke-log></div>' +
+        '<div class="tma-bespoke__history" data-bespoke-history-panel hidden>' +
+          '<div class="tma-bespoke__history-head">' +
+            '<p class="tma-bespoke__history-title">Past chats</p>' +
+            '<button type="button" class="tma-bespoke-page__new" data-bespoke-history-new>' +
+              '<img src="' + PLUS + '" alt="" width="14" height="14"> New chat' +
+            '</button>' +
+          '</div>' +
+          '<div class="tma-bespoke-page__list" data-bespoke-history-list></div>' +
+        '</div>' +
         '<div class="sr-only" aria-live="polite" data-bespoke-live></div>' +
         '<div class="tma-bespoke__chips" data-bespoke-chips></div>' +
         '<div class="tma-bespoke__attach" data-bespoke-attach hidden></div>' +
@@ -2085,6 +2094,7 @@
 
   function newWidgetChat() {
     if (!widget) return;
+    showWidgetHistory(false);
     widget.messages = [];
     widget.pending = [];
     renderAttachStrip(widget);
@@ -2093,6 +2103,69 @@
     if (widget.logEl) widget.logEl.innerHTML = '';
     refreshSuggestions(widget);
     if (widget.inputEl) widget.inputEl.focus();
+  }
+
+  /* ── Past chats, inside the launcher ──────────────────────────
+   * The same list the full page shows, over the launcher's own log.
+   * Picking one loads the thread here; the expand button is still the
+   * only way out to /bespoke-ai. */
+  function renderWidgetHistory() {
+    if (!widget || !widget.historyListEl) return;
+    var list = widget.historyListEl;
+    list.innerHTML = '';
+    var rows = widget.conversations || [];
+    if (!rows.length) {
+      var empty = document.createElement('p');
+      empty.className = 'tma-bespoke-page__empty';
+      empty.textContent = 'No past chats yet. Ask a question to start one.';
+      list.appendChild(empty);
+      return;
+    }
+    rows.forEach(function (row) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tma-bespoke-page__item' + (row.uuid === widget.conversationId ? ' is-active' : '');
+      btn.innerHTML =
+        '<span class="tma-bespoke-page__item-title">' + escapeHtml(row.title || 'New chat') + '</span>' +
+        '<span class="tma-bespoke-page__item-time">' + escapeHtml(timeLabel(row.updatedAt)) + '</span>' +
+        '<span class="tma-bespoke-page__item-preview">' + escapeHtml(row.preview || '') + '</span>';
+      btn.addEventListener('click', function () { openWidgetThread(row.uuid); });
+      list.appendChild(btn);
+    });
+  }
+
+  function openWidgetThread(id) {
+    if (!widget || !id) return;
+    api('/portal/bespoke/conversations/' + encodeURIComponent(id)).then(function (data) {
+      var conv = data.conversation || {};
+      widget.conversationId = conv.uuid || id;
+      storeSet(LS_CONV, widget.conversationId);
+      widget.messages = Array.isArray(conv.messages) ? conv.messages.map(function (row) {
+        return { role: row.role, content: row.content, attachments: row.attachments || [] };
+      }) : [];
+      widget.pending = [];
+      renderAttachStrip(widget);
+      paintLog(widget);
+      renderChips(widget, widget.messages.length ? [] : localChips());
+      showWidgetHistory(false);
+      if (widget.inputEl) widget.inputEl.focus();
+    }).catch(function () {
+      showWidgetHistory(false);
+    });
+  }
+
+  function showWidgetHistory(next) {
+    if (!widget || !widget.historyEl) return;
+    widget.historyOpen = !!next;
+    widget.historyEl.hidden = !widget.historyOpen;
+    var btn = host && host.querySelector('[data-bespoke-history]');
+    if (btn) btn.setAttribute('aria-pressed', widget.historyOpen ? 'true' : 'false');
+    if (!widget.historyOpen) return;
+    renderWidgetHistory();
+    api('/portal/bespoke/conversations').then(function (data) {
+      widget.conversations = Array.isArray(data.conversations) ? data.conversations : [];
+      if (widget.historyOpen) renderWidgetHistory();
+    }).catch(function () { /* keep whatever the list already shows */ });
   }
 
   function focusables() {
@@ -2136,6 +2209,7 @@
       return;
     }
     stopDictation(widget);
+    showWidgetHistory(false);
     if (lastFocus && typeof lastFocus.focus === 'function') {
       lastFocus.focus();
     } else if (fab) {
@@ -2227,6 +2301,10 @@
       clipBtn: host.querySelector('[data-bespoke-clip]'),
       fileEl: host.querySelector('[data-bespoke-file]'),
       micBtn: host.querySelector('[data-bespoke-mic]'),
+      historyEl: host.querySelector('[data-bespoke-history-panel]'),
+      historyListEl: host.querySelector('[data-bespoke-history-list]'),
+      historyOpen: false,
+      conversations: [],
       pending: [],
       messages: [],
       conversationId: storeGet(LS_CONV, ''),
@@ -2243,9 +2321,9 @@
     host.querySelector('[data-bespoke-close]').addEventListener('click', function () { setOpen(false); });
     host.querySelector('[data-bespoke-new]').addEventListener('click', newWidgetChat);
     host.querySelector('[data-bespoke-history]').addEventListener('click', function () {
-      setOpen(false);
-      go('/bespoke-ai');
+      showWidgetHistory(!widget.historyOpen);
     });
+    host.querySelector('[data-bespoke-history-new]').addEventListener('click', newWidgetChat);
     host.querySelector('[data-bespoke-expand]').addEventListener('click', function () {
       setOpen(false);
       var id = widget && widget.conversationId && widget.messages.length

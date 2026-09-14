@@ -1381,3 +1381,43 @@ body:has(.tma-dash--bespoke) .tma-bespoke,
     filter: invert(1) brightness(1.6);
   }
 }
+
+/* Past chats inside the launcher: over the log, under the head, so the
+ * reader keeps the clock button they opened it with. */
+.tma-bespoke__head {
+  position: relative;
+  z-index: 3;
+}
+
+.tma-bespoke__history {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-white);
+}
+
+.tma-bespoke__history[hidden] {
+  display: none;
+}
+
+.tma-bespoke__history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-12) var(--space-12) var(--space-8);
+  flex-shrink: 0;
+}
+
+.tma-bespoke__history-title {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+}
