@@ -24,7 +24,11 @@ class EncryptedIdentity implements CastsAttributes
         }
 
         if ($key === 'date_of_birth') {
-            return Carbon::parse($open)->startOfDay();
+            try {
+                return Carbon::parse($open)->startOfDay();
+            } catch (\Throwable) {
+                return null;
+            }
         }
 
         return $open;

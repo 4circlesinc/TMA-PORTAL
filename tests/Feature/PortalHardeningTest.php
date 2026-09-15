@@ -51,6 +51,22 @@ class PortalHardeningTest extends TestCase
         $this->assertSame('1815-12-10', $person->date_of_birth->toDateString());
     }
 
+    public function test_an_unreadable_sealed_dob_reads_as_null_instead_of_throwing(): void
+    {
+        $junk = 'eyJpdiI6IkFBQUFBQUFBQUFBQUFBQUFBQUFBQUE9PSIsInZhbHVlIjoiQkJCQkJCQkJCQkJCQkJCQkJCQkJCQT09IiwibWFjIjoiY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjY2NjYyIsInRhZyI6IiJ9';
+
+        $this->assertNull(IdentityFields::open($junk));
+
+        $person = new CipPerson;
+        $person->setRawAttributes([
+            'date_of_birth' => $junk,
+            'passport_number' => $junk,
+        ]);
+
+        $this->assertNull($person->date_of_birth);
+        $this->assertNull($person->passport_number);
+    }
+
     public function test_security_headers_include_csp_and_permissions_policy(): void
     {
         $response = $this->get(route('login'));

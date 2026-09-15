@@ -38,7 +38,10 @@ final class IdentityFields
         try {
             return Crypt::decryptString($stored);
         } catch (\Throwable) {
-            return $stored;
+            // Ciphertext sealed under another APP_KEY (or corrupted). Returning
+            // the blob used to reach Carbon::parse on DOB columns and take the
+            // whole CIP applications list down with one bad row.
+            return null;
         }
     }
 
