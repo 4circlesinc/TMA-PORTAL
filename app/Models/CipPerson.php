@@ -18,7 +18,7 @@ use Illuminate\Support\Str;
 #[Fillable([
     'uuid', 'application_id', 'role', 'relationship', 'dependent_ordinal',
     'first_name', 'last_name', 'gender', 'date_of_birth', 'country_of_birth',
-    'country_of_residence', 'occupation', 'passport_number', 'folder_id',
+    'country_of_residence', 'nationality', 'occupation', 'passport_number', 'folder_id',
     'post_approval_folder_id',
     'post_approval_status',
     'passport_number_lookup', 'date_of_birth_lookup',
@@ -36,6 +36,12 @@ class CipPerson extends Model
     public const RELATIONSHIP_SPOUSE = 'spouse';
 
     public const RELATIONSHIP_QUALIFIED = 'qualified_dependent';
+
+    public const RELATIONSHIP_SON = 'son';
+
+    public const RELATIONSHIP_DAUGHTER = 'daughter';
+
+    public const RELATIONSHIP_OTHER = 'other_qualified_dependent';
 
     /**
      * A person changing changes the application they are on.

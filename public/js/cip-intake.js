@@ -102,6 +102,7 @@
   }
 
   function sectionForPath(path) {
+    if (isAddOnIntake()) return addonSection();
     if (path.indexOf('sponsor.') === 0) return 'sponsor';
     var match = path.match(/^dependents\.(\d+)\./);
     if (match) return dependentSection(Number(match[1]));
@@ -129,8 +130,10 @@
     return {
       providerId: '', firstName: '', lastName: '', gender: '',
       dateOfBirth: '', countryOfBirth: '', countryOfResidence: '',
-      occupation: '', passportNumber: '',
+      nationality: '', occupation: '', passportNumber: '',
       investmentType: '', investmentTypeOther: '', sponsored: '',
+      parentCipNumber: '', parentCorNumber: '', parentApplicantName: '',
+      addonType: '', relationship: '',
     };
   }
 
@@ -160,8 +163,12 @@
        URL and leave the row at Draft. Filing still posts to create, and
        names this row so the photo already kept on it counts as answered. */
     draftId: null,
-    /* pre_approval or post_approval for a new filing; null when editing. */
+    /* pre_approval, post_approval or add_on for a new filing; null when editing. */
     phase: 'pre_approval',
+    /* Granted parent resolved from CIP + COR on an Add-On filing. */
+    parent: null,
+    parentError: '',
+    openAddOn: null,
     /* The filed record the form was opened on. Kept so a save that has to be
        parked offline can say what the record will look like once it lands. */
     record: null,
@@ -223,6 +230,11 @@
     investmentType: 'Investment type', investmentTypeOther: 'Specify investment type',
     sponsored: 'Sponsored', relationship: 'Relationship',
     cipNumber: 'CIP application number',
+    parentCipNumber: 'CIP application number',
+    parentCorNumber: 'Certificate of Registration (COR) number',
+    parentApplicantName: 'Main applicant name',
+    addonType: 'Add-On type',
+    nationality: 'Nationality',
   };
 
   /* The label for a path: the template's wording where there is one, else
@@ -240,6 +252,10 @@
   function photoRequiredFor(path) {
     var settings = state.options && state.options.photoRequired;
     if (path === 'passportPhoto') {
+      if (isAddOnIntake()) {
+        var section = addonSection();
+        return settings ? !!settings[section] : true;
+      }
       return settings ? !!settings.principal : true;
     }
 
@@ -297,6 +313,16 @@
 
   /* Every path this form must have an answer for, given what it now says. */
   function requiredPaths() {
+    if (isAddOnIntake()) {
+      var addOnPaths = ['parentCipNumber', 'parentCorNumber', 'addonType',
+        'firstName', 'lastName', 'dateOfBirth', 'nationality',
+        'countryOfResidence', 'passportNumber'];
+      if (state.draft.addonType && state.draft.addonType !== 'spouse') {
+        addOnPaths.push('relationship');
+      }
+      return addOnPaths;
+    }
+
     var paths = ['providerId'].concat(PERSON_FIELDS)
       .concat(['investmentType', 'sponsored']);
 
@@ -323,6 +349,10 @@
      string, so it cannot be checked the same way. */
   function requiredFiles() {
     var paths = [];
+    if (isAddOnIntake()) {
+      if (photoRequiredFor('passportPhoto')) paths.push('passportPhoto');
+      return paths;
+    }
     if (photoRequiredFor('passportPhoto')) paths.push('passportPhoto');
     if (photoRequiredFor('sponsor.passportPhoto')) paths.push('sponsor.passportPhoto');
     for (var i = 0; i < state.dependents; i++) {
@@ -341,6 +371,11 @@
         if (d.required) paths.push(prefix + d.field);
       });
     };
+
+    if (isAddOnIntake()) {
+      add(addonSection(), '');
+      return paths;
+    }
 
     add('principal', '');
     if (sponsored()) add('sponsor', 'sponsor.');
@@ -962,6 +997,20 @@
     return state.phase === 'post_approval';
   }
 
+  function isAddOnIntake() {
+    if (state.record && state.record.phase === 'add_on') return true;
+
+    return state.phase === 'add_on';
+  }
+
+  function addonSection() {
+    var type = state.draft.addonType;
+    if (type === 'spouse') return 'spouse';
+    if (type === 'dependent_under_16') return 'dependent_under_16';
+    if (type === 'dependent_16_over') return 'dependent_16_over';
+    return 'spouse';
+  }
+
   /*
    * Filed post-approval Edit uses the person-slot drops (canUpload), not
    * the intake pack. Confirm submission would freeze every PAD control
@@ -1048,9 +1097,70 @@
   }
 
   function formBody() {
+    if (isAddOnIntake()) return addOnFormBody();
     if (isPostApprovalIntake()) return postApprovalFormBody();
 
     return preApprovalFormBody();
+  }
+
+  function addOnFormBody() {
+    var types = ((state.options && state.options.addonTypes) || []).map(function (t) {
+      return { value: t.value, label: t.label };
+    });
+    var relKey = state.draft.addonType === 'spouse' ? 'spouse' : 'dependent';
+    var relationships = ((((state.options && state.options.addonRelationships) || {})[relKey]) || [])
+      .map(function (t) { return { value: t.value, label: t.label }; });
+    var countries = countryOptions();
+    var parent = state.parent || (state.record && state.record.parent) || null;
+    var parentName = state.draft.parentApplicantName || (parent && parent.applicantName) || '';
+    var openNote = '';
+    if (state.openAddOn && !(state.applicationId && state.openAddOn.id === state.applicationId)
+      && !(state.draftId && state.openAddOn.id === state.draftId)) {
+      openNote = '<p class="tma-portal-modal__error" role="alert">' +
+        esc('An Add-On application is already in progress for this file (' +
+          state.openAddOn.number + '). Finish or close it before starting another.') +
+        '</p>';
+    }
+
+    return '<div class="tma-dash__clients-cards tma-dash__clients-cards--intake">' +
+      card('Parent application',
+        '<p class="tma-portal-note">File this Add-On against an existing granted application. The CIP number and Certificate of Registration number must both match that file.</p>' +
+        '<div class="tma-portal-form-grid tma-portal-form-grid--investment">' +
+        textField('parentCipNumber', { placeholder: 'As printed on the approval letter' }) +
+        textField('parentCorNumber', { placeholder: 'As printed on the certificate' }) +
+        '</div>' +
+        '<div class="tma-portal-form-actions" style="margin-top:12px">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-addon-lookup>Look up parent</button>' +
+        '</div>' +
+        (state.parentError
+          ? '<p class="tma-portal-modal__error" role="alert">' + esc(state.parentError) + '</p>'
+          : '') +
+        (parentName
+          ? '<div class="tma-portal-field" style="margin-top:12px"><span class="tma-portal-field__label">' +
+            esc(LABELS.parentApplicantName) + '</span>' +
+            '<p class="tma-portal-field__static">' + esc(parentName) + '</p></div>'
+          : '') +
+        openNote) +
+      card('Add-On',
+        '<div class="tma-portal-form-grid tma-portal-form-grid--investment">' +
+        selectField('addonType', types, 'Select Add-On type') +
+        (state.draft.addonType && state.draft.addonType !== 'spouse'
+          ? selectField('relationship', relationships, 'Select relationship')
+          : '') +
+        '</div>') +
+      titledCard('Add-On applicant',
+        photoField('passportPhoto') +
+        '<div class="tma-portal-form-grid tma-portal-form-grid--person">' +
+        textField('firstName') +
+        textField('lastName') +
+        textField('dateOfBirth', { type: 'date' }) +
+        selectField('nationality', countries, 'Select a nationality') +
+        selectField('countryOfResidence', countries, 'Select a country') +
+        textField('passportNumber', { placeholder: 'As printed on the bio page' }) +
+        '</div>',
+        { modifier: 'tma-portal-section--person' }) +
+      documentsCard('', addonSection()) +
+      '</div>';
   }
 
   /*
@@ -1137,13 +1247,17 @@
         // finished date (type 2 → 0002-09-10). Re-rendering there wipes the
         // year buffer, so 2004 lands as 0004. Wait until the year looks like
         // a birth year, or until they leave the field.
-        if (/countryOfResidence$|investmentType$|sponsored$|relationship$|gender$/.test(path)) {
+        if (/countryOfResidence$|investmentType$|sponsored$|relationship$|gender$|addonType$|nationality$/.test(path)) {
           render(root);
         } else if (/dateOfBirth$/.test(path) && dobYearSettled(el.value)) {
           render(root);
         }
       });
       el.addEventListener('blur', function () {
+        if (/parentCipNumber$|parentCorNumber$/.test(path)) {
+          lookupParent();
+          return;
+        }
         if (!/dateOfBirth$/.test(path)) return;
         if (!el.value || dobYearSettled(el.value)) return;
         render(root);
@@ -1154,7 +1268,59 @@
     wireDocuments(root);
     wireDependents(root);
     wireDraft(root);
+    wireAddOnLookup(root);
     if (window.TMACipSlots && window.TMACipSlots.wire) window.TMACipSlots.wire(root);
+  }
+
+  function wireAddOnLookup(root) {
+    MORPH.unwired(root, '[data-cip-addon-lookup]').forEach(function (btn) {
+      btn.addEventListener('click', function () { lookupParent({ announce: true }); });
+    });
+  }
+
+  function lookupParent(opts) {
+    opts = opts || {};
+    if (!isAddOnIntake()) return;
+    var cip = String(state.draft.parentCipNumber || '').trim();
+    var cor = String(state.draft.parentCorNumber || '').trim();
+    if (!cip || !cor) {
+      if (opts.announce) {
+        state.parentError = !cip
+          ? 'Enter the CIP application number.'
+          : 'Enter the Certificate of Registration number.';
+        render(state.root);
+      }
+      return;
+    }
+
+    var url = '/portal/cip/applications/add-on/parent?cipNumber=' +
+      encodeURIComponent(cip) + '&corNumber=' + encodeURIComponent(cor);
+
+    fetch(url, { credentials: 'same-origin', headers: headers() }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (json) {
+        if (!res.ok) {
+          state.parent = null;
+          state.openAddOn = null;
+          state.parentError = (json && json.message) || 'Could not find that application.';
+          state.draft.parentApplicantName = '';
+          render(state.root);
+          return;
+        }
+        state.parent = json.parent || null;
+        state.openAddOn = json.openAddOn || null;
+        state.parentError = '';
+        if (state.parent) {
+          state.draft.parentApplicantName = state.parent.applicantName || '';
+          if (state.parent.providerId) state.draft.providerId = state.parent.providerId;
+        }
+        render(state.root);
+        touchDraft();
+      });
+    }).catch(function () {
+      if (!opts.announce) return;
+      state.parentError = 'Could not look up that application.';
+      render(state.root);
+    });
   }
 
   /*
@@ -1737,6 +1903,7 @@
    */
   function draftable() {
     if (state.draftOff || fieldsLocked()) return false;
+    if (isAddOnIntake() && isFiling() && !state.draft.providerId) return false;
 
     return !state.applicationId || editingDraft();
   }
@@ -2100,6 +2267,10 @@
 
     rememberFiled(draft);
 
+    if (isAddOnIntake() && state.draft.parentCipNumber && state.draft.parentCorNumber) {
+      lookupParent();
+    }
+
     // What was just put back is what the server holds, so an untouched
     // resume does not immediately re-post the same answers.
     state.draftSent = JSON.stringify([draftBody(), fileSignature()]);
@@ -2158,6 +2329,12 @@
     if (!root || state.saving) return;
     if (fieldsLocked()) {
       ui().toastError('This application’s original submission package is locked and cannot be modified.');
+      return;
+    }
+
+    if (isAddOnIntake() && isFiling() && state.openAddOn
+      && state.openAddOn.id !== state.draftId && state.openAddOn.id !== state.applicationId) {
+      ui().toastError('An Add-On application is already in progress for this file.');
       return;
     }
 
@@ -2485,8 +2662,22 @@
     state.draft.investmentType = app.investmentTypeValue || '';
     state.draft.investmentTypeOther = app.investmentTypeOther || '';
     state.draft.sponsored = app.sponsored ? '1' : '0';
+    if (app.addonType) state.draft.addonType = app.addonType;
+    if (app.parent) {
+      state.parent = app.parent;
+      state.draft.parentCipNumber = app.parent.cipNumber || '';
+      state.draft.parentCorNumber = app.parent.corNumber || '';
+      state.draft.parentApplicantName = app.parent.applicantName || '';
+      if (app.parent.providerId) state.draft.providerId = app.parent.providerId;
+    }
 
     into('', app.applicant);
+    if (app.applicant && app.applicant.nationality) {
+      state.draft.nationality = app.applicant.nationality;
+    }
+    if (app.applicant && app.applicant.relationship) {
+      state.draft.relationship = app.applicant.relationship;
+    }
     into('sponsor.', app.sponsor);
 
     (app.dependents || []).forEach(function (d, i) {
@@ -2501,6 +2692,11 @@
       into(p, d);
     });
     state.dependents = (app.dependents || []).length;
+  }
+
+  function parseIntakePhase(phase, forNew) {
+    if (phase === 'post_approval' || phase === 'add_on' || phase === 'pre_approval') return phase;
+    return forNew ? 'pre_approval' : null;
   }
 
   function open(root, opts) {
@@ -2523,11 +2719,10 @@
      * record, because the two phases ask for different document
      * requirements and guessing pre-approval drew the wrong pack.
      */
-    state.phase = opts.phase === 'post_approval'
-      ? 'post_approval'
-      : (opts.phase === 'pre_approval' || !state.applicationId
-        ? 'pre_approval'
-        : null);
+    state.phase = parseIntakePhase(opts.phase, !state.applicationId);
+    state.parent = null;
+    state.parentError = '';
+    state.openAddOn = null;
     // One key for this filing, however many times Add is pressed or retried.
     state.submissionKey = state.applicationId ? null : mintKey();
     state.allowDuplicate = false;
@@ -2568,14 +2763,16 @@
 
     loadRecord.then(function (record) {
       state.record = record || null;
-      if (record && (record.phase === 'post_approval' || record.phase === 'pre_approval')) {
+      if (record && (record.phase === 'post_approval' || record.phase === 'pre_approval' || record.phase === 'add_on')) {
         state.phase = record.phase;
       }
       // Keyed by phase: the two phases ask for different document
       // requirements, and one cache key for both served whichever was fetched
       // first to the other.
       var formUrl = '/portal/cip/applications/form';
-      if (state.phase === 'post_approval') formUrl += '?phase=post_approval';
+      if (state.phase === 'post_approval' || state.phase === 'add_on') {
+        formUrl += '?phase=' + encodeURIComponent(state.phase);
+      }
 
       return Promise.all([
         held('cip:form:' + (state.phase || 'pre_approval'), formUrl),
@@ -2597,7 +2794,7 @@
        * could not keep, and it goes on saving itself.
        */
       if (editingDraft()) {
-        state.phase = state.record.phase === 'post_approval' ? 'post_approval' : 'pre_approval';
+        state.phase = parseIntakePhase(state.record.phase, true);
         state.submissionKey = state.submissionKey || mintKey();
         state.draftResumed = true;
         state.draftSavedAt = state.record.updatedAt ? new Date(state.record.updatedAt) : null;

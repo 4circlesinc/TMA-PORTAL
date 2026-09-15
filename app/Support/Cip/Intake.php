@@ -232,7 +232,7 @@ class Intake
     /** The shared person field set. Section 2's list, which section 4 says a sponsor repeats. */
     private const PERSON_FIELDS = [
         'firstName', 'lastName', 'gender', 'dateOfBirth', 'countryOfBirth',
-        'countryOfResidence', 'occupation', 'passportNumber',
+        'countryOfResidence', 'nationality', 'occupation', 'passportNumber',
     ];
 
     /**
@@ -254,6 +254,10 @@ class Intake
      */
     public static function rules(bool $editing = false, ?CipApplication $draft = null): array
     {
+        if (self::isAddOnRequest($draft)) {
+            return self::addOnRules($editing, $draft);
+        }
+
         return array_merge(
             $editing ? [
                 /*
@@ -311,6 +315,10 @@ class Intake
      */
     public static function draftRules(): array
     {
+        if (self::filingPhase() === Phase::ADD_ON) {
+            return self::addOnDraftRules();
+        }
+
         $rules = [
             'providerId' => ['required', 'string'],
             'phase' => ['nullable', 'string', Rule::in(Phase::ALL)],
@@ -709,6 +717,12 @@ class Intake
             'investmentTypeOther.required' => 'Say which investment type this is.',
             'cipNumber.required' => 'Enter the CIP application number from the Unit.',
             'cipNumber.prohibited' => 'A CIP number is recorded when the application is submitted to the Unit.',
+            'parentCipNumber.required' => 'Enter the CIP application number of the granted file.',
+            'parentCorNumber.required' => 'Enter the Certificate of Registration number.',
+            'addonType.required' => 'Choose the Add-On type.',
+            'relationship.required' => 'Choose the relationship to the main applicant.',
+            'nationality.required' => 'Choose a nationality.',
+            'nationality.in' => 'Choose a country from the list.',
             'countryOfBirth.in' => 'Choose a country from the list.',
             'countryOfResidence.in' => 'Choose a country from the list.',
             'sponsor.countryOfBirth.in' => 'Choose a country from the list.',
@@ -796,6 +810,10 @@ class Intake
             $phase = Phase::PRE_APPROVAL;
             if (! empty($data['phase']) && Phase::isValid($data['phase'])) {
                 $phase = $data['phase'];
+            }
+
+            if ($phase === Phase::ADD_ON) {
+                return self::createAddOn($provider, $creator, $data);
             }
 
             $attributes = [
@@ -960,6 +978,14 @@ class Intake
                 $application->forceFill(['phase' => Phase::POST_APPROVAL])->save();
             }
 
+            if ($phase === Phase::ADD_ON) {
+                $application->forceFill([
+                    'phase' => Phase::ADD_ON,
+                    'addon_type' => $data['addonType'] ?? null,
+                ])->save();
+                self::linkAddOnParent($application, $creator, $data);
+            }
+
             self::saveDraftAnswers($application, $creator, $data);
 
             return $application->fresh();
@@ -1078,6 +1104,12 @@ class Intake
      */
     private static function saveDraftAnswers(CipApplication $application, User $actor, array $data): void
     {
+        if (($application->phase ?? '') === Phase::ADD_ON) {
+            self::saveAddOnDraftAnswers($application, $actor, $data);
+
+            return;
+        }
+
         $investment = $data['investmentType'] ?? null;
         $application->forceFill([
             'investment_type' => $investment ?: null,
@@ -1126,6 +1158,10 @@ class Intake
 
     public static function update(CipApplication $application, User $actor, array $data): CipApplication
     {
+        if (($application->phase ?? '') === Phase::ADD_ON) {
+            return self::updateAddOn($application, $actor, $data);
+        }
+
         return DB::transaction(function () use ($application, $actor, $data) {
             $locked = $application->isLocked();
             /*
@@ -1430,6 +1466,10 @@ class Intake
             }
         }
 
+        if (array_key_exists('relationship', $data) && $data['relationship'] !== null && $data['relationship'] !== '') {
+            $attributes['relationship'] = $data['relationship'];
+        }
+
         if (! empty($data['countryOfResidence'])) {
             $attributes['region'] = Countries::region($data['countryOfResidence']);
         }
@@ -1461,6 +1501,8 @@ class Intake
 
         if ($role === CipPerson::ROLE_DEPENDENT) {
             $attributes['relationship'] = $data['relationship'] ?? CipPerson::RELATIONSHIP_QUALIFIED;
+        } elseif (! empty($data['relationship'])) {
+            $attributes['relationship'] = $data['relationship'];
         }
 
         $person = $application->people()->make($attributes);
@@ -1659,5 +1701,288 @@ class Intake
             ->where('active', true)
             ->where('code', CipProvider::PRIVATE_CLIENT_CODE)
             ->get();
+    }
+
+    public static function isAddOnRequest(?CipApplication $existing = null): bool
+    {
+        if ($existing && ($existing->phase ?? '') === Phase::ADD_ON) {
+            return true;
+        }
+
+        return self::filingPhase() === Phase::ADD_ON;
+    }
+
+    /**
+     * One spouse or dependent, filed against a granted parent.
+     *
+     * Investment and the provider are inherited: this is not a new citizenship
+     * file, it is a person added to one the Unit has already granted.
+     */
+    private static function createAddOn(CipProvider $provider, User $creator, array $data): CipApplication
+    {
+        $parent = self::requireAddOnParent($creator, $data);
+        $data = self::normaliseAddOnPerson($data);
+        if ($mismatch = AddOn::typeMismatch(
+            (string) ($data['addonType'] ?? ''),
+            $data['dateOfBirth'] ?? null,
+            $data['relationship'] ?? null,
+        )) {
+            throw new \InvalidArgumentException($mismatch);
+        }
+
+        $application = Applications::create($provider, $creator, [
+            'investment_type' => $parent->investment_type,
+            'investment_type_other' => $parent->investment_type_other,
+            'sponsored' => false,
+            'submission_key' => ($data['submissionId'] ?? '') !== '' ? $data['submissionId'] : null,
+        ]);
+
+        $application->forceFill([
+            'phase' => Phase::ADD_ON,
+            'parent_application_id' => $parent->id,
+            'addon_type' => $data['addonType'],
+        ])->save();
+
+        self::writePerson($application, CipPerson::ROLE_MAIN_APPLICANT, $data);
+
+        $application->load('people');
+        Tree::provision($application, $creator);
+
+        foreach ($application->people as $person) {
+            $person->setRelation('application', $application);
+            DocumentSlots::open($person);
+        }
+
+        self::fileUploads($application, $data, $creator, []);
+
+        return $application->fresh();
+    }
+
+    private static function updateAddOn(CipApplication $application, User $actor, array $data): CipApplication
+    {
+        return DB::transaction(function () use ($application, $actor, $data) {
+            $locked = $application->isLocked();
+            if (! $locked) {
+                Confirmation::guard($application);
+            }
+            $data = self::normaliseAddOnPerson($data);
+            if ($mismatch = AddOn::typeMismatch(
+                (string) ($data['addonType'] ?? $application->addon_type),
+                $data['dateOfBirth'] ?? null,
+                $data['relationship'] ?? null,
+            )) {
+                throw new \InvalidArgumentException($mismatch);
+            }
+            self::guardIdentityEdits($application, $actor, $data);
+
+            if (! empty($data['addonType']) && AddOn::isValidType($data['addonType'])) {
+                $application->forceFill(['addon_type' => $data['addonType']])->save();
+            }
+
+            $application->load('people');
+
+            $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+            $main
+                ? self::applyPerson($main, $data)
+                : self::writePerson($application, CipPerson::ROLE_MAIN_APPLICANT, $data);
+
+            $application->load('people');
+            Tree::provision($application, $actor);
+            Tree::resyncNames($application);
+
+            foreach ($application->people as $person) {
+                $person->setRelation('application', $application);
+                DocumentSlots::open($person);
+            }
+
+            if (! $locked) {
+                self::fileUploads($application, $data, $actor, []);
+            }
+
+            return $application->fresh();
+        });
+    }
+
+    private static function saveAddOnDraftAnswers(CipApplication $application, User $actor, array $data): void
+    {
+        $data = self::normaliseAddOnPerson($data);
+        self::linkAddOnParent($application, $actor, $data);
+
+        $fill = [
+            'sponsored' => false,
+            'addon_type' => $data['addonType'] ?? $application->addon_type,
+        ];
+
+        if ($application->parent && ! $application->investment_type) {
+            $fill['investment_type'] = $application->parent->investment_type;
+            $fill['investment_type_other'] = $application->parent->investment_type_other;
+        }
+
+        $application->forceFill($fill)->save();
+        $application->load('people');
+
+        $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $main
+            ? self::applyPerson($main, $data)
+            : self::writePerson($application, CipPerson::ROLE_MAIN_APPLICANT, $data);
+
+        $application->load('people');
+        Tree::provision($application, $actor);
+
+        foreach ($application->people as $person) {
+            $person->setRelation('application', $application);
+            DocumentSlots::open($person);
+        }
+
+        self::fileUploads($application, $data, $actor, []);
+    }
+
+    private static function linkAddOnParent(CipApplication $application, User $actor, array $data): void
+    {
+        $cip = trim((string) ($data['parentCipNumber'] ?? ''));
+        $cor = trim((string) ($data['parentCorNumber'] ?? ''));
+        if ($cip === '' || $cor === '') {
+            return;
+        }
+
+        $parent = AddOn::findParent($actor, $cip, $cor);
+        if ($parent === null) {
+            return;
+        }
+
+        $application->forceFill([
+            'parent_application_id' => $parent->id,
+            'provider_id' => $parent->provider_id,
+        ])->save();
+        $application->setRelation('parent', $parent);
+    }
+
+    private static function requireAddOnParent(User $creator, array $data): CipApplication
+    {
+        $parent = AddOn::findParent(
+            $creator,
+            (string) ($data['parentCipNumber'] ?? ''),
+            (string) ($data['parentCorNumber'] ?? ''),
+        );
+
+        if ($parent === null) {
+            throw new \InvalidArgumentException('The parent application could not be found.');
+        }
+
+        if (AddOn::hasOpenAddOn($parent)) {
+            throw new \InvalidArgumentException(
+                'An Add-On application is already in progress for this file. Finish or close it before starting another.',
+            );
+        }
+
+        return $parent;
+    }
+
+    /** Spouse type always carries the spouse relationship, even if the form omitted it. */
+    private static function normaliseAddOnPerson(array $data): array
+    {
+        if (($data['addonType'] ?? '') === AddOn::TYPE_SPOUSE) {
+            $data['relationship'] = CipPerson::RELATIONSHIP_SPOUSE;
+        }
+
+        return $data;
+    }
+
+    /** @return array<string, mixed> */
+    private static function addOnRules(bool $editing, ?CipApplication $existing = null): array
+    {
+        $type = (string) ($existing?->addon_type ?: request()->input('addonType', ''));
+        $relationships = AddOn::isValidType($type)
+            ? AddOn::relationshipsFor($type)
+            : array_merge([CipPerson::RELATIONSHIP_SPOUSE], AddOn::DEPENDENT_RELATIONSHIPS);
+
+        $parentRules = $editing
+            ? [
+                'parentCipNumber' => ['nullable', 'string', 'max:'.Submission::MAX_LENGTH],
+                'parentCorNumber' => ['nullable', 'string', 'max:64'],
+                'addonType' => ['nullable', 'string', Rule::in(AddOn::TYPES)],
+            ]
+            : [
+                'providerId' => ['nullable', 'string'],
+                'phase' => ['nullable', 'string', Rule::in(Phase::ALL)],
+                'submissionId' => ['nullable', 'string', 'max:64'],
+                'draftId' => ['nullable', 'string', 'max:64'],
+                'parentCipNumber' => ['required', 'string', 'max:'.Submission::MAX_LENGTH],
+                'parentCorNumber' => ['required', 'string', 'max:64'],
+                'addonType' => ['required', 'string', Rule::in(AddOn::TYPES)],
+            ];
+
+        $rules = array_merge($parentRules, [
+            'firstName' => ['required', 'string', 'max:191'],
+            'lastName' => ['required', 'string', 'max:191'],
+            'dateOfBirth' => ['required', 'date', 'before:today'],
+            'nationality' => ['required', 'string', Rule::in(Countries::all())],
+            'countryOfResidence' => ['required', 'string', Rule::in(Countries::all())],
+            'passportNumber' => ['required', 'string', 'max:64'],
+            'relationship' => $type === AddOn::TYPE_SPOUSE
+                ? ['nullable', 'string', Rule::in($relationships)]
+                : ['required', 'string', Rule::in($relationships)],
+            'gender' => ['nullable', Rule::in(['Male', 'Female'])],
+            'countryOfBirth' => ['nullable', 'string', Rule::in(Countries::all())],
+            'occupation' => ['nullable', 'string', 'max:191'],
+        ], self::addOnDocumentRules($existing, $editing));
+
+        return $rules;
+    }
+
+    /** @return array<string, mixed> */
+    private static function addOnDraftRules(): array
+    {
+        $rules = [
+            'providerId' => ['nullable', 'string'],
+            'phase' => ['nullable', 'string', Rule::in(Phase::ALL)],
+            'submissionId' => ['nullable', 'string', 'max:64'],
+            'parentCipNumber' => ['nullable', 'string', 'max:'.Submission::MAX_LENGTH],
+            'parentCorNumber' => ['nullable', 'string', 'max:64'],
+            'addonType' => ['nullable', 'string', Rule::in(AddOn::TYPES)],
+            'relationship' => ['nullable', 'string', 'max:48'],
+            'dependents' => ['nullable', 'array', 'max:0'],
+        ];
+
+        $rules = array_merge($rules, self::optionalPersonRules(''));
+        $rules['nationality'] = ['nullable', 'string', Rule::in(Countries::all())];
+        $rules['passportPhoto'] = ['nullable', 'file', self::photoRule()];
+
+        foreach (self::allDocumentFieldNames() as $field) {
+            $rules[$field] = ['nullable', 'array', 'max:'.self::MAX_DOCUMENTS_PER_SLOT];
+            $rules[$field.'.*'] = self::documentRule();
+        }
+
+        return $rules;
+    }
+
+    /** @return array<string, mixed> */
+    private static function addOnDocumentRules(?CipApplication $existing, bool $editing): array
+    {
+        $type = (string) ($existing?->addon_type ?: request()->input('addonType', AddOn::TYPE_SPOUSE));
+        if (! AddOn::isValidType($type)) {
+            $type = AddOn::TYPE_SPOUSE;
+        }
+
+        $phase = Phase::ADD_ON;
+        $gender = request()->input('gender');
+        $demand = self::demandsUploads($editing);
+        $photo = self::photoTemplate($type, $phase);
+        $photoKept = self::draftHolds($existing, DocumentTypes::PASSPORT_PHOTO);
+        $rules = [
+            'passportPhoto' => [
+                $demand && ! $photoKept && $photo && $photo->required ? 'required' : 'nullable',
+                'file', self::photoRule(),
+            ],
+        ];
+
+        foreach (self::documentFields($type, $phase, $existing) as $doc) {
+            $kept = self::draftHolds($existing, $doc['key']);
+            $demanded = $demand && ! $kept && $doc['required'] && self::documentAppliesToGender($doc, $gender);
+            $rules[$doc['field']] = self::scanFieldRules($demanded);
+            $rules[$doc['field'].'.*'] = self::documentRule();
+        }
+
+        return $rules;
     }
 }

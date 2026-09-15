@@ -207,6 +207,7 @@ class Stages
         return [
             'corSubmittedAt' => $application->cor_submitted_at?->toDateString(),
             'corReceivedAt' => $application->cor_received_at?->toDateString(),
+            'corNumber' => $application->cor_number,
             'nicSubmittedAt' => $application->nic_submitted_at?->toDateString(),
             'nicReceivedAt' => $application->nic_received_at?->toDateString(),
             'passportSubmittedAt' => $application->passport_submitted_at?->toDateString(),
@@ -226,6 +227,7 @@ class Stages
         User $actor,
         string $key,
         ?Carbon $date = null,
+        ?string $corNumber = null,
     ): CipApplication {
         $step = self::STEPS[$key] ?? null;
 
@@ -265,8 +267,15 @@ class Stages
             ));
         }
 
-        return DB::transaction(function () use ($application, $actor, $step, $date, $already, $key) {
-            $application->forceFill([$step['column'] => $date->startOfDay()])->save();
+        return DB::transaction(function () use ($application, $actor, $step, $date, $already, $key, $corNumber) {
+            $fill = [$step['column'] => $date->startOfDay()];
+            if ($key === self::COR_RECEIVED) {
+                $number = trim((string) $corNumber);
+                if ($number !== '') {
+                    $fill['cor_number'] = $number;
+                }
+            }
+            $application->forceFill($fill)->save();
 
             $meta = [
                 'stage' => $key,

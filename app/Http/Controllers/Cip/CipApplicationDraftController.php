@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Cip;
 use App\Http\Controllers\Controller;
 use App\Models\CipApplication;
 use App\Models\CipPerson;
+use App\Support\Cip\AddOn;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Intake;
 use App\Support\Cip\Phase;
@@ -117,7 +118,18 @@ class CipApplicationDraftController extends Controller
             return response()->json(['draft' => null]);
         }
 
-        $provider = Intake::providersFor($user)->firstWhere('uuid', $data['providerId']);
+        $provider = Intake::providersFor($user)->firstWhere('uuid', $data['providerId'] ?? '');
+        if ($provider === null && Intake::filingPhase() === Phase::ADD_ON) {
+            $parent = AddOn::findParent(
+                $user,
+                (string) ($data['parentCipNumber'] ?? ''),
+                (string) ($data['parentCorNumber'] ?? ''),
+            );
+            $provider = $parent?->provider;
+            if ($provider === null) {
+                return response()->json(['draft' => $draft ? $this->answers($draft) : null]);
+            }
+        }
         abort_unless($provider, 422, 'Choose a service provider you can file under.');
 
         $draft = $draft
@@ -176,7 +188,7 @@ class CipApplicationDraftController extends Controller
         }
 
         $phase = (string) ($request->input('phase') ?? $request->query('phase', ''));
-        $phase = $phase === Phase::POST_APPROVAL ? Phase::POST_APPROVAL : Phase::PRE_APPROVAL;
+        $phase = Phase::isValid($phase) ? $phase : Phase::PRE_APPROVAL;
 
         return CipApplication::query()
             ->where('status', Status::DRAFT)
@@ -285,7 +297,7 @@ class CipApplicationDraftController extends Controller
      */
     private function answers(CipApplication $draft): array
     {
-        $draft->loadMissing('people');
+        $draft->loadMissing(['people', 'parent.people', 'parent.client', 'provider']);
         $answers = [];
 
         $person = function (?CipPerson $p, string $prefix) use (&$answers) {
@@ -298,6 +310,7 @@ class CipApplicationDraftController extends Controller
                 'gender' => 'gender',
                 'countryOfBirth' => 'country_of_birth',
                 'countryOfResidence' => 'country_of_residence',
+                'nationality' => 'nationality',
                 'occupation' => 'occupation',
                 'passportNumber' => 'passport_number',
             ] as $field => $column) {
@@ -312,6 +325,25 @@ class CipApplicationDraftController extends Controller
         };
 
         $person($draft->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT), '');
+
+        $main = $draft->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        if ($main?->relationship) {
+            $answers['relationship'] = $main->relationship;
+        }
+
+        if (($draft->phase ?? '') === Phase::ADD_ON) {
+            if ($draft->addon_type) {
+                $answers['addonType'] = $draft->addon_type;
+            }
+            $parent = $draft->parent;
+            if ($parent) {
+                $answers['parentCipNumber'] = $parent->cip_number;
+                $answers['parentCorNumber'] = $parent->cor_number;
+                $answers['parentApplicantName'] = optional(
+                    $parent->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)
+                )?->fullName() ?: $parent->client?->name;
+            }
+        }
 
         if ($draft->sponsored) {
             $answers['sponsored'] = '1';

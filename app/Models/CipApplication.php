@@ -100,6 +100,23 @@ class CipApplication extends Model
         return $this->phase === Phase::POST_APPROVAL;
     }
 
+    public function isAddOn(): bool
+    {
+        return $this->phase === Phase::ADD_ON;
+    }
+
+    /** The granted file this Add-On was filed against. */
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_application_id');
+    }
+
+    /** Add-On filings that name this application as their parent. */
+    public function addOns(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_application_id');
+    }
+
     /** Who asked the firm to appeal, when one has. */
     public function appealRequestedBy(): BelongsTo
     {

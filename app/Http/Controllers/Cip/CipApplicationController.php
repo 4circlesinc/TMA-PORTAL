@@ -11,6 +11,7 @@ use App\Models\ClientAssignment;
 use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\AddOn;
 use App\Support\Cip\Appeal;
 use App\Support\Cip\ApplicantType;
 use App\Support\Cip\ApplicationScope;
@@ -96,8 +97,8 @@ class CipApplicationController extends Controller
 
         $phase = Phase::PRE_APPROVAL;
         $requested = (string) $request->query('phase', '');
-        if ($requested === Phase::POST_APPROVAL) {
-            $phase = Phase::POST_APPROVAL;
+        if (Phase::isValid($requested)) {
+            $phase = $requested;
         }
 
         $providers = Intake::providersFor($user)
@@ -112,6 +113,17 @@ class CipApplicationController extends Controller
             'countries' => Countries::options(),
             'investmentTypes' => InvestmentType::options(),
             'genders' => ['Male', 'Female'],
+            'addonTypes' => collect(AddOn::typeOptions())
+                ->map(fn (string $label, string $value) => ['value' => $value, 'label' => $label])
+                ->values(),
+            'addonRelationships' => [
+                'spouse' => collect(AddOn::relationshipOptions(AddOn::TYPE_SPOUSE))
+                    ->map(fn (string $label, string $value) => ['value' => $value, 'label' => $label])
+                    ->values(),
+                'dependent' => collect(AddOn::relationshipOptions(AddOn::TYPE_DEPENDENT_UNDER_16))
+                    ->map(fn (string $label, string $value) => ['value' => $value, 'label' => $label])
+                    ->values(),
+            ],
             /*
              * The wizard's document sections, from the same templates the
              * admin screen edits, so a requirement added, reworded or
@@ -142,6 +154,43 @@ class CipApplicationController extends Controller
         ]);
     }
 
+    /**
+     * Resolve the granted parent an Add-On will be filed against.
+     *
+     * Named by CIP number and COR number rather than picked from a list, so
+     * a mistyped pair is a 422 on the field that is wrong, not an empty
+     * dropdown.
+     */
+    public function addOnParent(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless(CipAccess::canCreate($user), 404);
+
+        $data = $request->validate([
+            'cipNumber' => ['required', 'string', 'max:'.Submission::MAX_LENGTH],
+            'corNumber' => ['required', 'string', 'max:64'],
+        ], [
+            'cipNumber.required' => 'Enter the CIP application number.',
+            'corNumber.required' => 'Enter the Certificate of Registration number.',
+        ]);
+
+        $result = AddOn::lookup($user, $data['cipNumber'], $data['corNumber']);
+        if (! ($result['ok'] ?? false)) {
+            $field = match ($result['field'] ?? '') {
+                'parentCipNumber' => 'cipNumber',
+                'parentCorNumber' => 'corNumber',
+                default => $result['field'] ?? 'cipNumber',
+            };
+
+            return response()->json([
+                'message' => $result['error'] ?? 'Parent application not found.',
+                'errors' => [$field => [$result['error'] ?? 'Parent application not found.']],
+            ], 422);
+        }
+
+        return response()->json($result);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -161,6 +210,11 @@ class CipApplicationController extends Controller
         $draft = $this->draftBeing($user, $request->all());
 
         $data = $request->validate(Intake::rules(draft: $draft), Intake::messages());
+
+        $addOnParent = null;
+        if (Intake::isAddOnRequest($draft)) {
+            $addOnParent = $this->addOnParentOrFail($user, $data, $draft);
+        }
 
         /*
          * The same submission landing twice is not a new application.
@@ -195,7 +249,8 @@ class CipApplicationController extends Controller
 
         // A provider this account may not file under is not offered and not
         // accepted, the same list the form was drawn from decides.
-        $provider = Intake::providersFor($user)->firstWhere('uuid', $data['providerId']);
+        $provider = $addOnParent?->provider
+            ?? Intake::providersFor($user)->firstWhere('uuid', $data['providerId'] ?? '');
         abort_unless($provider, 422, 'Choose a service provider you can file under.');
 
         /*
@@ -251,6 +306,8 @@ class CipApplicationController extends Controller
 
         try {
             $application = Intake::create($provider, $user, $data);
+        } catch (\InvalidArgumentException $e) {
+            abort(422, $e->getMessage());
         } catch (UniqueConstraintViolationException $e) {
             // Two lands of the same submission racing: the index picked the
             // winner, hand the loser the winner's row.
@@ -328,6 +385,39 @@ class CipApplicationController extends Controller
             ->with(['people.documents'])
             ->latest('id')
             ->first();
+    }
+
+    /**
+     * The granted parent this Add-On names, or a 422 naming the field that
+     * is wrong. One open Add-On per parent: the draft being filed is that
+     * profile, so it is ignored rather than blocking itself.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function addOnParentOrFail(User $user, array $data, ?CipApplication $draft): CipApplication
+    {
+        $result = AddOn::lookup(
+            $user,
+            (string) ($data['parentCipNumber'] ?? ''),
+            (string) ($data['parentCorNumber'] ?? ''),
+        );
+
+        if (! ($result['ok'] ?? false)) {
+            abort(422, $result['error'] ?? 'The parent application could not be found.');
+        }
+
+        $parent = AddOn::findParent(
+            $user,
+            (string) ($data['parentCipNumber'] ?? ''),
+            (string) ($data['parentCorNumber'] ?? ''),
+        );
+        abort_unless($parent, 422, 'The parent application could not be found.');
+
+        if (AddOn::hasOpenAddOn($parent, $draft?->id)) {
+            abort(422, 'An Add-On application is already in progress for this file. Finish or close it before starting another.');
+        }
+
+        return $parent;
     }
 
     /**
@@ -562,6 +652,9 @@ class CipApplicationController extends Controller
                 'people' => $postApprovalList
                     ? fn ($q) => $q->with('documents')->orderBy('id')
                     : fn ($q) => $q->where('role', CipPerson::ROLE_MAIN_APPLICANT),
+                'parent.people' => fn ($q) => $q->where('role', CipPerson::ROLE_MAIN_APPLICANT),
+                'parent.client:id,name',
+                'parent.provider:id,uuid,name,code',
             ])
             ->withCount('people');
 
@@ -585,7 +678,7 @@ class CipApplicationController extends Controller
                 $query->where('phase', $data['phase']);
 
                 // The lane tabs list work in flight; Closed holds the rest.
-                if ($data['phase'] === Phase::POST_APPROVAL) {
+                if (in_array($data['phase'], [Phase::POST_APPROVAL, Phase::ADD_ON], true)) {
                     $query->where('status', '!=', Status::CLOSED);
                 }
             }
@@ -701,7 +794,7 @@ class CipApplicationController extends Controller
      * Measured over the whole scoped set, not the current page or phase filter,
      * so tab badges stay honest while the table narrows.
      *
-     * @return array{all: int, pre_approval: int, post_approval: int, closed: int, appeal: int}
+     * @return array{all: int, pre_approval: int, post_approval: int, add_on: int, closed: int, appeal: int}
      */
     private function phaseCounts(User $user): array
     {
@@ -732,11 +825,13 @@ class CipApplicationController extends Controller
 
         $pre = (int) ($counts[Phase::PRE_APPROVAL] ?? 0);
         $post = (int) ($counts[Phase::POST_APPROVAL] ?? 0);
+        $addon = (int) ($counts[Phase::ADD_ON] ?? 0);
 
         return [
-            'all' => $pre + $post,
+            'all' => $pre + $post + $addon,
             'pre_approval' => $pre,
             'post_approval' => max(0, $post - $closed),
+            'add_on' => $addon,
             'closed' => $closed,
             'appeal' => $appeal,
         ];
@@ -982,6 +1077,8 @@ class CipApplicationController extends Controller
             ...Stages::into($application, $viewer),
             'phase' => $application->phase ?? Phase::PRE_APPROVAL,
             'phaseLabel' => Phase::label($application->phase ?? Phase::PRE_APPROVAL),
+            'corNumber' => $application->cor_number,
+            ...AddOn::payload($application),
             'availableTransitions' => $this->transitions($application, $viewer, forListing: true),
             'availableOverrides' => $this->overrides($application, $viewer, forListing: true),
             'lockedStatuses' => $this->lockedStatuses($application, $viewer, forListing: true),
@@ -1621,6 +1718,8 @@ class CipApplicationController extends Controller
         $application->loadMissing(array_merge([
             'provider', 'client', 'assignedOfficer',
             'people.documents.file', 'people.documents.requirement',
+            'parent.provider', 'parent.client',
+            'parent.people' => fn ($q) => $q->where('role', CipPerson::ROLE_MAIN_APPLICANT),
         ], self::assigneeRelations()));
 
         /*
@@ -1687,6 +1786,8 @@ class CipApplicationController extends Controller
             'statusTone' => Status::tone($application->status),
             'phase' => $application->phase ?? Phase::PRE_APPROVAL,
             'phaseLabel' => Phase::label($application->phase ?? Phase::PRE_APPROVAL),
+            'corNumber' => $application->cor_number,
+            ...AddOn::payload($application),
             'postApprovalAt' => $application->post_approval_at?->toIso8601String(),
             'personStatuses' => ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL
                 ? PersonStatus::listed()
@@ -1873,6 +1974,7 @@ class CipApplicationController extends Controller
             'dateOfBirth' => $person->date_of_birth?->toDateString(),
             'countryOfBirth' => $person->country_of_birth,
             'countryOfResidence' => $person->country_of_residence,
+            'nationality' => $person->nationality,
             'region' => $person->region,
             'occupation' => $person->occupation,
             'passportNumber' => $person->passport_number,

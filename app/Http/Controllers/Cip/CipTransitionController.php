@@ -591,6 +591,7 @@ class CipTransitionController extends Controller
         $data = $request->validate([
             'stage' => ['required', 'string', Rule::in(Stages::keys())],
             'date' => ['required', 'date'],
+            'corNumber' => ['nullable', 'string', 'max:64'],
         ], [
             'date.required' => 'Enter the date for this step.',
         ]);
@@ -601,6 +602,7 @@ class CipTransitionController extends Controller
                 $user,
                 $data['stage'],
                 Carbon::parse($data['date']),
+                $data['corNumber'] ?? null,
             );
         } catch (\InvalidArgumentException $e) {
             abort(422, $e->getMessage());

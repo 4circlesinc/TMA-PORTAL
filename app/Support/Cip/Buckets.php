@@ -326,6 +326,21 @@ class Buckets
             ],
             self::SERVICE_PROVIDER => self::POST_APPROVAL_PIPELINE,
         ],
+        Phase::ADD_ON => [
+            self::ADMINISTRATOR => [
+                'new', 'review_application', 'assessment_feedback', 'update_required',
+                'ready_to_submit', 'pending_review', 'non_compliant', 'background_check',
+                'dd_query', 'delayed', 'approved', 'denied',
+            ],
+            self::REVIEWING_OFFICER => [
+                'assigned_reviews', 'reviews_pending', 'assessment_feedback_tasks',
+                'information_requests',
+            ],
+            self::SERVICE_PROVIDER => [
+                'update_required', 'ready_to_submit', 'pending_review', 'non_compliant',
+                'dd_query', 'delayed', 'approved', 'denied',
+            ],
+        ],
     ];
 
     /**
@@ -448,12 +463,13 @@ class Buckets
             return [
                 Phase::PRE_APPROVAL => $empty,
                 Phase::POST_APPROVAL => $empty,
+                Phase::ADD_ON => $empty,
             ];
         }
 
         $tallies = [];
 
-        foreach ([Phase::PRE_APPROVAL, Phase::POST_APPROVAL] as $phase) {
+        foreach ([Phase::PRE_APPROVAL, Phase::POST_APPROVAL, Phase::ADD_ON] as $phase) {
             foreach (self::keysFor($set, $phase) as $key) {
                 $scope = self::DEFINITIONS[$key]['scope'];
                 $tallies[$scope] ??= self::tallyByPhase($user, $scope);
@@ -463,6 +479,7 @@ class Buckets
         return [
             Phase::PRE_APPROVAL => self::assemble($set, Phase::PRE_APPROVAL, $tallies),
             Phase::POST_APPROVAL => self::assemble($set, Phase::POST_APPROVAL, $tallies),
+            Phase::ADD_ON => self::assemble($set, Phase::ADD_ON, $tallies),
         ];
     }
 
@@ -710,6 +727,7 @@ class Buckets
         $byPhase = [
             Phase::PRE_APPROVAL => [],
             Phase::POST_APPROVAL => [],
+            Phase::ADD_ON => [],
         ];
 
         $rows = self::scoped(ApplicationScope::query($user), $scope, $user)

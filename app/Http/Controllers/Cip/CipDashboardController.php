@@ -48,6 +48,7 @@ class CipDashboardController extends Controller
         $summaries = Buckets::summaries($user);
         $pre = $summaries[Phase::PRE_APPROVAL];
         $post = $summaries[Phase::POST_APPROVAL];
+        $addon = $summaries[Phase::ADD_ON];
 
         return response()->json([
             'cip' => true,
@@ -102,6 +103,12 @@ class CipDashboardController extends Controller
                     'label' => Buckets::titleFor(Phase::POST_APPROVAL),
                     'buckets' => $post['buckets'],
                     'total' => $post['total'],
+                ],
+                Phase::ADD_ON => [
+                    'key' => Phase::ADD_ON,
+                    'label' => Buckets::titleFor(Phase::ADD_ON),
+                    'buckets' => $addon['buckets'],
+                    'total' => $addon['total'],
                 ],
             ],
         ]);

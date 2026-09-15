@@ -1061,18 +1061,19 @@
    */
   function cipPhaseView(payload, phase) {
     var phases = payload && payload.phases;
-    var key = phase === 'post_approval' ? 'post_approval' : 'pre_approval';
+    var key = 'pre_approval';
+    if (phase === 'post_approval' || phase === 'add_on') key = phase;
     var lane = phases && phases[key];
+    var order = cipPhaseOrder(payload);
 
     if (lane && Array.isArray(lane.buckets)) {
       return {
         key: key,
-        title: lane.label || (key === 'post_approval'
-          ? 'Post-Approval Applications'
-          : 'Pre-Approval Applications'),
+        title: lane.label || cipPhaseTitle(key),
         buckets: lane.buckets,
         total: lane.total,
-        switchable: !!(phases.pre_approval && phases.post_approval),
+        switchable: order.length > 1,
+        order: order,
       };
     }
 
@@ -1082,15 +1083,30 @@
       buckets: (payload && payload.buckets) || [],
       total: payload && payload.total,
       switchable: false,
+      order: ['pre_approval'],
     };
   }
 
-  function cipActiveView(payload) {
-    var want = homeCipPhase === 'post_approval' ? 'post_approval' : 'pre_approval';
-    var view = cipPhaseView(payload, want);
+  function cipPhaseOrder(payload) {
+    var phases = payload && payload.phases;
+    return ['pre_approval', 'post_approval', 'add_on'].filter(function (k) {
+      return phases && phases[k] && Array.isArray(phases[k].buckets);
+    });
+  }
 
-    if (want === 'post_approval' && !view.switchable) {
-      return cipPhaseView(payload, 'pre_approval');
+  function cipPhaseTitle(key) {
+    if (key === 'post_approval') return 'Post-Approval Applications';
+    if (key === 'add_on') return 'Add-On Applications';
+    return 'Pre-Approval Applications';
+  }
+
+  function cipActiveView(payload) {
+    var want = homeCipPhase;
+    if (want !== 'post_approval' && want !== 'add_on') want = 'pre_approval';
+    var view = cipPhaseView(payload, want);
+    var order = view.order || [];
+    if (order.indexOf(want) === -1) {
+      return cipPhaseView(payload, order[0] || 'pre_approval');
     }
 
     return view;
@@ -1099,19 +1115,19 @@
   function cipPhaseSwitch(view) {
     if (!view.switchable) return '';
 
-    var atPre = view.key !== 'post_approval';
+    var order = view.order || ['pre_approval', 'post_approval'];
+    var idx = order.indexOf(view.key);
+    if (idx < 0) idx = 0;
+    var prev = order[(idx - 1 + order.length) % order.length];
+    var next = order[(idx + 1) % order.length];
 
     return '<div class="tma-portal-cip__switch" role="group" aria-label="Application lane">' +
-      '<button type="button" class="tma-portal-cip__switch-btn" data-home-cip-phase="pre_approval"' +
-      (atPre ? ' disabled' : '') +
-      ' aria-label="Pre-Approval Applications"' +
-      (atPre ? ' aria-current="true"' : '') + '>' +
+      '<button type="button" class="tma-portal-cip__switch-btn" data-home-cip-phase="' + ui().esc(prev) + '"' +
+      ' aria-label="' + ui().esc(cipPhaseTitle(prev)) + '">' +
       '<img src="images/icons/phosphor/CaretLeft.svg" alt="" width="16" height="16">' +
       '</button>' +
-      '<button type="button" class="tma-portal-cip__switch-btn" data-home-cip-phase="post_approval"' +
-      (atPre ? '' : ' disabled') +
-      ' aria-label="Post-Approval Applications"' +
-      (atPre ? '' : ' aria-current="true"') + '>' +
+      '<button type="button" class="tma-portal-cip__switch-btn" data-home-cip-phase="' + ui().esc(next) + '"' +
+      ' aria-label="' + ui().esc(cipPhaseTitle(next)) + '">' +
       '<img src="images/icons/phosphor/CaretRight.svg" alt="" width="16" height="16">' +
       '</button>' +
       '</div>';
@@ -3635,7 +3651,7 @@
         e.preventDefault();
         e.stopPropagation();
         var phase = b.getAttribute('data-home-cip-phase');
-        if (phase !== 'pre_approval' && phase !== 'post_approval') return;
+        if (phase !== 'pre_approval' && phase !== 'post_approval' && phase !== 'add_on') return;
         if (phase === homeCipPhase) return;
         homeCipPhase = phase;
         mount(el, { fromLoad: true });

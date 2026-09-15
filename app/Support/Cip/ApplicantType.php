@@ -89,6 +89,20 @@ class ApplicantType
             return self::SPONSOR;
         }
 
+        /*
+         * An Add-On file is filed *for* the spouse or dependent being added.
+         * They sit as the main applicant of that row so the table and the
+         * client record name them, but the checklist they owe is the one
+         * their Add-On type asks for, not the principal's.
+         */
+        $application = $person->application;
+        if ($application
+            && $application->phase === Phase::ADD_ON
+            && $person->role === CipPerson::ROLE_MAIN_APPLICANT
+            && AddOn::isValidType((string) $application->addon_type)) {
+            return $application->addon_type;
+        }
+
         // There is no fourth role: anyone who is neither sponsor nor dependant
         // is the person the application is filed for.
         if ($person->role !== CipPerson::ROLE_DEPENDENT) {

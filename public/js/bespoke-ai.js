@@ -47,7 +47,7 @@
       id: 'start-cip',
       q: 'How do I start a CIP application?',
       keywords: ['start', 'create', 'cip', 'application'],
-      answer: 'Open [CIP Applications](/citizenship-applications) → Create New Application. Staff: Pre-Approval, Post-Approval, New service provider, Import. Provider contacts: Pre-Approval only.'
+      answer: 'Open [CIP Applications](/citizenship-applications) → Create New Application. Staff: Pre-Approval, Post-Approval, Add-On, New service provider, Import. Provider contacts: Pre-Approval, Post-Approval, Add-On. An Add-On needs the parent CIP number and COR number, and only one Add-On can be in progress per granted file.'
     },
     {
       id: 'file-library',

@@ -172,6 +172,7 @@
     { id: 'all_applications', label: 'All Applications', shortLabel: 'All' },
     { id: 'pre_approval', label: 'Pre-Approval Applications', shortLabel: 'Pre-Approval' },
     { id: 'post_approval', label: 'Post-Approval Applications', shortLabel: 'Post-Approval' },
+    { id: 'add_on', label: 'Add-On Applications', shortLabel: 'Add-On' },
     // Appeals sit between the lanes and the archive: a file being appealed
     // is still in flight, but it is no longer in the lane it was in.
     { id: 'appeal', label: 'Appeals', shortLabel: 'Appeals' },
@@ -197,9 +198,9 @@
 
   /*
    * Staff see the full set. A service provider contact sees their firm's
-   * applications split the same way — All / Pre-Approval / Post-Approval —
-   * but not the firm's registry of providers and contacts. A private client
-   * has no list tabs; they only have their own files.
+   * applications split the same way — All / Pre-Approval / Post-Approval /
+   * Add-On — but not the firm's registry of providers and contacts. A private
+   * client has no list tabs; they only have their own files.
    */
   function listTabsForViewer() {
     if (isProviderCipUser()) {
@@ -207,6 +208,7 @@
         if (tab.id === 'all_applications'
           || tab.id === 'pre_approval'
           || tab.id === 'post_approval'
+          || tab.id === 'add_on'
           || tab.id === 'appeal'
           || tab.id === 'closed') {
           return true;
@@ -262,7 +264,7 @@
     if (!state || state.screen !== 'list') return false;
     var tab = listTabOf(state);
     return tab === 'all_applications' || tab === 'pre_approval' || tab === 'post_approval'
-      || tab === 'appeal' || tab === 'closed';
+      || tab === 'add_on' || tab === 'appeal' || tab === 'closed';
   }
 
   /** Which workflow lane the current application tab filters to, if any. */
@@ -270,6 +272,7 @@
     var tab = listTabOf(state);
     if (tab === 'pre_approval') return 'pre_approval';
     if (tab === 'post_approval') return 'post_approval';
+    if (tab === 'add_on') return 'add_on';
     // Neither of these is a lane: the server reads 'closed' as status =
     // closed, and 'appeal' as any of the three appeal statuses.
     if (tab === 'closed') return 'closed';
@@ -280,25 +283,28 @@
   /** Which workflow lane a new application is filed into. */
   function parseNewApplicationPhase(search) {
     var phase = new URLSearchParams(search || window.location.search || '').get('phase');
-    return phase === 'post_approval' ? 'post_approval' : 'pre_approval';
+    if (phase === 'post_approval') return 'post_approval';
+    if (phase === 'add_on') return 'add_on';
+    return 'pre_approval';
   }
 
   function newApplicationLabel(phase) {
-    return phase === 'post_approval'
-      ? 'New post-approval application'
-      : 'New pre-approval application';
+    if (phase === 'post_approval') return 'New post-approval application';
+    if (phase === 'add_on') return 'New Add-On application';
+    return 'New pre-approval application';
   }
 
   function pathForNewApplication(phase) {
-    return phase === 'post_approval'
-      ? cipPagePath('/applications/new') + '?phase=post_approval'
-      : cipPagePath('/applications/new');
+    if (phase === 'post_approval') return cipPagePath('/applications/new') + '?phase=post_approval';
+    if (phase === 'add_on') return cipPagePath('/applications/new') + '?phase=add_on';
+    return cipPagePath('/applications/new');
   }
 
   function tabPhaseCountKey(tab) {
     if (tab.id === 'all_applications') return 'all';
     if (tab.id === 'pre_approval') return 'pre_approval';
     if (tab.id === 'post_approval') return 'post_approval';
+    if (tab.id === 'add_on') return 'add_on';
     if (tab.id === 'closed') return 'closed';
     if (tab.id === 'appeal') return 'appeal';
     return null;
@@ -1945,6 +1951,7 @@
           '<div class="tma-dash__menu tma-dash__head-dropdown-menu tma-dash__head-dropdown-menu--end" data-head-dropdown-menu hidden role="menu" aria-label="Create New Application">' +
           '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-pre-approval">Create New Pre-Approval Application</button>' +
           '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-post-approval">Create New Post-Approval Application</button>' +
+          '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-add-on">Create New Add-On Application</button>' +
           (canCreateBeyondApplications()
             ? '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-company">New service provider</button>' +
               '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="create-import">Import</button>'
@@ -2044,7 +2051,7 @@
     if (!slot) return;
 
     // Private clients: applications only, no list tabs.
-    // Service provider contacts keep All / Pre-Approval / Post-Approval.
+    // Service provider contacts keep All / Pre-Approval / Post-Approval / Add-On.
     var tabs = listTabsForViewer();
     if (!tabs.length) {
       state.listTab = 'all_applications';
@@ -2926,7 +2933,7 @@
     // rather than undefined so the predicates that read .length can run
     // before the first response has landed.
     assignees: [], providers: [], statuses: [], personStatuses: [],
-    phaseCounts: { all: 0, pre_approval: 0, post_approval: 0, closed: 0 },
+    phaseCounts: { all: 0, pre_approval: 0, post_approval: 0, add_on: 0, closed: 0 },
     expanded: {},
   };
 
@@ -3237,7 +3244,7 @@
      * an empty table. Updates Required exists in both; the card says which.
      */
     var tab = 'pre_approval';
-    if (phase === 'post_approval' || phase === 'pre_approval') {
+    if (phase === 'post_approval' || phase === 'pre_approval' || phase === 'add_on') {
       tab = phase;
     } else if (key && BUCKETS.phases) {
       var postHas = bucketsFromPhase('post_approval').some(function (b) { return b.key === key; });
@@ -6826,6 +6833,14 @@
       overviewRow('Application number', app.internalNumber || app.number) +
       overviewRow('CIP application number', app.cipNumber || '') +
       overviewRow('Status', cipStatusChip(app), true) +
+      (app.phase === 'add_on' && app.addonTypeLabel
+        ? overviewRow('Add-On type', app.addonTypeLabel)
+        : '') +
+      (app.parent
+        ? overviewRow('Parent application', app.parent.number || app.parent.cipNumber) +
+          overviewRow('Main applicant', app.parent.applicantName) +
+          overviewRow('COR number', app.parent.corNumber)
+        : overviewRow('COR number', app.corNumber || '')) +
       overviewRow('Investment', app.investmentType) +
       overviewRow('Referred by', app.provider) +
       overviewRow('Sponsored', app.sponsored ? 'Yes' : 'No')
@@ -7174,6 +7189,7 @@
     if ((i = item(ICONS.User, 'Gender', person.gender))) fields.push(i);
     if ((i = item(ICONS.CalendarBlank, 'Date of birth', person.dateOfBirth))) fields.push(i);
     if ((i = item(ICONS.MapPin, 'Country of birth', person.countryOfBirth))) fields.push(i);
+    if ((i = item(ICONS.MapPin, 'Nationality', person.nationality))) fields.push(i);
     if ((i = item(ICONS.MapPin, 'Country of residence', person.countryOfResidence))) fields.push(i);
     if ((i = item(ICONS.MapPin, 'Region', person.region))) fields.push(i);
     if ((i = item(ICONS.Briefcase, 'Occupation', person.occupation))) fields.push(i);
@@ -12050,6 +12066,14 @@
         '<input type="date" id="cip-stage-date" class="tma-dash__clients-field-input"' +
         ' data-cip-stage-date value="' + esc(today) + '">' +
         '</div>' +
+        (key === 'cor_received'
+          ? '<div class="tma-dash__clients-field">' +
+            '<label class="tma-dash__clients-field-label" for="cip-stage-cor">Certificate of Registration number</label>' +
+            '<input type="text" id="cip-stage-cor" class="tma-dash__clients-field-input"' +
+            ' data-cip-stage-cor placeholder="As printed on the certificate" value="' +
+            esc((app && app.corNumber) || '') + '">' +
+            '</div>'
+          : '') +
         '<p class="tma-portal-modal__text">' + esc(meta.note || '') + '</p>' +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-stage>Cancel</button>' +
@@ -12069,13 +12093,23 @@
             clientsToast('Enter the ' + (meta.dateLabel || 'date').toLowerCase() + '.', 'negative');
             return;
           }
+          var payload = { stage: key, date: date };
+          if (key === 'cor_received') {
+            var corEl = el.querySelector('[data-cip-stage-cor]');
+            var corNumber = corEl && corEl.value ? corEl.value.trim() : '';
+            if (!corNumber) {
+              clientsToast('Enter the Certificate of Registration number.', 'negative');
+              return;
+            }
+            payload.corNumber = corNumber;
+          }
 
           save.disabled = true;
           save.textContent = 'Recording…';
 
           clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/stage', {
             method: 'POST',
-            json: { stage: key, date: date },
+            json: payload,
           })
             .then(function (json) {
               ui.closeModal();
@@ -13286,6 +13320,10 @@
       }
       if (action === 'create-post-approval' && clientsHeadActionsNavigate) {
         clientsHeadActionsNavigate('new-application', null, { applicationPhase: 'post_approval' });
+        return;
+      }
+      if (action === 'create-add-on' && clientsHeadActionsNavigate) {
+        clientsHeadActionsNavigate('new-application', null, { applicationPhase: 'add_on' });
         return;
       }
       if (action === 'create-new' && clientsHeadActionsNavigate) {

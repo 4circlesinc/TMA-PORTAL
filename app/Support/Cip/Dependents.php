@@ -74,6 +74,10 @@ class Dependents
      */
     public static function label(CipPerson $person): string
     {
+        if ($person->application?->phase === Phase::ADD_ON) {
+            return AddOn::personLabel($person);
+        }
+
         if ($person->role !== CipPerson::ROLE_DEPENDENT) {
             return $person->role === CipPerson::ROLE_SPONSOR ? 'Sponsor' : 'Main Applicant';
         }
