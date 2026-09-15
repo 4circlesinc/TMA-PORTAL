@@ -63,8 +63,8 @@ class AddOn
 
         return [
             self::TYPE_SPOUSE => 'Spouse',
-            self::TYPE_DEPENDENT_UNDER_16 => 'Dependent under '.$cutoff,
-            self::TYPE_DEPENDENT_16_OVER => 'Dependent '.$cutoff.' and over',
+            self::TYPE_DEPENDENT_UNDER_16 => 'Dependent Under '.$cutoff,
+            self::TYPE_DEPENDENT_16_OVER => 'Dependent '.$cutoff.' and Over',
         ];
     }
 
@@ -89,7 +89,16 @@ class AddOn
             return [CipPerson::RELATIONSHIP_SPOUSE => 'Spouse'];
         }
 
+        if (in_array($type, [self::TYPE_DEPENDENT_UNDER_16, self::TYPE_DEPENDENT_16_OVER], true)) {
+            return [
+                self::RELATIONSHIP_SON => 'Son',
+                self::RELATIONSHIP_DAUGHTER => 'Daughter',
+                self::RELATIONSHIP_OTHER => 'Other Qualified Dependent',
+            ];
+        }
+
         return [
+            CipPerson::RELATIONSHIP_SPOUSE => 'Spouse',
             self::RELATIONSHIP_SON => 'Son',
             self::RELATIONSHIP_DAUGHTER => 'Daughter',
             self::RELATIONSHIP_OTHER => 'Other Qualified Dependent',
@@ -116,6 +125,37 @@ class AddOn
     public static function normalizeNumber(?string $value): string
     {
         return mb_strtolower(preg_replace('/\s+/u', '', (string) $value) ?? '');
+    }
+
+    public static function normalizeName(?string $value): string
+    {
+        return mb_strtolower(preg_replace('/\s+/u', ' ', trim((string) $value)) ?? '');
+    }
+
+    public static function namesMatch(?string $typed, ?string $actual): bool
+    {
+        $left = self::normalizeName($typed);
+        $right = self::normalizeName($actual);
+
+        return $left !== '' && $left === $right;
+    }
+
+    /**
+     * Whether the typed main-applicant name is the person on this parent.
+     * Null means it is; a string is the reason it is not.
+     */
+    public static function nameMismatch(CipApplication $parent, ?string $typed): ?string
+    {
+        if (trim((string) $typed) === '') {
+            return 'Enter the main applicant name.';
+        }
+
+        $expected = (string) (self::parentPayload($parent)['applicantName'] ?? '');
+        if (! self::namesMatch($typed, $expected)) {
+            return 'Main applicant name does not match this CIP application.';
+        }
+
+        return null;
     }
 
     /**

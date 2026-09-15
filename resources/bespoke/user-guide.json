@@ -257,7 +257,7 @@
     "Menu item: Manage decision letters; What it opens: CIP Console → Granted And Denied Letters.",
     "Menu item: Manage distribution group; What it opens: CIP Console → Distribution Group.",
     "## Create an application",
-    "Staff: click Create New Application. The menu offers Create New Pre-Approval Application, Create New Post-Approval Application, Create New Add-On Application, New service provider, and Import. An Add-On is a spouse or dependent added to a granted file: enter the parent CIP number and COR number, then one applicant. Only one Add-On profile can be in progress for that parent at a time.",
+    "Staff: click Create New Application. The menu offers Create New Pre-Approval Application, Create New Post-Approval Application, Create New Add-On Application, New service provider, and Import. An Add-On is a spouse or dependent added to a granted file. Required parent fields: Main Applicant Name, CIP Application Number, Certificate of Registration (COR) Number, and Add-On Type (Spouse, Dependent Under 16, Dependent 16 and Over). Then one applicant: First Name, Last Name, Date of Birth, Nationality, Country of Residence, Relationship to Main Applicant (Spouse, Son, Daughter, Other Qualified Dependent), and Passport Number. Only one Add-On profile can be in progress for that parent at a time.",
     "## Fill the intake form",
     "Field: Service provider; What to enter: Select the provider. Required.",
     "Field: Investment type; What to enter: Select the investment. If you choose other, specify it.",

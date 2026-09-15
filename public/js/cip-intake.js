@@ -243,6 +243,8 @@
     var tail = path.split('.').pop();
     var fromTemplate = null;
     docFields(sectionForPath(path)).forEach(function (d) { if (d.field === tail) fromTemplate = d.label; });
+    if (isAddOnIntake() && tail === 'relationship') return 'Relationship to Main Applicant';
+    if (isAddOnIntake() && tail === 'parentApplicantName') return 'Main Applicant Name';
 
     return fromTemplate || LABELS[tail] || tail;
   }
@@ -314,12 +316,9 @@
   /* Every path this form must have an answer for, given what it now says. */
   function requiredPaths() {
     if (isAddOnIntake()) {
-      var addOnPaths = ['parentCipNumber', 'parentCorNumber', 'addonType',
-        'firstName', 'lastName', 'dateOfBirth', 'nationality',
-        'countryOfResidence', 'passportNumber'];
-      if (state.draft.addonType && state.draft.addonType !== 'spouse') {
-        addOnPaths.push('relationship');
-      }
+      var addOnPaths = ['parentApplicantName', 'parentCipNumber', 'parentCorNumber',
+        'addonType', 'firstName', 'lastName', 'dateOfBirth', 'nationality',
+        'countryOfResidence', 'relationship', 'passportNumber'];
       return addOnPaths;
     }
 
@@ -550,7 +549,7 @@
   }
 
   function isNamePath(path) {
-    return /(^|\.)(firstName|lastName)$/.test(String(path || ''));
+    return /(^|\.)(firstName|lastName|parentApplicantName)$/.test(String(path || ''));
   }
 
   function upperName(value) {
@@ -1107,12 +1106,17 @@
     var types = ((state.options && state.options.addonTypes) || []).map(function (t) {
       return { value: t.value, label: t.label };
     });
-    var relKey = state.draft.addonType === 'spouse' ? 'spouse' : 'dependent';
-    var relationships = ((((state.options && state.options.addonRelationships) || {})[relKey]) || [])
+    var type = state.draft.addonType;
+    var relationships = ((state.options && state.options.addonRelationships) || [])
+      .filter(function (t) {
+        if (type === 'spouse') return t.value === 'spouse';
+        if (type === 'dependent_under_16' || type === 'dependent_16_over') {
+          return t.value !== 'spouse';
+        }
+        return true;
+      })
       .map(function (t) { return { value: t.value, label: t.label }; });
     var countries = countryOptions();
-    var parent = state.parent || (state.record && state.record.parent) || null;
-    var parentName = state.draft.parentApplicantName || (parent && parent.applicantName) || '';
     var openNote = '';
     if (state.openAddOn && !(state.applicationId && state.openAddOn.id === state.applicationId)
       && !(state.draftId && state.openAddOn.id === state.draftId)) {
@@ -1124,10 +1128,12 @@
 
     return '<div class="tma-dash__clients-cards tma-dash__clients-cards--intake">' +
       card('Parent application',
-        '<p class="tma-portal-note">File this Add-On against an existing granted application. The CIP number and Certificate of Registration number must both match that file.</p>' +
+        '<p class="tma-portal-note">File this Add-On against an existing granted application. The main applicant name, CIP number and Certificate of Registration number must all match that file.</p>' +
         '<div class="tma-portal-form-grid tma-portal-form-grid--investment">' +
+        textField('parentApplicantName', { placeholder: 'As on the granted application' }) +
         textField('parentCipNumber', { placeholder: 'As printed on the approval letter' }) +
         textField('parentCorNumber', { placeholder: 'As printed on the certificate' }) +
+        selectField('addonType', types, 'Select Add-On type') +
         '</div>' +
         '<div class="tma-portal-form-actions" style="margin-top:12px">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-addon-lookup>Look up parent</button>' +
@@ -1135,19 +1141,7 @@
         (state.parentError
           ? '<p class="tma-portal-modal__error" role="alert">' + esc(state.parentError) + '</p>'
           : '') +
-        (parentName
-          ? '<div class="tma-portal-field" style="margin-top:12px"><span class="tma-portal-field__label">' +
-            esc(LABELS.parentApplicantName) + '</span>' +
-            '<p class="tma-portal-field__static">' + esc(parentName) + '</p></div>'
-          : '') +
         openNote) +
-      card('Add-On',
-        '<div class="tma-portal-form-grid tma-portal-form-grid--investment">' +
-        selectField('addonType', types, 'Select Add-On type') +
-        (state.draft.addonType && state.draft.addonType !== 'spouse'
-          ? selectField('relationship', relationships, 'Select relationship')
-          : '') +
-        '</div>') +
       titledCard('Add-On applicant',
         photoField('passportPhoto') +
         '<div class="tma-portal-form-grid tma-portal-form-grid--person">' +
@@ -1156,6 +1150,7 @@
         textField('dateOfBirth', { type: 'date' }) +
         selectField('nationality', countries, 'Select a nationality') +
         selectField('countryOfResidence', countries, 'Select a country') +
+        selectField('relationship', relationships, 'Select relationship') +
         textField('passportNumber', { placeholder: 'As printed on the bio page' }) +
         '</div>',
         { modifier: 'tma-portal-section--person' }) +
@@ -1248,13 +1243,17 @@
         // year buffer, so 2004 lands as 0004. Wait until the year looks like
         // a birth year, or until they leave the field.
         if (/countryOfResidence$|investmentType$|sponsored$|relationship$|gender$|addonType$|nationality$/.test(path)) {
+          if (path === 'addonType') {
+            if (el.value === 'spouse') state.draft.relationship = 'spouse';
+            else if (state.draft.relationship === 'spouse') state.draft.relationship = '';
+          }
           render(root);
         } else if (/dateOfBirth$/.test(path) && dobYearSettled(el.value)) {
           render(root);
         }
       });
       el.addEventListener('blur', function () {
-        if (/parentCipNumber$|parentCorNumber$/.test(path)) {
+        if (/parentCipNumber$|parentCorNumber$|parentApplicantName$/.test(path)) {
           lookupParent();
           return;
         }
@@ -1293,8 +1292,10 @@
       return;
     }
 
+    var name = String(state.draft.parentApplicantName || '').trim();
     var url = '/portal/cip/applications/add-on/parent?cipNumber=' +
       encodeURIComponent(cip) + '&corNumber=' + encodeURIComponent(cor);
+    if (name) url += '&applicantName=' + encodeURIComponent(name);
 
     fetch(url, { credentials: 'same-origin', headers: headers() }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (json) {
@@ -1302,16 +1303,14 @@
           state.parent = null;
           state.openAddOn = null;
           state.parentError = (json && json.message) || 'Could not find that application.';
-          state.draft.parentApplicantName = '';
           render(state.root);
           return;
         }
         state.parent = json.parent || null;
         state.openAddOn = json.openAddOn || null;
         state.parentError = '';
-        if (state.parent) {
-          state.draft.parentApplicantName = state.parent.applicantName || '';
-          if (state.parent.providerId) state.draft.providerId = state.parent.providerId;
+        if (state.parent && state.parent.providerId) {
+          state.draft.providerId = state.parent.providerId;
         }
         render(state.root);
         touchDraft();

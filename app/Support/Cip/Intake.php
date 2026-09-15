@@ -719,6 +719,7 @@ class Intake
             'cipNumber.prohibited' => 'A CIP number is recorded when the application is submitted to the Unit.',
             'parentCipNumber.required' => 'Enter the CIP application number of the granted file.',
             'parentCorNumber.required' => 'Enter the Certificate of Registration number.',
+            'parentApplicantName.required' => 'Enter the main applicant name.',
             'addonType.required' => 'Choose the Add-On type.',
             'relationship.required' => 'Choose the relationship to the main applicant.',
             'nationality.required' => 'Choose a nationality.',
@@ -1869,6 +1870,10 @@ class Intake
             throw new \InvalidArgumentException('The parent application could not be found.');
         }
 
+        if ($why = AddOn::nameMismatch($parent, $data['parentApplicantName'] ?? null)) {
+            throw new \InvalidArgumentException($why);
+        }
+
         if (AddOn::hasOpenAddOn($parent)) {
             throw new \InvalidArgumentException(
                 'An Add-On application is already in progress for this file. Finish or close it before starting another.',
@@ -1900,6 +1905,7 @@ class Intake
             ? [
                 'parentCipNumber' => ['nullable', 'string', 'max:'.Submission::MAX_LENGTH],
                 'parentCorNumber' => ['nullable', 'string', 'max:64'],
+                'parentApplicantName' => ['nullable', 'string', 'max:191'],
                 'addonType' => ['nullable', 'string', Rule::in(AddOn::TYPES)],
             ]
             : [
@@ -1909,6 +1915,7 @@ class Intake
                 'draftId' => ['nullable', 'string', 'max:64'],
                 'parentCipNumber' => ['required', 'string', 'max:'.Submission::MAX_LENGTH],
                 'parentCorNumber' => ['required', 'string', 'max:64'],
+                'parentApplicantName' => ['required', 'string', 'max:191'],
                 'addonType' => ['required', 'string', Rule::in(AddOn::TYPES)],
             ];
 
@@ -1919,9 +1926,7 @@ class Intake
             'nationality' => ['required', 'string', Rule::in(Countries::all())],
             'countryOfResidence' => ['required', 'string', Rule::in(Countries::all())],
             'passportNumber' => ['required', 'string', 'max:64'],
-            'relationship' => $type === AddOn::TYPE_SPOUSE
-                ? ['nullable', 'string', Rule::in($relationships)]
-                : ['required', 'string', Rule::in($relationships)],
+            'relationship' => ['required', 'string', Rule::in($relationships)],
             'gender' => ['nullable', Rule::in(['Male', 'Female'])],
             'countryOfBirth' => ['nullable', 'string', Rule::in(Countries::all())],
             'occupation' => ['nullable', 'string', 'max:191'],
@@ -1939,6 +1944,7 @@ class Intake
             'submissionId' => ['nullable', 'string', 'max:64'],
             'parentCipNumber' => ['nullable', 'string', 'max:'.Submission::MAX_LENGTH],
             'parentCorNumber' => ['nullable', 'string', 'max:64'],
+            'parentApplicantName' => ['nullable', 'string', 'max:191'],
             'addonType' => ['nullable', 'string', Rule::in(AddOn::TYPES)],
             'relationship' => ['nullable', 'string', 'max:48'],
             'dependents' => ['nullable', 'array', 'max:0'],

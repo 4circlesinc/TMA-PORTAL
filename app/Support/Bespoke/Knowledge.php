@@ -227,7 +227,7 @@ final class Knowledge
 
     public static function intakeFacts(): string
     {
-        return 'Create New Application: staff see Pre-Approval, Post-Approval, Add-On, New service provider, and Import. Provider contacts: Pre-Approval, Post-Approval, and Add-On. Service provider is chosen on create and prefixes the number (for example GAL26-00001). It is not reassigned later. Officers are assigned by administrators — that is not picking a provider. Autosave ~1.2s after idle on Draft / new filings. Toast: Draft saved. An Add-On is filed against a granted parent using the CIP number and COR number, one profile at a time.';
+        return 'Create New Application: staff see Pre-Approval, Post-Approval, Add-On, New service provider, and Import. Provider contacts: Pre-Approval, Post-Approval, and Add-On. Service provider is chosen on create and prefixes the number (for example GAL26-00001). It is not reassigned later. Officers are assigned by administrators — that is not picking a provider. Autosave ~1.2s after idle on Draft / new filings. Toast: Draft saved. An Add-On is filed against a granted parent using the main applicant name, CIP number and COR number (all three must match that file), then one applicant with relationship Spouse, Son, Daughter, or Other Qualified Dependent. Only one Add-On profile at a time.';
     }
 
     public static function statusFacts(): string
@@ -398,7 +398,7 @@ final class Knowledge
                 'q' => 'How do I start a CIP application?',
                 'keywords' => ['start', 'create', 'new application', 'cip', 'pre-approval', 'file an application'],
                 'cipOnly' => true,
-                'answer' => "Open [CIP Applications](/citizenship-applications) → **Create New Application**.\n\nStaff: Pre-Approval, Post-Approval, Add-On, New service provider, Import.\nProvider contacts: Pre-Approval, Post-Approval, and Add-On.\n\nAn Add-On is a spouse or dependent added to a granted file. Enter that file's CIP number and COR number; only one Add-On profile can be in progress at a time.\n\nPick the **service provider on create** (inherited from the parent on an Add-On). It prefixes the number (for example GAL26-00001) and is not reassigned later. Assigning an officer is a different, administrator-only action.",
+                'answer' => "Open [CIP Applications](/citizenship-applications) → **Create New Application**.\n\nStaff: Pre-Approval, Post-Approval, Add-On, New service provider, Import.\nProvider contacts: Pre-Approval, Post-Approval, and Add-On.\n\nAn Add-On is a spouse or dependent added to a granted file. Enter the **main applicant name**, CIP number and COR number (they must match the granted file), the Add-On type, then one applicant including **relationship to the main applicant** (Spouse, Son, Daughter, or Other Qualified Dependent). Only one Add-On profile can be in progress at a time.\n\nPick the **service provider on create** (inherited from the parent on an Add-On). It prefixes the number (for example GAL26-00001) and is not reassigned later. Assigning an officer is a different, administrator-only action.",
             ],
             [
                 'id' => 'file-library',

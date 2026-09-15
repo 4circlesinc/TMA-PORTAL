@@ -116,14 +116,9 @@ class CipApplicationController extends Controller
             'addonTypes' => collect(AddOn::typeOptions())
                 ->map(fn (string $label, string $value) => ['value' => $value, 'label' => $label])
                 ->values(),
-            'addonRelationships' => [
-                'spouse' => collect(AddOn::relationshipOptions(AddOn::TYPE_SPOUSE))
-                    ->map(fn (string $label, string $value) => ['value' => $value, 'label' => $label])
-                    ->values(),
-                'dependent' => collect(AddOn::relationshipOptions(AddOn::TYPE_DEPENDENT_UNDER_16))
-                    ->map(fn (string $label, string $value) => ['value' => $value, 'label' => $label])
-                    ->values(),
-            ],
+            'addonRelationships' => collect(AddOn::relationshipOptions())
+                ->map(fn (string $label, string $value) => ['value' => $value, 'label' => $label])
+                ->values(),
             /*
              * The wizard's document sections, from the same templates the
              * admin screen edits, so a requirement added, reworded or
@@ -169,6 +164,7 @@ class CipApplicationController extends Controller
         $data = $request->validate([
             'cipNumber' => ['required', 'string', 'max:'.Submission::MAX_LENGTH],
             'corNumber' => ['required', 'string', 'max:64'],
+            'applicantName' => ['nullable', 'string', 'max:191'],
         ], [
             'cipNumber.required' => 'Enter the CIP application number.',
             'corNumber.required' => 'Enter the Certificate of Registration number.',
@@ -179,6 +175,7 @@ class CipApplicationController extends Controller
             $field = match ($result['field'] ?? '') {
                 'parentCipNumber' => 'cipNumber',
                 'parentCorNumber' => 'corNumber',
+                'parentApplicantName' => 'applicantName',
                 default => $result['field'] ?? 'cipNumber',
             };
 
@@ -186,6 +183,16 @@ class CipApplicationController extends Controller
                 'message' => $result['error'] ?? 'Parent application not found.',
                 'errors' => [$field => [$result['error'] ?? 'Parent application not found.']],
             ], 422);
+        }
+
+        $parent = AddOn::findParent($user, $data['cipNumber'], $data['corNumber']);
+        if ($parent && trim((string) ($data['applicantName'] ?? '')) !== '') {
+            if ($why = AddOn::nameMismatch($parent, $data['applicantName'])) {
+                return response()->json([
+                    'message' => $why,
+                    'errors' => ['applicantName' => [$why]],
+                ], 422);
+            }
         }
 
         return response()->json($result);
@@ -412,6 +419,10 @@ class CipApplicationController extends Controller
             (string) ($data['parentCorNumber'] ?? ''),
         );
         abort_unless($parent, 422, 'The parent application could not be found.');
+
+        if ($why = AddOn::nameMismatch($parent, $data['parentApplicantName'] ?? null)) {
+            abort(422, $why);
+        }
 
         if (AddOn::hasOpenAddOn($parent, $draft?->id)) {
             abort(422, 'An Add-On application is already in progress for this file. Finish or close it before starting another.');

@@ -43,10 +43,9 @@ class CipAddOnTest extends TestCase
             ['spouse', 'dependent_under_16', 'dependent_16_over'],
             array_column($body['addonTypes'], 'value'),
         );
-        $this->assertSame(['spouse'], array_column($body['addonRelationships']['spouse'], 'value'));
-        $this->assertEqualsCanonicalizing(
-            ['son', 'daughter', 'other_qualified_dependent'],
-            array_column($body['addonRelationships']['dependent'], 'value'),
+        $this->assertSame(
+            ['spouse', 'son', 'daughter', 'other_qualified_dependent'],
+            array_column($body['addonRelationships'], 'value'),
         );
     }
 
@@ -103,6 +102,35 @@ class CipAddOnTest extends TestCase
             ->getJson('/portal/cip/applications/add-on/parent?cipNumber=10T1GADD02P&corNumber=COR-OPEN')
             ->assertUnprocessable()
             ->assertJsonPath('message', 'The parent application must be granted.');
+    }
+
+    public function test_parent_lookup_refuses_a_main_applicant_name_mismatch(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/add-on/parent?cipNumber='.$parent->cip_number.'&corNumber='.$parent->cor_number.'&applicantName=Wrong+Name')
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.applicantName.0', 'Main applicant name does not match this CIP application.');
+    }
+
+    public function test_filing_requires_the_main_applicant_name_and_relationship(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $this->file($staff, $this->addOnPayload($parent, [
+            'parentApplicantName' => '',
+        ]))->assertUnprocessable();
+
+        $this->file($staff, $this->addOnPayload($parent, [
+            'parentApplicantName' => 'Someone Else',
+        ]))->assertUnprocessable();
+
+        $this->file($staff, $this->addOnPayload($parent, [
+            'relationship' => '',
+        ]))->assertUnprocessable();
     }
 
     public function test_an_agent_can_file_a_spouse_add_on_against_a_granted_parent(): void
@@ -321,6 +349,7 @@ class CipAddOnTest extends TestCase
             'phase' => Phase::ADD_ON,
             'parentCipNumber' => $parent->cip_number,
             'parentCorNumber' => $parent->cor_number,
+            'parentApplicantName' => 'Chen Wei',
             'addonType' => $type,
             'firstName' => 'Mei',
             'lastName' => 'Wei',
