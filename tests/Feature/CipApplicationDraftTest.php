@@ -269,12 +269,13 @@ class CipApplicationDraftTest extends TestCase
     }
 
     /**
-     * Without the id, a second draft save used to replace the dependent.
+     * Without the id, a second draft save must still reuse the same person.
      *
-     * Pinning that failure mode so the frontend remembering the id stays
-     * necessary, and so a future change cannot quietly reintroduce the churn.
+     * Uuid is preferred, but concurrent or stale autosaves sometimes omit it.
+     * Matching on name (and DOB when present) stops a second Ahmed being
+     * minted beside the first — the failure that left Suha with duplicates.
      */
-    public function test_a_draft_dependent_save_without_id_still_replaces_the_row(): void
+    public function test_a_draft_dependent_save_without_id_reuses_the_same_person(): void
     {
         Storage::fake('local');
 
@@ -288,12 +289,16 @@ class CipApplicationDraftTest extends TestCase
                     'lastName' => 'Abtan',
                     'dateOfBirth' => '2012-05-01',
                     'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                    'passportPhoto' => UploadedFile::fake()->image('suha.jpg', 600, 600),
                 ]],
             ]), ['Accept' => 'application/json'])
             ->assertOk();
 
         $draft = CipApplication::query()->firstOrFail();
-        $firstId = $draft->people()->where('role', CipPerson::ROLE_DEPENDENT)->value('uuid');
+        $first = $draft->people()->where('role', CipPerson::ROLE_DEPENDENT)->firstOrFail();
+        $firstId = $first->uuid;
+        $folderId = $first->folder_id;
+        $photoPath = $first->photo_path;
 
         $this->actingAs($staff)
             ->post('/portal/cip/applications/draft', $this->answers($provider, [
@@ -309,8 +314,10 @@ class CipApplicationDraftTest extends TestCase
         $draft = $draft->fresh();
         $live = $draft->people()->where('role', CipPerson::ROLE_DEPENDENT)->get();
         $this->assertCount(1, $live);
-        $this->assertNotSame($firstId, $live[0]->uuid, 'Omitting the id still creates a new person — which is why the form must keep it.');
-        $this->assertSame(1, CipPerson::onlyTrashed()
+        $this->assertSame($firstId, $live[0]->uuid, 'Omitting the id still updates the same person by name.');
+        $this->assertSame($folderId, $live[0]->folder_id);
+        $this->assertSame($photoPath, $live[0]->photo_path);
+        $this->assertSame(0, CipPerson::onlyTrashed()
             ->where('application_id', $draft->id)
             ->where('role', CipPerson::ROLE_DEPENDENT)
             ->count());

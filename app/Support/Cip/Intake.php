@@ -1038,11 +1038,21 @@ class Intake
      */
     public static function updateDraft(CipApplication $application, User $actor, array $data): CipApplication
     {
-        if ($application->status !== Status::DRAFT) {
-            throw new \RuntimeException('This application has been filed and is no longer a draft.');
-        }
-
         return DB::transaction(function () use ($application, $actor, $data) {
+            /*
+             * Two autosaves in flight used to both read the same people list,
+             * both mint new dependents, and leave Suha with two Ahmeds. Lock
+             * the application row so concurrent drafts serialize.
+             */
+            $application = CipApplication::query()
+                ->whereKey($application->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($application->status !== Status::DRAFT) {
+                throw new \RuntimeException('This application has been filed and is no longer a draft.');
+            }
+
             self::saveDraftAnswers($application, $actor, $data);
 
             return $application->fresh();
@@ -1201,6 +1211,11 @@ class Intake
         }
 
         return DB::transaction(function () use ($application, $actor, $data) {
+            $application = CipApplication::query()
+                ->whereKey($application->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
             $locked = $application->isLocked();
             /*
              * Confirm submission freezes the scans the Unit was handed, not
@@ -1449,7 +1464,12 @@ class Intake
     }
 
     /**
-     * The dependants after an edit, matched by uuid.
+     * The dependants after an edit, matched by uuid, then by name.
+     *
+     * Uuid is preferred: the form remembers it after the first save. When a
+     * concurrent autosave or a stale tab omits it, the same first+last name
+     * (and date of birth when both sides have one) reuses the live row so a
+     * second Ahmed is not minted beside the first.
      *
      * @param  array<int, array<string, mixed>>  $rows
      * @return list<CipPerson> in the order the form sent them
@@ -1464,6 +1484,15 @@ class Intake
                 ? $application->people->firstWhere('uuid', $row['id'])
                 : null;
 
+            if ($person === null) {
+                $person = self::matchDependentByIdentity(
+                    $application->people
+                        ->where('role', CipPerson::ROLE_DEPENDENT)
+                        ->reject(fn (CipPerson $p) => in_array($p->id, $kept, true)),
+                    $row,
+                );
+            }
+
             if ($person) {
                 self::applyPerson($person, $row);
                 // A draft row may have no relationship chosen yet; keep the
@@ -1473,6 +1502,10 @@ class Intake
                 }
             } else {
                 $person = self::writePerson($application, CipPerson::ROLE_DEPENDENT, $row);
+                $application->setRelation(
+                    'people',
+                    $application->people->push($person),
+                );
             }
 
             $ordered[] = $person;
@@ -1487,6 +1520,47 @@ class Intake
             ->each(fn (CipPerson $p) => $p->delete());
 
         return $ordered;
+    }
+
+    /**
+     * Find a live dependent the form row is clearly the same person as.
+     *
+     * Empty names do not match: two blank draft rows must stay two people.
+     * When either side has no date of birth, name alone is enough — Suha's
+     * children were saved without DOBs and still duplicated by name alone.
+     *
+     * @param  \Illuminate\Support\Collection<int, CipPerson>  $candidates
+     * @param  array<string, mixed>  $row
+     */
+    private static function matchDependentByIdentity($candidates, array $row): ?CipPerson
+    {
+        $first = CipPerson::upperName(trim((string) ($row['firstName'] ?? ''))) ?? '';
+        $last = CipPerson::upperName(trim((string) ($row['lastName'] ?? ''))) ?? '';
+        if ($first === '' && $last === '') {
+            return null;
+        }
+
+        $dob = isset($row['dateOfBirth']) && $row['dateOfBirth'] !== ''
+            ? (string) $row['dateOfBirth']
+            : null;
+
+        return $candidates
+            ->sortBy('id')
+            ->first(function (CipPerson $person) use ($first, $last, $dob) {
+                if ((CipPerson::upperName($person->first_name) ?? '') !== $first) {
+                    return false;
+                }
+                if ((CipPerson::upperName($person->last_name) ?? '') !== $last) {
+                    return false;
+                }
+
+                $existingDob = $person->date_of_birth?->format('Y-m-d');
+                if ($dob === null || $existingDob === null) {
+                    return true;
+                }
+
+                return $existingDob === $dob;
+            });
     }
 
     /**
