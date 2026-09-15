@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Files;
 
 use App\Models\FileItem;
 use App\Models\FileVersion;
+use App\Support\Cip\DocumentTypes;
+use App\Support\Cip\PassportPhoto;
 use App\Support\Files\FileAccess;
 use App\Support\Files\FileType;
 use App\Support\Files\Presenter;
@@ -85,6 +87,20 @@ class FileVersionController extends BaseFilesController
         ]);
 
         $upload = $request->file('file');
+
+        /*
+         * A passport-photo slot is also the person's likeness. Refuse a
+         * version that could not be worn as a face, before the vault
+         * commits it — otherwise the viewer would show a scan the
+         * profile could never adopt.
+         */
+        $file->loadMissing('cipDocument');
+        if ($file->cipDocument?->type === DocumentTypes::PASSPORT_PHOTO) {
+            if ($why = PassportPhoto::rejectUpload($upload)) {
+                abort(422, $why);
+            }
+        }
+
         $meta = FileType::inspect($upload->getRealPath(), $upload->getClientOriginalName());
 
         $stored = Vault::store($upload->getRealPath(), $meta['extension']);

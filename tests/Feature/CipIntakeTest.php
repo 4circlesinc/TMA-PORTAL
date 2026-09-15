@@ -1420,6 +1420,52 @@ class CipIntakeTest extends TestCase
         );
     }
 
+    /**
+     * Upload new version in the file viewer also replaces the likeness.
+     *
+     * Once a photo is filed, the Documents list only offers that door. The
+     * version endpoint rewrote the library file and left photo_path /
+     * photo_url alone, so the Main applicant tab kept drawing the old face.
+     */
+    public function test_a_new_version_of_the_passport_photo_replaces_the_likeness(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $this->file($staff, $this->payload($provider))->assertCreated();
+
+        $person = CipPerson::query()->where('role', CipPerson::ROLE_MAIN_APPLICANT)->firstOrFail();
+        $firstPath = $person->photo_path;
+        $firstUrl = $person->photo_url;
+        $slot = CipDocument::query()
+            ->where('person_id', $person->id)
+            ->where('type', DocumentTypes::PASSPORT_PHOTO)
+            ->firstOrFail();
+        $file = FileItem::query()->findOrFail($slot->file_id);
+
+        $this->actingAs($staff)
+            ->post('/portal/files/files/'.$file->uuid.'/versions', [
+                'file' => $this->photo(800),
+                'note' => 'Corrected photo',
+            ])
+            ->assertCreated();
+
+        $person->refresh();
+
+        $this->assertNotSame($firstPath, $person->photo_path, 'the filed photo is the new one');
+        $this->assertNotSame($firstUrl, $person->photo_url, 'the avatar is redrawn from the new bytes');
+
+        [$width] = getimagesizefromstring((string) (PassportPhoto::read($person)['body'] ?? ''));
+        $this->assertSame(800, $width, 'the replacement bytes are what is filed');
+
+        $this->assertSame(
+            $person->photo_url,
+            $person->fresh()->application?->client?->photo_url,
+            "the client's face follows the applicant's",
+        );
+    }
+
     public function test_a_photo_that_is_not_two_by_two_is_refused(): void
     {
         Storage::fake(config('filesystems.avatar_disk', 'public'));

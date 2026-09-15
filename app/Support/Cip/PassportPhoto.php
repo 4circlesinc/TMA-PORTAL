@@ -3,7 +3,9 @@
 namespace App\Support\Cip;
 
 use App\Models\CipPerson;
+use App\Models\FileItem;
 use App\Support\AvatarService;
+use App\Support\Files\Vault;
 use App\Support\Security\Envelope;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -108,6 +110,56 @@ class PassportPhoto
         }
 
         return ['path' => $path, 'url' => $url];
+    }
+
+    /**
+     * Point this person (and the client, when they are the main applicant) at
+     * a new passport photo.
+     *
+     * The library file and the likeness are two stores of the same face. A
+     * new version of the filed photo has to move both, or every row that
+     * draws {@see CipPerson::$photo_url} keeps the old likeness while the
+     * viewer shows the new one.
+     */
+    public static function applyToPerson(CipPerson $person, string $binary): void
+    {
+        $stored = self::store($binary, $person);
+        $person->forceFill([
+            'photo_path' => $stored['path'],
+            'photo_url' => $stored['url'],
+        ])->save();
+
+        if ($person->role === CipPerson::ROLE_MAIN_APPLICANT) {
+            $person->loadMissing('application.client');
+            $person->application?->client?->forceFill(['photo_url' => $stored['url']])->save();
+        }
+    }
+
+    /**
+     * Refresh the likeness from the current bytes of a filed passport-photo
+     * file (a new version, or a restore).
+     *
+     * Quiet when the bytes are missing or not a passport photo: the vault
+     * version is already committed by then, and refusing mid-write would
+     * leave the checklist pointing at a face the person record cannot wear.
+     */
+    public static function syncFromFile(CipPerson $person, FileItem $file): void
+    {
+        $path = Vault::localCopy($file);
+        if ($path === null) {
+            return;
+        }
+
+        try {
+            $binary = (string) file_get_contents($path);
+            if ($binary === '' || self::reject($binary) !== null) {
+                return;
+            }
+
+            self::applyToPerson($person, $binary);
+        } finally {
+            Vault::cleanupLocalCopy($path);
+        }
     }
 
     /** The archival copy, as bytes and mime, or null if it has gone missing. */

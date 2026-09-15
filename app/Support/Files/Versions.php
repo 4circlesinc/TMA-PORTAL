@@ -9,6 +9,8 @@ use App\Models\FileVersion;
 use App\Models\User;
 use App\Support\Cip\Confirmation;
 use App\Support\Cip\DocumentSlots;
+use App\Support\Cip\DocumentTypes;
+use App\Support\Cip\PassportPhoto;
 use App\Support\Files\Workflow\Engine;
 use App\Support\Notifications\Notifier;
 use App\Support\Realtime\Live;
@@ -134,11 +136,22 @@ class Versions
 
         self::notify($file, $author, $version, $restoredFrom);
 
-        $file->loadMissing('cipDocument');
+        $file->loadMissing('cipDocument.person.application.client');
 
         if ($file->cipDocument) {
             DocumentSlots::advanceAfterUpload($file->cipDocument, $author);
             Live::staff(Live::CIP);
+
+            /*
+             * The passport photo slot answers twice: the library file and
+             * the person's likeness. Upload new version only rewrote the
+             * file, so every avatar and "Passport photo" row kept drawing
+             * photo_url / photo_path from the first upload.
+             */
+            if ($file->cipDocument->type === DocumentTypes::PASSPORT_PHOTO
+                && $file->cipDocument->person) {
+                PassportPhoto::syncFromFile($file->cipDocument->person, $file);
+            }
         }
 
         // Thumbnails are keyed by file uuid, not by storage_path. Without

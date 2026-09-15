@@ -1876,30 +1876,20 @@ class Intake
         // The slot first: Vault::store consumes the temp file, so the bytes
         // for the avatar have to be read before the file is moved.
         $binary = (string) file_get_contents($upload->getRealPath());
+        $hadFile = (bool) $slot?->file_id;
         DocumentSlots::fill($person, DocumentTypes::PASSPORT_PHOTO, $upload, $creator, null, $replace);
 
-        $stored = PassportPhoto::store($binary, $person);
-        $person->forceFill([
-            'photo_path' => $stored['path'],
-            'photo_url' => $stored['url'],
-        ])->save();
-
         /*
-         * The main applicant's face is the client's face.
-         *
-         * A CIP client IS the applicant, the hub record exists to hold their
-         * file, so the portrait they filed with is the picture every list,
-         * row and header should draw for them. Without this the passport photo
-         * showed on the application while the client the application belongs
-         * to went on wearing its initials, which is the same person twice with
-         * two different faces.
-         *
-         * Only the main applicant: a sponsor and a dependant are people on the
-         * application, not the client it is filed for.
+         * A replacement goes through Versions::addStored, which already
+         * synced the likeness from the new vault bytes. Writing it again
+         * here would only burn a second copy. First filing still creates
+         * the library file without addStored, so the face is written here.
          */
-        if ($person->role === CipPerson::ROLE_MAIN_APPLICANT) {
-            $person->application?->client?->forceFill(['photo_url' => $stored['url']])->save();
+        if ($hadFile) {
+            return;
         }
+
+        PassportPhoto::applyToPerson($person, $binary);
     }
 
     /**
