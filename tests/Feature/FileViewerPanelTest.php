@@ -315,6 +315,16 @@ class FileViewerPanelTest extends TestCase
         $this->assertSame('/Contracts', $rows['Portal path']);
         $this->assertSame($file->uuid, $rows['Record ID']);
 
+        $portalPath = null;
+        foreach ($res->json('groups') as $group) {
+            foreach ($group['rows'] as $row) {
+                if ($row['label'] === 'Portal path') {
+                    $portalPath = $row;
+                }
+            }
+        }
+        $this->assertSame($folder->uuid, $portalPath['folderId'] ?? null);
+
         // Nothing is in SharePoint yet, so those rows must be absent rather
         // than rendered blank — a blank "Sync status" reads as a failure.
         $this->assertArrayNotHasKey('SharePoint item ID', $rows);

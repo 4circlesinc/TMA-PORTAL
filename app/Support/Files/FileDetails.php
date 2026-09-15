@@ -75,8 +75,13 @@ class FileDetails
                     self::row('Checksum', $file->checksum ? substr($file->checksum, 0, 16).'…' : null),
                 ]),
                 self::group('Location', [
-                    self::row('Portal path', self::portalPath($folder)),
-                    self::row('Folder', $folder?->name ?? 'File Box'),
+                    self::row('Portal path', self::portalPath($folder), [
+                        // Opens this folder in the File Library when pressed.
+                        'folderId' => $folder?->uuid ?? '',
+                    ]),
+                    self::row('Folder', $folder?->name ?? 'File Box', [
+                        'folderId' => $folder?->uuid ?? '',
+                    ]),
                     self::row('Folder type', $folder ? self::folderTypeLabel($folder) : null),
                     // Phase 10 fills these in from the item mapping.
                     self::row('Document library', null),
@@ -182,9 +187,13 @@ class FileDetails
     }
 
     /** A row with no value is dropped by the group filter below. */
-    private static function row(string $label, ?string $value): ?array
+    private static function row(string $label, ?string $value, array $extra = []): ?array
     {
-        return $value === null || $value === '' ? null : ['label' => $label, 'value' => $value];
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return ['label' => $label, 'value' => $value] + $extra;
     }
 
     private static function group(string $title, array $rows): array

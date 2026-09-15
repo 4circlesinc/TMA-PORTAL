@@ -3020,7 +3020,9 @@
             '</div>' +
           '</div>' +
           '<section class="tma-portal-viewer__section">' +
-            detailRow('Location', f.folder ? f.folder.name : 'File Box') +
+            detailRow('Location', f.folder ? f.folder.name : 'File Box', {
+              folderId: f.folder ? f.folder.id : '',
+            }) +
             detailRow('Owner', f.owner ? f.owner.name : null) +
             detailRow('Modified', f.modifiedAt ? fmtDate(f.modifiedAt) : null) +
           '</section>' +
@@ -3202,11 +3204,20 @@
       '</div>';
     }
 
-    function detailRow(label, value) {
+    function detailRow(label, value, opts) {
       if (value == null || value === '') return '';
+      opts = opts || {};
+      var body = esc(value);
+      // A folderId (including "") means this value opens the File Library at
+      // that folder — "" is File Box / the library root.
+      if (Object.prototype.hasOwnProperty.call(opts, 'folderId')) {
+        body = '<button type="button" class="tma-portal-viewer__row-link" data-lb-open-folder="' +
+          esc(opts.folderId == null ? '' : String(opts.folderId)) +
+          '" title="Open in File Library">' + esc(value) + '</button>';
+      }
       return '<div class="tma-portal-viewer__row">' +
         '<span class="tma-portal-viewer__row-label">' + esc(label) + '</span>' +
-        '<span class="tma-portal-viewer__row-value">' + esc(value) + '</span></div>';
+        '<span class="tma-portal-viewer__row-value">' + body + '</span></div>';
     }
 
     /*
@@ -3233,7 +3244,7 @@
         groups.map(function (g) {
           return '<section class="tma-portal-viewer__section">' +
             '<h4 class="tma-portal-viewer__section-title">' + esc(g.title) + '</h4>' +
-            g.rows.map(function (r) { return detailRow(r.label, r.value); }).join('') +
+            g.rows.map(function (r) { return detailRow(r.label, r.value, r); }).join('') +
           '</section>';
         }).join('') +
       '</details>';
@@ -5821,6 +5832,17 @@
 
       if (e.target.closest('[data-lb-shared-open]')) { openSharedList(); return; }
       if (e.target.closest('[data-lb-presence-open]')) { openPresenceList(); return; }
+
+      // Portal path / Folder / Location: leave the viewer and open that folder.
+      var folderLink = e.target.closest('[data-lb-open-folder]');
+      if (folderLink) {
+        e.preventDefault();
+        var folderUuid = folderLink.getAttribute('data-lb-open-folder') || null;
+        closeLightbox();
+        openFolder(folderUuid || null);
+        return;
+      }
+
       if (e.target.closest('[data-lb-close]')) { closeLightbox(); return; }
       if (viewerEmptyClick(e.target)) { closeLightbox(); return; }
 

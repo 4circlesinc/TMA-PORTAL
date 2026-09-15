@@ -768,6 +768,13 @@
    every label and its value wide enough to read as two unrelated lists. */
 .tma-portal-viewer__row-label { flex: 0 0 96px; color: var(--color-text-secondary); }
 .tma-portal-viewer__row-value { flex: 1; min-width: 0; color: var(--color-text-primary); word-break: break-word; }
+.tma-portal-viewer__row-link {
+  display: inline; margin: 0; padding: 0; border: 0; background: none;
+  font: inherit; color: var(--color-text-link); text-align: inherit;
+  cursor: pointer; word-break: break-word; text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.tma-portal-viewer__row-link:hover { color: var(--color-text-primary); }
 /* Aligned with the card's text, not the panel edge. */
 .tma-portal-viewer__more { margin-top: 0; padding: 0 var(--space-16); }
 .tma-portal-viewer__more-summary {
