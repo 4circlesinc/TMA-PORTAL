@@ -223,6 +223,8 @@
        re-render does not have to invent the open menu from saved answers. */
     parentSuggest: { items: [], open: false, active: -1, seq: 0 },
     parentSuggestTimer: null,
+    parentSuggestPicking: false,
+    parentSuggestPlaceBound: null,
     /* The filed record the form was opened on. Kept so a save that has to be
        parked offline can say what the record will look like once it lands. */
     record: null,
@@ -765,18 +767,8 @@
     if (fieldsLocked()) return lockedField('parentCipNumber', shown, opts);
     var found = parentCipFound();
     var suggest = state.parentSuggest || { items: [], open: false, active: -1 };
-    var menu = '';
-    if (suggest.open && suggest.items && suggest.items.length) {
-      menu = '<ul class="tma-portal-cip-suggest" role="listbox" data-cip-parent-suggest>' +
-        suggest.items.map(function (item, i) {
-          return '<li role="option"' +
-            (i === suggest.active ? ' aria-selected="true" class="is-active"' : '') +
-            ' data-cip-parent-pick="' + esc(String(i)) + '">' +
-            parentSuggestRowHtml(item, i === suggest.active) +
-            '</li>';
-        }).join('') +
-        '</ul>';
-    }
+    // The suggestion list is painted onto document.body (fixed) so a phone's
+    // scroll pane cannot clip it. Only the input + tick live in the form.
 
     return '<div class="tma-portal-field tma-portal-field--cip-lookup' +
       (state.errors.parentCipNumber ? ' is-invalid' : '') +
@@ -789,11 +781,11 @@
       ' value="' + esc(shown) + '"' +
       (opts.placeholder ? ' placeholder="' + esc(opts.placeholder) + '"' : '') +
       ' aria-autocomplete="list" aria-expanded="' + (suggest.open ? 'true' : 'false') + '"' +
+      ' inputmode="text" autocapitalize="characters" spellcheck="false"' +
       requiredAttr('parentCipNumber') +
-      ' autocomplete="off" spellcheck="false">' +
+      ' autocomplete="off">' +
       (found ? parentFoundTick() : '') +
       '</div>' +
-      menu +
       '</div>' +
       fieldError('parentCipNumber') +
       '</div>';
@@ -1526,7 +1518,7 @@
   function wire(root) {
     MORPH.unwired(root, '[data-cip-field]').forEach(function (el) {
       var path = el.getAttribute('data-cip-field');
-      el.addEventListener('input', function () {
+      function onCipValue() {
         if (isNamePath(path)) forceUpperInput(el);
         state.draft[path] = el.value;
         delete state.errors[path];
@@ -1535,7 +1527,22 @@
           queueParentSuggest(el.value);
         }
         touchDraft();
-      });
+      }
+      el.addEventListener('input', onCipValue);
+      // Some mobile keyboards / paste paths fire change or keyup without a
+      // reliable input event for every character.
+      if (path === 'parentCipNumber') {
+        el.addEventListener('keyup', function () {
+          if (String(state.draft.parentCipNumber || '') === el.value) return;
+          onCipValue();
+        });
+        el.addEventListener('paste', function () {
+          window.setTimeout(onCipValue, 0);
+        });
+        el.addEventListener('focus', function () {
+          if (String(el.value || '').trim().length >= 2) queueParentSuggest(el.value);
+        });
+      }
       el.addEventListener('change', function () {
         if (isNamePath(path)) forceUpperInput(el);
         state.draft[path] = el.value;
@@ -1565,12 +1572,16 @@
       });
       el.addEventListener('blur', function () {
         if (/parentCipNumber$/.test(path)) {
-          // Delay so a mousedown on a suggestion still lands before the menu
-          // is torn down.
+          // Phones blur before the tap on a suggestion lands. Wait long
+          // enough, and skip close when a pointer is already picking a row.
           window.setTimeout(function () {
+            if (state.parentSuggestPicking) {
+              state.parentSuggestPicking = false;
+              return;
+            }
             closeParentSuggest();
             lookupParent();
-          }, 150);
+          }, 320);
           return;
         }
         if (/parentCorNumber$|parentApplicantName$/.test(path)) {
@@ -1593,7 +1604,6 @@
     wireDependents(root);
     wireDraft(root);
     wireAddOnLookup(root);
-    wireParentSuggest(root);
     if (window.TMACipSlots && window.TMACipSlots.wire) window.TMACipSlots.wire(root);
   }
 
@@ -1603,14 +1613,27 @@
     });
   }
 
-  function wireParentSuggest(root) {
-    MORPH.unwired(root, '[data-cip-parent-pick]').forEach(function (row) {
-      row.addEventListener('mousedown', function (e) {
-        e.preventDefault();
-        var index = Number(row.getAttribute('data-cip-parent-pick'));
-        pickParentSuggest(index);
-      });
-    });
+  function bindParentSuggestPick(el, index) {
+    var locked = false;
+    function pick(e) {
+      if (locked) return;
+      locked = true;
+      state.parentSuggestPicking = true;
+      if (e && e.preventDefault) e.preventDefault();
+      if (e && e.stopPropagation) e.stopPropagation();
+      pickParentSuggest(index);
+      window.setTimeout(function () { locked = false; }, 400);
+    }
+    // pointerdown covers mouse, touch and pen; preventDefault stops the
+    // input from blurring before the pick is applied (the classic mobile
+    // autocomplete miss). Fall back for older WebViews without PointerEvent.
+    if (window.PointerEvent) {
+      el.addEventListener('pointerdown', pick);
+    } else {
+      el.addEventListener('touchstart', pick, { passive: false });
+      el.addEventListener('mousedown', pick);
+    }
+    el.addEventListener('click', pick);
   }
 
   function clearParentIfCipChanged() {
@@ -1669,12 +1692,12 @@
 
   function paintParentSuggest() {
     if (!state.root) return;
-    var box = state.root.querySelector('.tma-portal-cip-lookup');
     var input = state.root.querySelector('[data-cip-parent-cip]');
-    if (!box || !input) return;
+    if (!input) return;
 
-    var existing = box.querySelector('[data-cip-parent-suggest]');
-    if (existing) existing.remove();
+    document.querySelectorAll('[data-cip-parent-suggest]').forEach(function (el) {
+      el.remove();
+    });
 
     var suggest = state.parentSuggest || { items: [], open: false, active: -1 };
     input.setAttribute('aria-expanded', suggest.open && suggest.items.length ? 'true' : 'false');
@@ -1693,16 +1716,67 @@
           li.className = 'is-active';
         }
         li.innerHTML = parentSuggestRowHtml(item, i === suggest.active);
-        li.addEventListener('mousedown', function (e) {
-          e.preventDefault();
-          pickParentSuggest(i);
-        });
+        bindParentSuggestPick(li, i);
         menu.appendChild(li);
       });
-      box.appendChild(menu);
+      document.body.appendChild(menu);
+      placeParentSuggestMenu(menu, input);
+      bindParentSuggestPlacement(input);
+    } else {
+      unbindParentSuggestPlacement();
     }
 
     paintParentTick();
+  }
+
+  function placeParentSuggestMenu(menu, input) {
+    if (!menu || !input) return;
+    var rect = input.getBoundingClientRect();
+    var width = Math.max(rect.width, 260);
+    var left = Math.min(Math.max(8, rect.left), Math.max(8, window.innerWidth - width - 8));
+    menu.style.position = 'fixed';
+    menu.style.zIndex = '520';
+    menu.style.left = left + 'px';
+    menu.style.width = width + 'px';
+    menu.style.right = 'auto';
+    menu.style.maxWidth = 'calc(100vw - 16px)';
+
+    var spaceBelow = window.innerHeight - rect.bottom;
+    var spaceAbove = rect.top;
+    if (spaceBelow < 180 && spaceAbove > spaceBelow) {
+      menu.style.top = 'auto';
+      menu.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+      menu.style.maxHeight = Math.min(280, Math.max(120, spaceAbove - 12)) + 'px';
+    } else {
+      menu.style.bottom = 'auto';
+      menu.style.top = (rect.bottom + 4) + 'px';
+      menu.style.maxHeight = Math.min(280, Math.max(120, spaceBelow - 12)) + 'px';
+    }
+  }
+
+  function bindParentSuggestPlacement(input) {
+    unbindParentSuggestPlacement();
+    state.parentSuggestPlaceBound = function () {
+      var menu = document.querySelector('[data-cip-parent-suggest]');
+      if (!menu || !input || !document.body.contains(input)) {
+        unbindParentSuggestPlacement();
+        return;
+      }
+      placeParentSuggestMenu(menu, input);
+    };
+    window.addEventListener('resize', state.parentSuggestPlaceBound, true);
+    window.addEventListener('scroll', state.parentSuggestPlaceBound, true);
+    var main = document.querySelector('.tma-dash__main');
+    if (main) main.addEventListener('scroll', state.parentSuggestPlaceBound, true);
+  }
+
+  function unbindParentSuggestPlacement() {
+    if (!state.parentSuggestPlaceBound) return;
+    window.removeEventListener('resize', state.parentSuggestPlaceBound, true);
+    window.removeEventListener('scroll', state.parentSuggestPlaceBound, true);
+    var main = document.querySelector('.tma-dash__main');
+    if (main) main.removeEventListener('scroll', state.parentSuggestPlaceBound, true);
+    state.parentSuggestPlaceBound = null;
   }
 
   function paintParentTick() {
@@ -1729,13 +1803,19 @@
       window.clearTimeout(state.parentSuggestTimer);
       state.parentSuggestTimer = null;
     }
-    if (!state.parentSuggest.open && !(state.parentSuggest.items || []).length) return;
+    unbindParentSuggestPlacement();
+    document.querySelectorAll('[data-cip-parent-suggest]').forEach(function (el) {
+      el.remove();
+    });
+    if (!state.parentSuggest.open && !(state.parentSuggest.items || []).length) {
+      var quiet = state.root && state.root.querySelector('[data-cip-parent-cip]');
+      if (quiet) quiet.setAttribute('aria-expanded', 'false');
+      return;
+    }
     state.parentSuggest.open = false;
     state.parentSuggest.items = [];
     state.parentSuggest.active = -1;
     if (!state.root) return;
-    var menu = state.root.querySelector('[data-cip-parent-suggest]');
-    if (menu) menu.remove();
     var input = state.root.querySelector('[data-cip-parent-cip]');
     if (input) input.setAttribute('aria-expanded', 'false');
   }
