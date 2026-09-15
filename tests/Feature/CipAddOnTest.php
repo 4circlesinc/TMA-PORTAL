@@ -570,6 +570,7 @@ class CipAddOnTest extends TestCase
         $application = CipApplication::query()->where('uuid', $body['id'])->with('people')->firstOrFail();
         $person = $application->people->first();
         $supporting = Tree::supportingFolder($application);
+        $this->assertNotNull($supporting);
 
         $photo = CipDocument::query()
             ->where('person_id', $person->id)
@@ -582,11 +583,86 @@ class CipAddOnTest extends TestCase
             ->where('person_id', $person->id)
             ->whereNotNull('file_id')
             ->where('type', '!=', DocumentTypes::PASSPORT_PHOTO)
-            ->first();
-        if ($pack) {
-            $this->assertNotNull($supporting);
-            $this->assertSame($supporting->id, FileItem::find($pack->file_id)->folder_id);
+            ->whereNotIn('type', AddOnRequirements::ADDITIONAL_KEYS)
+            ->get();
+        $this->assertNotEmpty($pack, 'Spouse Add-On Document Requirements must file pack scans.');
+        foreach ($pack as $slot) {
+            $this->assertSame(
+                $supporting->id,
+                FileItem::find($slot->file_id)->folder_id,
+                $slot->type.' must land in Supporting Documents, not Add-On Applicant.',
+            );
         }
+    }
+
+    public function test_misfiled_add_on_pack_scans_are_moved_into_supporting_documents(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $body = $this->file($staff, $this->addOnPayload($parent))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->with('people')->firstOrFail();
+        $person = $application->people->first();
+        $supporting = Tree::supportingFolder($application);
+        $this->assertNotNull($supporting);
+
+        $slot = CipDocument::query()
+            ->where('person_id', $person->id)
+            ->whereNotNull('file_id')
+            ->where('type', DocumentTypes::PASSPORT_BIO_PAGE)
+            ->firstOrFail();
+        $file = FileItem::findOrFail($slot->file_id);
+        $file->forceFill(['folder_id' => $person->folder_id])->save();
+
+        Tree::provision($application->fresh(['people']), $staff);
+
+        $this->assertSame($supporting->id, $file->fresh()->folder_id);
+    }
+
+    public function test_add_on_uploads_still_reach_supporting_when_the_tree_was_not_open_yet(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $body = $this->file($staff, $this->addOnPayload($parent))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->with('people')->firstOrFail();
+        $person = $application->people->first();
+
+        // Clear a filled pack slot so we can re-file through fill() after the
+        // application has lost its folder link — the half-provisioned draft case.
+        $slot = CipDocument::query()
+            ->where('person_id', $person->id)
+            ->where('type', DocumentTypes::PASSPORT_BIO_PAGE)
+            ->firstOrFail();
+        $oldFile = FileItem::find($slot->file_id);
+        $slot->forceFill([
+            'file_id' => null,
+            'uploaded_by' => null,
+            'uploaded_at' => null,
+            'status' => DocumentStatus::PENDING_UPLOAD,
+        ])->save();
+        $oldFile?->delete();
+
+        $application->forceFill(['folder_id' => null])->save();
+        $person->setRelation('application', $application->fresh());
+
+        $filled = DocumentSlots::fill(
+            $person,
+            DocumentTypes::PASSPORT_BIO_PAGE,
+            UploadedFile::fake()->create('bio-again.pdf', 40, 'application/pdf'),
+            $staff,
+        );
+
+        $supporting = Tree::supportingFolder($application->fresh());
+        $this->assertNotNull($supporting);
+        $this->assertSame($supporting->id, FileItem::find($filled->file_id)->folder_id);
+        $this->assertNotSame($person->folder_id, FileItem::find($filled->file_id)->folder_id);
     }
 
     public function test_the_add_on_form_lists_documents_for_the_selected_type(): void

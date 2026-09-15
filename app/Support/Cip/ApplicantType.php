@@ -93,14 +93,20 @@ class ApplicantType
          * An Add-On file is filed *for* the spouse or dependent being added.
          * They sit as the main applicant of that row so the table and the
          * client record name them, but the checklist they owe is the one
-         * their Add-On type asks for, not the principal's.
+         * their Add-On type asks for, not the principal's. Falling through
+         * to principal_applicant here opened the wrong Document Requirements
+         * list (and ignored spouse / dependent uploads) whenever addon_type
+         * had not been saved yet on a draft.
          */
         $application = $person->application;
         if ($application
             && $application->phase === Phase::ADD_ON
-            && $person->role === CipPerson::ROLE_MAIN_APPLICANT
-            && AddOn::isValidType((string) $application->addon_type)) {
-            return $application->addon_type;
+            && $person->role === CipPerson::ROLE_MAIN_APPLICANT) {
+            if (AddOn::isValidType((string) $application->addon_type)) {
+                return $application->addon_type;
+            }
+
+            return self::isSpouse($person) ? self::SPOUSE : self::bracket($person);
         }
 
         // There is no fourth role: anyone who is neither sponsor nor dependant

@@ -1782,8 +1782,12 @@ class Intake
         $application->forceFill([
             'phase' => Phase::ADD_ON,
             'parent_application_id' => $parent->id,
+            'provider_id' => $parent->provider_id,
             'addon_type' => $data['addonType'],
         ])->save();
+        if ($parent->provider) {
+            $application->setRelation('provider', $parent->provider);
+        }
 
         self::writePerson($application, CipPerson::ROLE_MAIN_APPLICANT, $data);
 
@@ -1892,11 +1896,31 @@ class Intake
             return;
         }
 
+        $previousProviderId = $application->provider_id;
+
         $application->forceFill([
             'parent_application_id' => $parent->id,
             'provider_id' => $parent->provider_id,
         ])->save();
         $application->setRelation('parent', $parent);
+        if ($parent->provider) {
+            $application->setRelation('provider', $parent->provider);
+        }
+
+        /*
+         * Inherit the parent's firm for real: provider_id alone leaves the
+         * client Dropbox under whoever the draft first opened as. Move the
+         * folder when the firm changes so Supporting Documents and the rest
+         * land under the right Citizenship Applications drawer.
+         */
+        if ($parent->provider
+            && (int) $previousProviderId !== (int) $parent->provider_id) {
+            Providers::ensureFolder($parent->provider);
+            $parent->provider->refresh();
+            $application->loadMissing(['client.folder', 'people']);
+            Tree::client($application, $actor);
+            ProviderTransfer::reparentClientFolder($application, $parent->provider);
+        }
     }
 
     private static function requireAddOnParent(User $creator, array $data): CipApplication

@@ -100,7 +100,7 @@ final class ProviderTransfer
                 $member->setRelation('provider', $to);
 
                 self::syncClient($member, $to);
-                self::moveFolder($member, $to);
+                self::reparentClientFolder($member, $to);
 
                 Engine::record($member, CipEvent::ACTION_PROVIDER_TRANSFERRED, $actor, [
                     'fromProvider' => $previous,
@@ -183,8 +183,12 @@ final class ProviderTransfer
      * (a fresh install / test rig), or when the client folder is already
      * sitting there. Name collisions under the new parent are resolved by
      * appending " (2)" rather than refusing the transfer.
+     *
+     * Also used when an Add-On draft links its parent and inherits that
+     * firm's provider_id — without this the papers stay under the Dropbox
+     * drawer the draft was first opened in.
      */
-    private static function moveFolder(CipApplication $application, CipProvider $to): void
+    public static function reparentClientFolder(CipApplication $application, CipProvider $to): void
     {
         $client = $application->client;
         $folder = $client?->folder;

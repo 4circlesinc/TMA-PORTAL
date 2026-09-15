@@ -1109,7 +1109,18 @@
     if (type === 'spouse') return 'spouse';
     if (type === 'dependent_under_16') return 'dependent_under_16';
     if (type === 'dependent_16_over') return 'dependent_16_over';
-    return 'spouse';
+    return '';
+  }
+
+  function addOnDocumentsCard() {
+    var section = addonSection();
+    if (!section) {
+      return card('Documents',
+        '<p class="tma-portal-note">Choose the Add-On type to see the Document Requirements for that person.</p>',
+        { modifier: 'tma-dash__clients-card--docs' });
+    }
+
+    return documentsCard('', section);
   }
 
   /*
@@ -1258,7 +1269,7 @@
         '</div>' +
         (type === 'spouse' ? '' : dependentAgeBracketNote(state.draft.dateOfBirth)),
         { modifier: 'tma-portal-section--person' }) +
-      documentsCard('', addonSection()) +
+      addOnDocumentsCard() +
       '</div>';
   }
 

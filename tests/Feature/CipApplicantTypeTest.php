@@ -10,6 +10,7 @@ use App\Support\Access\Role;
 use App\Support\Cip\ApplicantType;
 use App\Support\Cip\Applications;
 use App\Support\Cip\Dependents;
+use App\Support\Cip\Phase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -233,6 +234,52 @@ class CipApplicantTypeTest extends TestCase
 
         $principal = $this->person($application, CipPerson::ROLE_MAIN_APPLICANT, null, '1985-04-12');
         $this->assertNull(ApplicantType::ageBracketLabel($principal));
+    }
+
+    public function test_an_add_on_main_applicant_never_owes_the_principal_checklist(): void
+    {
+        $staff = User::create([
+            'name' => 'Ada Admin', 'email' => 'ada-addon-type@example.com', 'password' => bcrypt('password12345'),
+        ]);
+        $staff->forceFill([
+            'email_verified_at' => now(), 'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(), 'status' => 'approved',
+            'account_type' => Role::ADMINISTRATOR,
+        ])->save();
+
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+        $application = Applications::create($provider, $staff, ['phase' => Phase::ADD_ON]);
+        $application->forceFill([
+            'phase' => Phase::ADD_ON,
+            'addon_type' => null,
+        ])->save();
+
+        $spouse = CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Mei',
+            'last_name' => 'Wei',
+            'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+            'date_of_birth' => '1988-06-01',
+        ]);
+        $spouse->setRelation('application', $application);
+
+        $this->assertSame(ApplicantType::SPOUSE, ApplicantType::for($spouse));
+
+        $child = CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Kid',
+            'last_name' => 'Wei',
+            'relationship' => CipPerson::RELATIONSHIP_SON,
+            'date_of_birth' => now()->subYears(8)->toDateString(),
+        ]);
+        $child->setRelation('application', $application);
+        $this->assertSame(ApplicantType::DEPENDENT_UNDER_16, ApplicantType::for($child));
+
+        $application->forceFill(['addon_type' => ApplicantType::DEPENDENT_16_OVER])->save();
+        $child->setRelation('application', $application->fresh());
+        $this->assertSame(ApplicantType::DEPENDENT_16_OVER, ApplicantType::for($child));
     }
 
     public function test_the_five_types_are_the_whole_vocabulary(): void

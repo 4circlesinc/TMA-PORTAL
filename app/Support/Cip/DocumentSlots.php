@@ -663,6 +663,45 @@ class DocumentSlots
     }
 
     /**
+     * Put this person's Add-On slot files in the drawers the brief names.
+     *
+     * Pack scans that landed in Add-On Applicant (the old fallback when the
+     * application tree was not ready, or a library drop into the person
+     * folder) are moved into Supporting Documents; G-series extras into
+     * Additional Documents. Opening the file, or browsing its folders, is
+     * enough to heal them — the same pattern as {@see placePostApprovalFiles()}.
+     */
+    public static function placeAddOnFiles(CipPerson $person, ?User $actor = null): void
+    {
+        $person->loadMissing(['application', 'documents.file', 'documents.requirement']);
+
+        if (($person->application?->phase ?? '') !== Phase::ADD_ON) {
+            return;
+        }
+
+        foreach ($person->documents as $slot) {
+            $files = self::filesForSlot($slot);
+            if ($files === []) {
+                continue;
+            }
+
+            $template = $slot->requirement ?? self::template($person, $slot->type);
+            $destId = self::destination($person, $template, $actor, $slot->type);
+            if ($destId === null) {
+                continue;
+            }
+
+            foreach ($files as $file) {
+                if ((int) $file->folder_id === (int) $destId) {
+                    continue;
+                }
+
+                self::moveFileTo($file, $destId);
+            }
+        }
+    }
+
+    /**
      * Identity records (the passport photo) stay in Add-On Applicant.
      * G1–G3 supplemental papers go in Additional Documents. Every other
      * required scan for that Add-On type goes in Supporting Documents, so
@@ -678,6 +717,21 @@ class DocumentSlots
         $person->loadMissing('application');
         $application = $person->application;
         $root = $application?->folder_id ? Folder::find($application->folder_id) : null;
+
+        /*
+         * Never dump pack scans into Add-On Applicant. That drawer is the
+         * person's identity folder; Supporting / Additional are where the
+         * Document Requirements list files. If the tree is not open yet,
+         * open it rather than filing beside the passport photo.
+         */
+        if ($root === null && $application !== null) {
+            $root = Tree::provision($application, $actor);
+            $application->refresh();
+            $person->setRelation('application', $application);
+            $person->refresh();
+            $root = $application->folder_id ? Folder::find($application->folder_id) : $root;
+        }
+
         if ($root === null) {
             return $person->folder_id;
         }

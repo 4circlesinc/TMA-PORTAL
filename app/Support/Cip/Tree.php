@@ -178,8 +178,20 @@ class Tree
             self::provisionAddOnDrawers($application, $actor, $root);
         }
 
+        /*
+         * Stamp the application folder BEFORE relocating Add-On scans.
+         * placeAddOnFiles → destination → addOnDestination used to call
+         * provision again while folder_id was still null, which looped.
+         */
         if ($application->folder_id !== $root->id) {
             $application->forceFill(['folder_id' => $root->id])->save();
+        }
+
+        if (($application->phase ?? '') === Phase::ADD_ON) {
+            foreach ($application->people as $person) {
+                $person->setRelation('application', $application);
+                DocumentSlots::placeAddOnFiles($person, $actor);
+            }
         }
 
         self::stampClient($root, $client);
