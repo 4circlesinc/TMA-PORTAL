@@ -1296,6 +1296,10 @@
     }
 
     var count = Object.keys(state.errors).length;
+    // Keep the page where the reader is. A file drop re-renders the form,
+    // and without this the main pane jumps back to the top under them.
+    var main = document.querySelector('.tma-dash__main');
+    var keptScroll = main ? main.scrollTop : null;
 
     MORPH.patch(root,
       '<div class="tma-dash__clients-form" data-cip-form data-cip-intake-phase="' +
@@ -1330,6 +1334,7 @@
       formBody() +
       '</div>');
     wire(root);
+    if (main && keptScroll != null) main.scrollTop = keptScroll;
   }
 
   /* ── wiring ────────────────────────────────────────────────────── */

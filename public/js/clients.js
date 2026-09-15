@@ -10376,6 +10376,22 @@
     if (detail) detail.scrollTop = 0;
   }
 
+  /**
+   * Scroll to the top only when the reader opens a different screen.
+   *
+   * Live CIP / Clients signals call syncRoute while somebody is mid-form
+   * (draft autosave after a file drop does this). Resetting scroll there
+   * yanked the page back to the top under their hands. Navigate still
+   * starts a new screen at the top; a refresh of the same screen must not.
+   */
+  function maybeResetClientsScroll(root, previousScreen, nextScreen) {
+    if (!nextScreen || nextScreen === 'list') return;
+    if (previousScreen === nextScreen) return;
+    requestAnimationFrame(function () {
+      resetClientsScroll(root);
+    });
+  }
+
   function wireRowContextMenus(root, state, navigate, render) {
     clientsMenuCtx = { root: root, state: state, navigate: navigate, render: render };
     ensureClientsPopovers();
@@ -15916,6 +15932,7 @@
 
     function navigate(screen, contactId, navOpts) {
       navOpts = navOpts || {};
+      var previousScreen = state.screen;
       var companyId = navOpts.companyId || state.companyId;
       // Editing an application is addressed by the application, not the
       // client, one client can hold more than one over time.
@@ -15970,6 +15987,7 @@
           detailOnly: !needsFullRender,
           forceFull: needsFullRender,
         });
+        maybeResetClientsScroll(root, previousScreen, screen);
         return;
       }
 
@@ -16009,12 +16027,7 @@
       }
 
       render();
-
-      if (screen !== 'list') {
-        requestAnimationFrame(function () {
-          resetClientsScroll(root);
-        });
-      }
+      maybeResetClientsScroll(root, previousScreen, screen);
     }
 
     function syncRoute(route) {
@@ -16024,6 +16037,10 @@
       // (live signal, directory hydrate) must not put the applicant head
       // back over the chat or rewrite the address to this file.
       if (!clientsViewShowing()) return;
+
+      var previousScreen = state.screen;
+      var main = document.querySelector('.tma-dash__main');
+      var keptScroll = main ? main.scrollTop : null;
 
       if (route.legacyRedirect && window.history.replaceState) {
         history.replaceState(
@@ -16078,6 +16095,13 @@
             CIP_APPLICATIONS_PATH
           );
         }
+
+        // Live / draft autosave refreshes must not yank a mid-form scroll.
+        if (main && keptScroll != null && previousScreen === state.screen) {
+          main.scrollTop = keptScroll;
+        } else {
+          maybeResetClientsScroll(root, previousScreen, state.screen);
+        }
         return;
       }
 
@@ -16110,10 +16134,10 @@
         }
       }
 
-      if (state.screen !== 'list') {
-        requestAnimationFrame(function () {
-          resetClientsScroll(root);
-        });
+      if (main && keptScroll != null && previousScreen === state.screen) {
+        main.scrollTop = keptScroll;
+      } else {
+        maybeResetClientsScroll(root, previousScreen, state.screen);
       }
     }
 
