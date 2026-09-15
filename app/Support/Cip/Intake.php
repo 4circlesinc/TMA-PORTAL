@@ -1519,7 +1519,91 @@ class Intake
             ->reject(fn (CipPerson $p) => in_array($p->id, $kept, true))
             ->each(fn (CipPerson $p) => $p->delete());
 
-        return $ordered;
+        /*
+         * A stale tab can still post every duplicate uuid it loaded. Those
+         * all land in $kept above; collapse the extras so one Ahmed remains.
+         */
+        return self::collapseDuplicateDependents($application, $ordered);
+    }
+
+    /**
+     * Soft-delete live dependents that are the same person as an earlier row.
+     *
+     * @param  list<CipPerson>  $ordered
+     * @return list<CipPerson>
+     */
+    private static function collapseDuplicateDependents(CipApplication $application, array $ordered): array
+    {
+        $canonical = [];
+        $unique = [];
+
+        foreach ($ordered as $person) {
+            $duplicateOf = null;
+            foreach ($canonical as $kept) {
+                if (self::dependentsAreSameIdentity($kept, $person)) {
+                    $duplicateOf = $kept;
+                    break;
+                }
+            }
+
+            if ($duplicateOf !== null) {
+                if ($person->id !== $duplicateOf->id && ! $person->trashed()) {
+                    $person->delete();
+                }
+
+                continue;
+            }
+
+            $canonical[] = $person;
+            $unique[] = $person;
+        }
+
+        $application->unsetRelation('people');
+        $application->load('people');
+
+        $application->people
+            ->where('role', CipPerson::ROLE_DEPENDENT)
+            ->each(function (CipPerson $person) use ($canonical) {
+                foreach ($canonical as $kept) {
+                    if ($person->id !== $kept->id && self::dependentsAreSameIdentity($kept, $person)) {
+                        $person->delete();
+
+                        return;
+                    }
+                }
+            });
+
+        return $unique;
+    }
+
+    /**
+     * True when two dependent rows are the same individual.
+     *
+     * Same first and last name. Dates of birth must agree when both are set;
+     * a missing DOB on either side still counts as a match (the race that
+     * duplicated Suha's children left DOBs empty).
+     */
+    private static function dependentsAreSameIdentity(CipPerson $a, CipPerson $b): bool
+    {
+        $aFirst = CipPerson::upperName($a->first_name) ?? '';
+        $bFirst = CipPerson::upperName($b->first_name) ?? '';
+        $aLast = CipPerson::upperName($a->last_name) ?? '';
+        $bLast = CipPerson::upperName($b->last_name) ?? '';
+
+        if ($aFirst === '' && $aLast === '') {
+            return false;
+        }
+        if ($aFirst !== $bFirst || $aLast !== $bLast) {
+            return false;
+        }
+
+        $aDob = $a->date_of_birth?->format('Y-m-d');
+        $bDob = $b->date_of_birth?->format('Y-m-d');
+        if ($aDob === null || $bDob === null) {
+            return true;
+        }
+
+        return $aDob === $bDob;
     }
 
     /**
@@ -1561,6 +1645,51 @@ class Intake
 
                 return $existingDob === $dob;
             });
+    }
+
+    /**
+     * One-shot: soft-delete live duplicate dependents on every application.
+     *
+     * Keeps the oldest row for each identity. Safe to run repeatedly.
+     *
+     * @return int how many duplicate people were soft-deleted
+     */
+    public static function dedupeAllDependents(): int
+    {
+        $removed = 0;
+
+        CipApplication::query()->orderBy('id')->each(function (CipApplication $application) use (&$removed) {
+            $application->load('people');
+            $canonical = [];
+
+            foreach ($application->people
+                ->where('role', CipPerson::ROLE_DEPENDENT)
+                ->sortBy('id')
+                ->values() as $person) {
+                $duplicateOf = null;
+                foreach ($canonical as $kept) {
+                    if (self::dependentsAreSameIdentity($kept, $person)) {
+                        $duplicateOf = $kept;
+                        break;
+                    }
+                }
+
+                if ($duplicateOf !== null) {
+                    $person->delete();
+                    $removed++;
+
+                    continue;
+                }
+
+                $canonical[] = $person;
+            }
+
+            if ($canonical !== []) {
+                Dependents::renumber($application);
+            }
+        });
+
+        return $removed;
     }
 
     /**

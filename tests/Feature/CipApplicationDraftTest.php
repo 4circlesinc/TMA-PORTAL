@@ -323,6 +323,63 @@ class CipApplicationDraftTest extends TestCase
             ->count());
     }
 
+    /**
+     * A stale form that still lists both duplicate uuids must collapse to one.
+     */
+    public function test_saving_both_duplicate_dependent_ids_collapses_to_one_person(): void
+    {
+        Storage::fake('local');
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications/draft', $this->answers($provider, [
+                'dependents' => [[
+                    'firstName' => 'Ahmed',
+                    'lastName' => 'Ishan',
+                    'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                ]],
+            ]), ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $draft = CipApplication::query()->firstOrFail();
+        $original = $draft->people()->where('role', CipPerson::ROLE_DEPENDENT)->firstOrFail();
+
+        $clone = $draft->people()->make([
+            'role' => CipPerson::ROLE_DEPENDENT,
+            'first_name' => 'Ahmed',
+            'last_name' => 'Ishan',
+            'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+        ]);
+        $clone->save();
+
+        $this->assertSame(2, $draft->people()->where('role', CipPerson::ROLE_DEPENDENT)->count());
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications/draft', $this->answers($provider, [
+                'dependents' => [
+                    [
+                        'id' => $original->uuid,
+                        'firstName' => 'Ahmed',
+                        'lastName' => 'Ishan',
+                        'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                    ],
+                    [
+                        'id' => $clone->uuid,
+                        'firstName' => 'Ahmed',
+                        'lastName' => 'Ishan',
+                        'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                    ],
+                ],
+            ]), ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $live = $draft->fresh()->people()->where('role', CipPerson::ROLE_DEPENDENT)->get();
+        $this->assertCount(1, $live);
+        $this->assertSame($original->uuid, $live[0]->uuid);
+    }
+
     /** A resumed draft says which slots it already holds a scan for. */
     public function test_a_resumed_draft_names_the_files_it_kept(): void
     {
