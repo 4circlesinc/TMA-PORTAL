@@ -122,6 +122,37 @@ class ApplicantType
     }
 
     /**
+     * The short phrase printed after a dependent's date of birth: "Under 16"
+     * or "16 and over". Null until a date of birth is known, and null for
+     * anyone who is not in an age bracket (principal, spouse, sponsor), so
+     * the form never claims an answer it guessed.
+     */
+    public static function ageBracketLabel(CipPerson $person): ?string
+    {
+        if ($person->date_of_birth === null) {
+            return null;
+        }
+
+        $type = self::for($person);
+        if (! in_array($type, [self::DEPENDENT_UNDER_16, self::DEPENDENT_16_OVER], true)) {
+            return null;
+        }
+
+        $reference = $person->application?->created_at ?? now();
+
+        return $person->date_of_birth->copy()->addYears(self::cutoff())->isAfter($reference)
+            ? self::ageBracketPhrase(true)
+            : self::ageBracketPhrase(false);
+    }
+
+    public static function ageBracketPhrase(bool $under): string
+    {
+        $cutoff = self::cutoff();
+
+        return $under ? 'Under '.$cutoff : $cutoff.' and over';
+    }
+
+    /**
      * Dependents::label() is the authority, because it is what the folder tree
      * and the filed form already call this person. The pattern behind it
      * catches relationships that did not come through the intake form, where

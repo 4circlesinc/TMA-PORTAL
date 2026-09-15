@@ -269,7 +269,7 @@
     "Field: Occupation; What to enter: Applicant’s occupation.",
     "Field: Passport number; What to enter: As on the passport.",
     "Field: Passport bio page / Birth certificate; What to enter: Upload where the form requires them.",
-    "Add dependents if needed. Each dependent needs at least first name, last name, date of birth, and relationship (Spouse or Qualified dependent). Post-approval intake also asks for the CIP application number from the decision letter.",
+    "Add dependents if needed. Each dependent needs at least first name, last name, date of birth, and relationship (Spouse or Qualified dependent). After date of birth is entered, the form shows whether they are under 16 or 16 and over. Post-approval intake also asks for the CIP application number from the decision letter.",
     "## How draft auto-save works",
     "While you type a new application (or reopen a file that is still Draft), the form saves itself about 1.2 seconds after you stop typing. You will see Draft saved a moment ago under the form, and a toast Draft saved. There is also a Save as draft button if you want to save immediately.",
     "Autosave only runs on new filings and Draft rows. A filed application is not silently overwritten if you leave a form open. If you return and a draft is waiting, the portal offers to keep it (Keep it) or Start over.",

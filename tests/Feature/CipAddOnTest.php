@@ -190,6 +190,7 @@ class CipAddOnTest extends TestCase
 
         $this->assertSame(AddOn::TYPE_DEPENDENT_16_OVER, $body['addonType']);
         $this->assertSame(ApplicantType::DEPENDENT_16_OVER, $body['applicant']['applicantType']);
+        $this->assertSame('16 and over', $body['applicant']['ageBracketLabel']);
         $this->assertSame(AddOn::RELATIONSHIP_SON, $body['applicant']['relationship']);
         $this->assertSame('Son', $body['applicant']['label']);
     }

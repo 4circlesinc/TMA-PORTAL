@@ -85,20 +85,70 @@
     return ['principal', 'sponsor', 'spouse', 'dependent_under_16', 'dependent_16_over'];
   }
 
-  /* Which checklist a dependent owes, from the same facts the server uses. */
-  function dependentSection(index) {
-    var prefix = 'dependents.' + index + '.';
-    if (state.draft[prefix + 'relationship'] === 'spouse') return 'spouse';
-    var cutoff = (state.options && state.options.dependentAgeCutoff) || 16;
-    var dob = state.draft[prefix + 'dateOfBirth'];
-    if (!dob) return 'dependent_16_over';
+  function dependentCutoff() {
+    return (state.options && state.options.dependentAgeCutoff) || 16;
+  }
+
+  function dependentAgeYears(dob) {
+    if (!dob) return null;
     var birth = new Date(dob + 'T00:00:00');
+    if (isNaN(birth.getTime())) return null;
     var now = new Date();
     var age = now.getFullYear() - birth.getFullYear();
     var m = now.getMonth() - birth.getMonth();
     if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age -= 1;
 
-    return age < cutoff ? 'dependent_under_16' : 'dependent_16_over';
+    return age;
+  }
+
+  /* Which checklist a dependent owes, from the same facts the server uses. */
+  function dependentSection(index) {
+    var prefix = 'dependents.' + index + '.';
+    if (state.draft[prefix + 'relationship'] === 'spouse') return 'spouse';
+    var age = dependentAgeYears(state.draft[prefix + 'dateOfBirth']);
+    if (age === null) return 'dependent_16_over';
+
+    return age < dependentCutoff() ? 'dependent_under_16' : 'dependent_16_over';
+  }
+
+  /*
+   * The words printed after a dependent's date of birth: "Under 16" or
+   * "16 and over". Empty until the year looks like a birth year, so typing
+   * 2 → 0002 does not flash a bracket, and empty for a spouse.
+   */
+  function dependentAgeBracketPhrase(dob) {
+    if (!dobYearSettled(dob)) return '';
+    var age = dependentAgeYears(dob);
+    if (age === null) return '';
+    var cutoff = dependentCutoff();
+
+    return age < cutoff ? 'Under ' + cutoff : cutoff + ' and over';
+  }
+
+  function withDependentAgeBracket(title, dob) {
+    var phrase = dependentAgeBracketPhrase(dob);
+
+    return phrase ? title + ' — ' + phrase : title;
+  }
+
+  function dependentAgeBracketNote(dob) {
+    var phrase = dependentAgeBracketPhrase(dob);
+    if (!phrase) return '';
+
+    return '<p class="tma-portal-note" data-cip-age-bracket>' +
+      'This dependent is <strong>' + esc(phrase) + '</strong>.</p>';
+  }
+
+  function syncAddonTypeFromDob() {
+    if (!isAddOnIntake()) return;
+    if (state.draft.addonType === 'spouse') return;
+    var phrase = dependentAgeBracketPhrase(state.draft.dateOfBirth);
+    if (!phrase) return;
+    var age = dependentAgeYears(state.draft.dateOfBirth);
+    if (age === null) return;
+    state.draft.addonType = age < dependentCutoff()
+      ? 'dependent_under_16'
+      : 'dependent_16_over';
   }
 
   function sectionForPath(path) {
@@ -245,8 +295,23 @@
     docFields(sectionForPath(path)).forEach(function (d) { if (d.field === tail) fromTemplate = d.label; });
     if (isAddOnIntake() && tail === 'relationship') return 'Relationship to Main Applicant';
     if (isAddOnIntake() && tail === 'parentApplicantName') return 'Main Applicant Name';
+    if (/additionalDocumentG[123]Name$/.test(tail)) return 'Document name';
+
+    if (isGSeriesPath(path)) {
+      var named = String(state.draft[gNamePath(path)] || '').trim();
+      var prefix = (fromTemplate || '').split(' - ')[0] || tail.replace(/^additionalDocument/, 'G');
+      if (named) return prefix + ' - ' + named;
+    }
 
     return fromTemplate || LABELS[tail] || tail;
+  }
+
+  function isGSeriesPath(path) {
+    return /additionalDocumentG[123]$/.test(String(path || ''));
+  }
+
+  function gNamePath(path) {
+    return path + 'Name';
   }
 
   function sponsored() { return String(state.draft.sponsored) === '1'; }
@@ -731,6 +796,9 @@
       (files.length ? ' is-filled' : '') + '" data-cip-drop="' + esc(path) + '">' +
       fieldLabel(path, labelFor(path)) +
       documentHelp(path) +
+      (isGSeriesPath(path) && !locked
+        ? textField(gNamePath(path), { placeholder: 'Additional Document Name' })
+        : '') +
       updateReason +
       '<input type="file" accept=".pdf,image/*" multiple class="tma-dash__clients-photo-input"' +
       ' data-cip-file="' + esc(path) + '" aria-hidden="true">' +
@@ -875,10 +943,17 @@
 
     var note = '';
     if (isAddOnIntake()) {
-      note = '<p class="tma-portal-note">These uploads follow the selected Add-On type. G1, G2 and G3 are optional supplemental papers and file into Additional Documents.</p>';
+      note = '<p class="tma-portal-note">These uploads follow the selected Add-On type. G1, G2 and G3 are optional supplemental papers: name the document, then file it into Additional Documents as <strong>G1 - Additional Document Name</strong>.</p>';
     }
 
-    return card('Documents',
+    var title = 'Documents';
+    var dobPath = prefix + 'dateOfBirth';
+    if ((section === 'dependent_under_16' || section === 'dependent_16_over')
+      && dependentAgeBracketPhrase(state.draft[dobPath])) {
+      title = 'Documents — ' + dependentAgeBracketPhrase(state.draft[dobPath]);
+    }
+
+    return card(title,
       note +
       '<div class="tma-portal-drops">' +
       fields.map(function (doc) { return documentField(prefix + doc.field); }).join('') +
@@ -966,9 +1041,10 @@
   function dependentRow(i, ordinal) {
     var prefix = 'dependents.' + i + '.';
     var relationship = state.draft[prefix + 'relationship'];
+    var dob = state.draft[prefix + 'dateOfBirth'];
     var title = relationship === 'spouse'
       ? 'Spouse'
-      : (ordinal ? 'Qualified Dependent ' + ordinal : 'Dependent');
+      : withDependentAgeBracket(ordinal ? 'Qualified Dependent ' + ordinal : 'Dependent', dob);
 
     return '<section class="tma-portal-section tma-portal-section--person">' +
       '<h3 class="tma-portal-section__title tma-portal-repeat__title">' + esc(title) + '</h3>' +
@@ -990,7 +1066,9 @@
         { value: 'spouse', label: 'Spouse' },
         { value: 'qualified_dependent', label: 'Qualified dependent' },
       ], 'Select') +
-      '</div></div></div></section>' +
+      '</div>' +
+      (relationship === 'spouse' ? '' : dependentAgeBracketNote(dob)) +
+      '</div></div></section>' +
       documentsCard(prefix, dependentSection(i));
   }
 
@@ -1148,7 +1226,9 @@
           ? '<p class="tma-portal-modal__error" role="alert">' + esc(state.parentError) + '</p>'
           : '') +
         openNote) +
-      titledCard('Add-On applicant',
+      titledCard(type === 'spouse'
+          ? 'Add-On applicant'
+          : withDependentAgeBracket('Add-On applicant', state.draft.dateOfBirth),
         photoField('passportPhoto') +
         '<div class="tma-portal-form-grid tma-portal-form-grid--person">' +
         textField('firstName') +
@@ -1158,7 +1238,8 @@
         selectField('countryOfResidence', countries, 'Select a country') +
         selectField('relationship', relationships, 'Select relationship') +
         textField('passportNumber', { placeholder: 'As printed on the bio page' }) +
-        '</div>',
+        '</div>' +
+        (type === 'spouse' ? '' : dependentAgeBracketNote(state.draft.dateOfBirth)),
         { modifier: 'tma-portal-section--person' }) +
       documentsCard('', addonSection()) +
       '</div>';
@@ -1252,9 +1333,11 @@
           if (path === 'addonType') {
             if (el.value === 'spouse') state.draft.relationship = 'spouse';
             else if (state.draft.relationship === 'spouse') state.draft.relationship = '';
+            else syncAddonTypeFromDob();
           }
           render(root);
         } else if (/dateOfBirth$/.test(path) && dobYearSettled(el.value)) {
+          syncAddonTypeFromDob();
           render(root);
         }
       });

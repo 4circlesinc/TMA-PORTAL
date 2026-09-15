@@ -189,7 +189,7 @@ final class Knowledge
         foreach ($required as $item) {
             $text .= '- '.$item."\n";
         }
-        $text .= "\nDependents: first name, last name, date of birth, relationship (Spouse or Qualified dependent).\n";
+        $text .= "\nDependents: first name, last name, date of birth, relationship (Spouse or Qualified dependent). After date of birth is entered, the form shows Under 16 or 16 and over.\n";
         $text .= 'Post-approval also needs the CIP application number from the decision letter.';
         $text .= "\n\n**Save as draft** (and autosave) keep the file in Draft. **Add** files it into New Applications when required fields and files are complete. Filing follows Document Requirements: every required upload for the applicant, a sponsor if Sponsored is Yes, and each dependent on the form. **Save** on an application already on file does not re-demand outstanding pack documents; those stay on the checklist.";
 
@@ -439,7 +439,7 @@ final class Knowledge
                 'q' => 'How do dependents work?',
                 'keywords' => ['dependent', 'spouse', 'qualified', 'family', 'children'],
                 'cipOnly' => true,
-                'answer' => 'Add dependents on the intake form if needed. Each needs **first name**, **last name**, **date of birth**, and **relationship** (Spouse or Qualified dependent). Post-approval intake also asks for the CIP application number from the decision letter.',
+                'answer' => 'Add dependents on the intake form if needed. Each needs **first name**, **last name**, **date of birth**, and **relationship** (Spouse or Qualified dependent). After date of birth is entered, the form shows whether that person is **under 16** or **16 and over**, and the document list follows that bracket. A spouse is never sorted by age. Post-approval intake also asks for the CIP application number from the decision letter.',
             ],
             [
                 'id' => 'queues',

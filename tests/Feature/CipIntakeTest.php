@@ -1536,6 +1536,16 @@ class CipIntakeTest extends TestCase
             'CHILD B EXAMPLE' => 'Qualified Dependent 2',
             'CHILD C EXAMPLE' => 'Qualified Dependent 3',
         ], $classified);
+
+        $brackets = collect($body['dependents'])
+            ->mapWithKeys(fn ($d) => [$d['name'] => $d['ageBracketLabel']])
+            ->all();
+
+        $this->assertSame([
+            'CHILD A EXAMPLE' => 'Under 16',
+            'CHILD B EXAMPLE' => 'Under 16',
+            'CHILD C EXAMPLE' => '16 and over',
+        ], $brackets);
     }
 
     public function test_removing_a_dependent_renumbers_the_rest(): void

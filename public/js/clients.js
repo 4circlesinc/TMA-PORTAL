@@ -3553,6 +3553,13 @@
     return null;
   }
 
+  function cipPersonTitle(person) {
+    var title = (person && (person.label || person.applicantTypeLabel)) || 'Applicant';
+    if (person && person.ageBracketLabel) title += ' — ' + person.ageBracketLabel;
+
+    return title;
+  }
+
   function renderCipPersonCardHead(person, app) {
     if (!person) return '';
 
@@ -3564,7 +3571,7 @@
     return '<header class="tma-dash__clients-card-head tma-dash__clients-card-head--person">' +
       '<div class="tma-dash__clients-card-person">' +
       '<div class="tma-dash__clients-card-person-text">' +
-      '<h3 class="tma-dash__clients-card-title">' + esc(person.label || person.applicantTypeLabel || 'Applicant') + '</h3>' +
+      '<h3 class="tma-dash__clients-card-title">' + esc(cipPersonTitle(person)) + '</h3>' +
       '<span class="tma-dash__clients-card-person-name">' + esc(cipUpperName(person.name) || '-') + '</span>' +
       '</div></div>' +
       status +
@@ -3622,7 +3629,7 @@
       '<td><div class="tma-cip-table__member">' +
       '<span class="tma-cip-table__member-avatar">' + memberFace(member) + '</span>' +
       '<div class="tma-cip-table__member-text">' +
-      '<span class="tma-cip-table__member-role">' + esc(member.label || '') + '</span>' +
+      '<span class="tma-cip-table__member-role">' + esc(cipPersonTitle(member)) + '</span>' +
       '<span class="tma-cip-table__member-name">' + esc(cipUpperName(member.name) || '-') + '</span>' +
       '</div></div></td>' +
       '<td colspan="5"></td>' +
@@ -7187,7 +7194,9 @@
     var i;
     if ((i = item(ICONS.IdentificationCard, 'Passport number', person.passportNumber))) fields.push(i);
     if ((i = item(ICONS.User, 'Gender', person.gender))) fields.push(i);
-    if ((i = item(ICONS.CalendarBlank, 'Date of birth', person.dateOfBirth))) fields.push(i);
+    if ((i = item(ICONS.CalendarBlank, 'Date of birth', person.dateOfBirth
+      ? (person.ageBracketLabel ? person.dateOfBirth + ' · ' + person.ageBracketLabel : person.dateOfBirth)
+      : null))) fields.push(i);
     if ((i = item(ICONS.MapPin, 'Country of birth', person.countryOfBirth))) fields.push(i);
     if ((i = item(ICONS.MapPin, 'Nationality', person.nationality))) fields.push(i);
     if ((i = item(ICONS.MapPin, 'Country of residence', person.countryOfResidence))) fields.push(i);

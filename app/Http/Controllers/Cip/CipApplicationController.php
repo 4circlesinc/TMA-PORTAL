@@ -1141,6 +1141,7 @@ class CipApplicationController extends Controller
                     'id' => $person->uuid,
                     'role' => $person->role,
                     'label' => Dependents::label($person),
+                    'ageBracketLabel' => ApplicantType::ageBracketLabel($person),
                     'name' => $person->fullName(),
                     'profileTab' => $this->profileTabForPerson($person),
                     ...$this->personPhotoUrls($person, $photoFile),
@@ -2018,6 +2019,7 @@ class CipApplicationController extends Controller
             // Section 11's applicant types decide which checklist this person owes.
             'applicantType' => ApplicantType::for($person),
             'applicantTypeLabel' => ApplicantType::label(ApplicantType::for($person)),
+            'ageBracketLabel' => ApplicantType::ageBracketLabel($person),
             'documents' => $person->documents
                 ->filter(function ($slot) use ($allowedRequirements) {
                     if ($slot->requirement_id === null) {

@@ -135,7 +135,7 @@ try {
     await page.waitForTimeout(250);
   }
   const titles = await page.locator('.tma-portal-repeat__title').allInnerTexts();
-  check(titles.join('|') === 'Qualified Dependent 3|Qualified Dependent 2|Qualified Dependent 1|Spouse',
+  check(titles.join('|') === 'Qualified Dependent 3 — 16 and over|Qualified Dependent 2 — Under 16|Qualified Dependent 1 — Under 16|Spouse',
     `the form numbers them youngest-first (${titles.join(', ')})`);
 
   step(5, 'Filing');

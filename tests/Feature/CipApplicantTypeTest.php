@@ -212,6 +212,29 @@ class CipApplicantTypeTest extends TestCase
         $this->assertSame('Dependent 18 and over', ApplicantType::label(ApplicantType::DEPENDENT_16_OVER));
     }
 
+    public function test_the_age_bracket_phrase_is_blank_until_a_date_of_birth_is_known(): void
+    {
+        $application = $this->application();
+
+        $unknown = $this->person($application, CipPerson::ROLE_DEPENDENT, CipPerson::RELATIONSHIP_QUALIFIED);
+        $this->assertNull(ApplicantType::ageBracketLabel($unknown));
+
+        $child = $this->person($application, CipPerson::ROLE_DEPENDENT, CipPerson::RELATIONSHIP_QUALIFIED,
+            now()->subYears(8)->toDateString());
+        $this->assertSame('Under 16', ApplicantType::ageBracketLabel($child));
+
+        $adult = $this->person($application, CipPerson::ROLE_DEPENDENT, CipPerson::RELATIONSHIP_QUALIFIED,
+            now()->subYears(20)->toDateString());
+        $this->assertSame('16 and over', ApplicantType::ageBracketLabel($adult));
+
+        $spouse = $this->person($application, CipPerson::ROLE_DEPENDENT, CipPerson::RELATIONSHIP_SPOUSE,
+            now()->subYears(8)->toDateString());
+        $this->assertNull(ApplicantType::ageBracketLabel($spouse));
+
+        $principal = $this->person($application, CipPerson::ROLE_MAIN_APPLICANT, null, '1985-04-12');
+        $this->assertNull(ApplicantType::ageBracketLabel($principal));
+    }
+
     public function test_the_five_types_are_the_whole_vocabulary(): void
     {
         $this->assertSame([

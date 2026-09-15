@@ -360,8 +360,8 @@ try {
     await page.waitForTimeout(300);
   }
   const titles = await page.locator('.tma-portal-repeat__title').allInnerTexts();
-  check(titles[0] === 'Qualified Dependent 3' && titles[1] === 'Qualified Dependent 1'
-    && titles[2] === 'Qualified Dependent 2' && titles[3] === 'Spouse',
+  check(titles[0] === 'Qualified Dependent 3 — 16 and over' && titles[1] === 'Qualified Dependent 1 — Under 16'
+    && titles[2] === 'Qualified Dependent 2 — Under 16' && titles[3] === 'Spouse',
     `numbered from the youngest, not the order typed (${titles.join(', ')})`);
 
   // Removing one closes the gap rather than leaving a hole in the list.
