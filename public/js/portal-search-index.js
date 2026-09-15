@@ -75,6 +75,68 @@
       || ((item.navId || '') + ':' + (item.label || item.title || ''));
   }
 
+  /* Same person can exist as several Client rows (import + CIP provision +
+     provider contact) and again as a CIP application. The palette should
+     show one face, not three identical "Client" lines. */
+  function personCollapseKey(item) {
+    if (!item || item.type !== 'user') return '';
+    if (!item.clientId && !item.cipApplicationId) return '';
+    var name = String(item.label || item.title || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    return name ? ('person:' + name) : '';
+  }
+
+  function hasRealPhoto(item) {
+    var url = item && item.avatarUrl;
+    return !!(url && /^(https?:|\/(storage|media)\/)/i.test(url));
+  }
+
+  function preferSearchItem(current, next) {
+    if (!current) return next;
+    if (!next) return current;
+    var curPhoto = hasRealPhoto(current);
+    var nextPhoto = hasRealPhoto(next);
+    if (nextPhoto && !curPhoto) return next;
+    if (curPhoto && !nextPhoto) return current;
+    // Prefer a hub Client row over a CIP application when both name the same
+    // person: the Client href is the profile the reader expects.
+    var curClient = !!current.clientId && !current.cipApplicationId;
+    var nextClient = !!next.clientId && !next.cipApplicationId;
+    if (nextClient && !curClient) return next;
+    return current;
+  }
+
+  function mergeUnique(lists) {
+    var merged = [];
+    var seen = Object.create(null);
+    var personAt = Object.create(null);
+    (lists || []).forEach(function (list) {
+      (list || []).forEach(function (item) {
+        if (!item) return;
+        var key = resultKey(item);
+        var person = personCollapseKey(item);
+        if (person && personAt[person] != null) {
+          var idx = personAt[person];
+          var kept = preferSearchItem(merged[idx], item);
+          if (kept !== merged[idx]) {
+            if (key) seen[key] = true;
+            var oldKey = resultKey(merged[idx]);
+            if (oldKey) delete seen[oldKey];
+            merged[idx] = kept;
+            seen[resultKey(kept)] = true;
+          } else if (key) {
+            seen[key] = true;
+          }
+          return;
+        }
+        if (key && seen[key]) return;
+        if (key) seen[key] = true;
+        if (person) personAt[person] = merged.length;
+        merged.push(item);
+      });
+    });
+    return merged;
+  }
+
   /* Phrase first, then every word: "oath allegiance" still finds
      "Oath of Allegiance". */
   function matchesQuery(hay, query) {
@@ -246,7 +308,7 @@
       navId: 'folders-all',
       view: 'folders',
       href: '/folders/all',
-      keywords: [f.name, f.extension || '', folderName, 'file', 'files'],
+      keywords: [f.name, f.extension || '', folderName, 'file', 'files', 'file library', 'library'],
       // What TMAFileThumbs needs to draw the real thumbnail (or the
       // extension's own icon) instead of a generic document glyph.
       thumb: {
@@ -264,7 +326,7 @@
       },
     };
     if (!opts.compact) {
-      row.subtitle = folderName;
+      row.subtitle = folderName ? ('File Library · ' + folderName) : 'File Library';
     }
     return row;
   }
@@ -305,25 +367,35 @@
       });
   }
 
+  function mapFolderRow(f) {
+    return {
+      type: 'folder',
+      label: f.name,
+      title: f.name,
+      subtitle: 'File Library',
+      folderId: f.id,
+      navId: 'folders-all',
+      view: 'folders',
+      href: '/folders/all',
+      keywords: [f.name, 'folder', 'files', 'file library', 'library'],
+    };
+  }
+
   function fetchFiles(q) {
     var net = window.TMAFilesNet;
     if (!net || typeof net.fetchJSON !== 'function') return Promise.resolve([]);
-    var params = 'section=all&search=' + encodeURIComponent(q) + '&perPage=12&lean=1';
-    return net.fetchJSON(net.url('/?' + params)).then(function (res) {
-      var folders = (res.folders || []).slice(0, 8).map(function (f) {
-        return {
-          type: 'folder',
-          label: f.name,
-          title: f.name,
-          subtitle: 'Folder',
-          folderId: f.id,
-          navId: 'folders-all',
-          view: 'folders',
-          href: '/folders/all',
-          keywords: [f.name, 'folder', 'files'],
-        };
-      });
-      var files = (res.files || []).slice(0, 12).map(function (f) {
+    var term = String(q || '').trim();
+    if (!term) return Promise.resolve([]);
+    // Folders and files are windowed folders-first on the server. A name that
+    // hits many client folders used to starve every file hit. Ask for each
+    // kind on its own so the File Library always contributes both.
+    var base = 'section=all&search=' + encodeURIComponent(term) + '&perPage=8&lean=1';
+    return Promise.all([
+      settle(net.fetchJSON(net.url('/?' + base + '&only=folders'))),
+      settle(net.fetchJSON(net.url('/?' + base + '&only=files'))),
+    ]).then(function (parts) {
+      var folders = ((parts[0] && parts[0].folders) || []).slice(0, 8).map(mapFolderRow);
+      var files = ((parts[1] && parts[1].files) || []).slice(0, 8).map(function (f) {
         return mapFileRow(f);
       });
       return folders.concat(files);
@@ -686,17 +758,7 @@
       settle(fetchCipApplications(q)),
       settle(fetchProviders(q)),
     ]).then(function (chunks) {
-      var merged = [];
-      var seen = Object.create(null);
-      chunks.forEach(function (list) {
-        (list || []).forEach(function (item) {
-          var key = resultKey(item);
-          if (!key || seen[key]) return;
-          seen[key] = true;
-          merged.push(item);
-        });
-      });
-      return merged;
+      return mergeUnique(chunks);
     });
   }
 
@@ -706,9 +768,12 @@
     fetchContacts: fetchContacts,
     fetchLatestClients: fetchLatestClients,
     fetchLatestFiles: fetchLatestFiles,
+    fetchFiles: fetchFiles,
     fetchMail: fetchMail,
     fetchLiveResults: fetchLiveResults,
     resultKey: resultKey,
+    personCollapseKey: personCollapseKey,
+    mergeUnique: mergeUnique,
     forgetCipRequirements: function () {
       cipReqCache = null;
       cipReqPromise = null;

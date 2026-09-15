@@ -1153,6 +1153,9 @@
     }
 
     function mergeResults(lists) {
+      if (window.TMAPortalSearchIndex && typeof window.TMAPortalSearchIndex.mergeUnique === 'function') {
+        return window.TMAPortalSearchIndex.mergeUnique(lists);
+      }
       const merged = [];
       const seen = Object.create(null);
       lists.forEach((list) => {
@@ -1352,6 +1355,8 @@
 
       const pageHits = mailOnly ? [] : filterIndex(sourceIndex(), q);
       const contactHits = mailOnly ? [] : filterIndex(state.contacts, q);
+      // Live answers (File Library first) before the warm contact list so a
+      // long client match list cannot bury folders/files that also matched.
       state.results = mergeResults([pageHits, contactHits]);
       state.selectedIndex = 0;
 
@@ -1368,8 +1373,8 @@
             ? mergeResults([live])
             : mergeResults([
                 filterIndex(sourceIndex(), current),
-                filterIndex(state.contacts, current),
                 live,
+                filterIndex(state.contacts, current),
               ]);
           state.results = mailOnly && hits.length ? [submitRow(current)].concat(hits) : hits;
           state.selectedIndex = 0;

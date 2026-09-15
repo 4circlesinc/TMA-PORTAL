@@ -335,4 +335,43 @@ class ClientsTest extends TestCase
             ->assertJsonMissingPath('ids')
             ->assertJsonMissingPath('clients.0.profile');
     }
+
+    public function test_search_with_limit_collapses_duplicate_client_names(): void
+    {
+        $staff = $this->staff();
+
+        $this->actingAs($staff)->postJson('/portal/clients', $this->payload([
+            'uid' => 'sarah-1',
+            'name' => 'Sarah Ali Mohammed Obaid',
+        ]))->assertOk();
+
+        $this->actingAs($staff)->postJson('/portal/clients', $this->payload([
+            'uid' => 'sarah-2',
+            'name' => 'SARAH ALI MOHAMMED OBAID',
+            'profile' => [
+                'firstName' => 'Sarah',
+                'lastName' => 'Obaid',
+                'photo' => '/storage/clients/sarah.jpg',
+                'emails' => [['type' => 'work', 'value' => 'sarah@example.com']],
+                'phones' => [],
+                'addresses' => [],
+                'importantDates' => [],
+            ],
+        ]))->assertOk();
+
+        Client::query()->where('uid', 'sarah-2')->update([
+            'photo_url' => '/storage/clients/sarah.jpg',
+        ]);
+
+        $this->actingAs($staff)->postJson('/portal/clients', $this->payload([
+            'uid' => 'sarah-3',
+            'name' => 'Sarah Ali Mohammed Obaid',
+        ]))->assertOk();
+
+        $this->actingAs($staff)->getJson('/portal/clients/search?q='.urlencode('Sarah Ali Mohammed Obaid').'&limit=12')
+            ->assertOk()
+            ->assertJsonCount(1, 'clients')
+            ->assertJsonPath('clients.0.id', 'sarah-2')
+            ->assertJsonPath('clients.0.photo', '/storage/clients/sarah.jpg');
+    }
 }

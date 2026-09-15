@@ -96,7 +96,10 @@ final class ClientDirectory
         $like = '%'.addcslashes($term, '\\%_').'%';
         $op = self::likeOperator();
 
-        return self::baseQuery($user)
+        // Over-fetch slightly: the same applicant can exist as several Client
+        // rows (hub import, CIP provision, provider contact). The palette
+        // collapses identical names, and so does this list.
+        $rows = self::baseQuery($user)
             ->where(function ($q) use ($like, $op, $term) {
                 $q->where('name', $op, $like)
                     ->orWhere('email', $op, $like)
@@ -107,11 +110,76 @@ final class ClientDirectory
                 self::matchApplicationNumber($q, $term);
             })
             ->orderBy('name')
-            ->limit($limit)
+            ->limit(min(50, $limit * 3))
             ->get()
             ->map->toDirectoryRecord()
             ->values()
             ->all();
+
+        return self::uniqueDirectoryPeople($rows, $limit);
+    }
+
+    /**
+     * One search hit per person name. Prefer the row that actually has a
+     * photo, then a live login, then the first match.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<array<string, mixed>>
+     */
+    public static function uniqueDirectoryPeople(array $rows, int $limit): array
+    {
+        $best = [];
+        $order = [];
+
+        foreach ($rows as $row) {
+            $name = mb_strtolower(trim((string) ($row['name'] ?? '')));
+            if ($name === '') {
+                $name = 'id:'.(string) ($row['id'] ?? uniqid('client', true));
+            }
+
+            if (! isset($best[$name])) {
+                $best[$name] = $row;
+                $order[] = $name;
+                continue;
+            }
+
+            $best[$name] = self::preferDirectoryRow($best[$name], $row);
+        }
+
+        $out = [];
+        foreach ($order as $name) {
+            $out[] = $best[$name];
+            if (count($out) >= $limit) {
+                break;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  array<string, mixed>  $current
+     * @param  array<string, mixed>  $next
+     * @return array<string, mixed>
+     */
+    private static function preferDirectoryRow(array $current, array $next): array
+    {
+        $curPhoto = trim((string) ($current['photo'] ?? '')) !== '';
+        $nextPhoto = trim((string) ($next['photo'] ?? '')) !== '';
+        if ($nextPhoto && ! $curPhoto) {
+            return $next;
+        }
+        if ($curPhoto && ! $nextPhoto) {
+            return $current;
+        }
+
+        $curLogin = ! empty($current['hasLogin']);
+        $nextLogin = ! empty($next['hasLogin']);
+        if ($nextLogin && ! $curLogin) {
+            return $next;
+        }
+
+        return $current;
     }
 
     /**
