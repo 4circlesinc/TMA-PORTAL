@@ -432,6 +432,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/applications/form', [CipApplicationController::class, 'form'])->name('applications.form');
         Route::get('/applications/add-on/parent', [CipApplicationController::class, 'addOnParent'])
             ->name('applications.add-on.parent');
+        Route::get('/applications/add-on/parents', [CipApplicationController::class, 'addOnParents'])
+            ->name('applications.add-on.parents');
         // Above `/applications/{uuid}`, or the wildcard swallows it and the
         // catch-up read becomes a lookup for an application called "sync".
         Route::get('/applications/sync', [CipApplicationController::class, 'sync'])->name('applications.sync');

@@ -85,6 +85,65 @@ class CipAddOnTest extends TestCase
         $this->assertNull($body['openAddOn']);
     }
 
+    public function test_parent_lookup_tolerates_hyphens_in_the_cip_number(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/add-on/parent?cipNumber=10T1-GADD-01P&corNumber='.$parent->cor_number)
+            ->assertOk()
+            ->assertJsonPath('parent.id', $parent->uuid);
+    }
+
+    public function test_parent_suggest_lists_granted_files_as_the_cip_number_is_typed(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $body = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/add-on/parents?q=10T1G')
+            ->assertOk()
+            ->json();
+
+        $this->assertCount(1, $body['parents']);
+        $this->assertSame($parent->uuid, $body['parents'][0]['id']);
+        $this->assertSame($parent->cip_number, $body['parents'][0]['cipNumber']);
+        $this->assertSame('CHEN WEI', $body['parents'][0]['applicantName']);
+        $this->assertSame($parent->cor_number, $body['parents'][0]['corNumber']);
+    }
+
+    public function test_parent_suggest_matches_the_main_applicant_name(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $body = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/add-on/parents?q=Chen')
+            ->assertOk()
+            ->json();
+
+        $this->assertSame($parent->uuid, $body['parents'][0]['id']);
+    }
+
+    public function test_parent_suggest_hides_files_that_are_not_granted(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+        $open = Applications::create($provider, $staff, ['investment_type' => 'real_estate']);
+        $this->mainApplicant($open, 'Chen', 'Wei');
+        $open->forceFill([
+            'status' => Status::NEW,
+            'cip_number' => '10T1GADD99P',
+            'cor_number' => 'COR-OPEN',
+        ])->save();
+
+        $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/add-on/parents?q=10T1GADD99')
+            ->assertOk()
+            ->assertJsonPath('parents', []);
+    }
+
     public function test_parent_lookup_refuses_an_unknown_cip_number(): void
     {
         $staff = $this->staff();

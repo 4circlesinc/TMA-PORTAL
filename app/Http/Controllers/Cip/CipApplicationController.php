@@ -211,6 +211,25 @@ class CipApplicationController extends Controller
         return response()->json($result);
     }
 
+    /**
+     * Typeahead for the Add-On CIP number field: granted parents matching
+     * what has been typed, so the reader can confirm the file before the
+     * COR and name fields have to agree with it.
+     */
+    public function addOnParents(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless(CipAccess::canCreate($user), 404);
+
+        $data = $request->validate([
+            'q' => ['nullable', 'string', 'max:191'],
+        ]);
+
+        return response()->json([
+            'parents' => AddOn::suggest($user, (string) ($data['q'] ?? '')),
+        ]);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $user = $request->user();

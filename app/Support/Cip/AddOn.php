@@ -5,7 +5,9 @@ namespace App\Support\Cip;
 use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Post-approval family additions: one spouse or dependent filed against a
@@ -124,7 +126,15 @@ class AddOn
 
     public static function normalizeNumber(?string $value): string
     {
-        return mb_strtolower(preg_replace('/\s+/u', '', (string) $value) ?? '');
+        // Spaces and hyphens are noise on a Unit identifier: letters and
+        // digits are what the letter and the row have to share.
+        return mb_strtolower(preg_replace('/[\s\-]+/u', '', (string) $value) ?? '');
+    }
+
+    /** SQL expression that matches {@see normalizeNumber} for a column. */
+    public static function numberMatchSql(string $column): string
+    {
+        return 'LOWER(REPLACE(REPLACE(COALESCE('.$column.", ''), ' ', ''), '-', ''))";
     }
 
     public static function normalizeName(?string $value): string
@@ -182,17 +192,7 @@ class AddOn
             return ['ok' => false, 'error' => 'Enter the Certificate of Registration number.', 'field' => 'parentCorNumber'];
         }
 
-        $match = ApplicationScope::query($user)
-            ->whereRaw(
-                'LOWER(REPLACE(COALESCE(cip_applications.cip_number, \'\'), \' \', \'\')) = ?',
-                [self::normalizeNumber($cip)],
-            )
-            ->with([
-                'provider:id,uuid,name,code',
-                'client:id,name',
-                'people' => fn ($q) => $q->where('role', CipPerson::ROLE_MAIN_APPLICANT),
-            ])
-            ->first();
+        $match = self::findByCipNumber($user, $cip);
 
         if ($match === null) {
             return ['ok' => false, 'error' => 'CIP application number not found.', 'field' => 'parentCipNumber'];
@@ -245,6 +245,111 @@ class AddOn
         return ApplicationScope::query($user)
             ->where('uuid', $result['parent']['id'])
             ->first();
+    }
+
+    /**
+     * Typeahead for the Add-On CIP number field: granted parents whose CIP
+     * number (or main applicant name) contains what has been typed so far.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function suggest(?User $user, string $term, int $limit = 8): array
+    {
+        $needle = trim($term);
+        if (mb_strlen($needle) < 2) {
+            return [];
+        }
+
+        $like = '%'.mb_strtolower($needle).'%';
+        $numberNeedle = self::normalizeNumber($needle);
+
+        $rows = self::eligibleParentQuery($user)
+            ->with([
+                'provider:id,uuid,name,code',
+                'client:id,name',
+                'people' => fn ($q) => $q->where('role', CipPerson::ROLE_MAIN_APPLICANT),
+            ])
+            ->where(function ($q) use ($like, $numberNeedle) {
+                $q->whereRaw(
+                    'LOWER(COALESCE(cip_applications.cip_number, \'\')) like ?',
+                    [$like],
+                );
+                if ($numberNeedle !== '') {
+                    $q->orWhereRaw(
+                        self::numberMatchSql('cip_applications.cip_number').' like ?',
+                        ['%'.$numberNeedle.'%'],
+                    );
+                }
+                $q->orWhereHas('people', function ($people) use ($like) {
+                    $nameSql = DB::connection()->getDriverName() === 'mysql'
+                        ? "LOWER(TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, ''))))"
+                        : "LOWER(TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')))";
+                    $people->where('role', CipPerson::ROLE_MAIN_APPLICANT)
+                        ->where(function ($name) use ($like, $nameSql) {
+                            $name->whereRaw('LOWER(COALESCE(first_name, \'\')) like ?', [$like])
+                                ->orWhereRaw('LOWER(COALESCE(last_name, \'\')) like ?', [$like])
+                                ->orWhereRaw($nameSql.' like ?', [$like]);
+                        });
+                });
+            })
+            ->orderByDesc('cip_applications.id')
+            ->limit(max(1, min($limit, 20)))
+            ->get();
+
+        return $rows
+            ->filter(fn (CipApplication $row) => self::isEligibleParent($row))
+            ->values()
+            ->map(fn (CipApplication $row) => self::parentPayload($row))
+            ->all();
+    }
+
+    /**
+     * One application by CIP number inside this reader's slice, or null.
+     */
+    public static function findByCipNumber(?User $user, string $cipNumber): ?CipApplication
+    {
+        $cip = trim($cipNumber);
+        if ($cip === '') {
+            return null;
+        }
+
+        return ApplicationScope::query($user)
+            ->whereRaw(
+                self::numberMatchSql('cip_applications.cip_number').' = ?',
+                [self::normalizeNumber($cip)],
+            )
+            ->with([
+                'provider:id,uuid,name,code',
+                'client:id,name',
+                'people' => fn ($q) => $q->where('role', CipPerson::ROLE_MAIN_APPLICANT),
+            ])
+            ->first();
+    }
+
+    /**
+     * Granted parents that can take an Add-On, already narrowed to the
+     * reader's slice. The PHP gate in {@see isEligibleParent} still runs on
+     * each row; this only keeps the candidate set small.
+     */
+    public static function eligibleParentQuery(?User $user): Builder
+    {
+        return ApplicationScope::query($user)
+            ->whereNotNull('cip_applications.cip_number')
+            ->where('cip_applications.cip_number', '!=', '')
+            ->whereNotNull('cip_applications.cor_number')
+            ->where('cip_applications.cor_number', '!=', '')
+            ->where(function ($q) {
+                $q->whereNull('cip_applications.phase')
+                    ->orWhere('cip_applications.phase', '!=', Phase::ADD_ON);
+            })
+            ->where(function ($q) {
+                $q->where('cip_applications.status', Status::GRANTED)
+                    ->orWhere('cip_applications.decision', CipApplication::DECISION_GRANTED)
+                    ->orWhere(function ($post) {
+                        $post->where('cip_applications.phase', Phase::POST_APPROVAL)
+                            ->where('cip_applications.status', '!=', Status::POST_DENIED);
+                    });
+            });
     }
 
     public static function isEligibleParent(CipApplication $application): bool

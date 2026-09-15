@@ -219,6 +219,10 @@
     parent: null,
     parentError: '',
     openAddOn: null,
+    /* Typeahead under the Add-On CIP number field. Kept off the draft so a
+       re-render does not have to invent the open menu from saved answers. */
+    parentSuggest: { items: [], open: false, active: -1, seq: 0 },
+    parentSuggestTimer: null,
     /* The filed record the form was opened on. Kept so a save that has to be
        parked offline can say what the record will look like once it lands. */
     record: null,
@@ -665,6 +669,7 @@
 
   function textField(path, opts) {
     opts = opts || {};
+    if (path === 'parentCipNumber') return parentCipField(opts);
     var name = isNamePath(path);
     var shown = name ? upperName(state.draft[path] || '') : (state.draft[path] || '');
     if (fieldsLocked()) return lockedField(path, shown, opts);
@@ -682,6 +687,75 @@
       ' autocomplete="off">' +
       fieldError(path) +
       '</label>';
+  }
+
+  function normalizeCipNumber(value) {
+    return String(value || '').toLowerCase().replace(/[\s\-]+/g, '');
+  }
+
+  function parentCipFound() {
+    if (!state.parent || !state.parent.cipNumber) return false;
+
+    return normalizeCipNumber(state.parent.cipNumber) ===
+      normalizeCipNumber(state.draft.parentCipNumber);
+  }
+
+  function parentFoundTick() {
+    return '<span class="tma-portal-cip-lookup__tick" title="Application found" aria-hidden="true">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="18" height="18" fill="currentColor">' +
+      '<path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/>' +
+      '</svg></span>';
+  }
+
+  /*
+   * The CIP number field on an Add-On filing. Typing opens a short list of
+   * granted parents so the reader can confirm the file; a tick says the
+   * typed number already resolves to one.
+   */
+  function parentCipField(opts) {
+    opts = opts || {};
+    var shown = state.draft.parentCipNumber || '';
+    if (fieldsLocked()) return lockedField('parentCipNumber', shown, opts);
+    var found = parentCipFound();
+    var suggest = state.parentSuggest || { items: [], open: false, active: -1 };
+    var menu = '';
+    if (suggest.open && suggest.items && suggest.items.length) {
+      menu = '<ul class="tma-portal-cip-suggest" role="listbox" data-cip-parent-suggest>' +
+        suggest.items.map(function (item, i) {
+          var label = (item.cipNumber || '') +
+            (item.applicantName ? ' — ' + item.applicantName : '');
+          var meta = item.corNumber
+            ? 'COR ' + item.corNumber + (item.statusLabel ? ' · ' + item.statusLabel : '')
+            : (item.statusLabel || '');
+          return '<li role="option"' +
+            (i === suggest.active ? ' aria-selected="true" class="is-active"' : '') +
+            ' data-cip-parent-pick="' + esc(String(i)) + '">' +
+            '<span class="tma-portal-cip-suggest__label">' + esc(label) + '</span>' +
+            (meta ? '<span class="tma-portal-cip-suggest__meta">' + esc(meta) + '</span>' : '') +
+            '</li>';
+        }).join('') +
+        '</ul>';
+    }
+
+    return '<div class="tma-portal-field tma-portal-field--cip-lookup' +
+      (state.errors.parentCipNumber ? ' is-invalid' : '') +
+      (found ? ' is-found' : '') + '">' +
+      fieldLabel('parentCipNumber', opts.label || labelFor('parentCipNumber')) +
+      '<div class="tma-portal-cip-lookup">' +
+      '<div class="tma-portal-cip-lookup__control">' +
+      '<input class="tma-portal-input" type="text"' +
+      ' data-cip-field="parentCipNumber" data-cip-parent-cip' +
+      ' value="' + esc(shown) + '"' +
+      (opts.placeholder ? ' placeholder="' + esc(opts.placeholder) + '"' : '') +
+      ' aria-autocomplete="list" aria-expanded="' + (suggest.open ? 'true' : 'false') + '"' +
+      requiredAttr('parentCipNumber') +
+      ' autocomplete="off" spellcheck="false">' +
+      (found ? parentFoundTick() : '') +
+      '</div>' +
+      menu +
+      '</div>' +
+      fieldError('parentCipNumber') +
+      '</div>';
   }
 
   function selectField(path, options, placeholder, opts) {
@@ -1349,6 +1423,10 @@
         if (isNamePath(path)) forceUpperInput(el);
         state.draft[path] = el.value;
         delete state.errors[path];
+        if (path === 'parentCipNumber') {
+          clearParentIfCipChanged();
+          queueParentSuggest(el.value);
+        }
         touchDraft();
       });
       el.addEventListener('change', function () {
@@ -1379,7 +1457,16 @@
         }
       });
       el.addEventListener('blur', function () {
-        if (/parentCipNumber$|parentCorNumber$|parentApplicantName$/.test(path)) {
+        if (/parentCipNumber$/.test(path)) {
+          // Delay so a mousedown on a suggestion still lands before the menu
+          // is torn down.
+          window.setTimeout(function () {
+            closeParentSuggest();
+            lookupParent();
+          }, 150);
+          return;
+        }
+        if (/parentCorNumber$|parentApplicantName$/.test(path)) {
           lookupParent();
           return;
         }
@@ -1387,6 +1474,11 @@
         if (!el.value || dobYearSettled(el.value)) return;
         render(root);
       });
+      if (path === 'parentCipNumber') {
+        el.addEventListener('keydown', function (e) {
+          onParentCipKeydown(e);
+        });
+      }
     });
 
     wirePhotos(root);
@@ -1394,6 +1486,7 @@
     wireDependents(root);
     wireDraft(root);
     wireAddOnLookup(root);
+    wireParentSuggest(root);
     if (window.TMACipSlots && window.TMACipSlots.wire) window.TMACipSlots.wire(root);
   }
 
@@ -1401,6 +1494,207 @@
     MORPH.unwired(root, '[data-cip-addon-lookup]').forEach(function (btn) {
       btn.addEventListener('click', function () { lookupParent({ announce: true }); });
     });
+  }
+
+  function wireParentSuggest(root) {
+    MORPH.unwired(root, '[data-cip-parent-pick]').forEach(function (row) {
+      row.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        var index = Number(row.getAttribute('data-cip-parent-pick'));
+        pickParentSuggest(index);
+      });
+    });
+  }
+
+  function clearParentIfCipChanged() {
+    if (!state.parent) return;
+    if (normalizeCipNumber(state.parent.cipNumber) ===
+      normalizeCipNumber(state.draft.parentCipNumber)) {
+      return;
+    }
+    state.parent = null;
+    state.openAddOn = null;
+    state.parentError = '';
+    paintParentTick();
+  }
+
+  function queueParentSuggest(term) {
+    if (!isAddOnIntake()) return;
+    if (state.parentSuggestTimer) window.clearTimeout(state.parentSuggestTimer);
+    var q = String(term || '').trim();
+    if (q.length < 2) {
+      closeParentSuggest();
+      return;
+    }
+    state.parentSuggestTimer = window.setTimeout(function () {
+      fetchParentSuggest(q);
+    }, 180);
+  }
+
+  function fetchParentSuggest(term) {
+    var seq = (state.parentSuggest.seq || 0) + 1;
+    state.parentSuggest.seq = seq;
+    var url = '/portal/cip/applications/add-on/parents?q=' + encodeURIComponent(term);
+    fetch(url, { credentials: 'same-origin', headers: headers() }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (json) {
+        if (seq !== state.parentSuggest.seq) return;
+        if (!res.ok) {
+          closeParentSuggest();
+          return;
+        }
+        var items = (json && json.parents) || [];
+        state.parentSuggest.items = items;
+        state.parentSuggest.active = items.length ? 0 : -1;
+        state.parentSuggest.open = items.length > 0;
+        paintParentSuggest();
+        // Exact CIP match: show the tick as soon as the number resolves,
+        // even before COR is typed. Selecting from the list still fills COR.
+        if (items.length === 1 &&
+          normalizeCipNumber(items[0].cipNumber) === normalizeCipNumber(term)) {
+          applyParentHit(items[0], { fillExtras: false, lookup: false });
+        }
+      });
+    }).catch(function () {
+      if (seq !== state.parentSuggest.seq) return;
+      closeParentSuggest();
+    });
+  }
+
+  function paintParentSuggest() {
+    if (!state.root) return;
+    var box = state.root.querySelector('.tma-portal-cip-lookup');
+    var input = state.root.querySelector('[data-cip-parent-cip]');
+    if (!box || !input) return;
+
+    var existing = box.querySelector('[data-cip-parent-suggest]');
+    if (existing) existing.remove();
+
+    var suggest = state.parentSuggest || { items: [], open: false, active: -1 };
+    input.setAttribute('aria-expanded', suggest.open && suggest.items.length ? 'true' : 'false');
+
+    if (suggest.open && suggest.items && suggest.items.length) {
+      var menu = document.createElement('ul');
+      menu.className = 'tma-portal-cip-suggest';
+      menu.setAttribute('role', 'listbox');
+      menu.setAttribute('data-cip-parent-suggest', '');
+      suggest.items.forEach(function (item, i) {
+        var li = document.createElement('li');
+        li.setAttribute('role', 'option');
+        li.setAttribute('data-cip-parent-pick', String(i));
+        if (i === suggest.active) {
+          li.setAttribute('aria-selected', 'true');
+          li.className = 'is-active';
+        }
+        var label = (item.cipNumber || '') +
+          (item.applicantName ? ' — ' + item.applicantName : '');
+        var meta = item.corNumber
+          ? 'COR ' + item.corNumber + (item.statusLabel ? ' · ' + item.statusLabel : '')
+          : (item.statusLabel || '');
+        li.innerHTML = '<span class="tma-portal-cip-suggest__label"></span>' +
+          (meta ? '<span class="tma-portal-cip-suggest__meta"></span>' : '');
+        li.querySelector('.tma-portal-cip-suggest__label').textContent = label;
+        var metaEl = li.querySelector('.tma-portal-cip-suggest__meta');
+        if (metaEl) metaEl.textContent = meta;
+        li.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          pickParentSuggest(i);
+        });
+        menu.appendChild(li);
+      });
+      box.appendChild(menu);
+    }
+
+    paintParentTick();
+  }
+
+  function paintParentTick() {
+    if (!state.root) return;
+    var wrap = state.root.querySelector('.tma-portal-field--cip-lookup');
+    var control = state.root.querySelector('.tma-portal-cip-lookup__control');
+    if (!wrap || !control) return;
+    var tick = control.querySelector('.tma-portal-cip-lookup__tick');
+    if (parentCipFound()) {
+      wrap.classList.add('is-found');
+      if (!tick) {
+        var tmp = document.createElement('div');
+        tmp.innerHTML = parentFoundTick();
+        if (tmp.firstChild) control.appendChild(tmp.firstChild);
+      }
+    } else {
+      wrap.classList.remove('is-found');
+      if (tick) tick.remove();
+    }
+  }
+
+  function closeParentSuggest() {
+    if (state.parentSuggestTimer) {
+      window.clearTimeout(state.parentSuggestTimer);
+      state.parentSuggestTimer = null;
+    }
+    if (!state.parentSuggest.open && !(state.parentSuggest.items || []).length) return;
+    state.parentSuggest.open = false;
+    state.parentSuggest.items = [];
+    state.parentSuggest.active = -1;
+    if (!state.root) return;
+    var menu = state.root.querySelector('[data-cip-parent-suggest]');
+    if (menu) menu.remove();
+    var input = state.root.querySelector('[data-cip-parent-cip]');
+    if (input) input.setAttribute('aria-expanded', 'false');
+  }
+
+  function onParentCipKeydown(e) {
+    var suggest = state.parentSuggest;
+    if (!suggest.open || !suggest.items.length) {
+      if (e.key === 'Escape') closeParentSuggest();
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      suggest.active = (suggest.active + 1) % suggest.items.length;
+      paintParentSuggest();
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      suggest.active = suggest.active <= 0 ? suggest.items.length - 1 : suggest.active - 1;
+      paintParentSuggest();
+      return;
+    }
+    if (e.key === 'Enter' && suggest.active >= 0) {
+      e.preventDefault();
+      pickParentSuggest(suggest.active);
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeParentSuggest();
+    }
+  }
+
+  function pickParentSuggest(index) {
+    var item = (state.parentSuggest.items || [])[index];
+    if (!item) return;
+    applyParentHit(item, { fillExtras: true, lookup: true });
+    closeParentSuggest();
+    if (state.root) render(state.root);
+    touchDraft();
+  }
+
+  function applyParentHit(item, opts) {
+    opts = opts || {};
+    if (!item) return;
+    state.draft.parentCipNumber = item.cipNumber || state.draft.parentCipNumber || '';
+    if (opts.fillExtras) {
+      if (item.corNumber) state.draft.parentCorNumber = item.corNumber;
+      if (item.applicantName) state.draft.parentApplicantName = item.applicantName;
+    }
+    if (item.providerId) state.draft.providerId = item.providerId;
+    state.parent = item;
+    state.parentError = '';
+    paintParentTick();
+    if (opts.lookup && state.draft.parentCorNumber) {
+      lookupParent();
+    }
   }
 
   function lookupParent(opts) {
@@ -1428,7 +1722,9 @@
         if (!res.ok) {
           state.parent = null;
           state.openAddOn = null;
-          state.parentError = (json && json.message) || 'Could not find that application.';
+          state.parentError = (json && json.message) ||
+            (json && json.errors && json.errors.cipNumber && json.errors.cipNumber[0]) ||
+            'Could not find that application.';
           render(state.root);
           return;
         }
@@ -1437,6 +1733,14 @@
         state.parentError = '';
         if (state.parent && state.parent.providerId) {
           state.draft.providerId = state.parent.providerId;
+        }
+        if (state.parent) {
+          if (!String(state.draft.parentApplicantName || '').trim() && state.parent.applicantName) {
+            state.draft.parentApplicantName = state.parent.applicantName;
+          }
+          if (!String(state.draft.parentCorNumber || '').trim() && state.parent.corNumber) {
+            state.draft.parentCorNumber = state.parent.corNumber;
+          }
         }
         render(state.root);
         touchDraft();
