@@ -1063,8 +1063,11 @@
     var title = relationship === 'spouse'
       ? 'Spouse'
       : withDependentAgeBracket(ordinal ? 'Qualified Dependent ' + ordinal : 'Dependent', dob);
+    // Key by the server person id when we have one, so Morph does not reuse
+    // another dependent's photo node when the list reorders or re-renders.
+    var morphKey = state.draft[prefix + 'id'] || ('new-' + i);
 
-    return '<section class="tma-portal-section tma-portal-section--person">' +
+    return '<section class="tma-portal-section tma-portal-section--person" data-key="cip-dependent-' + esc(morphKey) + '">' +
       '<h3 class="tma-portal-section__title tma-portal-repeat__title">' + esc(title) + '</h3>' +
       '<div class="tma-portal-section__card">' +
       '<div class="tma-portal-repeat" data-cip-dependent="' + i + '">' +
@@ -2298,10 +2301,20 @@
           return;
         }
         rememberFiled(json.draft);
+        /*
+         * Keep the dependent (and sponsor) ids the server just minted.
+         *
+         * Without them every autosave creates the family again and soft-deletes
+         * the last one: the new row reuses "Dependent 1" by name and inherits
+         * the wrong passport photo. The response already carries the ids —
+         * restoreDraft reads them; a live autosave used to ignore them.
+         */
+        rememberPersonIds(json.draft);
         if (json.draft && json.draft.id && !state.applicationId) {
           state.draftId = json.draft.id;
         }
-        state.draftSent = payload;
+        // Recompute after ids landed so the next "unchanged" check includes them.
+        state.draftSent = JSON.stringify([draftBody(), fileSignature()]);
         state.draftSavedAt = new Date();
         paintDraftStatus();
         if (announce || state.draftAnnounce) ui().toast('Draft saved');
@@ -2418,6 +2431,22 @@
     });
   }
 
+  /**
+   * Stamp person ids from a draft response into the form without clobbering
+   * anything the reader is still typing.
+   *
+   * Only paths that name a person (`dependents.N.id`, `sponsor.id`) are
+   * taken. Names, dates and the rest stay with the live draft.
+   */
+  function rememberPersonIds(draft) {
+    if (!draft || !draft.answers) return;
+    Object.keys(draft.answers).forEach(function (path) {
+      if (!/^(dependents\.\d+|sponsor)\.id$/.test(path)) return;
+      var id = draft.answers[path];
+      if (!id) return;
+      state.draft[path] = id;
+    });
+  }
 
   /* When the draft was last saved, in the reader’s own words. */
   function savedAgo() {

@@ -1184,6 +1184,7 @@ class Intake
          */
         $application->load('people');
         Tree::provision($application, $actor);
+        Tree::resyncNames($application);
 
         foreach ($application->people as $person) {
             DocumentSlots::open($person);

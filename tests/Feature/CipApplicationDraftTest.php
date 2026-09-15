@@ -204,6 +204,118 @@ class CipApplicationDraftTest extends TestCase
         $this->assertSame('ENGINEER', $main->occupation === null ? '' : mb_strtoupper($main->occupation));
     }
 
+    /**
+     * Autosaving a dependent twice must update the same person, not mint another.
+     *
+     * The wizard used to drop the uuid the first save returned, so every
+     * later autosave created a new dependent and soft-deleted the last one.
+     * The new row reused "Dependent 1" by name and inherited the wrong
+     * passport photo — Suha wearing somebody else's face.
+     */
+    public function test_saving_a_draft_dependent_twice_keeps_the_same_person_and_photo(): void
+    {
+        Storage::fake('local');
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $first = $this->actingAs($staff)
+            ->post('/portal/cip/applications/draft', $this->answers($provider, [
+                'dependents' => [[
+                    'firstName' => 'Suha',
+                    'lastName' => 'H.Khalil Al - Abtan',
+                    'dateOfBirth' => '2012-05-01',
+                    'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                    'passportPhoto' => UploadedFile::fake()->image('suha.jpg', 600, 600),
+                ]],
+            ]), ['Accept' => 'application/json'])
+            ->assertOk()
+            ->json('draft');
+
+        $dependentId = $first['answers']['dependents.0.id'] ?? null;
+        $this->assertNotEmpty($dependentId, 'The draft response must name the dependent so the next save updates them.');
+
+        $draft = CipApplication::query()->where('uuid', $first['id'])->firstOrFail();
+        $person = $draft->people()->where('role', CipPerson::ROLE_DEPENDENT)->firstOrFail();
+        $this->assertSame($dependentId, $person->uuid);
+        $folderId = $person->folder_id;
+        $photoPath = $person->photo_path;
+        $this->assertNotNull($folderId);
+        $this->assertNotNull($photoPath);
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications/draft', $this->answers($provider, [
+                'occupation' => 'Engineer',
+                'dependents' => [[
+                    'id' => $dependentId,
+                    'firstName' => 'Suha',
+                    'lastName' => 'H.Khalil Al - Abtan',
+                    'dateOfBirth' => '2012-05-01',
+                    'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                ]],
+            ]), ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $draft = $draft->fresh(['people']);
+        $live = $draft->people->where('role', CipPerson::ROLE_DEPENDENT)->values();
+        $this->assertCount(1, $live, 'A second save must not mint another dependent.');
+        $this->assertSame($dependentId, $live[0]->uuid);
+        $this->assertSame($folderId, $live[0]->folder_id, 'The same person keeps their folder.');
+        $this->assertSame($photoPath, $live[0]->photo_path, 'Their passport photo stays theirs.');
+        $this->assertSame(0, CipPerson::onlyTrashed()
+            ->where('application_id', $draft->id)
+            ->where('role', CipPerson::ROLE_DEPENDENT)
+            ->count(), 'The previous dependent must not be soft-deleted and replaced.');
+    }
+
+    /**
+     * Without the id, a second draft save used to replace the dependent.
+     *
+     * Pinning that failure mode so the frontend remembering the id stays
+     * necessary, and so a future change cannot quietly reintroduce the churn.
+     */
+    public function test_a_draft_dependent_save_without_id_still_replaces_the_row(): void
+    {
+        Storage::fake('local');
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications/draft', $this->answers($provider, [
+                'dependents' => [[
+                    'firstName' => 'Suha',
+                    'lastName' => 'Abtan',
+                    'dateOfBirth' => '2012-05-01',
+                    'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                ]],
+            ]), ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $draft = CipApplication::query()->firstOrFail();
+        $firstId = $draft->people()->where('role', CipPerson::ROLE_DEPENDENT)->value('uuid');
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications/draft', $this->answers($provider, [
+                'dependents' => [[
+                    'firstName' => 'Suha',
+                    'lastName' => 'Abtan',
+                    'dateOfBirth' => '2012-05-01',
+                    'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                ]],
+            ]), ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $draft = $draft->fresh();
+        $live = $draft->people()->where('role', CipPerson::ROLE_DEPENDENT)->get();
+        $this->assertCount(1, $live);
+        $this->assertNotSame($firstId, $live[0]->uuid, 'Omitting the id still creates a new person — which is why the form must keep it.');
+        $this->assertSame(1, CipPerson::onlyTrashed()
+            ->where('application_id', $draft->id)
+            ->where('role', CipPerson::ROLE_DEPENDENT)
+            ->count());
+    }
+
     /** A resumed draft says which slots it already holds a scan for. */
     public function test_a_resumed_draft_names_the_files_it_kept(): void
     {
