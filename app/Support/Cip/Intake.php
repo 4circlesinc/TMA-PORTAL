@@ -324,7 +324,7 @@ class Intake
             'phase' => ['nullable', 'string', Rule::in(Phase::ALL)],
             'submissionId' => ['nullable', 'string', 'max:64'],
             'investmentType' => ['nullable', 'string', Rule::in(array_keys(InvestmentType::ALL))],
-            'investmentTypeOther' => ['nullable', 'string', 'max:191'],
+            'investmentTypeOther' => self::investmentTypeOtherRules(required: false),
             'sponsored' => ['nullable', 'boolean'],
             'cipNumber' => ['nullable', 'string', 'max:'.Submission::MAX_LENGTH],
             'dependents' => ['nullable', 'array', 'max:'.self::MAX_DEPENDENTS_DRAFT],
@@ -516,13 +516,39 @@ class Intake
         return [
             'investmentType' => ['required', Rule::in(array_keys(InvestmentType::ALL))],
             // Section 3: "If Other is selected, the portal shall display a Specify
-            // Investment Type free-text field", required exactly then.
-            'investmentTypeOther' => [
-                'nullable', 'string', 'max:191',
-                Rule::requiredIf(fn () => request()->input('investmentType') === InvestmentType::OTHER),
-            ],
+            // Investment Type free-text field", required exactly then. Enterprise
+            // Project likewise needs one of its three categories.
+            'investmentTypeOther' => self::investmentTypeOtherRules(required: true),
             'sponsored' => ['required', 'boolean'],
         ];
+    }
+
+    /**
+     * Detail beside the investment type: free text once Other is chosen, a
+     * fixed category once Enterprise Project is. Drafts may leave it blank.
+     *
+     * @return list<mixed>
+     */
+    private static function investmentTypeOtherRules(bool $required): array
+    {
+        $type = fn () => request()->input('investmentType');
+
+        $rules = ['nullable', 'string', 'max:191'];
+
+        if ($required) {
+            $rules[] = Rule::requiredIf(fn () => in_array($type(), [
+                InvestmentType::OTHER,
+                InvestmentType::ENTERPRISE_PROJECT,
+            ], true));
+        }
+
+        $rules[] = Rule::when(
+            fn () => $type() === InvestmentType::ENTERPRISE_PROJECT
+                && filled(request()->input('investmentTypeOther')),
+            [Rule::in(array_keys(InvestmentType::ENTERPRISE_CATEGORIES))],
+        );
+
+        return $rules;
     }
 
     /**
@@ -714,7 +740,10 @@ class Intake
             'dateOfBirth.before' => 'A date of birth has to be in the past.',
             'sponsor.dateOfBirth.before' => 'A date of birth has to be in the past.',
             'dependents.*.dateOfBirth.before' => 'A date of birth has to be in the past.',
-            'investmentTypeOther.required' => 'Say which investment type this is.',
+            'investmentTypeOther.required' => request()->input('investmentType') === InvestmentType::ENTERPRISE_PROJECT
+                ? 'Choose an enterprise category.'
+                : 'Say which investment type this is.',
+            'investmentTypeOther.in' => 'Choose Marketing, Infrastructure or Housing.',
             'cipNumber.required' => 'Enter the CIP application number from the Unit.',
             'cipNumber.prohibited' => 'A CIP number is recorded when the application is submitted to the Unit.',
             'parentCipNumber.required' => 'Enter the CIP application number of the granted file.',
@@ -819,9 +848,10 @@ class Intake
 
             $attributes = [
                 'investment_type' => $data['investmentType'],
-                'investment_type_other' => $data['investmentType'] === InvestmentType::OTHER
-                    ? trim((string) ($data['investmentTypeOther'] ?? ''))
-                    : null,
+                'investment_type_other' => InvestmentType::otherFor(
+                    $data['investmentType'],
+                    $data['investmentTypeOther'] ?? null,
+                ),
                 'sponsored' => (bool) $data['sponsored'],
                 'submission_key' => ($data['submissionId'] ?? '') !== '' ? $data['submissionId'] : null,
             ];
@@ -1119,9 +1149,10 @@ class Intake
         $investment = $data['investmentType'] ?? null;
         $application->forceFill([
             'investment_type' => $investment ?: null,
-            'investment_type_other' => $investment === InvestmentType::OTHER
-                ? trim((string) ($data['investmentTypeOther'] ?? '')) ?: null
-                : null,
+            'investment_type_other' => InvestmentType::otherFor(
+                $investment,
+                $data['investmentTypeOther'] ?? null,
+            ),
             'sponsored' => (bool) ($data['sponsored'] ?? false),
         ])->save();
 
@@ -1183,9 +1214,10 @@ class Intake
             self::syncCipNumber($application, $actor, $data);
             $application->forceFill([
                 'investment_type' => $data['investmentType'],
-                'investment_type_other' => $data['investmentType'] === InvestmentType::OTHER
-                    ? trim((string) ($data['investmentTypeOther'] ?? ''))
-                    : null,
+                'investment_type_other' => InvestmentType::otherFor(
+                    $data['investmentType'],
+                    $data['investmentTypeOther'] ?? null,
+                ),
                 'sponsored' => (bool) $data['sponsored'],
             ])->save();
 

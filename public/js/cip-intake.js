@@ -278,6 +278,7 @@
     passportNumber: 'Passport number', passportPhoto: 'Passport photo',
     passportBioPage: 'Passport bio page', birthCertificate: 'Birth certificate',
     investmentType: 'Investment type', investmentTypeOther: 'Specify investment type',
+    enterpriseCategory: 'Enterprise category',
     sponsored: 'Sponsored', relationship: 'Relationship',
     cipNumber: 'CIP application number',
     parentCipNumber: 'CIP application number',
@@ -501,6 +502,11 @@
       found.investmentTypeOther = 'Say which investment type this is';
     }
 
+    if (state.draft.investmentType === 'enterprise_project'
+      && String(state.draft.investmentTypeOther || '').trim() === '') {
+      found.investmentTypeOther = 'Choose an enterprise category';
+    }
+
     return found;
   }
 
@@ -555,7 +561,8 @@
    * in beside each field, so a mark can never promise something the check
    * does not enforce. It follows the form as it changes: a sponsor's fields
    * are required only once Sponsored is Yes, "Specify investment type" only
-   * once Other is picked. Document Requirements settings decide which
+   * once Other is picked, and "Enterprise category" only once Enterprise
+   * Project is. Document Requirements settings decide which
    * uploads carry an asterisk and gate Add — for the applicant, the sponsor,
    * and every dependent on the form. Save as draft does not ask for them.
    */
@@ -592,7 +599,10 @@
 
   function isRequired(path) {
     if (fieldsLocked()) return false;
-    if (path === 'investmentTypeOther') return state.draft.investmentType === 'other';
+    if (path === 'investmentTypeOther') {
+      return state.draft.investmentType === 'other'
+        || state.draft.investmentType === 'enterprise_project';
+    }
 
     return requiredPaths().indexOf(path) !== -1
       || requiredFiles().indexOf(path) !== -1
@@ -968,6 +978,9 @@
     var types = ((state.options && state.options.investmentTypes) || []).map(function (t) {
       return { value: t.value, label: t.label };
     });
+    var enterpriseCategories = ((state.options && state.options.enterpriseCategories) || []).map(function (t) {
+      return { value: t.value, label: t.label };
+    });
 
     return card('Investment',
       // Its own grid: this row is three, four or five fields depending on the
@@ -981,6 +994,11 @@
         : selectField('providerId', providers, 'Select a service provider')) +
       selectField('investmentType', types, 'Select an investment type') +
       (state.draft.investmentType === 'other' ? textField('investmentTypeOther') : '') +
+      (state.draft.investmentType === 'enterprise_project'
+        ? selectField('investmentTypeOther', enterpriseCategories, 'Select a category', {
+          label: LABELS.enterpriseCategory,
+        })
+        : '') +
       selectField('sponsored', [{ value: '0', label: 'No' }, { value: '1', label: 'Yes' }], 'Select') +
       // The Unit's number, asked for only where it exists. A post-approval
       // filing is a file the Unit already decided, so the number is on the
@@ -1330,6 +1348,7 @@
         // year buffer, so 2004 lands as 0004. Wait until the year looks like
         // a birth year, or until they leave the field.
         if (/countryOfResidence$|investmentType$|sponsored$|relationship$|gender$|addonType$|nationality$/.test(path)) {
+          if (path === 'investmentType') state.draft.investmentTypeOther = '';
           if (path === 'addonType') {
             if (el.value === 'spouse') state.draft.relationship = 'spouse';
             else if (state.draft.relationship === 'spouse') state.draft.relationship = '';
@@ -2673,14 +2692,21 @@
   }
 
   /* The display string for the chosen investment type, the free text once
-     somebody picked Other, the option's own label otherwise. */
+     somebody picked Other, the enterprise category beside Enterprise Project,
+     the option's own label otherwise. */
   function investmentLabel() {
     var value = state.draft.investmentType || '';
     if (value === 'other') return state.draft.investmentTypeOther || 'Other';
     var option = ((state.options && state.options.investmentTypes) || [])
       .filter(function (o) { return o.value === value; })[0];
+    var label = option ? option.label : value;
+    if (value === 'enterprise_project' && state.draft.investmentTypeOther) {
+      var category = ((state.options && state.options.enterpriseCategories) || [])
+        .filter(function (o) { return o.value === state.draft.investmentTypeOther; })[0];
+      if (category) return label + ' — ' + category.label;
+    }
 
-    return option ? option.label : value;
+    return label;
   }
 
   /* ── mount ─────────────────────────────────────────────────────── */

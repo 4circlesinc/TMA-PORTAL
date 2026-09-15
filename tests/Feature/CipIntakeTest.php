@@ -365,6 +365,39 @@ class CipIntakeTest extends TestCase
         $this->assertSame('Government bond variant', $body['investmentType']);
     }
 
+    public function test_enterprise_project_must_pick_a_category(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $this->file($staff,
+            $this->payload($provider, [
+                'investmentType' => InvestmentType::ENTERPRISE_PROJECT,
+            ]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('investmentTypeOther');
+
+        $this->file($staff,
+            $this->payload($provider, [
+                'investmentType' => InvestmentType::ENTERPRISE_PROJECT,
+                'investmentTypeOther' => 'not-a-category',
+            ]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('investmentTypeOther');
+
+        $body = $this->file($staff,
+            $this->payload($provider, [
+                'investmentType' => InvestmentType::ENTERPRISE_PROJECT,
+                'investmentTypeOther' => InvestmentType::ENTERPRISE_MARKETING,
+            ]))
+            ->assertCreated()
+            ->json('application');
+
+        $this->assertSame('Enterprise Project — Marketing', $body['investmentType']);
+        $this->assertSame(InvestmentType::ENTERPRISE_PROJECT, $body['investmentTypeValue']);
+        $this->assertSame(InvestmentType::ENTERPRISE_MARKETING, $body['investmentTypeOther']);
+    }
+
     public function test_gender_and_country_come_from_the_offered_lists(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);
@@ -1993,6 +2026,10 @@ class CipIntakeTest extends TestCase
             'Real Estate Project', 'National Action Bonds', 'National Economic Fund (Donation)',
             'Enterprise Project', 'Other',
         ], collect($form['investmentTypes'])->pluck('label')->all());
+
+        $this->assertSame([
+            'Marketing', 'Infrastructure', 'Housing',
+        ], collect($form['enterpriseCategories'])->pluck('label')->all());
 
         $this->assertCount(count(Countries::all()), $form['countries']);
         $this->assertSame(['Male', 'Female'], $form['genders']);

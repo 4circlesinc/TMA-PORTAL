@@ -124,6 +124,7 @@ class CipApplicationController extends Controller
             'providerFixed' => $providers->count() === 1,
             'countries' => Countries::options(),
             'investmentTypes' => InvestmentType::options(),
+            'enterpriseCategories' => InvestmentType::enterpriseOptions(),
             'genders' => ['Male', 'Female'],
             'addonTypes' => collect(AddOn::typeOptions())
                 ->map(fn (string $label, string $value) => ['value' => $value, 'label' => $label])
