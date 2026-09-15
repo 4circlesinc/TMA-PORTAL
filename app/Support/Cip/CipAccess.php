@@ -276,6 +276,21 @@ class CipAccess
     }
 
     /**
+     * May this account hand a filed application to a different service provider?
+     *
+     * Administrators only. The move reparents the client folder and cuts the
+     * outgoing firm off the file and its papers — not a day-to-day action.
+     */
+    public static function canTransferProvider(?User $user): bool
+    {
+        if ($user === null || ! self::enabled()) {
+            return false;
+        }
+
+        return Role::isAdmin($user);
+    }
+
+    /**
      * The officer roles this user holds.
      *
      * @return list<string>

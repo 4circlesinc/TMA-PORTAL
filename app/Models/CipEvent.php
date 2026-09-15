@@ -29,6 +29,15 @@ class CipEvent extends Model
     public const ACTION_UNASSIGNED = 'unassigned';
 
     /**
+     * The file was handed to a different service provider.
+     *
+     * Its own action rather than a detail of a status change: the firm, the
+     * folder parent, and who may open the papers all move together, and which
+     * day that happened is an audit question no status event answers.
+     */
+    public const ACTION_PROVIDER_TRANSFERRED = 'provider_transferred';
+
+    /**
      * The government's number arrived, or was corrected.
      *
      * Its own action rather than a detail of the status change: section 7 keeps two

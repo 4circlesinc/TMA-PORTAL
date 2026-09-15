@@ -28,6 +28,7 @@ use App\Http\Controllers\Cip\CipEventController;
 use App\Http\Controllers\Cip\CipLetterController;
 use App\Http\Controllers\Cip\CipPeopleController;
 use App\Http\Controllers\Cip\CipPersonStatusController;
+use App\Http\Controllers\Cip\CipProviderTransferController;
 use App\Http\Controllers\Cip\CipRequirementController;
 use App\Http\Controllers\Cip\CipReviewController;
 use App\Http\Controllers\Cip\CipThreadController;
@@ -599,6 +600,14 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
             ->name('applications.assignments.store');
         Route::delete('/applications/{uuid}/assignments/{userId}', [CipAssignmentController::class, 'destroy'])
             ->name('applications.assignments.destroy');
+
+        /*
+         * Hand a filed application (and its folder) to another service
+         * provider. Administrators only; the body must confirm the access
+         * loss for the outgoing firm.
+         */
+        Route::post('/applications/{uuid}/provider', [CipProviderTransferController::class, 'store'])
+            ->name('applications.provider.transfer');
 
         /*
          * Section 12: judging one document.

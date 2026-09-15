@@ -148,6 +148,7 @@ class Timeline
             CipEvent::ACTION_STATUS_CHANGED => self::statusSentence($event, $who),
             CipEvent::ACTION_ASSIGNED => "{$who} assigned ".($meta['officer'] ?? 'an officer'),
             CipEvent::ACTION_UNASSIGNED => "{$who} ended ".($meta['officer'] ?? 'an officer').'’s assignment',
+            CipEvent::ACTION_PROVIDER_TRANSFERRED => self::providerTransferSentence($meta, $who),
             CipEvent::ACTION_NUMBER_ASSIGNED => self::numberSentence($meta, $who),
             CipEvent::ACTION_DECISION_RECORDED => self::decisionSentence($meta, $who),
             CipEvent::ACTION_PACKAGE_CONFIRMED => "{$who} confirmed the submission package",
@@ -200,6 +201,27 @@ class Timeline
         $reason = trim((string) ($meta['note'] ?? ''));
 
         return $reason !== '' ? $reason : null;
+    }
+
+    /**
+     * Handing the file (and its folder) to another firm.
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    private static function providerTransferSentence(array $meta, string $who): string
+    {
+        $from = trim((string) ($meta['fromProvider'] ?? ''));
+        $to = trim((string) ($meta['toProvider'] ?? ''));
+
+        if ($from !== '' && $to !== '') {
+            return "{$who} transferred the application from {$from} to {$to}";
+        }
+
+        if ($to !== '') {
+            return "{$who} transferred the application to {$to}";
+        }
+
+        return "{$who} transferred the application to another service provider";
     }
 
     /** "moved it from Draft to New", the codes read through {@see Status}. */

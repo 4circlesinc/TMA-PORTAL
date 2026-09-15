@@ -13153,6 +13153,155 @@
     }
   }
 
+  /*
+   * Hand this application to another service provider.
+   *
+   * The confirm step is the point: the client folder moves under the new
+   * firm's Citizenship Applications drawer, and the outgoing firm loses the
+   * file and every paper in it. A silent transfer would look like a label
+   * change while leaving the old firm able to open the drawer — or cutting
+   * them off without anyone having said so.
+   */
+  function openProviderTransferPicker(clientUid, applicationId) {
+    var app = applicationRowById(applicationId) || applicationHeldById(applicationId)
+      || (clientUid ? applicationFor(clientUid) : null);
+    var id = applicationId || (app && app.id);
+    if (!id || !canTransferProvider(app)) {
+      clientsToast('Only an administrator can change the service provider', 'negative');
+      return;
+    }
+
+    var existing = document.querySelector('[data-cip-provider-transfer]');
+    if (existing) existing.remove();
+
+    var fromName = (app && app.provider) || 'the current service provider';
+    var selectedId = '';
+    var providers = [];
+    var wrap = document.createElement('div');
+    wrap.className = 'tma-dash__settings-popup';
+    wrap.setAttribute('data-cip-provider-transfer', '');
+    wrap.setAttribute('role', 'dialog');
+    wrap.setAttribute('aria-modal', 'true');
+    wrap.setAttribute('aria-label', 'Change service provider');
+    wrap.innerHTML =
+      '<div class="tma-dash__settings-popup-backdrop" aria-hidden="true"></div>' +
+      '<div class="tma-dash__settings-change-card tma-users-dialog tma-users-picker">' +
+      '<h3 class="tma-dash__settings-change-title">Change service provider</h3>' +
+      '<p class="tma-dash__settings-change-text">Move this application from <strong>' +
+      esc(fromName) + '</strong> to another firm.</p>' +
+      '<p class="tma-dash__settings-change-text" style="color: var(--color-red);">' +
+      'Are you sure you want to continue? The application folder will be transferred to the new service provider’s folder. ' +
+      esc(fromName) + ' will lose all access to the files and the application.</p>' +
+      '<input type="search" class="tma-users-picker-search" data-sp-search placeholder="Search service providers" autocomplete="off">' +
+      '<div class="tma-users-picker-list" data-sp-list>' +
+        (window.TMASkeleton ? window.TMASkeleton.rows(3, { leading: false }) : '<p class="tma-user-info-panel__field-label">Loading…</p>') +
+      '</div>' +
+      '<p class="tma-dash__settings-change-text" data-sp-error hidden style="color: var(--color-red);"></p>' +
+      '<div class="tma-users-delete-actions">' +
+      '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-sp-cancel>Cancel</button>' +
+      '<button type="button" class="tma-no-data__btn" data-sp-confirm disabled>Transfer application</button>' +
+      '</div></div>';
+    document.body.appendChild(wrap);
+
+    function close() { wrap.remove(); }
+    function currentQuery() {
+      var input = wrap.querySelector('[data-sp-search]');
+      return input ? input.value : '';
+    }
+    function paintList(term) {
+      var q = String(term || '').toLowerCase().trim();
+      var list = wrap.querySelector('[data-sp-list]');
+      var confirm = wrap.querySelector('[data-sp-confirm]');
+      var currentId = (app && app.providerId) || '';
+      var shown = providers.filter(function (p) {
+        if (p.id === currentId) return false;
+        if (!q) return true;
+        return (p.name + ' ' + (p.code || '')).toLowerCase().indexOf(q) !== -1;
+      });
+      if (!providers.length) {
+        list.innerHTML = '<p class="tma-user-info-panel__field-label">No service providers yet.</p>';
+        confirm.disabled = true;
+        return;
+      }
+      if (!shown.length) {
+        list.innerHTML = '<p class="tma-user-info-panel__field-label">No other service providers to choose.</p>';
+        confirm.disabled = true;
+        return;
+      }
+      list.innerHTML = shown.map(function (p) {
+        var on = selectedId === p.id;
+        var meta = p.code ? esc(p.code) : '';
+        return '<button type="button" class="tma-users-picker-item"' + (on ? ' data-selected' : '') +
+          ' data-sp-id="' + esc(p.id) + '">' +
+          '<img src="' + ICONS.Buildings + '" alt="" width="16" height="16">' +
+          '<span class="tma-users-picker-item-copy"><strong>' + esc(p.name) + '</strong>' +
+          (meta ? '<span>' + meta + '</span>' : '') + '</span></button>';
+      }).join('');
+      confirm.disabled = !selectedId;
+    }
+
+    wrap.querySelector('[data-sp-cancel]').addEventListener('click', close);
+    wrap.querySelector('.tma-dash__settings-popup-backdrop').addEventListener('click', close);
+    document.addEventListener('keydown', function escKey(ev) {
+      if (ev.key === 'Escape') { close(); document.removeEventListener('keydown', escKey); }
+    });
+    wrap.querySelector('[data-sp-list]').addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-sp-id]');
+      if (!btn) return;
+      selectedId = btn.getAttribute('data-sp-id');
+      paintList(currentQuery());
+    });
+    wrap.querySelector('[data-sp-search]').addEventListener('input', function () {
+      paintList(this.value);
+    });
+    wrap.querySelector('[data-sp-confirm]').addEventListener('click', function () {
+      if (!selectedId) return;
+      var chosen = providers.filter(function (p) { return p.id === selectedId; })[0];
+      var toName = (chosen && chosen.name) || 'the new service provider';
+      var warn =
+        'Transfer this application to ' + toName + '?\n\n' +
+        'The application folder will move into ' + toName + '’s folder. ' +
+        fromName + ' will lose all access to the files and the application.';
+      if (!window.confirm(warn)) return;
+
+      this.disabled = true;
+      clientsFetch('/portal/cip/applications/' + encodeURIComponent(id) + '/provider', {
+        method: 'POST',
+        json: { providerId: selectedId, confirm: true },
+      }).then(function (json) {
+        close();
+        forgetApplicationTable();
+        forgetBuckets();
+        if (clientUid) refreshAfterCipMove(clientUid);
+        else {
+          var ctx = clientsMenuCtx;
+          if (ctx && ctx.render) ctx.render({ forceFull: true });
+          else repaintClients({ forceFull: true });
+        }
+        clientsToast((json && json.message) || ('Transferred to ' + toName), 'positive');
+      }).catch(function (err) {
+        var msg = (err && err.message) || 'Could not transfer this application';
+        var box = wrap.querySelector('[data-sp-error]');
+        if (box) {
+          box.textContent = msg;
+          box.hidden = false;
+        }
+        wrap.querySelector('[data-sp-confirm]').disabled = false;
+        clientsToast(msg, 'negative');
+      });
+    });
+
+    clientsFetch('/portal/cip/applications/form')
+      .then(function (json) {
+        providers = (json && json.providers) || [];
+        paintList('');
+      })
+      .catch(function () {
+        var list = wrap.querySelector('[data-sp-list]');
+        if (list) list.innerHTML = '<p class="tma-user-info-panel__field-label">Could not load service providers.</p>';
+      });
+  }
+
   function deleteCipApplication(clientUid, applicationId) {
     var ctx = clientsMenuCtx;
     var app = applicationRowById(applicationId) || applicationHeldById(applicationId)
