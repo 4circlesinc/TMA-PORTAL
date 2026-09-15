@@ -3470,14 +3470,7 @@
     if (isPostApprovalApplicationsTab(state)) labels.status = 'Status';
 
     var headers = Object.keys(labels).map(function (key) {
-      var parentClass = '';
-      if (isAddOnApplicationsTab(state) && (key === 'cip' || key === 'cor' || key === 'main_applicant')) {
-        parentClass = 'tma-cip-table__parent' +
-          (key === 'cip' ? ' tma-cip-table__parent--start' : '') +
-          (key === 'main_applicant' ? ' tma-cip-table__parent--end' : '');
-      }
-
-      return applicationSortHeader(key, labels[key], parentClass);
+      return applicationSortHeader(key, labels[key]);
     });
     headers.push({ html: '', attrs: ' class="tma-portal-cell--menu"' });
 
@@ -3774,14 +3767,6 @@
     return value ? String(value) : '';
   }
 
-  function addOnParentCell(value, extraClass) {
-    var shown = value || '-';
-    var cls = 'tma-cip-table__parent' + (extraClass ? ' ' + extraClass : '');
-
-    return '<td class="' + cls + '"><span class="tma-cip-table__parent-value">' +
-      esc(shown) + '</span></td>';
-  }
-
   function renderAddOnApplicationTableRow(a) {
     var progressCell = cipStatusChip(a);
     var submitted = a.submittedAt ? fmtShortDate(a.submittedAt) : '';
@@ -3789,9 +3774,9 @@
     return '<tr data-cip-open="' + esc(a.clientUid || '') + '" data-cip-app="' + esc(a.id) + '"' +
       (a.status === 'draft' ? ' data-cip-draft="1"' : '') + '>' +
       '<td><span class="tma-cip-table__number">' + esc(a.number || a.internalNumber || '-') + '</span></td>' +
-      addOnParentCell(addOnParentValue(a, 'cipNumber'), 'tma-cip-table__parent--start') +
-      addOnParentCell(addOnParentValue(a, 'corNumber')) +
-      addOnParentCell(addOnParentValue(a, 'applicantName'), 'tma-cip-table__parent--end') +
+      '<td class="tma-portal-table__muted">' + esc(addOnParentValue(a, 'cipNumber') || '-') + '</td>' +
+      '<td class="tma-portal-table__muted">' + esc(addOnParentValue(a, 'corNumber') || '-') + '</td>' +
+      '<td class="tma-portal-table__muted">' + esc(addOnParentValue(a, 'applicantName') || '-') + '</td>' +
       '<td>' + applicantCell(a) +
       '<span class="tma-cip-table__inline-status">' + progressCell + '</span></td>' +
       '<td>' + esc(a.relationshipLabel || '-') + '</td>' +
@@ -3819,7 +3804,7 @@
 
     if (APP_TABLE.loading && !APP_TABLE.rows.length) {
       return ui.table(headers, applicationTableSkeleton(state), {
-        cls: 'tma-cip-table' + (isAddOnApplicationsTab(state) ? ' tma-cip-table--addon' : ''),
+        cls: 'tma-cip-table',
       });
     }
 
@@ -3832,9 +3817,8 @@
     var rows = APP_TABLE.rows.map(function (a) {
       return renderApplicationTableRow(a, state, postApproval);
     }).join('');
-    var tableCls = 'tma-cip-table' + (isAddOnApplicationsTab(state) ? ' tma-cip-table--addon' : '');
 
-    return ui.table(headers, rows, { cls: tableCls }) + renderApplicationTablePagination();
+    return ui.table(headers, rows, { cls: 'tma-cip-table' }) + renderApplicationTablePagination();
   }
 
   /*
@@ -4252,11 +4236,9 @@
       if (addOn) {
         rows += '<tr aria-hidden="true">' +
           '<td>' + skeletonBar(skeletonWidth(i, 0.7)) + '</td>' +
-          '<td class="tma-cip-table__parent tma-cip-table__parent--start">' +
-          skeletonBar(skeletonWidth(i + 1, 0.7)) + '</td>' +
-          '<td class="tma-cip-table__parent">' + skeletonBar(skeletonWidth(i + 2, 0.6)) + '</td>' +
-          '<td class="tma-cip-table__parent tma-cip-table__parent--end">' +
-          skeletonBar(skeletonWidth(i + 3, 0.8)) + '</td>' +
+          '<td>' + skeletonBar(skeletonWidth(i + 1, 0.7)) + '</td>' +
+          '<td>' + skeletonBar(skeletonWidth(i + 2, 0.6)) + '</td>' +
+          '<td>' + skeletonBar(skeletonWidth(i + 3, 0.8)) + '</td>' +
           '<td><span class="tma-cip-table__applicant">' + disc +
           skeletonBar(skeletonWidth(i + 4, 0.8)) + '</span></td>' +
           '<td>' + skeletonBar(skeletonWidth(i + 5, 0.5)) + '</td>' +

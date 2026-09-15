@@ -38254,10 +38254,6 @@ span.tma-dash__messages-profile-avatar {
   min-width: 1148px;
 }
 
-.tma-cip-table--addon {
-  min-width: 1480px;
-}
-
 /* Touch-width duplicate of the status, rendered beside the applicant's
    name; only the responsive layer ever shows it. */
 .tma-cip-table__inline-status {
@@ -38419,28 +38415,6 @@ span.tma-dash__messages-profile-avatar {
   white-space: nowrap;
 }
 
-/*
- * Add-On table: CIP number, COR and main applicant are the granted file
- * this row hangs off, so they read louder than the surrounding cells.
- */
-.tma-cip-table--addon th.tma-cip-table__parent,
-.tma-cip-table--addon td.tma-cip-table__parent {
-  color: var(--color-text-primary);
-  font-weight: 600;
-  background: color-mix(in srgb, var(--color-primary) 7%, transparent);
-}
-.tma-cip-table--addon tbody tr:hover td.tma-cip-table__parent {
-  background: color-mix(in srgb, var(--color-primary) 11%, var(--color-hover));
-}
-.tma-cip-table--addon th.tma-cip-table__parent--start,
-.tma-cip-table--addon td.tma-cip-table__parent--start {
-  box-shadow: inset 3px 0 0 var(--color-primary);
-}
-.tma-cip-table--addon td.tma-cip-table__parent .tma-cip-table__parent-value {
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
 /* "F6". A count, so it reads as one — a chip rather than a sentence. */
 .tma-cip-table__family {
   display: inline-block;
@@ -38453,18 +38427,6 @@ span.tma-dash__messages-profile-avatar {
   text-align: center;
   cursor: help;
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 .tma-cip-table tbody tr[data-cip-open] { cursor: pointer; }
 
