@@ -2,6 +2,7 @@
 
 namespace App\Support\Cip;
 
+use App\Models\CipApplication;
 use App\Models\CipDocument;
 use App\Models\CipDocumentRequirement;
 use App\Models\CipPerson;
@@ -37,6 +38,12 @@ use Illuminate\Support\Facades\DB;
 class DocumentSlots
 {
     /**
+     * True while {@see storeFile()} is writing a slot's own FileItem, so the
+     * observer must not also adopt that file into a G-series extra.
+     */
+    private static bool $storing = false;
+
+    /**
      * Every slot this person owes, created empty if it is not there yet.
      *
      * The list is no longer a fixed three per role. It comes from the
@@ -65,7 +72,7 @@ class DocumentSlots
      * Intake may not replace a filed answer unless a reviewer sent it back —
      * that is what forces the Upload new version path in the file viewer.
      */
-    public static function fill(CipPerson $person, string $type, UploadedFile $upload, User $actor): CipDocument
+    public static function fill(CipPerson $person, string $type, UploadedFile $upload, User $actor, ?string $givenName = null): CipDocument
     {
         $person->loadMissing('application');
 
@@ -84,11 +91,15 @@ class DocumentSlots
         $meta = FileType::inspect($upload->getRealPath(), $upload->getClientOriginalName());
         $stored = Vault::store($upload->getRealPath(), $meta['extension']);
 
-        // A name that says what it answers and who for. The uploaded filename
-        // is usually "scan0001.pdf", which tells a reviewer nothing.
-        $name = self::documentName($person, $type, $meta['extension'], null, $template);
+        // G-series extras take the paper's name: `G1 - Marriage Certificate`.
+        // Pack scans keep "{person} - {type}". A scan0001.pdf tells a reviewer nothing.
+        $filedLabel = AddOnRequirements::isAdditional($type)
+            ? AddOnRequirements::filedLabel($type, $givenName ?: $upload->getClientOriginalName())
+            : null;
 
-        return DB::transaction(function () use ($slot, $person, $template, $stored, $meta, $name, $actor, $type) {
+        $name = self::documentName($person, $type, $meta['extension'], null, $template, $filedLabel);
+
+        return DB::transaction(function () use ($slot, $person, $template, $stored, $meta, $name, $actor, $type, $filedLabel) {
             if ($slot->file_id && $file = $slot->file) {
                 Versions::addStored($file, $actor, $stored, $meta);
                 $slot->forceFill([
@@ -106,7 +117,7 @@ class DocumentSlots
 
             $file = self::storeFile($person, $stored, $meta, $name, $actor, self::destination($person, $template, $actor, $type));
 
-            $slot->forceFill([
+            $attributes = [
                 'file_id' => $file->id,
                 'uploaded_by' => $actor->id,
                 'company_member_id' => ContactIdentity::stamp(
@@ -114,7 +125,11 @@ class DocumentSlots
                     ContactIdentity::companyIdForApplication($person->application),
                 )['company_member_id'],
                 'uploaded_at' => now(),
-            ])->save();
+            ];
+            if ($filedLabel !== null) {
+                $attributes['label'] = $filedLabel;
+            }
+            $slot->forceFill($attributes)->save();
             $slot->setRelation('file', $file);
             self::advanceAfterUpload($slot, $actor);
 
@@ -136,10 +151,14 @@ class DocumentSlots
             return false;
         }
 
+        if (self::$storing) {
+            return false;
+        }
+
         $person = self::personForFolder($file->folder_id);
 
         if ($person === null) {
-            return false;
+            return self::adoptAddOnAdditional($file, $actor);
         }
 
         $person->loadMissing('documents');
@@ -333,11 +352,19 @@ class DocumentSlots
         // sheet filed outside its requirement's folder would split one answer
         // across two places.
         $template = self::template($person, $type);
-        Confirmation::guardDocument(self::slotFor($person, $type, $template));
+        $slot = self::slotFor($person, $type, $template);
+        Confirmation::guardDocument($slot);
 
         $meta = FileType::inspect($upload->getRealPath(), $upload->getClientOriginalName());
         $stored = Vault::store($upload->getRealPath(), $meta['extension']);
-        $name = self::documentName($person, $type, $meta['extension'], $number, $template);
+        $name = self::documentName(
+            $person,
+            $type,
+            $meta['extension'],
+            $number,
+            $template,
+            AddOnRequirements::isAdditional($type) ? $slot->label : null,
+        );
 
         return DB::transaction(fn () => self::storeFile($person, $stored, $meta, $name, $actor, self::destination($person, $template, $actor, $type)));
     }
@@ -349,9 +376,12 @@ class DocumentSlots
         string $extension,
         ?int $number = null,
         ?CipDocumentRequirement $template = null,
+        ?string $filedLabel = null,
     ): string {
-        if ($template && AddOnRequirements::isAdditional($type)) {
-            return $template->label.($number ? ' ('.$number.')' : '').'.'.$extension;
+        if (AddOnRequirements::isAdditional($type)) {
+            $label = $filedLabel ?: $template?->label ?: AddOnRequirements::filedLabel($type, '');
+
+            return $label.($number ? ' ('.$number.')' : '').'.'.$extension;
         }
 
         return $person->fullName().' - '.DocumentTypes::label($type).
@@ -361,23 +391,29 @@ class DocumentSlots
     /** One stored upload as a portal file, where {@see destination()} said. */
     private static function storeFile(CipPerson $person, array $stored, array $meta, string $name, User $actor, ?int $folderId): FileItem
     {
-        $file = FileItem::create([
-            'uuid' => $stored['uuid'],
-            'folder_id' => $folderId,
-            'name' => $name,
-            'extension' => $meta['extension'],
-            'mime_type' => $meta['mime'],
-            'size' => $stored['size'],
-            'disk' => $stored['disk'],
-            'storage_path' => $stored['path'],
-            'checksum' => $stored['checksum'],
-            'owner_id' => FolderProvisioner::systemOwnerId($actor),
-            'uploaded_by' => $actor->id,
-        ]);
+        self::$storing = true;
 
-        Versions::recordInitial($file, $actor->id);
+        try {
+            $file = FileItem::create([
+                'uuid' => $stored['uuid'],
+                'folder_id' => $folderId,
+                'name' => $name,
+                'extension' => $meta['extension'],
+                'mime_type' => $meta['mime'],
+                'size' => $stored['size'],
+                'disk' => $stored['disk'],
+                'storage_path' => $stored['path'],
+                'checksum' => $stored['checksum'],
+                'owner_id' => FolderProvisioner::systemOwnerId($actor),
+                'uploaded_by' => $actor->id,
+            ]);
 
-        return $file;
+            Versions::recordInitial($file, $actor->id);
+
+            return $file;
+        } finally {
+            self::$storing = false;
+        }
     }
 
     /**
@@ -681,6 +717,108 @@ class DocumentSlots
                 'required' => $requirement?->required ?? true,
             ],
         );
+    }
+
+    /**
+     * A drop into an Add-On Additional Documents drawer fills the next empty
+     * G1 / G2 / G3 slot and names the file `G{n} - {paper}`.
+     *
+     * Additional Documents hangs off the application, not the person, so
+     * {@see personForFolder()} cannot see these uploads. Purpose drawers
+     * (Non-Compliance / Queries / DD Query) keep their own naming.
+     */
+    private static function adoptAddOnAdditional(FileItem $file, ?User $actor): bool
+    {
+        $folder = Folder::find($file->folder_id);
+        if ($folder === null) {
+            return false;
+        }
+
+        $walk = $folder;
+        while ($walk !== null) {
+            foreach (Tree::ADDITIONAL_DRAWERS as $drawer) {
+                if (Tree::isDrawerVariant($drawer, $walk->name)) {
+                    return false;
+                }
+            }
+            $walk = $walk->parent_id ? Folder::find($walk->parent_id) : null;
+        }
+
+        $application = self::addOnApplicationForAdditionalFolder($file->folder_id);
+        if ($application === null) {
+            return false;
+        }
+
+        $person = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)
+            ?? $application->people->first();
+        if ($person === null) {
+            return false;
+        }
+
+        $person->setRelation('application', $application);
+        $person->loadMissing('documents');
+
+        $slot = null;
+        foreach (AddOnRequirements::ADDITIONAL_KEYS as $key) {
+            $candidate = $person->documents->firstWhere('type', $key);
+            if ($candidate !== null && $candidate->file_id === null) {
+                $slot = $candidate;
+                break;
+            }
+        }
+
+        if ($slot === null) {
+            return false;
+        }
+
+        $label = AddOnRequirements::filedLabel($slot->type, $file->name);
+        $extension = ltrim((string) ($file->extension ?: pathinfo($file->name, PATHINFO_EXTENSION)), '.');
+        $desired = Naming::clean($label.($extension !== '' ? '.'.$extension : ''));
+
+        return DB::transaction(function () use ($slot, $file, $actor, $label, $desired) {
+            if ($desired !== '' && $file->name !== $desired) {
+                $file->forceFill(['name' => $desired])->save();
+            }
+
+            $slot->forceFill([
+                'label' => $label,
+                'file_id' => $file->id,
+                'uploaded_by' => $actor?->id,
+                'company_member_id' => ContactIdentity::stamp(
+                    $actor,
+                    ContactIdentity::companyIdForFile($file),
+                )['company_member_id'],
+                'uploaded_at' => now(),
+            ])->save();
+
+            self::advanceAfterUpload($slot, $actor);
+
+            return true;
+        });
+    }
+
+    private static function addOnApplicationForAdditionalFolder(?int $folderId): ?CipApplication
+    {
+        $folder = Folder::find($folderId);
+
+        while ($folder !== null) {
+            if (Tree::isDrawerVariant(Tree::ADDITIONAL, $folder->name) && $folder->parent_id) {
+                $application = CipApplication::query()
+                    ->where('folder_id', $folder->parent_id)
+                    ->where('phase', Phase::ADD_ON)
+                    ->first();
+
+                if ($application !== null) {
+                    $application->loadMissing('people');
+
+                    return $application;
+                }
+            }
+
+            $folder = $folder->parent_id ? Folder::find($folder->parent_id) : null;
+        }
+
+        return null;
     }
 
     private static function personForFolder(?int $folderId): ?CipPerson

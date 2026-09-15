@@ -38535,6 +38535,19 @@ span.tma-dash__messages-profile-avatar {
   text-align: right;
 }
 
+/* Add-On Document | Status: column titles, then Complete / Outstanding. */
+.tma-dash__cip-doc-status-head,
+.tma-dash__cip-doc-status-head .tma-portal-details__label {
+  font-size: var(--text-size-12, 12px);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__cip-g-name {
+  margin: 0 0 var(--space-8);
+}
+
 .tma-dash__cip-ov-lead {
   margin: 0 0 var(--space-8);
   font-size: var(--text-size-13, 13px);

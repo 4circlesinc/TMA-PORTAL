@@ -16,6 +16,7 @@ use App\Support\Cip\AddOn;
 use App\Support\Cip\AddOnRequirements;
 use App\Support\Cip\ApplicantType;
 use App\Support\Cip\Applications;
+use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
@@ -23,6 +24,7 @@ use App\Support\Cip\Tree;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class CipAddOnTest extends TestCase
@@ -449,8 +451,94 @@ class CipAddOnTest extends TestCase
         $this->assertNotNull($slot?->file_id);
         $file = FileItem::find($slot->file_id);
         $this->assertSame(Tree::additionalFolder($application)?->id, $file->folder_id);
-        $this->assertSame('G1 - Additional Document Name.pdf', $file->name);
+        $this->assertSame('G1 - extra.pdf', $file->name);
+        $this->assertSame('G1 - extra', $slot->label);
         $this->assertFalse($slot->required);
+    }
+
+    public function test_an_additional_document_takes_the_name_the_filer_gave_it(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $body = $this->file($staff, $this->addOnPayload($parent, [
+            'additionalDocumentG1' => [UploadedFile::fake()->create('scan.pdf', 40, 'application/pdf')],
+            'additionalDocumentG1Name' => 'Marriage Certificate',
+        ]))
+            ->assertCreated()
+            ->json('application');
+
+        $g1 = collect($body['applicant']['documents'])->firstWhere('type', AddOnRequirements::G1);
+        $this->assertSame('G1 - Marriage Certificate', $g1['label']);
+        $this->assertSame('G1 - Marriage Certificate.pdf', $g1['fileName']);
+        $this->assertTrue($g1['additional']);
+        $this->assertTrue($g1['onStatusTable']);
+        $this->assertSame('complete', $g1['packStatus']);
+        $this->assertSame('Complete', $g1['packStatusLabel']);
+    }
+
+    public function test_add_on_document_status_is_complete_or_outstanding(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $docs = collect($this->file($staff, $this->addOnPayload($parent))
+            ->assertCreated()
+            ->json('application.applicant.documents'));
+
+        $photo = $docs->firstWhere('type', DocumentTypes::PASSPORT_PHOTO);
+        $this->assertFalse($photo['onStatusTable']);
+
+        $bio = $docs->firstWhere('type', DocumentTypes::PASSPORT_BIO_PAGE);
+        $this->assertTrue($bio['onStatusTable']);
+        $this->assertSame('complete', $bio['packStatus']);
+        $this->assertSame('Complete', $bio['packStatusLabel']);
+
+        $nationalId = $docs->firstWhere('type', 'national_id_card');
+        $this->assertTrue($nationalId['onStatusTable']);
+        $this->assertFalse($nationalId['uploaded']);
+        $this->assertSame('outstanding', $nationalId['packStatus']);
+        $this->assertSame('Outstanding', $nationalId['packStatusLabel']);
+
+        $g1 = $docs->firstWhere('type', AddOnRequirements::G1);
+        $this->assertTrue($g1['additional']);
+        $this->assertFalse($g1['onStatusTable']);
+        $this->assertSame('outstanding', $g1['packStatus']);
+    }
+
+    public function test_a_drop_into_additional_documents_fills_the_next_g_slot(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $body = $this->file($staff, $this->addOnPayload($parent))->assertCreated()->json('application');
+        $application = CipApplication::query()->where('uuid', $body['id'])->with('people')->firstOrFail();
+        $additional = Tree::additionalFolder($application);
+        $this->assertNotNull($additional);
+
+        $file = FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'folder_id' => $additional->id,
+            'name' => 'Bank Statement.pdf',
+            'extension' => 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 1000,
+            'disk' => config('filesystems.files_disk', 'local'),
+            'storage_path' => 'cip/addon-g1.pdf',
+            'owner_id' => $staff->id,
+            'uploaded_by' => $staff->id,
+        ]);
+
+        $this->assertTrue(DocumentSlots::adoptOrphan($file->fresh(), $staff));
+
+        $slot = CipDocument::query()
+            ->where('person_id', $application->people->first()->id)
+            ->where('type', AddOnRequirements::G1)
+            ->first();
+
+        $this->assertSame($file->id, $slot?->file_id);
+        $this->assertSame('G1 - Bank Statement', $slot->label);
+        $this->assertSame('G1 - Bank Statement.pdf', $file->fresh()->name);
     }
 
     public function test_an_administrator_can_turn_the_add_on_lane_off(): void

@@ -1570,9 +1570,12 @@ class Intake
     {
         $phase = $person->application?->phase ?? Phase::PRE_APPROVAL;
 
-        foreach (self::documentFields(ApplicantType::for($person), $phase, $person->application, $person)
-            ->mapWithKeys(fn ($doc) => [$doc['key'] => $data[$doc['field']] ?? []])
-            ->all() as $type => $uploads) {
+        foreach (self::documentFields(ApplicantType::for($person), $phase, $person->application, $person) as $doc) {
+            $type = $doc['key'];
+            $uploads = $data[$doc['field']] ?? [];
+            $givenName = AddOnRequirements::isAdditional($type)
+                ? trim((string) ($data[$doc['field'].'Name'] ?? ''))
+                : '';
             $existing = CipDocument::query()
                 ->where('person_id', $person->id)
                 ->where('type', $type)
@@ -1591,7 +1594,7 @@ class Intake
                 }
 
                 $filed === 0
-                    ? DocumentSlots::fill($person, $type, $upload, $creator)
+                    ? DocumentSlots::fill($person, $type, $upload, $creator, $givenName !== '' ? $givenName : null)
                     : DocumentSlots::attach($person, $type, $upload, $creator, $filed + 1);
 
                 $filed++;
@@ -1987,6 +1990,9 @@ class Intake
             $demanded = $demand && ! $kept && $doc['required'] && self::documentAppliesToGender($doc, $gender);
             $rules[$doc['field']] = self::scanFieldRules($demanded);
             $rules[$doc['field'].'.*'] = self::documentRule();
+            if (AddOnRequirements::isAdditional($doc['key'])) {
+                $rules[$doc['field'].'Name'] = ['nullable', 'string', 'max:120'];
+            }
         }
 
         return $rules;

@@ -6723,6 +6723,28 @@
     return '<ul class="tma-dash__cip-tl">' + rows + '</ul>';
   }
 
+  function addOnPackStatusChip(d) {
+    var label = d.packStatusLabel || (d.uploaded && d.status !== 'update_required' ? 'Complete' : 'Outstanding');
+    var tone = d.packStatusTone || (label === 'Complete' ? 'success' : 'pending');
+    return '<span class="tma-portal-status tma-portal-status--' + esc(tone) +
+      ' tma-portal-status--inline">' + esc(label) + '</span>';
+  }
+
+  function addOnStatusDocs(app) {
+    var rows = [];
+    cipFamily(app).forEach(function (p) {
+      ((p && p.documents) || []).forEach(function (d) {
+        if (d.onStatusTable === false) return;
+        if (d.onStatusTable == null) {
+          if (d.type === 'passport_photo') return;
+          if (d.additional && !d.uploaded) return;
+        }
+        rows.push(d);
+      });
+    });
+    return rows;
+  }
+
   function cipFamily(app) {
     var people = [];
     if (app.applicant) people.push(app.applicant);
@@ -6787,6 +6809,16 @@
   }
 
   function renderOverviewDocStatus(app) {
+    if (app && app.phase === 'add_on') {
+      var docs = addOnStatusDocs(app);
+      if (!docs.length) return '';
+      var rows = overviewRow('Document', 'Status', false, 'tma-dash__cip-doc-status-head');
+      docs.forEach(function (d) {
+        rows += overviewRow(d.label || 'Document', addOnPackStatusChip(d), true);
+      });
+      return overviewList(rows);
+    }
+
     var totals = { pending: 0, review: 0, update: 0, ready: 0, filed: 0, total: 0 };
     cipFamily(app).forEach(function (p) {
       var s = personDocStats(p);
@@ -6825,6 +6857,14 @@
   }
 
   function overviewDocCount(app) {
+    if (app && app.phase === 'add_on') {
+      var docs = addOnStatusDocs(app);
+      var complete = docs.filter(function (d) {
+        return (d.packStatus || (d.uploaded && d.status !== 'update_required' ? 'complete' : 'outstanding')) === 'complete';
+      }).length;
+      return docs.length ? complete + ' / ' + docs.length : '';
+    }
+
     var filed = 0;
     var total = 0;
     cipFamily(app).forEach(function (p) {
@@ -6874,20 +6914,26 @@
     if (!app) return '';
 
     var family = cipFamily(app);
+    var docStatus = renderOverviewDocStatus(app);
+    var addOn = app.phase === 'add_on';
+    var assigned = companyCard('Assigned', renderOverviewAssigned(app), {
+      half: true, count: Array.isArray(app.assignedTo) ? app.assignedTo.length : 0,
+    });
     var cards =
       companyCard('Application', renderOverviewApplication(app), { half: true }) +
       companyCard('Timeline', renderMilestones(app), { half: true }) +
       companyCard('Family', renderOverviewFamily(app), {
         half: true, count: app.familyLabel || family.length || '',
       }) +
-      companyCard('Documents', renderOverviewDocuments(app), {
+      (addOn ? assigned : companyCard('Documents', renderOverviewDocuments(app), {
         half: true, count: overviewDocCount(app),
+      })) +
+      companyCard('Document status', docStatus, {
+        half: !addOn,
+        count: addOn ? overviewDocCount(app) : '',
       }) +
-      companyCard('Document status', renderOverviewDocStatus(app), { half: true }) +
       renderOverviewUpdateReasonsCard(app) +
-      companyCard('Assigned', renderOverviewAssigned(app), {
-        half: true, count: Array.isArray(app.assignedTo) ? app.assignedTo.length : 0,
-      });
+      (addOn ? '' : assigned);
 
     return (
       '<div class="tma-dash__clients-profile-panel" data-clients-panel="overview" role="tabpanel"' +
@@ -7391,6 +7437,7 @@
   }
 
   var CIP_SLOT_MAX_MB = 10;
+  var cipGNames = {};
 
   function wireCipDocumentControls(root, state, render) {
     if (!root) return;
@@ -7456,6 +7503,15 @@
         if (file && id) uploadCipSlot(state, render, id, file, zone);
       });
     });
+
+    MORPH.unwired(root, '[data-cip-g-name]').forEach(function (input) {
+      MORPH.on(input, 'input', function () {
+        cipGNames[input.getAttribute('data-cip-g-name')] = input.value;
+      });
+      MORPH.on(input, 'click', function (e) {
+        e.stopPropagation();
+      });
+    });
   }
 
   function uploadCipSlot(state, render, slotId, file, zone) {
@@ -7472,6 +7528,11 @@
 
     var form = new FormData();
     form.append('file', file);
+    var nameInput = zone && zone.querySelector('[data-cip-g-name]');
+    var documentName = String(
+      (nameInput && nameInput.value) || cipGNames[slotId] || '',
+    ).trim();
+    if (documentName) form.append('documentName', documentName);
 
     clientsFetch('/portal/cip/documents/' + encodeURIComponent(slotId) + '/file', {
       method: 'POST',
@@ -7580,11 +7641,32 @@
       .map(function (x) { return x.d; });
   }
 
+  function isAddOnAdditionalDoc(d) {
+    return !!(d && (d.additional || /^additional_document_g[123]$/.test(d.type || '')));
+  }
+
+  function addOnGTitle(d) {
+    var label = String((d && d.label) || '');
+    var match = label.match(/^G[123]\s*[-–—:]\s*(.+)$/i);
+    var title = match ? match[1] : '';
+    if (!title || /^additional document name$/i.test(title)) return '';
+    return title;
+  }
+
   function renderCipChecklist(person, app) {
-    var docs = orderDocs((person && person.documents) || []);
+    var all = (person && person.documents) || [];
+    var extras = [];
+    var pack = all.filter(function (d) {
+      if (app && app.phase === 'add_on' && isAddOnAdditionalDoc(d)) {
+        extras.push(d);
+        return false;
+      }
+      return true;
+    });
+    var docs = orderDocs(pack);
     var postApproval = app && app.phase === 'post_approval';
 
-    if (!docs.length) {
+    if (!docs.length && !extras.length) {
       if (!postApproval) return '';
 
       return (
@@ -7603,17 +7685,35 @@
      * Pre- and post-approval details use the same checklist: status, view,
      * download. Uploads for post-approval live on Edit application, because
      * the original answers cannot be changed after the file has moved on.
+     * Add-On extras are a separate Additional Documents band with drops.
      */
+    return (
+      (docs.length
+        ? '<div class="tma-dash__clients-checklist-block">' +
+          '<header class="tma-dash__clients-card-head">' +
+          '<h3 class="tma-dash__clients-card-title">Documents</h3>' +
+          tabCountChip(docs.filter(function (d) { return d.uploaded; }).length) +
+          '</header>' +
+          '<ul class="tma-dash__clients-checklist">' +
+          docs.map(renderChecklistRow).join('') +
+          '</ul>' +
+          '</div>'
+        : '') +
+      renderAddOnAdditionalBlock(extras)
+    );
+  }
+
+  function renderAddOnAdditionalBlock(docs) {
+    if (!docs.length) return '';
+
     return (
       '<div class="tma-dash__clients-checklist-block">' +
       '<header class="tma-dash__clients-card-head">' +
-      '<h3 class="tma-dash__clients-card-title">Documents</h3>' +
-      tabCountChip(docs.filter(function (d) { return d.uploaded; }).length) +
-      '</header>' +
-      '<ul class="tma-dash__clients-checklist">' +
-      docs.map(renderChecklistRow).join('') +
-      '</ul>' +
-      '</div>'
+      '<h3 class="tma-dash__clients-card-title">Additional Documents</h3></header>' +
+      '<p class="tma-portal-drop__meta">Supplemental papers, named G1, G2 or G3 plus the document title.</p>' +
+      '<div class="tma-portal-drops">' +
+      docs.map(function (d) { return renderCipRequirementDrop(d); }).join('') +
+      '</div></div>'
     );
   }
 
@@ -7695,6 +7795,16 @@
         : (d.canUpload ? '<span class="tma-portal-field__required" aria-hidden="true">*</span>' : '')) +
       '</span>';
     var help = d.help ? '<p class="tma-portal-drop__meta">' + esc(d.help) + '</p>' : '';
+    var nameField = '';
+    if (isAddOnAdditionalDoc(d) && d.canUpload && !filed) {
+      var held = cipGNames[d.id] != null ? cipGNames[d.id] : addOnGTitle(d);
+      nameField =
+        '<label class="tma-portal-field tma-dash__cip-g-name">' +
+        '<span class="tma-portal-field__label">Document name</span>' +
+        '<input class="tma-portal-input" type="text" data-cip-g-name="' + esc(d.id) + '"' +
+        ' value="' + esc(held) + '" placeholder="Additional Document Name" autocomplete="off">' +
+        '</label>';
+    }
     var reason = (d.status === 'update_required' && d.updateReason)
       ? '<p class="tma-portal-drop__update-reason"><strong>Update required.</strong> ' + esc(d.updateReason) + '</p>'
       : '';
@@ -7717,7 +7827,7 @@
 
     if (d.canUpload) {
       return '<div class="tma-portal-drop' + (filed ? ' is-filled' : '') + '" data-cip-slot-drop="' + esc(d.id) + '">' +
-        label + help + reason +
+        label + help + nameField + reason +
         '<input type="file" accept="' + accept + '" class="tma-dash__clients-photo-input"' +
         ' data-cip-slot-file="' + esc(d.id) + '" aria-hidden="true">' +
         '<button type="button" class="tma-portal-drop__zone" data-cip-slot-file-btn="' + esc(d.id) + '">' +

@@ -2,6 +2,9 @@
 
 namespace App\Support\Cip;
 
+use App\Models\CipDocument;
+use Illuminate\Support\Str;
+
 /**
  * The official Add-On document checklists, one list per Add-On type.
  *
@@ -20,8 +23,9 @@ namespace App\Support\Cip;
  * lists without rewriting the original package.
  *
  * G1 / G2 / G3 are optional supplemental slots filed in Additional
- * Documents. The brief's naming convention is the label itself; they are
- * not asked of a pre-approval spouse or dependent.
+ * Documents. The brief's naming convention is `G{n} - {paper name}`;
+ * empty slots keep the placeholder until a file is named. They are not
+ * asked of a pre-approval spouse or dependent.
  */
 class AddOnRequirements
 {
@@ -97,6 +101,93 @@ class AddOnRequirements
     public static function isAdditional(string $key): bool
     {
         return in_array($key, self::ADDITIONAL_KEYS, true);
+    }
+
+    /** G1, G2 or G3 for a supplemental slot key. */
+    public static function seriesPrefix(string $key): ?string
+    {
+        return match ($key) {
+            self::G1 => 'G1',
+            self::G2 => 'G2',
+            self::G3 => 'G3',
+            default => null,
+        };
+    }
+
+    /**
+     * `G1 - Marriage Certificate` from the slot key and the paper's name.
+     *
+     * The G-number comes from the slot, not the upload: dropping a file
+     * already called `G1 - …` into G2 still files as G2. A bare filename
+     * (`scan.pdf`) or an explicit document name becomes the second half.
+     */
+    public static function filedLabel(string $key, string $source): string
+    {
+        $prefix = self::seriesPrefix($key) ?? 'G1';
+        $title = self::documentTitle($source);
+
+        if (preg_match('/^G[123]\s*[-–—:]\s*(.+)$/u', $title, $match)) {
+            $title = trim($match[1]);
+        }
+
+        if ($title === '') {
+            $title = 'Additional Document Name';
+        }
+
+        return $prefix.' - '.$title;
+    }
+
+    /** The paper's name, without a path, extension, or G-prefix. */
+    public static function documentTitle(string $source): string
+    {
+        $base = pathinfo(str_replace(['\\', '/'], '', $source), PATHINFO_FILENAME);
+        $base = trim((string) preg_replace('/[\x00-\x1F\x7F]+/u', '', $base));
+        $base = trim((string) preg_replace('/\s+/u', ' ', $base));
+        $base = ltrim($base, '. ');
+
+        if ($base === '') {
+            return 'Additional Document Name';
+        }
+
+        return Str::limit($base, 120, '');
+    }
+
+    /**
+     * Pack completeness for the Add-On Document | Status table.
+     *
+     * Filed (and not sent back) is Complete; everything else is Outstanding.
+     * Reviewer vocabulary (Application review / Ready for submission) stays
+     * on the person checklist.
+     *
+     * @return array{status:string,label:string,tone:string}
+     */
+    public static function packStatus(CipDocument $slot): array
+    {
+        $complete = $slot->isFilled()
+            && ($slot->displayStatus() ?? DocumentStatus::PENDING_UPLOAD) !== DocumentStatus::UPDATE_REQUIRED;
+
+        return $complete
+            ? ['status' => 'complete', 'label' => 'Complete', 'tone' => 'success']
+            : ['status' => 'outstanding', 'label' => 'Outstanding', 'tone' => 'pending'];
+    }
+
+    /**
+     * Whether this slot belongs on the Add-On Document | Status table.
+     *
+     * The passport photo is identity, not pack paper. Empty G-series extras
+     * are unnamed supplements and stay off the table until filed.
+     */
+    public static function onStatusTable(CipDocument $slot): bool
+    {
+        if ($slot->type === DocumentTypes::PASSPORT_PHOTO) {
+            return false;
+        }
+
+        if (self::isAdditional($slot->type) && ! $slot->isFilled()) {
+            return false;
+        }
+
+        return true;
     }
 
     /**

@@ -51,6 +51,7 @@ class CipDocumentUploadController extends Controller
             'file' => $photo
                 ? ['required', 'file', Intake::photoRule()]
                 : Intake::documentRule(),
+            'documentName' => ['nullable', 'string', 'max:120'],
         ], [
             'file.required' => 'Choose a file to upload.',
             'file.mimes' => 'Upload a PDF or an image.',
@@ -61,7 +62,7 @@ class CipDocumentUploadController extends Controller
             if ($photo) {
                 Intake::filePhoto($person, $data['file'], $user);
             } else {
-                DocumentSlots::fill($person, $document->type, $data['file'], $user);
+                DocumentSlots::fill($person, $document->type, $data['file'], $user, $data['documentName'] ?? null);
             }
         } catch (\InvalidArgumentException $e) {
             abort(422, $e->getMessage());
@@ -75,6 +76,7 @@ class CipDocumentUploadController extends Controller
         return response()->json([
             'document' => [
                 'id' => $document->uuid,
+                'label' => $document->label,
                 'uploaded' => $document->isFilled(),
                 'status' => $document->displayStatus(),
                 'statusLabel' => DocumentStatus::label($document->displayStatus()),

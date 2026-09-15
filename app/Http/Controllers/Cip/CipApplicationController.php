@@ -12,6 +12,7 @@ use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\AddOn;
+use App\Support\Cip\AddOnRequirements;
 use App\Support\Cip\Appeal;
 use App\Support\Cip\ApplicantType;
 use App\Support\Cip\ApplicationScope;
@@ -2041,12 +2042,15 @@ class CipApplicationController extends Controller
                     $reason = $status === DocumentStatus::UPDATE_REQUIRED
                         ? ($updateReasons[$slot->id] ?? $slot->file?->review_note)
                         : null;
+                    $additional = AddOnRequirements::isAdditional((string) $slot->type);
+                    $pack = $phase === Phase::ADD_ON ? AddOnRequirements::packStatus($slot) : null;
 
                     return [
                         'id' => $slot->uuid,
                         'type' => $slot->type,
                         'label' => $slot->label,
                         'required' => (bool) $slot->required,
+                        'additional' => $additional,
                         'help' => $slot->requirement?->help,
                         'carriedForward' => $phase === Phase::POST_APPROVAL
                             && $slot->requirement
@@ -2063,6 +2067,11 @@ class CipApplicationController extends Controller
                         'status' => $status,
                         'statusLabel' => DocumentStatus::label($status),
                         'statusTone' => DocumentStatus::tone($status),
+                        'packStatus' => $pack['status'] ?? null,
+                        'packStatusLabel' => $pack['label'] ?? null,
+                        'packStatusTone' => $pack['tone'] ?? null,
+                        'onStatusTable' => $phase === Phase::ADD_ON
+                            && AddOnRequirements::onStatusTable($slot),
                         'updateReason' => $reason ? (string) $reason : null,
                         'canReview' => Role::isStaff($presenter->viewer()),
                         'canUpload' => CipDocumentUploadController::canUpload($slot, $presenter->viewer()),
