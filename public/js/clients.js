@@ -12689,6 +12689,11 @@
         ' data-cip-decided value="' + esc(today) + '">' +
         '</div>' +
         typeField +
+        '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
+        '<label class="tma-dash__clients-field-label" for="cip-decision-note">Decision notes</label>' +
+        '<textarea id="cip-decision-note" class="tma-dash__clients-field-textarea" data-cip-decision-note' +
+        ' rows="3" maxlength="2000" placeholder="Optional notes on this decision"></textarea>' +
+        '</div>' +
         letterField +
         '<p class="tma-portal-modal__text">' +
         (picking
@@ -12739,12 +12744,16 @@
             return;
           }
 
+          var noteEl = el.querySelector('[data-cip-decision-note]');
+          var note = noteEl && noteEl.value ? noteEl.value.trim() : '';
+
           save.disabled = true;
           save.textContent = 'Recording…';
 
           var form = new FormData();
           form.append('decision', picked);
           form.append('decidedAt', date);
+          if (note) form.append('note', note);
           if (letterFile) form.append('decisionLetter', letterFile);
 
           clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/decision', {
