@@ -937,6 +937,79 @@ class CipAddOnTest extends TestCase
         $this->assertNull($reopened['parent']['id'], 'An unmatched parent names no file.');
     }
 
+    public function test_the_add_on_table_shows_parent_answers_that_name_no_file(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/draft', [
+                'phase' => Phase::ADD_ON,
+                'providerId' => $provider->uuid,
+                'parentCipNumber' => '99Z9XNONE01P',
+                'parentCorNumber' => 'COR-9999',
+                'parentApplicantName' => 'Ruth Okonjo',
+                'addonType' => AddOn::TYPE_SPOUSE,
+                'firstName' => 'Mei',
+                'lastName' => 'Wei',
+                'dateOfBirth' => '1988-06-01',
+                'nationality' => 'China',
+                'countryOfResidence' => 'China',
+                'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+                'passportNumber' => 'X1234567',
+                'passportPhoto' => $this->photo(),
+            ])
+            ->assertOk();
+
+        // The table reads these two columns off the parent block, so an
+        // unmatched parent used to draw a dash in both.
+        $row = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications?phase='.Phase::ADD_ON)
+            ->assertOk()
+            ->json('applications.0');
+
+        $this->assertSame('COR-9999', $row['parent']['corNumber'] ?? null);
+        $this->assertSame('RUTH OKONJO', $row['parent']['applicantName'] ?? null);
+        $this->assertFalse($row['parent']['resolved'] ?? true);
+    }
+
+    public function test_the_add_on_table_sorts_on_the_typed_parent_answers(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+
+        /*
+         * Built directly rather than through the draft endpoint: that keeps
+         * one open draft per creator, so posting twice as the same staff
+         * member would overwrite the first row instead of making a second.
+         */
+        foreach ([['COR-8001', 'Bea Nkosi'], ['COR-8002', 'Ada Mensah']] as [$cor, $name]) {
+            $application = Applications::create($provider, $staff, [
+                'investment_type' => 'real_estate',
+                'sponsored' => false,
+            ]);
+            $application->forceFill([
+                'phase' => Phase::ADD_ON,
+                'status' => Status::NEW,
+                'addon_type' => AddOn::TYPE_SPOUSE,
+                'parent_cip_number' => '99Z9X'.$cor.'P',
+                'parent_cor_number' => $cor,
+                'parent_applicant_name' => $name,
+            ])->save();
+        }
+
+        // Sorting off the parent join alone ranked every unmatched row as
+        // blank, so the column and its own sort disagreed.
+        $names = collect($this->actingAs($staff)
+            ->getJson('/portal/cip/applications?phase='.Phase::ADD_ON.'&sort=main_applicant&dir=asc')
+            ->assertOk()
+            ->json('applications'))
+            ->pluck('parent.applicantName')
+            ->all();
+
+        $this->assertSame(['ADA MENSAH', 'BEA NKOSI'], $names);
+    }
+
     public function test_an_add_on_keeps_a_typed_cor_when_the_parent_has_none_on_file(): void
     {
         $staff = $this->staff();

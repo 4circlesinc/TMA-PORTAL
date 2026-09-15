@@ -1080,16 +1080,27 @@ class CipApplicationController extends Controller
         return "(SELECT LOWER(first_name || ' ' || last_name) FROM cip_people WHERE cip_people.application_id = cip_applications.id AND cip_people.role = ".self::sqlString(CipPerson::ROLE_MAIN_APPLICANT).' AND cip_people.deleted_at IS NULL LIMIT 1)';
     }
 
+    /*
+     * Sorted the way the column is READ: the linked parent's number when one
+     * resolved, otherwise what the agent typed. The row shows the typed answer
+     * when no file matched, and sorting off the join alone ranked every one of
+     * those as blank — the column and its own sort disagreeing.
+     */
     private function parentColumnSql(string $column): string
     {
         $column = in_array($column, ['cip_number', 'cor_number'], true) ? $column : 'cip_number';
+        $typed = $column === 'cor_number' ? 'parent_cor_number' : 'parent_cip_number';
 
-        return '(SELECT LOWER('.$column.') FROM cip_applications AS parents WHERE parents.id = cip_applications.parent_application_id AND parents.deleted_at IS NULL LIMIT 1)';
+        return 'COALESCE('
+            .'(SELECT LOWER('.$column.') FROM cip_applications AS parents WHERE parents.id = cip_applications.parent_application_id AND parents.deleted_at IS NULL LIMIT 1), '
+            .'LOWER(cip_applications.'.$typed.'))';
     }
 
     private function parentApplicantNameSql(): string
     {
-        return "(SELECT LOWER(first_name || ' ' || last_name) FROM cip_people WHERE cip_people.application_id = cip_applications.parent_application_id AND cip_people.role = ".self::sqlString(CipPerson::ROLE_MAIN_APPLICANT).' AND cip_people.deleted_at IS NULL LIMIT 1)';
+        return 'COALESCE('
+            ."(SELECT LOWER(first_name || ' ' || last_name) FROM cip_people WHERE cip_people.application_id = cip_applications.parent_application_id AND cip_people.role = ".self::sqlString(CipPerson::ROLE_MAIN_APPLICANT).' AND cip_people.deleted_at IS NULL LIMIT 1), '
+            .'LOWER(cip_applications.parent_applicant_name))';
     }
 
     private function addOnRelationshipSql(): string
