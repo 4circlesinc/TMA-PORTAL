@@ -2992,6 +2992,66 @@
   };
 
   /*
+   * Where each application tab was left.
+   *
+   * The tabs share one APP_TABLE, so before this the page number and the
+   * ordering were one reader's position across six different lists. Turning
+   * to page 2 of All Applications and then opening Post-Approval asked the
+   * server for page 2 of a list with one page and the reader was told no
+   * applications were found; a header clicked on one lane silently re-ordered
+   * every other lane. Each tab now keeps its own position: page 1 and the
+   * lane's own newest-first order until that tab is itself sorted.
+   */
+  var APP_TABLE_POSITIONS = {};
+
+  function stashApplicationPosition(tabId) {
+    if (!tabId) return;
+    APP_TABLE_POSITIONS[tabId] = {
+      page: APP_TABLE.page || 1,
+      sort: APP_TABLE.sort || '',
+      dir: APP_TABLE.dir || 'asc',
+    };
+  }
+
+  /*
+   * A tab is opened where it was left, or at the top if it has not been
+   * opened yet. The sort is checked against the columns this tab actually
+   * has - Add-On's headers are not pre-approval's - so a remembered ordering
+   * cannot outlive the column it was made on.
+   */
+  function restoreApplicationPosition(tabId) {
+    var held = tabId && APP_TABLE_POSITIONS[tabId];
+    var sort = held ? (held.sort || '') : '';
+    if (sort && !applicationSorts({ listTab: tabId, screen: 'list' })[sort]) sort = '';
+
+    APP_TABLE.page = held ? (held.page || 1) : 1;
+    APP_TABLE.sort = sort;
+    APP_TABLE.dir = sort && held && held.dir === 'desc' ? 'desc' : 'asc';
+  }
+
+  /* Moving to another tab: put this one down where it stands, pick that one
+     up where it was left. Both halves, or the position being left behind is
+     the position being arrived at. */
+  function moveApplicationPosition(fromTabId, toTabId) {
+    if (fromTabId === toTabId) return;
+    stashApplicationPosition(fromTabId);
+    restoreApplicationPosition(toTabId);
+  }
+
+  /*
+   * A filter or a search term narrows every tab at once, so every tab's
+   * remembered page is about a list that no longer exists and has to go back
+   * to the top. The orderings are a preference about columns rather than a
+   * position in rows, so those are kept.
+   */
+  function resetApplicationPages() {
+    APP_TABLE.page = 1;
+    Object.keys(APP_TABLE_POSITIONS).forEach(function (tabId) {
+      APP_TABLE_POSITIONS[tabId].page = 1;
+    });
+  }
+
+  /*
    * Columns the applications table can be ordered by, keyed as the listing
    * API understands them. The menu column is not in this list because it is
    * not a fact about the application.
@@ -3303,7 +3363,6 @@
     // than adding to it: a reader pressing "Delayed" on the Dashboard means
     // "show me the delayed ones", not "add them to yesterday's filter".
     TABLE_FILTERS.bucket = key ? [String(key)] : [];
-    APP_TABLE.page = 1;
 
     /*
      * On the matching lane tab. A post-approval stage opened from the
@@ -3322,6 +3381,12 @@
       else if (addonHas && !preHas && !postHas) tab = 'add_on';
     }
 
+    /* A link from outside lands on the lane's own first page, in the lane's
+       own order, not wherever the tab the reader happened to be on stood. The
+       move first, so the tab being left keeps its ordering; the reset after,
+       because the new bucket narrows every tab. */
+    moveApplicationPosition(clientsMountState ? listTabOf(clientsMountState) : null, tab);
+    resetApplicationPages();
     saveListTab(tab);
 
     var state = clientsMountState;
@@ -3424,6 +3489,22 @@
           APP_TABLE.facetsLoaded = true;
         }
         APP_TABLE.loadedKey = key;
+
+        /*
+         * A page past the end answers with no rows rather than an error, which
+         * reads as "no applications found" on a tab that has plenty of them. A
+         * remembered page can fall off the end between two visits - rows
+         * deleted, a lane emptied - so an empty answer to a list that still
+         * has pages is asked again from the last page there is. Marked
+         * unloaded rather than refetched here: the closing step below clears
+         * the loading flags and repaints, and that repaint asks for it.
+         */
+        if (!APP_TABLE.rows.length && APP_TABLE.total > 0
+          && APP_TABLE.page > APP_TABLE.lastPage) {
+          APP_TABLE.page = APP_TABLE.lastPage;
+          if (clientsMountState) stashApplicationPosition(listTabOf(clientsMountState));
+          APP_TABLE.loadedKey = null;
+        }
       })
       .catch(function (err) {
         if (APP_TABLE.fetchGen !== gen || APP_TABLE.loadingKey !== key) return;
@@ -3504,7 +3585,10 @@
       APP_TABLE.dir = 'asc';
     }
     APP_TABLE.page = 1;
-    if (clientsMountState) syncClientsListUrl(clientsMountState);
+    if (clientsMountState) {
+      stashApplicationPosition(listTabOf(clientsMountState));
+      syncClientsListUrl(clientsMountState);
+    }
     forgetApplicationTable();
     repaintClients();
   }
@@ -4391,9 +4475,12 @@
         return;
       }
 
+      /* Held against the tab it was turned on, so leaving and coming back
+         returns to the page the reader was reading. */
       var page = e.target.closest('[data-cip-page]');
       if (page) {
         APP_TABLE.page = parseInt(page.getAttribute('data-cip-page'), 10) || 1;
+        if (clientsMountState) stashApplicationPosition(listTabOf(clientsMountState));
         repaintClients();
 
         return;
@@ -4405,6 +4492,7 @@
           ? APP_TABLE.page + 1
           : APP_TABLE.page - 1;
         APP_TABLE.page = Math.max(1, Math.min(APP_TABLE.lastPage, next));
+        if (clientsMountState) stashApplicationPosition(listTabOf(clientsMountState));
         repaintClients();
 
         return;
@@ -5011,6 +5099,7 @@
         || null;
       var tab = listTabForFormPhase(phase);
       if (tab) {
+        moveApplicationPosition(listTabOf(state), tab);
         state.listTab = tab;
         saveListTab(tab);
       }
@@ -10492,7 +10581,8 @@
 
         clearTableFilters();
         TABLE_FILTERS.provider = [String(provider.id)];
-        APP_TABLE.page = 1;
+        moveApplicationPosition(listTabOf(state), 'pre_approval');
+        resetApplicationPages();
         state.filters = emptyClientFilters();
         state.page = 1;
         state.selected = {};
@@ -10752,7 +10842,7 @@
     if (!clientsFilterCtx) return;
     var state = clientsFilterCtx.state;
 
-    APP_TABLE.page = 1;
+    resetApplicationPages();
     state.page = 1;
     state.selected = {};
     syncClientsListUrl(state);
@@ -13494,7 +13584,7 @@
         // leaving any of them applied would be a chip the button does not
         // clear.
         clearTableFilters();
-        APP_TABLE.page = 1;
+        resetApplicationPages();
         syncClientsListUrl(state);
         render({ forceFull: true });
       });
@@ -13662,14 +13752,11 @@
 
     var select = function (id) {
       if (state.listTab === id) return;
+      moveApplicationPosition(listTabOf(state), id);
       state.listTab = id;
       saveListTab(id);
       state.page = 1;
       state.selected = {};
-      if (!applicationSorts({ listTab: id, screen: 'list' })[APP_TABLE.sort]) {
-        APP_TABLE.sort = '';
-        APP_TABLE.dir = 'asc';
-      }
       forgetApplicationTable();
       syncClientsListUrl(state);
       render();
@@ -13824,7 +13911,7 @@
   function refreshDirectoryFromSearch(root, state) {
     state.page = 1;
     // Section 8's table pages on the server, so a new term is a new first page.
-    APP_TABLE.page = 1;
+    resetApplicationPages();
     /*
      * The full-width list repaints whole.
      *
@@ -14094,6 +14181,9 @@
       if (bootedSort && applicationSorts(state)[bootedSort]) APP_TABLE.sort = bootedSort;
       var bootedDir = takeBootPosition('dir');
       if (bootedDir === 'asc' || bootedDir === 'desc') APP_TABLE.dir = bootedDir;
+      /* An ordering carried in the address belongs to the tab the address
+         opens, not to whichever tab is looked at next. */
+      if (bootedSort || bootedDir) stashApplicationPosition(listTabOf(state));
 
       // The Dashboard's CIP card sets the filter from outside this view, and
       // cannot write an address for a screen that has not mounted yet, so
