@@ -350,9 +350,18 @@ class CipApplicationDraftController extends Controller
             $person($draft->people->firstWhere('role', CipPerson::ROLE_SPONSOR), 'sponsor.');
         }
 
+        /*
+         * Creation order, not qualified-dependent ordinal.
+         *
+         * The form's paths are positional (`dependents.0`, `dependents.1`) in
+         * the order the reader added them. Ordinals renumber by age (youngest
+         * first) after every save. Returning that age order here used to stamp
+         * the wrong uuid onto each form row on autosave — the next save then
+         * wrote each child's date of birth onto the other person.
+         */
         $dependents = $draft->people
             ->where('role', CipPerson::ROLE_DEPENDENT)
-            ->sortBy(fn (CipPerson $p) => $p->dependent_ordinal ?? $p->id)
+            ->sortBy(fn (CipPerson $p) => $p->id)
             ->values();
 
         foreach ($dependents as $i => $dependent) {

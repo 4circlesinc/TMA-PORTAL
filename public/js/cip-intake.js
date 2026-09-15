@@ -2757,15 +2757,73 @@
    *
    * Only paths that name a person (`dependents.N.id`, `sponsor.id`) are
    * taken. Names, dates and the rest stay with the live draft.
+   *
+   * Dependents are matched by identity, not by list index. The server used
+   * to return them sorted by qualified-dependent ordinal (youngest first),
+   * which is not the order the form rows sit in. Stamping ids by index then
+   * made the next autosave write each child's date of birth onto the other.
    */
   function rememberPersonIds(draft) {
     if (!draft || !draft.answers) return;
-    Object.keys(draft.answers).forEach(function (path) {
-      if (!/^(dependents\.\d+|sponsor)\.id$/.test(path)) return;
-      var id = draft.answers[path];
-      if (!id) return;
-      state.draft[path] = id;
-    });
+
+    var sponsorId = draft.answers['sponsor.id'];
+    if (sponsorId) state.draft['sponsor.id'] = sponsorId;
+
+    var serverRows = [];
+    var count = Number(draft.dependents) || 0;
+    for (var i = 0; i < count; i++) {
+      var id = draft.answers['dependents.' + i + '.id'];
+      if (!id) continue;
+      serverRows.push({
+        id: id,
+        firstName: upperName(draft.answers['dependents.' + i + '.firstName'] || ''),
+        lastName: upperName(draft.answers['dependents.' + i + '.lastName'] || ''),
+        dateOfBirth: String(draft.answers['dependents.' + i + '.dateOfBirth'] || ''),
+      });
+    }
+    if (!serverRows.length) return;
+
+    var used = {};
+    for (var formIndex = 0; formIndex < state.dependents; formIndex++) {
+      var prefix = 'dependents.' + formIndex + '.';
+      var existing = state.draft[prefix + 'id'];
+      if (existing) {
+        var kept = false;
+        for (var k = 0; k < serverRows.length; k++) {
+          if (serverRows[k].id === existing) { kept = true; break; }
+        }
+        if (kept) {
+          used[existing] = true;
+          continue;
+        }
+      }
+
+      var formFirst = upperName(state.draft[prefix + 'firstName'] || '');
+      var formLast = upperName(state.draft[prefix + 'lastName'] || '');
+      var formDob = String(state.draft[prefix + 'dateOfBirth'] || '');
+
+      var match = null;
+      for (var s = 0; s < serverRows.length; s++) {
+        var row = serverRows[s];
+        if (used[row.id]) continue;
+        if (row.firstName !== formFirst || row.lastName !== formLast) continue;
+        if (formDob && row.dateOfBirth && formDob !== row.dateOfBirth) continue;
+        match = row;
+        break;
+      }
+
+      // Blank rows (name not typed yet) may still take the same index — there
+      // is nothing to mis-assign a date of birth onto.
+      if (!match && !formFirst && !formLast
+        && serverRows[formIndex] && !used[serverRows[formIndex].id]) {
+        match = serverRows[formIndex];
+      }
+
+      if (match) {
+        state.draft[prefix + 'id'] = match.id;
+        used[match.id] = true;
+      }
+    }
   }
 
   /* When the draft was last saved, in the reader’s own words. */

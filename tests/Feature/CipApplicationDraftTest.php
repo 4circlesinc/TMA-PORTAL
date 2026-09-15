@@ -271,6 +271,87 @@ class CipApplicationDraftTest extends TestCase
     }
 
     /**
+     * Draft answers must keep dependents in form order, not age order.
+     *
+     * Qualified-dependent ordinals renumber youngest-first after every save.
+     * Returning that order in the draft payload used to stamp the wrong uuid
+     * onto each form row; the next autosave then swapped their dates of birth.
+     */
+    public function test_draft_dependent_answers_keep_form_order_not_age_ordinal(): void
+    {
+        Storage::fake('local');
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $first = $this->actingAs($staff)
+            ->post('/portal/cip/applications/draft', $this->answers($provider, [
+                'dependents' => [
+                    [
+                        'firstName' => 'Older',
+                        'lastName' => 'Child',
+                        'dateOfBirth' => '2010-01-15',
+                        'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                    ],
+                    [
+                        'firstName' => 'Younger',
+                        'lastName' => 'Child',
+                        'dateOfBirth' => '2015-06-01',
+                        'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                    ],
+                ],
+            ]), ['Accept' => 'application/json'])
+            ->assertOk()
+            ->json('draft');
+
+        $this->assertSame('OLDER', $first['answers']['dependents.0.firstName'] ?? null);
+        $this->assertSame('2010-01-15', $first['answers']['dependents.0.dateOfBirth'] ?? null);
+        $this->assertSame('YOUNGER', $first['answers']['dependents.1.firstName'] ?? null);
+        $this->assertSame('2015-06-01', $first['answers']['dependents.1.dateOfBirth'] ?? null);
+
+        $olderId = $first['answers']['dependents.0.id'] ?? null;
+        $youngerId = $first['answers']['dependents.1.id'] ?? null;
+        $this->assertNotEmpty($olderId);
+        $this->assertNotEmpty($youngerId);
+        $this->assertNotSame($olderId, $youngerId);
+
+        $draft = CipApplication::query()->where('uuid', $first['id'])->firstOrFail();
+        $people = $draft->people()->where('role', CipPerson::ROLE_DEPENDENT)->orderBy('id')->get();
+        $this->assertCount(2, $people);
+        $this->assertSame(2, $people[0]->dependent_ordinal, 'Older child is QD2.');
+        $this->assertSame(1, $people[1]->dependent_ordinal, 'Younger child is QD1.');
+        $this->assertSame($olderId, $people[0]->uuid);
+        $this->assertSame($youngerId, $people[1]->uuid);
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications/draft', $this->answers($provider, [
+                'dependents' => [
+                    [
+                        'id' => $olderId,
+                        'firstName' => 'Older',
+                        'lastName' => 'Child',
+                        'dateOfBirth' => '2010-01-15',
+                        'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                    ],
+                    [
+                        'id' => $youngerId,
+                        'firstName' => 'Younger',
+                        'lastName' => 'Child',
+                        'dateOfBirth' => '2015-06-01',
+                        'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                    ],
+                ],
+            ]), ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $people = $draft->fresh()->people()->where('role', CipPerson::ROLE_DEPENDENT)->orderBy('id')->get();
+        $this->assertSame('2010-01-15', $people[0]->date_of_birth->toDateString());
+        $this->assertSame('2015-06-01', $people[1]->date_of_birth->toDateString());
+        $this->assertSame('OLDER', $people[0]->first_name);
+        $this->assertSame('YOUNGER', $people[1]->first_name);
+    }
+
+    /**
      * Without the id, a second draft save must still reuse the same person.
      *
      * Uuid is preferred, but concurrent or stale autosaves sometimes omit it.
