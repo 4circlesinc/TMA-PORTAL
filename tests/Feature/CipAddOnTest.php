@@ -114,6 +114,55 @@ class CipAddOnTest extends TestCase
         $this->assertArrayHasKey('photo', $body['parents'][0]);
     }
 
+    public function test_parent_suggest_includes_post_approved_files_without_a_cor_on_file(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+        $parent = Applications::create($provider, $staff, ['investment_type' => 'real_estate']);
+        $this->mainApplicant($parent, 'Suha', 'Ali');
+        $parent->forceFill([
+            'status' => Status::POST_APPROVED,
+            'decision' => Status::POST_APPROVED,
+            'phase' => Phase::POST_APPROVAL,
+            'post_approval_at' => now(),
+            'cip_number' => '10T3E08888P',
+            'cor_number' => null,
+        ])->save();
+
+        $body = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/add-on/parents?q=10T3E08888')
+            ->assertOk()
+            ->json();
+
+        $this->assertSame($parent->uuid, $body['parents'][0]['id']);
+        $this->assertSame('10T3E08888P', $body['parents'][0]['cipNumber']);
+    }
+
+    public function test_parent_lookup_accepts_a_typed_cor_when_the_parent_has_none_stored(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+        $parent = Applications::create($provider, $staff, ['investment_type' => 'real_estate']);
+        $this->mainApplicant($parent, 'Suha', 'Ali');
+        $parent->forceFill([
+            'status' => Status::POST_APPROVED,
+            'decision' => Status::POST_APPROVED,
+            'phase' => Phase::POST_APPROVAL,
+            'post_approval_at' => now(),
+            'cip_number' => '10T3E08888P',
+            'cor_number' => null,
+        ])->save();
+
+        $body = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/add-on/parent?cipNumber=10T3E08888P&corNumber=COR-FROM-LETTER&applicantName=Suha+Ali')
+            ->assertOk()
+            ->json();
+
+        $this->assertTrue($body['ok']);
+        $this->assertSame($parent->uuid, $body['parent']['id']);
+        $this->assertSame('COR-FROM-LETTER', $body['parent']['corNumber']);
+    }
+
     public function test_parent_suggest_carries_the_main_applicant_profile_photo(): void
     {
         $staff = $this->staff();

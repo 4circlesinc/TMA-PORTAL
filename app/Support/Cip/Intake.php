@@ -2118,6 +2118,12 @@ class Intake
             return;
         }
 
+        // Capture the certificate number onto the parent when the portal
+        // never recorded one, so later Add-Ons and reporting agree.
+        if (! filled($parent->cor_number) && $cor !== '') {
+            $parent->forceFill(['cor_number' => $cor])->save();
+        }
+
         $previousProviderId = $application->provider_id;
 
         $application->forceFill([

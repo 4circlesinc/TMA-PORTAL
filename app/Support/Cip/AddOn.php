@@ -202,27 +202,30 @@ class AddOn
             return ['ok' => false, 'error' => 'An Add-On application cannot be filed against another Add-On.', 'field' => 'parentCipNumber'];
         }
 
-        if (! filled($match->cor_number)) {
-            return [
-                'ok' => false,
-                'error' => 'This application does not have a Certificate of Registration number on file.',
-                'field' => 'parentCorNumber',
-            ];
-        }
-
-        if (self::normalizeNumber((string) $match->cor_number) !== self::normalizeNumber($cor)) {
-            return ['ok' => false, 'error' => 'COR number does not match this CIP application.', 'field' => 'parentCorNumber'];
-        }
-
         if (! self::isEligibleParent($match)) {
             return ['ok' => false, 'error' => 'The parent application must be granted.', 'field' => 'parentCipNumber'];
         }
 
+        /*
+         * Most post-approval files never had COR staged in the portal. The
+         * certificate is still what the reader has, so an empty parent COR
+         * accepts the typed number; a stored one must match it.
+         */
+        if (filled($match->cor_number)
+            && self::normalizeNumber((string) $match->cor_number) !== self::normalizeNumber($cor)) {
+            return ['ok' => false, 'error' => 'COR number does not match this CIP application.', 'field' => 'parentCorNumber'];
+        }
+
         $open = self::openAddOn($match);
+
+        $payload = self::parentPayload($match);
+        if (! filled($payload['corNumber'] ?? null)) {
+            $payload['corNumber'] = $cor;
+        }
 
         return [
             'ok' => true,
-            'parent' => self::parentPayload($match),
+            'parent' => $payload,
             'openAddOn' => $open ? [
                 'id' => $open->uuid,
                 'number' => $open->displayNumber(),
@@ -330,23 +333,23 @@ class AddOn
 
     /**
      * Granted parents that can take an Add-On, already narrowed to the
-     * reader's slice. The PHP gate in {@see isEligibleParent} still runs on
-     * each row; this only keeps the candidate set small.
+     * reader's slice. COR is not required here: many post-approval files
+     * never had it staged, and the typeahead still has to name them.
      */
     public static function eligibleParentQuery(?User $user): Builder
     {
         return ApplicationScope::query($user)
             ->whereNotNull('cip_applications.cip_number')
             ->where('cip_applications.cip_number', '!=', '')
-            ->whereNotNull('cip_applications.cor_number')
-            ->where('cip_applications.cor_number', '!=', '')
             ->where(function ($q) {
                 $q->whereNull('cip_applications.phase')
                     ->orWhere('cip_applications.phase', '!=', Phase::ADD_ON);
             })
             ->where(function ($q) {
                 $q->where('cip_applications.status', Status::GRANTED)
+                    ->orWhere('cip_applications.status', Status::POST_APPROVED)
                     ->orWhere('cip_applications.decision', CipApplication::DECISION_GRANTED)
+                    ->orWhere('cip_applications.decision', Status::POST_APPROVED)
                     ->orWhere(function ($post) {
                         $post->where('cip_applications.phase', Phase::POST_APPROVAL)
                             ->where('cip_applications.status', '!=', Status::POST_DENIED);
@@ -364,12 +367,14 @@ class AddOn
             return false;
         }
 
-        if (! filled($application->cip_number) || ! filled($application->cor_number)) {
+        if (! filled($application->cip_number)) {
             return false;
         }
 
         if ($application->status === Status::GRANTED
-            || $application->decision === CipApplication::DECISION_GRANTED) {
+            || $application->status === Status::POST_APPROVED
+            || $application->decision === CipApplication::DECISION_GRANTED
+            || $application->decision === Status::POST_APPROVED) {
             return true;
         }
 
