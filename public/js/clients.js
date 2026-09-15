@@ -2481,7 +2481,7 @@
     if (sort === 'type') {
       return rows.sort(keyed(function (r) {
         if (r.kind === 'company') return 'Service provider';
-        if (r.kind === 'person') return 'Contact';
+        if (r.kind === 'person') return (r.person && r.person.accountType) || '';
         return clientTypeLabel(clientTypeOf(r.id));
       }));
     }
@@ -2606,6 +2606,8 @@
       '<span class="tma-dash__cc-truncate" data-tma-person="0" tabindex="0">' + esc(name) + '</span>' +
       emailLine +
       '</span></span></div>' +
+      '<div class="tma-dash__cc tma-dash__cc--type"><span class="tma-dash__cc-truncate">' +
+      esc(person.accountType || '-') + '</span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--referral">' +
       '<button type="button" class="tma-dash__clients-company-link tma-dash__cc-truncate" data-clients-open-company="' +
       esc(company.id) + '">' + esc(company.name || 'Service provider') + '</button></div>' +
@@ -2677,7 +2679,7 @@
         '<div class="tma-dash__cc tma-dash__cc--user">' +
         '<span class="tma-skeleton tma-skeleton--avatar tma-dash__clients-skeleton-avatar"></span>' +
         skeletonBar(skeletonWidth(i)) + '</div>' +
-        (people ? '' : '<div class="tma-dash__cc tma-dash__cc--type">' + skeletonBar(skeletonWidth(i + 4, 0.7)) + '</div>') +
+        '<div class="tma-dash__cc tma-dash__cc--type">' + skeletonBar(skeletonWidth(i + 4, 0.7)) + '</div>' +
         (providers ? '<div class="tma-dash__cc tma-dash__cc--code">' + skeletonBar(skeletonWidth(i + 5, 0.5)) + '</div>' : '') +
         '<div class="tma-dash__cc tma-dash__cc--referral">' + skeletonBar(skeletonWidth(i + 7, 0.9)) + '</div>' +
         '<div class="tma-dash__cc tma-dash__cc--contact">' + skeletonBar(skeletonWidth(i + 2)) + '</div>' +
@@ -4555,7 +4557,8 @@
       // endpoint, and a company is deleted from its own profile.
       '<div class="tma-dash__cc tma-dash__cc--user tma-dash__cc--head" role="columnheader">' +
       (people ? 'Person' : 'Service provider') + '</div>' +
-      (people ? ''
+      (people
+        ? '<div class="tma-dash__cc tma-dash__cc--type tma-dash__cc--head" role="columnheader">Account type</div>'
         : '<div class="tma-dash__cc tma-dash__cc--type tma-dash__cc--head" role="columnheader">Type</div>') +
       // The CIP code is how the firm refers to a provider in an application
       // number, so it earns a column of its own rather than living only in
@@ -8278,6 +8281,15 @@
     return !!((me && me.isAdmin) || (access && access.can && access.can('cip.assign')));
   }
 
+  /* Handing a file to another firm is administrators only — the folder moves
+     with it and the outgoing firm loses access. */
+  function canTransferProvider(app) {
+    if (app && app.canTransferProvider === false) return false;
+    if (app && app.canTransferProvider === true) return true;
+    var me = window.TMACurrentUser && window.TMACurrentUser.get();
+    return !!(me && me.isAdmin);
+  }
+
   /*
    * The Activity tab (section 4d): what has happened to this application.
    *
@@ -11138,6 +11150,9 @@
     if (kind === 'application' && canChangeCipStatus(app)) {
       items.push({ act: 'status', label: 'Change status', icon: 'Flag', submenu: true });
     }
+    if (kind === 'application' && canTransferProvider(app)) {
+      items.push({ act: 'transfer-provider', label: 'Change service provider', icon: 'Buildings' });
+    }
     // Assigning staff is `clients.assign`, the same capability the server
     // enforces, read through the access mirror rather than guessed from the
     // current-user store (which is not always populated by the time a row
@@ -13082,6 +13097,10 @@
           return navigate('edit-application', null, { applicationId: row.id });
         }
       }
+      if (act === 'transfer-provider') {
+        openProviderTransferPicker(id, extra.applicationId);
+        return;
+      }
       if (act === 'delete') {
         deleteCipApplication(id, extra.applicationId);
         return;
@@ -13243,7 +13262,9 @@
         }
         var current = state.sort || 'name';
         var sorts = onPeopleTab(state)
-          ? CLIENT_SORTS.filter(function (s) { return s.value !== 'type'; })
+          ? CLIENT_SORTS.map(function (s) {
+              return s.value === 'type' ? { value: 'type', label: 'Account type' } : s;
+            })
           : CLIENT_SORTS;
         clientsPop.sort.innerHTML = sorts.map(function (s) {
           return clientsPopItem('data-clients-sort-value', s.value, s.label, { selected: current === s.value });

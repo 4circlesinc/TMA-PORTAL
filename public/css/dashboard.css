@@ -19207,7 +19207,7 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
 
 .tma-dash__ctable--clients.tma-dash__ctable--people .tma-dash__ctr--head,
 .tma-dash__ctable--clients.tma-dash__ctable--people .tma-dash__ctr--body {
-  grid-template-columns: minmax(160px, 1.3fr) minmax(160px, 1fr) minmax(180px, 1.1fr);
+  grid-template-columns: minmax(160px, 1.3fr) minmax(140px, 1fr) minmax(140px, 1fr) minmax(180px, 1.1fr);
 }
 
 .tma-dash__ctable--clients.tma-dash__ctable--people .tma-dash__cc--user .tma-dash__cc-user-stack {
@@ -24417,7 +24417,7 @@ a.tma-dash__clients-edit-btn--accent:visited {
 
   .tma-dash__ctable--clients.tma-dash__ctable--people .tma-dash__ctr--head,
   .tma-dash__ctable--clients.tma-dash__ctable--people .tma-dash__ctr--body {
-    grid-template-columns: minmax(120px, 1fr) minmax(120px, 0.9fr) minmax(120px, 1fr);
+    grid-template-columns: minmax(120px, 1fr) minmax(110px, 0.9fr) minmax(110px, 0.9fr) minmax(120px, 1fr);
   }
 
   .tma-dash__ctable--clients.tma-dash__ctable--providers .tma-dash__ctr--head,

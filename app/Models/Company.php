@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Access\Role;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -183,8 +184,32 @@ class Company extends Model
                     'roles' => array_values(array_filter([
                         $login?->roleName(),
                     ])),
+                    // Users-page wording: a Client on a firm is a Service
+                    // Provider Contact; an admin keeps that account type name.
+                    'accountType' => self::contactAccountTypeLabel($login),
                 ];
             })->values()->all(),
         ];
+    }
+
+    /**
+     * How the Provider contacts table names this person's portal account.
+     *
+     * Same labels the Users directory uses for external people. No login means
+     * no account type to show — the contact row still exists in the firm.
+     */
+    private static function contactAccountTypeLabel(?User $login): ?string
+    {
+        if ($login === null) {
+            return null;
+        }
+
+        $type = Role::of($login) ?? $login->account_type;
+
+        return match ($type) {
+            Role::SERVICE_PROVIDER_ADMIN => Role::SERVICE_PROVIDER_ADMIN,
+            Role::CLIENT => 'Service Provider Contact',
+            default => $type ? (string) $type : null,
+        };
     }
 }

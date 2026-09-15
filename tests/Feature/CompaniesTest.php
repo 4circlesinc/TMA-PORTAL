@@ -218,7 +218,43 @@ class CompaniesTest extends TestCase
         $this->assertSame('Catarina Silva', $row['name'] ?? null);
         $this->assertSame('catarina@galaxy.example', $row['email'] ?? null);
         $this->assertSame($user->id, $row['userId'] ?? null);
+        $this->assertSame('Service Provider Contact', $row['accountType'] ?? null);
         $this->assertNotEmpty($row['roles'] ?? []);
+    }
+
+    public function test_provider_contacts_name_service_provider_admins(): void
+    {
+        $staff = $this->staff();
+        $galaxy = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
+
+        $user = User::factory()->create([
+            'name' => 'Admin Contact',
+            'email' => 'admin@galaxy.example',
+            'status' => 'approved',
+            'account_type' => 'Service Provider admin',
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+        ]);
+
+        Client::create([
+            'uid' => 'admin-contact',
+            'name' => 'Admin Contact',
+            'company_id' => $galaxy->id,
+            'email' => 'admin@galaxy.example',
+            'user_id' => $user->id,
+            'data' => [],
+        ]);
+
+        $people = collect($this->actingAs($staff)->getJson('/portal/companies')
+            ->assertOk()
+            ->json('companies'))
+            ->flatMap(fn ($company) => $company['people'] ?? []);
+
+        $this->assertSame(
+            'Service Provider admin',
+            $people->firstWhere('id', 'admin-contact')['accountType'] ?? null,
+        );
     }
 
     public function test_deleting_a_provider_keeps_its_people_and_referrals(): void
