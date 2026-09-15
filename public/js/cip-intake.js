@@ -707,6 +707,37 @@
       '</svg></span>';
   }
 
+  function parentSuggestFace(item) {
+    var photo = item && item.photo;
+    if (photo) {
+      return '<img class="tma-portal-cip-suggest__face" src="' + esc(photo) +
+        '" alt="" width="32" height="32">';
+    }
+
+    var name = (item && item.applicantName) || '';
+    var initials = name.replace(/[^A-Za-z0-9]+/g, ' ').trim().split(/\s+/)
+      .filter(Boolean).slice(0, 2).map(function (part) {
+        return part.charAt(0).toUpperCase();
+      }).join('') || '?';
+
+    return '<span class="tma-portal-cip-suggest__face tma-portal-cip-suggest__face--initial" aria-hidden="true">' +
+      esc(initials) + '</span>';
+  }
+
+  function parentSuggestRowHtml(item, active) {
+    var label = (item.cipNumber || '') +
+      (item.applicantName ? ' — ' + item.applicantName : '');
+    var meta = item.corNumber
+      ? 'COR ' + item.corNumber + (item.statusLabel ? ' · ' + item.statusLabel : '')
+      : (item.statusLabel || '');
+
+    return parentSuggestFace(item) +
+      '<span class="tma-portal-cip-suggest__text">' +
+      '<span class="tma-portal-cip-suggest__label">' + esc(label) + '</span>' +
+      (meta ? '<span class="tma-portal-cip-suggest__meta">' + esc(meta) + '</span>' : '') +
+      '</span>';
+  }
+
   /*
    * The CIP number field on an Add-On filing. Typing opens a short list of
    * granted parents so the reader can confirm the file; a tick says the
@@ -722,16 +753,10 @@
     if (suggest.open && suggest.items && suggest.items.length) {
       menu = '<ul class="tma-portal-cip-suggest" role="listbox" data-cip-parent-suggest>' +
         suggest.items.map(function (item, i) {
-          var label = (item.cipNumber || '') +
-            (item.applicantName ? ' — ' + item.applicantName : '');
-          var meta = item.corNumber
-            ? 'COR ' + item.corNumber + (item.statusLabel ? ' · ' + item.statusLabel : '')
-            : (item.statusLabel || '');
           return '<li role="option"' +
             (i === suggest.active ? ' aria-selected="true" class="is-active"' : '') +
             ' data-cip-parent-pick="' + esc(String(i)) + '">' +
-            '<span class="tma-portal-cip-suggest__label">' + esc(label) + '</span>' +
-            (meta ? '<span class="tma-portal-cip-suggest__meta">' + esc(meta) + '</span>' : '') +
+            parentSuggestRowHtml(item, i === suggest.active) +
             '</li>';
         }).join('') +
         '</ul>';
@@ -1585,16 +1610,7 @@
           li.setAttribute('aria-selected', 'true');
           li.className = 'is-active';
         }
-        var label = (item.cipNumber || '') +
-          (item.applicantName ? ' — ' + item.applicantName : '');
-        var meta = item.corNumber
-          ? 'COR ' + item.corNumber + (item.statusLabel ? ' · ' + item.statusLabel : '')
-          : (item.statusLabel || '');
-        li.innerHTML = '<span class="tma-portal-cip-suggest__label"></span>' +
-          (meta ? '<span class="tma-portal-cip-suggest__meta"></span>' : '');
-        li.querySelector('.tma-portal-cip-suggest__label').textContent = label;
-        var metaEl = li.querySelector('.tma-portal-cip-suggest__meta');
-        if (metaEl) metaEl.textContent = meta;
+        li.innerHTML = parentSuggestRowHtml(item, i === suggest.active);
         li.addEventListener('mousedown', function (e) {
           e.preventDefault();
           pickParentSuggest(i);

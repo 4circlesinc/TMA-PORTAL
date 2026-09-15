@@ -111,6 +111,25 @@ class CipAddOnTest extends TestCase
         $this->assertSame($parent->cip_number, $body['parents'][0]['cipNumber']);
         $this->assertSame('CHEN WEI', $body['parents'][0]['applicantName']);
         $this->assertSame($parent->cor_number, $body['parents'][0]['corNumber']);
+        $this->assertArrayHasKey('photo', $body['parents'][0]);
+    }
+
+    public function test_parent_suggest_carries_the_main_applicant_profile_photo(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+        $main = $parent->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $main->forceFill([
+            'photo_url' => 'https://cdn.example/chen.jpg',
+            'photo_path' => 'cip/photos/chen.bin',
+        ])->save();
+
+        $body = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/add-on/parents?q=10T1G')
+            ->assertOk()
+            ->json();
+
+        $this->assertSame('https://cdn.example/chen.jpg', $body['parents'][0]['photo'] ?? null);
     }
 
     public function test_parent_suggest_matches_the_main_applicant_name(): void

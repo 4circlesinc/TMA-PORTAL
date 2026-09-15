@@ -266,7 +266,8 @@ class AddOn
         $rows = self::eligibleParentQuery($user)
             ->with([
                 'provider:id,uuid,name,code',
-                'client:id,name',
+                'client:id,name,photo_url,user_id',
+                'client.user:id,avatar_url,provider_avatar_url',
                 'people' => fn ($q) => $q->where('role', CipPerson::ROLE_MAIN_APPLICANT),
             ])
             ->where(function ($q) use ($like, $numberNeedle) {
@@ -320,7 +321,8 @@ class AddOn
             )
             ->with([
                 'provider:id,uuid,name,code',
-                'client:id,name',
+                'client:id,name,photo_url,user_id',
+                'client.user:id,avatar_url,provider_avatar_url',
                 'people' => fn ($q) => $q->where('role', CipPerson::ROLE_MAIN_APPLICANT),
             ])
             ->first();
@@ -490,12 +492,42 @@ class AddOn
             'corNumber' => $parent->cor_number,
             'number' => $parent->displayNumber(),
             'applicantName' => CipPerson::upperName($name) ?: $name,
+            'photo' => self::parentPhoto($main, $parent),
             'status' => $parent->status,
             'statusLabel' => Status::label($parent->status),
             'providerId' => $parent->provider?->uuid,
             'providerName' => $parent->provider?->name,
             'investmentType' => $parent->investment_type,
         ];
+    }
+
+    /**
+     * The main applicant's face for typeahead and confirm rows.
+     *
+     * Same priority as the CIP worklist: passport likeness on the person,
+     * then the hub client's photo, then a live portal login avatar.
+     */
+    private static function parentPhoto(?CipPerson $main, CipApplication $parent): ?string
+    {
+        if ($main?->photo_url) {
+            return $main->photo_url;
+        }
+
+        if ($main?->photo_path) {
+            return '/portal/cip/people/'.$main->uuid.'/passport-photo?v='
+                .substr(md5($main->photo_path.'|'.($main->updated_at?->getTimestamp() ?? 0)), 0, 8);
+        }
+
+        $client = $parent->client;
+        if ($client?->photo_url) {
+            return $client->photo_url;
+        }
+
+        if ($client && $client->hasLiveLogin()) {
+            return $client->user?->photoUrl();
+        }
+
+        return null;
     }
 
     public static function personLabel(CipPerson $person): string
