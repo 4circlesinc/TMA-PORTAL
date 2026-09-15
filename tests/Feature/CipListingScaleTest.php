@@ -3,15 +3,20 @@
 namespace Tests\Feature;
 
 use App\Models\CipApplication;
+use App\Models\CipDocument;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Company;
+use App\Models\FileItem;
+use App\Models\Folder;
 use App\Models\User;
 use App\Support\Cip\Applications;
+use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -204,6 +209,44 @@ class CipListingScaleTest extends TestCase
                     'last_name' => 'Row',
                     'date_of_birth' => '1995-01-01',
                     'dependent_ordinal' => $role === CipPerson::ROLE_DEPENDENT ? 1 : null,
+                ]);
+            }
+        }
+
+        /*
+         * Every person with a passport photo FILED - a real file behind the
+         * slot, not just the slot. The expandable row draws each member's
+         * face off that file, and a fixture without one never exercised the
+         * walk that cost the production list one query per person.
+         */
+        $folder = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Photos',
+            'owner_id' => $staff->id,
+            'created_by' => $staff->id,
+            'folder_type' => Folder::TYPE_CLIENT,
+        ]);
+        foreach ($applications as $application) {
+            foreach ($application->people()->get() as $person) {
+                $file = FileItem::create([
+                    'uuid' => (string) Str::uuid(),
+                    'folder_id' => $folder->id,
+                    'owner_id' => $staff->id,
+                    'name' => 'photo-'.$person->id.'.jpg',
+                    'extension' => 'jpg',
+                    'mime_type' => 'image/jpeg',
+                    'size' => 2048,
+                    'disk' => 'local',
+                    'storage_path' => 'tests/photo-'.$person->id.'.jpg',
+                ]);
+                CipDocument::create([
+                    'uuid' => (string) Str::uuid(),
+                    'application_id' => $application->id,
+                    'person_id' => $person->id,
+                    'type' => DocumentTypes::PASSPORT_PHOTO,
+                    'label' => 'Passport photo',
+                    'required' => true,
+                    'file_id' => $file->id,
                 ]);
             }
         }

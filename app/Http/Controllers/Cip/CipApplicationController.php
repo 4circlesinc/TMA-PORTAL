@@ -728,8 +728,16 @@ class CipApplicationController extends Controller
                  * Post-approval lists need the whole family so each member can
                  * show their own document progress in an expandable row.
                  */
+                /*
+                 * With each slot's FILE, as the sync endpoint and record()
+                 * already load it. The expandable row draws every member's
+                 * passport photo off the filed slot, and without the file
+                 * loaded that walk was one `select * from files where id = ?`
+                 * per person - invisible on seed data with no photos filed,
+                 * and three queries a row on the real post-approval list.
+                 */
                 'people' => $postApprovalList
-                    ? fn ($q) => $q->with('documents')->orderBy('id')
+                    ? fn ($q) => $q->with('documents.file')->orderBy('id')
                     : fn ($q) => $q->where('role', CipPerson::ROLE_MAIN_APPLICANT),
                 'parent.people' => fn ($q) => $q->where('role', CipPerson::ROLE_MAIN_APPLICANT),
                 'parent.client:id,name',
