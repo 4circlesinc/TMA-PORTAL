@@ -3,6 +3,8 @@
 namespace Database\Seeders;
 
 use App\Models\CipDocumentRequirement;
+use App\Support\Cip\AddOn;
+use App\Support\Cip\AddOnRequirements;
 use App\Support\Cip\ApplicationRequirements;
 use App\Support\Cip\CorRequirements;
 use App\Support\Cip\DocumentTypes;
@@ -69,6 +71,10 @@ class CipDocumentRequirementSeeder extends Seeder
 
         if (Schema::hasColumn('cip_document_requirements', 'real_estate_only')) {
             $this->syncPostApproval();
+        }
+
+        if (Schema::hasColumn('cip_document_requirements', 'at_add_on')) {
+            $this->syncAddOn();
         }
 
         $this->command?->info($added === 0
@@ -174,6 +180,104 @@ class CipDocumentRequirementSeeder extends Seeder
                 $row->forceFill($flags)->save();
             }
         }
+    }
+
+    /**
+     * The official Add-On lists, one per spouse / dependent type.
+     *
+     * Safe to run more than once: pack rows that already exist for
+     * pre-approval keep their wording and required flags, and only the
+     * Add-On tick (and the G1–G3 supplemental rows) are brought into line
+     * with the brief. A paper the firm added for a spouse that the brief
+     * does not list loses the Add-On tick, the same bargain post-approval
+     * already makes with its catalogue.
+     */
+    public function syncAddOn(): void
+    {
+        if (! Schema::hasColumn('cip_document_requirements', 'at_add_on')) {
+            return;
+        }
+
+        foreach (AddOnRequirements::defaults() as $applicantType => $requirements) {
+            foreach (array_values($requirements) as $index => $requirement) {
+                $row = CipDocumentRequirement::withTrashed()
+                    ->where('applicant_type', $applicantType)
+                    ->where('key', $requirement['key'])
+                    ->first();
+
+                $flags = [
+                    'at_add_on' => true,
+                    'active' => true,
+                ];
+
+                if (AddOnRequirements::isAdditional($requirement['key'])) {
+                    $flags['at_pre_approval'] = false;
+                    $flags['at_post_approval'] = false;
+                    $flags['carry_forward'] = false;
+                    $flags['folder'] = $requirement['folder'];
+                    $flags['required'] = false;
+                    $flags['help'] = $requirement['help'];
+                    $flags['label'] = $requirement['label'];
+                }
+
+                if ($row === null) {
+                    $sortOrder = AddOnRequirements::isAdditional($requirement['key'])
+                        ? $this->nextAddOnExtraOrder(
+                            $applicantType,
+                            (int) array_search($requirement['key'], AddOnRequirements::ADDITIONAL_KEYS, true),
+                        )
+                        : ($index + 1) * 10;
+
+                    CipDocumentRequirement::create(array_merge([
+                        'uuid' => (string) Str::uuid(),
+                        'applicant_type' => $applicantType,
+                        'key' => $requirement['key'],
+                        'label' => $requirement['label'],
+                        'required' => $requirement['required'],
+                        'help' => $requirement['help'] ?? null,
+                        'folder' => $requirement['folder'] ?? null,
+                        'at_pre_approval' => (bool) ($requirement['at_pre_approval'] ?? false),
+                        'at_post_approval' => (bool) ($requirement['at_post_approval'] ?? false),
+                        'carry_forward' => (bool) ($requirement['carry_forward'] ?? false),
+                        'sort_order' => $sortOrder,
+                    ], $flags));
+
+                    continue;
+                }
+
+                if ($row->trashed()) {
+                    $row->restore();
+                }
+
+                $row->forceFill($flags)->save();
+            }
+        }
+
+        foreach (AddOn::TYPES as $applicantType) {
+            CipDocumentRequirement::query()
+                ->where('applicant_type', $applicantType)
+                ->whereNotIn('key', AddOnRequirements::keys($applicantType))
+                ->update(['at_add_on' => false]);
+        }
+
+        CipDocumentRequirement::query()
+            ->whereNotIn('applicant_type', AddOn::TYPES)
+            ->where('at_add_on', true)
+            ->update(['at_add_on' => false]);
+    }
+
+    /**
+     * Sit G1–G3 after the pack, still below the post-approval 500s.
+     */
+    private function nextAddOnExtraOrder(string $applicantType, int $index): int
+    {
+        $max = (int) CipDocumentRequirement::withTrashed()
+            ->where('applicant_type', $applicantType)
+            ->where('sort_order', '<', 500)
+            ->whereNotIn('key', AddOnRequirements::ADDITIONAL_KEYS)
+            ->max('sort_order');
+
+        return max($max, 0) + (($index + 1) * 10);
     }
 
     /**

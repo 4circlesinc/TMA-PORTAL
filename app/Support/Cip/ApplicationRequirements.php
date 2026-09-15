@@ -2,13 +2,15 @@
 
 namespace App\Support\Cip;
 
+use App\Models\CipDocumentRequirement;
+
 /**
  * The firm's official pre-approval document checklists.
  *
  * Transcribed from "Preparing Your Files for Submission" (updated 28.05.2025),
  * the Application Folders section: one list per kind of person, in the order
  * the guide prints them. The rows themselves live in
- * {@see \App\Models\CipDocumentRequirement} — Settings is the source of truth
+ * {@see CipDocumentRequirement} — Settings is the source of truth
  * once they exist — and this class is the shipped default the seeder writes,
  * the way {@see CorRequirements}, {@see NicRequirements} and
  * {@see PassportRequirements} already are for the post-approval stages.
@@ -29,8 +31,9 @@ namespace App\Support\Cip;
  * {@see NicRequirements} describes from its side.
  *
  * The guide's G-series ("Additional Document Name") is a naming convention
- * for extras, not a requirement, so it seeds nothing: an administrator adds
- * ad-hoc rows in Settings when a file needs one.
+ * for extras on a pre-approval file, not a requirement, so this class seeds
+ * none of them. Add-On files do: {@see AddOnRequirements} installs G1–G3
+ * as optional Additional Documents slots, because that brief names them.
  */
 class ApplicationRequirements
 {

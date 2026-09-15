@@ -137,7 +137,7 @@ class Intake
     {
         return collect(ApplicantType::ALL)
             ->flatMap(function (string $type) {
-                return collect([Phase::PRE_APPROVAL, Phase::POST_APPROVAL])
+                return collect([Phase::PRE_APPROVAL, Phase::POST_APPROVAL, Phase::ADD_ON])
                     ->flatMap(fn (string $phase) => self::documentFields($type, $phase)->pluck('field'));
             })
             ->unique()

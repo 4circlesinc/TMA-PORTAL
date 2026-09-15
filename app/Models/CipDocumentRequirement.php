@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Support\Cip\ApplicantType;
 use App\Support\Cip\DocumentTypes;
+use App\Support\Cip\Requirements;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -32,7 +33,7 @@ use Illuminate\Support\Str;
  */
 #[Fillable([
     'uuid', 'applicant_type', 'key', 'label', 'required', 'sort_order',
-    'active', 'help', 'folder', 'at_pre_approval', 'at_post_approval', 'carry_forward', 'real_estate_only', 'female_only',
+    'active', 'help', 'folder', 'at_pre_approval', 'at_post_approval', 'at_add_on', 'carry_forward', 'real_estate_only', 'female_only',
 ])]
 class CipDocumentRequirement extends Model
 {
@@ -44,8 +45,8 @@ class CipDocumentRequirement extends Model
             $requirement->uuid ??= (string) Str::uuid();
         });
 
-        static::saved(fn () => \App\Support\Cip\Requirements::flush());
-        static::deleted(fn () => \App\Support\Cip\Requirements::flush());
+        static::saved(fn () => Requirements::flush());
+        static::deleted(fn () => Requirements::flush());
     }
 
     protected function casts(): array
@@ -55,6 +56,7 @@ class CipDocumentRequirement extends Model
             'active' => 'boolean',
             'at_pre_approval' => 'boolean',
             'at_post_approval' => 'boolean',
+            'at_add_on' => 'boolean',
             'carry_forward' => 'boolean',
             'real_estate_only' => 'boolean',
             'female_only' => 'boolean',

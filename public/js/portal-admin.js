@@ -1722,6 +1722,7 @@
     { label: 'Required', title: 'Must be uploaded' },
     { label: 'Pre', title: 'Asked in pre-approval' },
     { label: 'Post', title: 'Asked in post-approval' },
+    { label: 'Add', title: 'Asked in Add-On' },
     { label: 'Carry', title: 'Reuse the pre-approval file in post-approval' },
     { label: 'RE', title: 'Real Estate applicants only' },
     { label: 'F', title: 'Female applicants only' },
@@ -1776,6 +1777,13 @@
       'Post-approval, ' + r.label,
     );
 
+    var addon = r.retired ? '' : cipDocCheck(
+      canEdit,
+      'data-cipdoc-addon="' + ui().esc(r.id) + '"',
+      r.atAddOn,
+      'Add-On, ' + r.label,
+    );
+
     var carry = r.retired ? '' : cipDocCheck(
       canEdit,
       'data-cipdoc-carry="' + ui().esc(r.id) + '"',
@@ -1821,6 +1829,7 @@
       '<td class="tma-portal-table__check">' + tick + '</td>' +
       '<td class="tma-portal-table__check">' + pre + '</td>' +
       '<td class="tma-portal-table__check">' + post + '</td>' +
+      '<td class="tma-portal-table__check">' + addon + '</td>' +
       '<td class="tma-portal-table__check">' + carry + '</td>' +
       '<td class="tma-portal-table__check">' + reOnly + '</td>' +
       '<td class="tma-portal-table__check">' + femaleOnly + '</td>' +
@@ -1852,7 +1861,7 @@
 
       var canEdit = true;
 
-      return '<p class="tma-portal-subtitle">What each person on an application must upload. Use the columns to set whether a document is required, when it is asked, and whether a pre-approval upload carries into post-approval. The pencil edits the name and the description shown under it on the application.</p>' +
+      return '<p class="tma-portal-subtitle">What each person on an application must upload. Use the columns to set whether a document is required, when it is asked (pre-approval, post-approval, or Add-On), and whether a pre-approval upload carries into post-approval. The pencil edits the name and the description shown under it on the application.</p>' +
         cipDocSortToggle() +
         cipDocKey() +
         CIPDOCS.types.map(function (t) {
@@ -1950,7 +1959,8 @@
           if (!f) return;
           var pre = !!box.checked;
           var post = f.r.atPostApproval;
-          if (!pre && !post) { box.checked = true; ui().toastError('A requirement must apply to at least one phase.'); return; }
+          var addon = f.r.atAddOn;
+          if (!pre && !post && !addon) { box.checked = true; ui().toastError('A requirement must apply to at least one phase.'); return; }
           patchPhase(id, { atPreApproval: pre });
         });
       });
@@ -1962,8 +1972,22 @@
           if (!f) return;
           var post = !!box.checked;
           var pre = f.r.atPreApproval;
-          if (!pre && !post) { box.checked = true; ui().toastError('A requirement must apply to at least one phase.'); return; }
+          var addon = f.r.atAddOn;
+          if (!pre && !post && !addon) { box.checked = true; ui().toastError('A requirement must apply to at least one phase.'); return; }
           patchPhase(id, { atPostApproval: post });
+        });
+      });
+
+      el.querySelectorAll('[data-cipdoc-addon]').forEach(function (box) {
+        box.addEventListener('change', function () {
+          var id = box.getAttribute('data-cipdoc-addon');
+          var f = req(id);
+          if (!f) return;
+          var addon = !!box.checked;
+          var pre = f.r.atPreApproval;
+          var post = f.r.atPostApproval;
+          if (!pre && !post && !addon) { box.checked = true; ui().toastError('A requirement must apply to at least one phase.'); return; }
+          patchPhase(id, { atAddOn: addon });
         });
       });
 

@@ -56,6 +56,7 @@ class Requirements
     {
         return self::$active ??= CipDocumentRequirement::query()->active()->get();
     }
+
     /**
      * The active templates for one applicant type, in the order they are
      * asked for, which is {@see CipDocumentRequirement::scopeActive()}'s
@@ -71,12 +72,14 @@ class Requirements
     /**
      * Active templates for one applicant type in a workflow lane.
      *
-     * Pre-approval lists requirements flagged for that lane. Post-approval
-     * lists post-only requirements plus any pre-approval row marked to carry
-     * forward without re-uploading the file. Once a file is in post-approval,
-     * only packs that stage has reached are opened — COR at Post-Approval
-     * (and at intake, where there is no file yet), NIC after the COR
-     * received date, Passport after the NIC received date.
+     * Pre-approval lists requirements flagged for that lane. Add-On lists
+     * the Add-On tick, so a spouse paper can be asked on a family file and
+     * not on an Add-On (or the other way around) without a second row.
+     * Post-approval lists post-only requirements plus any pre-approval row
+     * marked to carry forward without re-uploading the file. Once a file is
+     * in post-approval, only packs that stage has reached are opened — COR
+     * at Post-Approval (and at intake, where there is no file yet), NIC
+     * after the COR received date, Passport after the NIC received date.
      *
      * @return Collection<int, CipDocumentRequirement>
      */
@@ -140,6 +143,10 @@ class Requirements
                 if ($phase === Phase::POST_APPROVAL) {
                     return $row->at_post_approval
                         || ($row->at_pre_approval && $row->carry_forward);
+                }
+
+                if ($phase === Phase::ADD_ON) {
+                    return (bool) $row->at_add_on;
                 }
 
                 return (bool) $row->at_pre_approval;

@@ -873,7 +873,13 @@
     var fields = docFields(section || (prefix === 'sponsor.' ? 'sponsor' : 'principal'), prefix);
     if (!fields.length) return '';
 
+    var note = '';
+    if (isAddOnIntake()) {
+      note = '<p class="tma-portal-note">These uploads follow the selected Add-On type. G1, G2 and G3 are optional supplemental papers and file into Additional Documents.</p>';
+    }
+
     return card('Documents',
+      note +
       '<div class="tma-portal-drops">' +
       fields.map(function (doc) { return documentField(prefix + doc.field); }).join('') +
       '</div>',

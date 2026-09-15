@@ -1,0 +1,128 @@
+<?php
+
+namespace App\Support\Cip;
+
+/**
+ * The official Add-On document checklists, one list per Add-On type.
+ *
+ * Transcribed from Add-On Application Management Module v1.0, section 5
+ * ("Presenting Files for Add-On Review and Submission", updated 28.05.2025).
+ * The rows live in {@see \App\Models\CipDocumentRequirement}; Settings is
+ * the source of truth once they exist. This class is the shipped default
+ * the seeder writes, the way {@see ApplicationRequirements} is for
+ * pre-approval.
+ *
+ * Pack scans reuse the spouse / dependent keys already seeded for
+ * pre-approval, so a file filed on a family application still answers the
+ * same question when that person is later added as an Add-On. The Add-On
+ * lane is the {@see CipDocumentRequirement::$at_add_on} tick, independent
+ * of Pre and Post, which is what lets the Settings screen show the three
+ * lists without rewriting the original package.
+ *
+ * G1 / G2 / G3 are optional supplemental slots filed in Additional
+ * Documents. The brief's naming convention is the label itself; they are
+ * not asked of a pre-approval spouse or dependent.
+ */
+class AddOnRequirements
+{
+    public const G1 = 'additional_document_g1';
+
+    public const G2 = 'additional_document_g2';
+
+    public const G3 = 'additional_document_g3';
+
+    public const ADDITIONAL_KEYS = [
+        self::G1,
+        self::G2,
+        self::G3,
+    ];
+
+    /**
+     * The Add-On Application Folders lists, grouped by Add-On type.
+     *
+     * @return array<string, list<array<string, mixed>>>
+     */
+    public static function defaults(): array
+    {
+        $from = ApplicationRequirements::defaults();
+        $out = [];
+
+        foreach (AddOn::TYPES as $type) {
+            $rows = [];
+
+            foreach ($from[$type] as $requirement) {
+                $rows[] = array_merge($requirement, [
+                    'at_pre_approval' => true,
+                    'at_post_approval' => false,
+                    'at_add_on' => true,
+                    'folder' => $requirement['folder'] ?? null,
+                ]);
+            }
+
+            foreach (self::additionalRows() as $extra) {
+                $rows[] = $extra;
+            }
+
+            $out[$type] = $rows;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Pack keys the brief lists for one Add-On type, without G-series extras.
+     *
+     * @return list<string>
+     */
+    public static function packKeys(string $applicantType): array
+    {
+        $from = ApplicationRequirements::defaults()[$applicantType] ?? [];
+
+        return array_values(array_column($from, 'key'));
+    }
+
+    /**
+     * Every key the Add-On lane asks of one type, including G1–G3.
+     *
+     * @return list<string>
+     */
+    public static function keys(string $applicantType): array
+    {
+        return array_values(array_unique(array_merge(
+            self::packKeys($applicantType),
+            self::ADDITIONAL_KEYS,
+        )));
+    }
+
+    public static function isAdditional(string $key): bool
+    {
+        return in_array($key, self::ADDITIONAL_KEYS, true);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private static function additionalRows(): array
+    {
+        return [
+            self::additional(self::G1, 'G1 - Additional Document Name'),
+            self::additional(self::G2, 'G2 - Additional Document Name'),
+            self::additional(self::G3, 'G3 - Additional Document Name'),
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private static function additional(string $key, string $label): array
+    {
+        return [
+            'key' => $key,
+            'label' => $label,
+            'required' => false,
+            'help' => 'Supplemental. Keep the G-number and replace Additional Document Name with the paper you are filing.',
+            'folder' => Tree::ADDITIONAL,
+            'at_pre_approval' => false,
+            'at_post_approval' => false,
+            'at_add_on' => true,
+        ];
+    }
+}

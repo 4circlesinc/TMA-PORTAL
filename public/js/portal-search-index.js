@@ -37,7 +37,7 @@
     { id: 'clienthub-access', label: 'Access', group: 'CIP Console' },
     { id: 'service-teams', label: 'Service Teams', group: 'CIP Console' },
     { id: 'custom-fields', label: 'Custom Fields', group: 'CIP Console' },
-    { id: 'cip-documents', label: 'Document Requirements', group: 'CIP Console', keywords: ['description', 'help', 'checklist'] },
+    { id: 'cip-documents', label: 'Document Requirements', group: 'CIP Console', keywords: ['description', 'help', 'checklist', 'add-on'] },
     { id: 'cip-letters', label: 'Granted And Denied Letters', group: 'CIP Console' },
     { id: 'cip-distribution', label: 'Distribution Group', group: 'CIP Console' },
     { id: 'account-security', label: 'Account Security', group: 'Security' },

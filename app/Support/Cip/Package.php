@@ -77,6 +77,10 @@ class Package
             return $slot->application?->isCorLocked() === true;
         }
 
+        if ($requirement && trim((string) $requirement->folder) === Tree::ADDITIONAL) {
+            return $slot->application?->isClosed() === true;
+        }
+
         if ($slot->application?->isLocked() !== true) {
             return false;
         }
@@ -160,6 +164,10 @@ class Package
 
         if ($requirement && $requirement->at_post_approval && ! $requirement->at_pre_approval) {
             return $document->application?->isCorLocked() === true;
+        }
+
+        if ($requirement && trim((string) $requirement->folder) === Tree::ADDITIONAL) {
+            return $document->application?->isClosed() === true;
         }
 
         if ($document->application?->isLocked() !== true) {

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CipApplication;
 use App\Models\CipDocumentRequirement;
 use App\Support\Access\Role;
+use App\Support\Cip\AddOn;
 use App\Support\Cip\ApplicantType;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Phase;
@@ -65,6 +66,7 @@ class CipRequirementController extends Controller
             'folder' => ['nullable', 'string', 'max:64'],
             'atPreApproval' => ['nullable', 'boolean'],
             'atPostApproval' => ['nullable', 'boolean'],
+            'atAddOn' => ['nullable', 'boolean'],
             'carryForward' => ['nullable', 'boolean'],
             'realEstateOnly' => ['nullable', 'boolean'],
             'femaleOnly' => ['nullable', 'boolean'],
@@ -101,7 +103,7 @@ class CipRequirementController extends Controller
                 $changes['folder'] = $this->folder($data);
             }
 
-            foreach (['atPreApproval' => 'at_pre_approval', 'atPostApproval' => 'at_post_approval', 'carryForward' => 'carry_forward', 'realEstateOnly' => 'real_estate_only', 'femaleOnly' => 'female_only'] as $from => $to) {
+            foreach (['atPreApproval' => 'at_pre_approval', 'atPostApproval' => 'at_post_approval', 'atAddOn' => 'at_add_on', 'carryForward' => 'carry_forward', 'realEstateOnly' => 'real_estate_only', 'femaleOnly' => 'female_only'] as $from => $to) {
                 if (array_key_exists($from, $data)) {
                     $changes[$to] = $data[$from];
                 }
@@ -118,6 +120,7 @@ class CipRequirementController extends Controller
                 'folder' => $this->folder($data),
                 'at_pre_approval' => $data['atPreApproval'] ?? true,
                 'at_post_approval' => $data['atPostApproval'] ?? false,
+                'at_add_on' => $data['atAddOn'] ?? AddOn::isValidType($data['applicantType']),
                 'carry_forward' => $data['carryForward'] ?? false,
                 'real_estate_only' => $data['realEstateOnly'] ?? false,
                 'female_only' => $data['femaleOnly'] ?? false,
@@ -142,6 +145,7 @@ class CipRequirementController extends Controller
             'folder' => ['sometimes', 'nullable', 'string', 'max:64'],
             'atPreApproval' => ['sometimes', 'boolean'],
             'atPostApproval' => ['sometimes', 'boolean'],
+            'atAddOn' => ['sometimes', 'boolean'],
             'carryForward' => ['sometimes', 'boolean'],
             'realEstateOnly' => ['sometimes', 'boolean'],
             'femaleOnly' => ['sometimes', 'boolean'],
@@ -335,6 +339,11 @@ class CipRequirementController extends Controller
             unset($data['atPostApproval']);
         }
 
+        if (array_key_exists('atAddOn', $data)) {
+            $data['at_add_on'] = $data['atAddOn'];
+            unset($data['atAddOn']);
+        }
+
         if (array_key_exists('carryForward', $data)) {
             $data['carry_forward'] = $data['carryForward'];
             unset($data['carryForward']);
@@ -366,6 +375,7 @@ class CipRequirementController extends Controller
             'folder' => $requirement->folder,
             'atPreApproval' => (bool) $requirement->at_pre_approval,
             'atPostApproval' => (bool) $requirement->at_post_approval,
+            'atAddOn' => (bool) $requirement->at_add_on,
             'carryForward' => (bool) $requirement->carry_forward,
             'realEstateOnly' => (bool) $requirement->real_estate_only,
             'femaleOnly' => (bool) $requirement->female_only,

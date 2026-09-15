@@ -86,7 +86,7 @@ class DocumentSlots
 
         // A name that says what it answers and who for. The uploaded filename
         // is usually "scan0001.pdf", which tells a reviewer nothing.
-        $name = self::documentName($person, $type, $meta['extension']);
+        $name = self::documentName($person, $type, $meta['extension'], null, $template);
 
         return DB::transaction(function () use ($slot, $person, $template, $stored, $meta, $name, $actor, $type) {
             if ($slot->file_id && $file = $slot->file) {
@@ -337,14 +337,23 @@ class DocumentSlots
 
         $meta = FileType::inspect($upload->getRealPath(), $upload->getClientOriginalName());
         $stored = Vault::store($upload->getRealPath(), $meta['extension']);
-        $name = self::documentName($person, $type, $meta['extension'], $number);
+        $name = self::documentName($person, $type, $meta['extension'], $number, $template);
 
         return DB::transaction(fn () => self::storeFile($person, $stored, $meta, $name, $actor, self::destination($person, $template, $actor, $type)));
     }
 
-    /** "Ada Lovelace - Birth certificate (2).pdf" */
-    private static function documentName(CipPerson $person, string $type, string $extension, ?int $number = null): string
-    {
+    /** "Ada Lovelace - Birth certificate (2).pdf", or the G-series label as filed. */
+    private static function documentName(
+        CipPerson $person,
+        string $type,
+        string $extension,
+        ?int $number = null,
+        ?CipDocumentRequirement $template = null,
+    ): string {
+        if ($template && AddOnRequirements::isAdditional($type)) {
+            return $template->label.($number ? ' ('.$number.')' : '').'.'.$extension;
+        }
+
         return $person->fullName().' - '.DocumentTypes::label($type).
             ($number ? ' ('.$number.')' : '').'.'.$extension;
     }
@@ -619,8 +628,9 @@ class DocumentSlots
 
     /**
      * Identity records (the passport photo) stay in Add-On Applicant.
-     * Every other required scan for that Add-On type goes in Supporting
-     * Documents, so the four drawers the brief names stay distinct.
+     * G1–G3 supplemental papers go in Additional Documents. Every other
+     * required scan for that Add-On type goes in Supporting Documents, so
+     * the four drawers the brief names stay distinct.
      */
     private static function addOnDestination(CipPerson $person, ?CipDocumentRequirement $template, ?User $actor, ?string $type = null): ?int
     {
@@ -634,6 +644,11 @@ class DocumentSlots
         $root = $application?->folder_id ? Folder::find($application->folder_id) : null;
         if ($root === null) {
             return $person->folder_id;
+        }
+
+        $named = trim((string) $template?->folder);
+        if ($named === Tree::ADDITIONAL || AddOnRequirements::isAdditional((string) $key)) {
+            return Tree::subfolder($root, Tree::ADDITIONAL, $actor)->id;
         }
 
         return Tree::subfolder($root, Tree::SUPPORTING, $actor)->id;
