@@ -72,7 +72,7 @@ class DocumentSlots
      * Intake may not replace a filed answer unless a reviewer sent it back —
      * that is what forces the Upload new version path in the file viewer.
      */
-    public static function fill(CipPerson $person, string $type, UploadedFile $upload, User $actor, ?string $givenName = null): CipDocument
+    public static function fill(CipPerson $person, string $type, UploadedFile $upload, User $actor, ?string $givenName = null, bool $replace = false): CipDocument
     {
         $person->loadMissing('application');
 
@@ -82,7 +82,14 @@ class DocumentSlots
         $slot = self::slotFor($person, $type, $template);
         Confirmation::guardDocument($slot);
 
-        if ($slot->file_id && ($slot->status ?? DocumentStatus::PENDING_UPLOAD) !== DocumentStatus::UPDATE_REQUIRED) {
+        // $replace is the caller saying this upload is meant to supersede
+        // what is filed — the Upload new version door, not an autosave
+        // re-sending a scan it already filed. Without it a deliberate
+        // replacement is indistinguishable from the repeat, and refusing
+        // both is what left a new photo sitting behind the old one.
+        if (! $replace
+            && $slot->file_id
+            && ($slot->status ?? DocumentStatus::PENDING_UPLOAD) !== DocumentStatus::UPDATE_REQUIRED) {
             throw new \InvalidArgumentException(
                 DocumentTypes::label($type).' is already filed. Upload a new version from the file viewer.',
             );

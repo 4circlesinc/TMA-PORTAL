@@ -60,7 +60,11 @@ class CipDocumentUploadController extends Controller
 
         try {
             if ($photo) {
-                Intake::filePhoto($person, $data['file'], $user);
+                // Replacing: this door is only ever reached by someone
+                // choosing a file for this slot, never by a draft autosave,
+                // so a photo arriving on a filled slot is meant to supersede
+                // the one there.
+                Intake::filePhoto($person, $data['file'], $user, replace: true);
             } else {
                 DocumentSlots::fill($person, $document->type, $data['file'], $user, $data['documentName'] ?? null);
             }

@@ -13,6 +13,7 @@ use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyMember;
 use App\Models\FileItem;
+use App\Models\FileVersion;
 use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
@@ -1308,6 +1309,63 @@ class CipIntakeTest extends TestCase
             (string) (PassportPhoto::read($person)['body'] ?? '')
         );
         $this->assertSame(600, $width, 'the filed photo keeps the resolution it arrived at');
+    }
+
+    /**
+     * Replacing the passport photo actually replaces the face.
+     *
+     * filePhoto returns early when the slot is already filled, which is right
+     * for an autosave re-sending a photo it already filed, but the Documents
+     * list offers Upload new version on a filled photo slot precisely to
+     * change it. Taking that door left the new bytes in the slot while
+     * photo_path, the avatar and the client's face all still pointed at the
+     * first photo, so every row went on drawing the old likeness.
+     */
+    public function test_uploading_a_new_passport_photo_replaces_the_likeness(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $this->file($staff, $this->payload($provider))->assertCreated();
+
+        $person = CipPerson::query()->where('role', CipPerson::ROLE_MAIN_APPLICANT)->firstOrFail();
+        $firstPath = $person->photo_path;
+        $firstUrl = $person->photo_url;
+        $slot = CipDocument::query()
+            ->where('person_id', $person->id)
+            ->where('type', DocumentTypes::PASSPORT_PHOTO)
+            ->firstOrFail();
+        $firstVersions = FileVersion::query()->where('file_id', $slot->file_id)->count();
+
+        // A second, visibly different photo through the Documents list door.
+        $this->actingAs($staff)
+            ->post('/portal/cip/documents/'.$slot->uuid.'/file', [
+                'file' => $this->photo(800),
+            ])
+            ->assertOk();
+
+        $person->refresh();
+
+        $this->assertNotSame($firstPath, $person->photo_path, 'the filed photo is the new one');
+        $this->assertNotSame($firstUrl, $person->photo_url, 'the avatar is redrawn from the new bytes');
+        // The slot keeps its file row and gains a version, which is how every
+        // other replaced document in the portal records a new copy.
+        $this->assertGreaterThan(
+            $firstVersions,
+            FileVersion::query()->where('file_id', $slot->fresh()->file_id)->count(),
+            'the replacement is recorded as a new version of the filed photo',
+        );
+
+        [$width] = getimagesizefromstring((string) (PassportPhoto::read($person)['body'] ?? ''));
+        $this->assertSame(800, $width, 'the replacement bytes are what is filed');
+
+        // The applicant is the client, so the hub record follows the new face.
+        $this->assertSame(
+            $person->photo_url,
+            $person->fresh()->application?->client?->photo_url,
+            "the client's face follows the applicant's",
+        );
     }
 
     public function test_a_photo_that_is_not_two_by_two_is_refused(): void

@@ -1843,28 +1843,35 @@ class Intake
         }
     }
 
-    public static function filePhoto(CipPerson $person, mixed $upload, User $creator): void
+    public static function filePhoto(CipPerson $person, mixed $upload, User $creator, bool $replace = false): void
     {
         if (! $upload instanceof UploadedFile) {
             return;
         }
 
         /*
-         * A photo already filed stays filed.
+         * A photo already filed stays filed, unless replacing it is the point.
          *
          * The same rule fileDocuments has kept all along, and the photo
          * needed it once a draft began keeping its scans: the wizard posts
          * the whole form on every autosave, so the second save re-sent a
          * photo the first had filed and DocumentSlots::fill threw — a 500 on
-         * a keystroke. Replacing a filed answer is the file viewer's Upload
-         * new version, not a side effect of typing a surname.
+         * a keystroke.
+         *
+         * But the Documents list offers Upload new version on a filled photo
+         * slot precisely to change the face, and that upload arrived here
+         * wearing the autosave's clothes. Returning early answered it 200 OK
+         * and changed nothing, so the new photo was accepted, filed nowhere,
+         * and every row went on drawing the old likeness. $replace is that
+         * door telling the difference.
          */
         $slot = CipDocument::query()
             ->where('person_id', $person->id)
             ->where('type', DocumentTypes::PASSPORT_PHOTO)
             ->first();
 
-        if ($slot?->file_id
+        if (! $replace
+            && $slot?->file_id
             && ($slot->status ?? DocumentStatus::PENDING_UPLOAD) !== DocumentStatus::UPDATE_REQUIRED) {
             return;
         }
@@ -1872,7 +1879,7 @@ class Intake
         // The slot first: Vault::store consumes the temp file, so the bytes
         // for the avatar have to be read before the file is moved.
         $binary = (string) file_get_contents($upload->getRealPath());
-        DocumentSlots::fill($person, DocumentTypes::PASSPORT_PHOTO, $upload, $creator);
+        DocumentSlots::fill($person, DocumentTypes::PASSPORT_PHOTO, $upload, $creator, null, $replace);
 
         $stored = PassportPhoto::store($binary, $person);
         $person->forceFill([
