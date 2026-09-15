@@ -1230,7 +1230,6 @@
 
     return '<div class="tma-dash__clients-cards tma-dash__clients-cards--intake">' +
       card('Parent application',
-        '<p class="tma-portal-note">File this Add-On against an existing granted application. The main applicant name, CIP number and Certificate of Registration number must all match that file.</p>' +
         '<div class="tma-portal-form-grid tma-portal-form-grid--investment">' +
         textField('parentApplicantName', { placeholder: 'As on the granted application' }) +
         textField('parentCipNumber', { placeholder: 'As printed on the approval letter' }) +
