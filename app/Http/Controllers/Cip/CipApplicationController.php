@@ -176,14 +176,17 @@ class CipApplicationController extends Controller
 
         $data = $request->validate([
             'cipNumber' => ['required', 'string', 'max:'.Submission::MAX_LENGTH],
-            'corNumber' => ['required', 'string', 'max:64'],
+            'corNumber' => ['nullable', 'string', 'max:64'],
             'applicantName' => ['nullable', 'string', 'max:191'],
         ], [
             'cipNumber.required' => 'Enter the CIP application number.',
-            'corNumber.required' => 'Enter the Certificate of Registration number.',
         ]);
 
-        $result = AddOn::lookup($user, $data['cipNumber'], $data['corNumber']);
+        $result = AddOn::lookup(
+            $user,
+            $data['cipNumber'],
+            (string) ($data['corNumber'] ?? ''),
+        );
         if (! ($result['ok'] ?? false)) {
             $field = match ($result['field'] ?? '') {
                 'parentCipNumber' => 'cipNumber',
@@ -198,7 +201,11 @@ class CipApplicationController extends Controller
             ], 422);
         }
 
-        $parent = AddOn::findParent($user, $data['cipNumber'], $data['corNumber']);
+        $parent = AddOn::findParent(
+            $user,
+            $data['cipNumber'],
+            (string) ($data['corNumber'] ?? ''),
+        );
         if ($parent && trim((string) ($data['applicantName'] ?? '')) !== '') {
             if ($why = AddOn::nameMismatch($parent, $data['applicantName'])) {
                 return response()->json([

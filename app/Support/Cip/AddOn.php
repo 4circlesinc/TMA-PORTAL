@@ -179,17 +179,13 @@ class AddOn
      *     openAddOn?: array{id: string, number: string, statusLabel: string}|null
      * }
      */
-    public static function lookup(?User $user, string $cipNumber, string $corNumber): array
+    public static function lookup(?User $user, string $cipNumber, string $corNumber = ''): array
     {
         $cip = trim($cipNumber);
         $cor = trim($corNumber);
 
         if ($cip === '') {
             return ['ok' => false, 'error' => 'Enter the CIP application number.', 'field' => 'parentCipNumber'];
-        }
-
-        if ($cor === '') {
-            return ['ok' => false, 'error' => 'Enter the Certificate of Registration number.', 'field' => 'parentCorNumber'];
         }
 
         $match = self::findByCipNumber($user, $cip);
@@ -207,19 +203,27 @@ class AddOn
         }
 
         /*
-         * Most post-approval files never had COR staged in the portal. The
-         * certificate is still what the reader has, so an empty parent COR
-         * accepts the typed number; a stored one must match it.
+         * COR is optional on confirm when the parent never had one staged.
+         * When it is on file, the typed value must match. An empty typed COR
+         * against a stored one is still incomplete.
          */
-        if (filled($match->cor_number)
-            && self::normalizeNumber((string) $match->cor_number) !== self::normalizeNumber($cor)) {
-            return ['ok' => false, 'error' => 'COR number does not match this CIP application.', 'field' => 'parentCorNumber'];
+        if (filled($match->cor_number)) {
+            if ($cor === '') {
+                return [
+                    'ok' => false,
+                    'error' => 'Enter the Certificate of Registration number.',
+                    'field' => 'parentCorNumber',
+                ];
+            }
+            if (self::normalizeNumber((string) $match->cor_number) !== self::normalizeNumber($cor)) {
+                return ['ok' => false, 'error' => 'COR number does not match this CIP application.', 'field' => 'parentCorNumber'];
+            }
         }
 
         $open = self::openAddOn($match);
 
         $payload = self::parentPayload($match);
-        if (! filled($payload['corNumber'] ?? null)) {
+        if (! filled($payload['corNumber'] ?? null) && $cor !== '') {
             $payload['corNumber'] = $cor;
         }
 

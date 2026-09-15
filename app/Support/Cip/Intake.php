@@ -2207,7 +2207,7 @@ class Intake
                 'submissionId' => ['nullable', 'string', 'max:64'],
                 'draftId' => ['nullable', 'string', 'max:64'],
                 'parentCipNumber' => ['required', 'string', 'max:'.Submission::MAX_LENGTH],
-                'parentCorNumber' => ['required', 'string', 'max:64'],
+                'parentCorNumber' => ['nullable', 'string', 'max:64'],
                 'parentApplicantName' => ['required', 'string', 'max:191'],
                 'addonType' => ['required', 'string', Rule::in(AddOn::TYPES)],
             ];

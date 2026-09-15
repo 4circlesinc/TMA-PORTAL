@@ -386,9 +386,12 @@
   /* Every path this form must have an answer for, given what it now says. */
   function requiredPaths() {
     if (isAddOnIntake()) {
-      var addOnPaths = ['parentApplicantName', 'parentCipNumber', 'parentCorNumber',
+      var addOnPaths = ['parentApplicantName', 'parentCipNumber',
         'addonType', 'firstName', 'lastName', 'dateOfBirth', 'nationality',
         'countryOfResidence', 'relationship', 'passportNumber'];
+      // COR is only owed when the confirmed parent already has one on file —
+      // otherwise the certificate was never staged and the field stays blank.
+      if (parentCorRequired()) addOnPaths.splice(2, 0, 'parentCorNumber');
       // Staff with more than one firm must name which one; a fixed firm is
       // already on the draft. Filing still inherits the parent's provider,
       // but Save as draft needs one up front to mint the row.
@@ -704,6 +707,13 @@
 
     return normalizeCipNumber(state.parent.cipNumber) ===
       normalizeCipNumber(state.draft.parentCipNumber);
+  }
+
+  /* COR is owed only when the confirmed parent already carries one. */
+  function parentCorRequired() {
+    if (!parentCipFound()) return true;
+
+    return !!(state.parent && String(state.parent.corNumber || '').trim());
   }
 
   function parentFoundTick() {
@@ -1644,11 +1654,11 @@
         state.parentSuggest.active = items.length ? 0 : -1;
         state.parentSuggest.open = items.length > 0;
         paintParentSuggest();
-        // Exact CIP match: show the tick as soon as the number resolves,
-        // even before COR is typed. Selecting from the list still fills COR.
+        // Exact CIP match: fill name and COR from the parent immediately so
+        // the reader does not have to click the row to confirm known facts.
         if (items.length === 1 &&
           normalizeCipNumber(items[0].cipNumber) === normalizeCipNumber(term)) {
-          applyParentHit(items[0], { fillExtras: false, lookup: false });
+          applyParentHit(items[0], { fillExtras: true, lookup: true });
         }
       });
     }).catch(function () {
@@ -1773,15 +1783,34 @@
     if (!item) return;
     state.draft.parentCipNumber = item.cipNumber || state.draft.parentCipNumber || '';
     if (opts.fillExtras) {
-      if (item.corNumber) state.draft.parentCorNumber = item.corNumber;
       if (item.applicantName) state.draft.parentApplicantName = item.applicantName;
+      // Always write COR from the parent when confirming — including clearing
+      // a stale value from a previous pick when this file has none on record.
+      state.draft.parentCorNumber = item.corNumber ? String(item.corNumber) : '';
     }
     if (item.providerId) state.draft.providerId = item.providerId;
     state.parent = item;
     state.parentError = '';
     paintParentTick();
-    if (opts.lookup && state.draft.parentCorNumber) {
-      lookupParent();
+    if (opts.fillExtras) syncParentExtraFields();
+    if (opts.lookup) {
+      lookupParent({ silent: true });
+    } else if (opts.render && state.root) {
+      render(state.root);
+    }
+  }
+
+  /* Push confirmed name/COR into the live inputs without rebuilding the form
+     under the reader's caret (exact CIP match while typing). */
+  function syncParentExtraFields() {
+    if (!state.root) return;
+    var name = state.root.querySelector('[data-cip-field="parentApplicantName"]');
+    if (name && document.activeElement !== name) {
+      name.value = state.draft.parentApplicantName || '';
+    }
+    var cor = state.root.querySelector('[data-cip-field="parentCorNumber"]');
+    if (cor && document.activeElement !== cor) {
+      cor.value = state.draft.parentCorNumber || '';
     }
   }
 
@@ -1790,11 +1819,18 @@
     if (!isAddOnIntake()) return;
     var cip = String(state.draft.parentCipNumber || '').trim();
     var cor = String(state.draft.parentCorNumber || '').trim();
-    if (!cip || !cor) {
+    if (!cip) {
       if (opts.announce) {
-        state.parentError = !cip
-          ? 'Enter the CIP application number.'
-          : 'Enter the Certificate of Registration number.';
+        state.parentError = 'Enter the CIP application number.';
+        render(state.root);
+      }
+      return;
+    }
+    // When the parent is already confirmed and has no COR on file, CIP alone
+    // is enough to refresh the payload. Otherwise COR is still required.
+    if (!cor && parentCorRequired()) {
+      if (opts.announce) {
+        state.parentError = 'Enter the Certificate of Registration number.';
         render(state.root);
       }
       return;
@@ -1802,7 +1838,8 @@
 
     var name = String(state.draft.parentApplicantName || '').trim();
     var url = '/portal/cip/applications/add-on/parent?cipNumber=' +
-      encodeURIComponent(cip) + '&corNumber=' + encodeURIComponent(cor);
+      encodeURIComponent(cip);
+    if (cor) url += '&corNumber=' + encodeURIComponent(cor);
     if (name) url += '&applicantName=' + encodeURIComponent(name);
 
     fetch(url, { credentials: 'same-origin', headers: headers() }).then(function (res) {
@@ -1813,7 +1850,7 @@
           state.parentError = (json && json.message) ||
             (json && json.errors && json.errors.cipNumber && json.errors.cipNumber[0]) ||
             'Could not find that application.';
-          render(state.root);
+          if (!opts.silent) render(state.root);
           return;
         }
         state.parent = json.parent || null;
@@ -1823,10 +1860,10 @@
           state.draft.providerId = state.parent.providerId;
         }
         if (state.parent) {
-          if (!String(state.draft.parentApplicantName || '').trim() && state.parent.applicantName) {
+          if (state.parent.applicantName) {
             state.draft.parentApplicantName = state.parent.applicantName;
           }
-          if (!String(state.draft.parentCorNumber || '').trim() && state.parent.corNumber) {
+          if (state.parent.corNumber) {
             state.draft.parentCorNumber = state.parent.corNumber;
           }
         }

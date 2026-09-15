@@ -163,6 +163,45 @@ class CipAddOnTest extends TestCase
         $this->assertSame('COR-FROM-LETTER', $body['parent']['corNumber']);
     }
 
+    public function test_parent_lookup_confirms_by_cip_alone_when_no_cor_is_on_file(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+        $parent = Applications::create($provider, $staff, ['investment_type' => 'real_estate']);
+        $this->mainApplicant($parent, 'Suha', 'Ali');
+        $parent->forceFill([
+            'status' => Status::POST_APPROVED,
+            'decision' => Status::POST_APPROVED,
+            'phase' => Phase::POST_APPROVAL,
+            'post_approval_at' => now(),
+            'cip_number' => '10T3E09999P',
+            'cor_number' => null,
+        ])->save();
+
+        $body = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/add-on/parent?cipNumber=10T3E09999P')
+            ->assertOk()
+            ->json();
+
+        $this->assertTrue($body['ok']);
+        $this->assertSame($parent->uuid, $body['parent']['id']);
+        $this->assertSame('SUHA ALI', $body['parent']['applicantName']);
+        $this->assertNull($body['parent']['corNumber']);
+    }
+
+    public function test_parent_lookup_returns_the_stored_cor_so_the_form_can_auto_fill_it(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $body = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/add-on/parent?cipNumber='.$parent->cip_number.'&corNumber='.$parent->cor_number)
+            ->assertOk()
+            ->json();
+
+        $this->assertSame($parent->cor_number, $body['parent']['corNumber']);
+    }
+
     public function test_parent_suggest_carries_the_main_applicant_profile_photo(): void
     {
         $staff = $this->staff();
