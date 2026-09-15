@@ -125,9 +125,16 @@
         : list.map(function (p) { return p.first || p.name; }).join(', ');
     }
 
+    // One person: the name is as much a hover target as the face, so the card
+    // answers "who is this?" from either. Several people share one names
+    // string, so only the faces stay hoverable there.
+    var namesAttrs = list.length === 1
+      ? ' data-tma-person="0" tabindex="0"'
+      : '';
+
     return '<span class="tma-people" data-tma-people="' + esc(JSON.stringify(list)) + '">' +
       (art ? '<span class="tma-people__faces">' + art + '</span>' : '') +
-      (names ? '<span class="tma-people__names">' + esc(names) + '</span>' : '') +
+      (names ? '<span class="tma-people__names"' + namesAttrs + '>' + esc(names) + '</span>' : '') +
       '</span>';
   }
 
@@ -275,7 +282,18 @@
     document.addEventListener('mouseout', function (e) {
       var face = e.target.closest && e.target.closest('[data-tma-person]');
       // Only when the pointer actually leaves the face, not on a child.
-      if (face && !face.contains(e.relatedTarget)) hide();
+      if (!face || face.contains(e.relatedTarget)) return;
+      // Moving from the face onto the sibling name (or back) must keep the
+      // card open — both are hover targets for the same person.
+      var related = e.relatedTarget && e.relatedTarget.closest
+        ? e.relatedTarget.closest('[data-tma-person]')
+        : null;
+      if (related
+        && face.closest('[data-tma-people]') === related.closest('[data-tma-people]')
+        && face.getAttribute('data-tma-person') === related.getAttribute('data-tma-person')) {
+        return;
+      }
+      hide();
     });
     // Keyboard: the faces are focusable, so the card has to answer to focus.
     document.addEventListener('focusin', function (e) {

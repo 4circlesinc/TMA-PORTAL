@@ -217,6 +217,8 @@ class CompaniesTest extends TestCase
         $row = $people->firstWhere('id', 'catarina');
         $this->assertSame('Catarina Silva', $row['name'] ?? null);
         $this->assertSame('catarina@galaxy.example', $row['email'] ?? null);
+        $this->assertSame($user->id, $row['userId'] ?? null);
+        $this->assertNotEmpty($row['roles'] ?? []);
     }
 
     public function test_deleting_a_provider_keeps_its_people_and_referrals(): void

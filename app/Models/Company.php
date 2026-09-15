@@ -163,17 +163,28 @@ class Company extends Model
                 : $this->referredClientCards(
                     $this->referredClients()->orderBy('name')->orderBy('id')->limit(self::REFERRED_PREVIEW)->get()
                 ),
-            'people' => $people->map(fn (Client $c) => [
-                'id' => $c->uid,
-                'name' => $c->contactDisplayName(),
-                'initial' => $c->initial,
-                'initialColor' => $c->initial_color,
-                // Contact photo first, then the portal login's face — same
-                // fallback the rest of the hub uses for people with access.
-                'photo' => $c->photo_url ?: ($c->hasLiveLogin() ? $c->user?->photoUrl() : null),
-                'email' => $c->contactEmail(),
-                'hasLogin' => $c->hasLiveLogin(),
-            ])->values()->all(),
+            'people' => $people->map(function (Client $c) {
+                $name = $c->contactDisplayName();
+                $login = $c->hasLiveLogin() ? $c->user : null;
+
+                return [
+                    'id' => $c->uid,
+                    'name' => $name,
+                    'first' => \Illuminate\Support\Str::of($name)->trim()->explode(' ')->first(),
+                    'initial' => $c->initial,
+                    'initialColor' => $c->initial_color,
+                    // Contact photo first, then the portal login's face — same
+                    // fallback the rest of the hub uses for people with access.
+                    'photo' => $c->photo_url ?: ($login?->photoUrl()),
+                    'email' => $c->contactEmail(),
+                    'hasLogin' => $login !== null,
+                    // What the shared person card needs for Message / Call / Video.
+                    'userId' => $login?->id,
+                    'roles' => array_values(array_filter([
+                        $login?->roleName(),
+                    ])),
+                ];
+            })->values()->all(),
         ];
     }
 }

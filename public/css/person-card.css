@@ -173,7 +173,11 @@
 
 /* The face is a hover target, so it has to look like one. */
 .tma-people__face { cursor: pointer; }
-.tma-people__face:focus-visible {
+.tma-people__face:focus-visible,
+.tma-people__names[data-tma-person]:focus-visible,
+.tma-people--contact [data-tma-person]:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
+
+.tma-people__names[data-tma-person] { cursor: pointer; }

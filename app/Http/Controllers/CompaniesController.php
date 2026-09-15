@@ -42,8 +42,8 @@ class CompaniesController extends Controller
         'id', 'company_id', 'uid', 'name', 'initial', 'initial_color', 'email', 'user_id', 'photo_url',
     ];
 
-    /** User columns a person card needs to draw a face from a live login. */
-    private const PERSON_USER_COLUMNS = 'id,name,avatar_url,provider_avatar_url';
+    /** User columns a person card needs to draw a face and title from a live login. */
+    private const PERSON_USER_COLUMNS = 'id,name,job_title,account_type,avatar_url,provider_avatar_url';
 
     /** Warm the company list briefly, it rides next to the client directory
      *  on hub mount and is identical for every staff reader. */

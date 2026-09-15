@@ -2551,14 +2551,45 @@
     );
   }
 
+  /* Mark a face or name as a TMAPersonCard hover target without rebuilding
+     the markup the table already uses for avatars. */
+  function withPersonHoverTarget(html, index) {
+    var i = String(index == null ? 0 : index);
+    if (/^<img\b/i.test(html)) {
+      return html.replace(/^<img\b/i, '<img data-tma-person="' + i + '" tabindex="0"');
+    }
+    if (/^<span\b/i.test(html)) {
+      return html.replace(/^<span\b/i, '<span data-tma-person="' + i + '" tabindex="0"');
+    }
+    return html;
+  }
+
+  /* The shared person card payload: same shape as the Assigned column. */
+  function providerContactCardPerson(person) {
+    var name = String((person && person.name) || '').trim()
+      || String((person && person.email) || '').trim()
+      || 'Contact';
+    var roles = (person && Array.isArray(person.roles)) ? person.roles.slice() : [];
+    return {
+      name: name,
+      first: name.split(/\s+/).filter(Boolean)[0] || name,
+      email: (person && person.email) || '',
+      photo: (person && person.photo) || '',
+      userId: (person && person.userId) || null,
+      roles: roles,
+    };
+  }
+
   /*
    * One contact from any service provider. Opening the row is the person;
    * the firm name is its own control, the same as the Applications table.
+   * Avatar and name open the same hover card the Assigned column uses.
    */
   function renderProviderPersonTableRow(entry, index) {
     var person = entry.person;
     var company = entry.company;
-    var name = String(person.name || '').trim() || String(person.email || '').trim() || 'Contact';
+    var cardPerson = providerContactCardPerson(person);
+    var name = cardPerson.name;
     var email = String(person.email || '').trim();
     var emailLine = email && email.toLowerCase() !== name.toLowerCase()
       ? '<span class="tma-dash__cc-truncate tma-dash__cc-user-email">' + esc(email) + '</span>'
@@ -2567,11 +2598,14 @@
     return (
       '<div class="tma-dash__ctr tma-dash__ctr--body" data-clients-row="' + esc(person.id) +
       '" data-row-index="' + index + '" role="row">' +
-      '<div class="tma-dash__cc tma-dash__cc--user">' + clientAvatarMarkup(person) +
+      '<div class="tma-dash__cc tma-dash__cc--user">' +
+      '<span class="tma-people tma-people--contact" data-tma-people="' +
+      esc(JSON.stringify([cardPerson])) + '">' +
+      withPersonHoverTarget(clientAvatarMarkup(person), 0) +
       '<span class="tma-dash__cc-user-stack">' +
-      '<span class="tma-dash__cc-truncate">' + esc(name) + '</span>' +
+      '<span class="tma-dash__cc-truncate" data-tma-person="0" tabindex="0">' + esc(name) + '</span>' +
       emailLine +
-      '</span></div>' +
+      '</span></span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--referral">' +
       '<button type="button" class="tma-dash__clients-company-link tma-dash__cc-truncate" data-clients-open-company="' +
       esc(company.id) + '">' + esc(company.name || 'Service provider') + '</button></div>' +
@@ -6065,12 +6099,15 @@
   }
 
   function companyPersonRow(p) {
+    var cardPerson = providerContactCardPerson(p);
     return (
       '<button type="button" class="tma-dash__clients-row" data-clients-row="' + esc(p.id) + '">' +
-      clientAvatarMarkup(p) +
-      '<span class="tma-dash__clients-row-name">' + esc(p.name) + '</span>' +
+      '<span class="tma-people tma-people--contact" data-tma-people="' +
+      esc(JSON.stringify([cardPerson])) + '">' +
+      withPersonHoverTarget(clientAvatarMarkup(p), 0) +
+      '<span class="tma-dash__clients-row-name" data-tma-person="0" tabindex="-1">' + esc(cardPerson.name) + '</span>' +
       (p.email ? '<span class="tma-dash__clients-row-meta">' + esc(p.email) + '</span>' : '') +
-      '</button>'
+      '</span></button>'
     );
   }
 
