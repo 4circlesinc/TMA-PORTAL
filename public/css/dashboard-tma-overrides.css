@@ -1237,11 +1237,11 @@ body::-webkit-scrollbar,
 }
 
 /* ── Underline tab rows (CIP list tabs, applicant detail tabs, any page
- *    head tabs): scroll sideways on touch widths, never wrap or clip. ── */
+ *    head tabs): scroll sideways on touch widths when labels do not fit.
+ *    CIP list head already stacks Manage/Create above a full-width tab
+ *    row on every width; keep that stacking and only scroll when the
+ *    equal-share tabs still overflow. ── */
 @media (max-width: 1024px) {
-  /* The slot is the scroller: the tab group arrives wrapped in an
-     unclassed patch <div> that grows to content width, so a scroll set on
-     the group itself never engages — the group is as wide as its tabs. */
   .tma-dash__head-tabs {
     min-width: 0;
     max-width: 100%;
@@ -1249,19 +1249,35 @@ body::-webkit-scrollbar,
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-x: contain;
-    /* right edge fades so a cut-off row reads as "more this way" */
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
     mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent 100%);
+  }
+
+  .tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__head-tabs {
+    -webkit-mask-image: none;
+    mask-image: none;
+    overflow-x: visible;
   }
 
   .tma-dash__head-tabs > div {
     flex: 0 0 auto;
   }
 
+  .tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__head-tabs > [data-clients-head-tabs] {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+  }
+
   .tma-dash__head-tabs .tma-tab-group {
     display: flex;
     flex-wrap: nowrap;
     width: max-content;
+  }
+
+  .tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__clients-list-tabs {
+    width: 100%;
+    max-width: 100%;
   }
 
   .tma-dash__clients-profile-tablist {
@@ -1281,10 +1297,19 @@ body::-webkit-scrollbar,
     white-space: nowrap;
   }
 
-  /* Page head stacks: tabs row first, action buttons drop below when tight. */
+  .tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__clients-list-tabs .tma-tab {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  /* Non-CIP heads may still wrap; CIP list head is already a column. */
   .tma-dash__main-head {
     flex-wrap: wrap;
     row-gap: var(--space-12);
+  }
+
+  .tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) {
+    flex-wrap: nowrap;
   }
 
   .tma-dash__main-head-right {
@@ -1298,6 +1323,12 @@ body::-webkit-scrollbar,
 }
 
 @media (max-width: 767px) {
+  .tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__main-head-right {
+    align-self: stretch;
+    width: 100%;
+    justify-content: flex-end;
+  }
+
   .tma-dash__main-head-right {
     flex: 1 1 100%;
     margin-left: 0;

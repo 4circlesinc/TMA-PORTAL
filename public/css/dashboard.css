@@ -20058,9 +20058,9 @@ button.tma-file-status-chip:focus-visible,
 /*
  * The list's own tabs — Applications and Service providers.
  *
- * They sit in the page head, on the line the Create button is on, where the
- * title used to be. No rule under them: the head already has its own edge, and
- * a second one directly above the toolbar drew a band across the page that
+ * Manage / Create sit on a row above; the tabs take the full width under
+ * them. No rule under the tabs: the head already has its own edge, and a
+ * second one directly above the toolbar drew a band across the page that
  * belonged to neither.
  */
 .tma-dash__head-tabs {
@@ -20074,6 +20074,53 @@ button.tma-file-status-chip:focus-visible,
 /* The heading and the tabs are two answers to "what page is this". */
 .tma-dash__main-head-left:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__page-title {
   display: none;
+}
+
+/*
+ * CIP list head: actions above a full-width tab row.
+ *
+ * Eight section labels do not share a line with Manage / Create without
+ * wrapping the last tab under the first. Stack the verbs on top (right-
+ * aligned) and let every tab claim an equal share of the width below.
+ */
+.tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-12);
+}
+
+.tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__main-head-right {
+  order: -1;
+  margin-left: 0;
+  align-self: flex-end;
+}
+
+.tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__main-head-left,
+.tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__head-tabs,
+.tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__head-tabs > [data-clients-head-tabs],
+.tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__clients-list-tabs {
+  width: 100%;
+  min-width: 0;
+}
+
+.tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__clients-list-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__clients-list-tabs .tma-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  align-items: center;
+}
+
+.tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__clients-list-tabs .tma-tab__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  text-align: center;
 }
 
 .tma-dash__clients-list-tabs .tma-tab:not(.is-active) {

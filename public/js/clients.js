@@ -1999,10 +1999,10 @@
   /*
    * The list's tabs, in the page head rather than above the table.
    *
-   * They sit on the same line as Create New Application, where the page title
-   * was. The title said "CIP Applications" while the lit tab said
-   * "Applications" directly beneath it, the same word twice, one of them
-   * doing nothing. The tab that is lit names the page now.
+   * Manage / Create sit on the row above; the tabs span the full width under
+   * them. The title used to say "CIP Applications" while the lit tab said
+   * "Applications" directly beneath it — the same word twice. The tab that
+   * is lit names the page now.
    *
    * Rendered into the shell's head, so it is synced on every render the way
    * the head actions are; the page's own DOM no longer contains them.
