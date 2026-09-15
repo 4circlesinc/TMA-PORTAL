@@ -894,6 +894,169 @@ class CipAddOnTest extends TestCase
             ->assertStatus(422);
     }
 
+    public function test_an_add_on_query_moves_to_non_compliant_and_notifies_the_agent(): void
+    {
+        Mail::fake();
+
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+        $contact = $this->providerContact($parent->provider);
+
+        $body = $this->file($contact, $this->addOnPayload($parent))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->firstOrFail();
+        Tree::provision($application, $staff);
+        $application->forceFill([
+            'status' => Status::PENDING_REVIEW,
+            'submitted_at' => '2026-09-14',
+            'submitted_by' => 'Ada Admin',
+            'locked_at' => now(),
+        ])->save();
+        Package::forget();
+
+        $shown = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/query', [
+                'queryReceivedAt' => '2026-09-15',
+                'message' => 'Please upload the missing police certificate.',
+            ])
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame(Status::NON_COMPLIANT, $shown['status']);
+        $this->assertSame('2026-09-15', $shown['queryReceivedAt']);
+
+        $fresh = $application->fresh();
+        $this->assertSame(Status::NON_COMPLIANT, $fresh->status);
+        $this->assertSame('2026-09-15', $fresh->query_received_at?->toDateString());
+        $this->assertTrue($fresh->isLocked());
+
+        $additional = Tree::additionalFolder($fresh);
+        $this->assertNotNull($additional);
+        $this->assertFalse(Package::locksFolder($additional));
+
+        $this->assertDatabaseHas('cip_events', [
+            'application_id' => $fresh->id,
+            'action' => CipEvent::ACTION_QUERY_RECEIVED,
+            'actor_id' => $staff->id,
+        ]);
+
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('gal-addon@example.com')
+            && str_contains((string) ($mail->subjectLine ?? ''), 'NON-COMPLIANT')
+            && str_contains((string) ($mail->payload['lead'] ?? ''), 'Additional Documents'));
+    }
+
+    public function test_an_add_on_can_be_approved_from_pending_review(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $body = $this->file($staff, $this->addOnPayload($parent))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->firstOrFail();
+        Tree::provision($application, $staff);
+        $application->forceFill([
+            'status' => Status::PENDING_REVIEW,
+            'submitted_at' => '2026-09-14',
+            'locked_at' => now(),
+        ])->save();
+
+        $this->assertFalse(\App\Support\Cip\Engine::canTransition($application->fresh(), Status::BACKGROUND_CHECK));
+        $this->assertTrue(\App\Support\Cip\Engine::canTransition($application->fresh(), Status::GRANTED));
+        $this->assertTrue(\App\Support\Cip\Engine::canTransition($application->fresh(), Status::DENIED));
+
+        $shown = $this->postCipDecision($staff, $application->uuid, [
+            'decision' => Status::GRANTED,
+            'decidedAt' => '2026-09-16',
+            'note' => 'Spouse Add-On approved.',
+        ])
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame(Status::GRANTED, $shown['status']);
+        $this->assertSame(Status::GRANTED, $shown['decision']);
+        $this->assertSame('2026-09-16', $shown['decidedAt']);
+        $this->assertSame($application->internal_number, $shown['number']);
+        $this->assertFalse(\App\Support\Cip\Engine::canTransition($application->fresh(), Status::POST_APPROVAL));
+
+        $this->assertDatabaseHas('cip_events', [
+            'application_id' => $application->id,
+            'action' => CipEvent::ACTION_DECISION_RECORDED,
+            'actor_id' => $staff->id,
+        ]);
+        $event = CipEvent::query()
+            ->where('application_id', $application->id)
+            ->where('action', CipEvent::ACTION_DECISION_RECORDED)
+            ->latest('id')
+            ->first();
+        $meta = is_array($event?->meta) ? $event->meta : [];
+        $this->assertSame(Status::GRANTED, $meta['decision'] ?? null);
+        $this->assertSame('2026-09-16', $meta['decidedAt'] ?? null);
+        $this->assertSame('Spouse Add-On approved.', $meta['note'] ?? null);
+    }
+
+    public function test_an_add_on_can_be_denied_from_non_compliant_and_keeps_decision_history(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $body = $this->file($staff, $this->addOnPayload($parent))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->firstOrFail();
+        Tree::provision($application, $staff);
+        $application->forceFill([
+            'status' => Status::NON_COMPLIANT,
+            'query_received_at' => '2026-09-15',
+            'submitted_at' => '2026-09-14',
+            'locked_at' => now(),
+        ])->save();
+
+        $this->postCipDecision($staff, $application->uuid, [
+            'decision' => Status::DENIED,
+            'decidedAt' => '2026-09-17',
+            'note' => 'Incomplete response.',
+        ])->assertOk();
+
+        $this->assertSame(Status::DENIED, $application->fresh()->status);
+
+        $this->postCipDecision($staff, $application->uuid, [
+            'decision' => Status::DENIED,
+            'decidedAt' => '2026-09-18',
+            'note' => 'Date corrected.',
+            'decisionLetter' => null,
+        ])->assertOk();
+
+        $this->assertSame('2026-09-18', $application->fresh()->decided_at?->toDateString());
+        $this->assertSame(2, CipEvent::query()
+            ->where('application_id', $application->id)
+            ->where('action', CipEvent::ACTION_DECISION_RECORDED)
+            ->count());
+    }
+
+    public function test_an_add_on_cannot_be_decided_before_pending_review(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $body = $this->file($staff, $this->addOnPayload($parent))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->firstOrFail();
+        Tree::provision($application, $staff);
+        $application->forceFill(['status' => Status::READY_TO_SUBMIT])->save();
+
+        $this->postCipDecision($staff, $application->uuid, [
+            'decision' => Status::GRANTED,
+            'decidedAt' => '2026-09-16',
+        ])->assertStatus(422);
+    }
+
     public function test_a_drop_into_additional_documents_fills_the_next_g_slot(): void
     {
         $staff = $this->staff();

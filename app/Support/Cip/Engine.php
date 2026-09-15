@@ -139,8 +139,35 @@ class Engine
     public static function canTransition(CipApplication $application, string $to): bool
     {
         return Status::isValid($to)
-            && in_array($to, self::TRANSITIONS[$application->status] ?? [], true)
+            && in_array($to, self::transitionsFrom($application), true)
             && self::phaseAllows($application, $to);
+    }
+
+    /**
+     * Edges out of the file's current status for its phase.
+     *
+     * Add-On reuses the pre-approval path through Pending Review, then skips
+     * Background Check / DD Query / Delayed: from Pending Review or
+     * Non-compliant the Unit either asks for more paper or decides. Approved
+     * Add-Ons do not enter the post-approval COR lane.
+     *
+     * @return list<string>
+     */
+    private static function transitionsFrom(CipApplication $application): array
+    {
+        $from = $application->status;
+        $base = self::TRANSITIONS[$from] ?? [];
+
+        if (($application->phase ?? Phase::PRE_APPROVAL) !== Phase::ADD_ON) {
+            return $base;
+        }
+
+        return match ($from) {
+            Status::PENDING_REVIEW => [Status::NON_COMPLIANT, Status::GRANTED, Status::DENIED],
+            Status::NON_COMPLIANT => [Status::PENDING_REVIEW, Status::GRANTED, Status::DENIED],
+            Status::GRANTED => [Status::NEW_APPEAL],
+            default => $base,
+        };
     }
 
     /**
@@ -385,7 +412,27 @@ class Engine
      */
     private static function phaseAllows(CipApplication $application, string $to): bool
     {
-        $post = ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL;
+        $phase = $application->phase ?? Phase::PRE_APPROVAL;
+        $post = $phase === Phase::POST_APPROVAL;
+
+        /*
+         * Add-On never works Background Check, the DD path, or post-approval
+         * COR collection. Those labels belong to the first filing; an Add-On
+         * that has been submitted is either asked for more paper, approved,
+         * or denied.
+         */
+        if ($phase === Phase::ADD_ON) {
+            if (in_array($to, [
+                Status::BACKGROUND_CHECK,
+                Status::DD_QUERY,
+                Status::DELAYED,
+                Status::POST_APPROVAL,
+                Status::POST_APPROVED,
+                Status::POST_DENIED,
+            ], true) || Status::inLane($to)) {
+                return false;
+            }
+        }
 
         if ($to === Status::POST_APPROVAL) {
             return $application->status === Status::GRANTED || $post;

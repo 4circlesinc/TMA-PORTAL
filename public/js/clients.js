@@ -7321,7 +7321,8 @@
   /*
    * A compliance query (section 18) from Pending review, or a DD query once
    * the file has been accepted. Two verbs because they land in different
-   * statuses and different Additional Documents drawers.
+   * statuses and different Additional Documents drawers. Add-On has no DD
+   * path — only the Unit query that opens Additional Documents.
    */
   function renderQueryAction(app) {
     if (!canRecordSubmission()) return '';
@@ -7329,6 +7330,7 @@
       return '<button type="button" class="tma-dash__clients-appbar-action" data-cip-query>' +
         'Query received</button>';
     }
+    if (app.phase === 'add_on') return '';
     if (['background_check', 'delayed'].indexOf(app.status) !== -1) {
       return '<button type="button" class="tma-dash__clients-appbar-action" data-cip-dd-query>' +
         'DD Query received</button>';
@@ -7340,9 +7342,11 @@
   /*
    * Section 19: the Unit accepted the file. Offered from Pending review and
    * Non-compliant, the two edges the server accepts into Background check.
+   * Add-On skips that step and decides from Pending review / Non-compliant.
    */
   function renderAcceptanceAction(app) {
     if (!canRecordSubmission()) return '';
+    if (app.phase === 'add_on') return '';
     if (['pending_review', 'non_compliant'].indexOf(app.status) === -1) return '';
 
     return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-accept>' +
@@ -7350,10 +7354,10 @@
   }
 
   /*
-   * Section 21: the Unit decided. Offered from Background check and Delayed, the
-   * two edges the server accepts into Approved or Denied. Date and type
-   * are both asked for; either one without the other would leave a terminal
-   * file whose reports cannot say when, or which way.
+   * Section 21: the Unit decided. Pre-approval: from Background check, DD
+   * Query or Delayed. Add-On: from Pending review or Non-compliant. Date and
+   * type are both asked for; either one without the other would leave a
+   * terminal file whose reports cannot say when, or which way.
    */
   function canRecordDecision() {
     var access = window.TMAPortalAccess;
@@ -7363,7 +7367,11 @@
 
   function renderDecisionAction(app) {
     if (!canRecordDecision()) return '';
-    if (['background_check', 'dd_query', 'delayed'].indexOf(app.status) === -1) return '';
+    if (app.phase === 'add_on') {
+      if (['pending_review', 'non_compliant'].indexOf(app.status) === -1) return '';
+    } else if (['background_check', 'dd_query', 'delayed'].indexOf(app.status) === -1) {
+      return '';
+    }
 
     return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-decide>' +
       'Decision received</button>';
@@ -7379,7 +7387,7 @@
 
   function renderPostApprovalAction(app) {
     if (!canEnterPostApproval()) return '';
-    if (app.phase === 'post_approval') return '';
+    if (app.phase === 'post_approval' || app.phase === 'add_on') return '';
     if (app.status !== 'granted') return '';
 
     return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-post-approval>' +
