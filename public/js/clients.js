@@ -2985,6 +2985,9 @@
     // before the first response has landed.
     assignees: [], providers: [], statuses: [], personStatuses: [],
     phaseCounts: { all: 0, pre_approval: 0, post_approval: 0, add_on: 0, closed: 0 },
+    // Whether the three above have been measured yet. Until they have, every
+    // listing asks for them; after that a sort or a page turn does not.
+    facetsLoaded: false,
     expanded: {},
   };
 
@@ -3364,7 +3367,14 @@
     APP_TABLE.loading = true;
     APP_TABLE.error = null;
 
-    var params = ['perPage=50', 'page=' + APP_TABLE.page];
+    var params = ['perPage=150', 'page=' + APP_TABLE.page];
+    /*
+     * The filter menu and the tab badges are counted over the whole slice, so
+     * a sort or a page turn cannot change them. Asked for once per session and
+     * kept on APP_TABLE after that: without this every header click paid for
+     * five grouped counts over every application the reader may see.
+     */
+    if (!APP_TABLE.facetsLoaded) params.push('facets=1');
     var phase = applicationPhaseForTab(state);
     if (phase) params.push('phase=' + encodeURIComponent(phase));
     if (state.search) params.push('q=' + encodeURIComponent(state.search));
@@ -3407,7 +3417,12 @@
          */
         if (json && json.assignees) APP_TABLE.assignees = json.assignees;
         if (json && json.providers) APP_TABLE.providers = json.providers;
-        if (json && json.phaseCounts) APP_TABLE.phaseCounts = json.phaseCounts;
+        // Only a reply that carried them counts: a sort that asked for none
+        // must not mark them loaded, or the menu would never fill.
+        if (json && json.phaseCounts) {
+          APP_TABLE.phaseCounts = json.phaseCounts;
+          APP_TABLE.facetsLoaded = true;
+        }
         APP_TABLE.loadedKey = key;
       })
       .catch(function (err) {

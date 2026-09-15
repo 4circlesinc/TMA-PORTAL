@@ -77,8 +77,15 @@ class CipApplicationController extends Controller
      */
     private const SYNC_PAGE = 50;
 
-    /** Rows in one page of the main application table (section 8). */
-    private const LIST_PAGE = 50;
+    /**
+     * Rows in one page of the main application table (section 8).
+     *
+     * A full page of the worklist, because the firm reads it as a list rather
+     * than paging through it. The per-row cost is primed in one query apiece
+     * (see {@see Review::primeTally()} and {@see Attention::forClients()}), so
+     * this is three times the rows for the same number of round trips.
+     */
+    private const LIST_PAGE = 150;
 
     /**
      * Column keys the table headers may ask to order by.
@@ -673,9 +680,25 @@ class CipApplicationController extends Controller
              * 422, the same as a mistyped sort.
              */
             'searchBy' => ['nullable', 'string', 'max:32'],
+            /*
+             * Whether to measure the filter menu and the tab badges too.
+             *
+             * Those counts are taken over the reader's whole slice (see
+             * {@see Facets}), so they cost a handful of grouped counts over
+             * every row the reader may see — and they cannot change because
+             * somebody clicked a column header or turned a page. Asked for on
+             * the first draw of a table and kept by the browser after that,
+             * which is what makes re-sorting cheap. Deliberately NOT cached
+             * server-side: Facets explains why an officer must see their own
+             * count move.
+             */
+            'facets' => ['nullable', 'boolean'],
         ]);
 
         $perPage = (int) ($data['perPage'] ?? self::LIST_PAGE);
+        // Absent means yes: a caller that has not been taught to ask still
+        // gets the whole answer rather than a table with no filter menu.
+        $withFacets = (bool) ($data['facets'] ?? true);
         $postApprovalList = ($data['phase'] ?? '') === Phase::POST_APPROVAL;
 
         $query = ApplicationScope::query($user)
@@ -818,6 +841,16 @@ class CipApplicationController extends Controller
             collect($page->items())->map(fn ($a) => $a->client_id)->filter()->all()
         );
 
+        /*
+         * Every checklist on the page in one grouped query.
+         *
+         * The status picker asks whether Apply for COR is allowed, which is a
+         * question about this file's documents. Unprimed that is one COUNT per
+         * row — invisible on the seed data and a hundred and fifty round trips
+         * on a full page against a remote database.
+         */
+        Review::primeTally($page->items());
+
         return response()->json([
             'applications' => collect($page->items())->map(fn ($a) => $this->row($a, $user, $attention))->all(),
             'page' => $page->currentPage(),
@@ -843,9 +876,11 @@ class CipApplicationController extends Controller
              * anything to show. Measured over the whole slice rather than this
              * page, see {@see Facets}.
              */
-            'assignees' => Facets::assignees($user),
-            'providers' => Facets::providers($user),
-            'phaseCounts' => $this->phaseCounts($user),
+            ...($withFacets ? [
+                'assignees' => Facets::assignees($user),
+                'providers' => Facets::providers($user),
+                'phaseCounts' => $this->phaseCounts($user),
+            ] : []),
         ]);
     }
 

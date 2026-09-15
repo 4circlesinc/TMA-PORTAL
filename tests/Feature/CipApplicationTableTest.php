@@ -250,8 +250,10 @@ class CipApplicationTableTest extends TestCase
         // Five applications of six people each. A per-row family count or a
         // per-row provider lookup would put this in the dozens. The budget
         // includes one grouped read for the application thread (section 24), the
-        // same shape as the document-comment unread query.
-        $this->assertLessThan(22, $count, 'The table must not scale its queries with its rows.');
+        // same shape as the document-comment unread query, and one more for
+        // the checklist tally primed across the page ({@see Review::primeTally}),
+        // which is the fixed price of NOT counting documents once per row.
+        $this->assertLessThan(23, $count, 'The table must not scale its queries with its rows.');
     }
 
     public function test_it_lists_applications_not_clients(): void
@@ -407,7 +409,7 @@ class CipApplicationTableTest extends TestCase
         $count = count(DB::getQueryLog());
         DB::disableQueryLog();
 
-        $this->assertLessThan(22, $count, 'A sorted listing must not scale its queries with its rows.');
+        $this->assertLessThan(23, $count, 'A sorted listing must not scale its queries with its rows.');
     }
 
     public function test_it_sorts_status_in_lifecycle_order(): void
