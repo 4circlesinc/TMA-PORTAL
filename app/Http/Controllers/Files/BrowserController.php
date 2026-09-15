@@ -63,6 +63,7 @@ class BrowserController extends BaseFilesController
             $current = $this->findFolder($uuid);
             FileAccess::authorize($user, 'view', $current);
             Tree::healPostApprovalListing($current, $user);
+            Tree::healAddOnListing($current, $user);
         }
 
         [$folderQuery, $fileQuery] = $this->queriesFor($section, $user, $current, $request);

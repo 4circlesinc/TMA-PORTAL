@@ -3,16 +3,21 @@
 namespace Tests\Feature;
 
 use App\Models\CipApplication;
+use App\Models\CipDocument;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Company;
+use App\Models\FileItem;
+use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\AddOn;
 use App\Support\Cip\ApplicantType;
 use App\Support\Cip\Applications;
+use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
+use App\Support\Cip\Tree;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -271,6 +276,89 @@ class CipAddOnTest extends TestCase
             array_column($body['phases'][Phase::PRE_APPROVAL]['buckets'], 'label'),
             array_column($body['phases'][Phase::ADD_ON]['buckets'], 'label'),
         );
+    }
+
+    public function test_creating_an_add_on_opens_the_four_brief_folders(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $body = $this->file($staff, $this->addOnPayload($parent))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->firstOrFail();
+        $root = Folder::find($application->folder_id);
+        $this->assertNotNull($root);
+
+        $this->assertEqualsCanonicalizing(Tree::ADD_ON_DRAWERS, Folder::query()
+            ->where('parent_id', $root->id)
+            ->pluck('name')
+            ->all());
+
+        $person = $application->people()->first();
+        $applicant = Folder::query()
+            ->where('parent_id', $root->id)
+            ->where('name', Tree::ADD_ON_APPLICANT)
+            ->first();
+        $this->assertNotNull($applicant);
+        $this->assertSame($applicant->id, $person->folder_id);
+
+        $additional = Folder::query()
+            ->where('parent_id', $root->id)
+            ->where('name', Tree::ADDITIONAL)
+            ->first();
+        $this->assertEqualsCanonicalizing(Tree::ADDITIONAL_DRAWERS, Folder::query()
+            ->where('parent_id', $additional->id)
+            ->pluck('name')
+            ->all());
+
+        $this->assertSame($additional->uuid, $body['additionalDocumentsFolder']);
+        $this->assertSame(
+            Folder::query()->where('parent_id', $root->id)->where('name', Tree::SUPPORTING)->value('uuid'),
+            $body['supportingDocumentsFolder'],
+        );
+        $this->assertSame(
+            Folder::query()->where('parent_id', $root->id)->where('name', Tree::ASSESSMENT_FEEDBACK)->value('uuid'),
+            $body['assessmentFeedbackFolder'],
+        );
+
+        Tree::provision($application->fresh(['people']), $staff);
+        $this->assertEqualsCanonicalizing(Tree::ADD_ON_DRAWERS, Folder::query()
+            ->where('parent_id', $root->id)
+            ->pluck('name')
+            ->all());
+    }
+
+    public function test_add_on_identity_stays_in_the_applicant_folder_and_pack_scans_go_to_supporting(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $body = $this->file($staff, $this->addOnPayload($parent))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->with('people')->firstOrFail();
+        $person = $application->people->first();
+        $supporting = Tree::supportingFolder($application);
+
+        $photo = CipDocument::query()
+            ->where('person_id', $person->id)
+            ->where('type', DocumentTypes::PASSPORT_PHOTO)
+            ->first();
+        $this->assertNotNull($photo?->file_id);
+        $this->assertSame($person->folder_id, FileItem::find($photo->file_id)->folder_id);
+
+        $pack = CipDocument::query()
+            ->where('person_id', $person->id)
+            ->whereNotNull('file_id')
+            ->where('type', '!=', DocumentTypes::PASSPORT_PHOTO)
+            ->first();
+        if ($pack) {
+            $this->assertNotNull($supporting);
+            $this->assertSame($supporting->id, FileItem::find($pack->file_id)->folder_id);
+        }
     }
 
     private function staff(): User

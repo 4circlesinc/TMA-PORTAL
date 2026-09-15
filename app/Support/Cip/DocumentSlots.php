@@ -88,7 +88,7 @@ class DocumentSlots
         // is usually "scan0001.pdf", which tells a reviewer nothing.
         $name = self::documentName($person, $type, $meta['extension']);
 
-        return DB::transaction(function () use ($slot, $person, $template, $stored, $meta, $name, $actor) {
+        return DB::transaction(function () use ($slot, $person, $template, $stored, $meta, $name, $actor, $type) {
             if ($slot->file_id && $file = $slot->file) {
                 Versions::addStored($file, $actor, $stored, $meta);
                 $slot->forceFill([
@@ -104,7 +104,7 @@ class DocumentSlots
                 return $slot;
             }
 
-            $file = self::storeFile($person, $stored, $meta, $name, $actor, self::destination($person, $template, $actor));
+            $file = self::storeFile($person, $stored, $meta, $name, $actor, self::destination($person, $template, $actor, $type));
 
             $slot->forceFill([
                 'file_id' => $file->id,
@@ -339,7 +339,7 @@ class DocumentSlots
         $stored = Vault::store($upload->getRealPath(), $meta['extension']);
         $name = self::documentName($person, $type, $meta['extension'], $number);
 
-        return DB::transaction(fn () => self::storeFile($person, $stored, $meta, $name, $actor, self::destination($person, $template, $actor)));
+        return DB::transaction(fn () => self::storeFile($person, $stored, $meta, $name, $actor, self::destination($person, $template, $actor, $type)));
     }
 
     /** "Ada Lovelace - Birth certificate (2).pdf" */
@@ -425,7 +425,7 @@ class DocumentSlots
             return null;
         }
 
-        return self::destination($person, $slot->requirement ?? self::template($person, $slot->type), $actor);
+        return self::destination($person, $slot->requirement ?? self::template($person, $slot->type), $actor, $slot->type);
     }
 
     /**
@@ -467,7 +467,7 @@ class DocumentSlots
                 continue;
             }
 
-            $destId = self::destination($person, $template, $actor);
+            $destId = self::destination($person, $template, $actor, $slot->type);
             if ($destId === null) {
                 continue;
             }
@@ -536,10 +536,14 @@ class DocumentSlots
             ->first();
     }
 
-    private static function destination(CipPerson $person, ?CipDocumentRequirement $template, ?User $actor): ?int
+    private static function destination(CipPerson $person, ?CipDocumentRequirement $template, ?User $actor, ?string $type = null): ?int
     {
         $person->loadMissing('application');
         $application = $person->application;
+
+        if (($application?->phase ?? '') === Phase::ADD_ON) {
+            return self::addOnDestination($person, $template, $actor, $type);
+        }
 
         /*
          * Digital passport photos still live on the COR checklist (they
@@ -611,6 +615,28 @@ class DocumentSlots
         }
 
         return true;
+    }
+
+    /**
+     * Identity records (the passport photo) stay in Add-On Applicant.
+     * Every other required scan for that Add-On type goes in Supporting
+     * Documents, so the four drawers the brief names stay distinct.
+     */
+    private static function addOnDestination(CipPerson $person, ?CipDocumentRequirement $template, ?User $actor, ?string $type = null): ?int
+    {
+        $key = $template?->key ?? $type;
+        if (self::isDigitalPassportPhoto($key)) {
+            return $person->folder_id;
+        }
+
+        $person->loadMissing('application');
+        $application = $person->application;
+        $root = $application?->folder_id ? Folder::find($application->folder_id) : null;
+        if ($root === null) {
+            return $person->folder_id;
+        }
+
+        return Tree::subfolder($root, Tree::SUPPORTING, $actor)->id;
     }
 
     private static function isDigitalPassportPhoto(?string $key): bool

@@ -252,7 +252,7 @@ class Removal
             ? collect()
             : Tree::drawersNamed(
                 $appFolderIds->all(),
-                [Tree::ADDITIONAL, Tree::APPEAL],
+                [Tree::ADDITIONAL, Tree::APPEAL, Tree::SUPPORTING, Tree::ASSESSMENT_FEEDBACK],
                 trashed: true,
             )->pluck('id');
 
@@ -304,7 +304,12 @@ class Removal
                 $ids[] = $application->post_approval_folder_id;
             }
             if ($shared) {
-                foreach ([Tree::additionalFolder($application), Tree::appealFolder($application)] as $folder) {
+                foreach ([
+                    Tree::additionalFolder($application),
+                    Tree::appealFolder($application),
+                    Tree::supportingFolder($application),
+                    Tree::assessmentFeedbackFolder($application),
+                ] as $folder) {
                     if ($folder) {
                         $ids[] = $folder->id;
                     }
@@ -339,7 +344,7 @@ class Removal
         if ($application->folder_id) {
             $ids = array_merge($ids, Tree::drawersNamed(
                 [$application->folder_id],
-                [Tree::ADDITIONAL, Tree::APPEAL],
+                [Tree::ADDITIONAL, Tree::APPEAL, Tree::SUPPORTING, Tree::ASSESSMENT_FEEDBACK],
                 trashed: true,
             )->pluck('id')->all());
         }

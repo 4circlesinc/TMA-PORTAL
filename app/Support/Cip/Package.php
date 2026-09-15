@@ -330,7 +330,7 @@ class Package
             // answers it.
             $additional = $rootIds === [] ? [] : Tree::drawersNamed(
                 $rootIds,
-                [Tree::ADDITIONAL, Tree::APPEAL],
+                [Tree::ADDITIONAL, Tree::APPEAL, Tree::ASSESSMENT_FEEDBACK],
             )->pluck('id')->all();
 
             $postOpen = $original
@@ -377,7 +377,7 @@ class Package
         if ($closedRoots !== []) {
             $additional = array_merge(
                 $additional,
-                Tree::drawersNamed($closedRoots, [Tree::ADDITIONAL, Tree::APPEAL])
+                Tree::drawersNamed($closedRoots, [Tree::ADDITIONAL, Tree::APPEAL, Tree::ASSESSMENT_FEEDBACK])
                     ->pluck('id')
                     ->all(),
             );

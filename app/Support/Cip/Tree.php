@@ -31,6 +31,18 @@ use Illuminate\Support\Str;
  *             ├── Queries Responses
  *             └── DD Query Responses
  *
+ * An Add-On is one person, so they get their own client folder and the four
+ * drawers the brief names:
+ *
+ *     Mei Wei
+ *       ├── Add-On Applicant
+ *       ├── Supporting Documents
+ *       ├── Assessment Feedback
+ *       └── Additional Documents
+ *             ├── Non-Compliance Responses
+ *             ├── Queries Responses
+ *             └── DD Query Responses
+ *
  * **Where it hangs.** Every application's main applicant gets a lightweight
  * client-hub record, created here if the applicant is not already one, and
  * the people are provisioned straight into that client's folder. Two reasons.
@@ -90,6 +102,28 @@ class Tree
      */
     public const APPEAL = 'Appeal Documents';
 
+    /** Add-On person folder: profile and identity records. */
+    public const ADD_ON_APPLICANT = 'Add-On Applicant';
+
+    /** Required documentation for that Add-On type. */
+    public const SUPPORTING = 'Supporting Documents';
+
+    /** Reviewer feedback and update requests. */
+    public const ASSESSMENT_FEEDBACK = 'Assessment Feedback';
+
+    /**
+     * The four drawers section 4 opens on an Add-On file, hanging off that
+     * person's own client folder so a second Add-On never shares them.
+     *
+     * @var list<string>
+     */
+    public const ADD_ON_DRAWERS = [
+        self::ADD_ON_APPLICANT,
+        self::SUPPORTING,
+        self::ASSESSMENT_FEEDBACK,
+        self::ADDITIONAL,
+    ];
+
     /**
      * Give the application a client record, a folder tree, and one folder per
      * person. Safe to call again: it fills in what is missing.
@@ -139,6 +173,10 @@ class Tree
         // One shared drawer for everything that belongs to the file rather
         // than to a person on it, plus the section 17 purpose folders inside it.
         self::provisionAdditionalDrawers($application, $actor, $root);
+
+        if (($application->phase ?? '') === Phase::ADD_ON) {
+            self::provisionAddOnDrawers($application, $actor, $root);
+        }
 
         if ($application->folder_id !== $root->id) {
             $application->forceFill(['folder_id' => $root->id])->save();
@@ -219,6 +257,78 @@ class Tree
         }
 
         return self::ensureChildDrawer($root, self::APPEAL, $actor);
+    }
+
+    /**
+     * Supporting Documents and Assessment Feedback beside the Add-On
+     * person's folder. Additional Documents is already opened by
+     * {@see provisionAdditionalDrawers}; this fills the other two so a
+     * newly created Add-On always has the four drawers the brief names.
+     */
+    public static function provisionAddOnDrawers(
+        CipApplication $application,
+        ?User $actor = null,
+        ?Folder $root = null,
+    ): Folder {
+        $root ??= $application->folder_id ? Folder::find($application->folder_id) : null;
+        if ($root === null) {
+            $root = self::provision($application, $actor);
+        }
+
+        self::ensureChildDrawer($root, self::SUPPORTING, $actor);
+        self::ensureChildDrawer($root, self::ASSESSMENT_FEEDBACK, $actor);
+
+        return $root;
+    }
+
+    /**
+     * Collapse numbered Add-On drawer copies when someone opens the
+     * person's folder in the file browser.
+     */
+    public static function healAddOnListing(Folder $folder, ?User $actor = null): void
+    {
+        $application = CipApplication::query()
+            ->where('folder_id', $folder->id)
+            ->where('phase', Phase::ADD_ON)
+            ->first();
+
+        if ($application === null && $folder->parent_id) {
+            $application = CipApplication::query()
+                ->where('folder_id', $folder->parent_id)
+                ->where('phase', Phase::ADD_ON)
+                ->orderBy('id')
+                ->first();
+        }
+
+        if ($application === null) {
+            return;
+        }
+
+        self::provision($application, $actor);
+    }
+
+    /** Supporting Documents, if this Add-On already has a tree. */
+    public static function supportingFolder(CipApplication $application): ?Folder
+    {
+        if (! $application->folder_id) {
+            return null;
+        }
+
+        $root = Folder::find($application->folder_id);
+
+        return $root ? self::existingDrawer($root, self::SUPPORTING) : null;
+    }
+
+    /** Assessment Feedback, if this Add-On already has a tree. */
+    public static function assessmentFeedbackFolder(CipApplication $application): ?Folder
+    {
+        if (! $application->folder_id) {
+            return null;
+        }
+
+        $root = Folder::find($application->folder_id);
+
+        return $root ? self::existingDrawer($root, self::ASSESSMENT_FEEDBACK) : null;
     }
 
     /** The Appeal Documents drawer, if this application already has a tree. */
@@ -333,7 +443,7 @@ class Tree
     public static function canonicalDrawerName(string $name): ?string
     {
         foreach (array_merge(
-            [self::ADDITIONAL, self::APPEAL, self::POST_APPROVAL],
+            [self::ADDITIONAL, self::APPEAL, self::POST_APPROVAL, self::SUPPORTING, self::ASSESSMENT_FEEDBACK],
             self::ADDITIONAL_DRAWERS,
         ) as $canonical) {
             if (self::isDrawerVariant($canonical, $name)) {
@@ -525,7 +635,7 @@ class Tree
     {
         $name = trim($name);
 
-        foreach (['Main Applicant', 'Sponsor'] as $label) {
+        foreach (['Main Applicant', 'Sponsor', self::ADD_ON_APPLICANT] as $label) {
             if (preg_match('/^'.preg_quote($label, '/').'(?:\s+\(?\d+\)?)?$/iu', $name)) {
                 return $label;
             }
@@ -741,7 +851,11 @@ class Tree
     public static function folderName(CipPerson $person): string
     {
         if ($person->role === CipPerson::ROLE_MAIN_APPLICANT) {
-            return 'Main Applicant';
+            $person->loadMissing('application');
+
+            return ($person->application?->phase ?? '') === Phase::ADD_ON
+                ? self::ADD_ON_APPLICANT
+                : 'Main Applicant';
         }
         if ($person->role === CipPerson::ROLE_SPONSOR) {
             return 'Sponsor';

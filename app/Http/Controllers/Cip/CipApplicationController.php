@@ -1335,6 +1335,9 @@ class CipApplicationController extends Controller
             Tree::provision($application, $request->user());
         } else {
             Tree::provisionAdditionalDrawers($application, $request->user());
+            if (($application->phase ?? '') === Phase::ADD_ON) {
+                Tree::provisionAddOnDrawers($application, $request->user());
+            }
         }
         if (($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL) {
             Tree::provisionPostApproval($application, $request->user());
@@ -1495,6 +1498,9 @@ class CipApplicationController extends Controller
                 Tree::provision($application, $user);
             } else {
                 Tree::provisionAdditionalDrawers($application, $user);
+                if (($application->phase ?? '') === Phase::ADD_ON) {
+                    Tree::provisionAddOnDrawers($application, $user);
+                }
             }
             if (($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL) {
                 Tree::provisionPostApproval($application, $user);
@@ -1807,6 +1813,12 @@ class CipApplicationController extends Controller
             ...Appeal::payload($application, $viewer),
             ...Stages::into($application, $viewer),
             'additionalDocumentsFolder' => Tree::additionalFolder($application)?->uuid,
+            'supportingDocumentsFolder' => ($application->phase ?? '') === Phase::ADD_ON
+                ? Tree::supportingFolder($application)?->uuid
+                : null,
+            'assessmentFeedbackFolder' => ($application->phase ?? '') === Phase::ADD_ON
+                ? Tree::assessmentFeedbackFolder($application)?->uuid
+                : null,
             'responseFolder' => Tree::responseFolderPayload($application),
             'availableTransitions' => $this->transitions($application, $viewer),
             'availableOverrides' => $this->overrides($application, $viewer),
