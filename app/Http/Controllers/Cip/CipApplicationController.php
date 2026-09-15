@@ -1157,6 +1157,7 @@ class CipApplicationController extends Controller
             // answered, and asks for the CIP number and the day only for the
             // first. Read off the row, so it costs nothing.
             'submittedAt' => $application->submitted_at?->toDateString(),
+            'submittedBy' => $application->submitted_by,
             // Their passport photo, which intake files as the client's picture.
             'photo' => $client?->photo_url,
             'applicantName' => CipPerson::upperName(
@@ -1698,11 +1699,13 @@ class CipApplicationController extends Controller
     }
 
     /**
-     * The Unit has it: record the date and the CIP number (section 16, section 7).
+     * The Unit has it: record the date (and, on a family file, the CIP number).
      *
-     * The number is the point. Every surface renders `displayNumber()`, so
-     * writing it here is what flips dashboards, reports, status screens, email
-     * subjects and search off the internal number in one move.
+     * On a pre-approval filing the number is the point. Every surface renders
+     * `displayNumber()`, so writing it here is what flips dashboards, reports,
+     * status screens, email subjects and search off the internal number in one
+     * move. An Add-On keeps its AO reference and records the day, who sent it,
+     * and the Add-On type instead (section 15).
      *
      * The capability is not checked here on purpose. Submission is a status
      * change and {@see Engine} owns those, it refuses the edge from anywhere
@@ -1714,22 +1717,28 @@ class CipApplicationController extends Controller
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
 
-        $data = $request->validate([
-            'cipNumber' => ['required', 'string', 'max:'.Submission::MAX_LENGTH],
+        $rules = [
             // Recorded, not assumed: staff enter a submission after the fact
             // as often as on the day, and defaulting silently to today would
             // put the wrong date on an audit trail.
             'submittedAt' => ['required', 'date'],
-        ], [
-            'cipNumber.required' => 'Enter the CIP application number from the Unit.',
+        ];
+        $messages = [
             'submittedAt.required' => 'Enter the submission date.',
-        ]);
+        ];
+
+        if (! $application->isAddOn()) {
+            $rules['cipNumber'] = ['required', 'string', 'max:'.Submission::MAX_LENGTH];
+            $messages['cipNumber.required'] = 'Enter the CIP application number from the Unit.';
+        }
+
+        $data = $request->validate($rules, $messages);
 
         try {
             $application = Submission::record(
                 $application,
                 $user,
-                $data['cipNumber'],
+                $data['cipNumber'] ?? null,
                 Carbon::parse($data['submittedAt']),
             );
         } catch (\InvalidArgumentException $e) {
@@ -1901,6 +1910,7 @@ class CipApplicationController extends Controller
              */
             'canEditApplication' => CipAccess::canEditApplication($viewer, $application),
             'submittedAt' => $application->submitted_at?->toDateString(),
+            'submittedBy' => $application->submitted_by,
             'queryReceivedAt' => $application->query_received_at?->toDateString(),
             'ddQueryReceivedAt' => $application->dd_query_received_at?->toDateString(),
             'acceptedAt' => $application->accepted_at?->toDateString(),

@@ -142,7 +142,9 @@ class CipTransitionController extends Controller
         }
 
         if ($status === Status::PENDING_REVIEW && $application->submitted_at === null) {
-            abort(422, 'Record the submission instead, so the CIP number and the date go with it.');
+            abort(422, $application->isAddOn()
+                ? 'Record the submission instead, so the date and who sent it go with it.'
+                : 'Record the submission instead, so the CIP number and the date go with it.');
         }
 
         if ($status === Status::NON_COMPLIANT) {
@@ -707,6 +709,7 @@ class CipTransitionController extends Controller
             ...Confirmation::payload($application, $actor),
             ...Appeal::payload($application, $actor),
             'submittedAt' => $application->submitted_at?->toDateString(),
+            'submittedBy' => $application->submitted_by,
             'queryReceivedAt' => $application->query_received_at?->toDateString(),
             'ddQueryReceivedAt' => $application->dd_query_received_at?->toDateString(),
             'acceptedAt' => $application->accepted_at?->toDateString(),

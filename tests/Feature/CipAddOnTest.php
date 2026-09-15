@@ -7,6 +7,7 @@ use App\Models\CipApplication;
 use App\Models\CipApplicationAssignment;
 use App\Models\CipDocument;
 use App\Models\CipDocumentRequirement;
+use App\Models\CipEvent;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Company;
@@ -19,11 +20,14 @@ use App\Support\Cip\AddOn;
 use App\Support\Cip\AddOnRequirements;
 use App\Support\Cip\ApplicantType;
 use App\Support\Cip\Applications;
+use App\Support\Cip\DocumentEngine;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\Intake;
+use App\Support\Cip\Package;
 use App\Support\Cip\Phase;
+use App\Support\Cip\Review;
 use App\Support\Cip\Status;
 use App\Support\Cip\Tree;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -714,6 +718,182 @@ class CipAddOnTest extends TestCase
         }
     }
 
+    public function test_judging_every_required_add_on_document_reaches_ready_to_submit(): void
+    {
+        Mail::fake();
+
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+        $contact = $this->providerContact($parent->provider);
+
+        $body = $this->file($contact, $this->addOnPayload($parent))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->firstOrFail();
+        $officer = $this->officer();
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/assignments', [
+                'userId' => $officer->id,
+            ])
+            ->assertCreated();
+
+        $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
+
+        $this->markRequiredAddOnDocumentsReady($application, $staff);
+
+        Review::settle($application->fresh(), $staff);
+
+        $this->assertSame(Status::READY_TO_SUBMIT, $application->fresh()->status);
+
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('gal-addon@example.com')
+            && str_contains((string) ($mail->subjectLine ?? ''), 'READY TO SUBMIT'));
+    }
+
+    public function test_one_refused_add_on_document_reaches_updates_required_and_notifies_the_agent(): void
+    {
+        Mail::fake();
+
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+        $contact = $this->providerContact($parent->provider);
+
+        $body = $this->file($contact, $this->addOnPayload($parent))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->firstOrFail();
+        $officer = $this->officer();
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/assignments', [
+                'userId' => $officer->id,
+            ])
+            ->assertCreated();
+
+        $slot = CipDocument::query()
+            ->where('application_id', $application->id)
+            ->where('required', true)
+            ->whereNotNull('file_id')
+            ->where('type', '!=', DocumentTypes::PASSPORT_PHOTO)
+            ->firstOrFail();
+
+        $this->actingAs($officer)
+            ->postJson('/portal/cip/documents/'.$slot->uuid.'/request-changes', [
+                'comment' => 'Please rescan the bottom edge.',
+            ])
+            ->assertOk();
+
+        $this->assertSame(Status::UPDATE_REQUIRED, $application->fresh()->status);
+        $this->assertFalse($application->fresh()->isLocked());
+
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('gal-addon@example.com')
+            && str_contains((string) ($mail->subjectLine ?? ''), 'UPDATE REQUIRED'));
+    }
+
+    public function test_confirming_and_recording_an_add_on_submission_locks_and_reaches_pending_review(): void
+    {
+        Mail::fake();
+
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+        $contact = $this->providerContact($parent->provider);
+
+        $body = $this->file($contact, $this->addOnPayload($parent))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->with('people')->firstOrFail();
+        Tree::provision($application, $staff);
+
+        $officer = $this->officer();
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/assignments', [
+                'userId' => $officer->id,
+            ])
+            ->assertCreated();
+
+        $this->markRequiredAddOnDocumentsReady($application, $staff);
+        Review::settle($application->fresh(), $staff);
+        $this->assertSame(Status::READY_TO_SUBMIT, $application->fresh()->status);
+
+        $this->actingAs($contact)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/confirm')
+            ->assertOk()
+            ->assertJsonPath('application.locked', true);
+
+        $application = $application->fresh();
+        Package::forget();
+        $this->assertTrue($application->isLocked());
+        $this->assertSame(Status::READY_TO_SUBMIT, $application->status);
+        $this->assertNotNull(CipEvent::query()
+            ->where('application_id', $application->id)
+            ->where('action', CipEvent::ACTION_PACKAGE_CONFIRMED)
+            ->first());
+
+        $supporting = Tree::supportingFolder($application);
+        $feedback = Tree::assessmentFeedbackFolder($application);
+        $additional = Tree::additionalFolder($application);
+        $this->assertNotNull($supporting);
+        $this->assertTrue(Package::locksFolder($supporting));
+        $this->assertFalse(Package::locksFolder($feedback));
+        $this->assertFalse(Package::locksFolder($additional));
+
+        $shown = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/submission', [
+                'submittedAt' => '2026-09-14',
+            ])
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame(Status::PENDING_REVIEW, $shown['status']);
+        $this->assertSame('2026-09-14', $shown['submittedAt']);
+        $this->assertSame('Ada Admin', $shown['submittedBy']);
+        $this->assertSame(AddOn::TYPE_SPOUSE, $shown['addonType']);
+        $this->assertSame($application->internal_number, $shown['number']);
+        $this->assertTrue(empty($shown['cipNumber']));
+
+        $fresh = $application->fresh();
+        $this->assertSame(Status::PENDING_REVIEW, $fresh->status);
+        $this->assertSame('2026-09-14', $fresh->submitted_at?->toDateString());
+        $this->assertSame('Ada Admin', $fresh->submitted_by);
+        $this->assertSame(AddOn::TYPE_SPOUSE, $fresh->addon_type);
+        $this->assertTrue($fresh->isLocked());
+
+        $event = CipEvent::query()
+            ->where('application_id', $fresh->id)
+            ->where('action', CipEvent::ACTION_STATUS_CHANGED)
+            ->where('to_status', Status::PENDING_REVIEW)
+            ->latest('id')
+            ->first();
+        $this->assertNotNull($event);
+        $meta = is_array($event->meta) ? $event->meta : [];
+        $this->assertSame('2026-09-14', $meta['submittedAt'] ?? null);
+        $this->assertSame('Ada Admin', $meta['submittedBy'] ?? null);
+        $this->assertSame(AddOn::TYPE_SPOUSE, $meta['addonType'] ?? null);
+    }
+
+    public function test_an_add_on_cannot_be_recorded_as_submitted_before_confirm(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $body = $this->file($staff, $this->addOnPayload($parent))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->firstOrFail();
+        $this->markRequiredAddOnDocumentsReady($application, $staff);
+        $application->forceFill(['status' => Status::READY_TO_SUBMIT])->save();
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/submission', [
+                'submittedAt' => '2026-09-14',
+            ])
+            ->assertStatus(422);
+    }
+
     public function test_a_drop_into_additional_documents_fills_the_next_g_slot(): void
     {
         $staff = $this->staff();
@@ -774,6 +954,24 @@ class CipAddOnTest extends TestCase
 
         $this->assertNotContains('sl1_form', $keys);
         $this->assertContains('sl2b_form', $keys);
+    }
+
+    private function markRequiredAddOnDocumentsReady(CipApplication $application, User $actor): void
+    {
+        CipDocument::query()
+            ->where('application_id', $application->id)
+            ->where('required', true)
+            ->whereNotNull('file_id')
+            ->get()
+            ->each(function (CipDocument $slot) use ($actor) {
+                if ($slot->status === DocumentStatus::READY_FOR_SUBMISSION) {
+                    return;
+                }
+
+                DocumentEngine::set($slot, DocumentStatus::READY_FOR_SUBMISSION, $actor, [
+                    'reason' => 'test',
+                ]);
+            });
     }
 
     private function staff(): User

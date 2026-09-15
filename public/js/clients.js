@@ -5060,7 +5060,7 @@
     record.statusLabel = (extra && extra.statusLabel) || (meta && meta.label) || to;
     record.statusTone = (extra && extra.statusTone) || (meta && meta.tone) || 'neutral';
     if (extra) {
-      ['availableTransitions', 'availableOverrides', 'lockedStatuses', 'locked', 'corLocked', 'canConfirm', 'canRequestAppeal', 'appealStartedBy', 'submittedAt', 'phase', 'phaseLabel', 'stageAction', 'corSubmittedAt', 'corReceivedAt', 'nicSubmittedAt', 'nicReceivedAt', 'passportSubmittedAt', 'passportReceivedAt', 'passportDeliveredAt']
+      ['availableTransitions', 'availableOverrides', 'lockedStatuses', 'locked', 'corLocked', 'canConfirm', 'canRequestAppeal', 'appealStartedBy', 'submittedAt', 'submittedBy', 'phase', 'phaseLabel', 'stageAction', 'corSubmittedAt', 'corReceivedAt', 'nicSubmittedAt', 'nicReceivedAt', 'passportSubmittedAt', 'passportReceivedAt', 'passportDeliveredAt']
         .forEach(function (k) {
           if (extra[k] !== undefined) record[k] = extra[k];
         });
@@ -7045,6 +7045,8 @@
       (app.phase === 'add_on' && app.addonTypeLabel
         ? overviewRow('Add-On type', app.addonTypeLabel)
         : '') +
+      (app.submittedAt ? overviewRow('Submission date', fmtShortDate(app.submittedAt)) : '') +
+      (app.submittedBy ? overviewRow('Submitted by', app.submittedBy) : '') +
       (app.parent
         ? overviewRow('CIP application number', app.parent.cipNumber || app.parent.number) +
           overviewRow('Main applicant', app.parent.applicantName) +
@@ -10860,10 +10862,31 @@
     if (!app || !ui || !ui.openModal) return;
 
     var today = new Date().toISOString().slice(0, 10);
+    var addOn = app.phase === 'add_on';
 
-    ui.openModal({
-      title: correcting ? 'Edit CIP number' : 'Record submission to the Unit',
-      body:
+    // Correcting a CIP number is a family-file act. Add-On keeps its AO
+    // reference and never asks for one here.
+    if (correcting && addOn) return;
+
+    var body;
+    if (addOn) {
+      body =
+        '<div class="tma-dash__clients-field">' +
+        '<label class="tma-dash__clients-field-label" for="cip-submitted">Submission date</label>' +
+        '<input type="date" id="cip-submitted" class="tma-dash__clients-field-input"' +
+        ' data-cip-submitted value="' + esc(today) + '">' +
+        '</div>' +
+        (app.addonTypeLabel
+          ? '<p class="tma-portal-modal__text">Add-On type: <strong>' + esc(app.addonTypeLabel) + '</strong>. ' +
+            esc(app.internalNumber || 'The Add-On reference') + ' stays on every screen.</p>'
+          : '<p class="tma-portal-modal__text">' +
+            esc(app.internalNumber || 'The Add-On reference') + ' stays on every screen.</p>') +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-number>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-cip-save-number>Record submission</button>' +
+        '</div>';
+    } else {
+      body =
         '<div class="tma-dash__clients-field">' +
         '<label class="tma-dash__clients-field-label" for="cip-number">CIP application number</label>' +
         '<input type="text" id="cip-number" class="tma-dash__clients-field-input" data-cip-number' +
@@ -10877,8 +10900,6 @@
             '<input type="date" id="cip-submitted" class="tma-dash__clients-field-input"' +
             ' data-cip-submitted value="' + esc(today) + '">' +
             '</div>') +
-        // Said before they commit: this is the moment the whole portal starts
-        // calling the application something else.
         '<p class="tma-portal-modal__text">' +
         (correcting
           ? 'The status does not change.'
@@ -10889,10 +10910,19 @@
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-number>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-number>' +
         (correcting ? 'Save number' : 'Record submission') + '</button>' +
-        '</div>',
+        '</div>';
+    }
+
+    ui.openModal({
+      title: correcting ? 'Edit CIP number' : 'Record submission to the Unit',
+      body: body,
       onMount: function (el) {
         var input = el.querySelector('[data-cip-number]');
         if (input) input.focus();
+        else {
+          var dateFocus = el.querySelector('[data-cip-submitted]');
+          if (dateFocus) dateFocus.focus();
+        }
 
         var cancel = el.querySelector('[data-cip-cancel-number]');
         if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
@@ -10902,7 +10932,7 @@
 
         save.addEventListener('click', function () {
           var number = input ? input.value.trim() : '';
-          if (!number) {
+          if (!addOn && !number) {
             clientsToast('Enter the CIP application number from the Unit.', 'negative');
             if (input) input.focus();
 
@@ -10920,7 +10950,7 @@
           save.disabled = true;
           save.textContent = 'Saving…';
 
-          submitCipNumber(app.id, number, correcting, dateEl ? dateEl.value : null)
+          submitCipNumber(app.id, addOn ? null : number, correcting, dateEl ? dateEl.value : null)
             .then(function (json) {
               ui.closeModal();
               var record = json && json.application;
@@ -10930,7 +10960,9 @@
               forgetBuckets();
               clientsToast(correcting
                 ? 'CIP number updated'
-                : 'Submission recorded, now ' + (record ? record.number : number), 'positive');
+                : (addOn
+                  ? 'Submission recorded'
+                  : 'Submission recorded, now ' + (record ? record.number : number)), 'positive');
               if (typeof render === 'function') {
                 render(usesPagedClientsFlow(state) ? { forceFull: true } : { detailOnly: true });
               } else {
@@ -10940,7 +10972,7 @@
             .catch(function (err) {
               save.disabled = false;
               save.textContent = correcting ? 'Save number' : 'Record submission';
-              clientsToast((err && err.message) || 'Could not save that number.', 'negative');
+              clientsToast((err && err.message) || (addOn ? 'Could not record that submission.' : 'Could not save that number.'), 'negative');
             });
         });
       },
@@ -10957,9 +10989,12 @@
       });
     }
 
+    var payload = { submittedAt: submittedAt || null };
+    if (number) payload.cipNumber = number;
+
     return clientsFetch(base + '/submission', {
       method: 'POST',
-      json: { cipNumber: number, submittedAt: submittedAt || null },
+      json: payload,
     });
   }
 
