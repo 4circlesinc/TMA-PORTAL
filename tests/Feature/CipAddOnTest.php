@@ -18,6 +18,7 @@ use App\Support\Cip\ApplicantType;
 use App\Support\Cip\Applications;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentTypes;
+use App\Support\Cip\Intake;
 use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
 use App\Support\Cip\Tree;
@@ -172,6 +173,11 @@ class CipAddOnTest extends TestCase
         $this->assertSame($parent->id, $row->parent_application_id);
         $this->assertSame($parent->provider_id, $row->provider_id);
         $this->assertSame(1, $row->people()->count());
+
+        $yy = now()->format('y');
+        $this->assertSame("GAL-AO-{$yy}-00001", $body['number']);
+        $this->assertSame("GAL-AO-{$yy}-00001", $body['internalNumber']);
+        $this->assertSame("GAL{$yy}-00001", $parent->internal_number);
     }
 
     public function test_a_dependent_add_on_stores_son_and_the_older_bracket(): void
@@ -224,7 +230,7 @@ class CipAddOnTest extends TestCase
 
         CipApplication::query()->where('uuid', $first['id'])->update(['status' => Status::GRANTED]);
 
-        $this->file($staff, $this->addOnPayload($parent, [
+        $second = $this->file($staff, $this->addOnPayload($parent, [
             'addonType' => AddOn::TYPE_DEPENDENT_UNDER_16,
             'firstName' => 'Bao',
             'lastName' => 'Wei',
@@ -232,7 +238,36 @@ class CipAddOnTest extends TestCase
             'relationship' => AddOn::RELATIONSHIP_DAUGHTER,
             'gender' => 'Female',
             'passportNumber' => 'X8888888',
-        ]))->assertCreated();
+        ]))
+            ->assertCreated()
+            ->json('application');
+
+        $yy = now()->format('y');
+        $this->assertSame("GAL-AO-{$yy}-00001", $first['number']);
+        $this->assertSame("GAL-AO-{$yy}-00002", $second['number']);
+        $this->assertSame("GAL{$yy}-00001", $parent->internal_number);
+        $this->assertSame("GAL{$yy}-00001", $parent->fresh()->internal_number);
+    }
+
+    public function test_an_add_on_draft_is_numbered_on_the_first_keystroke(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $draft = Intake::createDraft($parent->provider, $staff, [
+            'phase' => Phase::ADD_ON,
+            'parentCipNumber' => $parent->cip_number,
+            'parentCorNumber' => $parent->cor_number,
+            'addonType' => AddOn::TYPE_SPOUSE,
+            'firstName' => 'Mei',
+            'lastName' => 'Wei',
+        ]);
+
+        $yy = now()->format('y');
+        $this->assertSame(Phase::ADD_ON, $draft->phase);
+        $this->assertSame(Status::DRAFT, $draft->status);
+        $this->assertSame("GAL-AO-{$yy}-00001", $draft->internal_number);
+        $this->assertSame("GAL-AO-{$yy}-00001", $draft->displayNumber());
     }
 
     public function test_an_add_on_refuses_a_type_that_does_not_match_the_date_of_birth(): void
@@ -268,6 +303,7 @@ class CipAddOnTest extends TestCase
         $this->assertSame('MEI WEI', $addon['applications'][0]['applicantName']);
         $this->assertSame(AddOn::TYPE_SPOUSE, $addon['applications'][0]['addonType']);
         $this->assertSame($parent->uuid, $addon['applications'][0]['parent']['id']);
+        $this->assertSame('GAL-AO-'.now()->format('y').'-00001', $addon['applications'][0]['number']);
     }
 
     public function test_the_dashboard_includes_an_add_on_lane(): void

@@ -3651,7 +3651,7 @@
       // the form rather than to a profile that has nothing filled in yet.
       (a.status === 'draft' ? ' data-cip-draft="1"' : '') + '>' +
       '<td><span class="tma-cip-table__number">' + esc(a.number || '-') + '</span>' +
-      (a.cipNumber && a.internalNumber
+      (a.phase !== 'add_on' && a.cipNumber && a.internalNumber
         ? '<div class="tma-portal-table__muted">' + esc(a.internalNumber) + '</div>'
         : '') + '</td>' +
       // The inline copy of the status sits right after the name; CSS shows
@@ -6876,9 +6876,13 @@
   }
 
   function renderOverviewApplication(app) {
+    var addOn = app.phase === 'add_on';
     return overviewList(
-      overviewRow('Application number', app.internalNumber || app.number) +
-      overviewRow('CIP application number', app.cipNumber || '') +
+      overviewRow(
+        addOn ? 'Add-On reference number' : 'Application number',
+        app.internalNumber || app.number
+      ) +
+      (addOn ? '' : overviewRow('CIP application number', app.cipNumber || '')) +
       overviewRow('Status', cipStatusChip(app), true) +
       (app.phase === 'add_on' && app.addonTypeLabel
         ? overviewRow('Add-On type', app.addonTypeLabel)
@@ -7010,9 +7014,11 @@
     if (!app) return '';
 
     var decision = cipMilestone(app, 'decision');
-    var numberFact = app.cipNumber
-      ? cipFact('CIP application number', app.cipNumber)
-      : cipFact('Application number', app.internalNumber || app.number);
+    var numberFact = app.phase === 'add_on'
+      ? cipFact('Add-On reference number', app.internalNumber || app.number)
+      : (app.cipNumber
+        ? cipFact('CIP application number', app.cipNumber)
+        : cipFact('Application number', app.internalNumber || app.number));
     var html =
       numberFact +
       cipFact('Submitted', cipMilestoneDate(app, 'submitted') || '-') +

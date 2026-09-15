@@ -7,14 +7,19 @@ use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
 use App\Support\Cip\Numbering;
+use App\Support\Cip\Phase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
- * Internal numbers: [Provider Code][YY]-[Sequence], minted at creation inside
- * the insert transaction, gapless per provider per year, and displayed only
+ * Internal numbers: minted at creation inside the insert transaction, gapless
+ * per provider per year per lane.
+ *
+ * Family files: [Provider Code][YY]-[Sequence], GAL26-00001, displayed only
  * until the government CIP number takes over.
+ * Add-On files: [Provider Code]-AO-[YY]-[Sequence], GAL-AO-26-00001, kept for
+ * the life of the row on a sequence that does not share family slots.
  */
 class CipNumberingTest extends TestCase
 {
@@ -96,6 +101,47 @@ class CipNumberingTest extends TestCase
 
         $next = Applications::create($galaxy, $creator);
         $this->assertSame("GAL{$yy}-00008", $next->internal_number);
+    }
+
+    public function test_add_on_numbers_use_their_own_sequence_and_format(): void
+    {
+        $creator = $this->creator();
+        $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+        $private = CipProvider::create(['name' => 'Private Clients', 'code' => 'PRI']);
+        $yy = now()->format('y');
+
+        $family = Applications::create($galaxy, $creator);
+        $first = Applications::create($galaxy, $creator, ['phase' => Phase::ADD_ON]);
+        $second = Applications::create($galaxy, $creator, ['phase' => Phase::ADD_ON]);
+        $other = Applications::create($private, $creator, ['phase' => Phase::ADD_ON]);
+        $nextFamily = Applications::create($galaxy, $creator);
+
+        $this->assertSame("GAL{$yy}-00001", $family->internal_number);
+        $this->assertSame("GAL-AO-{$yy}-00001", $first->internal_number);
+        $this->assertSame("GAL-AO-{$yy}-00002", $second->internal_number);
+        $this->assertSame("PRI-AO-{$yy}-00001", $other->internal_number);
+        $this->assertSame("GAL{$yy}-00002", $nextFamily->internal_number);
+
+        $this->assertSame($first->internal_number, $first->displayNumber());
+        $first->forceFill(['cip_number' => '10T1GSHOULDNOT'])->save();
+        $this->assertSame("GAL-AO-{$yy}-00001", $first->fresh()->displayNumber());
+    }
+
+    public function test_reserving_an_add_on_number_does_not_advance_the_family_sequence(): void
+    {
+        $creator = $this->creator();
+        $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+        $yy = now()->format('y');
+
+        DB::transaction(function () use ($galaxy, $yy) {
+            Numbering::reserve($galaxy, "GAL-AO-{$yy}-00007");
+        });
+
+        $family = Applications::create($galaxy, $creator);
+        $addon = Applications::create($galaxy, $creator, ['phase' => Phase::ADD_ON]);
+
+        $this->assertSame("GAL{$yy}-00001", $family->internal_number);
+        $this->assertSame("GAL-AO-{$yy}-00008", $addon->internal_number);
     }
 
     public function test_family_size_counts_every_person(): void

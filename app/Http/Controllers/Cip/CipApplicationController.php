@@ -1046,7 +1046,6 @@ class CipApplicationController extends Controller
             // Null unless something on this client's file is waiting for this
             // reader — see Cip\Attention. Absent means "draw nothing".
             'attention' => $client ? ($attention[$client->id] ?? null) : null,
-            // Section 7: the CIP number once it exists, the internal one until then.
             'number' => $application->displayNumber(),
             'internalNumber' => $application->internal_number,
             'cipNumber' => $application->cip_number,
@@ -1773,7 +1772,8 @@ class CipApplicationController extends Controller
 
         return [
             'id' => $application->uuid,
-            // Section 7: the internal number until the CIP number takes over.
+            // Section 7: family files switch to the CIP number; Add-On files
+            // keep [Code]-AO-[YY]-[Sequence] on displayNumber().
             'number' => $application->displayNumber(),
             'internalNumber' => $application->internal_number,
             'cipNumber' => $application->cip_number,

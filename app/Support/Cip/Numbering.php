@@ -7,30 +7,41 @@ use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Internal application numbers: [Provider Code][YY]-[Sequence], minted the
- * moment an application is created and never reused, never changed.
+ * Internal application numbers, minted the moment a row is created and
+ * never reused, never changed.
  *
- * The sequence advances under a row lock on cip_counters, one row per
- * (provider, year), so two simultaneous creates cannot mint GAL26-00003
- * twice. max()+1 over cip_applications would race exactly there. Call only
+ * Family files: [Provider Code][YY]-[Sequence], GAL26-00001.
+ * Add-On files: [Provider Code]-AO-[YY]-[Sequence], GAL-AO-26-00001.
+ *
+ * Each lane has its own sequence under a row lock on cip_counters, one row
+ * per (provider, year, lane), so two simultaneous creates cannot mint the
+ * same number and an Add-On does not consume a family slot. Call only
  * inside the transaction that inserts the application, so a failed insert
  * rolls the counter back with it and the sequence stays gapless.
  */
 class Numbering
 {
-    public static function next(CipProvider $provider, ?CarbonInterface $when = null): string
-    {
+    public const LANE_APPLICATION = 'application';
+
+    public const LANE_ADD_ON = 'add_on';
+
+    public static function next(
+        CipProvider $provider,
+        ?CarbonInterface $when = null,
+        string $lane = self::LANE_APPLICATION,
+    ): string {
         self::assertTransaction();
+        $lane = self::assertLane($lane);
 
         $year = (int) ($when ?? now())->format('y');
-        $counter = self::lockedCounter($provider, $year);
+        $counter = self::lockedCounter($provider, $year, $lane);
         $sequence = $counter->last_sequence + 1;
 
         DB::table('cip_counters')
             ->where('id', $counter->id)
             ->update(['last_sequence' => $sequence, 'updated_at' => now()]);
 
-        return sprintf('%s%02d-%05d', strtoupper($provider->code), $year, $sequence);
+        return self::format($provider->code, $year, $sequence, $lane);
     }
 
     /**
@@ -49,7 +60,7 @@ class Numbering
             throw new \InvalidArgumentException('Not an internal number for this provider.');
         }
 
-        $counter = self::lockedCounter($provider, $parsed['year']);
+        $counter = self::lockedCounter($provider, $parsed['year'], $parsed['lane']);
         if ($parsed['sequence'] > $counter->last_sequence) {
             DB::table('cip_counters')
                 ->where('id', $counter->id)
@@ -57,23 +68,57 @@ class Numbering
         }
     }
 
-    /** True when this string is [this provider's code][YY]-[Sequence]. */
+    /** True when this string is this provider's family or Add-On number. */
     public static function matches(CipProvider $provider, string $number): bool
     {
         return self::parse($provider, $number) !== null;
     }
 
     /**
-     * @return array{year: int, sequence: int}|null
+     * @return array{year: int, sequence: int, lane: string}|null
      */
     private static function parse(CipProvider $provider, string $number): ?array
     {
-        $code = strtoupper($provider->code);
-        if (! preg_match('/^'.preg_quote($code, '/').'(\d{2})-(\d{5})$/', strtoupper(trim($number)), $m)) {
-            return null;
+        $code = preg_quote(strtoupper($provider->code), '/');
+        $value = strtoupper(trim($number));
+
+        if (preg_match('/^'.$code.'-AO-(\d{2})-(\d{5})$/', $value, $match)) {
+            return [
+                'year' => (int) $match[1],
+                'sequence' => (int) $match[2],
+                'lane' => self::LANE_ADD_ON,
+            ];
         }
 
-        return ['year' => (int) $m[1], 'sequence' => (int) $m[2]];
+        if (preg_match('/^'.$code.'(\d{2})-(\d{5})$/', $value, $match)) {
+            return [
+                'year' => (int) $match[1],
+                'sequence' => (int) $match[2],
+                'lane' => self::LANE_APPLICATION,
+            ];
+        }
+
+        return null;
+    }
+
+    private static function format(string $code, int $year, int $sequence, string $lane): string
+    {
+        $code = strtoupper($code);
+
+        if ($lane === self::LANE_ADD_ON) {
+            return sprintf('%s-AO-%02d-%05d', $code, $year, $sequence);
+        }
+
+        return sprintf('%s%02d-%05d', $code, $year, $sequence);
+    }
+
+    private static function assertLane(string $lane): string
+    {
+        if (! in_array($lane, [self::LANE_APPLICATION, self::LANE_ADD_ON], true)) {
+            throw new \InvalidArgumentException('Unknown numbering lane.');
+        }
+
+        return $lane;
     }
 
     private static function assertTransaction(): void
@@ -83,21 +128,24 @@ class Numbering
         }
     }
 
-    private static function lockedCounter(CipProvider $provider, int $year): object
+    private static function lockedCounter(CipProvider $provider, int $year, string $lane): object
     {
         $counter = DB::table('cip_counters')
             ->where('provider_id', $provider->id)
             ->where('year', $year)
+            ->where('lane', $lane)
             ->lockForUpdate()
             ->first();
 
         if ($counter === null) {
-            // First number of the year. insertOrIgnore + re-lock rather than
-            // insert: two firsts can race, and the unique (provider, year)
-            // index turns the loser's insert into a no-op re-read.
+            // First number of the year in this lane. insertOrIgnore + re-lock
+            // rather than insert: two firsts can race, and the unique
+            // (provider, year, lane) index turns the loser's insert into a
+            // no-op re-read.
             DB::table('cip_counters')->insertOrIgnore([
                 'provider_id' => $provider->id,
                 'year' => $year,
+                'lane' => $lane,
                 'last_sequence' => 0,
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -106,6 +154,7 @@ class Numbering
             $counter = DB::table('cip_counters')
                 ->where('provider_id', $provider->id)
                 ->where('year', $year)
+                ->where('lane', $lane)
                 ->lockForUpdate()
                 ->first();
         }

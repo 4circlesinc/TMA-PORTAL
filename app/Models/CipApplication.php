@@ -68,15 +68,20 @@ class CipApplication extends Model
     }
 
     /**
-     * The one switch point for the dual-numbering rule: the internal number
-     * until the government CIP number is recorded, the CIP number after.
-     * Every user-facing surface — tables, dashboards, status screens, email
-     * subjects, reports — renders this and nothing else, so entering the CIP
-     * number flips them all at once. The internal number stays stored and
-     * searchable for audit and invoicing.
+     * The number every surface renders: tables, dashboards, notices, reports,
+     * search, audit.
+     *
+     * Family files switch to the Unit's CIP number once it is recorded; the
+     * internal number stays stored for audit and invoicing. Add-On files keep
+     * their own reference ([Code]-AO-[YY]-[Sequence]) for the life of the
+     * row — the parent's CIP and COR stay on the parent.
      */
     public function displayNumber(): string
     {
+        if ($this->isAddOn()) {
+            return $this->internal_number ?? '';
+        }
+
         return $this->cip_number ?: ($this->internal_number ?? '');
     }
 

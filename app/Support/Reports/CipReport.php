@@ -7,6 +7,7 @@ use App\Models\CipPerson;
 use App\Models\Report;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\Pages;
+use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
@@ -204,6 +205,7 @@ final class CipReport
             ->get([
                 'a.internal_number',
                 'a.cip_number',
+                'a.phase',
                 'pe.name as applicant',
                 'a.status',
                 'p.name as provider',
@@ -225,7 +227,9 @@ final class CipReport
             'title' => $title,
             'columns' => ['Number', 'Applicant', 'Status', 'Service provider', 'Investment type', 'Assigned officer', 'Submitted', 'Decision date'],
             'rows' => $rows->map(fn ($row) => [
-                $row->cip_number ?: ($row->internal_number ?? ''),
+                ($row->phase ?? '') === Phase::ADD_ON
+                    ? ($row->internal_number ?? '')
+                    : ($row->cip_number ?: ($row->internal_number ?? '')),
                 trim((string) $row->applicant) !== '' ? trim((string) $row->applicant) : '-',
                 Status::label((string) $row->status),
                 $row->provider ?: '-',

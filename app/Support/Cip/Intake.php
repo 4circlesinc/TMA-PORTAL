@@ -965,9 +965,14 @@ class Intake
                 $phase = $data['phase'];
             }
 
-            $application = Applications::create($provider, $creator, [
+            $attrs = [
                 'submission_key' => ($data['submissionId'] ?? '') !== '' ? $data['submissionId'] : null,
-            ], Status::DRAFT);
+            ];
+            if ($phase === Phase::ADD_ON) {
+                $attrs['phase'] = Phase::ADD_ON;
+            }
+
+            $application = Applications::create($provider, $creator, $attrs, Status::DRAFT);
 
             /*
              * The phase is recorded now, but the post-approval ENTRY is not.
@@ -1735,6 +1740,7 @@ class Intake
         }
 
         $application = Applications::create($provider, $creator, [
+            'phase' => Phase::ADD_ON,
             'investment_type' => $parent->investment_type,
             'investment_type_other' => $parent->investment_type_other,
             'sponsored' => false,

@@ -14,6 +14,7 @@ use App\Support\Cip\Assignments;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\Pages;
+use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -365,6 +366,29 @@ class CipReportingTest extends TestCase
 
         $this->assertSame('1', $this->metric($report, 'Applications'));
         $this->assertNotContains($draft->internal_number, collect($this->rows($report))->pluck(0)->all());
+    }
+
+    public function test_an_add_on_row_keeps_the_ao_reference_number(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+        $yy = now()->format('y');
+
+        $addon = Applications::create($galaxy, $admin, [
+            'phase' => Phase::ADD_ON,
+            'investment_type' => InvestmentType::REAL_ESTATE,
+        ]);
+        CipPerson::create([
+            'application_id' => $addon->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Mei',
+            'last_name' => 'Wei',
+        ]);
+        $addon->forceFill(['status' => Status::PENDING_REVIEW])->save();
+
+        $report = $this->create($admin);
+
+        $this->assertSame("GAL-AO-{$yy}-00001", $this->rows($report)[0][0]);
     }
 
     public function test_an_officer_on_the_assignment_row_matches_even_if_they_are_not_the_cached_holder(): void

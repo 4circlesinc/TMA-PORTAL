@@ -810,7 +810,9 @@ class Tree
         }
 
         $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
-        $name = $main?->fullName() ?: ('Application '.$application->displayNumber());
+        $name = $main?->fullName() ?: (
+            ($application->isAddOn() ? 'Add-On ' : 'Application ').$application->displayNumber()
+        );
 
         $client = Client::create([
             'uid' => self::uid($name, $application),
@@ -978,9 +980,10 @@ class Tree
             return true;
         }
 
+        $prefix = $application->isAddOn() ? 'Add-On ' : 'Application ';
         $needles = array_filter([
-            'Application '.$application->displayNumber(),
-            $application->internal_number ? 'Application '.$application->internal_number : null,
+            $prefix.$application->displayNumber(),
+            $application->internal_number ? $prefix.$application->internal_number : null,
             $application->cip_number ? 'Application '.$application->cip_number : null,
         ]);
 
@@ -990,7 +993,7 @@ class Tree
             }
         }
 
-        return (bool) preg_match('/^Application\s+[A-Z]{2,}\d{2}-\d+$/iu', $name);
+        return (bool) preg_match('/^(?:Application|Add-On)\s+[A-Z]{2,}(?:-AO)?-?\d{2}-\d+$/iu', $name);
     }
 
     /**
