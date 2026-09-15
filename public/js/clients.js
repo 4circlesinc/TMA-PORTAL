@@ -1419,9 +1419,6 @@
       listParams.push('sort=' + encodeURIComponent(APP_TABLE.sort));
       listParams.push('dir=' + encodeURIComponent(APP_TABLE.dir === 'desc' ? 'desc' : 'asc'));
     }
-    if (listTab === 'add_on' && APP_TABLE.searchBy) {
-      listParams.push('searchBy=' + encodeURIComponent(APP_TABLE.searchBy));
-    }
 
     return CIP_APPLICATIONS_PATH + (listParams.length ? '?' + listParams.join('&') : '');
   }
@@ -2329,19 +2326,10 @@
     if (state.searchLoading) cls += ' tma-dash__toolbar-search--loading';
     var kbd = search ? '' : '<kbd class="tma-dash__kbd" data-clients-search-shortcut aria-hidden="true">/</kbd>';
     var addOn = isAddOnApplicationsTab(state);
-    var placeholder = 'Search';
-    var aria = 'Search table';
-    if (addOn) {
-      var chosen = ADDON_SEARCH_FIELDS.filter(function (field) {
-        return field.value === APP_TABLE.searchBy;
-      })[0];
-      placeholder = chosen
-        ? 'Search ' + chosen.label
-        : 'Search reference, CIP, COR or name';
-      aria = chosen ? 'Search by ' + chosen.label : 'Search Add-On applications';
-    }
+    var placeholder = addOn ? 'Search reference, CIP, COR or name' : 'Search';
+    var aria = addOn ? 'Search Add-On applications' : 'Search table';
 
-    var input =
+    return (
       '<div class="' + cls + '" role="search" data-clients-search-wrap>' +
       '<img src="' + ICONS.Search + '" alt="">' +
       '<input type="search" class="tma-dash__search-input" data-clients-search value="' + esc(search) +
@@ -2351,24 +2339,6 @@
       '<img src="' + ICONS.XCircle + '" alt=""></button>' +
       '<span class="tma-dash__search-spinner" aria-hidden="true"><img src="' + ICONS.Loading16 + '" alt=""></span>' +
       kbd +
-      '</div>';
-
-    if (!addOn) return input;
-
-    var options = '<option value="">All fields</option>' +
-      ADDON_SEARCH_FIELDS.map(function (field) {
-        return '<option value="' + esc(field.value) + '"' +
-          (APP_TABLE.searchBy === field.value ? ' selected' : '') + '>' +
-          esc(field.label) + '</option>';
-      }).join('');
-
-    return (
-      '<div class="tma-dash__cip-search">' +
-      '<label class="tma-dash__cip-search-by">' +
-      '<span class="tma-dash__cip-search-by-label">Search by</span>' +
-      '<select class="tma-dash__filter-drop tma-dash__cip-search-by-select" data-cip-search-by' +
-      ' aria-label="Search by">' + options + '</select></label>' +
-      input +
       '</div>'
     );
   }
@@ -2970,9 +2940,6 @@
     assignees: [], providers: [], statuses: [], personStatuses: [],
     phaseCounts: { all: 0, pre_approval: 0, post_approval: 0, add_on: 0, closed: 0 },
     expanded: {},
-    // Add-On tab: which of the five search options the box is using. Empty
-    // means all five, the default.
-    searchBy: '',
   };
 
   /*
@@ -2991,8 +2958,9 @@
   };
 
   var ADDON_SORTS = {
-    number: 'Add-On Reference Number',
-    cip: 'CIP Application Number',
+    // Same stacked Application cell as pre/post: Add-On reference on top,
+    // parent CIP muted under it. Sorting still keys on the Add-On number.
+    number: 'Application',
     cor: 'COR Number',
     main_applicant: 'Main Applicant Name',
     applicant: 'Add-On Applicant Name',
@@ -3001,14 +2969,6 @@
     submitted: 'Submission Date',
     assigned: 'Assigned Officer',
   };
-
-  var ADDON_SEARCH_FIELDS = [
-    { value: 'addon_number', label: 'Add-On Reference Number' },
-    { value: 'cip_number', label: 'CIP Application Number' },
-    { value: 'cor_number', label: 'COR Number' },
-    { value: 'main_applicant', label: 'Main Applicant Name' },
-    { value: 'addon_applicant', label: 'Add-On Applicant Name' },
-  ];
 
   /*
    * Every application status the picker names, matching Status::listed().
@@ -3345,7 +3305,6 @@
       filterValues('provider').join(','),
       APP_TABLE.sort || '',
       APP_TABLE.dir || '',
-      APP_TABLE.searchBy || '',
       APP_TABLE.page,
     ].join('|');
   }
@@ -3363,9 +3322,6 @@
     var phase = applicationPhaseForTab(state);
     if (phase) params.push('phase=' + encodeURIComponent(phase));
     if (state.search) params.push('q=' + encodeURIComponent(state.search));
-    if (isAddOnApplicationsTab(state) && APP_TABLE.searchBy) {
-      params.push('searchBy=' + encodeURIComponent(APP_TABLE.searchBy));
-    }
     if (APP_TABLE.status) params.push('status=' + encodeURIComponent(APP_TABLE.status));
     /*
      * The same keys the counts were measured through, so the number beside a
@@ -3770,11 +3726,14 @@
   function renderAddOnApplicationTableRow(a) {
     var progressCell = cipStatusChip(a);
     var submitted = a.submittedAt ? fmtShortDate(a.submittedAt) : '';
+    var parentCip = addOnParentValue(a, 'cipNumber');
 
     return '<tr data-cip-open="' + esc(a.clientUid || '') + '" data-cip-app="' + esc(a.id) + '"' +
       (a.status === 'draft' ? ' data-cip-draft="1"' : '') + '>' +
-      '<td><span class="tma-cip-table__number">' + esc(a.number || a.internalNumber || '-') + '</span></td>' +
-      '<td class="tma-portal-table__muted">' + esc(addOnParentValue(a, 'cipNumber') || '-') + '</td>' +
+      '<td><span class="tma-cip-table__number">' + esc(a.number || a.internalNumber || '-') + '</span>' +
+      (parentCip
+        ? '<div class="tma-portal-table__muted">' + esc(parentCip) + '</div>'
+        : '') + '</td>' +
       '<td class="tma-portal-table__muted">' + esc(addOnParentValue(a, 'corNumber') || '-') + '</td>' +
       '<td class="tma-portal-table__muted">' + esc(addOnParentValue(a, 'applicantName') || '-') + '</td>' +
       '<td>' + applicantCell(a) +
@@ -4235,8 +4194,8 @@
     for (var i = 0; i < 8; i++) {
       if (addOn) {
         rows += '<tr aria-hidden="true">' +
-          '<td>' + skeletonBar(skeletonWidth(i, 0.7)) + '</td>' +
-          '<td>' + skeletonBar(skeletonWidth(i + 1, 0.7)) + '</td>' +
+          '<td>' + skeletonBar(skeletonWidth(i, 0.7)) +
+          '<div>' + skeletonBar(skeletonWidth(i + 1, 0.55)) + '</div></td>' +
           '<td>' + skeletonBar(skeletonWidth(i + 2, 0.6)) + '</td>' +
           '<td>' + skeletonBar(skeletonWidth(i + 3, 0.8)) + '</td>' +
           '<td><span class="tma-cip-table__applicant">' + disc +
@@ -4325,19 +4284,6 @@
      * handlers read `clientsMountState` rather than a captured `state` for the
      * same reason.
      */
-    document.addEventListener('change', function (e) {
-      var searchBy = e.target.closest('[data-cip-search-by]');
-      if (!searchBy) return;
-      APP_TABLE.searchBy = searchBy.value || '';
-      APP_TABLE.page = 1;
-      if (clientsMountState) {
-        clientsMountState.page = 1;
-        syncClientsListUrl(clientsMountState);
-      }
-      forgetApplicationTable();
-      repaintClients();
-    });
-
     document.addEventListener('click', function (e) {
       var sortCol = e.target.closest('[data-cip-sort]');
       if (sortCol) {
@@ -13422,7 +13368,6 @@
         APP_TABLE.sort = '';
         APP_TABLE.dir = 'asc';
       }
-      if (id !== 'add_on') APP_TABLE.searchBy = '';
       forgetApplicationTable();
       syncClientsListUrl(state);
       render();
@@ -13847,12 +13792,6 @@
       if (bootedSort && applicationSorts(state)[bootedSort]) APP_TABLE.sort = bootedSort;
       var bootedDir = takeBootPosition('dir');
       if (bootedDir === 'asc' || bootedDir === 'desc') APP_TABLE.dir = bootedDir;
-      var bootedSearchBy = takeBootPosition('searchBy');
-      if (bootedSearchBy && ADDON_SEARCH_FIELDS.some(function (field) {
-        return field.value === bootedSearchBy;
-      })) {
-        APP_TABLE.searchBy = bootedSearchBy;
-      }
 
       // The Dashboard's CIP card sets the filter from outside this view, and
       // cannot write an address for a screen that has not mounted yet, so

@@ -39297,37 +39297,6 @@ span.tma-dash__messages-profile-avatar {
   flex-wrap: wrap;
 }
 
-.tma-dash__cip-search {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  min-width: 0;
-  flex: 0 1 auto;
-}
-
-.tma-dash__cip-search-by {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-6);
-  min-width: 0;
-}
-
-.tma-dash__cip-search-by-label {
-  font-size: 13px;
-  line-height: 1;
-  color: var(--color-text-secondary);
-  white-space: nowrap;
-}
-
-.tma-dash__cip-search-by-select {
-  max-width: 240px;
-  padding-right: var(--space-24);
-  cursor: pointer;
-}
-
-.tma-dash__cip-search .tma-dash__toolbar-search {
-  width: 280px;
-}
 
 .tma-dash__filter-drop {
   appearance: none;
