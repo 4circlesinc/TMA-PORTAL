@@ -2172,6 +2172,56 @@ class CipPostApprovalTest extends TestCase
         $this->assertContains(Tree::POST_APPROVAL, $loose);
     }
 
+    /**
+     * Soft-deleted duplicate dependents must not leave an empty Dependent N folder.
+     */
+    public function test_orphan_dependent_folders_are_pruned_after_a_person_is_removed(): void
+    {
+        $staff = $this->staff();
+        $application = $this->application($staff);
+        $application->forceFill(['phase' => Phase::POST_APPROVAL])->save();
+        $this->mainApplicant($application);
+        $live = CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_DEPENDENT,
+            'first_name' => 'Ahmed',
+            'last_name' => 'Ishan',
+            'date_of_birth' => now()->subYears(10),
+        ]);
+
+        PostApproval::prepare($application->fresh()->load('people'), $staff);
+
+        $postRoot = Folder::find($application->fresh()->post_approval_folder_id);
+        $orphan = Folder::create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'name' => 'Dependent 8',
+            'folder_type' => Folder::TYPE_USER,
+            'parent_id' => $postRoot->id,
+            'client_id' => $postRoot->client_id,
+            'owner_id' => $postRoot->owner_id,
+            'created_by' => $staff->id,
+        ]);
+        $ghost = CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_DEPENDENT,
+            'first_name' => 'Ahmed',
+            'last_name' => 'Ishan',
+            'post_approval_folder_id' => $orphan->id,
+        ]);
+        $ghost->delete();
+
+        $this->assertSame(2, Folder::where('parent_id', $postRoot->id)->where('name', 'like', 'Dependent%')->count());
+
+        Tree::resyncNames($application->fresh()->load('people'));
+
+        $names = Folder::where('parent_id', $postRoot->id)->pluck('name')->all();
+        $this->assertContains('Dependent 1', $names);
+        $this->assertNotContains('Dependent 8', $names);
+        $this->assertTrue($orphan->fresh()->trashed());
+        $this->assertNull($ghost->fresh()->post_approval_folder_id);
+        $this->assertNotNull($live->fresh()->post_approval_folder_id);
+    }
+
     public function test_a_file_that_reached_post_approval_keeps_its_pre_approval_folders(): void
     {
         $staff = $this->staff();

@@ -195,6 +195,7 @@ class Tree
         }
 
         self::stampClient($root, $client);
+        self::pruneOrphanPersonFolders($application, $actor);
 
         return $root;
     }
@@ -554,6 +555,8 @@ class Tree
             self::postApprovalPersonFolder($person, $postRoot, $actor);
             DocumentSlots::placePostApprovalFiles($person, $actor);
         }
+
+        self::pruneOrphanPersonFolders($application, $actor);
 
         return $postRoot;
     }
@@ -931,6 +934,82 @@ class Tree
                 }
             }
         }
+
+        self::pruneOrphanPersonFolders($application);
+    }
+
+    /**
+     * Soft-delete Dependent / Sponsor folders that no live person owns.
+     *
+     * Soft-deleting a duplicate dependent used to leave an empty "Dependent 8"
+     * under Post-Approval Documents — Suha had four children and five folders.
+     * Main Applicant / Add-On Applicant drawers are left alone even when briefly
+     * unlinked; only numbered dependents and the sponsor are pruned.
+     *
+     * @return int how many person folders were soft-deleted
+     */
+    public static function pruneOrphanPersonFolders(CipApplication $application, ?User $actor = null): int
+    {
+        $application->loadMissing('people');
+
+        $liveFolderIds = $application->people
+            ->flatMap(fn (CipPerson $person) => array_filter([
+                $person->folder_id,
+                $person->post_approval_folder_id,
+            ]))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $parents = array_values(array_filter([
+            $application->folder_id ? (int) $application->folder_id : null,
+            $application->post_approval_folder_id ? (int) $application->post_approval_folder_id : null,
+        ]));
+
+        $removed = 0;
+
+        foreach ($parents as $parentId) {
+            foreach (Folder::query()->where('parent_id', $parentId)->get() as $child) {
+                $canonical = self::canonicalPersonName($child->name);
+                if ($canonical === null) {
+                    continue;
+                }
+
+                $isDependent = (bool) preg_match('/^Dependent\s+\d+$/iu', $canonical);
+                $isSponsor = strcasecmp($canonical, 'Sponsor') === 0;
+                if (! $isDependent && ! $isSponsor) {
+                    continue;
+                }
+
+                if (in_array((int) $child->id, $liveFolderIds, true)) {
+                    continue;
+                }
+
+                CipPerson::withTrashed()
+                    ->where(function ($query) use ($child) {
+                        $query->where('folder_id', $child->id)
+                            ->orWhere('post_approval_folder_id', $child->id);
+                    })
+                    ->each(function (CipPerson $person) use ($child) {
+                        $attrs = [];
+                        if ((int) $person->folder_id === (int) $child->id) {
+                            $attrs['folder_id'] = null;
+                        }
+                        if ((int) $person->post_approval_folder_id === (int) $child->id) {
+                            $attrs['post_approval_folder_id'] = null;
+                        }
+                        if ($attrs !== []) {
+                            $person->forceFill($attrs)->save();
+                        }
+                    });
+
+                FolderTree::softDeleteTree($child, (int) ($actor?->id ?? $child->owner_id));
+                $removed++;
+            }
+        }
+
+        return $removed;
     }
 
     /**
