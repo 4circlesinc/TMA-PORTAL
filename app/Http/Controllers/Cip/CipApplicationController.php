@@ -7,6 +7,7 @@ use App\Models\CipApplication;
 use App\Models\CipDocument;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
+use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\FileItem;
 use App\Models\User;
@@ -654,8 +655,8 @@ class CipApplicationController extends Controller
             ->with([
                 'provider:id,uuid,name,code',
                 'client:id,uid,name,email,phone,photo_url,initial,initial_color,user_id',
-                'client.user:id',
-                'assignedOfficer:id,name,email,avatar_url',
+                'client.user:id,avatar_url,provider_avatar_url',
+                'assignedOfficer:id,name,email,avatar_url,provider_avatar_url',
                 // Live only, with their people: the column names who holds the
                 // file now, and an ended assignment is somebody who has
                 // stopped. Eager, because this is fifty rows.
@@ -1158,8 +1159,10 @@ class CipApplicationController extends Controller
             // first. Read off the row, so it costs nothing.
             'submittedAt' => $application->submitted_at?->toDateString(),
             'submittedBy' => $application->submitted_by,
-            // Their passport photo, which intake files as the client's picture.
-            'photo' => $client?->photo_url,
+            // The face on the row: the person's passport portrait first
+            // (Add-On applicants keep theirs on the CipPerson), then the hub
+            // client's copy, then a portal login avatar when that is all there is.
+            'photo' => $this->listingPhoto($main, $client),
             'applicantName' => CipPerson::upperName(
                 $main
                     ? trim(($main->first_name ?? '').' '.($main->last_name ?? ''))
@@ -2277,6 +2280,38 @@ class CipApplicationController extends Controller
     }
 
     /**
+     * The face a worklist row draws for the applicant.
+     *
+     * Passport portrait on the person first — Add-On files keep that face on
+     * the CipPerson even when the hub client never got a copy — then the
+     * client's photo, then a live portal login's avatar. The revisioned
+     * passport endpoint is used when only the encrypted path was kept.
+     */
+    private function listingPhoto(?CipPerson $main, ?Client $client): ?string
+    {
+        if ($main) {
+            if ($main->photo_url) {
+                return $main->photo_url;
+            }
+
+            if ($main->photo_path) {
+                return '/portal/cip/people/'.$main->uuid.'/passport-photo?v='
+                    .substr(md5($main->photo_path.'|'.($main->updated_at?->getTimestamp() ?? 0)), 0, 8);
+            }
+        }
+
+        if ($client?->photo_url) {
+            return $client->photo_url;
+        }
+
+        if ($client && $client->hasLiveLogin()) {
+            return $client->user?->photoUrl();
+        }
+
+        return null;
+    }
+
+    /**
      * Portrait URLs for one person.
      *
      * The avatar column on {@see CipPerson} is filled at intake, but a
@@ -2308,7 +2343,10 @@ class CipApplicationController extends Controller
         }
 
         if (! $photoUrl && $person->role === CipPerson::ROLE_MAIN_APPLICANT) {
-            $photoUrl = $person->application?->client?->photo_url;
+            $photoUrl = $person->application?->client?->photo_url
+                ?: ($person->application?->client?->hasLiveLogin()
+                    ? $person->application->client->user?->photoUrl()
+                    : null);
         }
 
         return [

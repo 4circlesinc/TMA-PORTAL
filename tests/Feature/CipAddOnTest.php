@@ -1218,6 +1218,43 @@ class CipAddOnTest extends TestCase
             });
     }
 
+    public function test_the_add_on_worklist_carries_the_applicants_passport_photo(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $this->file($staff, $this->addOnPayload($parent))->assertCreated();
+
+        $row = collect($this->actingAs($staff)
+            ->getJson('/portal/cip/applications?phase='.Phase::ADD_ON)
+            ->assertOk()
+            ->json('applications'))
+            ->firstWhere('applicantName', 'MEI WEI');
+
+        $this->assertNotNull($row);
+        $this->assertNotEmpty(
+            $row['photo'] ?? null,
+            'Add-On rows must carry the applicant passport photo for the avatar column.',
+        );
+
+        // Even when the hub client never got a copy, the person's portrait still shows.
+        $application = CipApplication::query()->where('uuid', $row['id'])->firstOrFail();
+        $application->client?->forceFill(['photo_url' => null])->save();
+        $main = $application->people()->where('role', CipPerson::ROLE_MAIN_APPLICANT)->firstOrFail();
+        $main->forceFill([
+            'photo_url' => 'https://cdn.example/mei.jpg',
+            'photo_path' => 'cip/photos/mei.bin',
+        ])->save();
+
+        $again = collect($this->actingAs($staff)
+            ->getJson('/portal/cip/applications?phase='.Phase::ADD_ON)
+            ->assertOk()
+            ->json('applications'))
+            ->firstWhere('id', $row['id']);
+
+        $this->assertSame('https://cdn.example/mei.jpg', $again['photo'] ?? null);
+    }
+
     private function staff(): User
     {
         return $this->account(Role::ADMINISTRATOR, 'Ada Admin', 'ada-addon@example.com');
