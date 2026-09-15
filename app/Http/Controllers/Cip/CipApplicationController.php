@@ -88,6 +88,16 @@ class CipApplicationController extends Controller
     private const LIST_SORTS = [
         'number', 'applicant', 'provider', 'contact', 'email',
         'investment', 'family', 'status', 'assigned',
+        'cip', 'cor', 'main_applicant', 'relationship', 'submitted',
+    ];
+
+    /** Fields the Add-On tab's search box may be narrowed to. */
+    private const ADDON_SEARCH = [
+        'addon_number',
+        'cip_number',
+        'cor_number',
+        'main_applicant',
+        'addon_applicant',
     ];
 
     /** Everything the wizard needs to draw itself, in one request. */
@@ -629,6 +639,12 @@ class CipApplicationController extends Controller
             'sort' => ['nullable', 'string', 'max:32'],
             'dir' => ['nullable', 'string', 'max:4'],
             'phase' => ['nullable', 'string', 'max:24'],
+            /*
+             * Add-On tab only: which of the five search options the box is
+             * using. Unknown values fall through to every option rather than
+             * 422, the same as a mistyped sort.
+             */
+            'searchBy' => ['nullable', 'string', 'max:32'],
         ]);
 
         $perPage = (int) ($data['perPage'] ?? self::LIST_PAGE);
@@ -756,7 +772,12 @@ class CipApplicationController extends Controller
         Facets::applyAssignees($query, self::list($data['assignee'] ?? null));
         Facets::applyProviders($query, self::list($data['provider'] ?? null));
 
-        $this->applyListSearch($query, trim($data['q'] ?? ''));
+        $this->applyListSearch(
+            $query,
+            trim($data['q'] ?? ''),
+            $data['phase'] ?? null,
+            $data['searchBy'] ?? null,
+        );
         $this->applyListSort($query, $data['sort'] ?? null, $data['dir'] ?? null);
 
         $page = $query->paginate($perPage, ['*'], 'page', $data['page'] ?? 1);
@@ -879,7 +900,7 @@ class CipApplicationController extends Controller
      * it is three or four characters, and matching it anywhere would have
      * every code hit half the table.
      */
-    private function applyListSearch($query, string $term): void
+    private function applyListSearch($query, string $term, ?string $phase = null, ?string $searchBy = null): void
     {
         if ($term === '') {
             return;
@@ -888,8 +909,16 @@ class CipApplicationController extends Controller
         $prefix = mb_strtolower(addcslashes($term, '\\%_')).'%';
         $anywhere = '%'.mb_strtolower(addcslashes($term, '\\%_')).'%';
         $code = mb_strtolower(trim($term));
+        $addon = $phase === Phase::ADD_ON;
+        $field = $addon && in_array($searchBy, self::ADDON_SEARCH, true) ? $searchBy : null;
 
-        $query->where(function (Builder $q) use ($prefix, $anywhere, $code) {
+        $query->where(function (Builder $q) use ($prefix, $anywhere, $code, $addon, $field) {
+            if ($addon) {
+                $this->applyAddOnListSearch($q, $field, $prefix, $anywhere);
+
+                return;
+            }
+
             $q->whereRaw('LOWER(cip_applications.internal_number) LIKE ?', [$prefix])
                 ->orWhereRaw('LOWER(cip_applications.cip_number) LIKE ?', [$prefix])
                 ->orWhereHas('client', fn (Builder $c) => $c
@@ -900,6 +929,58 @@ class CipApplicationController extends Controller
                     ->whereRaw('LOWER(cip_providers.name) LIKE ?', [$anywhere])
                     ->orWhereRaw('LOWER(cip_providers.code) = ?', [$code]));
         });
+    }
+
+    /**
+     * Add-On tab search: the five options the brief names, and only those.
+     *
+     * Parent CIP, COR and main-applicant name are the granted file this
+     * Add-On hangs off, not columns on the Add-On row itself.
+     */
+    private function applyAddOnListSearch(Builder $query, ?string $field, string $prefix, string $anywhere): void
+    {
+        foreach ($field ? [$field] : self::ADDON_SEARCH as $which) {
+            $query->orWhere(function (Builder $q) use ($which, $prefix, $anywhere) {
+                $this->constrainAddOnSearchField($q, $which, $prefix, $anywhere);
+            });
+        }
+    }
+
+    private function constrainAddOnSearchField(Builder $query, string $field, string $prefix, string $anywhere): void
+    {
+        $role = CipPerson::ROLE_MAIN_APPLICANT;
+
+        match ($field) {
+            'addon_number' => $query->whereRaw(
+                'LOWER(cip_applications.internal_number) LIKE ?',
+                [$prefix]
+            ),
+            'cip_number' => $query->whereRaw(
+                'EXISTS (SELECT 1 FROM cip_applications AS parents WHERE parents.id = cip_applications.parent_application_id AND parents.deleted_at IS NULL AND LOWER(parents.cip_number) LIKE ?)',
+                [$prefix]
+            ),
+            'cor_number' => $query->whereRaw(
+                'EXISTS (SELECT 1 FROM cip_applications AS parents WHERE parents.id = cip_applications.parent_application_id AND parents.deleted_at IS NULL AND LOWER(parents.cor_number) LIKE ?)',
+                [$prefix]
+            ),
+            'main_applicant' => $query->where(function (Builder $q) use ($anywhere, $role) {
+                $q->whereRaw(
+                    "EXISTS (SELECT 1 FROM cip_people WHERE cip_people.application_id = cip_applications.parent_application_id AND cip_people.role = ? AND cip_people.deleted_at IS NULL AND LOWER(first_name || ' ' || last_name) LIKE ?)",
+                    [$role, $anywhere]
+                )->orWhereRaw(
+                    'EXISTS (SELECT 1 FROM cip_applications AS parents INNER JOIN clients ON clients.id = parents.client_id AND clients.deleted_at IS NULL WHERE parents.id = cip_applications.parent_application_id AND parents.deleted_at IS NULL AND LOWER(clients.name) LIKE ?)',
+                    [$anywhere]
+                );
+            }),
+            'addon_applicant' => $query->where(function (Builder $q) use ($anywhere, $role) {
+                $q->whereHas('client', fn (Builder $c) => $c
+                    ->whereRaw('LOWER(clients.name) LIKE ?', [$anywhere]))
+                    ->orWhereHas('people', fn (Builder $p) => $p
+                        ->where('role', $role)
+                        ->whereRaw("LOWER(first_name || ' ' || last_name) LIKE ?", [$anywhere]));
+            }),
+            default => null,
+        };
     }
 
     /**
@@ -926,7 +1007,12 @@ class CipApplicationController extends Controller
                 'LOWER(COALESCE(cip_applications.cip_number, cip_applications.internal_number))',
                 $dir,
             ),
+            'cip' => $this->orderByNullable($query, $this->parentColumnSql('cip_number'), $dir),
+            'cor' => $this->orderByNullable($query, $this->parentColumnSql('cor_number'), $dir),
+            'main_applicant' => $this->orderByNullable($query, $this->parentApplicantNameSql(), $dir),
             'applicant' => $this->orderByNullable($query, $this->mainApplicantNameSql(), $dir),
+            'relationship' => $this->orderByNullable($query, $this->addOnRelationshipSql(), $dir),
+            'submitted' => $this->orderByNullable($query, 'cip_applications.submitted_at', $dir),
             'provider' => $this->orderByNullable(
                 $query,
                 '(SELECT LOWER(name) FROM cip_providers WHERE cip_providers.id = cip_applications.provider_id AND cip_providers.deleted_at IS NULL LIMIT 1)',
@@ -964,6 +1050,23 @@ class CipApplicationController extends Controller
     private function mainApplicantNameSql(): string
     {
         return "(SELECT LOWER(first_name || ' ' || last_name) FROM cip_people WHERE cip_people.application_id = cip_applications.id AND cip_people.role = ".self::sqlString(CipPerson::ROLE_MAIN_APPLICANT).' AND cip_people.deleted_at IS NULL LIMIT 1)';
+    }
+
+    private function parentColumnSql(string $column): string
+    {
+        $column = in_array($column, ['cip_number', 'cor_number'], true) ? $column : 'cip_number';
+
+        return '(SELECT LOWER('.$column.') FROM cip_applications AS parents WHERE parents.id = cip_applications.parent_application_id AND parents.deleted_at IS NULL LIMIT 1)';
+    }
+
+    private function parentApplicantNameSql(): string
+    {
+        return "(SELECT LOWER(first_name || ' ' || last_name) FROM cip_people WHERE cip_people.application_id = cip_applications.parent_application_id AND cip_people.role = ".self::sqlString(CipPerson::ROLE_MAIN_APPLICANT).' AND cip_people.deleted_at IS NULL LIMIT 1)';
+    }
+
+    private function addOnRelationshipSql(): string
+    {
+        return '(SELECT LOWER(relationship) FROM cip_people WHERE cip_people.application_id = cip_applications.id AND cip_people.role = '.self::sqlString(CipPerson::ROLE_MAIN_APPLICANT).' AND cip_people.deleted_at IS NULL LIMIT 1)';
     }
 
     /**
@@ -1089,6 +1192,10 @@ class CipApplicationController extends Controller
             'phase' => $application->phase ?? Phase::PRE_APPROVAL,
             'phaseLabel' => Phase::label($application->phase ?? Phase::PRE_APPROVAL),
             'corNumber' => $application->cor_number,
+            'relationship' => $application->isAddOn() ? ($main?->relationship) : null,
+            'relationshipLabel' => $application->isAddOn()
+                ? (AddOn::relationshipLabel($main?->relationship) ?: null)
+                : null,
             ...AddOn::payload($application),
             'availableTransitions' => $this->transitions($application, $viewer, forListing: true),
             'availableOverrides' => $this->overrides($application, $viewer, forListing: true),

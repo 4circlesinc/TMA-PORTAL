@@ -38206,6 +38206,10 @@ span.tma-dash__messages-profile-avatar {
   min-width: 1148px;
 }
 
+.tma-cip-table--addon {
+  min-width: 1480px;
+}
+
 /* Touch-width duplicate of the status, rendered beside the applicant's
    name; only the responsive layer ever shows it. */
 .tma-cip-table__inline-status {
@@ -38363,6 +38367,28 @@ span.tma-dash__messages-profile-avatar {
    and tabular figures so a column of them lines up digit under digit. */
 .tma-cip-table__number {
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/*
+ * Add-On table: CIP number, COR and main applicant are the granted file
+ * this row hangs off, so they read louder than the surrounding cells.
+ */
+.tma-cip-table--addon th.tma-cip-table__parent,
+.tma-cip-table--addon td.tma-cip-table__parent {
+  color: var(--color-text-primary);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--color-primary) 7%, transparent);
+}
+.tma-cip-table--addon tbody tr:hover td.tma-cip-table__parent {
+  background: color-mix(in srgb, var(--color-primary) 11%, var(--color-hover));
+}
+.tma-cip-table--addon th.tma-cip-table__parent--start,
+.tma-cip-table--addon td.tma-cip-table__parent--start {
+  box-shadow: inset 3px 0 0 var(--color-primary);
+}
+.tma-cip-table--addon td.tma-cip-table__parent .tma-cip-table__parent-value {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -38603,6 +38629,14 @@ span.tma-dash__messages-profile-avatar {
   overflow-wrap: anywhere;
   font-weight: 400;
   font-variant-numeric: tabular-nums;
+}
+
+.tma-dash__cip-strip .tma-dash__cip-fact--parent .tma-dash__clients-list-label {
+  color: var(--color-text-primary);
+}
+
+.tma-dash__cip-strip .tma-dash__cip-fact--parent .tma-dash__clients-list-value {
+  font-weight: 600;
 }
 
 .tma-dash__cip-strip + .tma-dash__clients-sync-notice {
@@ -39242,6 +39276,38 @@ span.tma-dash__messages-profile-avatar {
      what must survive; the filters wrap to a second line rather than
      squeezing the search field to nothing. */
   flex-wrap: wrap;
+}
+
+.tma-dash__cip-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.tma-dash__cip-search-by {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.tma-dash__cip-search-by-label {
+  font-size: 13px;
+  line-height: 1;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.tma-dash__cip-search-by-select {
+  max-width: 240px;
+  padding-right: var(--space-24);
+  cursor: pointer;
+}
+
+.tma-dash__cip-search .tma-dash__toolbar-search {
+  width: 280px;
 }
 
 .tma-dash__filter-drop {

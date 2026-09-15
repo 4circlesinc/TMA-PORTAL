@@ -304,6 +304,41 @@ class CipAddOnTest extends TestCase
         $this->assertSame(AddOn::TYPE_SPOUSE, $addon['applications'][0]['addonType']);
         $this->assertSame($parent->uuid, $addon['applications'][0]['parent']['id']);
         $this->assertSame('GAL-AO-'.now()->format('y').'-00001', $addon['applications'][0]['number']);
+        $this->assertSame('Spouse', $addon['applications'][0]['relationshipLabel']);
+        $this->assertSame('10T1GADD01P', $addon['applications'][0]['parent']['cipNumber']);
+        $this->assertSame('COR-1001', $addon['applications'][0]['parent']['corNumber']);
+        $this->assertSame('CHEN WEI', $addon['applications'][0]['parent']['applicantName']);
+    }
+
+    public function test_the_add_on_table_can_be_searched_by_the_five_named_options(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+        $this->file($staff, $this->addOnPayload($parent))->assertCreated();
+
+        $find = fn (string $q, ?string $searchBy = null) => $this->actingAs($staff)
+            ->getJson('/portal/cip/applications?phase='.Phase::ADD_ON.'&q='.urlencode($q).(
+                $searchBy ? '&searchBy='.urlencode($searchBy) : ''
+            ))
+            ->assertOk()
+            ->json('total');
+
+        $this->assertSame(1, $find('GAL-AO-'.now()->format('y').'-00001'));
+        $this->assertSame(1, $find('10T1GADD01P'));
+        $this->assertSame(1, $find('COR-1001'));
+        $this->assertSame(1, $find('Chen'));
+        $this->assertSame(1, $find('Mei'));
+        $this->assertSame(0, $find('Nobody at all'));
+        $this->assertSame(0, $find('Galaxy'), 'provider name is not an Add-On search option');
+
+        $this->assertSame(1, $find('10T1GADD01P', 'cip_number'));
+        $this->assertSame(0, $find('Mei', 'cip_number'));
+        $this->assertSame(1, $find('Mei', 'addon_applicant'));
+        $this->assertSame(0, $find('Chen', 'addon_applicant'));
+        $this->assertSame(1, $find('Chen', 'main_applicant'));
+        $this->assertSame(0, $find('Mei', 'main_applicant'));
+        $this->assertSame(1, $find('COR-1001', 'cor_number'));
+        $this->assertSame(1, $find('GAL-AO', 'addon_number'));
     }
 
     public function test_the_dashboard_includes_an_add_on_lane(): void

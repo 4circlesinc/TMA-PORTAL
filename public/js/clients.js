@@ -1414,9 +1414,12 @@
       var ticked = filterValues(field);
       if (ticked.length) listParams.push(field + '=' + encodeURIComponent(ticked.join(',')));
     });
-    if (APP_TABLE.sort && CIP_SORTS[APP_TABLE.sort]) {
+    if (APP_TABLE.sort && applicationSorts(clientsMountState)[APP_TABLE.sort]) {
       listParams.push('sort=' + encodeURIComponent(APP_TABLE.sort));
       listParams.push('dir=' + encodeURIComponent(APP_TABLE.dir === 'desc' ? 'desc' : 'asc'));
+    }
+    if (listTab === 'add_on' && APP_TABLE.searchBy) {
+      listParams.push('searchBy=' + encodeURIComponent(APP_TABLE.searchBy));
     }
 
     return CIP_APPLICATIONS_PATH + (listParams.length ? '?' + listParams.join('&') : '');
@@ -2324,16 +2327,47 @@
     if (search) cls += ' tma-dash__toolbar-search--has-value';
     if (state.searchLoading) cls += ' tma-dash__toolbar-search--loading';
     var kbd = search ? '' : '<kbd class="tma-dash__kbd" data-clients-search-shortcut aria-hidden="true">/</kbd>';
+    var addOn = isAddOnApplicationsTab(state);
+    var placeholder = 'Search';
+    var aria = 'Search table';
+    if (addOn) {
+      var chosen = ADDON_SEARCH_FIELDS.filter(function (field) {
+        return field.value === APP_TABLE.searchBy;
+      })[0];
+      placeholder = chosen
+        ? 'Search ' + chosen.label
+        : 'Search reference, CIP, COR or name';
+      aria = chosen ? 'Search by ' + chosen.label : 'Search Add-On applications';
+    }
 
-    return (
+    var input =
       '<div class="' + cls + '" role="search" data-clients-search-wrap>' +
       '<img src="' + ICONS.Search + '" alt="">' +
       '<input type="search" class="tma-dash__search-input" data-clients-search value="' + esc(search) +
-      '" placeholder="Search" aria-label="Search table" autocomplete="off" spellcheck="false">' +
+      '" placeholder="' + esc(placeholder) + '" aria-label="' + esc(aria) +
+      '" autocomplete="off" spellcheck="false">' +
       '<button type="button" class="tma-dash__search-clear" aria-label="Clear search" data-clients-search-clear>' +
       '<img src="' + ICONS.XCircle + '" alt=""></button>' +
       '<span class="tma-dash__search-spinner" aria-hidden="true"><img src="' + ICONS.Loading16 + '" alt=""></span>' +
       kbd +
+      '</div>';
+
+    if (!addOn) return input;
+
+    var options = '<option value="">All fields</option>' +
+      ADDON_SEARCH_FIELDS.map(function (field) {
+        return '<option value="' + esc(field.value) + '"' +
+          (APP_TABLE.searchBy === field.value ? ' selected' : '') + '>' +
+          esc(field.label) + '</option>';
+      }).join('');
+
+    return (
+      '<div class="tma-dash__cip-search">' +
+      '<label class="tma-dash__cip-search-by">' +
+      '<span class="tma-dash__cip-search-by-label">Search by</span>' +
+      '<select class="tma-dash__filter-drop tma-dash__cip-search-by-select" data-cip-search-by' +
+      ' aria-label="Search by">' + options + '</select></label>' +
+      input +
       '</div>'
     );
   }
@@ -2935,6 +2969,9 @@
     assignees: [], providers: [], statuses: [], personStatuses: [],
     phaseCounts: { all: 0, pre_approval: 0, post_approval: 0, add_on: 0, closed: 0 },
     expanded: {},
+    // Add-On tab: which of the five search options the box is using. Empty
+    // means all five, the default.
+    searchBy: '',
   };
 
   /*
@@ -2951,6 +2988,26 @@
     status: 'Status',
     assigned: 'Assigned to',
   };
+
+  var ADDON_SORTS = {
+    number: 'Add-On Reference Number',
+    cip: 'CIP Application Number',
+    cor: 'COR Number',
+    main_applicant: 'Main Applicant Name',
+    applicant: 'Add-On Applicant Name',
+    relationship: 'Relationship',
+    status: 'Status',
+    submitted: 'Submission Date',
+    assigned: 'Assigned Officer',
+  };
+
+  var ADDON_SEARCH_FIELDS = [
+    { value: 'addon_number', label: 'Add-On Reference Number' },
+    { value: 'cip_number', label: 'CIP Application Number' },
+    { value: 'cor_number', label: 'COR Number' },
+    { value: 'main_applicant', label: 'Main Applicant Name' },
+    { value: 'addon_applicant', label: 'Add-On Applicant Name' },
+  ];
 
   /*
    * Every application status the picker names, matching Status::listed().
@@ -3284,6 +3341,7 @@
       filterValues('provider').join(','),
       APP_TABLE.sort || '',
       APP_TABLE.dir || '',
+      APP_TABLE.searchBy || '',
       APP_TABLE.page,
     ].join('|');
   }
@@ -3301,6 +3359,9 @@
     var phase = applicationPhaseForTab(state);
     if (phase) params.push('phase=' + encodeURIComponent(phase));
     if (state.search) params.push('q=' + encodeURIComponent(state.search));
+    if (isAddOnApplicationsTab(state) && APP_TABLE.searchBy) {
+      params.push('searchBy=' + encodeURIComponent(APP_TABLE.searchBy));
+    }
     if (APP_TABLE.status) params.push('status=' + encodeURIComponent(APP_TABLE.status));
     /*
      * The same keys the counts were measured through, so the number beside a
@@ -3311,7 +3372,7 @@
       var ticked = filterValues(field);
       if (ticked.length) params.push(field + '=' + encodeURIComponent(ticked.join(',')));
     });
-    if (APP_TABLE.sort && CIP_SORTS[APP_TABLE.sort]) {
+    if (APP_TABLE.sort && applicationSorts(state)[APP_TABLE.sort]) {
       params.push('sort=' + encodeURIComponent(APP_TABLE.sort));
       params.push('dir=' + encodeURIComponent(APP_TABLE.dir === 'desc' ? 'desc' : 'asc'));
     }
@@ -3371,7 +3432,7 @@
    * padding still sorts, and aria-sort lives on the th, that is the column
    * header, not the button inside it.
    */
-  function applicationSortHeader(key, label) {
+  function applicationSortHeader(key, label, extraClass) {
     var active = APP_TABLE.sort === key;
     var dir = active && APP_TABLE.dir === 'desc' ? 'desc' : 'asc';
     var aria = !active ? 'none' : (dir === 'desc' ? 'descending' : 'ascending');
@@ -3379,11 +3440,12 @@
       ? '<span class="tma-cip-table__sort-arrow" aria-hidden="true">' +
         (dir === 'desc' ? '↓' : '↑') + '</span>'
       : '';
+    var cls = 'tma-cip-table__th-sort' + (extraClass ? ' ' + extraClass : '');
 
     return {
       html: '<button type="button" class="tma-cip-table__sort' + (active ? ' is-sorted' : '') +
         '" data-cip-sort="' + key + '">' + esc(label) + arrow + '</button>',
-      attrs: ' class="tma-cip-table__th-sort" aria-sort="' + aria + '"',
+      attrs: ' class="' + cls + '" aria-sort="' + aria + '"',
     };
   }
 
@@ -3391,12 +3453,27 @@
     return onApplicationsTable(state) && listTabOf(state) === 'post_approval';
   }
 
+  function isAddOnApplicationsTab(state) {
+    return onApplicationsTable(state) && listTabOf(state) === 'add_on';
+  }
+
+  function applicationSorts(state) {
+    return isAddOnApplicationsTab(state) ? ADDON_SORTS : CIP_SORTS;
+  }
+
   function applicationTableHeaders(state) {
-    var labels = Object.assign({}, CIP_SORTS);
+    var labels = Object.assign({}, applicationSorts(state));
     if (isPostApprovalApplicationsTab(state)) labels.status = 'Status';
 
     var headers = Object.keys(labels).map(function (key) {
-      return applicationSortHeader(key, labels[key]);
+      var parentClass = '';
+      if (isAddOnApplicationsTab(state) && (key === 'cip' || key === 'cor' || key === 'main_applicant')) {
+        parentClass = 'tma-cip-table__parent' +
+          (key === 'cip' ? ' tma-cip-table__parent--start' : '') +
+          (key === 'main_applicant' ? ' tma-cip-table__parent--end' : '');
+      }
+
+      return applicationSortHeader(key, labels[key], parentClass);
     });
     headers.push({ html: '', attrs: ' class="tma-portal-cell--menu"' });
 
@@ -3404,7 +3481,8 @@
   }
 
   function setApplicationSort(col) {
-    if (!CIP_SORTS[col]) return;
+    var sorts = applicationSorts(clientsMountState);
+    if (!sorts[col]) return;
     if (APP_TABLE.sort === col) {
       APP_TABLE.dir = APP_TABLE.dir === 'asc' ? 'desc' : 'asc';
     } else {
@@ -3640,6 +3718,10 @@
   }
 
   function renderApplicationTableRow(a, state, postApproval) {
+    if (isAddOnApplicationsTab(state)) {
+      return renderAddOnApplicationTableRow(a);
+    }
+
     var members = postApproval ? postApprovalFamilyMembers(a) : [];
     var expanded = !!(APP_TABLE.expanded && APP_TABLE.expanded[a.id]);
     var progressCell = postApproval
@@ -3682,6 +3764,44 @@
     return html;
   }
 
+  function addOnParentValue(a, key) {
+    var parent = a && a.parent;
+    var value = parent && parent[key];
+    return value ? String(value) : '';
+  }
+
+  function addOnParentCell(value, extraClass) {
+    var shown = value || '-';
+    var cls = 'tma-cip-table__parent' + (extraClass ? ' ' + extraClass : '');
+
+    return '<td class="' + cls + '"><span class="tma-cip-table__parent-value">' +
+      esc(shown) + '</span></td>';
+  }
+
+  function renderAddOnApplicationTableRow(a) {
+    var progressCell = cipStatusChip(a);
+    var submitted = a.submittedAt ? fmtShortDate(a.submittedAt) : '';
+
+    return '<tr data-cip-open="' + esc(a.clientUid || '') + '" data-cip-app="' + esc(a.id) + '"' +
+      (a.status === 'draft' ? ' data-cip-draft="1"' : '') + '>' +
+      '<td><span class="tma-cip-table__number">' + esc(a.number || a.internalNumber || '-') + '</span></td>' +
+      addOnParentCell(addOnParentValue(a, 'cipNumber'), 'tma-cip-table__parent--start') +
+      addOnParentCell(addOnParentValue(a, 'corNumber')) +
+      addOnParentCell(addOnParentValue(a, 'applicantName'), 'tma-cip-table__parent--end') +
+      '<td>' + applicantCell(a) +
+      '<span class="tma-cip-table__inline-status">' + progressCell + '</span></td>' +
+      '<td>' + esc(a.relationshipLabel || '-') + '</td>' +
+      '<td class="tma-cip-table__status-cell">' + progressCell + '</td>' +
+      '<td class="tma-portal-table__muted">' + esc(submitted || '-') + '</td>' +
+      '<td>' + assignedCell(a.assignedTo, a) + '</td>' +
+      '<td class="tma-portal-cell--menu">' +
+      '<button type="button" class="tma-portal-row-menu" data-cip-row-menu="' +
+      esc(a.clientUid || '') + '" data-cip-app="' + esc(a.id) + '"' +
+      ' aria-label="More actions" aria-haspopup="menu">' +
+      '<img src="images/icons/tma/ThreeDots-16.svg" alt="" width="16" height="16"></button></td>' +
+      '</tr>';
+  }
+
   function renderApplicationTable(state) {
     var ui = window.TMAPortalUI;
     if (!ui || !ui.table) return '';
@@ -3694,7 +3814,9 @@
     var headers = applicationTableHeaders(state);
 
     if (APP_TABLE.loading && !APP_TABLE.rows.length) {
-      return ui.table(headers, applicationTableSkeleton(), { cls: 'tma-cip-table' });
+      return ui.table(headers, applicationTableSkeleton(state), {
+        cls: 'tma-cip-table' + (isAddOnApplicationsTab(state) ? ' tma-cip-table--addon' : ''),
+      });
     }
 
     if (!APP_TABLE.rows.length) {
@@ -3706,8 +3828,9 @@
     var rows = APP_TABLE.rows.map(function (a) {
       return renderApplicationTableRow(a, state, postApproval);
     }).join('');
+    var tableCls = 'tma-cip-table' + (isAddOnApplicationsTab(state) ? ' tma-cip-table--addon' : '');
 
-    return ui.table(headers, rows, { cls: 'tma-cip-table' }) + renderApplicationTablePagination();
+    return ui.table(headers, rows, { cls: tableCls }) + renderApplicationTablePagination();
   }
 
   /*
@@ -4111,16 +4234,36 @@
    * them, or the block shimmers like something is still arriving when nothing
    * has changed.
    */
-  function applicationTableSkeleton() {
+  function applicationTableSkeleton(state) {
     var disc = '<span class="tma-skeleton tma-skeleton--circle"' +
       ' style="display:inline-block;width:26px;height:26px"></span>';
     var chip = function (w) {
       return '<span class="tma-skeleton" style="display:inline-block;width:' + w +
         'px;height:18px;border-radius:9px"></span>';
     };
+    var addOn = isAddOnApplicationsTab(state);
     var rows = '';
 
     for (var i = 0; i < 8; i++) {
+      if (addOn) {
+        rows += '<tr aria-hidden="true">' +
+          '<td>' + skeletonBar(skeletonWidth(i, 0.7)) + '</td>' +
+          '<td class="tma-cip-table__parent tma-cip-table__parent--start">' +
+          skeletonBar(skeletonWidth(i + 1, 0.7)) + '</td>' +
+          '<td class="tma-cip-table__parent">' + skeletonBar(skeletonWidth(i + 2, 0.6)) + '</td>' +
+          '<td class="tma-cip-table__parent tma-cip-table__parent--end">' +
+          skeletonBar(skeletonWidth(i + 3, 0.8)) + '</td>' +
+          '<td><span class="tma-cip-table__applicant">' + disc +
+          skeletonBar(skeletonWidth(i + 4, 0.8)) + '</span></td>' +
+          '<td>' + skeletonBar(skeletonWidth(i + 5, 0.5)) + '</td>' +
+          '<td>' + chip(34) + '</td>' +
+          '<td>' + skeletonBar(skeletonWidth(i + 6, 0.6)) + '</td>' +
+          '<td><span class="tma-cip-table__applicant">' + disc + '</span></td>' +
+          '<td class="tma-portal-cell--menu"></td>' +
+          '</tr>';
+        continue;
+      }
+
       rows += '<tr aria-hidden="true">' +
         '<td>' + skeletonBar(skeletonWidth(i, 0.7)) + '</td>' +
         // The face, then the name, the shape the row settles into.
@@ -4196,6 +4339,19 @@
      * handlers read `clientsMountState` rather than a captured `state` for the
      * same reason.
      */
+    document.addEventListener('change', function (e) {
+      var searchBy = e.target.closest('[data-cip-search-by]');
+      if (!searchBy) return;
+      APP_TABLE.searchBy = searchBy.value || '';
+      APP_TABLE.page = 1;
+      if (clientsMountState) {
+        clientsMountState.page = 1;
+        syncClientsListUrl(clientsMountState);
+      }
+      forgetApplicationTable();
+      repaintClients();
+    });
+
     document.addEventListener('click', function (e) {
       var sortCol = e.target.closest('[data-cip-sort]');
       if (sortCol) {
@@ -5893,6 +6049,7 @@
     var tab = listTabOf(state);
     if (tab === 'post_approval') return clientsEmpty('No post-approval applications', 'Illustration07');
     if (tab === 'pre_approval') return clientsEmpty('No pre-approval applications', 'Illustration07');
+    if (tab === 'add_on') return clientsEmpty('No Add-On applications', 'Illustration07');
     return clientsEmpty('No applications', 'Illustration07');
   }
 
@@ -6888,7 +7045,7 @@
         ? overviewRow('Add-On type', app.addonTypeLabel)
         : '') +
       (app.parent
-        ? overviewRow('Parent application', app.parent.number || app.parent.cipNumber) +
+        ? overviewRow('CIP application number', app.parent.cipNumber || app.parent.number) +
           overviewRow('Main applicant', app.parent.applicantName) +
           overviewRow('COR number', app.parent.corNumber)
         : overviewRow('COR number', app.corNumber || '')) +
@@ -6969,9 +7126,10 @@
    * The verbs stand at the strip's end, beside the facts they act on: one
    * card that says what the file is and what can be done to it next.
    */
-  function cipFact(label, value, rawHtml) {
+  function cipFact(label, value, rawHtml, extraClass) {
     if (value == null || value === '') return '';
-    return '<div class="tma-dash__clients-list-main">' +
+    return '<div class="tma-dash__clients-list-main' +
+      (extraClass ? ' ' + extraClass : '') + '">' +
       '<span class="tma-dash__clients-list-label">' + esc(label) + '</span>' +
       '<span class="tma-dash__clients-list-value">' + (rawHtml ? value : esc(value)) + '</span></div>';
   }
@@ -7019,8 +7177,16 @@
       : (app.cipNumber
         ? cipFact('CIP application number', app.cipNumber)
         : cipFact('Application number', app.internalNumber || app.number));
+    var parentLink = '';
+    if (app.phase === 'add_on' && app.parent) {
+      parentLink =
+        cipFact('CIP application number', app.parent.cipNumber, false, 'tma-dash__cip-fact--parent') +
+        cipFact('COR number', app.parent.corNumber, false, 'tma-dash__cip-fact--parent') +
+        cipFact('Main applicant', app.parent.applicantName, false, 'tma-dash__cip-fact--parent');
+    }
     var html =
       numberFact +
+      parentLink +
       cipFact('Submitted', cipMilestoneDate(app, 'submitted') || '-') +
       cipFact('Accepted', cipMilestoneDate(app, 'accepted') || '-') +
       cipFact(decision && decision.reached ? (decision.label || 'Decision') : 'Decision', cipMilestoneDate(app, 'decision')) +
@@ -13136,6 +13302,11 @@
       saveListTab(id);
       state.page = 1;
       state.selected = {};
+      if (!applicationSorts({ listTab: id, screen: 'list' })[APP_TABLE.sort]) {
+        APP_TABLE.sort = '';
+        APP_TABLE.dir = 'asc';
+      }
+      if (id !== 'add_on') APP_TABLE.searchBy = '';
       forgetApplicationTable();
       syncClientsListUrl(state);
       render();
@@ -13557,9 +13728,15 @@
       });
 
       var bootedSort = takeBootPosition('sort');
-      if (bootedSort && CIP_SORTS[bootedSort]) APP_TABLE.sort = bootedSort;
+      if (bootedSort && applicationSorts(state)[bootedSort]) APP_TABLE.sort = bootedSort;
       var bootedDir = takeBootPosition('dir');
       if (bootedDir === 'asc' || bootedDir === 'desc') APP_TABLE.dir = bootedDir;
+      var bootedSearchBy = takeBootPosition('searchBy');
+      if (bootedSearchBy && ADDON_SEARCH_FIELDS.some(function (field) {
+        return field.value === bootedSearchBy;
+      })) {
+        APP_TABLE.searchBy = bootedSearchBy;
+      }
 
       // The Dashboard's CIP card sets the filter from outside this view, and
       // cannot write an address for a screen that has not mounted yet, so
