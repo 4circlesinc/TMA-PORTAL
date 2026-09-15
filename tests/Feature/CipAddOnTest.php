@@ -25,6 +25,7 @@ use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\Intake;
+use App\Support\Cip\Notices;
 use App\Support\Cip\Package;
 use App\Support\Cip\Phase;
 use App\Support\Cip\Review;
@@ -246,8 +247,88 @@ class CipAddOnTest extends TestCase
                 && $details['Main Applicant Name'] === 'CHEN WEI'
                 && $details['Add-On Applicant Name'] === 'MEI WEI'
                 && $details['Direct Portal Link'] === $url
-                && str_starts_with($url, rtrim(config('app.url'), '/').'/citizenship-applications/');
+                && str_starts_with($url, rtrim(config('app.url'), '/').'/citizenship-applications/')
+                && $mail->subjectLine === 'AA - REVIEW APPLICATION - '.$application->displayNumber()
+                    .' - MEI WEI - '.now()->format('d.m.Y');
         });
+    }
+
+    public function test_add_on_notification_subjects_match_the_brief(): void
+    {
+        $this->travelTo('2026-08-12 12:00:00');
+
+        $kim = $this->account(Role::ADMINISTRATOR, 'Kim Morgan', 'kim-addon@example.com');
+        $facts = [
+            'number' => 'GAL-AO-26-00001',
+            'applicant' => 'Jane Smith',
+            'familySize' => 1,
+            'addOn' => true,
+        ];
+
+        $this->assertSame(
+            'KM - NEW APPLICATION - GAL-AO-26-00001 - JANE SMITH - 12.08.2026',
+            Notices::line($facts, Status::NEW, $kim),
+        );
+
+        $this->travelTo('2026-08-13 12:00:00');
+        $this->assertSame(
+            'KM - REVIEW APPLICATION - GAL-AO-26-00001 - JANE SMITH - 13.08.2026',
+            Notices::line($facts, Status::REVIEW_APPLICATION, $kim),
+        );
+
+        $this->travelTo('2026-08-15 12:00:00');
+        $this->assertSame(
+            'KM - ASSESSMENT FEEDBACK - GAL-AO-26-00001 - JANE SMITH - 15.08.2026',
+            Notices::line($facts, Status::ASSESSMENT_FEEDBACK, $kim),
+        );
+
+        $this->travelTo('2026-08-18 12:00:00');
+        $this->assertSame(
+            'KM - READY TO SUBMIT - GAL-AO-26-00001 - JANE SMITH - 18.08.2026',
+            Notices::line($facts, Status::READY_TO_SUBMIT, $kim),
+        );
+
+        $this->travelTo('2026-08-20 12:00:00');
+        $this->assertSame(
+            'KM - APPROVED - GAL-AO-26-00001 - JANE SMITH - 20.08.2026',
+            Notices::line($facts, Status::GRANTED, $kim),
+        );
+        $this->assertStringNotContainsString('(F', Notices::line($facts, Status::GRANTED, $kim));
+        $this->assertStringNotContainsString('GRANTED', Notices::line($facts, Status::GRANTED, $kim));
+    }
+
+    public function test_approving_an_add_on_uses_approved_in_the_subject_and_notifies_the_agent(): void
+    {
+        Mail::fake();
+        $this->travelTo('2026-08-20 12:00:00');
+
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+        $contact = $this->providerContact($parent->provider);
+
+        $body = $this->file($contact, $this->addOnPayload($parent))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->firstOrFail();
+        Tree::provision($application, $staff);
+        $application->forceFill([
+            'status' => Status::PENDING_REVIEW,
+            'submitted_at' => '2026-08-18',
+            'locked_at' => now(),
+        ])->save();
+
+        $this->postCipDecision($staff, $application->uuid, [
+            'decision' => Status::GRANTED,
+            'decidedAt' => '2026-08-20',
+        ])->assertOk();
+
+        $expected = 'AA - APPROVED - '.$application->displayNumber().' - MEI WEI - 20.08.2026';
+
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('gal-addon@example.com')
+            && $mail->subjectLine === $expected);
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('ada-addon@example.com')
+            && $mail->subjectLine === $expected);
     }
 
     public function test_a_dependent_add_on_stores_son_and_the_older_bracket(): void

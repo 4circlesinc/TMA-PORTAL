@@ -300,6 +300,11 @@ class Contacts
             return $facts;
         }
 
+        // Always mark Add-On so subject lines drop (Fn) and say APPROVED,
+        // even before the parent link is loaded for the postcard body.
+        $facts['addOn'] = true;
+        $facts['addonApplicant'] = $facts['applicant'];
+
         $application->loadMissing([
             'parent.client',
             'parent.people' => fn ($q) => $q->where('role', CipPerson::ROLE_MAIN_APPLICANT),
@@ -312,12 +317,10 @@ class Contacts
 
         $named = AddOn::parentPayload($parent);
 
-        $facts['addOn'] = true;
         $facts['cipNumber'] = (string) ($named['cipNumber'] ?? '');
         $facts['mainApplicant'] = ($named['applicantName'] ?? '') !== ''
             ? (string) $named['applicantName']
             : 'Unnamed applicant';
-        $facts['addonApplicant'] = $facts['applicant'];
 
         return $facts;
     }

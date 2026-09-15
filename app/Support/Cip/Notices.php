@@ -27,21 +27,30 @@ class Notices
      *
      *   [OFFICER INITIALS] - [STATUS] - [NUMBER] - [APPLICANT] (F[n]) - [DD.MM.YYYY]
      *
+     * Add-On omits the family-size token and names the Add-On applicant only:
+     *
+     *   [OFFICER INITIALS] - [STATUS] - [ADD-ON NUMBER] - [ADD-ON APPLICANT] - [DD.MM.YYYY]
+     *
      * Initials are the actor who moved the file, or the assigned reviewing
      * officer when the system moved it (DELAYED). NEW APPLICATION before an
      * assignment uses the actor, the person who filed or created it.
      *
-     * @param  array{number:string, applicant:string, familySize:int}  $facts
+     * @param  array{number:string, applicant:string, familySize:int, addOn?:bool}  $facts
      */
     public static function line(array $facts, string $status, ?User $actor = null, ?string $initials = null): string
     {
         $initials = trim((string) ($initials ?? ($actor ? SignaturePresenter::initials($actor->name) : '')));
+        $addOn = (bool) ($facts['addOn'] ?? false);
+        $applicant = mb_strtoupper($facts['applicant']);
+        if (! $addOn) {
+            $applicant .= ' (F'.$facts['familySize'].')';
+        }
 
         return implode(' - ', array_filter([
             $initials !== '' ? $initials : null,
-            Status::subjectLabel($status),
+            Status::subjectLabel($status, $addOn ? Phase::ADD_ON : null),
             $facts['number'],
-            mb_strtoupper($facts['applicant']).' (F'.$facts['familySize'].')',
+            $applicant,
             now()->format('d.m.Y'),
         ], fn ($part) => $part !== null && $part !== ''));
     }

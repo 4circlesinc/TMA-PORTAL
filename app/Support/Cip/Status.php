@@ -225,7 +225,8 @@ class Status
      * The status token section 22 puts in email subjects, not the chip/bucket label.
      *
      * Chips say Review Applications and Approved; the filing format says
-     * REVIEW APPLICATION and GRANTED, matching the brief's worked examples.
+     * REVIEW APPLICATION and GRANTED for pre-approval (APPROVED on Add-On),
+     * matching each brief's worked examples.
      */
     private const SUBJECT_LABELS = [
         self::DRAFT => 'DRAFT',
@@ -408,9 +409,16 @@ class Status
     /**
      * The uppercase form the notification standard puts in email subjects:
      * "KM - REVIEW APPLICATION - GAL26-00001 - JOHN SMITH (F4) - 13.08.2026".
+     *
+     * Add-On subjects say APPROVED for a grant (the brief's worked example);
+     * pre-approval still says GRANTED.
      */
-    public static function subjectLabel(string $status): string
+    public static function subjectLabel(string $status, ?string $phase = null): string
     {
+        if ($phase === Phase::ADD_ON && $status === self::GRANTED) {
+            return 'APPROVED';
+        }
+
         return self::SUBJECT_LABELS[$status] ?? strtoupper(self::label($status));
     }
 

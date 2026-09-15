@@ -439,6 +439,13 @@ final class Knowledge
                 'answer' => "After an Add-On is in **Pending Review**, staff can **Record query received** with the request date and what was asked for. The file moves to **Non-compliant**, the authorized agent is notified, and response uploads go in **Additional Documents** (versioning stays on). The requesting officer is the staff member who recorded the query.\n\nAdd-On skips Background Check. From **Pending Review** or **Non-compliant**, staff open **Decision received** and enter the decision date, **Approved** or **Denied**, optional **Decision notes**, and the decision letter PDF. Each recording is kept on the timeline as decision history. An approved Add-On does not move into the post-approval COR lane.",
             ],
             [
+                'id' => 'addon-notifications',
+                'q' => 'Who gets Add-On notification emails, and what is the subject line?',
+                'keywords' => ['add-on notification', 'add-on email', 'subject line', 'officer initials', 'approved subject', 'AO number email'],
+                'cipOnly' => true,
+                'answer' => "Every Add-On status change emails the same four classes as other CIP notices: **Assigned Officer**, **Compliance Team** (CIP Distribution Group), **Administrators**, and the **Authorized Agent Contact**.\n\nThe subject is:\n`[OFFICER INITIALS] - [STATUS] - [ADD-ON NUMBER] - [ADD-ON APPLICANT NAME] - [DD.MM.YYYY]`\n\nExamples: `KM - NEW APPLICATION - GAL-AO-26-00001 - JANE SMITH - 12.08.2026`, `KM - READY TO SUBMIT - GAL-AO-26-00001 - JANE SMITH - 18.08.2026`, `KM - APPROVED - GAL-AO-26-00001 - JANE SMITH - 20.08.2026`. There is no family-size `(Fn)` token on Add-On. A grant uses **APPROVED** in the subject (not GRANTED).",
+            ],
+            [
                 'id' => 'file-library',
                 'q' => 'Where is File Library?',
                 'keywords' => ['file library', 'files', 'folders', 'documents', 'all files'],
