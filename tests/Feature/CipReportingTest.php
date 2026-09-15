@@ -114,7 +114,7 @@ class CipReportingTest extends TestCase
 
         $this->assertContains('cip', collect($index['types'])->pluck('value')->all());
         $this->assertContains('all', collect($index['ranges'])->pluck('value')->all());
-        $this->assertCount(7, $index['cip']['presets']);
+        $this->assertCount(15, $index['cip']['presets']);
         $this->assertSame('Applications Pending Review', $index['cip']['presets'][0]['label']);
     }
 
@@ -453,6 +453,142 @@ class CipReportingTest extends TestCase
 
         $index = $this->actingAs($admin)->getJson('/admin/reports')->assertOk()->json();
         $this->assertSame('CIP Applications', collect($index['types'])->firstWhere('value', 'cip')['label']);
-        $this->assertCount(7, $index['cip']['presets']);
+        $this->assertCount(15, $index['cip']['presets']);
+    }
+
+    public function test_add_on_standard_presets_and_filters(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Reviewer');
+        $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+
+        $parent = $this->application($admin, $galaxy, Status::GRANTED, [
+            'decision' => CipApplication::DECISION_GRANTED,
+            'decided_at' => '2026-07-01',
+            'phase' => Phase::POST_APPROVAL,
+            'cip_number' => '10T1GADD01P',
+            'cor_number' => 'COR-1001',
+        ], 'Chen', 'Wei');
+
+        $spouse = Applications::create($galaxy, $admin, [
+            'phase' => Phase::ADD_ON,
+            'investment_type' => InvestmentType::REAL_ESTATE,
+        ]);
+        CipPerson::create([
+            'application_id' => $spouse->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Mei',
+            'last_name' => 'Wei',
+            'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+        ]);
+        $spouse->forceFill([
+            'status' => Status::NEW,
+            'phase' => Phase::ADD_ON,
+            'parent_application_id' => $parent->id,
+            'addon_type' => \App\Support\Cip\AddOn::TYPE_SPOUSE,
+            'assigned_officer_id' => $rita->id,
+        ])->save();
+
+        $pending = Applications::create($galaxy, $admin, [
+            'phase' => Phase::ADD_ON,
+            'investment_type' => InvestmentType::REAL_ESTATE,
+        ]);
+        CipPerson::create([
+            'application_id' => $pending->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Li',
+            'last_name' => 'Wei',
+            'relationship' => 'son',
+        ]);
+        $pending->forceFill([
+            'status' => Status::PENDING_REVIEW,
+            'phase' => Phase::ADD_ON,
+            'parent_application_id' => $parent->id,
+            'addon_type' => \App\Support\Cip\AddOn::TYPE_DEPENDENT_16_OVER,
+            'submitted_at' => '2026-08-10',
+            'assigned_officer_id' => $rita->id,
+        ])->save();
+
+        $approved = Applications::create($galaxy, $admin, [
+            'phase' => Phase::ADD_ON,
+            'investment_type' => InvestmentType::REAL_ESTATE,
+        ]);
+        CipPerson::create([
+            'application_id' => $approved->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Ana',
+            'last_name' => 'Wei',
+            'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+        ]);
+        $approved->forceFill([
+            'status' => Status::GRANTED,
+            'phase' => Phase::ADD_ON,
+            'parent_application_id' => $parent->id,
+            'addon_type' => \App\Support\Cip\AddOn::TYPE_SPOUSE,
+            'decision' => CipApplication::DECISION_GRANTED,
+            'decided_at' => '2026-08-15',
+            'assigned_officer_id' => $rita->id,
+        ])->save();
+
+        // A pre-approval pending review must not appear in Add-On presets.
+        $this->application($admin, $galaxy, Status::PENDING_REVIEW);
+
+        $newReport = $this->create($admin, ['filters' => ['preset' => 'addon_new']]);
+        $this->assertSame('New Add-On Applications: All dates', $newReport['name']);
+        $this->assertSame('1', $this->metric($newReport, 'Applications'));
+        $this->assertSame('MEI WEI', $this->rows($newReport)[0][1]);
+        $this->assertSame('CHEN WEI', $this->rows($newReport)[0][2]);
+
+        $pendingReport = $this->create($admin, ['filters' => ['preset' => 'addon_pending_review']]);
+        $this->assertSame('1', $this->metric($pendingReport, 'Applications'));
+        $this->assertSame('LI WEI', $this->rows($pendingReport)[0][1]);
+
+        $approvedReport = $this->create($admin, ['filters' => ['preset' => 'addon_granted']]);
+        $this->assertSame('Approved Add-Ons: All dates', $approvedReport['name']);
+        $this->assertSame('1', $this->metric($approvedReport, 'Applications'));
+        $this->assertSame('1', $this->metric($approvedReport, 'Approved'));
+
+        $byType = $this->create($admin, ['filters' => [
+            'phase' => Phase::ADD_ON,
+            'addonType' => \App\Support\Cip\AddOn::TYPE_SPOUSE,
+        ]]);
+        $this->assertSame('2', $this->metric($byType, 'Applications'));
+
+        $byMain = $this->create($admin, ['filters' => [
+            'phase' => Phase::ADD_ON,
+            'mainApplicant' => 'Chen',
+        ]]);
+        $this->assertSame('3', $this->metric($byMain, 'Applications'));
+
+        $byAddonName = $this->create($admin, ['filters' => [
+            'addonApplicant' => 'Mei',
+        ]]);
+        $this->assertSame('1', $this->metric($byAddonName, 'Applications'));
+
+        $byCip = $this->create($admin, ['filters' => [
+            'phase' => Phase::ADD_ON,
+            'cipNumber' => '10T1GADD01P',
+        ]]);
+        $this->assertSame('3', $this->metric($byCip, 'Applications'));
+
+        $byCor = $this->create($admin, ['filters' => [
+            'phase' => Phase::ADD_ON,
+            'corNumber' => 'COR-1001',
+        ]]);
+        $this->assertSame('3', $this->metric($byCor, 'Applications'));
+
+        $byRelationship = $this->create($admin, ['filters' => ['preset' => 'addon_by_relationship']]);
+        $this->assertSame('Add-Ons by Relationship Type: All dates', $byRelationship['name']);
+        $buckets = collect($this->rows($byRelationship))->mapWithKeys(fn ($row) => [$row[0] => $row[1]]);
+        $this->assertSame('2', $buckets['Spouse']);
+        $this->assertSame('1', $buckets['Son']);
+
+        $byOfficer = $this->create($admin, ['filters' => ['preset' => 'addon_by_officer']]);
+        $this->assertSame('Add-Ons by Assigned Officer: All dates', $byOfficer['name']);
+        $this->assertSame([['Rita Reviewer', '3']], $this->rows($byOfficer));
+
+        $index = $this->actingAs($admin)->getJson('/admin/reports')->assertOk()->json();
+        $this->assertNotEmpty($index['cip']['phases']);
+        $this->assertNotEmpty($index['cip']['addonTypes']);
     }
 }

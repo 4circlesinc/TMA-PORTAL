@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Report;
 use App\Support\Access\Role;
+use App\Support\Cip\AddOn;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\InvestmentType;
+use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
 use App\Support\Reports\CipReport;
 use App\Support\Reports\ReportBuilder;
@@ -88,10 +90,16 @@ class ReportsController extends Controller
             'filters' => ['nullable', 'array'],
             'filters.preset' => ['nullable', 'string', Rule::in(array_keys(CipReport::PRESETS))],
             'filters.status' => ['nullable', 'string', Rule::in(Status::ALL)],
+            'filters.phase' => ['nullable', 'string', Rule::in(Phase::ALL)],
             'filters.providerId' => ['nullable', 'integer'],
             'filters.investmentType' => ['nullable', 'string', Rule::in(array_keys(InvestmentType::ALL))],
+            'filters.addonType' => ['nullable', 'string', Rule::in(AddOn::TYPES)],
             'filters.applicant' => ['nullable', 'string', 'max:191'],
+            'filters.mainApplicant' => ['nullable', 'string', 'max:191'],
+            'filters.addonApplicant' => ['nullable', 'string', 'max:191'],
             'filters.officerId' => ['nullable', 'integer'],
+            'filters.cipNumber' => ['nullable', 'string', 'max:64'],
+            'filters.corNumber' => ['nullable', 'string', 'max:64'],
             'filters.submittedFrom' => ['nullable', 'date'],
             'filters.submittedTo' => ['nullable', 'date', 'after_or_equal:filters.submittedFrom'],
             'filters.decidedFrom' => ['nullable', 'date'],
@@ -280,8 +288,14 @@ class ReportsController extends Controller
             'statuses' => collect(Status::listed())
                 ->map(fn (string $status) => ['value' => $status, 'label' => Status::label($status)])
                 ->all(),
+            'phases' => collect(Phase::ALL)
+                ->map(fn (string $phase) => ['value' => $phase, 'label' => Phase::label($phase)])
+                ->all(),
             'providers' => $providers,
             'investmentTypes' => InvestmentType::options(),
+            'addonTypes' => collect(AddOn::TYPES)
+                ->map(fn (string $type) => ['value' => $type, 'label' => AddOn::typeLabel($type)])
+                ->all(),
             'officers' => $officers,
         ];
     }
@@ -298,8 +312,10 @@ class ReportsController extends Controller
         $clean = [];
 
         foreach ([
-            'preset', 'status', 'providerId', 'investmentType', 'applicant',
-            'officerId', 'submittedFrom', 'submittedTo', 'decidedFrom', 'decidedTo',
+            'preset', 'status', 'phase', 'providerId', 'investmentType', 'addonType',
+            'applicant', 'mainApplicant', 'addonApplicant', 'officerId',
+            'cipNumber', 'corNumber',
+            'submittedFrom', 'submittedTo', 'decidedFrom', 'decidedTo',
         ] as $key) {
             $value = $filters[$key] ?? null;
 

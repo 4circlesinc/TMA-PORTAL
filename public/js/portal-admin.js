@@ -567,13 +567,23 @@
           var hit = (list || []).filter(function (x) { return String(x.value) === String(value); })[0];
           return hit ? hit.label : String(value);
         }
-        var pinned = filters.preset && ['pending_review', 'background_check', 'delayed', 'granted', 'denied'].indexOf(filters.preset) !== -1;
+        var pinned = filters.preset && [
+          'pending_review', 'background_check', 'delayed', 'granted', 'denied',
+          'addon_new', 'addon_pending_review', 'addon_assessment_feedback',
+          'addon_non_compliant', 'addon_granted', 'addon_denied',
+        ].indexOf(filters.preset) !== -1;
         var bits = [];
         if (!pinned && filters.status) bits.push(named(cip.statuses, filters.status));
+        if (filters.phase) bits.push(named(cip.phases, filters.phase));
         if (filters.providerId) bits.push(named(cip.providers, filters.providerId));
         if (filters.investmentType) bits.push(named(cip.investmentTypes, filters.investmentType));
+        if (filters.addonType) bits.push(named(cip.addonTypes, filters.addonType));
         if (filters.applicant) bits.push(filters.applicant);
+        if (filters.mainApplicant) bits.push('Main ' + filters.mainApplicant);
+        if (filters.addonApplicant) bits.push('Add-On ' + filters.addonApplicant);
         if (filters.officerId) bits.push(named(cip.officers, filters.officerId));
+        if (filters.cipNumber) bits.push('CIP ' + filters.cipNumber);
+        if (filters.corNumber) bits.push('COR ' + filters.corNumber);
         if (filters.submittedFrom || filters.submittedTo) {
           bits.push('Submitted ' + (filters.submittedFrom || '…') + ' – ' + (filters.submittedTo || '…'));
         }
@@ -588,7 +598,15 @@
         var today = new Date().toISOString().slice(0, 10);
         var cip = payload.cip || null;
         var any = [{ value: '', label: 'Any' }];
-        var pinnedPresets = ['pending_review', 'background_check', 'delayed', 'granted', 'denied'];
+        var pinnedPresets = [
+          'pending_review', 'background_check', 'delayed', 'granted', 'denied',
+          'addon_new', 'addon_pending_review', 'addon_assessment_feedback',
+          'addon_non_compliant', 'addon_granted', 'addon_denied',
+        ];
+        var groupingPresets = [
+          'by_provider', 'by_investment_type',
+          'addon_by_relationship', 'addon_by_officer',
+        ];
         ui().openModal({
           title: 'Create Report',
           cls: cip ? 'tma-rep-create' : '',
@@ -602,12 +620,18 @@
                 '<div data-rep-status-field>' +
                 ui().field('Status', ui().select(any.concat(cip.statuses || []), '', 'data-rep-status', 'Status')) +
                 '</div>' +
+                ui().field('Phase', ui().select(any.concat(cip.phases || []), '', 'data-rep-phase', 'Phase')) +
                 ui().field('Service provider', ui().select(any.concat(cip.providers || []), '', 'data-rep-provider', 'Service provider')) +
                 ui().field('Investment type', ui().select(any.concat(cip.investmentTypes || []), '', 'data-rep-investment', 'Investment type')) +
+                ui().field('Add-On type', ui().select(any.concat(cip.addonTypes || []), '', 'data-rep-addon-type', 'Add-On type')) +
                 ui().field('Assigned officer', ui().select(any.concat(cip.officers || []), '', 'data-rep-officer', 'Assigned officer')) +
                 '<div class="tma-rep-filters__span">' +
                 ui().field('Applicant', ui().input({ attrs: 'data-rep-applicant', placeholder: 'Name', ariaLabel: 'Applicant' })) +
                 '</div>' +
+                ui().field('Main applicant', ui().input({ attrs: 'data-rep-main-applicant', placeholder: 'Name', ariaLabel: 'Main applicant' })) +
+                ui().field('Add-On applicant', ui().input({ attrs: 'data-rep-addon-applicant', placeholder: 'Name', ariaLabel: 'Add-On applicant' })) +
+                ui().field('CIP application number', ui().input({ attrs: 'data-rep-cip-number', placeholder: 'CIP number', ariaLabel: 'CIP application number' })) +
+                ui().field('COR number', ui().input({ attrs: 'data-rep-cor-number', placeholder: 'COR number', ariaLabel: 'COR number' })) +
                 ui().field('Submitted from', ui().input({ type: 'date', attrs: 'data-rep-submitted-from' })) +
                 ui().field('Submitted to', ui().input({ type: 'date', attrs: 'data-rep-submitted-to' })) +
                 ui().field('Decision from', ui().input({ type: 'date', attrs: 'data-rep-decided-from' })) +
@@ -636,7 +660,7 @@
 
             function syncPreset() {
               var value = preset ? preset.value : '';
-              var pinned = pinnedPresets.indexOf(value) !== -1;
+              var pinned = pinnedPresets.indexOf(value) !== -1 || groupingPresets.indexOf(value) !== -1;
               if (statusField) statusField.hidden = pinned;
             }
 
@@ -674,11 +698,19 @@
                 var chosen = val('data-rep-preset');
                 body.filters = {
                   preset: chosen,
-                  status: pinnedPresets.indexOf(chosen) !== -1 ? '' : val('data-rep-status'),
+                  status: pinnedPresets.indexOf(chosen) !== -1 || groupingPresets.indexOf(chosen) !== -1
+                    ? ''
+                    : val('data-rep-status'),
+                  phase: chosen.indexOf('addon_') === 0 ? '' : val('data-rep-phase'),
                   providerId: val('data-rep-provider'),
                   investmentType: val('data-rep-investment'),
+                  addonType: val('data-rep-addon-type'),
                   applicant: val('data-rep-applicant'),
+                  mainApplicant: val('data-rep-main-applicant'),
+                  addonApplicant: val('data-rep-addon-applicant'),
                   officerId: val('data-rep-officer'),
+                  cipNumber: val('data-rep-cip-number'),
+                  corNumber: val('data-rep-cor-number'),
                   submittedFrom: val('data-rep-submitted-from'),
                   submittedTo: val('data-rep-submitted-to'),
                   decidedFrom: val('data-rep-decided-from'),
