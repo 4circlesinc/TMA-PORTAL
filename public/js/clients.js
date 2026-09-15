@@ -7175,27 +7175,37 @@
     if (!app) return '';
 
     var decision = cipMilestone(app, 'decision');
-    var numberFact = app.phase === 'add_on'
+    var addOn = app.phase === 'add_on';
+    var numberFact = addOn
       ? cipFact('Add-On reference number', app.internalNumber || app.number)
       : (app.cipNumber
         ? cipFact('CIP application number', app.cipNumber)
         : cipFact('Application number', app.internalNumber || app.number));
-    var parentLink = '';
-    if (app.phase === 'add_on' && app.parent) {
-      parentLink =
+    /* Add-On strip is identity + the granted parent it hangs off + who holds
+       it. Submitted / Accepted only appear once dated; Investment and
+       Referred by stay on Overview so the glance does not sprawl. */
+    var html = numberFact;
+    if (addOn && app.parent) {
+      html +=
         cipFact('CIP application number', app.parent.cipNumber, false, 'tma-dash__cip-fact--parent') +
         cipFact('COR number', app.parent.corNumber, false, 'tma-dash__cip-fact--parent') +
         cipFact('Main applicant', app.parent.applicantName, false, 'tma-dash__cip-fact--parent');
     }
-    var html =
-      numberFact +
-      parentLink +
-      cipFact('Submitted', cipMilestoneDate(app, 'submitted') || '-') +
-      cipFact('Accepted', cipMilestoneDate(app, 'accepted') || '-') +
-      cipFact(decision && decision.reached ? (decision.label || 'Decision') : 'Decision', cipMilestoneDate(app, 'decision')) +
-      cipFact('Investment', app.investmentType) +
-      cipFact('Referred by', app.provider) +
-      cipFact('Assigned', cipAssignedFaces(app), true);
+    if (addOn) {
+      html +=
+        cipFact('Submitted', cipMilestoneDate(app, 'submitted')) +
+        cipFact('Accepted', cipMilestoneDate(app, 'accepted')) +
+        cipFact(decision && decision.reached ? (decision.label || 'Decision') : 'Decision', cipMilestoneDate(app, 'decision')) +
+        cipFact('Assigned', cipAssignedFaces(app), true);
+    } else {
+      html +=
+        cipFact('Submitted', cipMilestoneDate(app, 'submitted') || '-') +
+        cipFact('Accepted', cipMilestoneDate(app, 'accepted') || '-') +
+        cipFact(decision && decision.reached ? (decision.label || 'Decision') : 'Decision', cipMilestoneDate(app, 'decision')) +
+        cipFact('Investment', app.investmentType) +
+        cipFact('Referred by', app.provider) +
+        cipFact('Assigned', cipAssignedFaces(app), true);
+    }
 
     var actions = renderApplicationBar(state, app);
     if (!html && !actions) return '';
