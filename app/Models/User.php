@@ -118,12 +118,14 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
-     * Must this account use an authenticator app? Either the firm-wide
-     * sign-in policy, or an administrator requiring it on this person.
+     * Must this account use an authenticator app? Either Sign-in policy for
+     * this account type, or an administrator requiring it on this person.
+     * Stricter wins: a person flag or a matching account-type policy both
+     * block the portal until the authenticator app is confirmed.
      */
     public function mustUseAuthenticator(): bool
     {
-        return $this->require_two_factor || SecurityPolicies::authenticatorRequired();
+        return $this->require_two_factor || SecurityPolicies::authenticatorRequired($this);
     }
 
     /**

@@ -22,9 +22,9 @@ class PreventDisablingRequiredAuthenticator
             && $request->is('auth/user/two-factor-authentication')
             && $user?->mustUseAuthenticator()
         ) {
-            $message = $user->require_two_factor && ! SecurityPolicies::authenticatorRequired()
-                ? 'An administrator requires an authenticator app on this account.'
-                : 'Your organisation requires an authenticator app.';
+            $message = SecurityPolicies::authenticatorRequired($user)
+                ? 'Your organisation requires an authenticator app.'
+                : 'An administrator requires an authenticator app on this account.';
 
             if ($request->expectsJson()) {
                 return response()->json(['message' => $message], 403);

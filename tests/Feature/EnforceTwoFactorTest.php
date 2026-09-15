@@ -58,6 +58,8 @@ class EnforceTwoFactorTest extends TestCase
         $this->assertFalse(SecurityPolicies::authenticatorRequired());
         $this->assertFalse(SecurityPolicies::DEFAULTS['sign-in']['requireAuthenticatorApp']);
         $this->assertFalse(SecurityPolicies::DEFAULTS['sign-in']['requireMfa']);
+        $this->assertSame([], SecurityPolicies::DEFAULTS['sign-in']['requireAuthenticatorForAccountTypes']);
+        $this->assertSame([], SecurityPolicies::authenticatorRequiredAccountTypes());
         $this->assertSame(7, SecurityPolicies::DEFAULTS['sign-in']['sessionDays']);
     }
 
@@ -172,6 +174,103 @@ class EnforceTwoFactorTest extends TestCase
         $this->assertTrue(SecurityPolicies::authenticatorRequired());
         $this->assertTrue(SecurityPolicies::get('sign-in')['requireMfa']);
         $this->assertTrue(SecurityPolicies::get('sign-in')['requireAuthenticatorApp']);
+        $this->assertSame(
+            SecurityPolicies::AUTHENTICATOR_ACCOUNT_TYPES,
+            SecurityPolicies::authenticatorRequiredAccountTypes()
+        );
         $this->assertSame(7, SecurityPolicies::sessionDays());
+    }
+
+    public function test_sign_in_policy_can_require_the_authenticator_for_one_account_type(): void
+    {
+        $admin = $this->user();
+        $officer = User::factory()->create([
+            'status' => 'approved',
+            'account_type' => Role::REVIEWING_OFFICER,
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+        ]);
+        $providerAdmin = User::factory()->create([
+            'status' => 'approved',
+            'account_type' => Role::SERVICE_PROVIDER_ADMIN,
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->putJson('/admin/security-policies/sign-in', [
+                'minLength' => 10,
+                'numbersRequired' => 0,
+                'specialRequired' => 0,
+                'requireMfa' => false,
+                'requireMicrosoftConnect' => false,
+                'requireGoogleConnect' => false,
+                'requireAuthenticatorApp' => false,
+                'requireAuthenticatorForAccountTypes' => [Role::SERVICE_PROVIDER_ADMIN],
+                'sessionDays' => 7,
+            ])
+            ->assertOk();
+
+        Cache::forget('portal-settings.sign-in');
+
+        $this->assertFalse(SecurityPolicies::get('sign-in')['requireAuthenticatorApp']);
+        $this->assertSame(
+            [Role::SERVICE_PROVIDER_ADMIN],
+            SecurityPolicies::authenticatorRequiredAccountTypes()
+        );
+        $this->assertFalse(SecurityPolicies::authenticatorRequired($officer));
+        $this->assertTrue(SecurityPolicies::authenticatorRequired($providerAdmin));
+        $this->assertTrue($providerAdmin->mustUseAuthenticator());
+        $this->assertFalse($officer->mustUseAuthenticator());
+
+        $this->actingAs($providerAdmin)
+            ->getJson('/portal/companies')
+            ->assertForbidden()
+            ->assertJsonPath('code', 'mfa-required');
+
+        $this->actingAs($officer)->getJson('/portal/companies')->assertOk();
+    }
+
+    public function test_account_type_policy_and_per_person_requirement_both_enforce(): void
+    {
+        $spWithoutPersonFlag = User::factory()->create([
+            'status' => 'approved',
+            'account_type' => Role::SERVICE_PROVIDER_ADMIN,
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+            'require_two_factor' => false,
+        ]);
+        $spWithPersonFlag = User::factory()->create([
+            'status' => 'approved',
+            'account_type' => Role::SERVICE_PROVIDER_ADMIN,
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+            'require_two_factor' => true,
+        ]);
+
+        // Only the person flag so far.
+        $this->assertTrue($spWithPersonFlag->mustUseAuthenticator());
+        $this->assertFalse($spWithoutPersonFlag->mustUseAuthenticator());
+
+        SecurityPolicies::put('sign-in', SecurityPolicies::syncAuthenticatorRequirement([
+            'minLength' => 10,
+            'numbersRequired' => 0,
+            'specialRequired' => 0,
+            'requireMfa' => false,
+            'requireMicrosoftConnect' => false,
+            'requireGoogleConnect' => false,
+            'requireAuthenticatorApp' => false,
+            'requireAuthenticatorForAccountTypes' => [Role::SERVICE_PROVIDER_ADMIN],
+            'sessionDays' => 7,
+        ]));
+        Cache::forget('portal-settings.sign-in');
+
+        // Both Service Provider admins are required once the account type is on.
+        $this->assertTrue($spWithPersonFlag->fresh()->mustUseAuthenticator());
+        $this->assertTrue($spWithoutPersonFlag->fresh()->mustUseAuthenticator());
     }
 }

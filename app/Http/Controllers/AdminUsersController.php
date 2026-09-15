@@ -151,6 +151,8 @@ class AdminUsersController extends Controller
                 'status' => $user->status,
                 'twoFactor' => $user->hasTwoFactorEnabled(),
                 'requireTwoFactor' => (bool) $user->require_two_factor,
+                'policyRequiresAuthenticator' => SecurityPolicies::authenticatorRequired($user),
+                'mustUseAuthenticator' => $user->mustUseAuthenticator(),
                 'serviceProviders' => ($membershipsByUser->get($user->id) ?? collect())
                     ->map(function (CompanyMember $member) {
                         $company = $member->company;
@@ -193,6 +195,7 @@ class AdminUsersController extends Controller
             'users' => $users,
             'canManage' => $this->isAdmin($viewer),
             'orgRequiresAuthenticator' => SecurityPolicies::authenticatorRequired(),
+            'authenticatorRequiredAccountTypes' => SecurityPolicies::authenticatorRequiredAccountTypes(),
         ]);
     }
 

@@ -101,6 +101,8 @@
       linkedin: u.linkedin || '',
       _twoFactor: u.twoFactor,
       _requireTwoFactor: !!u.requireTwoFactor,
+      _policyRequiresAuthenticator: !!u.policyRequiresAuthenticator,
+      _mustUseAuthenticator: !!(u.mustUseAuthenticator || u.requireTwoFactor || u.policyRequiresAuthenticator),
       _accountType: u.accountType || '',
       lastLogin: u.lastLogin || '',
       lastLoginIso: u.lastLoginIso || '',
@@ -141,9 +143,10 @@
   }
 
   function twoFactorLabel(row) {
-    if (row._twoFactor && row._requireTwoFactor) return 'On · required';
+    var required = row._requireTwoFactor || row._policyRequiresAuthenticator || row._mustUseAuthenticator;
+    if (row._twoFactor && required) return 'On · required';
     if (row._twoFactor) return 'On';
-    if (row._requireTwoFactor) return 'Required — not set up';
+    if (required) return 'Required — not set up';
     return 'Off';
   }
 
@@ -1087,7 +1090,9 @@ if (state.filters.user) {
       }
       if (act === 'clear-2fa') {
         statusAction('/admin/users/' + row._id + '/require-two-factor', { required: false },
-          'Authenticator is no longer required for ' + row.user);
+          row._policyRequiresAuthenticator
+            ? 'Person requirement cleared; Sign-in policy still requires the authenticator for this account type'
+            : 'Authenticator is no longer required for ' + row.user);
       }
       if (act === 'reset-2fa') {
         usersApi('POST', '/admin/users/' + row._id + '/reset-two-factor').then(function (res) {
@@ -1177,7 +1182,9 @@ if (state.filters.user) {
         }
         if (kind === 'clear-2fa') {
           statusAction('/admin/users/' + row._id + '/require-two-factor', { required: false },
-            'Authenticator is no longer required for ' + row.user);
+            row._policyRequiresAuthenticator
+              ? 'Person requirement cleared; Sign-in policy still requires the authenticator for this account type'
+              : 'Authenticator is no longer required for ' + row.user);
         }
         if (kind === 'reset-2fa') {
           usersApi('POST', '/admin/users/' + row._id + '/reset-two-factor').then(function (res) {

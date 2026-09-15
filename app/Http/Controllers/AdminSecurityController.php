@@ -14,9 +14,24 @@ class AdminSecurityController extends Controller
 {
     public function show(Request $request): JsonResponse
     {
+        $signIn = SecurityPolicies::get('sign-in');
+        $types = SecurityPolicies::authenticatorRequiredAccountTypes();
+        $everyone = $types !== []
+            && count($types) === count(SecurityPolicies::AUTHENTICATOR_ACCOUNT_TYPES);
+        $signIn['requireAuthenticatorForAccountTypes'] = $types;
+        $signIn['requireAuthenticatorApp'] = $everyone;
+        $signIn['requireMfa'] = $everyone;
+        $signIn['authenticatorAccountTypeOptions'] = collect(SecurityPolicies::AUTHENTICATOR_ACCOUNT_TYPES)
+            ->map(fn (string $type) => [
+                'id' => $type,
+                'label' => SecurityPolicies::AUTHENTICATOR_ACCOUNT_TYPE_LABELS[$type] ?? $type,
+            ])
+            ->values()
+            ->all();
+
         return response()->json([
             'isAdmin' => $this->isAdmin($request->user()),
-            'signInPolicy' => SecurityPolicies::get('sign-in'),
+            'signInPolicy' => $signIn,
             'securityPolicy' => SecurityPolicies::get('security'),
             'deviceSecurity' => SecurityPolicies::get('device'),
             'alertSettings' => SecurityPolicies::get('alerts'),
@@ -110,16 +125,12 @@ class AdminSecurityController extends Controller
             'requireMicrosoftConnect' => ['required', 'boolean'],
             'requireGoogleConnect' => ['required', 'boolean'],
             'requireAuthenticatorApp' => ['required', 'boolean'],
+            'requireAuthenticatorForAccountTypes' => ['sometimes', 'array'],
+            'requireAuthenticatorForAccountTypes.*' => ['string', Rule::in(SecurityPolicies::AUTHENTICATOR_ACCOUNT_TYPES)],
             'sessionDays' => ['required', 'integer', 'between:1,30'],
         ]);
 
-        // One control on the screen, two stored flags so older rows and the
-        // portal gate stay in agreement.
-        $required = $request->boolean('requireAuthenticatorApp') || $request->boolean('requireMfa');
-        $data['requireAuthenticatorApp'] = $required;
-        $data['requireMfa'] = $required;
-
-        return $data;
+        return SecurityPolicies::syncAuthenticatorRequirement($data);
     }
 
     /**

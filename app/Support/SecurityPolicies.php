@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use App\Models\User;
+use App\Support\Access\Role;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +15,33 @@ use Illuminate\Support\Facades\DB;
 class SecurityPolicies
 {
     public const SECTIONS = ['sign-in', 'security', 'device', 'alerts'];
+
+    /**
+     * Account types an administrator may require an authenticator for from
+     * Sign-in policy. Canonical Role values only (aliases resolve at check time).
+     *
+     * @var list<string>
+     */
+    public const AUTHENTICATOR_ACCOUNT_TYPES = [
+        Role::ADMINISTRATOR,
+        Role::REVIEWING_OFFICER,
+        Role::SERVICE_PROVIDER_ADMIN,
+        Role::CLIENT,
+        Role::EMPLOYEE,
+    ];
+
+    /**
+     * Labels for the Sign-in policy checkboxes.
+     *
+     * @var array<string, string>
+     */
+    public const AUTHENTICATOR_ACCOUNT_TYPE_LABELS = [
+        Role::ADMINISTRATOR => 'Administrators',
+        Role::REVIEWING_OFFICER => 'CRO / Reviewing officers',
+        Role::SERVICE_PROVIDER_ADMIN => 'Service Provider admins',
+        Role::CLIENT => 'Clients',
+        Role::EMPLOYEE => 'Employees',
+    ];
 
     public const DEFAULTS = [
         'sign-in' => [
@@ -27,6 +56,10 @@ class SecurityPolicies
             'requireMicrosoftConnect' => false,
             'requireGoogleConnect' => false,
             'requireAuthenticatorApp' => false,
+            // Per account-type requirements. Empty means none. Legacy rows
+            // that only set requireAuthenticatorApp/requireMfa still mean
+            // every account type until an administrator saves the new UI.
+            'requireAuthenticatorForAccountTypes' => [],
             // Absolute sign-in lifetime in days (Stay signed in, trusted
             // devices, and the session cap). Email codes for a new browser
             // are always on and are not a stored switch.
@@ -95,17 +128,108 @@ class SecurityPolicies
     }
 
     /**
-     * Onboarding hides "Set later" and the portal is blocked until an
-     * authenticator app is confirmed. Off unless an administrator turns it
-     * on in Sign-in policy. Email codes for a new browser are always on
-     * and do not use this flag.
+     * Account types the sign-in policy currently requires an authenticator for.
+     *
+     * Legacy `requireAuthenticatorApp` / `requireMfa` alone still means every
+     * type. Once an administrator saves the per-type list, that list wins and
+     * the legacy flags stay in sync (true only when every type is selected).
+     *
+     * @return list<string>
      */
-    public static function authenticatorRequired(): bool
+    public static function authenticatorRequiredAccountTypes(): array
     {
         $policy = self::get('sign-in');
 
-        return (bool) ($policy['requireAuthenticatorApp'] ?? false)
+        // Legacy everyone toggle still means every type, even if a partial
+        // list was left behind in an older row.
+        if ((bool) ($policy['requireAuthenticatorApp'] ?? false)
+            || (bool) ($policy['requireMfa'] ?? false)) {
+            return self::AUTHENTICATOR_ACCOUNT_TYPES;
+        }
+
+        return self::normalizeAuthenticatorAccountTypes(
+            $policy['requireAuthenticatorForAccountTypes'] ?? []
+        );
+    }
+
+    /**
+     * Does the sign-in policy require an authenticator for this person?
+     *
+     * With no user, true when any account type (or the legacy everyone flag)
+     * is required — used by tests and "is the org requiring anything?" checks.
+     * Email codes for a new browser are always on and do not use this.
+     */
+    public static function authenticatorRequired(?User $user = null): bool
+    {
+        $types = self::authenticatorRequiredAccountTypes();
+
+        if ($user === null) {
+            return $types !== [];
+        }
+
+        $accountType = Role::of($user);
+
+        return $accountType !== null && in_array($accountType, $types, true);
+    }
+
+    /**
+     * Keep the legacy everyone flags and the per-type list in agreement before
+     * writing Sign-in policy.
+     *
+     * @param  array<string, mixed>  $policy
+     * @return array<string, mixed>
+     */
+    public static function syncAuthenticatorRequirement(array $policy): array
+    {
+        $types = self::normalizeAuthenticatorAccountTypes(
+            $policy['requireAuthenticatorForAccountTypes'] ?? []
+        );
+
+        // Older clients still POST only the boolean. Treat that as every type
+        // when the list was omitted or empty and the toggle is on.
+        $legacyOn = (bool) ($policy['requireAuthenticatorApp'] ?? false)
             || (bool) ($policy['requireMfa'] ?? false);
+        if ($types === [] && $legacyOn) {
+            $types = self::AUTHENTICATOR_ACCOUNT_TYPES;
+        }
+
+        $everyone = $types !== []
+            && count($types) === count(self::AUTHENTICATOR_ACCOUNT_TYPES);
+
+        $policy['requireAuthenticatorForAccountTypes'] = $types;
+        $policy['requireAuthenticatorApp'] = $everyone;
+        $policy['requireMfa'] = $everyone;
+
+        return $policy;
+    }
+
+    /**
+     * @param  mixed  $types
+     * @return list<string>
+     */
+    public static function normalizeAuthenticatorAccountTypes(mixed $types): array
+    {
+        if (! is_array($types)) {
+            return [];
+        }
+
+        $aliases = [
+            'Reviewing Officer' => Role::REVIEWING_OFFICER,
+            'Compliance Officer' => Role::REVIEWING_OFFICER,
+        ];
+
+        $normalized = [];
+        foreach ($types as $type) {
+            if (! is_string($type) || $type === '') {
+                continue;
+            }
+            $canonical = $aliases[$type] ?? $type;
+            if (in_array($canonical, self::AUTHENTICATOR_ACCOUNT_TYPES, true)) {
+                $normalized[] = $canonical;
+            }
+        }
+
+        return array_values(array_unique($normalized));
     }
 
     /**
@@ -116,6 +240,7 @@ class SecurityPolicies
         $policy = self::get('sign-in');
         $policy['requireMfa'] = false;
         $policy['requireAuthenticatorApp'] = false;
+        $policy['requireAuthenticatorForAccountTypes'] = [];
         self::put('sign-in', $policy);
     }
 

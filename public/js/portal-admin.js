@@ -3493,11 +3493,44 @@
       var root = el.querySelector('[data-pol-root]');
       if (!root) return;
       secApi('GET', '/admin/security-policies').then(function (r) { return r.json(); }).then(function (all) {
+        var esc = ui().esc;
         var p = all.signInPolicy;
         var admin = all.isAdmin;
         if (p.sessionDays == null) p.sessionDays = 7;
-        p.requireAuthenticatorApp = !!(p.requireAuthenticatorApp || p.requireMfa);
+        var authTypes = Array.isArray(p.requireAuthenticatorForAccountTypes)
+          ? p.requireAuthenticatorForAccountTypes.slice()
+          : [];
+        var authOptions = Array.isArray(p.authenticatorAccountTypeOptions)
+          ? p.authenticatorAccountTypeOptions
+          : [];
+        // Older rows only had the everyone toggle; expand for the checkboxes.
+        if (!authTypes.length && (p.requireAuthenticatorApp || p.requireMfa) && authOptions.length) {
+          authTypes = authOptions.map(function (o) { return o.id; });
+        }
+        p.requireAuthenticatorForAccountTypes = authTypes;
+        p.requireAuthenticatorApp = authOptions.length > 0
+          && authTypes.length === authOptions.length;
         p.requireMfa = p.requireAuthenticatorApp;
+
+        function authTypeChecked(id) {
+          return authTypes.indexOf(id) !== -1;
+        }
+
+        function authTypeRows() {
+          if (!authOptions.length) {
+            return '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Require authenticator app<span class="tma-portal-note"> Hides Set later during onboarding and blocks the portal until the app is confirmed.</span></span>' +
+              ui().toggle(!!p.requireAuthenticatorApp || !!p.requireMfa, 'data-signin-authapp' + (admin ? '' : ' disabled'), 'Require authenticator') + '</div>';
+          }
+          return '<p class="tma-portal-note" style="margin:0 0 0.75rem">Tick an account type to require the authenticator app for everyone with that type. You can still require it on one person from Users. The stricter rule wins.</p>' +
+            authOptions.map(function (opt) {
+              return '<label class="tma-portal-checkbox" style="display:flex;align-items:center;gap:0.5rem;margin:0.4rem 0">' +
+                '<input type="checkbox" data-signin-auth-type="' + esc(opt.id) + '"' +
+                (authTypeChecked(opt.id) ? ' checked' : '') +
+                (admin ? '' : ' disabled') + '>' +
+                '<span>' + esc(opt.label) + '</span></label>';
+            }).join('');
+        }
+
         root.innerHTML = '<h3 class="tma-portal-section__title">Password requirements</h3>' +
           '<p class="tma-portal-subtitle">Applies to registration, password changes, and password resets.</p>' +
           (admin ? '' : '<p class="tma-portal-note">Only administrators can change these settings.</p>') +
@@ -3507,12 +3540,12 @@
             '<p>Special characters required:<br><strong>' + p.specialRequired + '</strong></p>' +
             (admin ? '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Edit', icon: 'PencilSimple', variant: 'ghost', attrs: 'data-signin-edit' }) + '</div>' : '')) +
           '<h3 class="tma-portal-section__title">Two-factor authentication</h3>' +
-          '<p class="tma-portal-subtitle">Everyone confirms a new or unrecognised sign-in with a 6-digit code. Email codes are always on. An authenticator app is recommended, and can be required so onboarding cannot skip it.</p>' +
+          '<p class="tma-portal-subtitle">Everyone confirms a new or unrecognised sign-in with a 6-digit code. Email codes are always on. An authenticator app is recommended, and can be required so onboarding cannot skip it. Once the app is set up, sign-in uses the app code instead of email.</p>' +
           ui().section('',
-            '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Email verification codes<span class="tma-portal-note"> Always on. Sent when someone signs in from a new browser or device.</span></span>' +
+            '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Email verification codes<span class="tma-portal-note"> Always on. Sent when someone signs in from a new browser or device and they have not set up an authenticator app.</span></span>' +
             ui().toggle(true, 'disabled', 'Email codes') + '</div>' +
-            '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Require authenticator app<span class="tma-portal-note"> Hides Set later during onboarding and blocks the portal until the app is confirmed.</span></span>' +
-            ui().toggle(!!p.requireAuthenticatorApp || !!p.requireMfa, 'data-signin-authapp' + (admin ? '' : ' disabled'), 'Require authenticator') + '</div>') +
+            '<div style="margin-top:0.75rem"><span class="tma-portal-toggle-row__label">Require authenticator app by account type</span>' +
+            authTypeRows() + '</div>') +
           '<h3 class="tma-portal-section__title">Sign-in lifetime</h3>' +
           '<p class="tma-portal-subtitle">Everyone is signed out after this many days, including people who chose Stay signed in. Trusted devices use the same window.</p>' +
           ui().section('',
@@ -3524,6 +3557,13 @@
             ui().toggle(!!p.requireMicrosoftConnect, 'data-signin-ms' + (admin ? '' : ' disabled'), 'Require Microsoft') + '</div>' +
             '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Require Google connect</span>' +
             ui().toggle(!!p.requireGoogleConnect, 'data-signin-google' + (admin ? '' : ' disabled'), 'Require Google') + '</div>');
+
+        function syncAuthFlagsFromTypes() {
+          p.requireAuthenticatorForAccountTypes = authTypes.slice();
+          p.requireAuthenticatorApp = authOptions.length > 0
+            && authTypes.length === authOptions.length;
+          p.requireMfa = p.requireAuthenticatorApp;
+        }
 
         function save(done) {
           secApi('PUT', '/admin/security-policies/sign-in', p).then(function (res) {
@@ -3540,7 +3580,21 @@
         if (authApp) authApp.addEventListener('change', function () {
           p.requireAuthenticatorApp = authApp.checked;
           p.requireMfa = authApp.checked;
+          p.requireAuthenticatorForAccountTypes = authApp.checked
+            ? authOptions.map(function (o) { return o.id; })
+            : [];
+          authTypes = p.requireAuthenticatorForAccountTypes.slice();
           save();
+        });
+        root.querySelectorAll('[data-signin-auth-type]').forEach(function (box) {
+          box.addEventListener('change', function () {
+            var id = box.getAttribute('data-signin-auth-type');
+            var idx = authTypes.indexOf(id);
+            if (box.checked && idx === -1) authTypes.push(id);
+            if (!box.checked && idx !== -1) authTypes.splice(idx, 1);
+            syncAuthFlagsFromTypes();
+            save();
+          });
         });
         var days = root.querySelector('[data-signin-days]');
         if (days) days.addEventListener('change', function () {
