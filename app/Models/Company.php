@@ -168,6 +168,9 @@ class Company extends Model
                 'name' => $c->name,
                 'initial' => $c->initial,
                 'initialColor' => $c->initial_color,
+                // Contact photo first, then the portal login's face — same
+                // fallback the rest of the hub uses for people with access.
+                'photo' => $c->photo_url ?: ($c->hasLiveLogin() ? $c->user?->photoUrl() : null),
                 'email' => $c->contactEmail(),
                 'hasLogin' => $c->hasLiveLogin(),
             ])->values()->all(),

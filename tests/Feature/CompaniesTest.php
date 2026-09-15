@@ -119,6 +119,7 @@ class CompaniesTest extends TestCase
             'email_verified_at' => now(),
             'profile_completed_at' => now(),
             'onboarding_completed_at' => now(),
+            'avatar_url' => 'https://cdn.example/maya.jpg',
         ]);
 
         // Membership with no client row — how Users-page assignment used to leave people.
@@ -137,14 +138,50 @@ class CompaniesTest extends TestCase
             ->json('companies'));
 
         $people = $companies->flatMap(fn ($company) => $company['people'] ?? []);
-        $this->assertTrue(
-            $people->contains(fn ($person) => ($person['email'] ?? null) === 'maya@galaxy.example'
-                && ($person['name'] ?? null) === 'Maya Contact'),
-            'People with portal access at a firm must appear on Provider contacts.',
+        $maya = $people->firstWhere('email', 'maya@galaxy.example');
+        $this->assertNotNull($maya, 'People with portal access at a firm must appear on Provider contacts.');
+        $this->assertSame('Maya Contact', $maya['name']);
+        $this->assertTrue((bool) ($maya['hasLogin'] ?? false));
+        $this->assertSame(
+            'https://cdn.example/maya.jpg',
+            $maya['photo'] ?? null,
+            'Provider contacts must carry the portal profile picture.',
         );
-        $this->assertTrue(
-            (bool) ($people->firstWhere('email', 'maya@galaxy.example')['hasLogin'] ?? false),
-            'A live portal login should show as having access on the contact.',
+    }
+
+    public function test_provider_contacts_prefer_the_contact_photo_over_the_login_photo(): void
+    {
+        $staff = $this->staff();
+        $galaxy = Company::create(['uid' => 'galaxy-partners', 'name' => 'Galaxy Partners']);
+        $user = User::factory()->create([
+            'name' => 'Amy Zhang',
+            'email' => 'amy@galaxy.example',
+            'status' => 'approved',
+            'account_type' => 'Client',
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+            'avatar_url' => 'https://cdn.example/login.jpg',
+        ]);
+
+        Client::create([
+            'uid' => 'amy-zhang',
+            'name' => 'Amy Zhang',
+            'company_id' => $galaxy->id,
+            'email' => 'amy@galaxy.example',
+            'user_id' => $user->id,
+            'photo_url' => 'https://cdn.example/contact.jpg',
+            'data' => [],
+        ]);
+
+        $people = collect($this->actingAs($staff)->getJson('/portal/companies')
+            ->assertOk()
+            ->json('companies'))
+            ->flatMap(fn ($company) => $company['people'] ?? []);
+
+        $this->assertSame(
+            'https://cdn.example/contact.jpg',
+            $people->firstWhere('id', 'amy-zhang')['photo'] ?? null,
         );
     }
 

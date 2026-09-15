@@ -39,8 +39,11 @@ class CompaniesController extends Controller
      * @see Company::toRecord()
      */
     private const PERSON_COLUMNS = [
-        'id', 'company_id', 'uid', 'name', 'initial', 'initial_color', 'email', 'user_id',
+        'id', 'company_id', 'uid', 'name', 'initial', 'initial_color', 'email', 'user_id', 'photo_url',
     ];
+
+    /** User columns a person card needs to draw a face from a live login. */
+    private const PERSON_USER_COLUMNS = 'id,avatar_url,provider_avatar_url';
 
     /** Warm the company list briefly, it rides next to the client directory
      *  on hub mount and is identical for every staff reader. */
@@ -88,7 +91,7 @@ class CompaniesController extends Controller
             // problem the moment the firm starts using membership.
             'clients' => fn ($q) => $q
                 ->select(self::PERSON_COLUMNS)
-                ->with('user:id')
+                ->with('user:'.self::PERSON_USER_COLUMNS)
                 ->orderBy('name')
                 ->orderBy('id'),
         ])
@@ -113,7 +116,7 @@ class CompaniesController extends Controller
         $companies->load([
             'clients' => fn ($q) => $q
                 ->select(self::PERSON_COLUMNS)
-                ->with('user:id')
+                ->with('user:'.self::PERSON_USER_COLUMNS)
                 ->orderBy('name')
                 ->orderBy('id'),
         ]);
@@ -406,6 +409,7 @@ class CompaniesController extends Controller
             Company::with([
                 'cipProvider:id,company_id,code',
                 'clients' => fn ($q) => $this->viewerClients($viewer, $q)
+                    ->with('user:'.self::PERSON_USER_COLUMNS)
                     ->orderBy('name')->orderBy('id'),
                 'referredClients' => fn ($q) => $this->viewerClients($viewer, $q, true)
                     ->select(self::PERSON_COLUMNS)
@@ -422,6 +426,7 @@ class CompaniesController extends Controller
         CompanyMembers::ensureContactsForCompanies([$company], $viewer);
         $company->load([
             'clients' => fn ($q) => $this->viewerClients($viewer, $q)
+                ->with('user:'.self::PERSON_USER_COLUMNS)
                 ->orderBy('name')->orderBy('id'),
         ]);
         $company->loadCount([
