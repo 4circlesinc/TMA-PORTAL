@@ -3733,9 +3733,7 @@
       // the form rather than to a profile that has nothing filled in yet.
       (a.status === 'draft' ? ' data-cip-draft="1"' : '') + '>' +
       '<td><span class="tma-cip-table__number">' + esc(a.number || '-') + '</span>' +
-      (a.phase !== 'add_on' && a.cipNumber && a.internalNumber
-        ? '<div class="tma-portal-table__muted">' + esc(a.internalNumber) + '</div>'
-        : '') + '</td>' +
+      applicationNumberSubline(a) + '</td>' +
       // The inline copy of the status sits right after the name; CSS shows
       // it only on touch widths, where the Status column's cell is hidden.
       '<td>' + applicantCell(a) +
@@ -3770,17 +3768,37 @@
     return value ? String(value) : '';
   }
 
+  /*
+   * Second line under the Application number.
+   *
+   * Pre/post: once a CIP number exists it is the primary (`a.number`), and the
+   * firm internal stays underneath. Add-On: the primary is always the AO
+   * reference, and the parent's CIP number sits under it — including on All
+   * Applications, where Add-On rows used to hide that line.
+   */
+  function applicationNumberSubline(a) {
+    if (!a) return '';
+    var secondary = '';
+    if (a.phase === 'add_on') {
+      secondary = addOnParentValue(a, 'cipNumber');
+    } else if (a.cipNumber && a.internalNumber && a.number === a.cipNumber) {
+      secondary = a.internalNumber;
+    } else if (a.cipNumber && a.cipNumber !== (a.number || '')) {
+      secondary = a.cipNumber;
+    }
+    return secondary
+      ? '<div class="tma-portal-table__muted">' + esc(secondary) + '</div>'
+      : '';
+  }
+
   function renderAddOnApplicationTableRow(a) {
     var progressCell = cipStatusChip(a);
     var submitted = a.submittedAt ? fmtShortDate(a.submittedAt) : '';
-    var parentCip = addOnParentValue(a, 'cipNumber');
 
     return '<tr data-cip-open="' + esc(a.clientUid || '') + '" data-cip-app="' + esc(a.id) + '"' +
       (a.status === 'draft' ? ' data-cip-draft="1"' : '') + '>' +
       '<td><span class="tma-cip-table__number">' + esc(a.number || a.internalNumber || '-') + '</span>' +
-      (parentCip
-        ? '<div class="tma-portal-table__muted">' + esc(parentCip) + '</div>'
-        : '') + '</td>' +
+      applicationNumberSubline(a) + '</td>' +
       '<td class="tma-portal-table__muted">' + esc(addOnParentValue(a, 'corNumber') || '-') + '</td>' +
       '<td class="tma-portal-table__muted">' + esc(addOnParentValue(a, 'applicantName') || '-') + '</td>' +
       '<td>' + applicantCell(a) +
