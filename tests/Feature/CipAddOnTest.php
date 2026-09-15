@@ -629,6 +629,40 @@ class CipAddOnTest extends TestCase
         $this->assertSame($parent->cip_number, $body['answers']['parentCipNumber'] ?? null);
     }
 
+    public function test_an_add_on_draft_saves_from_parent_cip_alone_when_cor_is_not_on_file(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+        $parent = Applications::create($provider, $staff, ['investment_type' => 'real_estate']);
+        $this->mainApplicant($parent, 'Xinyue', 'Du');
+        $parent->forceFill([
+            'status' => Status::POST_APPROVED,
+            'decision' => Status::POST_APPROVED,
+            'phase' => Phase::POST_APPROVAL,
+            'post_approval_at' => now(),
+            'cip_number' => '10T3E08888P',
+            'cor_number' => null,
+        ])->save();
+
+        $body = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/draft', [
+                'phase' => Phase::ADD_ON,
+                'parentCipNumber' => '10T3E08888P',
+                'parentApplicantName' => 'Xinyue Du',
+                'firstName' => 'Mei',
+            ])
+            ->assertOk()
+            ->json('draft');
+
+        $this->assertNotNull($body);
+        $this->assertSame($provider->uuid, $body['answers']['providerId']);
+        $this->assertSame('10T3E08888P', $body['answers']['parentCipNumber'] ?? null);
+        $this->assertSame('MEI', $body['answers']['firstName'] ?? null);
+
+        $row = CipApplication::query()->where('uuid', $body['id'])->first();
+        $this->assertSame($parent->id, $row->parent_application_id);
+    }
+
     public function test_an_add_on_refuses_a_type_that_does_not_match_the_date_of_birth(): void
     {
         $staff = $this->staff();

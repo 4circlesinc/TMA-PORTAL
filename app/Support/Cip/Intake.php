@@ -2108,12 +2108,24 @@ class Intake
     private static function linkAddOnParent(CipApplication $application, User $actor, array $data): void
     {
         $cip = trim((string) ($data['parentCipNumber'] ?? ''));
-        $cor = trim((string) ($data['parentCorNumber'] ?? ''));
-        if ($cip === '' || $cor === '') {
+        if ($cip === '') {
             return;
         }
 
-        $parent = AddOn::findParent($actor, $cip, $cor);
+        $cor = trim((string) ($data['parentCorNumber'] ?? ''));
+        $result = AddOn::lookup($actor, $cip, $cor);
+        $parent = null;
+        if ($result['ok'] ?? false) {
+            $parent = AddOn::findParent($actor, $cip, $cor);
+        } elseif ($cor === '') {
+            // Draft may name the parent by CIP before COR is typed, when the
+            // parent file itself has no COR staged yet.
+            $match = AddOn::findByCipNumber($actor, $cip);
+            if ($match && AddOn::isEligibleParent($match) && ! filled($match->cor_number)) {
+                $parent = $match;
+            }
+        }
+
         if ($parent === null) {
             return;
         }

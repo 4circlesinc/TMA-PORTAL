@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Cip;
 use App\Http\Controllers\Controller;
 use App\Models\CipApplication;
 use App\Models\CipPerson;
+use App\Models\CipProvider;
+use App\Models\User;
 use App\Support\Cip\AddOn;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Intake;
@@ -120,17 +122,18 @@ class CipApplicationDraftController extends Controller
 
         $provider = Intake::providersFor($user)->firstWhere('uuid', $data['providerId'] ?? '');
         if ($provider === null && Intake::filingPhase() === Phase::ADD_ON) {
-            $parent = AddOn::findParent(
-                $user,
-                (string) ($data['parentCipNumber'] ?? ''),
-                (string) ($data['parentCorNumber'] ?? ''),
-            );
-            $provider = $parent?->provider;
-            if ($provider === null) {
-                return response()->json(['draft' => $draft ? $this->answers($draft) : null]);
-            }
+            $provider = $this->addOnDraftProvider($user, $data);
         }
-        abort_unless($provider, 422, 'Choose a service provider you can file under.');
+        if ($provider === null) {
+            $message = Intake::filingPhase() === Phase::ADD_ON
+                ? 'Choose a service provider, or confirm the parent CIP application first.'
+                : 'Choose a service provider you can file under.';
+
+            return response()->json([
+                'message' => $message,
+                'errors' => ['providerId' => [$message]],
+            ], 422);
+        }
 
         $draft = $draft
             ? Intake::updateDraft($draft, $user, $data)
@@ -153,6 +156,36 @@ class CipApplicationDraftController extends Controller
         }
 
         return response()->json(['draft' => null]);
+    }
+
+    /**
+     * The firm an Add-On draft inherits once the parent CIP number is known.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function addOnDraftProvider(User $user, array $data): ?CipProvider
+    {
+        $cip = trim((string) ($data['parentCipNumber'] ?? ''));
+        if ($cip === '') {
+            return null;
+        }
+
+        $cor = trim((string) ($data['parentCorNumber'] ?? ''));
+        $result = AddOn::lookup($user, $cip, $cor);
+        if ($result['ok'] ?? false) {
+            $parent = AddOn::findParent($user, $cip, $cor);
+
+            return $parent?->provider;
+        }
+
+        // CIP typed, COR not yet: still inherit the firm when the parent has
+        // no COR on file (or the reader has not reached that field).
+        $match = AddOn::findByCipNumber($user, $cip);
+        if ($match && AddOn::isEligibleParent($match) && ! filled($match->cor_number)) {
+            return $match->provider;
+        }
+
+        return null;
     }
 
     /**

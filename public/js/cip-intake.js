@@ -1812,6 +1812,10 @@
     if (cor && document.activeElement !== cor) {
       cor.value = state.draft.parentCorNumber || '';
     }
+    var provider = state.root.querySelector('[data-cip-field="providerId"]');
+    if (provider && state.draft.providerId) {
+      provider.value = state.draft.providerId;
+    }
   }
 
   function lookupParent(opts) {
@@ -2457,7 +2461,13 @@
    */
   function draftable() {
     if (state.draftOff || fieldsLocked()) return false;
-    if (isAddOnIntake() && isFiling() && !state.draft.providerId) return false;
+    // Add-On: a chosen firm OR a confirmed parent CIP is enough — the server
+    // inherits the parent's provider when providerId is still empty.
+    if (isAddOnIntake() && isFiling()
+      && !state.draft.providerId
+      && !String(state.draft.parentCipNumber || '').trim()) {
+      return false;
+    }
 
     return !state.applicationId || editingDraft();
   }
@@ -2638,8 +2648,10 @@
       // common case: the dropdown is there, but nothing is chosen yet.
       if (announce) {
         ui().toastError(
-          isAddOnIntake() && isFiling() && !state.draft.providerId
-            ? 'Choose a service provider to save a draft.'
+          isAddOnIntake() && isFiling()
+            && !state.draft.providerId
+            && !String(state.draft.parentCipNumber || '').trim()
+            ? 'Choose a service provider, or confirm the parent CIP number first.'
             : 'This form isn’t saved as a draft.',
         );
       }
