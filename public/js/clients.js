@@ -4088,8 +4088,9 @@
 
   function applicantCell(a) {
     var name = cipUpperName(a.applicantName) || '-';
-    var face = a.photo
-      ? '<img class="tma-cip-table__applicant-face" src="' + esc(a.photo) + '" alt="" width="26" height="26">'
+    var photo = cipPersonPhotoSrc(a);
+    var face = photo
+      ? '<img class="tma-cip-table__applicant-face" src="' + esc(photo) + '" alt="" width="26" height="26">'
       : applicantInitials(a);
 
     var flag = attentionFlags(a.attention);
