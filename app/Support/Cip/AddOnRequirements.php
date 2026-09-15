@@ -153,22 +153,19 @@ class AddOnRequirements
     }
 
     /**
-     * Pack completeness for the Add-On Document | Status table.
+     * The chip the Add-On Document | Status table draws for one slot.
      *
-     * Filed (and not sent back) is Complete; everything else is Outstanding.
-     * Reviewer vocabulary (Application review / Ready for submission) stays
-     * on the person checklist.
+     * Section 11 gives every document its own status — Pending upload,
+     * Application review, Update required, Ready for submission — rather
+     * than a pack-wide Complete / Outstanding. The slot's display status is
+     * that vocabulary, so this table and the person checklist cannot disagree.
      *
      * @return array{status:string,label:string,tone:string}
      */
     public static function packStatus(CipDocument $slot): array
     {
-        $complete = $slot->isFilled()
-            && ($slot->displayStatus() ?? DocumentStatus::PENDING_UPLOAD) !== DocumentStatus::UPDATE_REQUIRED;
-
-        return $complete
-            ? ['status' => 'complete', 'label' => 'Complete', 'tone' => 'success']
-            : ['status' => 'outstanding', 'label' => 'Outstanding', 'tone' => 'pending'];
+        return DocumentStatus::badge($slot->displayStatus())
+            ?? DocumentStatus::badge(DocumentStatus::PENDING_UPLOAD);
     }
 
     /**

@@ -6884,8 +6884,8 @@
   }
 
   function addOnPackStatusChip(d) {
-    var label = d.packStatusLabel || (d.uploaded && d.status !== 'update_required' ? 'Complete' : 'Outstanding');
-    var tone = d.packStatusTone || (label === 'Complete' ? 'success' : 'pending');
+    var label = d.statusLabel || d.packStatusLabel || 'Pending upload';
+    var tone = d.statusTone || d.packStatusTone || 'neutral';
     return '<span class="tma-portal-status tma-portal-status--' + esc(tone) +
       ' tma-portal-status--inline">' + esc(label) + '</span>';
   }
@@ -7019,10 +7019,8 @@
   function overviewDocCount(app) {
     if (app && app.phase === 'add_on') {
       var docs = addOnStatusDocs(app);
-      var complete = docs.filter(function (d) {
-        return (d.packStatus || (d.uploaded && d.status !== 'update_required' ? 'complete' : 'outstanding')) === 'complete';
-      }).length;
-      return docs.length ? complete + ' / ' + docs.length : '';
+      var filed = docs.filter(function (d) { return !!d.uploaded; }).length;
+      return docs.length ? filed + ' / ' + docs.length : '';
     }
 
     var filed = 0;

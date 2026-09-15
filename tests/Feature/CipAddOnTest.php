@@ -20,6 +20,7 @@ use App\Support\Cip\AddOnRequirements;
 use App\Support\Cip\ApplicantType;
 use App\Support\Cip\Applications;
 use App\Support\Cip\DocumentSlots;
+use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\Intake;
 use App\Support\Cip\Phase;
@@ -610,11 +611,12 @@ class CipAddOnTest extends TestCase
         $this->assertSame('G1 - Marriage Certificate.pdf', $g1['fileName']);
         $this->assertTrue($g1['additional']);
         $this->assertTrue($g1['onStatusTable']);
-        $this->assertSame('complete', $g1['packStatus']);
-        $this->assertSame('Complete', $g1['packStatusLabel']);
+        $this->assertSame(DocumentStatus::APPLICATION_REVIEW, $g1['packStatus']);
+        $this->assertSame('Application review', $g1['packStatusLabel']);
+        $this->assertSame($g1['status'], $g1['packStatus']);
     }
 
-    public function test_add_on_document_status_is_complete_or_outstanding(): void
+    public function test_each_add_on_document_keeps_its_own_review_status(): void
     {
         $staff = $this->staff();
         $parent = $this->grantedParent($staff);
@@ -628,19 +630,88 @@ class CipAddOnTest extends TestCase
 
         $bio = $docs->firstWhere('type', DocumentTypes::PASSPORT_BIO_PAGE);
         $this->assertTrue($bio['onStatusTable']);
-        $this->assertSame('complete', $bio['packStatus']);
-        $this->assertSame('Complete', $bio['packStatusLabel']);
+        $this->assertTrue($bio['uploaded']);
+        $this->assertSame(DocumentStatus::APPLICATION_REVIEW, $bio['status']);
+        $this->assertSame('Application review', $bio['statusLabel']);
+        $this->assertSame(DocumentStatus::APPLICATION_REVIEW, $bio['packStatus']);
+        $this->assertSame('Application review', $bio['packStatusLabel']);
+        $this->assertSame('pending', $bio['packStatusTone']);
 
         $nationalId = $docs->firstWhere('type', 'national_id_card');
         $this->assertTrue($nationalId['onStatusTable']);
         $this->assertFalse($nationalId['uploaded']);
-        $this->assertSame('outstanding', $nationalId['packStatus']);
-        $this->assertSame('Outstanding', $nationalId['packStatusLabel']);
+        $this->assertSame(DocumentStatus::PENDING_UPLOAD, $nationalId['status']);
+        $this->assertSame('Pending upload', $nationalId['statusLabel']);
+        $this->assertSame(DocumentStatus::PENDING_UPLOAD, $nationalId['packStatus']);
+        $this->assertSame('Pending upload', $nationalId['packStatusLabel']);
+        $this->assertSame('neutral', $nationalId['packStatusTone']);
 
         $g1 = $docs->firstWhere('type', AddOnRequirements::G1);
         $this->assertTrue($g1['additional']);
         $this->assertFalse($g1['onStatusTable']);
-        $this->assertSame('outstanding', $g1['packStatus']);
+        $this->assertSame(DocumentStatus::PENDING_UPLOAD, $g1['packStatus']);
+    }
+
+    public function test_judging_one_add_on_document_leaves_the_others_where_they_are(): void
+    {
+        Mail::fake();
+
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $created = $this->file($staff, $this->addOnPayload($parent))
+            ->assertCreated()
+            ->json('application');
+
+        $filed = collect($created['applicant']['documents'])
+            ->filter(fn (array $d) => $d['uploaded'] && $d['onStatusTable'])
+            ->values();
+
+        $this->assertGreaterThanOrEqual(2, $filed->count());
+
+        $first = $filed[0];
+        $second = $filed[1];
+        $untouched = $filed->slice(2);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/documents/'.$first['id'].'/approve')
+            ->assertOk()
+            ->assertJsonPath('document.status', DocumentStatus::READY_FOR_SUBMISSION);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/documents/'.$second['id'].'/request-changes', [
+                'comment' => 'The scan is cut off at the bottom.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('document.status', DocumentStatus::UPDATE_REQUIRED);
+
+        $shown = collect($this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$created['id'])
+            ->assertOk()
+            ->json('application.applicant.documents'));
+
+        $approved = $shown->firstWhere('id', $first['id']);
+        $returned = $shown->firstWhere('id', $second['id']);
+
+        $this->assertSame(DocumentStatus::READY_FOR_SUBMISSION, $approved['status']);
+        $this->assertSame('Ready for submission', $approved['statusLabel']);
+        $this->assertSame(DocumentStatus::READY_FOR_SUBMISSION, $approved['packStatus']);
+        $this->assertSame('Ready for submission', $approved['packStatusLabel']);
+
+        $this->assertSame(DocumentStatus::UPDATE_REQUIRED, $returned['status']);
+        $this->assertSame('Update required', $returned['statusLabel']);
+        $this->assertSame(DocumentStatus::UPDATE_REQUIRED, $returned['packStatus']);
+        $this->assertSame('Update required', $returned['packStatusLabel']);
+
+        foreach ($untouched as $other) {
+            $row = $shown->firstWhere('id', $other['id']);
+            $this->assertSame(
+                DocumentStatus::APPLICATION_REVIEW,
+                $row['status'],
+                $other['type'].' should still be in application review',
+            );
+            $this->assertSame($row['status'], $row['packStatus']);
+        }
     }
 
     public function test_a_drop_into_additional_documents_fills_the_next_g_slot(): void

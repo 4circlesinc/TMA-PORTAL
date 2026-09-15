@@ -227,7 +227,7 @@ final class Knowledge
 
     public static function intakeFacts(): string
     {
-        return 'Create New Application: staff see Pre-Approval, Post-Approval, Add-On, New service provider, and Import. Provider contacts: Pre-Approval, Post-Approval, and Add-On. Service provider is chosen on create and prefixes the number (for example GAL26-00001). It is not reassigned later. Officers are assigned by administrators — that is not picking a provider. Autosave ~1.2s after idle on Draft / new filings. Toast: Draft saved. An Add-On is filed against a granted parent using the main applicant name, CIP number and COR number (all three must match that file), then one applicant with relationship Spouse, Son, Daughter, or Other Qualified Dependent. Only one Add-On profile at a time. Creating it opens Add-On Applicant, Supporting Documents, Assessment Feedback, and Additional Documents for that person. Document Requirements has an Add-On column: the form shows the Spouse, Dependent under 16, or Dependent 16 and over list for the selected type. G1, G2 and G3 are optional extra papers in Additional Documents. The Add-On Applications table lists Add-On reference number, CIP application number, COR number, main applicant, Add-On applicant, relationship, status, submission date, and assigned officer. Search there is by Add-On reference, CIP number, COR number, main applicant name, or Add-On applicant name. CIP number, main applicant and COR stay prominent so the row stays tied to the granted file. The home CIP card’s Add-On view is the same widget as pre- and post-approval, by role: administrators see New Add-On Applications through Denied (no Background Check / DD Query / Delayed); reviewing officers see Assigned Reviews, Pending Reviews, Assessment Feedback Tasks, and Additional Information Requests; service providers see Draft Add-Ons, then Updates Required through Denied. An authorized agent’s Add-On filing lands at New. An administrator assigning an officer moves it to Review Applications and emails the officer the Add-On reference number, parent CIP number, main applicant name, Add-On applicant name, and a direct portal link.';
+        return 'Create New Application: staff see Pre-Approval, Post-Approval, Add-On, New service provider, and Import. Provider contacts: Pre-Approval, Post-Approval, and Add-On. Service provider is chosen on create and prefixes the number (for example GAL26-00001). It is not reassigned later. Officers are assigned by administrators — that is not picking a provider. Autosave ~1.2s after idle on Draft / new filings. Toast: Draft saved. An Add-On is filed against a granted parent using the main applicant name, CIP number and COR number (all three must match that file), then one applicant with relationship Spouse, Son, Daughter, or Other Qualified Dependent. Only one Add-On profile at a time. Creating it opens Add-On Applicant, Supporting Documents, Assessment Feedback, and Additional Documents for that person. Document Requirements has an Add-On column: the form shows the Spouse, Dependent under 16, or Dependent 16 and over list for the selected type. G1, G2 and G3 are optional extra papers in Additional Documents. Each document keeps its own status independently of the others: Pending upload, Application review, Update required, or Ready for submission. Judging one document does not change another. The Add-On Applications table lists Add-On reference number, CIP application number, COR number, main applicant, Add-On applicant, relationship, status, submission date, and assigned officer. Search there is by Add-On reference, CIP number, COR number, main applicant name, or Add-On applicant name. CIP number, main applicant and COR stay prominent so the row stays tied to the granted file. The home CIP card’s Add-On view is the same widget as pre- and post-approval, by role: administrators see New Add-On Applications through Denied (no Background Check / DD Query / Delayed); reviewing officers see Assigned Reviews, Pending Reviews, Assessment Feedback Tasks, and Additional Information Requests; service providers see Draft Add-Ons, then Updates Required through Denied. An authorized agent’s Add-On filing lands at New. An administrator assigning an officer moves it to Review Applications and emails the officer the Add-On reference number, parent CIP number, main applicant name, Add-On applicant name, and a direct portal link.';
     }
 
     public static function statusFacts(): string
@@ -237,7 +237,13 @@ final class Knowledge
             $rows[] = '- **'.$name.'** — '.$meaning;
         }
 
-        return "CIP statuses (pre-approval order unless an administrator overrides):\n".implode("\n", $rows);
+        $docs = [];
+        foreach (self::documentStatuses() as $name => $meaning) {
+            $docs[] = '- **'.$name.'** — '.$meaning;
+        }
+
+        return "CIP statuses (pre-approval order unless an administrator overrides):\n".implode("\n", $rows)
+            ."\n\nEach CIP document (including Add-On) keeps its own status independently:\n".implode("\n", $docs);
     }
 
     /** @return array<string, string> */
@@ -258,6 +264,17 @@ final class Knowledge
             'Denied' => 'Refused. Record decision uses Denied letter templates. Next: New Appeal if someone lodges an appeal.',
             'Post-Approval' => 'Work after a grant. Later stages such as Pending COR use Record … buttons so the date travels with the status.',
             'New Appeal' => 'The one status an external account may drive on a decided file that is theirs. Appeal Ready and Appeal Submitted are the firm’s.',
+        ];
+    }
+
+    /** @return array<string, string> */
+    public static function documentStatuses(): array
+    {
+        return [
+            'Pending upload' => 'This document slot has no file yet. Other documents on the same application keep their own status.',
+            'Application review' => 'A file has been uploaded and is waiting for the reviewing officer. Independent of other documents.',
+            'Update required' => 'The officer sent this document back. Other documents on the file are not rewritten.',
+            'Ready for submission' => 'The officer accepted this document for the submission package. That is not the application being Ready to Submit.',
         ];
     }
 
@@ -396,9 +413,16 @@ final class Knowledge
             [
                 'id' => 'start-cip',
                 'q' => 'How do I start a CIP application?',
-                'keywords' => ['start', 'create', 'new application', 'cip', 'pre-approval', 'file an application'],
+                'keywords' => ['start', 'create', 'new application', 'cip', 'pre-approval', 'file an application', 'add-on'],
                 'cipOnly' => true,
-                'answer' => "Open [CIP Applications](/citizenship-applications) → **Create New Application**.\n\nStaff: Pre-Approval, Post-Approval, Add-On, New service provider, Import.\nProvider contacts: Pre-Approval, Post-Approval, and Add-On.\n\nAn Add-On is a spouse or dependent added to a granted file. Enter the **main applicant name**, CIP number and COR number (they must match the granted file), the Add-On type, then one applicant including **relationship to the main applicant** (Spouse, Son, Daughter, or Other Qualified Dependent). Only one Add-On profile can be in progress at a time. The file opens **Add-On Applicant**, **Supporting Documents**, **Assessment Feedback**, and **Additional Documents** for that person. The document list follows the selected type (Spouse, Dependent under 16, Dependent 16 and over) from the Add-On column on Document Requirements. G1, G2 and G3 are optional extras in Additional Documents.\n\nPick the **service provider on create** (inherited from the parent on an Add-On). It prefixes the number (for example GAL26-00001) and is not reassigned later. Assigning an officer is a different, administrator-only action.",
+                'answer' => "Open [CIP Applications](/citizenship-applications) → **Create New Application**.\n\nStaff: Pre-Approval, Post-Approval, Add-On, New service provider, Import.\nProvider contacts: Pre-Approval, Post-Approval, and Add-On.\n\nAn Add-On is a spouse or dependent added to a granted file. Enter the **main applicant name**, CIP number and COR number (they must match the granted file), the Add-On type, then one applicant including **relationship to the main applicant** (Spouse, Son, Daughter, or Other Qualified Dependent). Only one Add-On profile can be in progress at a time. The file opens **Add-On Applicant**, **Supporting Documents**, **Assessment Feedback**, and **Additional Documents** for that person. The document list follows the selected type (Spouse, Dependent under 16, Dependent 16 and over) from the Add-On column on Document Requirements. G1, G2 and G3 are optional extras in Additional Documents. Each document keeps its own status: **Pending upload**, **Application review**, **Update required**, or **Ready for submission**. Approving or sending back one document does not change another.\n\nPick the **service provider on create** (inherited from the parent on an Add-On). It prefixes the number (for example GAL26-00001) and is not reassigned later. Assigning an officer is a different, administrator-only action.",
+            ],
+            [
+                'id' => 'cip-document-status',
+                'q' => 'What are CIP document statuses?',
+                'keywords' => ['document status', 'pending upload', 'application review', 'update required', 'ready for submission', 'add-on document'],
+                'cipOnly' => true,
+                'answer' => "Each CIP document keeps its own status, independently of the others and of the application status:\n\n1. **Pending upload** — nothing filed in the slot yet\n2. **Application review** — a file is in and waiting for the officer\n3. **Update required** — the officer sent this document back\n4. **Ready for submission** — the officer accepted this document\n\nApproving or sending back one document does not rewrite another. Application **Ready to Submit** is a different label from a document being Ready for submission.",
             ],
             [
                 'id' => 'file-library',
@@ -612,6 +636,13 @@ final class Knowledge
     private static function statusFromQuery(string $q): ?string
     {
         foreach (self::statuses() as $name => $meaning) {
+            $needle = self::fold($name);
+            if ($needle !== '' && str_contains($q, $needle)) {
+                return '**'.$name.'** — '.$meaning;
+            }
+        }
+
+        foreach (self::documentStatuses() as $name => $meaning) {
             $needle = self::fold($name);
             if ($needle !== '' && str_contains($q, $needle)) {
                 return '**'.$name.'** — '.$meaning;

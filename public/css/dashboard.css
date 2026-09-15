@@ -38561,7 +38561,7 @@ span.tma-dash__messages-profile-avatar {
   text-align: right;
 }
 
-/* Add-On Document | Status: column titles, then Complete / Outstanding. */
+/* Add-On Document | Status: column titles, then each slot's own status. */
 .tma-dash__cip-doc-status-head,
 .tma-dash__cip-doc-status-head .tma-portal-details__label {
   font-size: var(--text-size-12, 12px);
