@@ -889,6 +889,125 @@ class CipAddOnTest extends TestCase
         $this->assertSame(Status::NEW, CipApplication::query()->where('uuid', $draftBody['id'])->value('status'));
     }
 
+    public function test_an_add_on_draft_keeps_parent_answers_the_portal_cannot_resolve(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+
+        // A parent named by numbers no file in the portal carries. The match
+        // is optional, so this saves — and the answers have to come back.
+        $draftBody = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/draft', [
+                'phase' => Phase::ADD_ON,
+                'providerId' => $provider->uuid,
+                'parentCipNumber' => '99Z9XNONE01P',
+                'parentCorNumber' => 'COR-9999',
+                'parentApplicantName' => 'Ruth Okonjo',
+                'addonType' => AddOn::TYPE_SPOUSE,
+                'firstName' => 'Mei',
+                'lastName' => 'Wei',
+                'dateOfBirth' => '1988-06-01',
+                'nationality' => 'China',
+                'countryOfResidence' => 'China',
+                'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+                'passportNumber' => 'X1234567',
+                'passportPhoto' => $this->photo(),
+            ])
+            ->assertOk()
+            ->json('draft');
+
+        $row = CipApplication::query()->where('uuid', $draftBody['id'])->firstOrFail();
+        $this->assertNull($row->parent_application_id, 'No file matches, so nothing should be linked.');
+        $this->assertSame('99Z9XNONE01P', $row->parent_cip_number);
+        $this->assertSame('COR-9999', $row->parent_cor_number);
+        $this->assertSame('Ruth Okonjo', $row->parent_applicant_name);
+
+        // Reopening is where this used to fail: three empty boxes over
+        // answers that had been given.
+        $reopened = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$draftBody['id'])
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame('99Z9XNONE01P', $reopened['parent']['cipNumber'] ?? null);
+        $this->assertSame('COR-9999', $reopened['parent']['corNumber'] ?? null);
+        $this->assertSame('RUTH OKONJO', $reopened['parent']['applicantName'] ?? null);
+        $this->assertFalse($reopened['parent']['resolved'] ?? true, 'An unmatched parent must not read as confirmed.');
+        $this->assertArrayHasKey('id', $reopened['parent']);
+        $this->assertNull($reopened['parent']['id'], 'An unmatched parent names no file.');
+    }
+
+    public function test_an_add_on_keeps_a_typed_cor_when_the_parent_has_none_on_file(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+        // The parent file itself never had a certificate staged.
+        $parent->forceFill(['cor_number' => null])->save();
+
+        $draftBody = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/draft', [
+                'phase' => Phase::ADD_ON,
+                'providerId' => $parent->provider->uuid,
+                'parentCipNumber' => $parent->cip_number,
+                'parentCorNumber' => 'COR-2002',
+                'parentApplicantName' => 'Chen Wei',
+                'addonType' => AddOn::TYPE_SPOUSE,
+                'firstName' => 'Mei',
+                'lastName' => 'Wei',
+                'dateOfBirth' => '1988-06-01',
+                'nationality' => 'China',
+                'countryOfResidence' => 'China',
+                'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+                'passportNumber' => 'X1234567',
+                'passportPhoto' => $this->photo(),
+            ])
+            ->assertOk()
+            ->json('draft');
+
+        $reopened = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$draftBody['id'])
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame($parent->uuid, $reopened['parent']['id'] ?? null, 'The CIP number alone still links the file.');
+        $this->assertSame('COR-2002', $reopened['parent']['corNumber'] ?? null);
+    }
+
+    public function test_editing_an_add_on_does_not_blank_parent_answers_it_omits(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $filed = $this->file($staff, $this->addOnPayload($parent))
+            ->assertCreated()
+            ->json('application');
+
+        // An edit body that carries none of the three parent keys must leave
+        // the answers alone rather than clear them.
+        $this->actingAs($staff)
+            ->post(
+                '/portal/cip/applications/'.$filed['id'],
+                [
+                    'addonType' => AddOn::TYPE_SPOUSE,
+                    'firstName' => 'Mei',
+                    'lastName' => 'Wong',
+                    'dateOfBirth' => '1988-06-01',
+                    'nationality' => 'China',
+                    'countryOfResidence' => 'China',
+                    'passportNumber' => 'X1234567',
+                    'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+                ],
+                ['Accept' => 'application/json'],
+            )
+            ->assertOk();
+
+        $row = CipApplication::query()->where('uuid', $filed['id'])->firstOrFail();
+        $this->assertSame($parent->cip_number, $row->parent_cip_number);
+        $this->assertSame($parent->cor_number, $row->parent_cor_number);
+        $this->assertSame('Chen Wei', $row->parent_applicant_name);
+        $this->assertSame($parent->id, $row->parent_application_id);
+    }
+
     public function test_an_add_on_refuses_a_type_that_does_not_match_the_date_of_birth(): void
     {
         $staff = $this->staff();

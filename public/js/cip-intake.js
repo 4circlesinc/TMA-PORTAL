@@ -3337,7 +3337,13 @@
     state.draft.sponsored = app.sponsored ? '1' : '0';
     if (app.addonType) state.draft.addonType = app.addonType;
     if (app.parent) {
-      state.parent = app.parent;
+      /*
+       * A parent block with resolved === false is what was TYPED against a
+       * file the portal does not hold. The answers go back into the controls,
+       * but it is not a confirmed parent: adopting it as state.parent would
+       * draw the found tick (and demand a COR) against nothing.
+       */
+      state.parent = app.parent.resolved === false ? null : app.parent;
       state.draft.parentCipNumber = app.parent.cipNumber || '';
       state.draft.parentCorNumber = app.parent.corNumber || '';
       state.draft.parentApplicantName = app.parent.applicantName || '';

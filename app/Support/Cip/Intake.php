@@ -1155,6 +1155,9 @@ class Intake
                 'investment_type_other' => $parent->investment_type_other,
                 'sponsored' => false,
             ])->save();
+            // As in createAddOn: the parent is resolved directly here, so keep
+            // what was typed for the form rather than leaving it to the link.
+            self::retainTypedAddOnParent($application, $data);
             $application->setRelation('parent', $parent);
             if ($parent->provider) {
                 $application->setRelation('provider', $parent->provider);
@@ -2075,6 +2078,9 @@ class Intake
             'provider_id' => $parent->provider_id,
             'addon_type' => $data['addonType'],
         ])->save();
+        // The link is resolved here rather than through linkAddOnParent, so
+        // the typed answers still have to be kept for the form to read back.
+        self::retainTypedAddOnParent($application, $data);
         if ($parent->provider) {
             $application->setRelation('provider', $parent->provider);
         }
@@ -2191,14 +2197,57 @@ class Intake
         self::fileUploads($application, $data, $actor, []);
     }
 
+    /**
+     * Store the parent answers exactly as typed.
+     *
+     * Only keys the request actually carried are written: the edit rules make
+     * all three nullable, and a body that omits one must not blank an answer
+     * given earlier. An empty string IS a clearance — that is the agent
+     * deleting the box — so presence, not truthiness, decides.
+     */
+    private static function retainTypedAddOnParent(CipApplication $application, array $data): void
+    {
+        $columns = [
+            'parentCipNumber' => 'parent_cip_number',
+            'parentCorNumber' => 'parent_cor_number',
+            'parentApplicantName' => 'parent_applicant_name',
+        ];
+
+        $fill = [];
+        foreach ($columns as $key => $column) {
+            if (! array_key_exists($key, $data)) {
+                continue;
+            }
+            $value = trim((string) ($data[$key] ?? ''));
+            $fill[$column] = $value === '' ? null : $value;
+        }
+
+        if ($fill !== []) {
+            $application->forceFill($fill)->save();
+        }
+    }
+
     private static function linkAddOnParent(CipApplication $application, User $actor, array $data): void
     {
         $cip = trim((string) ($data['parentCipNumber'] ?? ''));
+        $cor = trim((string) ($data['parentCorNumber'] ?? ''));
+
+        /*
+         * Keep what was typed before trying to resolve it.
+         *
+         * The link below is optional on purpose — an agent may name a parent
+         * the portal has never seen. That used to mean the three answers were
+         * handed to the lookup and, when it found nothing, dropped: the row
+         * saved, and reopening it painted empty boxes over answers that had
+         * been given. Retaining them here is what lets the form put them back,
+         * whether or not a parent row is ever found.
+         */
+        self::retainTypedAddOnParent($application, $data);
+
         if ($cip === '') {
             return;
         }
 
-        $cor = trim((string) ($data['parentCorNumber'] ?? ''));
         $result = AddOn::lookup($actor, $cip, $cor);
         $parent = null;
         if ($result['ok'] ?? false) {

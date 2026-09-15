@@ -482,7 +482,64 @@ class AddOn
         return [
             'addonType' => $application->addon_type,
             'addonTypeLabel' => self::typeLabel($application->addon_type),
-            'parent' => $parent ? self::parentPayload($parent) : null,
+            'parent' => $parent
+                ? self::linkedParentPayload($application, $parent)
+                : self::typedParentPayload($application),
+        ];
+    }
+
+    /**
+     * The linked parent, with the typed COR preferred when the parent file
+     * itself never had one staged. Reading COR off the parent alone meant a
+     * number typed against a parent with none on file vanished on reopen.
+     *
+     * @return array<string, mixed>
+     */
+    private static function linkedParentPayload(CipApplication $application, CipApplication $parent): array
+    {
+        $payload = self::parentPayload($parent);
+
+        if (! filled($payload['corNumber'] ?? null) && filled($application->parent_cor_number)) {
+            $payload['corNumber'] = $application->parent_cor_number;
+        }
+
+        return $payload;
+    }
+
+    /**
+     * What the agent typed to name a parent the portal could not resolve.
+     *
+     * Not a file, so there is no id, status or photo to give — only the three
+     * answers, so the form can put them back in their own controls instead of
+     * showing blanks. Null when nothing was typed at all.
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function typedParentPayload(CipApplication $application): ?array
+    {
+        $cip = (string) ($application->parent_cip_number ?? '');
+        $cor = (string) ($application->parent_cor_number ?? '');
+        $name = (string) ($application->parent_applicant_name ?? '');
+
+        if (trim($cip) === '' && trim($cor) === '' && trim($name) === '') {
+            return null;
+        }
+
+        return [
+            'id' => null,
+            'cipNumber' => $cip !== '' ? $cip : null,
+            'corNumber' => $cor !== '' ? $cor : null,
+            'number' => null,
+            'applicantName' => $name !== '' ? (CipPerson::upperName($name) ?: $name) : null,
+            'photo' => null,
+            'status' => null,
+            'statusLabel' => null,
+            'providerId' => null,
+            'providerName' => null,
+            'investmentType' => null,
+            // The numbers name a file the portal does not hold, so the form
+            // can say so rather than draw a confirmed tick against nothing.
+            'resolved' => false,
         ];
     }
 
