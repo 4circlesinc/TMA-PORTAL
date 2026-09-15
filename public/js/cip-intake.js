@@ -389,6 +389,12 @@
       var addOnPaths = ['parentApplicantName', 'parentCipNumber', 'parentCorNumber',
         'addonType', 'firstName', 'lastName', 'dateOfBirth', 'nationality',
         'countryOfResidence', 'relationship', 'passportNumber'];
+      // Staff with more than one firm must name which one; a fixed firm is
+      // already on the draft. Filing still inherits the parent's provider,
+      // but Save as draft needs one up front to mint the row.
+      if (isFiling() && !(state.options && state.options.providerFixed)) {
+        addOnPaths.unshift('providerId');
+      }
       return addOnPaths;
     }
 
@@ -1070,10 +1076,26 @@
       { modifier: 'tma-dash__clients-card--docs' });
   }
 
-  function investmentCard() {
+  /*
+   * Whose firm this filing sits under.
+   *
+   * Shared by pre/post-approval Investment and the Add-On parent card: one
+   * firm and nothing to choose is a static name; staff with more than one
+   * pick from the same list the server offered the form.
+   */
+  function providerField() {
     var providers = ((state.options && state.options.providers) || []).map(function (p) {
       return { value: p.id, label: p.name + ' (' + p.code + ')' };
     });
+    if (state.options && state.options.providerFixed) {
+      return '<div class="tma-portal-field"><span class="tma-portal-field__label">' + esc(LABELS.providerId) + '</span>' +
+        '<p class="tma-portal-field__static">' + esc(providerName(state.draft.providerId)) + '</p></div>';
+    }
+
+    return selectField('providerId', providers, 'Select a service provider');
+  }
+
+  function investmentCard() {
     var types = ((state.options && state.options.investmentTypes) || []).map(function (t) {
       return { value: t.value, label: t.label };
     });
@@ -1085,12 +1107,7 @@
       // Its own grid: this row is three, four or five fields depending on the
       // answers, so it fits what it has rather than stranding the last one.
       '<div class="tma-portal-form-grid tma-portal-form-grid--investment">' +
-      // One provider and nothing to choose: say whose file this is instead
-      // of offering a select of one.
-      (state.options && state.options.providerFixed
-        ? '<div class="tma-portal-field"><span class="tma-portal-field__label">' + esc(LABELS.providerId) + '</span>' +
-          '<p class="tma-portal-field__static">' + esc(providerName(state.draft.providerId)) + '</p></div>'
-        : selectField('providerId', providers, 'Select a service provider')) +
+      providerField() +
       selectField('investmentType', types, 'Select an investment type') +
       (state.draft.investmentType === 'other' ? textField('investmentTypeOther') : '') +
       (state.draft.investmentType === 'enterprise_project'
@@ -1344,6 +1361,7 @@
     return '<div class="tma-dash__clients-cards tma-dash__clients-cards--intake">' +
       card('Parent application',
         '<div class="tma-portal-form-grid tma-portal-form-grid--investment">' +
+        providerField() +
         textField('parentApplicantName', { placeholder: 'As on the granted application' }) +
         textField('parentCipNumber', { placeholder: 'As printed on the approval letter' }) +
         textField('parentCorNumber', { placeholder: 'As printed on the certificate' }) +
@@ -2579,8 +2597,15 @@
     if (!draftable()) {
       // Pressed on a form that cannot be drafted at all. Only reachable if
       // the button outlives the state that drew it; say so rather than
-      // appear to have worked.
-      if (announce) ui().toastError('This form isn’t saved as a draft.');
+      // appear to have worked. An Add-On still waiting on a firm is the
+      // common case: the dropdown is there, but nothing is chosen yet.
+      if (announce) {
+        ui().toastError(
+          isAddOnIntake() && isFiling() && !state.draft.providerId
+            ? 'Choose a service provider to save a draft.'
+            : 'This form isn’t saved as a draft.',
+        );
+      }
 
       return;
     }

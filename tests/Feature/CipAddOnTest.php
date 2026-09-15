@@ -499,6 +499,48 @@ class CipAddOnTest extends TestCase
         $this->assertSame("GAL-AO-{$yy}-00001", $draft->displayNumber());
     }
 
+    public function test_an_add_on_draft_can_be_saved_from_the_form_with_a_service_provider(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $body = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/draft', [
+                'phase' => Phase::ADD_ON,
+                'providerId' => $parent->provider->uuid,
+                'firstName' => 'Mei',
+                'addonType' => AddOn::TYPE_SPOUSE,
+            ])
+            ->assertOk()
+            ->json('draft');
+
+        $this->assertNotNull($body);
+        $this->assertSame(Phase::ADD_ON, $body['phase']);
+        $this->assertSame($parent->provider->uuid, $body['answers']['providerId']);
+        $this->assertSame('MEI', $body['answers']['firstName'] ?? null);
+        $this->assertStringContainsString('-AO-', $body['number']);
+    }
+
+    public function test_an_add_on_draft_inherits_the_provider_once_the_parent_is_named(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $body = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/draft', [
+                'phase' => Phase::ADD_ON,
+                'parentCipNumber' => $parent->cip_number,
+                'parentCorNumber' => $parent->cor_number,
+                'firstName' => 'Mei',
+            ])
+            ->assertOk()
+            ->json('draft');
+
+        $this->assertNotNull($body);
+        $this->assertSame($parent->provider->uuid, $body['answers']['providerId']);
+        $this->assertSame($parent->cip_number, $body['answers']['parentCipNumber'] ?? null);
+    }
+
     public function test_an_add_on_refuses_a_type_that_does_not_match_the_date_of_birth(): void
     {
         $staff = $this->staff();
