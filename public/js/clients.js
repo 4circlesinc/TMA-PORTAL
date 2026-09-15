@@ -4899,10 +4899,16 @@
    * table instead, the client you had open, their tabs and wherever you were
    * in them, all thrown away to go back to a row you then had to find again.
    *
+   * The application's own client wins over `selectedId`. A New / Edit form
+   * often keeps the previous profile's id in state (create-add-on from a
+   * parent's file, a cold edit URL after browsing someone else), and Back
+   * used to open that other person's application.
+   *
    * `applicationOwner` covers the case where the edit page was loaded cold, by
-   * link or reload, and there is no client open to go back to.
+   * link or reload, and the record is not in hand yet.
    */
   function backDestination(state) {
+    if (!state) return null;
     if (state.screen === 'edit') return state.selectedId || null;
     /*
      * A draft goes back where it was opened from: the table.
@@ -4914,12 +4920,76 @@
      * they have never been.
      */
     if (state.screen === 'edit-application') {
-      if ((applicationRecord(state) || {}).status === 'draft') return null;
+      var app = applicationRecord(state);
+      if ((app || {}).status === 'draft') return null;
+      if (app && app.clientUid) return app.clientUid;
 
-      return state.selectedId || applicationOwner(state);
+      return applicationOwner(state);
     }
 
+    // New application, company forms, and the profile itself: the table
+    // (or the firm, for company edit). Never a leftover selectedId.
     return null;
+  }
+
+  /* List tab that matches the form the reader just left. */
+  function listTabForFormPhase(phase) {
+    if (phase === 'add_on') return 'add_on';
+    if (phase === 'post_approval') return 'post_approval';
+    if (phase === 'pre_approval') return 'pre_approval';
+
+    return null;
+  }
+
+  /*
+   * Leave a form the way Back and Cancel both mean: the record you were
+   * editing, or the list you opened the form from — never a stale profile.
+   */
+  function leaveClientsForm(navigate) {
+    var state = clientsMountState;
+    if (!state || !navigate) return;
+    var owner = backDestination(state);
+    if (owner) {
+      navigate('detail', owner);
+
+      return;
+    }
+    if (state.screen === 'edit-company' && state.companyId) {
+      navigate('company', null, { companyId: state.companyId });
+
+      return;
+    }
+    if (state.screen === 'add-company') {
+      navigate('list');
+
+      return;
+    }
+    if (state.screen === 'add' || state.adding) {
+      if (state.companyId && companyFor(state.companyId)) {
+        navigate('company', null, { companyId: state.companyId });
+      } else {
+        navigate('list');
+      }
+
+      return;
+    }
+    /*
+     * New filings and drafts: land on the lane this form belonged to, and
+     * drop the previous profile so a later Back from somewhere else cannot
+     * reopen them by accident.
+     */
+    if (state.screen === 'new-application' || state.screen === 'edit-application') {
+      var phase = state.applicationPhase
+        || (applicationRecord(state) || {}).phase
+        || null;
+      var tab = listTabForFormPhase(phase);
+      if (tab) {
+        state.listTab = tab;
+        saveListTab(tab);
+      }
+      state.selectedId = null;
+    }
+    navigate('list');
   }
 
   /* Who a cold-loaded application belongs to. The URL addresses the
@@ -13707,9 +13777,10 @@
   }
 
 
-  /* The application form's Cancel and Add sit in the page head, which is
-     rendered outside this view's mount, so they are delegated once rather
-     than bound on every render. */
+  /* The application form's Back, Cancel and Add sit in the page head, which
+     is rendered outside this view's mount (and replaced whenever the intake
+     wizard finishes loading). Bind them once on the document, or a fresh
+     arrow after onReady has no click handler and appears broken. */
   var cipToolbarWired = false;
 
   function wireCipToolbar(navigate) {
@@ -13730,14 +13801,13 @@
         }
         return;
       }
-      if (e.target.closest('[data-cip-cancel]')) {
+      // Back and Cancel are the same journey (see leaveClientsForm). The head
+      // is swapped out after paint, so these must not rely on per-render binds.
+      if (e.target.closest('[data-clients-back]')
+        || e.target.closest('[data-cip-cancel]')
+        || e.target.closest('[data-clients-cancel]')) {
         e.preventDefault();
-        // Cancel goes where Back goes. Abandoning an edit and finishing one
-        // both leave you where you started, or the safer of the two answers
-        // is the one that loses your place.
-        var owner = clientsMountState && backDestination(clientsMountState);
-        if (owner) navigate('detail', owner);
-        else navigate('list');
+        leaveClientsForm(navigate);
       }
     });
   }
@@ -13853,7 +13923,9 @@
           state.canEditApplication = !(application && application.canEditApplication === false);
           if (application && application.clientUid) {
             rememberApplication(application.clientUid, application);
-            if (!state.selectedId) state.selectedId = application.clientUid;
+            // Only bind the profile on an edit; a new form must not inherit
+            // a client uid or Back opens that file instead of the list.
+            if (editing) state.selectedId = application.clientUid;
           }
           syncClientsDetailHead(state);
         },
@@ -13935,18 +14007,9 @@
       }
     }
 
-    var backBtn = unwiredClientsChrome(root, '[data-clients-back]');
-    if (backBtn) {
-      backBtn.addEventListener('click', function () {
-        var owner = backDestination(state);
-        if (owner) navigate('detail', owner);
-        else if (state.screen === 'edit-company' && state.companyId) {
-          navigate('company', null, { companyId: state.companyId });
-        } else {
-          navigate('list');
-        }
-      });
-    }
+    // Back is delegated in wireCipToolbar: the elevated head replaces its
+    // markup after the form loads, which would leave a per-render listener
+    // on a node that no longer exists.
 
     var editBtn = unwiredClientsChrome(root, '[data-clients-edit]');
     if (editBtn) {
@@ -13971,30 +14034,7 @@
       });
     }
 
-    var cancelBtn = unwiredClientsChrome(root, '[data-clients-cancel]');
-    if (cancelBtn) {
-      cancelBtn.addEventListener('click', function () {
-        if (state.screen === 'add-company') {
-          navigate('list');
-          return;
-        }
-        if (state.screen === 'edit-company' && state.companyId) {
-          navigate('company', null, { companyId: state.companyId });
-          return;
-        }
-        if (state.screen === 'add' || state.adding) {
-          if (state.companyId && companyFor(state.companyId)) {
-            navigate('company', null, { companyId: state.companyId });
-          } else if (usesPagedClientsFlow(state)) {
-            navigate('list');
-          } else {
-            navigate('detail', state.selectedId);
-          }
-          return;
-        }
-        navigate('detail', state.selectedId);
-      });
-    }
+    // Cancel is delegated in wireCipToolbar with Back (same leaveClientsForm).
 
     var saveBtn = unwiredClientsChrome(root, '[data-clients-save]');
     if (saveBtn) {
@@ -15477,11 +15517,21 @@
       }
       if (screen === 'new-application') {
         state.applicationPhase = state.applicationPhase || 'pre_approval';
+        // A Create from someone's profile left their uid selected; Back must
+        // not treat that as the form's owner (see backDestination).
+        state.selectedId = null;
       } else if (screen !== 'edit-application') {
         state.applicationPhase = null;
       }
       if (companyId) state.companyId = companyId;
-      if (contactId) state.selectedId = contactId;
+      if (screen === 'edit-application' && !contactId) {
+        // Prefer the file being edited; otherwise clear so a previous profile
+        // cannot become Back's destination while the owner is still loading.
+        var held = applicationHeldById(applicationId || state.applicationId);
+        state.selectedId = (held && held.clientUid) || null;
+      } else if (contactId) {
+        state.selectedId = contactId;
+      }
       if (contactId && contactId !== previousId) {
         // An application is Overview (or Main applicant after a decision),
         // never Client info. Forcing `info` here is how a row clicked from
