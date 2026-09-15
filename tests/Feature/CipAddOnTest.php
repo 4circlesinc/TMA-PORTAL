@@ -2,12 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Mail\Postcard;
 use App\Models\CipApplication;
+use App\Models\CipApplicationAssignment;
 use App\Models\CipDocument;
 use App\Models\CipDocumentRequirement;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Company;
+use App\Models\CompanyMember;
 use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\User;
@@ -24,6 +27,7 @@ use App\Support\Cip\Status;
 use App\Support\Cip\Tree;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -178,6 +182,67 @@ class CipAddOnTest extends TestCase
         $this->assertSame("GAL-AO-{$yy}-00001", $body['number']);
         $this->assertSame("GAL-AO-{$yy}-00001", $body['internalNumber']);
         $this->assertSame("GAL{$yy}-00001", $parent->internal_number);
+    }
+
+    public function test_an_authorized_agent_add_on_waits_at_new_until_assigned(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+        $contact = $this->providerContact($parent->provider);
+
+        $body = $this->file($contact, $this->addOnPayload($parent))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->firstOrFail();
+
+        $this->assertSame(Status::NEW, $application->status);
+        $this->assertNull($application->assigned_officer_id);
+        $this->assertSame(0, CipApplicationAssignment::query()
+            ->where('application_id', $application->id)
+            ->count());
+    }
+
+    public function test_assigning_an_add_on_starts_review_and_emails_the_officer_the_named_fields(): void
+    {
+        Mail::fake();
+
+        $staff = $this->staff();
+        $officer = $this->officer();
+        $parent = $this->grantedParent($staff);
+        $contact = $this->providerContact($parent->provider);
+
+        $body = $this->file($contact, $this->addOnPayload($parent))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->firstOrFail();
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/assignments', [
+                'userId' => $officer->id,
+            ])
+            ->assertCreated();
+
+        $fresh = $application->fresh();
+        $this->assertSame(Status::REVIEW_APPLICATION, $fresh->status);
+        $this->assertSame($officer->id, $fresh->assigned_officer_id);
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($application, $parent) {
+            if (! $mail->hasTo('rita-addon@example.com')) {
+                return false;
+            }
+
+            $details = collect($mail->payload['details'])->mapWithKeys(fn ($row) => [$row[0] => $row[1]]);
+            $url = $mail->payload['button']['url'] ?? '';
+
+            return $details['Add-On Reference Number'] === $application->displayNumber()
+                && $details['CIP Application Number'] === $parent->cip_number
+                && $details['Main Applicant Name'] === 'CHEN WEI'
+                && $details['Add-On Applicant Name'] === 'MEI WEI'
+                && $details['Direct Portal Link'] === $url
+                && str_starts_with($url, rtrim(config('app.url'), '/').'/citizenship-applications/');
+        });
     }
 
     public function test_a_dependent_add_on_stores_son_and_the_older_bracket(): void
@@ -642,9 +707,35 @@ class CipAddOnTest extends TestCase
 
     private function staff(): User
     {
+        return $this->account(Role::ADMINISTRATOR, 'Ada Admin', 'ada-addon@example.com');
+    }
+
+    private function officer(): User
+    {
+        return $this->account(Role::REVIEWING_OFFICER, 'Rita Reviewer', 'rita-addon@example.com');
+    }
+
+    private function providerContact(CipProvider $provider): User
+    {
+        $contact = $this->account(Role::CLIENT, 'Gal Contact', 'gal-addon@example.com');
+
+        CompanyMember::create([
+            'company_id' => $provider->company_id,
+            'user_id' => $contact->id,
+            'name' => $contact->name,
+            'email' => $contact->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+
+        return $contact;
+    }
+
+    private function account(string $type, string $name, string $email): User
+    {
         $user = User::create([
-            'name' => 'Ada Admin',
-            'email' => 'ada-addon@example.com',
+            'name' => $name,
+            'email' => $email,
             'password' => bcrypt('password12345'),
         ]);
         $user->forceFill([
@@ -652,7 +743,7 @@ class CipAddOnTest extends TestCase
             'profile_completed_at' => now(),
             'onboarding_completed_at' => now(),
             'status' => 'approved',
-            'account_type' => Role::ADMINISTRATOR,
+            'account_type' => $type,
         ])->save();
 
         return $user;

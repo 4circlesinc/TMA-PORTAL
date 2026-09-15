@@ -669,7 +669,18 @@ class Postcards
      * are filed, and a mailbox full of them is sorted and searched by exactly
      * those fields. It stays with the caller and is not editable copy.
      *
-     * @param  array{number:string, applicant:string, provider:string, familySize:int, statusLabel:string, roleLabel:string}  $facts
+     * @param  array{
+     *     number: string,
+     *     applicant: string,
+     *     provider: string,
+     *     familySize: int,
+     *     statusLabel: string,
+     *     roleLabel: string,
+     *     addOn?: bool,
+     *     cipNumber?: string,
+     *     mainApplicant?: string,
+     *     addonApplicant?: string
+     * }  $facts
      */
     public static function cipAssigned(array $facts, ?User $officer, string $url, ?string $subject = null, ?string $recipientName = null): Postcard
     {
@@ -681,14 +692,39 @@ class Postcards
         ], [
             'subject' => $subject,
             'url' => $url,
-            'details' => [
-                ['Application', $facts['number']],
-                ['Applicant', $facts['applicant']],
-                ['Service provider', $facts['provider']],
-                ['Status', $facts['statusLabel']],
-                ['Family size', 'F'.$facts['familySize']],
-            ],
+            'details' => self::cipAssignedDetails($facts, $url),
         ]);
+    }
+
+    /**
+     * Section 10 names what the assignment notice must carry.
+     *
+     * Family files: application number, applicant, firm, status. Add-On files:
+     * the AO reference, the parent's CIP number, both names, and the portal
+     * link — the five fields the brief lists for that lane.
+     *
+     * @param  array<string, mixed>  $facts
+     * @return list<array{0: string, 1: string}>
+     */
+    private static function cipAssignedDetails(array $facts, string $url): array
+    {
+        if (! empty($facts['addOn'])) {
+            return [
+                ['Add-On Reference Number', $facts['number']],
+                ['CIP Application Number', (string) ($facts['cipNumber'] ?? '')],
+                ['Main Applicant Name', (string) ($facts['mainApplicant'] ?? '')],
+                ['Add-On Applicant Name', (string) ($facts['addonApplicant'] ?? $facts['applicant'])],
+                ['Direct Portal Link', $url],
+            ];
+        }
+
+        return [
+            ['Application', $facts['number']],
+            ['Applicant', $facts['applicant']],
+            ['Service provider', $facts['provider']],
+            ['Status', $facts['statusLabel']],
+            ['Family size', 'F'.$facts['familySize']],
+        ];
     }
 
     /**

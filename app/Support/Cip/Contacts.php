@@ -265,7 +265,20 @@ class Contacts
     /**
      * The facts every CIP notice names: number, applicant, firm, family.
      *
-     * @return array{number:string, applicant:string, provider:string, familySize:int}
+     * An Add-On notice also names the granted parent: CIP number, main
+     * applicant, and the person being added. Section 10's assignment email
+     * is built from those, not from the family-file labels.
+     *
+     * @return array{
+     *     number: string,
+     *     applicant: string,
+     *     provider: string,
+     *     familySize: int,
+     *     addOn?: bool,
+     *     cipNumber?: string,
+     *     mainApplicant?: string,
+     *     addonApplicant?: string
+     * }
      */
     public static function facts(CipApplication $application): array
     {
@@ -276,12 +289,37 @@ class Contacts
             $applicant?->fullName() ?: (string) ($application->client?->name ?? '')
         );
 
-        return [
+        $facts = [
             'number' => $application->displayNumber(),
             'applicant' => $name !== null && $name !== '' ? $name : 'Unnamed applicant',
             'provider' => $application->provider?->name ?? 'Private client',
             'familySize' => $application->familySize(),
         ];
+
+        if (! $application->isAddOn()) {
+            return $facts;
+        }
+
+        $application->loadMissing([
+            'parent.client',
+            'parent.people' => fn ($q) => $q->where('role', CipPerson::ROLE_MAIN_APPLICANT),
+        ]);
+
+        $parent = $application->parent;
+        if ($parent === null) {
+            return $facts;
+        }
+
+        $named = AddOn::parentPayload($parent);
+
+        $facts['addOn'] = true;
+        $facts['cipNumber'] = (string) ($named['cipNumber'] ?? '');
+        $facts['mainApplicant'] = ($named['applicantName'] ?? '') !== ''
+            ? (string) $named['applicantName']
+            : 'Unnamed applicant';
+        $facts['addonApplicant'] = $facts['applicant'];
+
+        return $facts;
     }
 
     /** The portal path a notice's button opens. */
