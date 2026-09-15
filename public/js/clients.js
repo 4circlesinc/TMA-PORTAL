@@ -3640,9 +3640,14 @@
     var status = appRecord.phase === 'post_approval'
       ? cipPersonStatusChip(person, appRecord, true)
       : '';
+    var photo = cipPersonPhotoSrc(person);
+    var face = photo
+      ? '<img class="tma-dash__clients-card-person-face" src="' + esc(photo) + '" alt="" width="40" height="40">'
+      : '';
 
     return '<header class="tma-dash__clients-card-head tma-dash__clients-card-head--person">' +
       '<div class="tma-dash__clients-card-person">' +
+      face +
       '<div class="tma-dash__clients-card-person-text">' +
       '<h3 class="tma-dash__clients-card-title">' + esc(cipPersonTitle(person)) + '</h3>' +
       '<span class="tma-dash__clients-card-person-name">' + esc(cipUpperName(person.name) || '-') + '</span>' +
@@ -5332,6 +5337,21 @@
     }
 
     /*
+     * Face from the application first.
+     *
+     * Add-On (and CIP) portraits live on the person / listing photo. The hub
+     * client row can lag — or never update for a provider contact who cannot
+     * refetch the directory — so drawing the header from the contact alone
+     * left the old face up after a passport photo was filed.
+     */
+    var face = Object.assign({}, c, {
+      photo: cipPersonPhotoSrc(app && app.applicant)
+        || (app && app.photo)
+        || c.photo
+        || '',
+    });
+
+    /*
      * Arrow, face, name, and, on an application, the status beside the name.
      * Number and family are on the facts strip; a second copy under the name
      * was the same file answering twice.
@@ -5339,7 +5359,7 @@
     return (
       '<div class="tma-dash__clients-profile-toolbar">' +
       '<div class="tma-dash__clients-profile-head">' +
-      renderClientsBackArrow(state) + renderAvatar(c, 40) +
+      renderClientsBackArrow(state) + renderAvatar(face, 40) +
       '<div class="tma-dash__clients-profile-ident">' +
       '<span class="tma-dash__clients-profile-name-row">' +
       '<span class="tma-dash__clients-profile-name">' + esc(c.name) + '</span>' +
@@ -15061,6 +15081,7 @@
     if (!clientId || record === undefined) return;
     APPLICATIONS[clientId] = record;
     if (record) rememberCipApplicant(clientId);
+    syncClientFaceFromApplication(clientId, record);
     if (window.TMAStore) {
       var stored = record;
       if (record && (record._statusPending || record._pendingFileStatuses)) {
@@ -15070,6 +15091,38 @@
       }
       window.TMAStore.put(applicationCacheKey(clientId), { application: stored });
     }
+  }
+
+  /*
+   * Keep the hub face in step with the passport portrait on the open file.
+   *
+   * Filing a photo updates CipPerson (and usually clients.photo_url), but the
+   * in-memory directory / stub used by the profile head can stay on the old
+   * URL until a full clients list refetch — which provider contacts never get.
+   * Mirror the application photo onto those local copies as soon as we hold it.
+   */
+  function syncClientFaceFromApplication(clientId, app) {
+    if (!clientId || !app) return;
+    var photo = cipPersonPhotoSrc(app.applicant) || app.photo || '';
+    if (!photo) return;
+
+    var item = directoryItemFor(clientId);
+    if (item) item.photo = photo;
+
+    if (CLIENT_STUBS[clientId]) {
+      CLIENT_STUBS[clientId] = Object.assign({}, CLIENT_STUBS[clientId], { photo: photo });
+    }
+
+    if (PROFILES[clientId]) {
+      PROFILES[clientId] = Object.assign({}, PROFILES[clientId], { photo: photo });
+    }
+
+    (APP_TABLE.rows || []).forEach(function (row) {
+      if (!row) return;
+      if (row.clientUid === clientId || (app.id && row.id === app.id)) {
+        row.photo = photo;
+      }
+    });
   }
 
   function ensureProfileLoaded(state, render) {

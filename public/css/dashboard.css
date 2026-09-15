@@ -19017,6 +19017,14 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   min-width: 0;
 }
 
+.tma-dash__clients-card-person-face {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-pill, 999px);
+  object-fit: cover;
+}
+
 .tma-dash__clients-card-person-text {
   display: flex;
   flex-direction: column;
