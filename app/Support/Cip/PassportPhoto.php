@@ -139,9 +139,11 @@ class PassportPhoto
      * Refresh the likeness from the current bytes of a filed passport-photo
      * file (a new version, or a restore).
      *
-     * Quiet when the bytes are missing or not a passport photo: the vault
-     * version is already committed by then, and refusing mid-write would
-     * leave the checklist pointing at a face the person record cannot wear.
+     * Does not re-apply the intake square/size gate: the vault already
+     * accepted this version, and Thumbnail may be painting a face that
+     * reject() would still refuse (slightly off-square). Skipping those
+     * left every avatar on photo_url while the checklist showed the new
+     * thumb. Readable image bytes are enough to wear as the likeness.
      */
     public static function syncFromFile(CipPerson $person, FileItem $file): void
     {
@@ -152,7 +154,7 @@ class PassportPhoto
 
         try {
             $binary = (string) file_get_contents($path);
-            if ($binary === '' || self::reject($binary) !== null) {
+            if ($binary === '' || @imagecreatefromstring($binary) === false) {
                 return;
             }
 

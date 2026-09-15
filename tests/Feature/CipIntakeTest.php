@@ -1346,11 +1346,18 @@ class CipIntakeTest extends TestCase
             ->assertCreated()->json('application');
 
         // One upload, two jobs: the picture drawn beside the applicant's name
-        // is the photo that was filed, not a second thing to keep in step.
+        // is the photo that was filed. The API prefers the library file's
+        // revisioned thumb so Upload new version and the Main applicant
+        // panel stay on the same face; the 320px avatar still lives on the person.
         $person = CipPerson::firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
         $this->assertNotNull($person->photo_url);
-        $this->assertSame($person->photo_url, $body['applicant']['photo']);
         $this->assertStringStartsWith('/media/avatars/', $person->photo_url);
+        $this->assertNotEmpty($body['applicant']['photoFile']['thumbUrl'] ?? null);
+        $this->assertSame(
+            $body['applicant']['photoFile']['thumbUrl'],
+            $body['applicant']['photo'],
+            'the drawn face is the filed passport-photo file',
+        );
 
         // ...and the archival copy is kept separately, because the avatar is
         // 320px and what gets filed with the government cannot be.

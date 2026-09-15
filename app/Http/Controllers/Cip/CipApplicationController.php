@@ -2339,12 +2339,16 @@ class CipApplicationController extends Controller
 
         if ($photoFile) {
             $thumb = $this->slotThumb($photoFile);
-            if (! $photoUrl) {
-                $photoUrl = $thumb['thumbUrl'] ?? $thumb['previewUrl'] ?? null;
-            }
-            if (! $passportPhotoUrl) {
-                $passportPhotoUrl = $thumb['previewUrl'] ?? $thumb['thumbUrl'] ?? null;
-            }
+            /*
+             * The filed copy wins when it is there.
+             *
+             * Upload new version bumps the file's ?v= immediately; photo_url
+             * and photo_path can still point at the previous upload until
+             * likeness sync catches up. Preferring the derived avatar here
+             * made the Main applicant panel disagree with the checklist.
+             */
+            $photoUrl = $thumb['thumbUrl'] ?? $thumb['previewUrl'] ?? $photoUrl;
+            $passportPhotoUrl = $thumb['previewUrl'] ?? $thumb['thumbUrl'] ?? $passportPhotoUrl;
         }
 
         if (! $photoUrl && $person->role === CipPerson::ROLE_MAIN_APPLICANT) {

@@ -3611,19 +3611,31 @@
 
   function cipPersonPhotoSrc(person) {
     if (!person) return null;
-    if (person.photo) return person.photo;
-    if (person.passportPhotoUrl) return person.passportPhotoUrl;
+
+    /*
+     * Filed passport-photo first.
+     *
+     * Upload new version rewrites the library file and bumps ?v= on its
+     * thumb/preview. person.photo / passportPhotoUrl are a derived likeness
+     * that can lag — preferring them left the Main applicant "Passport photo"
+     * on the old face while the Documents checklist already showed the new one.
+     */
     if (person.photoFile) {
-      return person.photoFile.thumbUrl || person.photoFile.previewUrl || null;
+      var fromFile = person.photoFile.previewUrl || person.photoFile.thumbUrl || null;
+      if (fromFile) return fromFile;
     }
 
     var docs = person.documents || [];
     for (var i = 0; i < docs.length; i++) {
       var slot = docs[i];
       if (slot.type === 'passport_photo' && slot.uploaded && slot.fileId) {
-        return slot.thumbUrl || slot.previewUrl || null;
+        var fromSlot = slot.previewUrl || slot.thumbUrl || null;
+        if (fromSlot) return fromSlot;
       }
     }
+
+    if (person.photo) return person.photo;
+    if (person.passportPhotoUrl) return person.passportPhotoUrl;
 
     return null;
   }
