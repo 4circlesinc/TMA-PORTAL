@@ -167,6 +167,10 @@ class CipProviderTransferTest extends TestCase
 
         $this->assertSame($igraphix->id, $application->provider_id);
         $this->assertSame($igaCompany->id, $client->referred_by_company_id);
+        $this->assertNull(
+            $client->company_id,
+            'A CIP applicant is referred by the firm, not a Provider contact at it.',
+        );
         $this->assertSame($igaFolder->id, $folder->parent_id);
         $this->assertSame($galaxyFolder->id !== $folder->parent_id, true);
 

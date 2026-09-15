@@ -142,6 +142,26 @@ class Client extends Model
     }
 
     /**
+     * CIP filings whose main hub record is this client.
+     *
+     * Distinct from firm membership (`company_id`): a filing is referred by
+     * the provider, it does not make the applicant a Provider contact.
+     */
+    public function cipApplications(): HasMany
+    {
+        return $this->hasMany(CipApplication::class);
+    }
+
+    /**
+     * People who work at a firm — not CIP applicants that were wrongly
+     * stamped with that firm's `company_id`.
+     */
+    public function scopeWithoutCipFilings($query)
+    {
+        return $query->whereDoesntHave('cipApplications');
+    }
+
+    /**
      * The company that referred this client. Not membership: the referrer gets
      * no reach over the record, which is why this is its own key rather than
      * a second use of `company_id`.

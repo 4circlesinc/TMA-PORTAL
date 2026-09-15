@@ -257,6 +257,58 @@ class CompaniesTest extends TestCase
         );
     }
 
+    public function test_cip_applicants_are_not_provider_contacts(): void
+    {
+        config(['services.cip.enabled' => true]);
+
+        $staff = $this->staff();
+        $galaxy = Company::create(['uid' => 'galaxy-partners', 'name' => 'Galaxy Partners']);
+        $provider = \App\Models\CipProvider::create([
+            'name' => 'Galaxy Partners',
+            'code' => 'GAL',
+            'company_id' => $galaxy->id,
+            'active' => true,
+        ]);
+
+        Client::create([
+            'uid' => 'maya-contact',
+            'name' => 'Maya Contact',
+            'company_id' => $galaxy->id,
+            'email' => 'maya@galaxy.example',
+            'data' => [],
+        ]);
+
+        // Wrongly stamped as belonging to the firm — how transfers used to
+        // leave applicants, which put them on the Provider contacts card.
+        $applicant = Client::create([
+            'uid' => 'emma-example',
+            'name' => 'Emma Example',
+            'company_id' => $galaxy->id,
+            'referral_type' => Client::REFERRAL_COMPANY,
+            'referred_by_company_id' => $galaxy->id,
+            'photo_url' => 'https://cdn.example/emma.jpg',
+            'data' => [],
+        ]);
+        \App\Support\Cip\Applications::create($provider, $staff, [
+            'client_id' => $applicant->id,
+        ]);
+
+        $companies = collect($this->actingAs($staff)->getJson('/portal/companies')
+            ->assertOk()
+            ->json('companies'));
+
+        $galaxyRow = $companies->firstWhere('id', 'galaxy-partners');
+        $peopleIds = collect($galaxyRow['people'] ?? [])->pluck('id')->all();
+
+        $this->assertContains('maya-contact', $peopleIds);
+        $this->assertNotContains(
+            'emma-example',
+            $peopleIds,
+            'CIP applicants belong under Clients referred / Applications, not Provider contacts.',
+        );
+        $this->assertSame(1, $galaxyRow['peopleCount'] ?? null);
+    }
+
     public function test_deleting_a_provider_keeps_its_people_and_referrals(): void
     {
         $staff = $this->staff();

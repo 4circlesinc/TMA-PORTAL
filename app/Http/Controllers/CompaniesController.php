@@ -90,6 +90,7 @@ class CompaniesController extends Controller
             // client belongs to a company, and a second copy of the clients
             // problem the moment the firm starts using membership.
             'clients' => fn ($q) => $q
+                ->withoutCipFilings()
                 ->select(self::PERSON_COLUMNS)
                 ->with('user:'.self::PERSON_USER_COLUMNS)
                 ->orderBy('name')
@@ -100,7 +101,7 @@ class CompaniesController extends Controller
             // absent, which for member counts meant one round trip per company.
             ->withCount([
                 'referredClients' => fn ($q) => $this->viewerClients($viewer, $q, true),
-                'clients' => fn ($q) => $this->viewerClients($viewer, $q),
+                'clients' => fn ($q) => $this->viewerClients($viewer, $q)->withoutCipFilings(),
                 'members as current_members_count' => fn ($q) => $q->current(),
             ])
             ->orderBy('name')
@@ -115,13 +116,14 @@ class CompaniesController extends Controller
         CompanyMembers::ensureContactsForCompanies($companies, $viewer);
         $companies->load([
             'clients' => fn ($q) => $q
+                ->withoutCipFilings()
                 ->select(self::PERSON_COLUMNS)
                 ->with('user:'.self::PERSON_USER_COLUMNS)
                 ->orderBy('name')
                 ->orderBy('id'),
         ]);
         $companies->loadCount([
-            'clients' => fn ($q) => $this->viewerClients($viewer, $q),
+            'clients' => fn ($q) => $this->viewerClients($viewer, $q)->withoutCipFilings(),
             'members as current_members_count' => fn ($q) => $q->current(),
         ]);
 
@@ -409,6 +411,7 @@ class CompaniesController extends Controller
             Company::with([
                 'cipProvider:id,company_id,code',
                 'clients' => fn ($q) => $this->viewerClients($viewer, $q)
+                    ->withoutCipFilings()
                     ->with('user:'.self::PERSON_USER_COLUMNS)
                     ->orderBy('name')->orderBy('id'),
                 'referredClients' => fn ($q) => $this->viewerClients($viewer, $q, true)
@@ -418,7 +421,7 @@ class CompaniesController extends Controller
                     ->limit(Company::REFERRED_PREVIEW),
             ])->withCount([
                 'referredClients' => fn ($q) => $this->viewerClients($viewer, $q, true),
-                'clients' => fn ($q) => $this->viewerClients($viewer, $q),
+                'clients' => fn ($q) => $this->viewerClients($viewer, $q)->withoutCipFilings(),
                 'members as current_members_count' => fn ($q) => $q->current(),
             ]),
         )->where('uid', $uid)->firstOrFail();
@@ -426,11 +429,12 @@ class CompaniesController extends Controller
         CompanyMembers::ensureContactsForCompanies([$company], $viewer);
         $company->load([
             'clients' => fn ($q) => $this->viewerClients($viewer, $q)
+                ->withoutCipFilings()
                 ->with('user:'.self::PERSON_USER_COLUMNS)
                 ->orderBy('name')->orderBy('id'),
         ]);
         $company->loadCount([
-            'clients' => fn ($q) => $this->viewerClients($viewer, $q),
+            'clients' => fn ($q) => $this->viewerClients($viewer, $q)->withoutCipFilings(),
             'members as current_members_count' => fn ($q) => $q->current(),
         ]);
 

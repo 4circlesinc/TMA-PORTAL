@@ -812,11 +812,20 @@ class Tree
              */
             $firm = $application->provider?->company_id;
 
-            if ($firm && $application->client->referred_by_company_id !== $firm) {
-                $application->client->forceFill([
-                    'referred_by_company_id' => $firm,
-                    'referral_type' => Client::REFERRAL_COMPANY,
-                ])->save();
+            if ($firm) {
+                $patch = [];
+                if ($application->client->referred_by_company_id !== $firm) {
+                    $patch['referred_by_company_id'] = $firm;
+                    $patch['referral_type'] = Client::REFERRAL_COMPANY;
+                }
+                // Applicants are referred by the firm, not contacts at it.
+                // Leaving company_id set puts them on Provider contacts.
+                if ((int) $application->client->company_id === (int) $firm) {
+                    $patch['company_id'] = null;
+                }
+                if ($patch !== []) {
+                    $application->client->forceFill($patch)->save();
+                }
             }
 
             self::syncClientName($application);

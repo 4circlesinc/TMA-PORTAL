@@ -1886,11 +1886,13 @@
 
   function clientAvatarMarkup(item) {
     var av = directoryAvatarItem(item);
-    if (av.avatar) {
-      return '<img src="' + esc(AVATAR + av.avatar + '.png') + '" alt="">';
-    }
-    if (av.photo) {
-      return '<img src="' + esc(av.photo) + '" alt="">';
+    if (av.avatar || av.photo) {
+      var src = av.avatar ? (AVATAR + av.avatar + '.png') : av.photo;
+      return (
+        '<span class="tma-dash__clients-avatar" style="width:var(--dash-icon-lg);height:var(--dash-icon-lg)">' +
+        '<img src="' + esc(src) + '" alt="">' +
+        '</span>'
+      );
     }
     var uri = initialsAvatarUri(item.name, item.id);
     if (uri) {

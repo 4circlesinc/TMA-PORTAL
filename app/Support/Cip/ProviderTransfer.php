@@ -95,11 +95,12 @@ final class ProviderTransfer
                 }
 
                 $previous = $member->provider?->name ?: ($from?->name ?: 'the previous firm');
+                $previousFirmId = $member->provider?->company_id ?? $from?->company_id;
 
                 $member->forceFill(['provider_id' => $to->id])->save();
                 $member->setRelation('provider', $to);
 
-                self::syncClient($member, $to);
+                self::syncClient($member, $to, $previousFirmId);
                 self::reparentClientFolder($member, $to);
 
                 Engine::record($member, CipEvent::ACTION_PROVIDER_TRANSFERRED, $actor, [
@@ -155,8 +156,14 @@ final class ProviderTransfer
         return $children->prepend($root)->unique('id')->values()->all();
     }
 
-    /** Keep the hub referral column pointing at the firm that now holds the file. */
-    private static function syncClient(CipApplication $application, CipProvider $to): void
+    /**
+     * Keep the hub referral column pointing at the firm that now holds the file.
+     *
+     * Referral only — never `company_id`. That column is membership (Provider
+     * contacts / people at the firm). Stamping the filing firm there used to
+     * put applicants on the Provider contacts card next to the real contacts.
+     */
+    private static function syncClient(CipApplication $application, CipProvider $to, ?int $fromFirmId = null): void
     {
         $client = $application->client;
         if (! $client) {
@@ -168,9 +175,15 @@ final class ProviderTransfer
         ];
 
         if ($to->company_id) {
-            $patch['company_id'] = $to->company_id;
             $patch['referral_type'] = Client::REFERRAL_COMPANY;
             $patch['referred_by_company_id'] = $to->company_id;
+        }
+
+        // Drop mistaken membership if a past transfer or fixture left the
+        // applicant belonging to either the outgoing or incoming firm.
+        $mistaken = array_values(array_filter([(int) $to->company_id, (int) $fromFirmId]));
+        if ($client->company_id && in_array((int) $client->company_id, $mistaken, true)) {
+            $patch['company_id'] = null;
         }
 
         $client->forceFill($patch)->save();

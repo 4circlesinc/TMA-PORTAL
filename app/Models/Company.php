@@ -120,9 +120,11 @@ class Company extends Model
         // `name, id` throughout: repeated names are common in the caseload, and
         // ordering by name alone leaves ties to the planner — so a list could
         // come back in a different order between identical requests.
+        // withoutCipFilings: applicants referred by this firm must not appear
+        // as Provider contacts when company_id was wrongly stamped on them.
         $people = $this->relationLoaded('clients')
             ? $this->clients
-            : $this->clients()->orderBy('name')->orderBy('id')->get();
+            : $this->clients()->withoutCipFilings()->orderBy('name')->orderBy('id')->get();
 
         return [
             'id' => $this->uid,
