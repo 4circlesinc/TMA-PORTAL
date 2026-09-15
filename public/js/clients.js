@@ -2326,7 +2326,7 @@
     if (state.searchLoading) cls += ' tma-dash__toolbar-search--loading';
     var kbd = search ? '' : '<kbd class="tma-dash__kbd" data-clients-search-shortcut aria-hidden="true">/</kbd>';
     var addOn = isAddOnApplicationsTab(state);
-    var placeholder = addOn ? 'Search reference, CIP, COR or name' : 'Search';
+    var placeholder = 'Search';
     var aria = addOn ? 'Search Add-On applications' : 'Search table';
 
     return (
