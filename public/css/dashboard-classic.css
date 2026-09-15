@@ -511,15 +511,22 @@
   text-decoration: none;
   padding: var(--space-4) var(--space-12);
   border-radius: var(--radius-12);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .tma-dash__crumb:hover { background: var(--color-hover); }
-.tma-dash__crumb-sep { color: var(--color-border-soft); }
+.tma-dash__crumb-sep {
+  color: var(--color-border-soft);
+  flex-shrink: 0;
+}
 .tma-dash__crumb--current {
   color: var(--color-text-primary);
   padding: var(--space-4) var(--space-12);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .tma-dash__header-icons { display: flex; align-items: center; gap: var(--space-8); }
