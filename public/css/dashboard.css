@@ -20106,9 +20106,18 @@ button.tma-file-status-chip:focus-visible,
 .tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__clients-list-tabs {
   display: flex;
   flex-wrap: nowrap;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: flex-start;
-  gap: var(--space-12);
+  /* Same column gap as .tma-tab-group--underline / overview tabs. */
+  gap: 8px 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__clients-list-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__clients-list-tabs .tma-tab {

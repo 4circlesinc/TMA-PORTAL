@@ -1274,9 +1274,9 @@ body::-webkit-scrollbar,
 
   .tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__clients-list-tabs {
     width: max-content;
-    min-width: 100%;
-    max-width: none;
-    justify-content: space-between;
+    min-width: 0;
+    max-width: 100%;
+    justify-content: flex-start;
   }
 
   .tma-dash__clients-profile-tablist {
