@@ -1390,6 +1390,45 @@
       ' <button type="button" class="tma-portal-link" data-cip-draft-discard>Start over</button></p>';
   }
 
+  /*
+   * Scroll positions to hold across a re-render.
+   *
+   * The intake form scrolls inside `.tma-dash__clients-form`, not
+   * `.tma-dash__main` (that pane is often `overflow: hidden` on CIP). Saving
+   * only the main pane left every date-of-birth / relationship re-render
+   * jumping back to the top of the application.
+   */
+  function captureIntakeScroll(root) {
+    var spots = [];
+    var seen = [];
+    var push = function (el) {
+      if (!el || seen.indexOf(el) !== -1) return;
+      seen.push(el);
+      spots.push({ el: el, top: el.scrollTop });
+    };
+
+    push(root && root.querySelector('[data-cip-form]'));
+    push(root && root.querySelector('.tma-dash__clients-form'));
+    push(document.querySelector('.tma-dash__clients-detail'));
+    push(document.querySelector('.tma-dash__main'));
+
+    return spots;
+  }
+
+  function restoreIntakeScroll(spots, root) {
+    if (!spots || !spots.length) return;
+    spots.forEach(function (spot) {
+      var el = spot.el;
+      // The form node can be replaced by Morph; re-find it on the mount.
+      if (root && el && el.getAttribute && el.getAttribute('data-cip-form') !== null) {
+        el = root.querySelector('[data-cip-form]') || el;
+      } else if (root && el && el.classList && el.classList.contains('tma-dash__clients-form')) {
+        el = root.querySelector('.tma-dash__clients-form') || el;
+      }
+      if (el) el.scrollTop = spot.top;
+    });
+  }
+
   function render(root) {
     if (state.loading) { root.innerHTML = ui().loading(); return; }
     if (state.error) {
@@ -1398,10 +1437,14 @@
     }
 
     var count = Object.keys(state.errors).length;
-    // Keep the page where the reader is. A file drop re-renders the form,
-    // and without this the main pane jumps back to the top under them.
-    var main = document.querySelector('.tma-dash__main');
-    var keptScroll = main ? main.scrollTop : null;
+    var keptScroll = captureIntakeScroll(root);
+    // Remember which field had focus so a Morph rebuild of that control
+    // (dependent ids landing, documents card appearing) does not leave the
+    // caret on <body> and let the browser scroll the form to the top.
+    var active = document.activeElement;
+    var activePath = (active && root.contains(active) && active.getAttribute)
+      ? active.getAttribute('data-cip-field')
+      : null;
 
     MORPH.patch(root,
       '<div class="tma-dash__clients-form" data-cip-form data-cip-intake-phase="' +
@@ -1436,7 +1479,18 @@
       formBody() +
       '</div>');
     wire(root);
-    if (main && keptScroll != null) main.scrollTop = keptScroll;
+    restoreIntakeScroll(keptScroll, root);
+    if (activePath) {
+      var again = root.querySelector('[data-cip-field="' + cssEscape(activePath) + '"]');
+      if (again && typeof again.focus === 'function') {
+        try { again.focus({ preventScroll: true }); } catch (err) { again.focus(); }
+      }
+    }
+    // Morph can briefly shrink the form so the browser clamps scrollTop to 0
+    // before the new documents card lands. Put the reader back after layout.
+    window.requestAnimationFrame(function () {
+      restoreIntakeScroll(keptScroll, root);
+    });
   }
 
   /* ── wiring ────────────────────────────────────────────────────── */

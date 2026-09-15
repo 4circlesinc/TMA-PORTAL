@@ -10386,6 +10386,9 @@
     if (page) page.scrollTop = 0;
     var detail = root.querySelector('.tma-dash__clients-detail');
     if (detail) detail.scrollTop = 0;
+    // Intake scrolls inside the form itself on CIP new/edit screens.
+    var form = root.querySelector('[data-cip-form], .tma-dash__clients-form');
+    if (form) form.scrollTop = 0;
   }
 
   /**
