@@ -32,9 +32,6 @@ use Illuminate\Validation\Rule;
  */
 class CipAssignmentController extends Controller
 {
-    /** The mark on company assignments this workflow writes for itself. */
-    private const AUTO_NOTE = 'cip:auto-assigned with the application';
-
     /** Who holds this application, and who else could. */
     public function index(Request $request, string $uuid): JsonResponse
     {
@@ -73,53 +70,12 @@ class CipAssignmentController extends Controller
         );
 
         /*
-         * Written to the CLIENT's assignment list, which is what the Assigned
-         * tab shows and what section 8's column draws, one record, so somebody put
-         * on here appears there and vice versa.
-         *
-         * The CIP assignment is written too, because section 10 hangs off it: the
-         * file being assigned is what moves it into review. Who may *see* the
-         * file is ApplicationScope (the whole firm); who is working it is this
-         * row, and the dashboard queues still read it.
+         * Hub surfaces first (client Assigned tab / section 8 column, and the
+         * provider firm), then the CIP assignment that starts review from NEW.
+         * Intake's officer self-claim writes the same three through
+         * {@see Assignments::claimFilingOfficer}.
          */
-        $client = $application->client;
-
-        if ($client) {
-            ClientAssignments::assign($client, $officer, [
-                'role' => $role,
-                'level' => 'editor',
-            ], $request->user(), announce: false);
-        }
-
-        /*
-         * The provider firm comes with the file, automatically, and scoped.
-         *
-         * An officer's hub is what they are assigned to, so without this the
-         * application named Galaxy Partners while the officer's Service
-         * providers tab had no such firm, the firm's contact details being
-         * exactly what a reviewer needs to chase a document. COMPANY_ONLY is
-         * the point: the assignment opens the firm's own page, not its book
-         * of clients, and the people lists on that page are scoped to the
-         * viewer separately. Marked as the workflow's own row so ending the
-         * last assignment can take it back without touching grants an
-         * administrator made by hand.
-         */
-        $firm = $application->provider?->company;
-
-        if ($firm && ! CompanyStaffAssignment::where('company_id', $firm->id)
-            ->where('user_id', $officer->id)->live()->exists()) {
-            CompanyStaffAssignment::create([
-                'company_id' => $firm->id,
-                'user_id' => $officer->id,
-                'role' => $role,
-                'permission_level' => 'view_files',
-                'applies_to_clients' => CompanyStaffAssignment::SCOPE_COMPANY_ONLY,
-                'status' => CompanyStaffAssignment::STATUS_ACTIVE,
-                'assigned_by' => $request->user()->id,
-                'notes' => self::AUTO_NOTE,
-            ]);
-        }
-
+        Assignments::grantHubAccess($application, $officer, $request->user(), $role);
         Assignments::assign($application, $officer, $request->user(), $role);
 
         // The officer's own worklist changes shape too, this row is what puts
@@ -188,7 +144,7 @@ class CipAssignmentController extends Controller
             if (! $stillHolds) {
                 CompanyStaffAssignment::where('company_id', $firm->id)
                     ->where('user_id', $userId)
-                    ->where('notes', self::AUTO_NOTE)
+                    ->where('notes', Assignments::AUTO_NOTE)
                     ->live()
                     ->get()
                     ->each(fn ($row) => $row->forceFill([

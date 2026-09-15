@@ -509,6 +509,10 @@ class CipIntakeTest extends TestCase
     /**
      * Section 10, applied to the person who filed it: an officer's own
      * application is already theirs, and assignment is what starts the review.
+     *
+     * The client hub assignment is written too — section 8's column and the
+     * Assigned tab read that list — so the officer who entered the file is
+     * named on the worklist, not left as Unassigned beside a CIP-only row.
      */
     public function test_an_officer_who_files_an_application_is_given_it(): void
     {
@@ -537,6 +541,54 @@ class CipIntakeTest extends TestCase
         // And the file is under way, not sitting in New Applications
         // pretending nobody has it.
         $this->assertSame(Status::REVIEW_APPLICATION, $application->status);
+
+        // The same person on the client list the column and Assigned tab draw.
+        $this->assertNotNull($application->client_id);
+        $this->assertTrue(
+            $application->client->assignments()->live()->where('user_id', $officer->id)->exists(),
+        );
+        $this->assertSame(
+            $officer->name,
+            $body['assignedTo'][0]['name'] ?? null,
+        );
+    }
+
+    /**
+     * A CRO who enters a post-approval file holds it the same way.
+     *
+     * Post-approval intake used to skip self-assign because the NEW-only
+     * gate never fired after the status was already POST_APPROVAL, leaving
+     * every officer-filed post-approval row as Unassigned.
+     */
+    public function test_an_officer_who_files_post_approval_is_given_it(): void
+    {
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($officer, $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12999P',
+            'oathOfAllegiance' => $this->scan('oath.pdf'),
+            'proofOfPayment' => $this->scan('payment.pdf'),
+        ]))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->firstOrFail();
+
+        $this->assertSame(Status::POST_APPROVAL, $application->status);
+        $this->assertSame($officer->id, $application->assigned_officer_id);
+        $this->assertTrue(
+            CipApplicationAssignment::query()
+                ->where('application_id', $application->id)
+                ->where('user_id', $officer->id)
+                ->where('status', CipApplicationAssignment::STATUS_ACTIVE)
+                ->exists(),
+        );
+        $this->assertTrue(
+            $application->client->assignments()->live()->where('user_id', $officer->id)->exists(),
+        );
+        $this->assertSame($officer->name, $body['assignedTo'][0]['name'] ?? null);
     }
 
     /**

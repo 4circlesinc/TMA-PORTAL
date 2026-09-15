@@ -6,9 +6,11 @@ use App\Models\CipApplication;
 use App\Models\CipApplicationAssignment;
 use App\Models\CipEvent;
 use App\Models\ClientAssignment;
+use App\Models\CompanyStaffAssignment;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Clients\Assignments as ClientAssignments;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -47,6 +49,13 @@ class Assignments
     ];
 
     /**
+     * Mark on company assignments this workflow writes for itself, so ending
+     * the last file can take the firm back without touching grants an
+     * administrator made by hand.
+     */
+    public const AUTO_NOTE = 'cip:auto-assigned with the application';
+
+    /**
      * Who may hand a file to an officer.
      *
      * Section 10 gives this to the Administrator, and the matrix agrees, in the way
@@ -65,6 +74,92 @@ class Assignments
         return $user !== null
             && CipAccess::enabled()
             && (Role::isAdmin($user) || CipAccess::can($user, 'cip.assign'));
+    }
+
+    /**
+     * Is this account an officer who may hold a filed application?
+     *
+     * Uses {@see Role::of} so legacy "Reviewing Officer" / "Compliance Officer"
+     * spellings still count. Administrators are deliberately out: filing on
+     * somebody's behalf is routing work, not claiming it.
+     */
+    public static function isFilingOfficer(?User $user): bool
+    {
+        return $user !== null
+            && $user->status === User::STATUS_APPROVED
+            && in_array(Role::of($user), Role::OFFICERS, true);
+    }
+
+    /**
+     * Open the hub surfaces that go with holding a file: the client's
+     * Assigned list (what section 8's column draws) and the provider firm
+     * (company-only, so the officer can chase documents without inheriting
+     * the firm's whole book).
+     *
+     * The CIP assignment itself is still {@see assign}; this is the half the
+     * picker and Intake must both write or the column and the Assigned tab
+     * drift apart.
+     */
+    public static function grantHubAccess(
+        CipApplication $application,
+        User $officer,
+        User $actor,
+        string $role = CipAccess::REVIEWING_OFFICER,
+    ): void {
+        $application->loadMissing(['client', 'provider.company']);
+
+        $client = $application->client;
+        if ($client) {
+            ClientAssignments::assign($client, $officer, [
+                'role' => $role,
+                'level' => 'editor',
+            ], $actor, announce: false);
+        }
+
+        $firm = $application->provider?->company;
+        if ($firm && ! CompanyStaffAssignment::where('company_id', $firm->id)
+            ->where('user_id', $officer->id)->live()->exists()) {
+            CompanyStaffAssignment::create([
+                'company_id' => $firm->id,
+                'user_id' => $officer->id,
+                'role' => $role,
+                'permission_level' => 'view_files',
+                'applies_to_clients' => CompanyStaffAssignment::SCOPE_COMPANY_ONLY,
+                'status' => CompanyStaffAssignment::STATUS_ACTIVE,
+                'assigned_by' => $actor->id,
+                'notes' => self::AUTO_NOTE,
+            ]);
+        }
+    }
+
+    /**
+     * An officer who files an application is already working it.
+     *
+     * Writes the CIP row, the client hub assignment the table column reads,
+     * and the firm grant — the same three surfaces the picker writes — then
+     * lets {@see assign} move NEW → Review Applications when that applies.
+     * Returns null when the actor is not a filing officer (admin, provider
+     * contact, client), so callers can leave those files for routing.
+     */
+    public static function claimFilingOfficer(
+        CipApplication $application,
+        User $officer,
+        bool $systemStatusMove = true,
+    ): ?CipApplicationAssignment {
+        if (! self::isFilingOfficer($officer)) {
+            return null;
+        }
+
+        $role = CipAccess::REVIEWING_OFFICER;
+        self::grantHubAccess($application, $officer, $officer, $role);
+
+        return self::assign(
+            $application,
+            $officer,
+            $officer,
+            $role,
+            systemStatusMove: $systemStatusMove,
+        );
     }
 
     /**
