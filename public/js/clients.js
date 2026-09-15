@@ -166,13 +166,14 @@
    * that belongs to a service provider, the same rows the firm card used to
    * hide one company at a time.
    */
-  // shortLabel is the phone strip's copy: every long label repeats
-  // "Applications", and on a 390px screen that word is pure noise.
+  // Lane tabs drop the repeated "Applications" word — the page is already
+  // CIP Applications, and the long form crushed the strip into ellipsis.
+  // shortLabel is the phone strip's even shorter copy.
   var LIST_TABS = [
     { id: 'all_applications', label: 'All Applications', shortLabel: 'All' },
-    { id: 'pre_approval', label: 'Pre-Approval Applications', shortLabel: 'Pre-Approval' },
-    { id: 'post_approval', label: 'Post-Approval Applications', shortLabel: 'Post-Approval' },
-    { id: 'add_on', label: 'Add-On Applications', shortLabel: 'Add-On' },
+    { id: 'pre_approval', label: 'Pre-Approval', shortLabel: 'Pre-Approval' },
+    { id: 'post_approval', label: 'Post-Approval', shortLabel: 'Post-Approval' },
+    { id: 'add_on', label: 'Add-On', shortLabel: 'Add-On' },
     // Appeals sit between the lanes and the archive: a file being appealed
     // is still in flight, but it is no longer in the lane it was in.
     { id: 'appeal', label: 'Appeals', shortLabel: 'Appeals' },

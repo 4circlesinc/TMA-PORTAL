@@ -1238,9 +1238,8 @@ body::-webkit-scrollbar,
 
 /* ── Underline tab rows (CIP list tabs, applicant detail tabs, any page
  *    head tabs): scroll sideways on touch widths when labels do not fit.
- *    CIP list head already stacks Manage/Create above a full-width tab
- *    row on every width; keep that stacking and only scroll when the
- *    equal-share tabs still overflow. ── */
+ *    CIP list head stacks Manage/Create above a full-width tab row; tabs
+ *    keep their natural width (no ellipsis) and scroll if they overflow. ── */
 @media (max-width: 1024px) {
   .tma-dash__head-tabs {
     min-width: 0;
@@ -1254,9 +1253,7 @@ body::-webkit-scrollbar,
   }
 
   .tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__head-tabs {
-    -webkit-mask-image: none;
-    mask-image: none;
-    overflow-x: visible;
+    overflow-x: auto;
   }
 
   .tma-dash__head-tabs > div {
@@ -1264,9 +1261,9 @@ body::-webkit-scrollbar,
   }
 
   .tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__head-tabs > [data-clients-head-tabs] {
-    flex: 1 1 auto;
-    width: 100%;
-    min-width: 0;
+    flex: 0 0 auto;
+    width: max-content;
+    min-width: 100%;
   }
 
   .tma-dash__head-tabs .tma-tab-group {
@@ -1276,8 +1273,10 @@ body::-webkit-scrollbar,
   }
 
   .tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__clients-list-tabs {
-    width: 100%;
-    max-width: 100%;
+    width: max-content;
+    min-width: 100%;
+    max-width: none;
+    justify-content: space-between;
   }
 
   .tma-dash__clients-profile-tablist {
@@ -1298,8 +1297,8 @@ body::-webkit-scrollbar,
   }
 
   .tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__clients-list-tabs .tma-tab {
-    flex: 1 1 0;
-    min-width: 0;
+    flex: 0 0 auto;
+    min-width: auto;
   }
 
   /* Non-CIP heads may still wrap; CIP list head is already a column. */

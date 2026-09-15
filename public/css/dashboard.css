@@ -20079,9 +20079,9 @@ button.tma-file-status-chip:focus-visible,
 /*
  * CIP list head: actions above a full-width tab row.
  *
- * Eight section labels do not share a line with Manage / Create without
- * wrapping the last tab under the first. Stack the verbs on top (right-
- * aligned) and let every tab claim an equal share of the width below.
+ * Manage / Create sit on their own row so the section tabs get the whole
+ * width under them. Tabs keep their natural label width and space out
+ * across that row — they must never be crushed into ellipsis.
  */
 .tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) {
   flex-direction: column;
@@ -20107,20 +20107,21 @@ button.tma-file-status-chip:focus-visible,
   display: flex;
   flex-wrap: nowrap;
   justify-content: space-between;
-  gap: var(--space-8);
+  align-items: flex-start;
+  gap: var(--space-12);
 }
 
 .tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__clients-list-tabs .tma-tab {
-  flex: 1 1 0;
+  flex: 0 0 auto;
   min-width: 0;
   align-items: center;
 }
 
 .tma-dash__main-head:has(.tma-dash__head-tabs:not([hidden])) .tma-dash__clients-list-tabs .tma-tab__label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-  text-align: center;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  max-width: none;
 }
 
 .tma-dash__clients-list-tabs .tma-tab:not(.is-active) {
