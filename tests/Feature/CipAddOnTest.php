@@ -663,6 +663,232 @@ class CipAddOnTest extends TestCase
         $this->assertSame($parent->id, $row->parent_application_id);
     }
 
+    public function test_filing_an_add_on_draft_links_the_parent_named_on_submit(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        // Draft starts with a firm only — parent CIP/COR/name arrive on Add.
+        $draftBody = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/draft', [
+                'phase' => Phase::ADD_ON,
+                'providerId' => $parent->provider->uuid,
+                'addonType' => AddOn::TYPE_SPOUSE,
+                'firstName' => 'Mei',
+                'lastName' => 'Wei',
+                'dateOfBirth' => '1988-06-01',
+                'nationality' => 'China',
+                'countryOfResidence' => 'China',
+                'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+                'passportNumber' => 'X1234567',
+                'passportPhoto' => $this->photo(),
+            ])
+            ->assertOk()
+            ->json('draft');
+
+        $row = CipApplication::query()->where('uuid', $draftBody['id'])->firstOrFail();
+        $this->assertNull($row->parent_application_id);
+
+        $filed = $this->file($staff, $this->addOnPayload($parent, [
+            'draftId' => $draftBody['id'],
+            'addonType' => AddOn::TYPE_SPOUSE,
+            'firstName' => 'Mei',
+            'lastName' => 'Wei',
+            'dateOfBirth' => '1988-06-01',
+            'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+        ]))
+            ->assertCreated()
+            ->json('application');
+
+        $this->assertSame($draftBody['id'], $filed['id']);
+        $this->assertSame($parent->uuid, $filed['parent']['id'] ?? null);
+        $this->assertSame($parent->cip_number, $filed['parent']['cipNumber'] ?? null);
+        $this->assertSame($parent->cor_number, $filed['parent']['corNumber'] ?? null);
+        $this->assertSame('CHEN WEI', $filed['parent']['applicantName'] ?? null);
+
+        $row->refresh();
+        $this->assertSame($parent->id, $row->parent_application_id);
+        $this->assertSame($parent->provider_id, $row->provider_id);
+    }
+
+    public function test_filing_an_add_on_draft_moves_it_out_of_draft(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $draftBody = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/draft', [
+                'phase' => Phase::ADD_ON,
+                'providerId' => $parent->provider->uuid,
+                'parentCipNumber' => $parent->cip_number,
+                'parentCorNumber' => $parent->cor_number,
+                'parentApplicantName' => 'Chen Wei',
+                'addonType' => AddOn::TYPE_SPOUSE,
+                'firstName' => 'Mei',
+                'lastName' => 'Wei',
+                'dateOfBirth' => '1988-06-01',
+                'nationality' => 'China',
+                'countryOfResidence' => 'China',
+                'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+                'passportNumber' => 'X1234567',
+                'passportPhoto' => $this->photo(),
+            ])
+            ->assertOk()
+            ->json('draft');
+
+        $this->assertSame(Status::DRAFT, CipApplication::query()->where('uuid', $draftBody['id'])->value('status'));
+
+        $filed = $this->file($staff, $this->addOnPayload($parent, [
+            'draftId' => $draftBody['id'],
+            'addonType' => AddOn::TYPE_SPOUSE,
+            'firstName' => 'Mei',
+            'lastName' => 'Wei',
+            'dateOfBirth' => '1988-06-01',
+            'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+        ]))
+            ->assertCreated()
+            ->json('application');
+
+        $this->assertSame($draftBody['id'], $filed['id'], 'Filing must complete the draft row, not mint a second application.');
+        $this->assertSame(Status::NEW, $filed['status']);
+        $this->assertSame(Status::NEW, CipApplication::query()->where('uuid', $draftBody['id'])->value('status'));
+        $this->assertSame(1, CipApplication::query()->where('phase', Phase::ADD_ON)->count());
+        $this->assertSame($parent->uuid, $filed['parent']['id'] ?? null);
+        $this->assertSame($parent->cip_number, $filed['parent']['cipNumber'] ?? null);
+        $this->assertSame('CHEN WEI', $filed['parent']['applicantName'] ?? null);
+    }
+
+    public function test_a_provider_contact_filing_an_add_on_draft_also_leaves_draft(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+        $contact = $this->providerContact($parent->provider);
+
+        $draftBody = $this->actingAs($contact)
+            ->postJson('/portal/cip/applications/draft', [
+                'phase' => Phase::ADD_ON,
+                'providerId' => $parent->provider->uuid,
+                'parentCipNumber' => $parent->cip_number,
+                'parentCorNumber' => $parent->cor_number,
+                'parentApplicantName' => 'Chen Wei',
+                'addonType' => AddOn::TYPE_SPOUSE,
+                'firstName' => 'Mei',
+                'lastName' => 'Wei',
+                'dateOfBirth' => '1988-06-01',
+                'nationality' => 'China',
+                'countryOfResidence' => 'China',
+                'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+                'passportNumber' => 'X1234567',
+                'passportPhoto' => $this->photo(),
+                'submissionId' => 'sub-addon-contact-'.uniqid(),
+            ])
+            ->assertOk()
+            ->json('draft');
+
+        $filed = $this->file($contact, $this->addOnPayload($parent, [
+            'draftId' => $draftBody['id'],
+            'submissionId' => 'sub-addon-contact-file-'.uniqid(),
+            'addonType' => AddOn::TYPE_SPOUSE,
+            'firstName' => 'Mei',
+            'lastName' => 'Wei',
+            'dateOfBirth' => '1988-06-01',
+            'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+        ]))
+            ->assertCreated()
+            ->json('application');
+
+        $this->assertSame($draftBody['id'], $filed['id']);
+        $this->assertSame(Status::NEW, $filed['status']);
+        $this->assertSame(Status::NEW, CipApplication::query()->where('uuid', $draftBody['id'])->value('status'));
+    }
+
+    public function test_filing_an_add_on_draft_by_submission_key_alone_leaves_draft(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+        $key = 'sub-addon-key-'.uniqid();
+
+        $draftBody = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/draft', [
+                'phase' => Phase::ADD_ON,
+                'providerId' => $parent->provider->uuid,
+                'parentCipNumber' => $parent->cip_number,
+                'parentCorNumber' => $parent->cor_number,
+                'parentApplicantName' => 'Chen Wei',
+                'addonType' => AddOn::TYPE_SPOUSE,
+                'firstName' => 'Mei',
+                'lastName' => 'Wei',
+                'dateOfBirth' => '1988-06-01',
+                'nationality' => 'China',
+                'countryOfResidence' => 'China',
+                'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+                'passportNumber' => 'X1234567',
+                'passportPhoto' => $this->photo(),
+                'submissionId' => $key,
+            ])
+            ->assertOk()
+            ->json('draft');
+
+        $filed = $this->file($staff, $this->addOnPayload($parent, [
+            'submissionId' => $key,
+            'addonType' => AddOn::TYPE_SPOUSE,
+            'firstName' => 'Mei',
+            'lastName' => 'Wei',
+            'dateOfBirth' => '1988-06-01',
+            'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+        ]))
+            ->assertCreated()
+            ->json('application');
+
+        $this->assertSame($draftBody['id'], $filed['id']);
+        $this->assertSame(Status::NEW, $filed['status']);
+    }
+
+    public function test_posting_add_on_draft_to_the_edit_url_still_leaves_draft(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $draftBody = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/draft', [
+                'phase' => Phase::ADD_ON,
+                'providerId' => $parent->provider->uuid,
+                'parentCipNumber' => $parent->cip_number,
+                'parentCorNumber' => $parent->cor_number,
+                'parentApplicantName' => 'Chen Wei',
+                'addonType' => AddOn::TYPE_SPOUSE,
+                'firstName' => 'Mei',
+                'lastName' => 'Wei',
+                'dateOfBirth' => '1988-06-01',
+                'nationality' => 'China',
+                'countryOfResidence' => 'China',
+                'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+                'passportNumber' => 'X1234567',
+                'passportPhoto' => $this->photo(),
+            ])
+            ->assertOk()
+            ->json('draft');
+
+        $filed = $this->actingAs($staff)
+            ->post(
+                '/portal/cip/applications/'.$draftBody['id'],
+                $this->addOnPayload($parent, [
+                    'addonType' => AddOn::TYPE_SPOUSE,
+                    'firstName' => 'Mei',
+                    'lastName' => 'Wei',
+                    'dateOfBirth' => '1988-06-01',
+                    'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+                ]),
+                ['Accept' => 'application/json'],
+            )
+            ->assertCreated()
+            ->json('application');
+
+        $this->assertSame($draftBody['id'], $filed['id']);
+        $this->assertSame(Status::NEW, $filed['status']);
+        $this->assertSame(Status::NEW, CipApplication::query()->where('uuid', $draftBody['id'])->value('status'));
+    }
+
     public function test_an_add_on_refuses_a_type_that_does_not_match_the_date_of_birth(): void
     {
         $staff = $this->staff();

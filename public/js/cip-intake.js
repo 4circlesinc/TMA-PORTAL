@@ -2427,6 +2427,11 @@
 
   /* Add, or filing a draft from the table. Not Save on a file already on record. */
   function isFiling() {
+    // A reopened draft names itself before its record arrives. Treat that
+    // window as filing so Add posts to create/fileDraft — update would
+    // write the answers and leave the row at Draft.
+    if (state.applicationId && state.loading && !state.record) return true;
+
     return !state.applicationId || editingDraft();
   }
 

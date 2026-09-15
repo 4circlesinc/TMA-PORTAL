@@ -1685,6 +1685,18 @@ class CipApplicationController extends Controller
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
 
+        /*
+         * A draft is filed, not edited.
+         *
+         * The wizard's Add on a reopened draft must leave Draft for New
+         * Applications (or Post-Approval). Posting here used to run the
+         * edit path, which writes answers and returns 200 while status
+         * stays Draft — the form looked filed, the table still said Draft.
+         */
+        if ($application->status === Status::DRAFT) {
+            return $this->fileDraftRequest($request, $application);
+        }
+
         abort_unless(CipAccess::canEditApplication($user, $application), 404);
         /*
          * The freeze is the original scans. Details can still be corrected;
@@ -1710,6 +1722,39 @@ class CipApplicationController extends Controller
         Live::staff(Live::CIP);
 
         return response()->json(['application' => $this->record($application, $user)]);
+    }
+
+    /**
+     * Complete a draft that arrived on the edit URL.
+     *
+     * Same landing as {@see store()} when it finds the draft: full filing
+     * rules, then {@see Intake::fileDraft()} so status leaves Draft.
+     */
+    private function fileDraftRequest(Request $request, CipApplication $draft): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless(CipAccess::canCreate($user), 404);
+        abort_unless((int) $draft->created_by === (int) $user->id, 404);
+
+        Intake::normaliseDocuments($request);
+        $draft->loadMissing('people.documents');
+        $data = $request->validate(Intake::rules(draft: $draft), Intake::messages());
+
+        if (Intake::isAddOnRequest($draft)) {
+            $this->addOnParentOrFail($user, $data, $draft);
+        }
+
+        try {
+            $application = Intake::fileDraft($draft, $user, $data);
+        } catch (\InvalidArgumentException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        Live::staff(Live::CIP);
+
+        return response()->json([
+            'application' => $this->record($application, $user),
+        ], 201);
     }
 
     /**

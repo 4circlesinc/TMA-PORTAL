@@ -1088,6 +1088,15 @@ class Intake
             throw new \RuntimeException('This application has been filed and is no longer a draft.');
         }
 
+        $phase = $application->phase ?? Phase::PRE_APPROVAL;
+        if (! empty($data['phase']) && Phase::isValid($data['phase'])) {
+            $phase = $data['phase'];
+        }
+
+        if ($phase === Phase::ADD_ON || ($application->phase ?? '') === Phase::ADD_ON) {
+            return self::fileAddOnDraft($application, $actor, $data);
+        }
+
         $application = self::update($application, $actor, $data);
 
         $phase = $application->phase ?? Phase::PRE_APPROVAL;
@@ -1105,6 +1114,65 @@ class Intake
          * may not pick statuses still has to land there, which is the same
          * place {@see create} puts a first-sitting filing.
          */
+        return self::leaveDraftForNew($application, $actor);
+    }
+
+    /**
+     * File an Add-On draft: link the parent, write the person, leave Draft.
+     *
+     * Uses the draft answer path rather than {@see updateAddOn}: filing is
+     * completing the row, and the parent named on the form must land on it
+     * the same way {@see createAddOn} would on a first-sitting Add.
+     */
+    private static function fileAddOnDraft(CipApplication $application, User $actor, array $data): CipApplication
+    {
+        $parent = self::requireAddOnParent($actor, $data, $application->id);
+        $data = self::normaliseAddOnPerson($data);
+        if ($mismatch = AddOn::typeMismatch(
+            (string) ($data['addonType'] ?? $application->addon_type),
+            $data['dateOfBirth'] ?? null,
+            $data['relationship'] ?? null,
+        )) {
+            throw new \InvalidArgumentException($mismatch);
+        }
+
+        DB::transaction(function () use ($application, $actor, $data, $parent) {
+            $application = CipApplication::query()
+                ->whereKey($application->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($application->status !== Status::DRAFT) {
+                throw new \RuntimeException('This application has been filed and is no longer a draft.');
+            }
+
+            $application->forceFill([
+                'phase' => Phase::ADD_ON,
+                'parent_application_id' => $parent->id,
+                'provider_id' => $parent->provider_id,
+                'addon_type' => $data['addonType'] ?? $application->addon_type,
+                'investment_type' => $parent->investment_type,
+                'investment_type_other' => $parent->investment_type_other,
+                'sponsored' => false,
+            ])->save();
+            $application->setRelation('parent', $parent);
+            if ($parent->provider) {
+                $application->setRelation('provider', $parent->provider);
+            }
+
+            self::saveAddOnDraftAnswers($application, $actor, $data);
+        });
+
+        $application = $application->fresh();
+
+        return self::leaveDraftForNew($application, $actor);
+    }
+
+    /**
+     * Move a completed draft onto New Applications and route the holder.
+     */
+    private static function leaveDraftForNew(CipApplication $application, User $actor): CipApplication
+    {
         if (Engine::canTransition($application, Status::NEW)
             && Engine::allows($actor, $application, Status::NEW)) {
             $application = Engine::apply($application, Status::NEW, $actor, []);
@@ -2043,8 +2111,26 @@ class Intake
             }
             self::guardIdentityEdits($application, $actor, $data);
 
+            /*
+             * Filing a draft lands here, not in createAddOn. Parent CIP / COR
+             * / main-applicant name are validated on the way in; without this
+             * link the filed row kept a null parent and those fields looked
+             * empty when the application was opened again.
+             */
+            if (trim((string) ($data['parentCipNumber'] ?? '')) !== '') {
+                self::linkAddOnParent($application, $actor, $data);
+            }
+
+            $fill = [];
             if (! empty($data['addonType']) && AddOn::isValidType($data['addonType'])) {
-                $application->forceFill(['addon_type' => $data['addonType']])->save();
+                $fill['addon_type'] = $data['addonType'];
+            }
+            if ($application->parent && ! $application->investment_type) {
+                $fill['investment_type'] = $application->parent->investment_type;
+                $fill['investment_type_other'] = $application->parent->investment_type_other;
+            }
+            if ($fill !== []) {
+                $application->forceFill($fill)->save();
             }
 
             $application->load('people');
@@ -2163,7 +2249,7 @@ class Intake
         }
     }
 
-    private static function requireAddOnParent(User $creator, array $data): CipApplication
+    private static function requireAddOnParent(User $creator, array $data, ?int $ignoreAddOnId = null): CipApplication
     {
         $parent = AddOn::findParent(
             $creator,
@@ -2179,7 +2265,7 @@ class Intake
             throw new \InvalidArgumentException($why);
         }
 
-        if (AddOn::hasOpenAddOn($parent)) {
+        if (AddOn::hasOpenAddOn($parent, $ignoreAddOnId)) {
             throw new \InvalidArgumentException(
                 'An Add-On application is already in progress for this file. Finish or close it before starting another.',
             );
