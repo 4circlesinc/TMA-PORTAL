@@ -271,8 +271,9 @@ class CipBucketTest extends TestCase
             'Approved', 'Denied',
         ], array_column($body['phases']['post_approval']['buckets'], 'label'));
         $this->assertSame([
-            'Draft Add-Ons', 'Updates Required', 'Ready to Submit', 'Pending Review',
-            'Non-compliant', 'Approved', 'Denied',
+            'Draft Add-Ons', 'New Add-On Applications', 'Review Applications',
+            'Assessment Feedback', 'Updates Required', 'Ready to Submit',
+            'Pending Review', 'Non-compliant', 'Approved', 'Denied',
         ], array_column($body['phases'][Phase::ADD_ON]['buckets'], 'label'));
     }
 
@@ -829,8 +830,12 @@ class CipBucketTest extends TestCase
         $providerAddOn = $this->actingAs($contact)->getJson('/portal/cip/dashboard')->assertOk()->json('phases.'.Phase::ADD_ON);
         $this->assertSame(1, collect($providerAddOn['buckets'])->firstWhere('key', 'draft')['count']);
         $this->assertSame('Draft Add-Ons', collect($providerAddOn['buckets'])->firstWhere('key', 'draft')['label']);
+        $this->assertSame(1, collect($providerAddOn['buckets'])->firstWhere('key', 'new')['count']);
+        $this->assertSame(1, collect($providerAddOn['buckets'])->firstWhere('key', 'review_application')['count']);
+        $this->assertSame(3, $providerAddOn['total'], 'Draft, New and Review all land on the provider Add-On card');
         $this->assertNull(Buckets::find($admin, 'draft'));
         $this->assertNotNull(Buckets::find($contact, 'draft', Phase::ADD_ON));
+        $this->assertNotNull(Buckets::find($contact, 'new', Phase::ADD_ON));
 
         $listed = $this->actingAs($contact)
             ->getJson('/portal/cip/applications?phase='.Phase::ADD_ON.'&bucket=draft')

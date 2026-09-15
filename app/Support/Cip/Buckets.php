@@ -346,8 +346,14 @@ class Buckets
                 'assigned_reviews', 'reviews_pending', 'assessment_feedback_tasks',
                 'information_requests',
             ],
+            // Same pipeline as the administrator Add-On card, plus Draft
+            // Add-Ons at the front (the brief's provider-only exception).
+            // Without New / Review / Assessment Feedback, a submitted Add-On
+            // would vanish from this card until Updates Required — and the
+            // home widget would look like it only had half the lane.
             self::SERVICE_PROVIDER => [
-                'draft', 'update_required', 'ready_to_submit', 'pending_review',
+                'draft', 'new', 'review_application', 'assessment_feedback',
+                'update_required', 'ready_to_submit', 'pending_review',
                 'non_compliant', 'approved', 'denied',
             ],
         ],
