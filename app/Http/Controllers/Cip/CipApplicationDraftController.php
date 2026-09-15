@@ -125,9 +125,7 @@ class CipApplicationDraftController extends Controller
             $provider = $this->addOnDraftProvider($user, $data);
         }
         if ($provider === null) {
-            $message = Intake::filingPhase() === Phase::ADD_ON
-                ? 'Choose a service provider, or confirm the parent CIP application first.'
-                : 'Choose a service provider you can file under.';
+            $message = 'Choose a service provider you can file under.';
 
             return response()->json([
                 'message' => $message,
