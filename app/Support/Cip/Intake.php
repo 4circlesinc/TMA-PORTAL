@@ -985,7 +985,7 @@ class Intake
      */
     public static function createDraft(CipProvider $provider, User $creator, array $data): CipApplication
     {
-        return DB::transaction(function () use ($provider, $creator, $data) {
+        $application = DB::transaction(function () use ($provider, $creator, $data) {
             $phase = Phase::PRE_APPROVAL;
             if (! empty($data['phase']) && Phase::isValid($data['phase'])) {
                 $phase = $data['phase'];
@@ -1022,6 +1022,22 @@ class Intake
 
             return $application->fresh();
         });
+
+        /*
+         * Name who started the draft on Assigned To.
+         *
+         * Filing already claims an officer; a leftover draft used to sit as
+         * Unassigned beside a created_by the table never drew. Officers and
+         * administrators who mayHold are claimed here. Outside the
+         * transaction for the same reason claimFilingOfficer is: it opens its
+         * own and must not nest. Notices skip DRAFT, so this does not page
+         * anyone for unfinished typing.
+         */
+        if (Assignments::claimDraftAuthor($application, $creator)) {
+            $application = $application->fresh();
+        }
+
+        return $application;
     }
 
     /**
@@ -1101,6 +1117,11 @@ class Intake
 
         if (Assignments::claimFilingOfficer($application, $actor)) {
             $application = $application->fresh();
+        } else {
+            // An admin named on the draft for authorship must not stay the
+            // holder of a New Applications row — same routing as a direct file.
+            Assignments::releaseRoutingAuthor($application, $actor);
+            $application = $application->fresh();
         }
 
         return $application;
@@ -1132,6 +1153,9 @@ class Intake
         Notices::announce($application, Status::POST_APPROVAL, $creator);
 
         if (Assignments::claimFilingOfficer($application, $creator)) {
+            $application = $application->fresh();
+        } else {
+            Assignments::releaseRoutingAuthor($application, $creator);
             $application = $application->fresh();
         }
 

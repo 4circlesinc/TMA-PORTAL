@@ -163,6 +163,93 @@ class Assignments
     }
 
     /**
+     * Name who is typing a draft on the Assigned To column.
+     *
+     * A draft is already a real row; leaving it Unassigned while created_by is
+     * known makes unfinished work look like nobody's. Officers claim the same
+     * three surfaces they claim on filing. Administrators are named for the
+     * draft only — {@see releaseRoutingAuthor} takes that claim off when they
+     * file, so the file waits in New Applications the same way a direct admin
+     * filing does. Provider contacts never hold files, draft or otherwise.
+     */
+    public static function claimDraftAuthor(
+        CipApplication $application,
+        User $author,
+    ): ?CipApplicationAssignment {
+        if ($application->status !== Status::DRAFT || ! self::mayHold($author)) {
+            return null;
+        }
+
+        $role = CipAccess::REVIEWING_OFFICER;
+        self::grantHubAccess($application, $author, $author, $role);
+
+        return self::assign($application, $author, $author, $role);
+    }
+
+    /**
+     * Take a non-officer's draft hold off once the file is filed.
+     *
+     * Administrators are named on drafts so the table can tell who typed them.
+     * Filing is the routing moment: the same person must not stay the holder of
+     * a New Applications row they never meant to review
+     * ({@see Intake::create} leaves admin filings unassigned). Mirrors the
+     * three surfaces {@see grantHubAccess} wrote — CIP row, client hub, and
+     * the auto firm grant — so the column and the Assigned tab agree.
+     */
+    public static function releaseRoutingAuthor(CipApplication $application, User $actor): void
+    {
+        if (self::isFilingOfficer($actor)) {
+            return;
+        }
+
+        $held = self::live($application)->firstWhere('user_id', $actor->id);
+        if (! $held) {
+            return;
+        }
+
+        self::end($held, $actor);
+
+        $application->loadMissing(['client', 'provider.company']);
+
+        $client = $application->client;
+        if ($client) {
+            $clientHeld = $client->assignments()->live()->where('user_id', $actor->id)->first();
+            if ($clientHeld) {
+                ClientAssignments::end($client, $clientHeld, $actor);
+            }
+        }
+
+        $firm = $application->provider?->company;
+        if (! $firm) {
+            return;
+        }
+
+        $stillHolds = CipApplicationAssignment::query()
+            ->live()
+            ->where('user_id', $actor->id)
+            ->whereHas(
+                'application',
+                fn ($q) => $q->where('provider_id', $application->provider_id),
+            )
+            ->exists();
+
+        if ($stillHolds) {
+            return;
+        }
+
+        CompanyStaffAssignment::where('company_id', $firm->id)
+            ->where('user_id', $actor->id)
+            ->where('notes', self::AUTO_NOTE)
+            ->live()
+            ->get()
+            ->each(fn ($row) => $row->forceFill([
+                'status' => CompanyStaffAssignment::STATUS_ENDED,
+                'ended_at' => now(),
+                'ended_by' => $actor->id,
+            ])->save());
+    }
+
+    /**
      * Give the application to this officer, in this job.
      *
      * Whoever held it in the same job stops holding it, in the same
@@ -184,7 +271,19 @@ class Assignments
         // An inline picker that fires twice must not read, a year later, as
         // one officer losing the application and being given it back a second
         // afterwards.
+        //
+        // A draft claim is the exception that still needs work: the officer
+        // was named while the row was DRAFT, then filing landed it at NEW
+        // without a second assignment row. Section 10 still owes the move
+        // into review — the hold is theirs, the review has not started.
         if ($held && $held->user_id === $officer->id) {
+            if ($application->status === Status::NEW) {
+                Engine::apply($application, Status::REVIEW_APPLICATION, $systemStatusMove ? null : $actor, [
+                    'officer' => $officer->name,
+                    'role' => $role,
+                ]);
+            }
+
             return $held;
         }
 

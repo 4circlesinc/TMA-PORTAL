@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\CipApplication;
+use App\Models\CipApplicationAssignment;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Client;
@@ -11,6 +12,7 @@ use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
+use App\Support\Cip\CipAccess;
 use App\Support\Cip\Engine;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\Phase;
@@ -1126,6 +1128,141 @@ class CipApplicationDraftTest extends TestCase
 
         $this->assertSame(Status::NEW, $older->fresh()->status);
         $this->assertSame(1, CipApplication::query()->where('status', Status::DRAFT)->count());
+    }
+
+    /**
+     * A draft names who is typing it.
+     *
+     * Filing already claims an officer; a leftover draft used to sit as
+     * Unassigned beside a created_by the table never drew. The Assigned To
+     * column and the hub list both name the author while the status stays
+     * DRAFT — unfinished typing is not nobody's work.
+     */
+    public function test_an_officer_who_starts_a_draft_is_given_it(): void
+    {
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider();
+
+        $this->save($officer, $this->answers($provider))->assertOk();
+
+        $draft = CipApplication::query()->firstOrFail();
+
+        $this->assertSame(Status::DRAFT, $draft->status);
+        $this->assertSame($officer->id, $draft->assigned_officer_id);
+        $this->assertTrue(
+            CipApplicationAssignment::query()
+                ->where('application_id', $draft->id)
+                ->where('user_id', $officer->id)
+                ->where('status', CipApplicationAssignment::STATUS_ACTIVE)
+                ->exists(),
+        );
+        $this->assertNotNull($draft->client_id);
+        $this->assertTrue(
+            $draft->client->assignments()->live()->where('user_id', $officer->id)->exists(),
+        );
+
+        $row = $this->actingAs($officer)
+            ->getJson('/portal/cip/applications/'.$draft->uuid)
+            ->assertOk()
+            ->json('application');
+        $this->assertSame($officer->name, $row['assignedTo'][0]['name'] ?? null);
+    }
+
+    /** An administrator typing a draft is named the same way. */
+    public function test_an_administrator_who_starts_a_draft_is_named_on_it(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->save($admin, $this->answers($provider))->assertOk();
+
+        $draft = CipApplication::query()->firstOrFail();
+        $this->assertSame(Status::DRAFT, $draft->status);
+        $this->assertSame($admin->id, $draft->assigned_officer_id);
+        $this->assertSame(
+            CipAccess::REVIEWING_OFFICER,
+            CipApplicationAssignment::query()
+                ->where('application_id', $draft->id)
+                ->where('status', CipApplicationAssignment::STATUS_ACTIVE)
+                ->value('role'),
+        );
+
+        $row = $this->actingAs($admin)
+            ->getJson('/portal/cip/applications/'.$draft->uuid)
+            ->assertOk()
+            ->json('application');
+        $this->assertSame($admin->name, $row['assignedTo'][0]['name'] ?? null);
+    }
+
+    /**
+     * Filing an admin's draft clears the authorship hold.
+     *
+     * An administrator filing on somebody's behalf is routing, not reviewing.
+     * Naming them on the draft must not leave them holding New Applications.
+     */
+    public function test_filing_an_administrators_draft_leaves_it_unassigned(): void
+    {
+        Storage::fake('local');
+
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->save($admin, $this->answers($provider))->assertOk();
+        $draft = CipApplication::query()->firstOrFail();
+        $this->assertSame($admin->id, $draft->assigned_officer_id);
+
+        $this->actingAs($admin)->post(
+            '/portal/cip/applications',
+            $this->filing($provider) + ['draftId' => $draft->uuid],
+            ['Accept' => 'application/json'],
+        )->assertCreated();
+
+        $filed = $draft->fresh();
+        $this->assertSame(Status::NEW, $filed->status);
+        $this->assertNull($filed->assigned_officer_id);
+        $this->assertSame(0, CipApplicationAssignment::query()
+            ->where('application_id', $filed->id)
+            ->where('status', CipApplicationAssignment::STATUS_ACTIVE)
+            ->count());
+    }
+
+    /**
+     * An officer who drafts and then files still holds the file.
+     *
+     * Claiming at draft and again at file must not end and re-open the
+     * assignment — the same person keeps it, and the status moves out of NEW.
+     */
+    public function test_filing_an_officers_draft_keeps_them_assigned(): void
+    {
+        Storage::fake('local');
+
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider();
+
+        $this->save($officer, $this->answers($provider))->assertOk();
+        $draft = CipApplication::query()->firstOrFail();
+        $assignmentId = CipApplicationAssignment::query()
+            ->where('application_id', $draft->id)
+            ->where('status', CipApplicationAssignment::STATUS_ACTIVE)
+            ->value('id');
+
+        $this->actingAs($officer)->post(
+            '/portal/cip/applications',
+            $this->filing($provider) + ['draftId' => $draft->uuid],
+            ['Accept' => 'application/json'],
+        )->assertCreated();
+
+        $filed = $draft->fresh();
+        $this->assertSame(Status::REVIEW_APPLICATION, $filed->status);
+        $this->assertSame($officer->id, $filed->assigned_officer_id);
+        $this->assertSame(
+            $assignmentId,
+            CipApplicationAssignment::query()
+                ->where('application_id', $filed->id)
+                ->where('status', CipApplicationAssignment::STATUS_ACTIVE)
+                ->value('id'),
+            'Filing reuses the draft claim rather than ending and rewriting it.',
+        );
     }
 
     /** The whole form, as the wizard posts it. */
