@@ -3121,7 +3121,7 @@
 
     var seen = {};
     var list = [];
-    ['pre_approval', 'post_approval'].forEach(function (phase) {
+    ['pre_approval', 'post_approval', 'add_on'].forEach(function (phase) {
       bucketsFromPhase(phase).forEach(function (b) {
         if (b && b.key && !seen[b.key]) {
           seen[b.key] = true;
@@ -3139,6 +3139,7 @@
     var tab = state ? listTabOf(state) : '';
     if (tab === 'post_approval') return bucketsFromPhase('post_approval');
     if (tab === 'pre_approval') return bucketsFromPhase('pre_approval');
+    if (tab === 'add_on') return bucketsFromPhase('add_on');
 
     return allBuckets();
   }
@@ -3306,7 +3307,9 @@
     } else if (key && BUCKETS.phases) {
       var postHas = bucketsFromPhase('post_approval').some(function (b) { return b.key === key; });
       var preHas = bucketsFromPhase('pre_approval').some(function (b) { return b.key === key; });
+      var addonHas = bucketsFromPhase('add_on').some(function (b) { return b.key === key; });
       if (postHas && !preHas) tab = 'post_approval';
+      else if (addonHas && !preHas && !postHas) tab = 'add_on';
     }
 
     saveListTab(tab);

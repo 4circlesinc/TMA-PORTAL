@@ -348,10 +348,11 @@ class CipAddOnTest extends TestCase
         $body = $this->actingAs($staff)->getJson('/portal/cip/dashboard')->assertOk()->json();
 
         $this->assertSame('Add-On Applications', $body['phases'][Phase::ADD_ON]['label']);
-        $this->assertSame(
-            array_column($body['phases'][Phase::PRE_APPROVAL]['buckets'], 'label'),
-            array_column($body['phases'][Phase::ADD_ON]['buckets'], 'label'),
-        );
+        $this->assertSame([
+            'New Add-On Applications', 'Review Applications', 'Assessment Feedback',
+            'Updates Required', 'Ready to Submit', 'Pending Review', 'Non-compliant',
+            'Approved', 'Denied',
+        ], array_column($body['phases'][Phase::ADD_ON]['buckets'], 'label'));
     }
 
     public function test_creating_an_add_on_opens_the_four_brief_folders(): void

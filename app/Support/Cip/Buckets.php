@@ -32,11 +32,13 @@ use Illuminate\Database\Eloquent\Builder;
  * names: Assessment feedback is a number on the administrator's report and a
  * task on the officer's list.
  *
- * NOTHING IS FILED AS A DRAFT
+ * NOTHING IS FILED AS A DRAFT — EXCEPT ADD-ON, FOR THE PROVIDER
  *
- * Applications are born at NEW and land in the New Applications bucket. DRAFT
- * remains a leftover code, historical events, and any row that has not yet
- * been moved, and no set names it, so those leftovers still count nowhere.
+ * Pre-approval and post-approval are born at NEW. DRAFT remains a leftover
+ * code on those lanes, and no set names it, so those leftovers still count
+ * nowhere. Add-On is the exception the brief names: the service provider's
+ * Add-On card opens on Draft Add-Ons, because that lane is still being
+ * typed and unfinished files are work for the firm that is typing them.
  *
  * NOT CACHED, AND MUST NOT BE
  *
@@ -98,6 +100,12 @@ class Buckets
             'label' => 'New Applications',
             'short' => 'New',
             'statuses' => [Status::NEW],
+            'scope' => self::SCOPE_ALL,
+        ],
+        'draft' => [
+            'label' => 'Draft Add-Ons',
+            'short' => 'Drafts',
+            'statuses' => [Status::DRAFT],
             'scope' => self::SCOPE_ALL,
         ],
         'review_application' => [
@@ -296,9 +304,12 @@ class Buckets
      *
      * Pre-approval is section 9's report without the collapsed post-approval
      * chip — that lane has its own view now. Reviewing officers keep their
-     * four personal queues on both sides; a file they hold that has moved
+     * four personal queues on every lane; a file they hold that has moved
      * into post-approval is work on the post-approval card, not a leftover
-     * on the pre-approval one.
+     * on the pre-approval one. Add-On is the same widget with the queues
+     * that lane actually uses: no Background Check / DD Query / Delayed,
+     * New Applications renamed New Add-On Applications, and Draft Add-Ons
+     * on the provider card.
      *
      * @var array<string, array<string, list<string>>>
      */
@@ -329,16 +340,15 @@ class Buckets
         Phase::ADD_ON => [
             self::ADMINISTRATOR => [
                 'new', 'review_application', 'assessment_feedback', 'update_required',
-                'ready_to_submit', 'pending_review', 'non_compliant', 'background_check',
-                'dd_query', 'delayed', 'approved', 'denied',
+                'ready_to_submit', 'pending_review', 'non_compliant', 'approved', 'denied',
             ],
             self::REVIEWING_OFFICER => [
                 'assigned_reviews', 'reviews_pending', 'assessment_feedback_tasks',
                 'information_requests',
             ],
             self::SERVICE_PROVIDER => [
-                'update_required', 'ready_to_submit', 'pending_review', 'non_compliant',
-                'dd_query', 'delayed', 'approved', 'denied',
+                'draft', 'update_required', 'ready_to_submit', 'pending_review',
+                'non_compliant', 'approved', 'denied',
             ],
         ],
     ];
@@ -506,10 +516,10 @@ class Buckets
 
             $buckets[] = [
                 'key' => $key,
-                'label' => $definition['label'],
+                'label' => self::labelFor($key, $phase),
                 // The same name, short enough to sit in a legend. See
                 // DEFINITIONS: it is named there, not abbreviated here.
-                'short' => $definition['short'],
+                'short' => self::shortFor($key, $phase),
                 'count' => array_sum(array_map(
                     fn (string $status) => $tally[$status] ?? 0,
                     $definition['statuses'],
@@ -591,6 +601,8 @@ class Buckets
         // left without a phase so the listing's own tab filter empties it.
         if ($lane !== null && in_array($key, self::keysFor($set, $lane), true)) {
             $found['phase'] = $lane;
+            $found['label'] = self::labelFor($key, $lane);
+            $found['short'] = self::shortFor($key, $lane);
         }
 
         return $found;
@@ -616,6 +628,35 @@ class Buckets
         }
 
         return $query;
+    }
+
+    /**
+     * The heading a bucket wears on one card.
+     *
+     * Add-On reuses the same keys as pre-approval so a chip and the table
+     * behind it still share a definition; only the words the brief uses on
+     * that lane change.
+     */
+    private static function labelFor(string $key, string $phase): string
+    {
+        if ($phase === Phase::ADD_ON) {
+            return match ($key) {
+                'new' => 'New Add-On Applications',
+                'reviews_pending' => 'Pending Reviews',
+                default => self::DEFINITIONS[$key]['label'],
+            };
+        }
+
+        return self::DEFINITIONS[$key]['label'];
+    }
+
+    private static function shortFor(string $key, string $phase): string
+    {
+        if ($phase === Phase::ADD_ON && $key === 'new') {
+            return 'New Add-On';
+        }
+
+        return self::DEFINITIONS[$key]['short'];
     }
 
     /**

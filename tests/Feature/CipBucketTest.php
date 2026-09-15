@@ -98,14 +98,17 @@ class CipBucketTest extends TestCase
         User $creator,
         string $status,
         ?User $officer = null,
+        ?string $phase = null,
     ): CipApplication {
-        $application = Applications::create($provider, $creator);
+        $application = Applications::create($provider, $creator, $phase === Phase::ADD_ON
+            ? ['phase' => Phase::ADD_ON]
+            : []);
 
         $application->forceFill([
             'status' => $status,
-            'phase' => Status::laneOf($status) === Phase::POST_APPROVAL
+            'phase' => $phase ?? (Status::laneOf($status) === Phase::POST_APPROVAL
                 ? Phase::POST_APPROVAL
-                : Phase::PRE_APPROVAL,
+                : Phase::PRE_APPROVAL),
             'assigned_officer_id' => $officer?->id,
         ])->save();
 
@@ -196,6 +199,11 @@ class CipBucketTest extends TestCase
             'Apply for Passport', 'Pending Passport', 'Ready for Delivery', 'Updates Required',
             'Approved', 'Denied',
         ], array_column($body['phases'][Phase::POST_APPROVAL]['buckets'], 'label'));
+        $this->assertSame([
+            'New Add-On Applications', 'Review Applications', 'Assessment Feedback',
+            'Updates Required', 'Ready to Submit', 'Pending Review', 'Non-compliant',
+            'Approved', 'Denied',
+        ], array_column($body['phases'][Phase::ADD_ON]['buckets'], 'label'));
     }
 
     public function test_the_reviewing_officer_dashboard_is_four_personal_queues(): void
@@ -216,6 +224,10 @@ class CipBucketTest extends TestCase
             array_fill(0, 4, Buckets::SCOPE_MINE),
             array_column($body['buckets'], 'scope'),
         );
+        $this->assertSame([
+            'Assigned Reviews', 'Pending Reviews', 'Assessment Feedback Tasks',
+            'Additional Information Requests',
+        ], array_column($body['phases'][Phase::ADD_ON]['buckets'], 'label'));
     }
 
     public function test_a_compliance_officer_reads_the_same_four_queues(): void
@@ -258,6 +270,10 @@ class CipBucketTest extends TestCase
             'Apply for Passport', 'Pending Passport', 'Ready for Delivery', 'Updates Required',
             'Approved', 'Denied',
         ], array_column($body['phases']['post_approval']['buckets'], 'label'));
+        $this->assertSame([
+            'Draft Add-Ons', 'Updates Required', 'Ready to Submit', 'Pending Review',
+            'Non-compliant', 'Approved', 'Denied',
+        ], array_column($body['phases'][Phase::ADD_ON]['buckets'], 'label'));
     }
 
     /**
@@ -330,7 +346,7 @@ class CipBucketTest extends TestCase
         [, $contact] = $this->providerWithContact('GAL');
 
         foreach ([$admin, $rita, $contact] as $reader) {
-            foreach ([Phase::PRE_APPROVAL, Phase::POST_APPROVAL] as $phase) {
+            foreach ([Phase::PRE_APPROVAL, Phase::POST_APPROVAL, Phase::ADD_ON] as $phase) {
                 $buckets = $this->actingAs($reader)
                     ->getJson('/portal/cip/dashboard')
                     ->assertOk()
@@ -502,7 +518,7 @@ class CipBucketTest extends TestCase
         foreach ([$admin, $rita, $contact] as $reader) {
             $body = $this->actingAs($reader)->getJson('/portal/cip/dashboard')->assertOk()->json();
 
-            foreach ([Phase::PRE_APPROVAL, Phase::POST_APPROVAL] as $phase) {
+            foreach ([Phase::PRE_APPROVAL, Phase::POST_APPROVAL, Phase::ADD_ON] as $phase) {
                 foreach (array_column($body['phases'][$phase]['buckets'], 'tone', 'key') as $key => $tone) {
                     $this->assertContains($tone, $vocabulary, $key.' ('.$phase.') must wear a tone the portal styles.');
                 }
@@ -785,6 +801,42 @@ class CipBucketTest extends TestCase
 
         $this->assertSame(0, array_sum($this->counts($admin)));
         $this->assertSame(0, array_sum($this->counts($contact)));
+    }
+
+    public function test_the_add_on_card_names_the_queues_that_lane_uses(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com');
+        [$galaxy, $contact] = $this->providerWithContact('GAL');
+
+        $this->application($galaxy, $admin, Status::NEW, phase: Phase::ADD_ON);
+        $this->application($galaxy, $admin, Status::DRAFT, phase: Phase::ADD_ON);
+        $this->application($galaxy, $admin, Status::REVIEW_APPLICATION, $rita, Phase::ADD_ON);
+        $this->application($galaxy, $admin, Status::NEW);
+
+        $adminAddOn = $this->actingAs($admin)->getJson('/portal/cip/dashboard')->assertOk()->json('phases.'.Phase::ADD_ON);
+        $this->assertSame(1, collect($adminAddOn['buckets'])->firstWhere('key', 'new')['count']);
+        $this->assertSame('New Add-On Applications', collect($adminAddOn['buckets'])->firstWhere('key', 'new')['label']);
+        $this->assertNull(collect($adminAddOn['buckets'])->firstWhere('key', 'draft'));
+        $this->assertSame(2, $adminAddOn['total'], 'New and Review; a draft Add-On is not on the administrator card');
+        $this->assertSame(1, $this->counts($admin)['new'], 'a pre-approval New file stays on the pre-approval card');
+
+        $officerAddOn = $this->actingAs($rita)->getJson('/portal/cip/dashboard')->assertOk()->json('phases.'.Phase::ADD_ON);
+        $this->assertSame('Pending Reviews', collect($officerAddOn['buckets'])->firstWhere('key', 'reviews_pending')['label']);
+        $this->assertSame(1, collect($officerAddOn['buckets'])->firstWhere('key', 'assigned_reviews')['count']);
+        $this->assertSame(0, $this->counts($rita)['assigned_reviews'] ?? 0);
+
+        $providerAddOn = $this->actingAs($contact)->getJson('/portal/cip/dashboard')->assertOk()->json('phases.'.Phase::ADD_ON);
+        $this->assertSame(1, collect($providerAddOn['buckets'])->firstWhere('key', 'draft')['count']);
+        $this->assertSame('Draft Add-Ons', collect($providerAddOn['buckets'])->firstWhere('key', 'draft')['label']);
+        $this->assertNull(Buckets::find($admin, 'draft'));
+        $this->assertNotNull(Buckets::find($contact, 'draft', Phase::ADD_ON));
+
+        $listed = $this->actingAs($contact)
+            ->getJson('/portal/cip/applications?phase='.Phase::ADD_ON.'&bucket=draft')
+            ->assertOk()
+            ->json();
+        $this->assertSame(1, $listed['total']);
     }
 
     public function test_the_whole_set_is_one_count_not_one_per_bucket(): void
