@@ -185,6 +185,40 @@ class CompaniesTest extends TestCase
         );
     }
 
+    public function test_provider_contacts_prefer_login_name_over_email_as_name(): void
+    {
+        $staff = $this->staff();
+        $galaxy = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
+
+        $user = User::factory()->create([
+            'name' => 'Catarina Silva',
+            'email' => 'catarina@galaxy.example',
+            'status' => 'approved',
+            'account_type' => 'Client',
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+        ]);
+
+        Client::create([
+            'uid' => 'catarina',
+            'name' => 'catarina@galaxy.example',
+            'company_id' => $galaxy->id,
+            'email' => 'catarina@galaxy.example',
+            'user_id' => $user->id,
+            'data' => [],
+        ]);
+
+        $people = collect($this->actingAs($staff)->getJson('/portal/companies')
+            ->assertOk()
+            ->json('companies'))
+            ->flatMap(fn ($company) => $company['people'] ?? []);
+
+        $row = $people->firstWhere('id', 'catarina');
+        $this->assertSame('Catarina Silva', $row['name'] ?? null);
+        $this->assertSame('catarina@galaxy.example', $row['email'] ?? null);
+    }
+
     public function test_deleting_a_provider_keeps_its_people_and_referrals(): void
     {
         $staff = $this->staff();

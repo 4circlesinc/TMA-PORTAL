@@ -43,7 +43,7 @@ class CompaniesController extends Controller
     ];
 
     /** User columns a person card needs to draw a face from a live login. */
-    private const PERSON_USER_COLUMNS = 'id,avatar_url,provider_avatar_url';
+    private const PERSON_USER_COLUMNS = 'id,name,avatar_url,provider_avatar_url';
 
     /** Warm the company list briefly, it rides next to the client directory
      *  on hub mount and is identical for every staff reader. */

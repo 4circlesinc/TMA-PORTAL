@@ -19202,6 +19202,24 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   grid-template-columns: minmax(160px, 1.3fr) minmax(160px, 1fr) minmax(180px, 1.1fr);
 }
 
+.tma-dash__ctable--clients.tma-dash__ctable--people .tma-dash__cc--user .tma-dash__cc-user-stack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+  font-weight: inherit;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+}
+
+.tma-dash__ctable--clients.tma-dash__ctable--people .tma-dash__cc--user .tma-dash__cc-user-email {
+  font-weight: 400;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12, 16px);
+  color: var(--color-text-secondary, rgba(0, 0, 0, 0.45));
+}
+
 /*
  * Service providers carry one track more than the tabs above: the CIP code.
  * It is three or four characters wide and never wraps, so it takes a fixed

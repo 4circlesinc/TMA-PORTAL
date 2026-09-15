@@ -205,6 +205,16 @@ final class CompanyMembers
             if ($email && ! $client->email) {
                 $patch['email'] = $email;
             }
+            // Rows created from an invite often kept the mailbox as `name`.
+            // Once we know the person, prefer their real label.
+            $display = $member->displayName();
+            $stored = trim((string) $client->name);
+            $emailKeyStored = strtolower(trim((string) ($client->email ?? '')));
+            if ($display !== '' && $display !== $stored
+                && ($stored === '' || str_contains($stored, '@') || strtolower($stored) === $emailKeyStored)) {
+                $patch['name'] = $display;
+                $patch['initial'] = mb_strtoupper(mb_substr($display, 0, 1));
+            }
             if ($patch !== []) {
                 $client->forceFill($patch)->save();
             }

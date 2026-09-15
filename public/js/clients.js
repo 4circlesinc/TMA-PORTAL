@@ -2558,12 +2558,20 @@
   function renderProviderPersonTableRow(entry, index) {
     var person = entry.person;
     var company = entry.company;
-    var contact = person.email || '-';
+    var name = String(person.name || '').trim() || String(person.email || '').trim() || 'Contact';
+    var email = String(person.email || '').trim();
+    var emailLine = email && email.toLowerCase() !== name.toLowerCase()
+      ? '<span class="tma-dash__cc-truncate tma-dash__cc-user-email">' + esc(email) + '</span>'
+      : '';
+    var contact = email || '-';
     return (
       '<div class="tma-dash__ctr tma-dash__ctr--body" data-clients-row="' + esc(person.id) +
       '" data-row-index="' + index + '" role="row">' +
       '<div class="tma-dash__cc tma-dash__cc--user">' + clientAvatarMarkup(person) +
-      '<span class="tma-dash__cc-truncate">' + esc(person.name || '') + '</span></div>' +
+      '<span class="tma-dash__cc-user-stack">' +
+      '<span class="tma-dash__cc-truncate">' + esc(name) + '</span>' +
+      emailLine +
+      '</span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--referral">' +
       '<button type="button" class="tma-dash__clients-company-link tma-dash__cc-truncate" data-clients-open-company="' +
       esc(company.id) + '">' + esc(company.name || 'Service provider') + '</button></div>' +

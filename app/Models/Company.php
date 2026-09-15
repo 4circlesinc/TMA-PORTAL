@@ -165,7 +165,7 @@ class Company extends Model
                 ),
             'people' => $people->map(fn (Client $c) => [
                 'id' => $c->uid,
-                'name' => $c->name,
+                'name' => $c->contactDisplayName(),
                 'initial' => $c->initial,
                 'initialColor' => $c->initial_color,
                 // Contact photo first, then the portal login's face — same

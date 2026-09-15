@@ -73,8 +73,7 @@ class Client extends Model
         return $this->user()->exists();
     }
 
-    /**
-     * Mailbox for the Contact column.
+    /** Mailbox for the Contact column.
      *
      * Deleted portal accounts keep a copy of their address on this row so a
      * restore can bring the login back. The directory must not keep advertising
@@ -87,6 +86,41 @@ class Client extends Model
         }
 
         return $this->email ?: null;
+    }
+
+    /**
+     * Name shown on Provider contacts and firm people lists.
+     *
+     * Older contact rows were often stored with the mailbox as `name`. When a
+     * live login exists, that account's name is the person; otherwise keep the
+     * stored label unless it is only the email again.
+     */
+    public function contactDisplayName(): string
+    {
+        $stored = trim((string) $this->name);
+        $email = strtolower(trim((string) ($this->contactEmail() ?? $this->email ?? '')));
+        $loginName = '';
+
+        if ($this->hasLiveLogin()) {
+            $loginName = trim((string) ($this->user?->name ?? ''));
+        }
+
+        if ($loginName !== '' && ($stored === '' || self::nameLooksLikeEmail($stored, $email))) {
+            return $loginName;
+        }
+
+        if ($stored !== '') {
+            return $stored;
+        }
+
+        return $email !== '' ? $email : 'Contact';
+    }
+
+    private static function nameLooksLikeEmail(string $name, string $email): bool
+    {
+        $lower = strtolower(trim($name));
+
+        return $lower === $email || str_contains($lower, '@');
     }
 
     /** Contact column: email when the login still exists, otherwise phone. */
