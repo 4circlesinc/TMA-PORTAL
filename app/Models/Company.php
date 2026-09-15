@@ -70,15 +70,15 @@ class Company extends Model
     }
 
     /** Everyone at the company who has (or is being given) portal access. */
+    public function members(): HasMany
+    {
+        return $this->hasMany(CompanyMember::class);
+    }
+
     /** The CIP numbering registry row, when this company is a service provider. */
     public function cipProvider(): HasOne
     {
         return $this->hasOne(CipProvider::class, 'company_id');
-    }
-
-    public function members(): HasMany
-    {
-        return $this->hasMany(CompanyMember::class);
     }
 
     /** The firm's own people looking after this company. */

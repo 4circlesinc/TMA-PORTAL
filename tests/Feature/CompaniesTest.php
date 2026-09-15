@@ -106,6 +106,48 @@ class CompaniesTest extends TestCase
         );
     }
 
+    public function test_portal_access_members_appear_as_provider_contacts(): void
+    {
+        $staff = $this->staff();
+        $galaxy = Company::create(['uid' => 'galaxy-partners', 'name' => 'Galaxy Partners']);
+
+        $contact = User::factory()->create([
+            'name' => 'Maya Contact',
+            'email' => 'maya@galaxy.example',
+            'status' => 'approved',
+            'account_type' => 'Client',
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+        ]);
+
+        // Membership with no client row — how Users-page assignment used to leave people.
+        \App\Models\CompanyMember::create([
+            'company_id' => $galaxy->id,
+            'user_id' => $contact->id,
+            'name' => $contact->name,
+            'email' => $contact->email,
+            'role' => 'member',
+            'status' => \App\Models\CompanyMember::STATUS_ACTIVE,
+            'added_by' => $staff->id,
+        ]);
+
+        $companies = collect($this->actingAs($staff)->getJson('/portal/companies')
+            ->assertOk()
+            ->json('companies'));
+
+        $people = $companies->flatMap(fn ($company) => $company['people'] ?? []);
+        $this->assertTrue(
+            $people->contains(fn ($person) => ($person['email'] ?? null) === 'maya@galaxy.example'
+                && ($person['name'] ?? null) === 'Maya Contact'),
+            'People with portal access at a firm must appear on Provider contacts.',
+        );
+        $this->assertTrue(
+            (bool) ($people->firstWhere('email', 'maya@galaxy.example')['hasLogin'] ?? false),
+            'A live portal login should show as having access on the contact.',
+        );
+    }
+
     public function test_deleting_a_provider_keeps_its_people_and_referrals(): void
     {
         $staff = $this->staff();

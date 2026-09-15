@@ -14357,7 +14357,11 @@
           var members = res && res.members;
           var company = companyFor(state.companyId);
           if (company && members) company.memberCount = members.length;
-          refreshCompanyPanels();
+          // Portal access creates a contact row; refresh so Provider contacts
+          // and the firm card's people list see them without a full reload.
+          refreshCompanyRecord(state.companyId).then(function () {
+            refreshCompanyPanels();
+          });
         }).catch(function (err) {
           memberAdd.disabled = false;
           clientsToast((err && err.message) || 'Could not add that person', 'negative');
@@ -14741,6 +14745,21 @@
      assignments capability still shows portal access. */
   /* Fetch the open company when the listing has not arrived yet, and surface
      a 403 rather than an empty "not assigned" card. */
+  function refreshCompanyRecord(companyId) {
+    if (!companyId) return Promise.resolve(null);
+    return CompaniesAPI.get(companyId).then(function (data) {
+      var company = data && data.company;
+      if (!company) return null;
+      var existing = companyFor(company.id);
+      if (!existing) COMPANIES.push(company);
+      else Object.assign(existing, company);
+      hydrateCompanies(COMPANIES);
+      return companyFor(company.id);
+    }).catch(function () {
+      return null;
+    });
+  }
+
   function ensureCompanyLoaded(state, render) {
     if (!state.companyId) return;
     if (companyFor(state.companyId)) {

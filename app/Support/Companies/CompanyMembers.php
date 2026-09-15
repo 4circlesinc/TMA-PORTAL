@@ -9,11 +9,16 @@ use App\Models\Invitation;
 use App\Models\User;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Cip\Pages;
+use App\Support\Clients\ClientDirectory;
+use App\Support\Files\FolderProvisioner;
 use App\Support\Invitations\Invitations;
 use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
 use App\Support\Messaging\ClientConversations;
 use App\Support\Notifications\Notifier;
+use App\Support\Realtime\Live;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 /**
@@ -100,7 +105,166 @@ final class CompanyMembers
             ClientConversations::attachLogin($member->user);
         }
 
+        // Portal access is a contact at the firm: Provider contacts reads the
+        // company people list, which is clients — not memberships alone.
+        self::ensureContact($member->fresh() ?? $member, $by);
+
         return $member->fresh();
+    }
+
+    /**
+     * Make sure a company member is also a contact row on that company.
+     *
+     * The Provider contacts tab (and the firm card's contacts list) draw from
+     * `clients` attached to the company. Membership alone used to grant sign-in
+     * without a contact, so people with portal access were invisible there.
+     */
+    public static function ensureContact(CompanyMember $member, ?User $by = null): ?Client
+    {
+        $company = $member->relationLoaded('company')
+            ? $member->company
+            : Company::query()->find($member->company_id);
+
+        if ($company === null) {
+            return null;
+        }
+
+        $email = $member->displayEmail();
+        $emailKey = $email ? Str::lower($email) : null;
+        $userId = $member->hasLiveAccount() ? $member->user_id : null;
+
+        $client = null;
+        if ($member->client_id) {
+            $client = Client::query()->find($member->client_id);
+        }
+
+        if ($client === null && $userId) {
+            $client = Client::query()
+                ->where('user_id', $userId)
+                ->where(function ($q) use ($company) {
+                    $q->where('company_id', $company->id)->orWhereNull('company_id');
+                })
+                ->orderByRaw('CASE WHEN company_id = ? THEN 0 ELSE 1 END', [$company->id])
+                ->orderBy('id')
+                ->first();
+        }
+
+        if ($client === null && $emailKey) {
+            $client = Client::query()
+                ->where('company_id', $company->id)
+                ->whereRaw('LOWER(email) = ?', [$emailKey])
+                ->orderBy('id')
+                ->first();
+        }
+
+        $created = false;
+        if ($client === null) {
+            $name = $member->displayName();
+            $uidBase = Str::slug($name) ?: ($emailKey ? Str::slug(Str::before($emailKey, '@')) : 'contact');
+            $uid = self::uniqueClientUid($uidBase !== '' ? $uidBase : 'contact');
+            $parts = preg_split('/\s+/', trim($name)) ?: [];
+            $first = $parts[0] ?? $name;
+            $last = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
+
+            $client = Client::create([
+                'uid' => $uid,
+                'name' => $name,
+                'client_type' => 'private',
+                'company_id' => $company->id,
+                'company' => $company->name,
+                'referral_type' => Client::REFERRAL_NONE,
+                'email' => $email,
+                'user_id' => $userId,
+                'initial' => mb_strtoupper(mb_substr($name, 0, 1)),
+                'initial_color' => 'blue',
+                'data' => [
+                    'firstName' => $first,
+                    'lastName' => $last,
+                    'emails' => $email ? [['type' => 'work', 'value' => $email]] : [],
+                    'phones' => [],
+                    'addresses' => [],
+                    'importantDates' => [],
+                    'work' => [
+                        'company' => $company->name,
+                        'jobTitle' => $member->job_title,
+                    ],
+                ],
+                'created_by' => $by?->id ?? $member->added_by,
+            ]);
+            $created = true;
+            FolderProvisioner::provisionClientFolder($client, $by);
+        } else {
+            $patch = [];
+            if ($client->company_id !== $company->id) {
+                $patch['company_id'] = $company->id;
+                $patch['company'] = $company->name;
+            }
+            if ($userId && $client->user_id === null) {
+                $patch['user_id'] = $userId;
+            }
+            if ($email && ! $client->email) {
+                $patch['email'] = $email;
+            }
+            if ($patch !== []) {
+                $client->forceFill($patch)->save();
+            }
+        }
+
+        if ($member->client_id !== $client->id) {
+            $member->forceFill(['client_id' => $client->id])->save();
+        }
+
+        if ($created) {
+            Cache::forget('companies.directory');
+            ClientDirectory::flush();
+            Live::staff(Live::CLIENTS);
+            Live::staff(Live::COMPANIES);
+        }
+
+        return $client->fresh();
+    }
+
+    /**
+     * Backfill contact rows for everyone who already has (or is being given)
+     * portal access at these firms, so the Provider contacts tab catches up.
+     *
+     * @param  Collection<int, Company>|iterable<int, Company>  $companies
+     */
+    public static function ensureContactsForCompanies(iterable $companies, ?User $by = null): void
+    {
+        $list = $companies instanceof Collection ? $companies : collect($companies);
+        if ($list->isEmpty()) {
+            return;
+        }
+
+        $companyIds = $list->pluck('id')->all();
+        $members = CompanyMember::query()
+            ->current()
+            ->whereIn('company_id', $companyIds)
+            ->with(['user:id,name,email', 'company:id,uid,name'])
+            ->get();
+
+        foreach ($members as $member) {
+            self::ensureContact($member, $by);
+        }
+
+        // Directory payload may have loaded clients before the backfill.
+        foreach ($list as $company) {
+            $company->unsetRelation('clients');
+        }
+    }
+
+    private static function uniqueClientUid(string $base): string
+    {
+        $base = trim($base, '-') ?: 'contact';
+        $uid = $base;
+        $n = 2;
+        while (Client::withTrashed()->where('uid', $uid)->exists()) {
+            $uid = $base.'-'.$n;
+            $n++;
+        }
+
+        return $uid;
     }
 
     /**
@@ -131,6 +295,10 @@ final class CompanyMembers
         abort_if(! $email, 422, 'Add an email address before inviting them.');
         abort_if($member->hasLiveAccount(), 422, 'This person already has portal access.');
         self::assertInvitable($email);
+
+        // Invitation acceptance links the login onto the contact row.
+        self::ensureContact($member, $by);
+        $member = $member->fresh() ?? $member;
 
         [$invitation] = Invitations::issue([
             'type' => Invitation::TYPE_COMPANY_MEMBER,
@@ -192,9 +360,11 @@ final class CompanyMembers
             'user_id' => $user->id,
             'status' => CompanyMember::STATUS_ACTIVE,
             'name' => $user->name ?: $member->name,
+            'email' => $member->email ?: $user->email,
         ])->save();
 
         ContactIdentity::relink($member, $user);
+        self::ensureContact($member->fresh() ?? $member);
 
         ClientConversations::attachLogin($user);
     }

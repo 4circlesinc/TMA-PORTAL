@@ -14,6 +14,7 @@ use App\Support\Access\Role;
 use App\Support\Cip\Providers;
 use App\Support\Clients\ClientDirectory;
 use App\Support\Companies\CompanyAccess;
+use App\Support\Companies\CompanyMembers;
 use App\Support\Realtime\Live;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -104,6 +105,22 @@ class CompaniesController extends Controller
 
         $this->attachReferredPreviews($companies, $viewer);
         $this->hideDeletedUserContactEmails($companies);
+
+        // Portal-access people are contacts: catch up any membership that never
+        // got a client row, then reload people so the Provider contacts tab
+        // and firm cards see them on this response.
+        CompanyMembers::ensureContactsForCompanies($companies, $viewer);
+        $companies->load([
+            'clients' => fn ($q) => $q
+                ->select(self::PERSON_COLUMNS)
+                ->with('user:id')
+                ->orderBy('name')
+                ->orderBy('id'),
+        ]);
+        $companies->loadCount([
+            'clients' => fn ($q) => $this->viewerClients($viewer, $q),
+            'members as current_members_count' => fn ($q) => $q->current(),
+        ]);
 
         return [
             'companies' => $companies->map->toRecord()->values()->all(),
@@ -398,8 +415,19 @@ class CompaniesController extends Controller
             ])->withCount([
                 'referredClients' => fn ($q) => $this->viewerClients($viewer, $q, true),
                 'clients' => fn ($q) => $this->viewerClients($viewer, $q),
+                'members as current_members_count' => fn ($q) => $q->current(),
             ]),
         )->where('uid', $uid)->firstOrFail();
+
+        CompanyMembers::ensureContactsForCompanies([$company], $viewer);
+        $company->load([
+            'clients' => fn ($q) => $this->viewerClients($viewer, $q)
+                ->orderBy('name')->orderBy('id'),
+        ]);
+        $company->loadCount([
+            'clients' => fn ($q) => $this->viewerClients($viewer, $q),
+            'members as current_members_count' => fn ($q) => $q->current(),
+        ]);
 
         return response()->json(['company' => $company->toRecord()]);
     }
