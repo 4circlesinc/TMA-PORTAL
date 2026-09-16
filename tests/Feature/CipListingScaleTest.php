@@ -271,6 +271,90 @@ class CipListingScaleTest extends TestCase
         );
     }
 
+    /*
+     * The same families, on the tab that does not name a lane.
+     *
+     * All Applications holds post-approval files alongside the others, and a
+     * row draws its family from its OWN phase, not from the filter. The eager
+     * load was read off the request instead, so this page - the one a reader
+     * lands on - skipped it and walked to the database once per member: 118
+     * document reads and 58 file reads to draw 68 rows on the production
+     * snapshot, against 24 queries for the same rows under the post-approval
+     * filter. The guard above could not see it because it always named a lane.
+     */
+    public function test_the_unfiltered_tab_costs_the_same_queries_at_any_size(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+        $applications = $this->applications($staff, $provider, 10, Phase::POST_APPROVAL);
+
+        foreach ($applications as $application) {
+            foreach ([CipPerson::ROLE_SPONSOR, CipPerson::ROLE_DEPENDENT] as $i => $role) {
+                CipPerson::create([
+                    'application_id' => $application->id,
+                    'role' => $role,
+                    'first_name' => 'Rel'.$i,
+                    'last_name' => 'Row',
+                    'date_of_birth' => '1995-01-01',
+                    'dependent_ordinal' => $role === CipPerson::ROLE_DEPENDENT ? 1 : null,
+                ]);
+            }
+        }
+
+        $folder = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Unfiltered scale photos',
+            'owner_id' => $staff->id,
+            'created_by' => $staff->id,
+            'folder_type' => Folder::TYPE_CLIENT,
+        ]);
+
+        foreach ($applications as $application) {
+            foreach ($application->people()->get() as $person) {
+                $file = FileItem::create([
+                    'uuid' => (string) Str::uuid(),
+                    'folder_id' => $folder->id,
+                    'owner_id' => $staff->id,
+                    'name' => 'photo-'.$person->id.'.jpg',
+                    'extension' => 'jpg',
+                    'mime_type' => 'image/jpeg',
+                    'size' => 2048,
+                    'disk' => 'local',
+                    'storage_path' => 'tests/unfiltered-photo-'.$person->id.'.jpg',
+                ]);
+                CipDocument::create([
+                    'uuid' => (string) Str::uuid(),
+                    'application_id' => $application->id,
+                    'person_id' => $person->id,
+                    'type' => DocumentTypes::PASSPORT_PHOTO,
+                    'label' => 'Passport photo',
+                    'required' => true,
+                    'file_id' => $file->id,
+                ]);
+            }
+        }
+
+        $this->actingAs($staff);
+
+        // No phase: the tab the reader lands on.
+        $unfiltered = $this->measure(function () {
+            $this->getJson('/portal/cip/applications?perPage=10')->assertOk();
+        });
+
+        $repeats = $this->repeats($unfiltered['queries']);
+
+        $this->assertSame(
+            [],
+            $repeats,
+            "All Applications repeated a query shape, so something is measured per row:\n".
+            implode("\n", array_map(
+                fn (string $shape, int $n) => $n.'x  '.substr($shape, 0, 160),
+                array_keys($repeats),
+                $repeats,
+            )),
+        );
+    }
+
     public function test_a_sort_or_page_change_does_not_recount_the_whole_table(): void
     {
         $staff = $this->staff();

@@ -3004,6 +3004,9 @@
     // laneServerSorted() answers from; see it for why APP_TABLE.lastPage
     // cannot.
     lanePages: {},
+    // Which lane the rows currently held actually belong to, so a miss can
+    // tell "not fetched yet" from "fetched, and this is it".
+    laneShown: null,
     expanded: {},
   };
 
@@ -3547,7 +3550,10 @@
     listTabsForViewer().forEach(function (tab) {
       var id = tab && tab.id;
       if (!id || id === current) return;
-      if (['all_applications', 'pre_approval', 'post_approval', 'add_on'].indexOf(id) === -1) return;
+      // Every tab that lists applications, not just the four lanes: Closed
+      // and Appeals are tabs a reader clicks like any other, and leaving them
+      // out meant those two always paid a round trip.
+      if (!onApplicationsTable({ listTab: id, screen: 'list' })) return;
 
       var phase = phaseForListTab(id);
       // Fetched unsorted, so filed unsorted: the request below sends no sort.
@@ -3585,6 +3591,7 @@
       APP_TABLE.lastPage = held.lastPage;
       APP_TABLE.total = held.total;
       APP_TABLE.lanePages[lane || ''] = held.lastPage;
+      APP_TABLE.laneShown = lane;
       APP_TABLE.error = null;
       APP_TABLE.loading = false;
       APP_TABLE.loadedKey = key;
@@ -3596,6 +3603,20 @@
     APP_TABLE.loadingKey = key;
     APP_TABLE.loading = true;
     APP_TABLE.error = null;
+    /*
+     * The rows on screen belong to the lane being left, and this lane's have
+     * not arrived. Left in place they are painted under the new tab's header
+     * until the answer lands - one tab's applications listed as another's,
+     * which is worse than a blank wait because it reads as real. Dropped
+     * here so the skeleton shows instead; renderApplicationTable only skips
+     * it while rows are held.
+     */
+    if (APP_TABLE.laneShown !== lane) {
+      APP_TABLE.rows = [];
+      APP_TABLE.total = 0;
+      APP_TABLE.lastPage = 1;
+    }
+    APP_TABLE.laneShown = lane;
 
     var params = ['perPage=150', 'page=' + APP_TABLE.page];
     /*
@@ -3696,6 +3717,9 @@
     APP_TABLE.cache = {};
     // Rows added or removed move the page counts these were measured from.
     APP_TABLE.lanePages = {};
+    // The rows held are stale too, so the next miss must clear them rather
+    // than treat them as this lane's and paint them on.
+    APP_TABLE.laneShown = null;
     APP_TABLE.fetchGen += 1;
   }
 

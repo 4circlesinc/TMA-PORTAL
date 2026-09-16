@@ -699,7 +699,21 @@ class CipApplicationController extends Controller
         // Absent means yes: a caller that has not been taught to ask still
         // gets the whole answer rather than a table with no filter menu.
         $withFacets = (bool) ($data['facets'] ?? true);
-        $postApprovalList = ($data['phase'] ?? '') === Phase::POST_APPROVAL;
+        /*
+         * Whether this page can contain a post-approval file, which is what
+         * decides whether the family has to be loaded with it.
+         *
+         * Not "was post_approval asked for": familyMembersForRow() reads each
+         * application's OWN phase, so All Applications, Closed and Appeals all
+         * draw family rows for whatever post-approval files they contain. Read
+         * as the filter, the eager load was skipped for exactly those pages
+         * and every member walked to the database on its own - 118 document
+         * reads and 58 file reads to draw 68 rows, against 24 queries for the
+         * same rows under the post_approval filter. Only a lane that cannot
+         * hold one can skip it.
+         */
+        $lane = $data['phase'] ?? '';
+        $postApprovalList = ! in_array($lane, [Phase::PRE_APPROVAL, Phase::ADD_ON], true);
 
         $query = ApplicationScope::query($user)
             ->with([

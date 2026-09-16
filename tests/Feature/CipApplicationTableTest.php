@@ -253,7 +253,12 @@ class CipApplicationTableTest extends TestCase
         // same shape as the document-comment unread query, and one more for
         // the checklist tally primed across the page ({@see Review::primeTally}),
         // which is the fixed price of NOT counting documents once per row.
-        $this->assertLessThan(23, $count, 'The table must not scale its queries with its rows.');
+        //
+        // 23 -> 24 for the family eager-load on an unfiltered page. This page
+        // has no phase, so it can hold post-approval files, and those draw a
+        // row per member; loaded per row that was one document read and one
+        // file read per person. One fixed grouped read buys both back.
+        $this->assertLessThan(24, $count, 'The table must not scale its queries with its rows.');
     }
 
     public function test_it_lists_applications_not_clients(): void
@@ -409,7 +414,7 @@ class CipApplicationTableTest extends TestCase
         $count = count(DB::getQueryLog());
         DB::disableQueryLog();
 
-        $this->assertLessThan(23, $count, 'A sorted listing must not scale its queries with its rows.');
+        $this->assertLessThan(24, $count, 'A sorted listing must not scale its queries with its rows.');
     }
 
     public function test_it_sorts_status_in_lifecycle_order(): void
