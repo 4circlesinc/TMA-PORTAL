@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Cache\SoftCache;
 use App\Support\Dashboard\DashboardMetrics;
 use App\Support\Dashboard\Period;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 
 /**
  * The KPI row on the portal home.
@@ -47,7 +47,8 @@ class DashboardMetricsController extends Controller
             // Keyed per user and period: an administrator sees organization
             // scope and everyone else their own, and "today" and "this year"
             // are different numbers, so one shared entry would show the wrong ones.
-            $payload = Cache::remember(
+            // Soft: the row is measured from Postgres if the cache is away.
+            $payload = SoftCache::remember(
                 "dashboard-metrics.week-monday.{$user->id}.{$period->key}",
                 self::TTL_SECONDS,
                 fn () => $metrics->toArray(),

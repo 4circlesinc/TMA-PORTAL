@@ -118,6 +118,12 @@ class AdminUsersController extends Controller
         $lastLogins = $this->latestAuthAt($userIds, 'login');
         $lastLogouts = $this->latestAuthAt($userIds, 'logout');
 
+        // Sign-in policy is one setting for the whole firm. Read it once here
+        // rather than twice per row through the model helpers: each of those
+        // is a cache round trip, and the table has no reason to pay for
+        // dozens of them to answer the same question.
+        $authenticatorTypes = SecurityPolicies::authenticatorRequiredAccountTypes();
+
         $users = $userModels->map(function (User $user) use (
             $providerContactIds,
             $referredClientIds,
@@ -126,10 +132,12 @@ class AdminUsersController extends Controller
             $lastLogins,
             $lastLogouts,
             $workStatuses,
+            $authenticatorTypes,
             $viewer,
         ) {
             $loginAt = isset($lastLogins[$user->id]) ? Carbon::parse($lastLogins[$user->id]) : null;
             $logoutAt = isset($lastLogouts[$user->id]) ? Carbon::parse($lastLogouts[$user->id]) : null;
+            $policyRequiresAuthenticator = in_array(Role::of($user), $authenticatorTypes, true);
 
             return [
                 'id' => $user->id,
@@ -151,8 +159,8 @@ class AdminUsersController extends Controller
                 'status' => $user->status,
                 'twoFactor' => $user->hasTwoFactorEnabled(),
                 'requireTwoFactor' => (bool) $user->require_two_factor,
-                'policyRequiresAuthenticator' => SecurityPolicies::authenticatorRequired($user),
-                'mustUseAuthenticator' => $user->mustUseAuthenticator(),
+                'policyRequiresAuthenticator' => $policyRequiresAuthenticator,
+                'mustUseAuthenticator' => (bool) $user->require_two_factor || $policyRequiresAuthenticator,
                 'serviceProviders' => ($membershipsByUser->get($user->id) ?? collect())
                     ->map(function (CompanyMember $member) {
                         $company = $member->company;
@@ -194,8 +202,8 @@ class AdminUsersController extends Controller
             'accountTypes' => self::ACCOUNT_TYPES,
             'users' => $users,
             'canManage' => $this->isAdmin($viewer),
-            'orgRequiresAuthenticator' => SecurityPolicies::authenticatorRequired(),
-            'authenticatorRequiredAccountTypes' => SecurityPolicies::authenticatorRequiredAccountTypes(),
+            'orgRequiresAuthenticator' => $authenticatorTypes !== [],
+            'authenticatorRequiredAccountTypes' => $authenticatorTypes,
         ]);
     }
 

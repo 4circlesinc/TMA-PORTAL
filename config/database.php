@@ -163,6 +163,14 @@ return [
             'password' => env('REDIS_PASSWORD'),
             'port' => env('REDIS_PORT', '6379'),
             'database' => env('REDIS_DB', '0'),
+            // Bound every wait on the store. The cache is an accelerator the
+            // app can live without (see App\Support\Cache\SoftCache), and the
+            // client defaults, five seconds to connect and PHP's sixty-second
+            // socket timeout per read, times the retries below, hold a web
+            // request open far past the load balancer's patience.
+            'timeout' => (float) env('REDIS_TIMEOUT', 2.0),
+            'read_timeout' => (float) env('REDIS_READ_TIMEOUT', 5.0),
+            'read_write_timeout' => (float) env('REDIS_READ_TIMEOUT', 5.0),
             'max_retries' => env('REDIS_MAX_RETRIES', 3),
             'backoff_algorithm' => env('REDIS_BACKOFF_ALGORITHM', 'decorrelated_jitter'),
             'backoff_base' => env('REDIS_BACKOFF_BASE', 100),
@@ -179,6 +187,14 @@ return [
             'password' => env('REDIS_PASSWORD'),
             'port' => env('REDIS_PORT', '6379'),
             'database' => env('REDIS_CACHE_DB', '1'),
+            // Bound every wait on the store. The cache is an accelerator the
+            // app can live without (see App\Support\Cache\SoftCache), and the
+            // client defaults, five seconds to connect and PHP's sixty-second
+            // socket timeout per read, times the retries below, hold a web
+            // request open far past the load balancer's patience.
+            'timeout' => (float) env('REDIS_TIMEOUT', 2.0),
+            'read_timeout' => (float) env('REDIS_READ_TIMEOUT', 5.0),
+            'read_write_timeout' => (float) env('REDIS_READ_TIMEOUT', 5.0),
             'max_retries' => env('REDIS_MAX_RETRIES', 3),
             'backoff_algorithm' => env('REDIS_BACKOFF_ALGORITHM', 'decorrelated_jitter'),
             'backoff_base' => env('REDIS_BACKOFF_BASE', 100),

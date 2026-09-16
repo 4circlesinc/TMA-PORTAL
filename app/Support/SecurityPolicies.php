@@ -5,7 +5,7 @@ namespace App\Support;
 use App\Models\User;
 use App\Support\Access\Role;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Cache;
+use App\Support\Cache\SoftCache;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -104,7 +104,7 @@ class SecurityPolicies
 
     public static function get(string $section): array
     {
-        $stored = Cache::remember("portal-settings.{$section}", 60, function () use ($section) {
+        $stored = SoftCache::remember("portal-settings.{$section}", 60, function () use ($section) {
             try {
                 $row = DB::table('portal_settings')->where('key', "security.{$section}")->first();
             } catch (\Throwable) {
@@ -124,7 +124,7 @@ class SecurityPolicies
             ['value' => json_encode($value), 'updated_at' => now(), 'updated_by' => $userId],
         );
 
-        Cache::forget("portal-settings.{$section}");
+        SoftCache::forget("portal-settings.{$section}");
     }
 
     /**
@@ -250,7 +250,7 @@ class SecurityPolicies
      */
     public static function forceReauthAfter(): ?Carbon
     {
-        $stored = Cache::remember('portal-settings.auth.reauth-after', 60, function () {
+        $stored = SoftCache::remember('portal-settings.auth.reauth-after', 60, function () {
             try {
                 $row = DB::table('portal_settings')->where('key', 'auth.reauth_after')->first();
             } catch (\Throwable) {
@@ -285,7 +285,7 @@ class SecurityPolicies
             ],
         );
 
-        Cache::forget('portal-settings.auth.reauth-after');
+        SoftCache::forget('portal-settings.auth.reauth-after');
     }
 
     public static function sessionDays(): int
