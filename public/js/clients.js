@@ -3000,6 +3000,10 @@
      */
     cache: {},
     prefetching: {},
+    // How many pages each lane has, by phase, learned as each is read. What
+    // laneServerSorted() answers from; see it for why APP_TABLE.lastPage
+    // cannot.
+    lanePages: {},
     expanded: {},
   };
 
@@ -3422,17 +3426,28 @@
      * too: a header click that does not change the key would paint a new
      * arrow over the same page.
      */
-    return applicationTableKeyFor(applicationPhaseForTab(state), state.search || '', APP_TABLE.page);
+    var phase = applicationPhaseForTab(state);
+
+    return applicationTableKeyFor(
+      phase, state.search || '', APP_TABLE.page,
+      laneServerSorted(phase) ? APP_TABLE.sort : '', laneServerSorted(phase) ? APP_TABLE.dir : ''
+    );
   }
 
   /*
    * The same key for any lane, so a lane fetched ahead of a click is filed
-   * under exactly what that click will ask for. Sort and direction are part
-   * of it only when the server has to do the ordering (see serverSorted):
-   * for a lane sorted here, a header click must not change the key, or it
-   * would refetch the rows it already holds.
+   * under exactly what that click will ask for.
+   *
+   * The ordering is part of the key only when the server did it, and that is
+   * a fact about the request, so it is passed in rather than read off
+   * APP_TABLE. Read from there it was the *visible* lane's answer to a
+   * question about a different one: All Applications runs to several pages,
+   * so while it was on screen every prefetched lane was filed under All's
+   * sort, and the moment a one-page lane was adopted the same lane computed
+   * a different key and could never find itself. Sort ordered here costs no
+   * round trip, so it must not be in the key at all for those lanes.
    */
-  function applicationTableKeyFor(phase, search, page) {
+  function applicationTableKeyFor(phase, search, page, sort, dir) {
     return [
       search || '',
       phase || '',
@@ -3440,8 +3455,8 @@
       filterValues('bucket').join(','),
       filterValues('assignee').join(','),
       filterValues('provider').join(','),
-      serverSorted() ? (APP_TABLE.sort || '') : '',
-      serverSorted() ? (APP_TABLE.dir || '') : '',
+      sort || '',
+      dir || '',
       page,
     ].join('|');
   }
@@ -3457,6 +3472,23 @@
    */
   function serverSorted() {
     return APP_TABLE.lastPage > 1;
+  }
+
+  /*
+   * The same question about a lane that is not the one on screen.
+   *
+   * How many pages a lane has is a fact about that lane, and APP_TABLE holds
+   * it only for the lane last painted. Asked during a tab switch - which is
+   * exactly when the key for the incoming lane is built - APP_TABLE.lastPage
+   * still describes the lane being left. Each lane's page count is recorded
+   * as it is adopted or prefetched, so the answer comes from the lane itself;
+   * a lane never yet seen is assumed to fit on one page, which is the cheaper
+   * guess and self-correcting: if it turns out to run longer, the answer that
+   * says so is what files it.
+   */
+  function laneServerSorted(phase) {
+    var known = APP_TABLE.lanePages[phase || ''];
+    return known ? known > 1 : false;
   }
 
   /*
@@ -3488,7 +3520,7 @@
       .map(function (x) { return x.a; });
   }
 
-  function adoptApplicationListing(json) {
+  function adoptApplicationListing(json, phase) {
     APP_TABLE.rows = (json && json.applications) || [];
     APP_TABLE.rows.forEach(function (row) {
       rememberCipApplicant(row && row.clientUid);
@@ -3496,6 +3528,7 @@
     APP_TABLE.page = (json && json.page) || 1;
     APP_TABLE.lastPage = (json && json.lastPage) || 1;
     APP_TABLE.total = (json && json.total) || 0;
+    APP_TABLE.lanePages[phase || ''] = APP_TABLE.lastPage;
   }
 
   /*
@@ -3517,7 +3550,8 @@
       if (['all_applications', 'pre_approval', 'post_approval', 'add_on'].indexOf(id) === -1) return;
 
       var phase = phaseForListTab(id);
-      var key = applicationTableKeyFor(phase, '', 1);
+      // Fetched unsorted, so filed unsorted: the request below sends no sort.
+      var key = applicationTableKeyFor(phase, '', 1, '', '');
       if (APP_TABLE.cache[key] || APP_TABLE.prefetching[key]) return;
 
       APP_TABLE.prefetching[key] = true;
@@ -3531,6 +3565,7 @@
             lastPage: (json && json.lastPage) || 1,
             total: (json && json.total) || 0,
           };
+          APP_TABLE.lanePages[phase || ''] = APP_TABLE.cache[key].lastPage;
         })
         .catch(function () {})
         .then(function () { delete APP_TABLE.prefetching[key]; });
@@ -3538,6 +3573,7 @@
   }
 
   function ensureApplicationTable(state, render) {
+    var lane = applicationPhaseForTab(state);
     var key = applicationTableKey(state);
     if (APP_TABLE.loadedKey === key || APP_TABLE.loadingKey === key) return;
 
@@ -3548,6 +3584,7 @@
       APP_TABLE.page = held.page;
       APP_TABLE.lastPage = held.lastPage;
       APP_TABLE.total = held.total;
+      APP_TABLE.lanePages[lane || ''] = held.lastPage;
       APP_TABLE.error = null;
       APP_TABLE.loading = false;
       APP_TABLE.loadedKey = key;
@@ -3594,7 +3631,7 @@
         // listing that left before a delete: the same key is still loading,
         // and writing those rows puts a deleted file back on the table.
         if (APP_TABLE.fetchGen !== gen || APP_TABLE.loadingKey !== key) return;
-        adoptApplicationListing(json);
+        adoptApplicationListing(json, lane);
         APP_TABLE.cache[key] = {
           rows: APP_TABLE.rows, page: APP_TABLE.page,
           lastPage: APP_TABLE.lastPage, total: APP_TABLE.total,
@@ -3657,7 +3694,25 @@
     APP_TABLE.loadedKey = null;
     APP_TABLE.loadingKey = null;
     APP_TABLE.cache = {};
+    // Rows added or removed move the page counts these were measured from.
+    APP_TABLE.lanePages = {};
     APP_TABLE.fetchGen += 1;
+  }
+
+  /*
+   * Leaving the rows alone.
+   *
+   * Switching tabs changes nothing on the server, so the lanes already held
+   * are still true and the prefetch that fetched them is the whole point.
+   * Only the pointer at what is on screen has to move: the next key is a
+   * different lane's, so ensureApplicationTable finds it in the cache and
+   * paints without a trip. forgetApplicationTable() here instead is what
+   * made every tab click bin all four lanes and ask again - the prefetch
+   * did its work and the click threw it away.
+   */
+  function releaseApplicationTable() {
+    APP_TABLE.loadedKey = null;
+    APP_TABLE.loadingKey = null;
   }
 
   /*
@@ -13890,7 +13945,7 @@
       saveListTab(id);
       state.page = 1;
       state.selected = {};
-      forgetApplicationTable();
+      releaseApplicationTable();
       syncClientsListUrl(state);
       render();
     };
