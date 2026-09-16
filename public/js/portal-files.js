@@ -2432,9 +2432,20 @@
   /* Bytes on the page, then pdf.js, see TMAPortalLightbox.pdfDocument. */
   function loadPdfDocument(url) {
     if (window.TMAPortalLightbox && typeof window.TMAPortalLightbox.pdfDocument === 'function') {
-      // The viewer paints every page. Range+disableAutoFetch is for thumbs;
-      // in Electron it is how a 1.7 MB scan reports "1 / 1" on a white sheet.
-      return window.TMAPortalLightbox.pdfDocument(url, { complete: true });
+      /*
+       * Whole file only in the desktop app. There, a Range request through
+       * the protocol handler often returns just the trailer, and a 1.7 MB
+       * scan reports "1 / 1" on a white sheet - so Electron reads it all.
+       *
+       * In a browser the whole-file read was the single slowest thing on
+       * the site: every PDF opened was downloaded end to end before page
+       * one could paint - 1.4 MB on average, 265 MB at worst - through a
+       * PHP worker held for the whole transfer, while everything else on
+       * the page queued behind it. Page one needs a few hundred KB by
+       * Range; the rest is fetched as the reader turns to it.
+       */
+      var desktop = !!(window.TMADesktop && window.TMADesktop.isDesktop);
+      return window.TMAPortalLightbox.pdfDocument(url, { complete: desktop });
     }
     var path = url;
     try {
