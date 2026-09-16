@@ -3535,6 +3535,71 @@
   }
 
   /*
+   * Put the held page onto APP_TABLE. Shared by the live fetch, a prefetch
+   * that finished after the click, and the paint-time sync that stops the
+   * previous tab's rows showing under this one.
+   */
+  function applyCachedApplicationPage(held, lane, key) {
+    APP_TABLE.rows = held.rows || [];
+    APP_TABLE.rows.forEach(function (row) {
+      rememberCipApplicant(row && row.clientUid);
+    });
+    APP_TABLE.page = held.page;
+    APP_TABLE.lastPage = held.lastPage;
+    APP_TABLE.total = held.total;
+    APP_TABLE.lanePages[lane || ''] = held.lastPage;
+    APP_TABLE.laneShown = lane;
+    APP_TABLE.error = null;
+    APP_TABLE.loading = false;
+    APP_TABLE.loadingKey = null;
+    APP_TABLE.loadedKey = key;
+  }
+
+  /*
+   * Align APP_TABLE with the tab about to be painted.
+   *
+   * render() used to draw the table first and only afterwards ask
+   * ensureApplicationTable to load it. A tab click therefore painted the
+   * previous lane's rows under the new header: on a cache hit ensure then
+   * swapped the rows in memory and returned without re-rendering, so the
+   * wrong list stuck; on a miss the wrong list sat there until the answer
+   * landed. Either way the tabs looked like they shared one confused table.
+   * This runs before the morph so the paint and the tab agree.
+   */
+  function syncApplicationTableForPaint(state) {
+    if (!onApplicationsTable(state)) return;
+    var lane = applicationPhaseForTab(state);
+    var key = applicationTableKey(state);
+    if (APP_TABLE.loadedKey === key) return;
+
+    var held = APP_TABLE.cache[key];
+    if (held) {
+      applyCachedApplicationPage(held, lane, key);
+      return;
+    }
+
+    // Nothing held for this tab: blank for the skeleton rather than leave
+    // the previous tab's rows under this header.
+    APP_TABLE.rows = [];
+    APP_TABLE.total = 0;
+    APP_TABLE.lastPage = 1;
+    APP_TABLE.loading = true;
+    APP_TABLE.laneShown = lane;
+  }
+
+  /*
+   * A prefetch finished for the tab now on screen: adopt it and repaint so
+   * the click does not wait on a second trip.
+   */
+  function adoptPrefetchedApplicationPage(key, phase, page) {
+    if (!clientsMountState || !onApplicationsTable(clientsMountState)) return;
+    if (applicationTableKey(clientsMountState) !== key) return;
+    if (APP_TABLE.loadedKey === key) return;
+    applyCachedApplicationPage(page, phase, key);
+    repaintClients();
+  }
+
+  /*
    * The other lanes, fetched once the one on screen has painted, so the
    * first click on a tab finds its rows already here. Only each lane's
    * default view - no search, no filters, first page - which is what a tab
@@ -3565,13 +3630,16 @@
         .then(function (json) {
           // A forget() while this was in flight means these rows are stale.
           if (APP_TABLE.fetchGen !== gen) return;
-          APP_TABLE.cache[key] = {
+          var page = {
             rows: (json && json.applications) || [],
             page: (json && json.page) || 1,
             lastPage: (json && json.lastPage) || 1,
             total: (json && json.total) || 0,
           };
-          APP_TABLE.lanePages[phase || ''] = APP_TABLE.cache[key].lastPage;
+          APP_TABLE.cache[key] = page;
+          APP_TABLE.lanePages[phase || ''] = page.lastPage;
+          // Click landed while this was still coming: paint it, no second trip.
+          adoptPrefetchedApplicationPage(key, phase, page);
         })
         .catch(function () {})
         .then(function () { delete APP_TABLE.prefetching[key]; });
@@ -3581,21 +3649,35 @@
   function ensureApplicationTable(state, render) {
     var lane = applicationPhaseForTab(state);
     var key = applicationTableKey(state);
-    if (APP_TABLE.loadedKey === key || APP_TABLE.loadingKey === key) return;
+    // Already on screen (paint-time sync may have adopted the cache): keep
+    // prefetching the other lanes, and do not start another trip.
+    if (APP_TABLE.loadedKey === key) {
+      prefetchOtherLanes(state);
+      return;
+    }
+    if (APP_TABLE.loadingKey === key) return;
 
     // Already here from an earlier visit or a prefetch: paint it, no trip.
     var held = APP_TABLE.cache[key];
     if (held) {
-      APP_TABLE.rows = held.rows;
-      APP_TABLE.page = held.page;
-      APP_TABLE.lastPage = held.lastPage;
-      APP_TABLE.total = held.total;
-      APP_TABLE.lanePages[lane || ''] = held.lastPage;
-      APP_TABLE.laneShown = lane;
-      APP_TABLE.error = null;
-      APP_TABLE.loading = false;
-      APP_TABLE.loadedKey = key;
+      applyCachedApplicationPage(held, lane, key);
       prefetchOtherLanes(state);
+      return;
+    }
+
+    /*
+     * A prefetch for this exact view is already in flight. Mark it as the
+     * load we are waiting on and let that answer paint when it lands, rather
+     * than paying a second round trip for the same rows.
+     */
+    if (APP_TABLE.prefetching[key]) {
+      APP_TABLE.loadingKey = key;
+      APP_TABLE.loading = true;
+      APP_TABLE.error = null;
+      APP_TABLE.rows = [];
+      APP_TABLE.total = 0;
+      APP_TABLE.lastPage = 1;
+      APP_TABLE.laneShown = lane;
       return;
     }
 
@@ -3647,16 +3729,21 @@
 
     clientsFetch('/portal/cip/applications?' + params.join('&'))
       .then(function (json) {
-        // A slower answer for a term the reader has moved on from must not
-        // overwrite the one they are looking at. fetchGen also drops a
-        // listing that left before a delete: the same key is still loading,
-        // and writing those rows puts a deleted file back on the table.
-        if (APP_TABLE.fetchGen !== gen || APP_TABLE.loadingKey !== key) return;
-        adoptApplicationListing(json, lane);
-        APP_TABLE.cache[key] = {
-          rows: APP_TABLE.rows, page: APP_TABLE.page,
-          lastPage: APP_TABLE.lastPage, total: APP_TABLE.total,
+        // A forget() while this was in flight means these rows are stale.
+        if (APP_TABLE.fetchGen !== gen) return;
+        /*
+         * Always file the answer. A click that moved on before it landed still
+         * paid for these rows; keeping them means the next visit to that tab
+         * is instant. Only the paint below is gated on still being wanted.
+         */
+        var page = {
+          rows: (json && json.applications) || [],
+          page: (json && json.page) || 1,
+          lastPage: (json && json.lastPage) || 1,
+          total: (json && json.total) || 0,
         };
+        APP_TABLE.cache[key] = page;
+        APP_TABLE.lanePages[lane || ''] = page.lastPage;
         APP_TABLE.statuses = (json && json.statuses) || APP_TABLE.statuses;
         if (json && json.personStatuses) APP_TABLE.personStatuses = json.personStatuses;
         /*
@@ -3673,6 +3760,9 @@
           APP_TABLE.phaseCounts = json.phaseCounts;
           APP_TABLE.facetsLoaded = true;
         }
+
+        if (APP_TABLE.loadingKey !== key) return;
+        adoptApplicationListing(json, lane);
         APP_TABLE.loadedKey = key;
 
         /*
@@ -16254,6 +16344,10 @@
        * and with it the class the shell had to be told to wear.
        */
       if (state.screen === 'list') {
+        // Swap (or blank) the rows before the morph so a tab click never
+        // paints the previous lane under the new header. See
+        // syncApplicationTableForPaint.
+        syncApplicationTableForPaint(state);
         MORPH.patch(root, renderTableListPage(state));
         wireEvents(root, state, 'list', navigate, render);
 
