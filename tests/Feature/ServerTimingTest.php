@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
 /**
@@ -38,6 +39,50 @@ class ServerTimingTest extends TestCase
 
         preg_match('/desc="(\d+) queries"/', $header, $m);
         $this->assertGreaterThan(0, (int) $m[1], '/me reads the user, so the count cannot be zero: '.$header);
+    }
+
+    public function test_a_request_over_the_threshold_is_logged_with_its_slowest_statement(): void
+    {
+        $user = User::factory()->create([
+            'status' => 'approved',
+            'account_type' => 'Administrator',
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+        ]);
+        // Every request is "slow" at a zero threshold; a real one only
+        // trips the default after seconds.
+        config(['app.slow_request_ms' => 1]);
+        Log::spy();
+
+        $this->actingAs($user)->getJson('/me')->assertOk();
+
+        Log::shouldHaveReceived('warning')->withArgs(function (string $message, array $context) use ($user) {
+            return $message === 'Slow request'
+                && $context['path'] === 'me'
+                && $context['user'] === $user->id
+                && $context['queries'] > 0
+                && is_string($context['slowest_sql'])
+                && str_contains(strtolower($context['slowest_sql']), 'select')
+                // The shape, with its placeholders; never the bindings.
+                && ! str_contains($context['slowest_sql'], $user->email);
+        })->once();
+    }
+
+    public function test_a_quick_request_is_not_logged(): void
+    {
+        $user = User::factory()->create([
+            'status' => 'approved',
+            'account_type' => 'Administrator',
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+        ]);
+        Log::spy();
+
+        $this->actingAs($user)->getJson('/me')->assertOk();
+
+        Log::shouldNotHaveReceived('warning');
     }
 
     public function test_the_header_carries_no_sql(): void

@@ -56,6 +56,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Slow Request Threshold
+    |--------------------------------------------------------------------------
+    |
+    | A web request that takes at least this many milliseconds end to end is
+    | logged with its query count and the shape of its slowest statement
+    | (App\Http\Middleware\ReportServerTiming). Zero disables the log.
+    |
+    */
+
+    'slow_request_ms' => (int) env('SLOW_REQUEST_MS', 5000),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

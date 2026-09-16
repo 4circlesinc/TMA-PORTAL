@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -27,10 +28,17 @@ class ReportServerTiming
     {
         $queries = 0;
         $dbMs = 0.0;
+        $slowestMs = 0.0;
+        $slowestSql = null;
 
-        DB::listen(function (QueryExecuted $event) use (&$queries, &$dbMs): void {
+        DB::listen(function (QueryExecuted $event) use (&$queries, &$dbMs, &$slowestMs, &$slowestSql): void {
             $queries++;
             $dbMs += $event->time;
+
+            if ($event->time > $slowestMs) {
+                $slowestMs = $event->time;
+                $slowestSql = $event->sql;
+            }
         });
 
         $response = $next($request);
@@ -45,6 +53,29 @@ class ReportServerTiming
             sprintf('app;dur=%.1f;desc="php"', max(0, $totalMs - $dbMs)),
             sprintf('total;dur=%.1f', $totalMs),
         ]));
+
+        /*
+         * A request the load balancer gave up on never reaches a browser's
+         * Network panel, so the server keeps its own record of the ones that
+         * ran long. The slowest statement is logged as its shape, with the
+         * placeholders and without the bindings, which is what separates "a
+         * scan that grew with the data" from "many small queries" and names
+         * the table without naming anyone in it.
+         */
+        $slowMs = (int) config('app.slow_request_ms', 5000);
+
+        if ($slowMs > 0 && $totalMs >= $slowMs) {
+            Log::warning('Slow request', [
+                'method' => $request->method(),
+                'path' => $request->path(),
+                'user' => $request->user()?->id,
+                'total_ms' => (int) round($totalMs),
+                'db_ms' => (int) round($dbMs),
+                'queries' => $queries,
+                'slowest_ms' => (int) round($slowestMs),
+                'slowest_sql' => $slowestSql === null ? null : mb_substr(preg_replace('/\s+/', ' ', $slowestSql), 0, 500),
+            ]);
+        }
 
         return $response;
     }
