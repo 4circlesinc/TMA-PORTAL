@@ -1292,6 +1292,62 @@ class CipApplicationController extends Controller
             'stageStatuses' => $this->statusChoices(Engine::stageStatuses($application, $viewer)),
             'assignedTo' => $this->assignees($application),
             'familyMembers' => $this->familyMembersForRow($application, $viewer),
+            'sortKeys' => $this->sortKeys($application, $main, $client),
+        ];
+    }
+
+    /**
+     * What each sortable column orders this row by.
+     *
+     * A lane that fits in one page is sorted by the browser, so a header
+     * click costs no round trip - but it has to sort the way the server does,
+     * and the server's ordering is {@see applyListSort()}. These keys are that
+     * ordering written out per row: lower-cased text where the SQL lower-cases,
+     * the lifecycle index for status and the form's option index for the
+     * investment type where the SQL uses a CASE, and null where the column has
+     * nothing, which the browser puts last exactly as {@see orderByNullable()}
+     * does. Everything here is read off relations the listing already loaded;
+     * no query runs.
+     *
+     * @return array<string, string|int|null>
+     */
+    private function sortKeys($application, ?CipPerson $main, $client): array
+    {
+        $lower = fn ($value) => $value === null ? null : mb_strtolower((string) $value);
+
+        $statusOrder = array_flip(Status::listed());
+        $statusOrder[Status::DRAFT] = $statusOrder[Status::NEW] ?? 0;
+        $investmentOrder = array_flip(array_keys(InvestmentType::ALL));
+
+        // The same person the Assigned column leads with: the client's first
+        // live assignment, primary first, and only the client's - the SQL
+        // this mirrors reads client_assignments alone.
+        $assigned = $client?->relationLoaded('assignments')
+            ? $client->assignments->first(fn ($a) => $a->user !== null)?->user?->name
+            : null;
+
+        $parent = $application->relationLoaded('parent') ? $application->parent : null;
+        $parentMain = $parent?->relationLoaded('people')
+            ? $parent->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)
+            : null;
+
+        return [
+            'number' => $lower($application->cip_number ?? $application->internal_number),
+            'applicant' => $main ? $lower($main->first_name.' '.$main->last_name) : null,
+            'submitted' => $application->submitted_at?->toDateString(),
+            'provider' => $lower($application->provider?->name),
+            'contact' => $lower($client?->name),
+            'email' => $lower($client?->email),
+            'investment' => $investmentOrder[$application->investment_type] ?? count($investmentOrder),
+            'family' => (int) $application->people_count,
+            'status' => $statusOrder[$application->status] ?? count(Status::listed()),
+            'assigned' => $lower($assigned),
+            'cip' => $lower($parent?->cip_number ?? $application->parent_cip_number),
+            'cor' => $lower($parent?->cor_number ?? $application->parent_cor_number),
+            'main_applicant' => $lower(
+                $parentMain ? $parentMain->first_name.' '.$parentMain->last_name : $application->parent_applicant_name,
+            ),
+            'relationship' => $lower($main?->relationship),
         ];
     }
 

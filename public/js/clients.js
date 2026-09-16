@@ -270,7 +270,10 @@
 
   /** Which workflow lane the current application tab filters to, if any. */
   function applicationPhaseForTab(state) {
-    var tab = listTabOf(state);
+    return phaseForListTab(listTabOf(state));
+  }
+
+  function phaseForListTab(tab) {
     if (tab === 'pre_approval') return 'pre_approval';
     if (tab === 'post_approval') return 'post_approval';
     if (tab === 'add_on') return 'add_on';
@@ -2988,6 +2991,15 @@
     // Whether the three above have been measured yet. Until they have, every
     // listing asks for them; after that a sort or a page turn does not.
     facetsLoaded: false,
+    /*
+     * Every listing answer this visit, by the key it was asked with. A tab
+     * the reader has already opened paints from here without asking again,
+     * and the other lanes are fetched behind the first paint so the first
+     * click on them finds their rows waiting. Emptied by
+     * forgetApplicationTable(), which is what a save or a live signal calls.
+     */
+    cache: {},
+    prefetching: {},
     expanded: {},
   };
 
@@ -3410,22 +3422,138 @@
      * too: a header click that does not change the key would paint a new
      * arrow over the same page.
      */
+    return applicationTableKeyFor(applicationPhaseForTab(state), state.search || '', APP_TABLE.page);
+  }
+
+  /*
+   * The same key for any lane, so a lane fetched ahead of a click is filed
+   * under exactly what that click will ask for. Sort and direction are part
+   * of it only when the server has to do the ordering (see serverSorted):
+   * for a lane sorted here, a header click must not change the key, or it
+   * would refetch the rows it already holds.
+   */
+  function applicationTableKeyFor(phase, search, page) {
     return [
-      state.search || '',
-      applicationPhaseForTab(state) || '',
+      search || '',
+      phase || '',
       APP_TABLE.status || '',
       filterValues('bucket').join(','),
       filterValues('assignee').join(','),
       filterValues('provider').join(','),
-      APP_TABLE.sort || '',
-      APP_TABLE.dir || '',
-      APP_TABLE.page,
+      serverSorted() ? (APP_TABLE.sort || '') : '',
+      serverSorted() ? (APP_TABLE.dir || '') : '',
+      page,
     ].join('|');
+  }
+
+  /*
+   * Whether ordering has to be asked of the server.
+   *
+   * A lane that fits in one page is sorted here, from the sortKeys each row
+   * carries - the server's own ordering written out per row - so a header
+   * click costs no round trip at all. Only a lane that runs to a second page
+   * needs the server to order it, because the rows on screen are not all
+   * the rows.
+   */
+  function serverSorted() {
+    return APP_TABLE.lastPage > 1;
+  }
+
+  /*
+   * The rows in the order the header asks for. Nulls last whichever way
+   * the arrow points, as orderByNullable() does on the server, then the
+   * key, then the order the server sent them in (newest first) as the tie
+   * - a stable sort keeps that without a second key.
+   */
+  function sortedApplicationRows() {
+    var rows = APP_TABLE.rows || [];
+    if (serverSorted() || !APP_TABLE.sort) return rows;
+
+    var key = APP_TABLE.sort;
+    var desc = APP_TABLE.dir === 'desc';
+
+    return rows.map(function (a, i) { return { a: a, i: i }; })
+      .sort(function (x, y) {
+        var kx = x.a.sortKeys ? x.a.sortKeys[key] : null;
+        var ky = y.a.sortKeys ? y.a.sortKeys[key] : null;
+        var nx = kx === null || kx === undefined;
+        var ny = ky === null || ky === undefined;
+        if (nx !== ny) return nx ? 1 : -1;
+        if (!nx && kx !== ky) {
+          var c = kx < ky ? -1 : 1;
+          return desc ? -c : c;
+        }
+        return x.i - y.i;
+      })
+      .map(function (x) { return x.a; });
+  }
+
+  function adoptApplicationListing(json) {
+    APP_TABLE.rows = (json && json.applications) || [];
+    APP_TABLE.rows.forEach(function (row) {
+      rememberCipApplicant(row && row.clientUid);
+    });
+    APP_TABLE.page = (json && json.page) || 1;
+    APP_TABLE.lastPage = (json && json.lastPage) || 1;
+    APP_TABLE.total = (json && json.total) || 0;
+  }
+
+  /*
+   * The other lanes, fetched once the one on screen has painted, so the
+   * first click on a tab finds its rows already here. Only each lane's
+   * default view - no search, no filters, first page - which is what a tab
+   * click opens; anything narrower is asked for when it is asked for.
+   */
+  function prefetchOtherLanes(state) {
+    if (!state || state.search || APP_TABLE.status) return;
+    if (filterValues('bucket').length || filterValues('assignee').length || filterValues('provider').length) return;
+
+    var current = listTabOf(state);
+    var gen = APP_TABLE.fetchGen;
+
+    listTabsForViewer().forEach(function (tab) {
+      var id = tab && tab.id;
+      if (!id || id === current) return;
+      if (['all_applications', 'pre_approval', 'post_approval', 'add_on'].indexOf(id) === -1) return;
+
+      var phase = phaseForListTab(id);
+      var key = applicationTableKeyFor(phase, '', 1);
+      if (APP_TABLE.cache[key] || APP_TABLE.prefetching[key]) return;
+
+      APP_TABLE.prefetching[key] = true;
+      clientsFetch('/portal/cip/applications?perPage=150&page=1' + (phase ? '&phase=' + encodeURIComponent(phase) : ''))
+        .then(function (json) {
+          // A forget() while this was in flight means these rows are stale.
+          if (APP_TABLE.fetchGen !== gen) return;
+          APP_TABLE.cache[key] = {
+            rows: (json && json.applications) || [],
+            page: (json && json.page) || 1,
+            lastPage: (json && json.lastPage) || 1,
+            total: (json && json.total) || 0,
+          };
+        })
+        .catch(function () {})
+        .then(function () { delete APP_TABLE.prefetching[key]; });
+    });
   }
 
   function ensureApplicationTable(state, render) {
     var key = applicationTableKey(state);
     if (APP_TABLE.loadedKey === key || APP_TABLE.loadingKey === key) return;
+
+    // Already here from an earlier visit or a prefetch: paint it, no trip.
+    var held = APP_TABLE.cache[key];
+    if (held) {
+      APP_TABLE.rows = held.rows;
+      APP_TABLE.page = held.page;
+      APP_TABLE.lastPage = held.lastPage;
+      APP_TABLE.total = held.total;
+      APP_TABLE.error = null;
+      APP_TABLE.loading = false;
+      APP_TABLE.loadedKey = key;
+      prefetchOtherLanes(state);
+      return;
+    }
 
     var gen = APP_TABLE.fetchGen;
     APP_TABLE.loadingKey = key;
@@ -3453,7 +3581,8 @@
       var ticked = filterValues(field);
       if (ticked.length) params.push(field + '=' + encodeURIComponent(ticked.join(',')));
     });
-    if (APP_TABLE.sort && applicationSorts(state)[APP_TABLE.sort]) {
+    // Ordering is asked of the server only when it has to do it.
+    if (serverSorted() && APP_TABLE.sort && applicationSorts(state)[APP_TABLE.sort]) {
       params.push('sort=' + encodeURIComponent(APP_TABLE.sort));
       params.push('dir=' + encodeURIComponent(APP_TABLE.dir === 'desc' ? 'desc' : 'asc'));
     }
@@ -3465,13 +3594,11 @@
         // listing that left before a delete: the same key is still loading,
         // and writing those rows puts a deleted file back on the table.
         if (APP_TABLE.fetchGen !== gen || APP_TABLE.loadingKey !== key) return;
-        APP_TABLE.rows = (json && json.applications) || [];
-        APP_TABLE.rows.forEach(function (row) {
-          rememberCipApplicant(row && row.clientUid);
-        });
-        APP_TABLE.page = (json && json.page) || 1;
-        APP_TABLE.lastPage = (json && json.lastPage) || 1;
-        APP_TABLE.total = (json && json.total) || 0;
+        adoptApplicationListing(json);
+        APP_TABLE.cache[key] = {
+          rows: APP_TABLE.rows, page: APP_TABLE.page,
+          lastPage: APP_TABLE.lastPage, total: APP_TABLE.total,
+        };
         APP_TABLE.statuses = (json && json.statuses) || APP_TABLE.statuses;
         if (json && json.personStatuses) APP_TABLE.personStatuses = json.personStatuses;
         /*
@@ -3516,16 +3643,20 @@
         APP_TABLE.loadingKey = null;
         APP_TABLE.loading = false;
         render();
+        prefetchOtherLanes(state);
       });
   }
 
   /* Drop what is held so the next paint refetches, after a save, or a live
      signal that somebody else changed one. Bump fetchGen so an in-flight
      listing cannot write the rows it left with — that is how a deleted
-     application reappeared and the next click toasted "Request failed". */
+     application reappeared and the next click toasted "Request failed".
+     The lane cache goes with it: every lane may have changed, not only the
+     one on screen. */
   function forgetApplicationTable() {
     APP_TABLE.loadedKey = null;
     APP_TABLE.loadingKey = null;
+    APP_TABLE.cache = {};
     APP_TABLE.fetchGen += 1;
   }
 
@@ -3589,7 +3720,9 @@
       stashApplicationPosition(listTabOf(clientsMountState));
       syncClientsListUrl(clientsMountState);
     }
-    forgetApplicationTable();
+    // A lane sorted here just repaints in the new order; only a lane the
+    // server orders has to be asked for again.
+    if (serverSorted()) forgetApplicationTable();
     repaintClients();
   }
 
@@ -3953,7 +4086,7 @@
     }
 
     var postApproval = isPostApprovalApplicationsTab(state);
-    var rows = APP_TABLE.rows.map(function (a) {
+    var rows = sortedApplicationRows().map(function (a) {
       return renderApplicationTableRow(a, state, postApproval);
     }).join('');
 
