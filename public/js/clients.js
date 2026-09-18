@@ -8369,6 +8369,14 @@
     return title;
   }
 
+  /* Filed out of owed, the same tally the Add-On detail page's Documents
+     card carries, so a reader sees how much of the pack is still to come. */
+  function checklistTallyChip(docs) {
+    if (!docs.length) return '';
+    var filed = docs.filter(function (d) { return d.uploaded; }).length;
+    return '<span class="tma-tab__count">' + esc(filed + ' / ' + docs.length) + '</span>';
+  }
+
   function renderCipChecklist(person, app) {
     var all = (person && person.documents) || [];
     var extras = [];
@@ -8408,7 +8416,7 @@
         ? '<div class="tma-dash__clients-checklist-block">' +
           '<header class="tma-dash__clients-card-head">' +
           '<h3 class="tma-dash__clients-card-title">Documents</h3>' +
-          tabCountChip(docs.filter(function (d) { return d.uploaded; }).length) +
+          checklistTallyChip(docs) +
           '</header>' +
           '<ul class="tma-dash__clients-checklist">' +
           docs.map(renderChecklistRow).join('') +
