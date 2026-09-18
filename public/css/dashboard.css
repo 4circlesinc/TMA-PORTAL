@@ -12679,6 +12679,10 @@
   position: fixed;
   z-index: 140;
   min-width: 220px;
+  max-height: calc(100vh - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--space-4);
   border: 1px solid var(--color-overlay-8);
   border-radius: var(--radius-12);

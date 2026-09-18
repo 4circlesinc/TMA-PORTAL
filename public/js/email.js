@@ -11600,7 +11600,12 @@
     menu.style.left = left + 'px';
     menu.style.top = top + 'px';
 
-    menu._onDismiss = function () { closeEmailPointerMenu(); };
+    menu._onDismiss = function (event) {
+      // A scroll inside the menu's own list is not the page moving.
+      var t = event && event.target;
+      if (t && t.nodeType === 1 && menu.contains(t)) return;
+      closeEmailPointerMenu();
+    };
     menu._onDoc = function (event) {
       if (menu.contains(event.target)) return;
       closeEmailPointerMenu();

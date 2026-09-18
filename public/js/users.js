@@ -882,13 +882,22 @@ if (state.filters.user) {
     var uCtxEl = null;
     var uCtxSubEl = null;
 
+    function onUserCtxScroll(e) {
+      var t = e && e.target;
+      if (t && t.nodeType === 1 && (
+        (uCtxEl && uCtxEl.contains(t)) ||
+        (uCtxSubEl && uCtxSubEl.contains(t))
+      )) return;
+      closeUserCtx();
+    }
+
     function closeUserCtx() {
       closeUserCtxSub();
       if (uCtxEl && uCtxEl.parentNode) uCtxEl.parentNode.removeChild(uCtxEl);
       uCtxEl = null;
       document.removeEventListener('click', onUserCtxDocClick);
       document.removeEventListener('keydown', onUserCtxKey);
-      document.removeEventListener('scroll', closeUserCtx, true);
+      document.removeEventListener('scroll', onUserCtxScroll, true);
     }
 
     function closeUserCtxSub() {
@@ -1063,7 +1072,7 @@ if (state.filters.user) {
       setTimeout(function () {
         document.addEventListener('click', onUserCtxDocClick);
         document.addEventListener('keydown', onUserCtxKey);
-        document.addEventListener('scroll', closeUserCtx, true);
+        document.addEventListener('scroll', onUserCtxScroll, true);
       }, 0);
     }
 

@@ -296,6 +296,12 @@
 
   var contextMenuEl = null;
 
+  function onFileContextMenuScroll(e) {
+    var t = e && e.target;
+    if (t && t.nodeType === 1 && contextMenuEl && contextMenuEl.contains(t)) return;
+    closeFileContextMenu();
+  }
+
   function closeFileContextMenu() {
     if (contextMenuEl) {
       contextMenuEl.remove();
@@ -304,7 +310,7 @@
     document.removeEventListener('click', closeFileContextMenu);
     document.removeEventListener('contextmenu', closeFileContextMenu);
     document.removeEventListener('keydown', onFileContextMenuKey);
-    document.removeEventListener('scroll', closeFileContextMenu, true);
+    document.removeEventListener('scroll', onFileContextMenuScroll, true);
   }
 
   function onFileContextMenuKey(e) {
@@ -342,7 +348,7 @@
       document.addEventListener('click', closeFileContextMenu);
       document.addEventListener('contextmenu', closeFileContextMenu);
       document.addEventListener('keydown', onFileContextMenuKey);
-      document.addEventListener('scroll', closeFileContextMenu, true);
+      document.addEventListener('scroll', onFileContextMenuScroll, true);
     }, 0);
   }
 

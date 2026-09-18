@@ -672,6 +672,13 @@
   display: flex;
   flex-direction: column;
   width: max-content;
+  /* Never taller than the window. A long list (the CIP status picker with
+     its override lane open) scrolls inside the menu rather than running
+     off the bottom where its last rows cannot be reached. */
+  max-height: calc(100vh - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--space-4);
   border-radius: var(--radius-12);
   background: var(--color-white);
