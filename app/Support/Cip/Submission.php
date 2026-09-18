@@ -12,8 +12,9 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Recording a submission to the Unit (section 16), and with it the switch from the
- * internal number to the CIP number (section 7) — or, for an Add-On, the day
- * and who sent it without inventing a second CIP number (Add-On section 15).
+ * internal number to the CIP number (section 7). An Add-On goes the same way:
+ * the Unit issues it a CIP number of its own, and that number, not the
+ * parent's, is the one the Add-On is known by from here on (Add-On section 15).
  *
  * Section 7 keeps two numbers for one application. The internal number is ours,
  * generated on creation and permanent, invoices, drafts, reviews and
@@ -28,11 +29,13 @@ use Illuminate\Validation\ValidationException;
  * rule was built as one accessor in phase 1d rather than a formatting decision
  * repeated per screen.
  *
- * An Add-On keeps {@see CipApplication::displayNumber()} on its AO reference
- * for life. The parent's CIP and COR stay on the parent. What this verb
- * records for that lane is the submission date, who recorded it, and the
- * Add-On type already on the row — then Pending Review, with the locked
- * package left intact for audit.
+ * An Add-On arrives here with its AO reference and leaves with the CIP number
+ * the Unit gave the Add-On itself. The parent's CIP and COR stay on the parent
+ * and are never copied down: an Add-On showing its parent's number up front
+ * was the mistake this lane used to make. Alongside the number this verb
+ * records the submission date, who recorded it, and the Add-On type already
+ * on the row — then Pending Review, with the locked package left intact for
+ * audit.
  *
  * The status change goes through {@see Engine}, not around it: submission is
  * READY_TO_SUBMIT → PENDING REVIEW, it needs `cip.compliance`, and it writes
@@ -51,8 +54,8 @@ class Submission
     public const MAX_LENGTH = 64;
 
     /**
-     * Record it: the number (family files), the date it went, who recorded it,
-     * and the move to Pending review.
+     * Record it: the number, the date it went, who recorded it, and the move
+     * to Pending review.
      *
      * @throws ValidationException the number is blank or already in use, or the package is still open
      * @throws \InvalidArgumentException the application is not ready to submit
@@ -64,12 +67,12 @@ class Submission
         ?string $cipNumber = null,
         ?Carbon $submittedAt = null,
     ): CipApplication {
-        if ($application->isAddOn()) {
-            return self::recordAddOn($application, $actor, $submittedAt);
-        }
-
         $number = self::clean((string) $cipNumber);
         self::assertFree($number, $application);
+
+        if ($application->isAddOn()) {
+            return self::recordAddOn($application, $actor, $number, $submittedAt);
+        }
 
         if (! $application->isLocked()) {
             throw ValidationException::withMessages([
@@ -109,11 +112,14 @@ class Submission
     }
 
     /**
-     * Add-On section 15: the day, who recorded it, the Add-On type, Pending Review.
+     * Add-On section 15: the Add-On's own CIP number, the day, who recorded
+     * it, the Add-On type, Pending Review.
      *
-     * No CIP number. The AO reference stays on {@see CipApplication::displayNumber()},
-     * and the parent's CIP / COR stay on the parent. The package was already
-     * frozen by {@see Confirmation::confirm()}.
+     * The number is the one on the Unit's letter for the Add-On, cleaned and
+     * checked for collisions by the caller exactly as a family file's is, so
+     * it can never repeat the parent's. The AO reference stays stored for
+     * audit and invoicing; the parent's CIP / COR stay on the parent. The
+     * package was already frozen by {@see Confirmation::confirm()}.
      *
      * @throws ValidationException the package is still open
      * @throws \InvalidArgumentException the application is not ready to submit
@@ -122,29 +128,37 @@ class Submission
     private static function recordAddOn(
         CipApplication $application,
         User $actor,
+        string $number,
         ?Carbon $submittedAt = null,
     ): CipApplication {
         if (! $application->isLocked()) {
             throw ValidationException::withMessages([
-                'submittedAt' => 'The service provider must confirm submission before the package can be sent to the Unit.',
+                'cipNumber' => 'The service provider must confirm submission before the package can be sent to the Unit.',
             ]);
         }
 
         $submittedAt ??= Carbon::now();
         $submittedBy = trim((string) $actor->name) !== '' ? (string) $actor->name : $actor->email;
 
-        return DB::transaction(function () use ($application, $actor, $submittedAt, $submittedBy) {
+        return DB::transaction(function () use ($application, $actor, $number, $submittedAt, $submittedBy) {
             $application->forceFill([
+                'cip_number' => $number,
                 'submitted_at' => $submittedAt,
                 'submitted_by' => $submittedBy,
             ])->save();
 
             Engine::apply($application, Status::PENDING_REVIEW, $actor, [
+                'cipNumber' => $number,
                 'internalNumber' => $application->internal_number,
                 'submittedAt' => $submittedAt->toDateString(),
                 'submittedBy' => $submittedBy,
                 'addonType' => $application->addon_type,
                 'addonTypeLabel' => AddOn::typeLabel($application->addon_type),
+            ]);
+
+            Engine::record($application, CipEvent::ACTION_NUMBER_ASSIGNED, $actor, [
+                'cipNumber' => $number,
+                'internalNumber' => $application->internal_number,
             ]);
 
             return $application->refresh();

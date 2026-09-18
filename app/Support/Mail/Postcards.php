@@ -700,8 +700,9 @@ class Postcards
      * Section 10 names what the assignment notice must carry.
      *
      * Family files: application number, applicant, firm, status. Add-On files:
-     * the AO reference, the parent's CIP number, both names, and the portal
-     * link — the five fields the brief lists for that lane.
+     * the AO reference, the Add-On's own CIP number once the Unit has issued
+     * it (the parent's until then, so the row is never blank), both names,
+     * and the portal link — the five fields the brief lists for that lane.
      *
      * @param  array<string, mixed>  $facts
      * @return list<array{0: string, 1: string}>
@@ -710,8 +711,8 @@ class Postcards
     {
         if (! empty($facts['addOn'])) {
             return [
-                ['Add-On Reference Number', $facts['number']],
-                ['CIP Application Number', (string) ($facts['cipNumber'] ?? '')],
+                ['Add-On Reference Number', (string) (($facts['internalNumber'] ?? '') ?: $facts['number'])],
+                ['CIP Application Number', (string) (($facts['ownCipNumber'] ?? '') ?: ($facts['cipNumber'] ?? ''))],
                 ['Main Applicant Name', (string) ($facts['mainApplicant'] ?? '')],
                 ['Add-On Applicant Name', (string) ($facts['addonApplicant'] ?? $facts['applicant'])],
                 ['Direct Portal Link', $url],

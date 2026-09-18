@@ -71,17 +71,14 @@ class CipApplication extends Model
      * The number every surface renders: tables, dashboards, notices, reports,
      * search, audit.
      *
-     * Family files switch to the Unit's CIP number once it is recorded; the
-     * internal number stays stored for audit and invoicing. Add-On files keep
-     * their own reference ([Code]-AO-[YY]-[Sequence]) for the life of the
-     * row — the parent's CIP and COR stay on the parent.
+     * Every lane switches to the Unit's CIP number once it is recorded; the
+     * internal number stays stored for audit and invoicing. An Add-On is
+     * known by its own reference ([Code]-AO-[YY]-[Sequence]) until the Unit
+     * issues the Add-On a CIP number of its own at submission — never by the
+     * parent's, which stays on the parent with the COR.
      */
     public function displayNumber(): string
     {
-        if ($this->isAddOn()) {
-            return $this->internal_number ?? '';
-        }
-
         return $this->cip_number ?: ($this->internal_number ?? '');
     }
 

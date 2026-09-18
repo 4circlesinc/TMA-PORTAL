@@ -291,6 +291,9 @@ class Contacts
 
         $facts = [
             'number' => $application->displayNumber(),
+            // The firm's own reference, for the notices that name it beside
+            // the CIP number rather than instead of it (an Add-On's row).
+            'internalNumber' => (string) ($application->internal_number ?? ''),
             'applicant' => $name !== null && $name !== '' ? $name : 'Unnamed applicant',
             'provider' => $application->provider?->name ?? 'Private client',
             'familySize' => $application->familySize(),
@@ -304,6 +307,9 @@ class Contacts
         // even before the parent link is loaded for the postcard body.
         $facts['addOn'] = true;
         $facts['addonApplicant'] = $facts['applicant'];
+        // The Add-On's own CIP number, once the Unit has issued one. Kept
+        // apart from `cipNumber`, which names the parent for this lane.
+        $facts['ownCipNumber'] = (string) ($application->cip_number ?? '');
 
         $application->loadMissing([
             'parent.client',

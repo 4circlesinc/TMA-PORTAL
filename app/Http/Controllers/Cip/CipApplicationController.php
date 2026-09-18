@@ -1906,8 +1906,9 @@ class CipApplicationController extends Controller
      * On a pre-approval filing the number is the point. Every surface renders
      * `displayNumber()`, so writing it here is what flips dashboards, reports,
      * status screens, email subjects and search off the internal number in one
-     * move. An Add-On keeps its AO reference and records the day, who sent it,
-     * and the Add-On type instead (section 15).
+     * move. An Add-On records the CIP number the Unit issued the Add-On
+     * itself, never the parent's, along with the day, who sent it, and the
+     * Add-On type (section 15).
      *
      * The capability is not checked here on purpose. Submission is a status
      * change and {@see Engine} owns those, it refuses the edge from anywhere
@@ -1919,28 +1920,24 @@ class CipApplicationController extends Controller
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
 
-        $rules = [
+        $data = $request->validate([
+            'cipNumber' => ['required', 'string', 'max:'.Submission::MAX_LENGTH],
             // Recorded, not assumed: staff enter a submission after the fact
             // as often as on the day, and defaulting silently to today would
             // put the wrong date on an audit trail.
             'submittedAt' => ['required', 'date'],
-        ];
-        $messages = [
+        ], [
+            'cipNumber.required' => $application->isAddOn()
+                ? 'Enter the CIP application number the Unit issued this Add-On.'
+                : 'Enter the CIP application number from the Unit.',
             'submittedAt.required' => 'Enter the submission date.',
-        ];
-
-        if (! $application->isAddOn()) {
-            $rules['cipNumber'] = ['required', 'string', 'max:'.Submission::MAX_LENGTH];
-            $messages['cipNumber.required'] = 'Enter the CIP application number from the Unit.';
-        }
-
-        $data = $request->validate($rules, $messages);
+        ]);
 
         try {
             $application = Submission::record(
                 $application,
                 $user,
-                $data['cipNumber'] ?? null,
+                $data['cipNumber'],
                 Carbon::parse($data['submittedAt']),
             );
         } catch (\InvalidArgumentException $e) {

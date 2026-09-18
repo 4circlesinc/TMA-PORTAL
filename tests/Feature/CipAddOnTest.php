@@ -1657,8 +1657,26 @@ class CipAddOnTest extends TestCase
         $this->assertFalse(Package::locksFolder($feedback));
         $this->assertFalse(Package::locksFolder($additional));
 
+        // The Unit issues the Add-On its own CIP number; the parent's stays
+        // on the parent and is refused here as a duplicate.
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/submission', [
+                'submittedAt' => '2026-09-14',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('cipNumber');
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/submission', [
+                'cipNumber' => $parent->cip_number,
+                'submittedAt' => '2026-09-14',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('cipNumber');
+
         $shown = $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/submission', [
+                'cipNumber' => '10T1 GADD 01P-AO1',
                 'submittedAt' => '2026-09-14',
             ])
             ->assertOk()
@@ -1668,10 +1686,17 @@ class CipAddOnTest extends TestCase
         $this->assertSame('2026-09-14', $shown['submittedAt']);
         $this->assertSame('Ada Admin', $shown['submittedBy']);
         $this->assertSame(AddOn::TYPE_SPOUSE, $shown['addonType']);
-        $this->assertSame($application->internal_number, $shown['number']);
-        $this->assertTrue(empty($shown['cipNumber']));
+        // The Add-On's own number leads from here on; the AO reference stays
+        // stored, and the parent's number stays the parent's.
+        $this->assertSame('10T1GADD01P-AO1', $shown['cipNumber']);
+        $this->assertSame('10T1GADD01P-AO1', $shown['number']);
+        $this->assertSame($application->internal_number, $shown['internalNumber']);
+        $this->assertSame($parent->cip_number, $shown['parent']['cipNumber']);
 
         $fresh = $application->fresh();
+        $this->assertSame('10T1GADD01P-AO1', $fresh->cip_number);
+        $this->assertSame('10T1GADD01P-AO1', $fresh->displayNumber());
+        $this->assertSame($parent->cip_number, $parent->fresh()->cip_number);
         $this->assertSame(Status::PENDING_REVIEW, $fresh->status);
         $this->assertSame('2026-09-14', $fresh->submitted_at?->toDateString());
         $this->assertSame('Ada Admin', $fresh->submitted_by);
@@ -1689,6 +1714,12 @@ class CipAddOnTest extends TestCase
         $this->assertSame('2026-09-14', $meta['submittedAt'] ?? null);
         $this->assertSame('Ada Admin', $meta['submittedBy'] ?? null);
         $this->assertSame(AddOn::TYPE_SPOUSE, $meta['addonType'] ?? null);
+        $this->assertSame('10T1GADD01P-AO1', $meta['cipNumber'] ?? null);
+
+        $this->assertNotNull(CipEvent::query()
+            ->where('application_id', $fresh->id)
+            ->where('action', CipEvent::ACTION_NUMBER_ASSIGNED)
+            ->first());
     }
 
     public function test_an_add_on_cannot_be_recorded_as_submitted_before_confirm(): void
@@ -1706,9 +1737,11 @@ class CipAddOnTest extends TestCase
 
         $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/submission', [
+                'cipNumber' => '10T1GADD01P-AO1',
                 'submittedAt' => '2026-09-14',
             ])
-            ->assertStatus(422);
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('cipNumber');
     }
 
     public function test_an_add_on_query_moves_to_non_compliant_and_notifies_the_agent(): void

@@ -4189,14 +4189,16 @@
    * Second line under the Application number.
    *
    * Pre/post: once a CIP number exists it is the primary (`a.number`), and the
-   * firm internal stays underneath. Add-On: the primary is always the AO
-   * reference, and the parent's CIP number sits under it — including on All
-   * Applications, where Add-On rows used to hide that line.
+   * firm internal stays underneath. Add-On: the AO reference is the primary
+   * with the parent's CIP number under it until the Unit issues the Add-On
+   * its own CIP number, which then leads with the AO reference underneath,
+   * the same rule as every other lane — including on All Applications, where
+   * Add-On rows used to hide that line.
    */
   function applicationNumberSubline(a) {
     if (!a) return '';
     var secondary = '';
-    if (a.phase === 'add_on') {
+    if (a.phase === 'add_on' && !a.cipNumber) {
       secondary = addOnParentValue(a, 'cipNumber');
     } else if (a.cipNumber && a.internalNumber && a.number === a.cipNumber) {
       secondary = a.internalNumber;
@@ -7546,7 +7548,7 @@
         addOn ? 'Add-On reference number' : 'Application number',
         app.internalNumber || app.number
       ) +
-      (addOn ? '' : overviewRow('CIP application number', app.cipNumber || '')) +
+      overviewRow('CIP application number', app.cipNumber || '') +
       overviewRow('Status', cipStatusChip(app), true) +
       (app.phase === 'add_on' && app.addonTypeLabel
         ? overviewRow('Add-On type', app.addonTypeLabel)
@@ -7554,7 +7556,7 @@
       (app.submittedAt ? overviewRow('Submission date', fmtShortDate(app.submittedAt)) : '') +
       (app.submittedBy ? overviewRow('Submitted by', app.submittedBy) : '') +
       (app.parent
-        ? overviewRow('CIP application number', app.parent.cipNumber || app.parent.number) +
+        ? overviewRow('Main application CIP number', app.parent.cipNumber || app.parent.number) +
           overviewRow('Main applicant', app.parent.applicantName) +
           overviewRow('COR number', app.parent.corNumber)
         : overviewRow('COR number', app.corNumber || '')) +
@@ -7682,18 +7684,19 @@
 
     var decision = cipMilestone(app, 'decision');
     var addOn = app.phase === 'add_on';
-    var numberFact = addOn
-      ? cipFact('Add-On reference number', app.internalNumber || app.number)
-      : (app.cipNumber
-        ? cipFact('CIP application number', app.cipNumber)
-        : cipFact('Application number', app.internalNumber || app.number));
+    /* The Add-On's own CIP number leads once the Unit has issued it; until
+       then the AO reference does. The parent's number is a parent fact,
+       named as such, never the Add-On's own. */
+    var numberFact = app.cipNumber
+      ? cipFact('CIP application number', app.cipNumber)
+      : cipFact(addOn ? 'Add-On reference number' : 'Application number', app.internalNumber || app.number);
     /* Add-On strip is identity + the granted parent it hangs off + who holds
        it. Submitted / Accepted only appear once dated; Investment and
        Referred by stay on Overview so the glance does not sprawl. */
     var html = numberFact;
     if (addOn && app.parent) {
       html +=
-        cipFact('CIP application number', app.parent.cipNumber, false, 'tma-dash__cip-fact--parent') +
+        cipFact('Main application CIP number', app.parent.cipNumber, false, 'tma-dash__cip-fact--parent') +
         cipFact('COR number', app.parent.corNumber, false, 'tma-dash__cip-fact--parent') +
         cipFact('Main applicant', app.parent.applicantName, false, 'tma-dash__cip-fact--parent');
     }
@@ -11417,54 +11420,49 @@
     var today = new Date().toISOString().slice(0, 10);
     var addOn = app.phase === 'add_on';
 
-    // Correcting a CIP number is a family-file act. Add-On keeps its AO
-    // reference and never asks for one here.
-    if (correcting && addOn) return;
-
-    var body;
-    if (addOn) {
-      body =
-        '<div class="tma-dash__clients-field">' +
-        '<label class="tma-dash__clients-field-label" for="cip-submitted">Submission date</label>' +
-        '<input type="date" id="cip-submitted" class="tma-dash__clients-field-input"' +
-        ' data-cip-submitted value="' + esc(today) + '">' +
-        '</div>' +
-        (app.addonTypeLabel
-          ? '<p class="tma-portal-modal__text">Add-On type: <strong>' + esc(app.addonTypeLabel) + '</strong>. ' +
-            esc(app.internalNumber || 'The Add-On reference') + ' stays on every screen.</p>'
-          : '<p class="tma-portal-modal__text">' +
-            esc(app.internalNumber || 'The Add-On reference') + ' stays on every screen.</p>') +
-        '<div class="tma-portal-modal__foot">' +
-        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-number>Cancel</button>' +
-        '<button type="button" class="tma-no-data__btn" data-cip-save-number>Record submission</button>' +
-        '</div>';
+    /* An Add-On is issued its own CIP number by the Unit. The field is for
+       that number, never the parent's, so the parent's is named beside it
+       as the thing NOT to type. */
+    var parentCip = addOn && app.parent && app.parent.cipNumber ? String(app.parent.cipNumber) : '';
+    var hint;
+    if (correcting) {
+      hint = 'The status does not change.';
+    } else if (addOn) {
+      hint = 'The number the Unit issued this Add-On' +
+        (parentCip ? ', not the main application’s ' + esc(parentCip) : '') +
+        '. Every screen will show it from now on; ' +
+        esc(app.internalNumber || 'the Add-On reference') + ' stays for audit.';
     } else {
-      body =
-        '<div class="tma-dash__clients-field">' +
-        '<label class="tma-dash__clients-field-label" for="cip-number">CIP application number</label>' +
-        '<input type="text" id="cip-number" class="tma-dash__clients-field-input" data-cip-number' +
-        ' value="' + esc(correcting ? (app.cipNumber || '') : '') + '"' +
-        ' placeholder="10T1G12661P" autocomplete="off" spellcheck="false">' +
-        '</div>' +
-        (correcting
-          ? ''
-          : '<div class="tma-dash__clients-field">' +
-            '<label class="tma-dash__clients-field-label" for="cip-submitted">Submission date</label>' +
-            '<input type="date" id="cip-submitted" class="tma-dash__clients-field-input"' +
-            ' data-cip-submitted value="' + esc(today) + '">' +
-            '</div>') +
-        '<p class="tma-portal-modal__text">' +
-        (correcting
-          ? 'The status does not change.'
-          : 'Every screen will show this number from now on. ' +
-            esc(app.internalNumber || 'The internal number') + ' stays for audit and invoicing.') +
-        '</p>' +
-        '<div class="tma-portal-modal__foot">' +
-        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-number>Cancel</button>' +
-        '<button type="button" class="tma-no-data__btn" data-cip-save-number>' +
-        (correcting ? 'Save number' : 'Record submission') + '</button>' +
-        '</div>';
+      hint = 'Every screen will show this number from now on. ' +
+        esc(app.internalNumber || 'The internal number') + ' stays for audit and invoicing.';
     }
+
+    var body =
+      '<div class="tma-dash__clients-field">' +
+      '<label class="tma-dash__clients-field-label" for="cip-number">' +
+      (addOn ? 'Add-On CIP application number' : 'CIP application number') + '</label>' +
+      '<input type="text" id="cip-number" class="tma-dash__clients-field-input" data-cip-number' +
+      ' value="' + esc(correcting ? (app.cipNumber || '') : '') + '"' +
+      ' placeholder="10T1G12661P" autocomplete="off" spellcheck="false">' +
+      '</div>' +
+      (correcting
+        ? ''
+        : '<div class="tma-dash__clients-field">' +
+          '<label class="tma-dash__clients-field-label" for="cip-submitted">Submission date</label>' +
+          '<input type="date" id="cip-submitted" class="tma-dash__clients-field-input"' +
+          ' data-cip-submitted value="' + esc(today) + '">' +
+          '</div>') +
+      '<p class="tma-portal-modal__text">' +
+      (addOn && !correcting && app.addonTypeLabel
+        ? 'Add-On type: <strong>' + esc(app.addonTypeLabel) + '</strong>. '
+        : '') +
+      hint +
+      '</p>' +
+      '<div class="tma-portal-modal__foot">' +
+      '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-number>Cancel</button>' +
+      '<button type="button" class="tma-no-data__btn" data-cip-save-number>' +
+      (correcting ? 'Save number' : 'Record submission') + '</button>' +
+      '</div>';
 
     ui.openModal({
       title: correcting ? 'Edit CIP number' : 'Record submission to the Unit',
@@ -11472,10 +11470,6 @@
       onMount: function (el) {
         var input = el.querySelector('[data-cip-number]');
         if (input) input.focus();
-        else {
-          var dateFocus = el.querySelector('[data-cip-submitted]');
-          if (dateFocus) dateFocus.focus();
-        }
 
         var cancel = el.querySelector('[data-cip-cancel-number]');
         if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
@@ -11485,8 +11479,10 @@
 
         save.addEventListener('click', function () {
           var number = input ? input.value.trim() : '';
-          if (!addOn && !number) {
-            clientsToast('Enter the CIP application number from the Unit.', 'negative');
+          if (!number) {
+            clientsToast(addOn
+              ? 'Enter the CIP application number the Unit issued this Add-On.'
+              : 'Enter the CIP application number from the Unit.', 'negative');
             if (input) input.focus();
 
             return;
@@ -11503,7 +11499,7 @@
           save.disabled = true;
           save.textContent = 'Saving…';
 
-          submitCipNumber(app.id, addOn ? null : number, correcting, dateEl ? dateEl.value : null)
+          submitCipNumber(app.id, number, correcting, dateEl ? dateEl.value : null)
             .then(function (json) {
               ui.closeModal();
               var record = json && json.application;
@@ -11513,9 +11509,7 @@
               forgetBuckets();
               clientsToast(correcting
                 ? 'CIP number updated'
-                : (addOn
-                  ? 'Submission recorded'
-                  : 'Submission recorded, now ' + (record ? record.number : number)), 'positive');
+                : 'Submission recorded, now ' + (record ? record.number : number), 'positive');
               if (typeof render === 'function') {
                 render(usesPagedClientsFlow(state) ? { forceFull: true } : { detailOnly: true });
               } else {
@@ -11525,7 +11519,7 @@
             .catch(function (err) {
               save.disabled = false;
               save.textContent = correcting ? 'Save number' : 'Record submission';
-              clientsToast((err && err.message) || (addOn ? 'Could not record that submission.' : 'Could not save that number.'), 'negative');
+              clientsToast((err && err.message) || 'Could not save that number.', 'negative');
             });
         });
       },
