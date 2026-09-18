@@ -7764,13 +7764,18 @@
      opening as file-actions (narrow) then filling with people (wide) is how
      that picker vanished off the right of the window. */
   function placeMenu(el, x, y) {
+    el.style.maxHeight = '';
     var w = el.offsetWidth, h = el.offsetHeight;
     var left = x;
     if (left + w > window.innerWidth - 8) left = x - w;
     el.style.left = Math.max(8, Math.min(left, window.innerWidth - w - 8)) + 'px';
     var top = y;
     if (top + h > window.innerHeight - 8) top = Math.max(8, y - h);
-    el.style.top = Math.max(8, Math.min(top, window.innerHeight - h - 8)) + 'px';
+    top = Math.max(8, Math.min(top, window.innerHeight - h - 8));
+    el.style.top = top + 'px';
+    // Capped to the space below its top: a menu that fills after opening
+    // scrolls inside itself rather than running off the bottom.
+    el.style.maxHeight = (window.innerHeight - top - 8) + 'px';
   }
 
   function menuFaceHtml(it) {

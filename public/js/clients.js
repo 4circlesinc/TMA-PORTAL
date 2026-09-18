@@ -11638,11 +11638,27 @@
 
   /* Placed at the pointer, then pulled back inside the window, the same
      clamp the File Library's menu uses. */
+  /*
+   * Placed where asked, then pulled back inside the window, and capped to
+   * the space below its top so a menu that grows after opening (the status
+   * picker's override lane) scrolls rather than running off the bottom. The
+   * cap is reset first so a re-placement measures the menu's real height.
+   */
   function placeCtxMenu(el, x, y) {
+    el.style.maxHeight = '';
     var w = el.offsetWidth;
     var h = el.offsetHeight;
+    var top = Math.max(8, Math.min(y, window.innerHeight - h - 8));
     el.style.left = Math.max(8, Math.min(x, window.innerWidth - w - 8)) + 'px';
-    el.style.top = Math.max(8, Math.min(y, window.innerHeight - h - 8)) + 'px';
+    el.style.top = top + 'px';
+    el.style.maxHeight = (window.innerHeight - top - 8) + 'px';
+  }
+
+  /* The menu grew or shrank in place: slide it back inside the window,
+     keeping the corner it opened from. */
+  function replaceCtxMenu(el) {
+    if (!el || !el.parentNode) return;
+    placeCtxMenu(el, parseFloat(el.style.left) || 8, parseFloat(el.style.top) || 8);
   }
 
   /* Scrolling the page closes the menu; scrolling the menu's own list, now
@@ -12020,6 +12036,10 @@
       toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
       if (toggle.hasAttribute('data-open')) toggle.removeAttribute('data-open');
       else toggle.setAttribute('data-open', 'true');
+      // The lane opened below a menu placed for its collapsed height; move
+      // the menu up as far as the window allows, then let the rest scroll.
+      replaceCtxMenu(root.closest('.tma-portal-context-menu') || root);
+      if (!list.hidden) list.scrollIntoView({ block: 'nearest' });
     });
   }
 
