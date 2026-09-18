@@ -7398,6 +7398,20 @@
       ' tma-portal-status--inline">' + esc(label) + '</span>';
   }
 
+  /*
+   * One Add-On slot on the Overview table: its name, marked the way the
+   * person's checklist marks it (an asterisk on a mandatory paper, Optional
+   * on one that is not), then where it has got to.
+   */
+  function addOnDocStatusRow(d) {
+    var mark = d.required === false
+      ? '<span class="tma-dash__clients-checklist-optional">Optional</span>'
+      : '<span class="tma-portal-field__required" aria-hidden="true">*</span>';
+    return '<li class="tma-portal-details__row">' +
+      '<span class="tma-dash__cip-doc-status-name">' + esc(d.label || 'Document') + mark + '</span>' +
+      '<span class="tma-portal-details__label">' + addOnPackStatusChip(d) + '</span></li>';
+  }
+
   function addOnStatusDocs(app) {
     var rows = [];
     cipFamily(app).forEach(function (p) {
@@ -7482,7 +7496,7 @@
       if (!docs.length) return '';
       var rows = overviewRow('Document', 'Status', false, 'tma-dash__cip-doc-status-head');
       docs.forEach(function (d) {
-        rows += overviewRow(d.label || 'Document', addOnPackStatusChip(d), true);
+        rows += addOnDocStatusRow(d);
       });
       return overviewList(rows);
     }

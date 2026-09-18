@@ -38052,21 +38052,29 @@ span.tma-dash__messages-profile-avatar {
 .tma-dash__clients-checklist {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* A rule between rows, the same one the Overview's Document status list
+   draws (.tma-portal-details__row), so every application's checklist reads
+   as the same list whichever phase it is in. Padding carries the spacing
+   the list's gap used to. */
 .tma-dash__clients-checklist-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--space-8);
+  padding: var(--space-8) 0;
+  border-bottom: 1px solid var(--color-border-soft);
   font-size: var(--text-size-14);
   line-height: var(--text-lh-14);
   color: var(--color-text-primary);
 }
+
+.tma-dash__clients-checklist-row:first-child { padding-top: 0; }
+.tma-dash__clients-checklist-row:last-child { border-bottom: 0; padding-bottom: 0; }
 
 /* Status, not a control: the documented checkbox, frozen so it cannot be
    toggled. Disabled must not fade it — the grey outline / filled tick are
@@ -38645,6 +38653,15 @@ span.tma-dash__messages-profile-avatar {
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--color-text-secondary);
+}
+
+/* The slot's name with its mandatory / Optional mark beside it, as the
+   person's checklist draws them. */
+.tma-dash__cip-doc-status-name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-8);
+  min-width: 0;
 }
 
 .tma-dash__cip-g-name {
