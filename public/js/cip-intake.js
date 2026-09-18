@@ -285,7 +285,7 @@
     enterpriseCategory: 'Enterprise category',
     sponsored: 'Sponsored', relationship: 'Relationship',
     cipNumber: 'CIP application number',
-    parentCipNumber: 'CIP application number',
+    parentCipNumber: 'Main application CIP number',
     parentCorNumber: 'Certificate of Registration (COR) number',
     parentApplicantName: 'Main applicant name',
     addonType: 'Add-On type',
@@ -1304,10 +1304,12 @@
    * Is the CIP number this form's to ask for?
    *
    * On a new filing, only a post-approval one: pre-approval has no number
-   * yet. On an edit, the record says which phase the file is in — state.phase
-   * is null there, because an existing application's phase is not the form's
-   * to choose — and only a reader the server says may change it is offered
-   * the control, since Submission::correct would turn anyone else away.
+   * yet. On an edit, the record says whether the file is numbered — a
+   * post-approval file always is, any other lane (family or Add-On) once the
+   * submission step recorded it — and only a reader the server says may
+   * change it is offered the control, since Submission::correct would turn
+   * anyone else away. state.phase is null on an edit, because an existing
+   * application's phase is not the form's to choose.
    */
   function showsCipNumber() {
     // A draft is a filing that has not happened yet, so it asks what a new
@@ -1316,8 +1318,8 @@
     if (!state.applicationId || editingDraft()) return isPostApprovalIntake();
 
     return !!(state.record
-      && state.record.phase === 'post_approval'
-      && state.record.canEditCipNumber);
+      && state.record.canEditCipNumber
+      && (state.record.phase === 'post_approval' || state.record.cipNumber));
   }
 
   function preApprovalFormBody() {
@@ -1385,6 +1387,14 @@
           ? '<p class="tma-portal-note" role="status">' + esc(state.parentError) + '</p>'
           : '') +
         openNote) +
+      // The Add-On's own CIP number, once the Unit has issued it. Its own
+      // card, so it is never read as the parent's number above it.
+      (showsCipNumber()
+        ? card('Add-On application',
+          '<div class="tma-portal-form-grid tma-portal-form-grid--investment">' +
+          textField('cipNumber', { placeholder: 'As issued to this Add-On by the Unit' }) +
+          '</div>')
+        : '') +
       titledCard(type === 'spouse'
           ? 'Add-On applicant'
           : withDependentAgeBracket('Add-On applicant', state.draft.dateOfBirth),

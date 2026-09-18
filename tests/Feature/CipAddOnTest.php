@@ -1722,6 +1722,91 @@ class CipAddOnTest extends TestCase
             ->first());
     }
 
+    public function test_editing_a_submitted_add_on_corrects_its_own_cip_number(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+
+        $body = $this->file($staff, $this->addOnPayload($parent))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->firstOrFail();
+
+        // Not numbered yet: the form is not offered the field and the
+        // server refuses a number sent early.
+        $shown = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk()
+            ->json('application');
+        $this->assertNull($shown['cipNumber']);
+        $this->assertTrue($shown['canEditCipNumber']);
+
+        $this->actingAs($staff)
+            ->post(
+                '/portal/cip/applications/'.$application->uuid,
+                $this->addOnPayload($parent, ['cipNumber' => '10T1GADD01P-AO1']),
+                ['Accept' => 'application/json'],
+            )
+            ->assertStatus(422);
+        $this->assertNull($application->fresh()->cip_number);
+
+        $application->forceFill([
+            'status' => Status::PENDING_REVIEW,
+            'cip_number' => '10T1GADD01P-AO1',
+            'submitted_at' => '2026-09-14',
+            'submitted_by' => 'Ada Admin',
+            'locked_at' => now(),
+        ])->save();
+        Package::forget();
+
+        // A locked file refuses replacement scans, so the edits below carry
+        // the typed answers only, as the form does once the package is frozen.
+        $details = fn (array $payload) => array_filter($payload, fn ($v) => ! $v instanceof UploadedFile && ! is_array($v));
+
+        // The number posted back untouched is not a change.
+        $this->actingAs($staff)
+            ->post(
+                '/portal/cip/applications/'.$application->uuid,
+                $details($this->addOnPayload($parent, ['cipNumber' => '10T1GADD01P-AO1'])),
+                ['Accept' => 'application/json'],
+            )
+            ->assertOk();
+        $this->assertSame(0, $application->events()->where('action', CipEvent::ACTION_NUMBER_ASSIGNED)->count());
+
+        // The parent's number is still the parent's.
+        $this->actingAs($staff)
+            ->post(
+                '/portal/cip/applications/'.$application->uuid,
+                $details($this->addOnPayload($parent, ['cipNumber' => $parent->cip_number])),
+                ['Accept' => 'application/json'],
+            )
+            ->assertStatus(422);
+        $this->assertSame('10T1GADD01P-AO1', $application->fresh()->cip_number);
+
+        $edited = $this->actingAs($staff)
+            ->post(
+                '/portal/cip/applications/'.$application->uuid,
+                $details($this->addOnPayload($parent, ['cipNumber' => '10T1 GADD 01P-AO2'])),
+                ['Accept' => 'application/json'],
+            )
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame('10T1GADD01P-AO2', $edited['cipNumber']);
+        $this->assertSame('10T1GADD01P-AO2', $edited['number']);
+        $this->assertSame($parent->cip_number, $edited['parent']['cipNumber']);
+        $this->assertSame('10T1GADD01P-AO2', $application->fresh()->cip_number);
+        $this->assertSame(Status::PENDING_REVIEW, $application->fresh()->status);
+        $this->assertTrue(
+            $application->events()
+                ->where('action', CipEvent::ACTION_NUMBER_ASSIGNED)
+                ->get()
+                ->contains(fn ($e) => ($e->meta['previous'] ?? null) === '10T1GADD01P-AO1'),
+            'A correction is audited with the number it replaced.',
+        );
+    }
+
     public function test_an_add_on_cannot_be_recorded_as_submitted_before_confirm(): void
     {
         $staff = $this->staff();

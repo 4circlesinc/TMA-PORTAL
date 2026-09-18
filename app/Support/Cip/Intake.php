@@ -1464,9 +1464,9 @@ class Intake
      * Three ways this does nothing, and they are all the common case. The
      * field is not sent at all, by a reader the form never offered it to. It
      * is sent unchanged, because the form posts every control it drew whether
-     * or not this one was touched. Or the file is still pre-approval, where
-     * the number does not exist yet and {@see Submission::record} is the only
-     * thing that may write one.
+     * or not this one was touched. Or the file has no number yet (a
+     * pre-approval or Add-On file the Unit has not received), where
+     * {@see Submission::record} is the only thing that may write one.
      *
      * What is left is somebody who typed a different number, and that goes
      * through {@see Submission::correct}, which is where the capability is
@@ -1506,7 +1506,13 @@ class Intake
             return;
         }
 
-        if (($application->phase ?? Phase::PRE_APPROVAL) !== Phase::POST_APPROVAL) {
+        /*
+         * A post-approval file arrived numbered. Any other lane, family or
+         * Add-On, is numbered by the submission step, and until that has
+         * happened there is nothing here to correct.
+         */
+        if (($application->phase ?? Phase::PRE_APPROVAL) !== Phase::POST_APPROVAL
+            && ! filled($application->cip_number)) {
             abort(422, 'A CIP number is recorded when the application is submitted to the Unit.');
         }
 
@@ -2116,6 +2122,7 @@ class Intake
                 throw new \InvalidArgumentException($mismatch);
             }
             self::guardIdentityEdits($application, $actor, $data);
+            self::syncCipNumber($application, $actor, $data);
 
             /*
              * Filing a draft lands here, not in createAddOn. Parent CIP / COR
@@ -2347,6 +2354,9 @@ class Intake
                 'parentCorNumber' => ['nullable', 'string', 'max:64'],
                 'parentApplicantName' => ['nullable', 'string', 'max:191'],
                 'addonType' => ['nullable', 'string', Rule::in(AddOn::TYPES)],
+                // The Add-On's own number, correctable here once the Unit has
+                // issued it; see syncCipNumber for what is refused.
+                'cipNumber' => ['nullable', 'string', 'max:'.Submission::MAX_LENGTH],
             ]
             : [
                 'providerId' => ['nullable', 'string'],
