@@ -88,6 +88,15 @@ class CipApplicationController extends Controller
     private const LIST_PAGE = 150;
 
     /**
+     * The most rows the right sidebar will ever paint.
+     *
+     * A ceiling, not a page size: the sidebar asks for what fits its height
+     * and this caps whatever it asks for, so a hand-written `?limit=5000`
+     * cannot turn a preview back into the whole caseload.
+     */
+    private const PREVIEW_MAX = 15;
+
+    /**
      * Column keys the table headers may ask to order by.
      *
      * Anything else is ignored rather than rejected: a typed URL with a typo
@@ -616,6 +625,95 @@ class CipApplicationController extends Controller
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * A short named slice for the right sidebar.
+     *
+     * Its own endpoint rather than `index` with a small perPage, because the
+     * table's row is expensive in ways a fifteen-line preview never uses: the
+     * listing eager-loads every family member's document slots and file rows
+     * for the post-approval lanes, then computes the available transitions,
+     * overrides, locked statuses and stage statuses per line. The sidebar
+     * paints a face, a name, a number and a status pill. Four columns and two
+     * light relations answer that, so opening any portal page costs one cheap
+     * query instead of the whole caseload's paperwork.
+     *
+     * Scope is narrower here than on the table on purpose. {@see ApplicationScope}
+     * hands an officer the firm's whole book — assignment fills their queue,
+     * it does not hide a colleague's file — and section 8 keeps it that way.
+     * A sidebar is not the book: it is the reader's own work, so everyone but
+     * an administrator sees only the files they hold. The "mine" predicate is
+     * the dashboard's, {@see Buckets} — the live assignment is the authority
+     * and the denormalised column is matched too, so a queue and this list
+     * never disagree about who holds a file.
+     */
+    public function preview(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless(CipAccess::canReach($user), 404);
+
+        $limit = max(1, min(self::PREVIEW_MAX, (int) $request->query('limit', self::PREVIEW_MAX)));
+
+        $query = ApplicationScope::query($user)
+            ->with([
+                // The main applicant only, the way the table picks it: the
+                // face and the name on the row are theirs, and the rest of
+                // the family is a question the sidebar never asks.
+                'people' => fn ($q) => $q->where('role', CipPerson::ROLE_MAIN_APPLICANT),
+                'client:id,uid,name,photo_url,user_id',
+                'client.user:id,avatar_url,provider_avatar_url',
+            ]);
+
+        /*
+         * Everyone but an administrator sees their own files only. Written as
+         * the dashboard writes it: the cache column or a live assignment row,
+         * because a file handed over this morning is held by whoever holds it
+         * now, not by whoever the listing column still names.
+         */
+        if (! Role::isAdmin($user)) {
+            $query->where(function (Builder $q) use ($user) {
+                $q->where('cip_applications.assigned_officer_id', $user->id)
+                    ->orWhereHas(
+                        'assignments',
+                        fn (Builder $a) => $a->live()->where('user_id', $user->id),
+                    );
+            });
+        }
+
+        /*
+         * Newest movement first: a file whose status changed today is what the
+         * reader came back for, and `updated_at` is what every write touches.
+         * Ordered on the id as well so a page of rows saved in one migration
+         * has a stable order instead of shuffling between requests.
+         */
+        $applications = $query
+            ->orderByDesc('cip_applications.updated_at')
+            ->orderByDesc('cip_applications.id')
+            ->limit($limit)
+            ->get();
+
+        return response()->json([
+            'applications' => $applications->map(function (CipApplication $application) {
+                $main = $application->people->first();
+                $client = $application->client;
+
+                return [
+                    'id' => $application->uuid,
+                    'clientUid' => $client?->uid,
+                    'number' => $application->displayNumber(),
+                    'applicantName' => CipPerson::upperName(
+                        $main
+                            ? trim(($main->first_name ?? '').' '.($main->last_name ?? ''))
+                            : (string) ($client?->name ?? '')
+                    ) ?: '-',
+                    'status' => $application->status,
+                    'statusLabel' => Status::label($application->status),
+                    'statusTone' => Status::tone($application->status),
+                    'photo' => $this->listingPhoto($main, $client),
+                ];
+            })->all(),
+        ]);
     }
 
     /**

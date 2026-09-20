@@ -452,6 +452,13 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
             ->name('applications.draft.store');
         Route::delete('/applications/draft', [CipApplicationDraftController::class, 'destroy'])
             ->name('applications.draft.destroy');
+        /*
+         * The right sidebar's short list, above the wildcard for the same
+         * reason as the routes before it: a preview is not an application
+         * called "preview".
+         */
+        Route::get('/applications/preview', [CipApplicationController::class, 'preview'])
+            ->name('applications.preview');
         Route::get('/applications', [CipApplicationController::class, 'index'])->name('applications.index');
         Route::post('/applications', [CipApplicationController::class, 'store'])->name('applications.store');
         Route::get('/applications/{uuid}', [CipApplicationController::class, 'show'])->name('applications.show');

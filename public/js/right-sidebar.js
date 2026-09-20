@@ -2,9 +2,14 @@
  * TMA - Right sidebar sections (section 1, section 5).
  *
  * Fills the existing right sidebar's three sections. Notifications, Activities,
- * Clients, with real data from the shared stores (notifications, activity) and
- * the clients API. The layout, spacing, and card styles are untouched; only the
- * content is now live.
+ * Applications, with real data from the shared stores (notifications, activity)
+ * and the CIP preview API. The layout, spacing, and card styles are untouched;
+ * only the content is now live.
+ *
+ * The third section is the reader's own caseload, not the firm's directory. An
+ * administrator sees the whole book capped at fifteen rows; everybody else sees
+ * the applications assigned to them. The server decides that, see
+ * CipApplicationController::preview - the sidebar only asks.
  *
  * Re-renders are per-section and scroll-preserving: a new notification updates
  * just that list, never the whole panel, and never resets the scroll position
@@ -18,8 +23,9 @@
 
   var R = function () { return window.TMANotifyRender; };
   var ROOT = window.__TMA_SITE_ROOT || '';
-  var CLIENTS_MIN = 6;
-  var CLIENTS_MAX = 10;
+  var APPS_MIN = 6;
+  // The server caps at fifteen too; asking for more would be trimmed anyway.
+  var APPS_MAX = 15;
 
   function mount(root) {
     var rightbar = root.querySelector('.tma-dash__rightbar');
@@ -51,22 +57,22 @@
       host.innerHTML =
         section('notifications', 'Notifications') +
         section('activities', 'Activities') +
-        section('clients', 'Clients');
+        section('applications', 'Applications');
       rightbar.appendChild(host);
     }
 
-    var clients = { items: [], loaded: false, loading: false, error: false, forbidden: false };
+    var apps = { items: [], loaded: false, loading: false, error: false, forbidden: false };
     // Kept for load-more while a section is temporarily expanded; "See all"
     // navigates to the full Overview tabs instead of expanding in place.
     var expanded = { notifications: false, activities: false };
 
-    /* Adaptive preview counts: keep ≥6 clients visible; trim notif/activity
+    /* Adaptive preview counts: keep ≥6 applications visible; trim notif/activity
        previews when the sidebar is short so nested scrollbars are avoided. */
     function previewLimits() {
       var h = rightbar.clientHeight || window.innerHeight || 800;
-      var clientsLimit = CLIENTS_MIN;
-      if (h >= 900) clientsLimit = CLIENTS_MAX;
-      else if (h >= 780) clientsLimit = 8;
+      var appsLimit = APPS_MIN;
+      if (h >= 900) appsLimit = APPS_MAX;
+      else if (h >= 780) appsLimit = 10;
 
       var notifLimit = 6;
       var actLimit = 6;
@@ -75,7 +81,7 @@
       if (h < 640) { notifLimit = 3; actLimit = 2; }
 
       return {
-        clients: clientsLimit,
+        applications: appsLimit,
         notifications: notifLimit,
         activities: actLimit,
       };
@@ -144,71 +150,69 @@
       });
     }
 
-    function renderClients() {
-      var el = bodyEl('clients');
+    function renderApplications() {
+      var el = bodyEl('applications');
       if (!el) return;
       var limits = previewLimits();
       withScroll(function () {
-        if (clients.loading && !clients.loaded) { el.innerHTML = R().skeleton(3); return; }
-        if (clients.forbidden) {
-          // A client-role user has no directory to show; hide the section.
-          var sec = host.querySelector('[data-rb-section="clients"]');
+        if (apps.loading && !apps.loaded) { el.innerHTML = R().skeleton(3); return; }
+        if (apps.forbidden) {
+          // No reach into the module (the feature is off, or this account is
+          // not part of it). Hide the section rather than explain it.
+          var sec = host.querySelector('[data-rb-section="applications"]');
           if (sec) sec.hidden = true;
           return;
         }
-        if (clients.error && !clients.items.length) { el.innerHTML = R().errorState('Could not load clients.'); return; }
-        if (!clients.items.length) { el.innerHTML = R().emptyState('No clients yet.', 'AddressBook'); return; }
-        el.innerHTML = clients.items.slice(0, limits.clients).map(clientItem).join('');
+        if (apps.error && !apps.items.length) { el.innerHTML = R().errorState('Could not load applications.'); return; }
+        if (!apps.items.length) { el.innerHTML = R().emptyState('No applications yet.', 'IdentificationCard'); return; }
+        el.innerHTML = apps.items.slice(0, limits.applications).map(applicationItem).join('');
       });
     }
 
-    function clientItem(c) {
-      var name = c.name || 'Client';
-      var company = (c.profile && c.profile.work && c.profile.work.company) || c.company || '';
-      // Real client photo (an upload or provider URL) if there is one; the
-      // initials tile only stands in when there isn't (section 5).
+    function applicationItem(a) {
+      var name = a.applicantName && a.applicantName !== '-' ? a.applicantName : 'Application';
+      // The file number under the name, and the status when there is no number,
+      // so a row is never just a face and a name.
+      var sub = a.number || a.statusLabel || '';
+      // The applicant's real portrait when one is filed; the initials tile
+      // only stands in when there isn't (section 5).
       var initials = R().initialsUri(name);
-      var photo = c.profile && c.profile.photo;
-      var src = (photo && /^(https?:|\/(storage|media)\/|data:)/.test(photo)) ? photo : initials;
-      return '<div class="tma-dash__contact" role="button" tabindex="0" data-client-id="' + R().esc(c.id) + '">' +
+      var photo = a.photo;
+      var src = (photo && /^(https?:|\/(storage|media|portal)\/|data:)/.test(photo)) ? photo : initials;
+      return '<div class="tma-dash__contact" role="button" tabindex="0" data-cip-app-uid="' + R().esc(a.clientUid || '') + '">' +
         '<img class="tma-dash__rb-avatar" src="' + R().esc(src) + '" alt="" ' +
           "onerror=\"this.onerror=null;this.src='" + initials + "'\">" +
         '<span class="tma-dash__contact-name">' + R().esc(name) +
-        (company ? '<span class="tma-dash__contact-company">' + R().esc(company) + '</span>' : '') +
+        (sub ? '<span class="tma-dash__contact-company">' + R().esc(sub) + '</span>' : '') +
         '</span></div>';
     }
 
-    /* ── clients data ──────────────────────────────────────────── */
-    function loadClients() {
-      if (clients.loaded || clients.loading) return;
-      var access = window.TMAPortalAccess;
-      var start = function () {
-        if (clients.loaded || clients.loading) return;
-        if (access && typeof access.holds === 'function' && !access.holds('clients.view')) {
-          clients.forbidden = true;
-          clients.loaded = true;
-          renderClients();
-          return;
-        }
-        clients.loading = true;
-        renderClients();
-        // Preview only, the sidebar paints ≤10 rows. Pulling /portal/clients
-        // here used to download the entire firm directory on every page.
-        var limit = Math.max(CLIENTS_MAX, previewLimits().clients);
-        window.TMANotifyAPI.api(ROOT + '/portal/clients/preview?limit=' + encodeURIComponent(limit)).then(function (data) {
-          clients.items = (data && data.clients) || [];
-          clients.loaded = true;
-          clients.loading = false;
-          renderClients();
-        }).catch(function (err) {
-          clients.loading = false;
-          clients.error = true;
-          if (err && (err.status === 403 || err.status === 401)) clients.forbidden = true;
-          renderClients();
-        });
-      };
-      if (access && typeof access.ready === 'function') access.ready().then(start);
-      else start();
+    /* ── applications data ───────────────────────── */
+    function loadApplications() {
+      if (apps.loaded || apps.loading) return;
+      apps.loading = true;
+      renderApplications();
+      /*
+       * Preview only: the sidebar paints at most fifteen rows, and the
+       * endpoint refuses to return more. The full table lives at
+       * /citizenship-applications and is a much heavier read.
+       *
+       * There is no client-side capability for the module, so reach is the
+       * server's answer: a 404 (module off, or this account is not part of
+       * it) hides the section the same way a 403 does.
+       */
+      var limit = Math.max(APPS_MAX, previewLimits().applications);
+      window.TMANotifyAPI.api(ROOT + '/portal/cip/applications/preview?limit=' + encodeURIComponent(limit)).then(function (data) {
+        apps.items = (data && data.applications) || [];
+        apps.loaded = true;
+        apps.loading = false;
+        renderApplications();
+      }).catch(function (err) {
+        apps.loading = false;
+        apps.error = true;
+        if (err && (err.status === 404 || err.status === 403 || err.status === 401)) apps.forbidden = true;
+        renderApplications();
+      });
     }
 
     /* ── data wiring ───────────────────────────────────────────── */
@@ -218,13 +222,13 @@
     function loadAll() {
       window.TMANotifications.ensureLoaded({ limit: 20 });
       window.TMAActivities.ensureLoaded({ limit: 20 });
-      loadClients();
+      loadApplications();
     }
 
     // Paint whatever is already known, then ensure fresh data.
     renderNotifications();
     renderActivities();
-    renderClients();
+    renderApplications();
     loadAll();
 
     var resizeTimer = null;
@@ -233,7 +237,7 @@
       resizeTimer = setTimeout(function () {
         if (!expanded.notifications) renderNotifications();
         if (!expanded.activities) renderActivities();
-        renderClients();
+        renderApplications();
       }, 120);
     });
 
@@ -246,7 +250,7 @@
         var kind = sec && sec.getAttribute('data-rb-section');
         if (kind === 'notifications') window.TMANotifications.load({ limit: 20 });
         else if (kind === 'activities') window.TMAActivities.load({ limit: 20 });
-        else if (kind === 'clients') { clients.loaded = false; clients.error = false; loadClients(); }
+        else if (kind === 'applications') { apps.loaded = false; apps.error = false; loadApplications(); }
         return;
       }
 
@@ -277,14 +281,23 @@
       var act = e.target.closest('[data-activity-id]');
       if (act) { navigate(act.getAttribute('data-action-url')); return; }
 
-      var client = e.target.closest('[data-client-id]');
-      if (client) { navigate('/citizenship-applications/' + encodeURIComponent(client.getAttribute('data-client-id'))); return; }
+      /*
+       * Open the file the way the table opens it: by the hub client's uid,
+       * which is what /citizenship-applications/{uid} resolves. The row also
+       * carries the application uuid, but that path does not take one.
+       */
+      var app = e.target.closest('[data-cip-app-uid]');
+      if (app) {
+        var uid = app.getAttribute('data-cip-app-uid');
+        if (uid) navigate('/citizenship-applications/' + encodeURIComponent(uid));
+        return;
+      }
     });
 
     // Keyboard access for the role="button" rows.
     host.addEventListener('keydown', function (e) {
       if (e.key !== 'Enter' && e.key !== ' ') return;
-      var row = e.target.closest('[data-notification-id],[data-activity-id],[data-client-id]');
+      var row = e.target.closest('[data-notification-id],[data-activity-id],[data-cip-app-uid]');
       if (!row) return;
       e.preventDefault();
       row.click();
