@@ -148,25 +148,44 @@ final class Anonymiser
     /**
      * Cloudflare's own read on the connection.
      *
-     * Two headers, both of which have to be turned on at the edge — a
-     * managed transform or a WAF rule copying the bot-management fields into
-     * request headers. When neither is present this simply says nothing,
-     * which is why the hosting check exists beside it.
+     * Every header here has to be turned on at the edge, and which ones are
+     * available depends on the plan. When none of them arrive this says
+     * nothing at all, which is why the hosting check sits beside it.
+     *
+     * ── Why three headers and not one ────────────────────────────────────
+     *
+     * `CF-Anonymiser` is ours, not Cloudflare's: a WAF custom rule can be set
+     * to add a request header on whatever expression the plan supports, so
+     * this is the escape hatch for a firm to express "this is a VPN" using
+     * fields we cannot know about from here. It is checked first because it
+     * is the only one that is a deliberate statement rather than an inference.
+     *
+     * `cf-bot-score` comes from the "Add bot protection headers" managed
+     * transform, which is Enterprise with Bot Management. 1 means certainly
+     * automated, 99 means certainly human. A VPN does not make a request a
+     * bot, so this is set low — it is here to catch scripted abuse, not to
+     * second-guess a person on a corporate VPN.
+     *
+     * `CF-Threat-Score` is legacy and dying: Cloudflare removed it from the
+     * dashboard in March 2025 and expects to disable the underlying rules
+     * during 2026. It is still read so that an edge already configured for it
+     * keeps working, and it must not be the header anybody is told to set up.
      */
     private static function cloudflareSaysAnonymiser(Request $request): bool
     {
-        // Cloudflare's threat score: 0 is clean, higher is worse. Anything at
-        // or above this has a reputation for abuse. Set conservatively: this
-        // header also rises for shared residential addresses behind CGNAT.
-        $threat = $request->header('CF-Threat-Score');
-        if ($threat !== null && is_numeric($threat) && (int) $threat >= 30) {
+        $verdict = strtolower(trim((string) $request->header('CF-Anonymiser', '')));
+        if (in_array($verdict, ['1', 'true', 'vpn', 'proxy', 'tor', 'yes'], true)) {
             return true;
         }
 
-        // A WAF rule can be set to pass its verdict through directly.
-        $verdict = strtolower(trim((string) $request->header('CF-Anonymiser', '')));
+        $bot = $request->header('CF-Bot-Score');
+        if ($bot !== null && is_numeric($bot) && (int) $bot > 0 && (int) $bot <= 5) {
+            return true;
+        }
 
-        return in_array($verdict, ['1', 'true', 'vpn', 'proxy', 'tor', 'yes'], true);
+        $threat = $request->header('CF-Threat-Score');
+
+        return $threat !== null && is_numeric($threat) && (int) $threat >= 30;
     }
 
     private static function isTor(Request $request): bool

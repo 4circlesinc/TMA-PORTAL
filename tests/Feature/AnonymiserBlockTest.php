@@ -80,17 +80,60 @@ class AnonymiserBlockTest extends TestCase
             ->assertStatus(403);
     }
 
-    public function test_cloudflares_own_verdict_is_honoured(): void
+    public function test_a_waf_rule_can_state_the_verdict_directly(): void
     {
         $this->policy();
 
+        // CF-Anonymiser is ours: a WAF custom rule sets it on whatever
+        // expression the firm's plan supports. It is a statement, not an
+        // inference, so it is believed.
+        $this->get('/auth/login', [
+            'REMOTE_ADDR' => self::HOME_IP,
+            'CF-IPCountry' => 'LC',
+            'CF-Anonymiser' => 'vpn',
+        ])->assertStatus(403);
+
+        $this->get('/auth/login', [
+            'REMOTE_ADDR' => self::HOME_IP,
+            'CF-IPCountry' => 'LC',
+            'CF-Anonymiser' => 'no',
+        ])->assertOk();
+    }
+
+    public function test_a_bot_score_is_read_from_the_managed_transform(): void
+    {
+        $this->policy();
+
+        // 1 = certainly automated, 99 = certainly human.
+        $this->get('/auth/login', [
+            'REMOTE_ADDR' => self::HOME_IP,
+            'CF-IPCountry' => 'LC',
+            'CF-Bot-Score' => '1',
+        ])->assertStatus(403);
+
+        // A person on a VPN is not a bot, and a middling score must not be
+        // read as one — that would refuse ordinary clients by the dozen.
+        foreach (['30', '50', '99'] as $human) {
+            $this->get('/auth/login', [
+                'REMOTE_ADDR' => self::HOME_IP,
+                'CF-IPCountry' => 'LC',
+                'CF-Bot-Score' => $human,
+            ])->assertOk();
+        }
+    }
+
+    public function test_the_legacy_threat_score_still_works_where_it_is_configured(): void
+    {
+        $this->policy();
+
+        // Cloudflare is retiring this field, but an edge already set up for
+        // it should not quietly stop enforcing.
         $this->get('/auth/login', [
             'REMOTE_ADDR' => self::HOME_IP,
             'CF-IPCountry' => 'LC',
             'CF-Threat-Score' => '45',
         ])->assertStatus(403);
 
-        // A clean score is not a refusal.
         $this->get('/auth/login', [
             'REMOTE_ADDR' => self::HOME_IP,
             'CF-IPCountry' => 'LC',

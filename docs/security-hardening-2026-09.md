@@ -211,9 +211,14 @@ firm may want no anonymisers without restricting countries at all.
 Three signals, cheapest first (`App\Support\Security\Anonymiser`):
 
 1. **Tor** — Cloudflare's `T1` pseudo-country.
-2. **Cloudflare's verdict** — `CF-Threat-Score` at 30 or above, or a
-   `CF-Anonymiser` header a WAF rule can be set to send. **Needs enabling in
-   the Cloudflare dashboard**; without it this signal says nothing.
+2. **Cloudflare's verdict** — `CF-Anonymiser` (a header a WAF custom rule
+   sets, on any plan), `cf-bot-score` at 5 or below (the "Add bot protection
+   headers" managed transform, Enterprise only), or the legacy
+   `CF-Threat-Score` at 30 or above. **Needs enabling in the Cloudflare
+   dashboard**; without it this signal says nothing. Note Cloudflare removed
+   threat score from the dashboard in March 2025 and is retiring it during
+   2026 — it is read for continuity, not recommended. Setup:
+   `docs/vpn-blocking-setup.md`.
 3. **Hosting ranges** — roughly 25 CIDRs covering M247, Vultr, DigitalOcean,
    OVH, Linode, Hetzner and Leaseweb, where most commercial VPNs exit. Kept
    short on purpose: a padded list buys a little coverage and a lot of
