@@ -3722,6 +3722,15 @@
             value: g.message || '',
             ariaLabel: 'Message shown to a refused visitor'
           })) +
+        '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Refuse VPNs, proxies and Tor</span>' +
+        ui().toggle(g.blockVpn, 'data-geo-vpn' + (admin ? '' : ' disabled'), 'Refuse VPNs, proxies and Tor') + '</div>' +
+        '<p class="tma-portal-note">Detection is a judgement, not a fact, and there is no exception list. It will also refuse corporate VPNs, iCloud Private Relay and some mobile networks, so a real client can be turned away with no way for you to let them in — every refusal is recorded so you can see who. It does not stop a residential proxy, which looks like home broadband.</p>' +
+        ui().field('Message shown to a refused VPN user',
+          ui().input({
+            attrs: 'data-geo-vpn-message' + (admin ? '' : ' disabled'),
+            value: g.vpnMessage || '',
+            ariaLabel: 'Message shown to a refused VPN user'
+          })) +
         (admin ? saveBtn('data-geo-save') : ''));
   }
 
@@ -3738,7 +3747,9 @@
         mode: root.querySelector('[data-geo-mode]').value,
         countries: codes,
         blockUnknown: root.querySelector('[data-geo-unknown]').checked,
-        message: (root.querySelector('[data-geo-message]').value || '').trim()
+        message: (root.querySelector('[data-geo-message]').value || '').trim(),
+        blockVpn: root.querySelector('[data-geo-vpn]').checked,
+        vpnMessage: (root.querySelector('[data-geo-vpn-message]').value || '').trim()
       }).then(function (res) {
         if (res.ok) { ui().toast('Geographic restrictions saved'); return; }
         // The server refuses a list that would lock this administrator out,

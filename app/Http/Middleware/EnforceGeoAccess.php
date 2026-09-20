@@ -35,27 +35,54 @@ class EnforceGeoAccess
             return $next($request);
         }
 
-        $reason = GeoAccess::refuse($request);
-
-        if ($reason === null) {
-            return $next($request);
+        if ($reason = GeoAccess::refuse($request)) {
+            return $this->refuse(
+                $request,
+                'security.geo_blocked',
+                ['country' => $reason],
+                GeoAccess::policy()['message'],
+                'geo-blocked',
+            );
         }
 
-        // Recorded every time. A geo block that nobody can see afterwards is
-        // indistinguishable from the portal being broken, and the first thing
-        // asked when a client cannot get in is "did we refuse them?".
-        SecurityAudit::record('security.geo_blocked', [
-            'country' => $reason,
+        // Checked after the country: the country test is two array lookups,
+        // while this one may reach a reputation API. Somebody already refused
+        // for where they are should not also cost a paid lookup.
+        if ($anonymiser = GeoAccess::refuseAnonymiser($request)) {
+            return $this->refuse(
+                $request,
+                'security.vpn_blocked',
+                ['detected' => $anonymiser, 'ip' => $request->ip()],
+                GeoAccess::policy()['vpnMessage'],
+                'vpn-blocked',
+            );
+        }
+
+        return $next($request);
+    }
+
+    /**
+     * Turn somebody away, and leave a record that says why.
+     *
+     * Recorded every time, without exception. A refusal nobody can see
+     * afterwards is indistinguishable from the portal being broken, and with
+     * no allowlist to rescue a wrongly-refused client the audit trail is the
+     * only way to answer "why can't I get in?". {@see Anonymiser} explains
+     * why that question will be asked.
+     *
+     * @param  array<string, mixed>  $context
+     */
+    private function refuse(Request $request, string $event, array $context, string $message, string $code): Response
+    {
+        SecurityAudit::record($event, $context + [
             'path' => $request->path(),
             'user_id' => $request->user()?->id,
         ]);
 
-        $message = GeoAccess::policy()['message'];
-
         if ($request->expectsJson()) {
             return response()->json([
                 'message' => $message,
-                'code' => 'geo-blocked',
+                'code' => $code,
             ], 403);
         }
 

@@ -42,6 +42,8 @@ class GeoAccessTest extends TestCase
             'countries' => [],
             'blockUnknown' => false,
             'message' => 'The portal is not available from your location.',
+            'blockVpn' => false,
+            'vpnMessage' => 'Turn off your VPN or proxy to use the portal.',
         ], $overrides));
     }
 
@@ -159,6 +161,8 @@ class GeoAccessTest extends TestCase
                 'countries' => ['CA'],
                 'blockUnknown' => false,
                 'message' => '',
+                'blockVpn' => false,
+                'vpnMessage' => '',
             ], $this->edge('LC'))
             ->assertStatus(422);
 
@@ -175,6 +179,8 @@ class GeoAccessTest extends TestCase
                 'countries' => ['LC'],
                 'blockUnknown' => false,
                 'message' => '',
+                'blockVpn' => false,
+                'vpnMessage' => '',
             ], $this->edge('LC'))
             ->assertStatus(422);
     }
@@ -191,6 +197,8 @@ class GeoAccessTest extends TestCase
                 'countries' => ['lc', 'LC', 'ca', 'ZZZ'],
                 'blockUnknown' => true,
                 'message' => '  Contact the firm.  ',
+                'blockVpn' => false,
+                'vpnMessage' => '',
             ], $this->edge('LC'))
             ->assertStatus(422); // ZZZ is not a two-letter code
 
@@ -200,6 +208,8 @@ class GeoAccessTest extends TestCase
                 'countries' => ['lc', 'LC', 'ca'],
                 'blockUnknown' => true,
                 'message' => '  Contact the firm.  ',
+                'blockVpn' => false,
+                'vpnMessage' => '',
             ], $this->edge('LC'))
             ->assertOk();
 
@@ -225,6 +235,8 @@ class GeoAccessTest extends TestCase
                 'countries' => ['LC'],
                 'blockUnknown' => false,
                 'message' => '',
+                'blockVpn' => false,
+                'vpnMessage' => '',
             ], $this->edge('CA'))
             ->assertStatus(403);
     }

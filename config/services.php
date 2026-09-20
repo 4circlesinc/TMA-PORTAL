@@ -162,6 +162,28 @@ return [
     ],
 
     /*
+     * Anonymiser detection for the "no VPNs" policy.
+     *
+     * The third-party lookup is optional and deliberately timid: it must
+     * never become a dependency of sign-in working. No key, a slow answer or
+     * an outage all mean "no verdict", and the decision falls back to the
+     * Cloudflare headers and the hosting-range check, which cost nothing and
+     * cannot fail. See App\Support\Security\Anonymiser.
+     */
+    'ip_reputation' => [
+        // 'ipqualityscore', 'ipapi', or '' to use only the free signals.
+        'driver' => env('IP_REPUTATION_DRIVER', ''),
+        'key' => env('IP_REPUTATION_KEY', ''),
+        // Seconds. Short on purpose: a visitor waiting on a reputation API is
+        // a visitor watching a blank sign-in page.
+        'timeout' => max(1, (int) env('IP_REPUTATION_TIMEOUT', 2)),
+        // How long a verdict is reused. An IP does not stop being a VPN exit
+        // between one sign-in and the next, and this keeps the paid lookup
+        // count down to roughly one per address per day.
+        'cache_hours' => max(1, (int) env('IP_REPUTATION_CACHE_HOURS', 24)),
+    ],
+
+    /*
     |--------------------------------------------------------------------------
     | Firebase Cloud Messaging (the native apps' push)
     |--------------------------------------------------------------------------

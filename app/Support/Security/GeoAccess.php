@@ -34,10 +34,17 @@ use Illuminate\Http\Request;
  * address. Loopback, private ranges and CLI have no edge in front of them
  * and are judged unknown-but-allowed, and that is recorded either way.
  *
- * This is a control, not the control. It is one signal beside authentication,
- * MFA and the capability matrix, and it is trivially defeated by a VPN. Treat
- * it as compliance evidence and friction, never as the thing keeping an
- * attacker out.
+ * ── The VPN policy ───────────────────────────────────────────────────────
+ *
+ * A country rule on its own is defeated by switching on a VPN, so the firm
+ * also refuses anonymised connections ({@see Anonymiser}, and read its
+ * caveats — detection is inference, not fact, and it has no allowlist).
+ *
+ * Even together these are controls, not the control. They sit beside
+ * authentication, MFA and the capability matrix. A residential-proxy service
+ * defeats both and looks like home broadband while doing it. Treat this as
+ * compliance evidence and friction against ordinary users, never as the thing
+ * keeping a determined attacker out.
  */
 final class GeoAccess
 {
@@ -47,7 +54,7 @@ final class GeoAccess
 
     public const MODE_BLOCK = 'block';
 
-    /** @return array{mode: string, countries: list<string>, blockUnknown: bool, message: string} */
+    /** @return array{mode: string, countries: list<string>, blockUnknown: bool, message: string, blockVpn: bool, vpnMessage: string} */
     public static function policy(): array
     {
         $policy = SecurityPolicies::get('geo');
@@ -62,7 +69,26 @@ final class GeoAccess
             'countries' => self::normalizeCountries($policy['countries'] ?? []),
             'blockUnknown' => (bool) ($policy['blockUnknown'] ?? false),
             'message' => trim((string) ($policy['message'] ?? '')) ?: 'The portal is not available from your location.',
+            'blockVpn' => (bool) ($policy['blockVpn'] ?? false),
+            'vpnMessage' => trim((string) ($policy['vpnMessage'] ?? '')) ?: 'Turn off your VPN or proxy to use the portal.',
         ];
+    }
+
+    /**
+     * Why an anonymised connection should be refused, or null.
+     *
+     * Separate from {@see refuse()} because the two are separate policies and
+     * produce different wording: a country block is "not available here" and
+     * nothing the visitor can act on, while this one has an obvious remedy —
+     * turn the VPN off — and the page should say so.
+     */
+    public static function refuseAnonymiser(Request $request): ?string
+    {
+        if (! self::policy()['blockVpn']) {
+            return null;
+        }
+
+        return Anonymiser::detect($request);
     }
 
     /**

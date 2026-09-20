@@ -201,3 +201,60 @@ One control beside authentication, MFA and the capability matrix. A VPN
 defeats it in seconds. It is useful as compliance evidence and as friction,
 and it is not what keeps an attacker out. If geographic restriction is a
 KYC/AML requirement, this is one input to that control, never the whole of it.
+
+## Refusing VPNs, proxies and Tor (added 20 Sep 2026)
+
+Same screen, one toggle: **Refuse VPNs, proxies and Tor**, plus the message a
+refused visitor reads. Off by default. Independent of the country mode — the
+firm may want no anonymisers without restricting countries at all.
+
+Three signals, cheapest first (`App\Support\Security\Anonymiser`):
+
+1. **Tor** — Cloudflare's `T1` pseudo-country.
+2. **Cloudflare's verdict** — `CF-Threat-Score` at 30 or above, or a
+   `CF-Anonymiser` header a WAF rule can be set to send. **Needs enabling in
+   the Cloudflare dashboard**; without it this signal says nothing.
+3. **Hosting ranges** — roughly 25 CIDRs covering M247, Vultr, DigitalOcean,
+   OVH, Linode, Hetzner and Leaseweb, where most commercial VPNs exit. Kept
+   short on purpose: a padded list buys a little coverage and a lot of
+   refused clients.
+4. **Reputation provider** — optional, `IP_REPUTATION_DRIVER` =
+   `ipqualityscore` or `ipapi` with a key. Catches residential proxies the
+   other three cannot see.
+
+### The rails
+
+- **The paid lookup can never take sign-in down.** No key, a timeout, a 500,
+  an unrecognised shape — every failure path means "no verdict", and the
+  decision falls back to the free signals. Tested against all three failure
+  modes.
+- **Verdicts are cached** (24h default), so one address costs one lookup a
+  day, not one per request.
+- **A country refusal short-circuits first**, so somebody already refused for
+  where they are does not also cost a paid lookup.
+- **Local and private ranges are never treated as VPNs**, and `/up` is never
+  refused.
+- **An administrator on a VPN cannot turn the setting on** — the save is
+  refused and names what their own connection reads as. There is no
+  allowlist, so this is the only guard against locking yourself out.
+
+### Validated against real traffic
+
+Every one of the 30 distinct client addresses in `auth_events` — St Lucia,
+Canada, UAE, US, Jordan, Turkey, China, Colombia — is allowed by the current
+rules. **Zero false positives on real historical traffic.**
+
+### What it cannot do, stated plainly
+
+Detection is inference, not fact, and **there is no exception list**. It will
+eventually refuse a client on a corporate VPN, on iCloud Private Relay, or on
+some mobile carriers, and there is no way in the UI to let that person
+through — the only remedy is for them to disconnect, or for an administrator
+to turn the whole setting off. Every refusal is recorded as
+`security.vpn_blocked` with the address and the reason, so "why can't I get
+in?" is one query away. That audit trail is not a nicety here; it is the only
+diagnostic there is.
+
+It also does not stop a determined attacker. A residential-proxy service
+looks exactly like home broadband and none of these signals will see it.
+This is policy enforcement against ordinary users, not a security boundary.

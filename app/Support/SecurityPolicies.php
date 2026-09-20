@@ -107,6 +107,12 @@ class SecurityPolicies
             'countries' => [],
             'blockUnknown' => false,
             'message' => 'The portal is not available from your location.',
+            // Refuse VPNs, proxies and Tor. Independent of `mode`: the firm
+            // may want no anonymisers without restricting countries at all.
+            // See App\Support\Security\Anonymiser for what this can and
+            // cannot actually see.
+            'blockVpn' => false,
+            'vpnMessage' => 'Turn off your VPN or proxy to use the portal.',
         ],
         'alerts' => [
             'newDevice' => ['admins' => false],

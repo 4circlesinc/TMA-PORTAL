@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Security\Anonymiser;
 use App\Support\Security\Detectors;
 use App\Support\Security\GeoAccess;
 use App\Support\Security\SecurityAlertPolicy;
@@ -138,7 +139,12 @@ class AdminSecurityController extends Controller
             'countries' => ['present', 'array', 'max:250'],
             'countries.*' => ['string', 'size:2', 'regex:/^[A-Za-z]{2}$/'],
             'blockUnknown' => ['required', 'boolean'],
-            'message' => ['present', 'string', 'max:300'],
+            // Nullable, not just present: the framework turns an empty field
+            // into null on the way in, and clearing the box to fall back to
+            // the default wording is a thing an administrator will do.
+            'message' => ['present', 'nullable', 'string', 'max:300'],
+            'blockVpn' => ['required', 'boolean'],
+            'vpnMessage' => ['present', 'nullable', 'string', 'max:300'],
         ]);
 
         $countries = GeoAccess::normalizeCountries($data['countries']);
@@ -152,11 +158,20 @@ class AdminSecurityController extends Controller
             abort(422, 'That list blocks '.$mine.', which is where you are signing in from.');
         }
 
+        // Refusing the administrator's own connection as a VPN would be the
+        // same lockout the country rules already guard against, and here
+        // there is no allowlist to climb back through.
+        if ((bool) $data['blockVpn'] && ($caught = Anonymiser::detect($request)) !== null) {
+            abort(422, 'Your own connection reads as '.lcfirst(Anonymiser::describe($caught)).'. Turning this on would lock you out.');
+        }
+
         return [
             'mode' => $data['mode'],
             'countries' => $countries,
             'blockUnknown' => (bool) $data['blockUnknown'],
-            'message' => trim($data['message']) ?: 'The portal is not available from your location.',
+            'message' => trim((string) ($data['message'] ?? '')) ?: 'The portal is not available from your location.',
+            'blockVpn' => (bool) $data['blockVpn'],
+            'vpnMessage' => trim((string) ($data['vpnMessage'] ?? '')) ?: 'Turn off your VPN or proxy to use the portal.',
         ];
     }
 
