@@ -47,20 +47,14 @@
     { ext: 'pdf', label: 'PDF' },
     { ext: 'doc', label: 'DOC' },
     { ext: 'docx', label: 'DOCX' },
-    { ext: 'odt', label: 'ODT' },
-    { ext: 'rtf', label: 'RTF' },
-    { ext: 'txt', label: 'TXT' },
     { ext: 'xls', label: 'XLS' },
     { ext: 'xlsx', label: 'XLSX' },
     { ext: 'ods', label: 'ODS' },
     { ext: 'csv', label: 'CSV' },
     { ext: 'ppt', label: 'PPT' },
     { ext: 'pptx', label: 'PPTX' },
-    { ext: 'odp', label: 'ODP' },
     { ext: 'jpg', label: 'JPG' },
     { ext: 'png', label: 'PNG' },
-    { ext: 'heic', label: 'HEIC' },
-    { ext: 'zip', label: 'ZIP' },
   ];
 
   /** The file mark for an extension, from the one map the file lists use. */
@@ -71,8 +65,10 @@
     return 'images/icons/tma/DefaultIcon.svg';
   }
 
-  /* Ink marks (the ZIP mark is one) get .is-mono so dark mode may flip them;
-     the brand marks must not be touched. Same stamp file-thumbs.js applies. */
+  /* Every mark offered above is a brand mark today, so nothing is stamped in
+     practice; the check stays because adding one ink extension back to the
+     list would otherwise paint a black square on a dark ground. Same stamp
+     file-thumbs.js applies. */
   function extIconClass(src) {
     var mono = window.TMAFileIcons && window.TMAFileIcons.isMonoIcon
       && window.TMAFileIcons.isMonoIcon(src);

@@ -42,7 +42,14 @@ final class FileRequests
      */
     public const MAX_BYTES_CEILING = 10 * 1024 * 1024;
 
-    /** Named bundles the modal offers instead of making people type extensions. */
+    /**
+     * Named bundles the modal used to offer in place of extensions.
+     *
+     * It now ticks one extension per chip, so nothing new arrives under these
+     * keys. They stay because links issued while the chips were bundles stored
+     * "documents", and narrowing the list would quietly change what an already
+     * sent link accepts. New restrictions belong on the chip list, not here.
+     */
     public const TYPE_GROUPS = [
         'documents' => ['pdf', 'doc', 'docx', 'rtf', 'odt', 'txt', 'md'],
         'spreadsheets' => ['xls', 'xlsx', 'ods', 'csv'],

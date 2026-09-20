@@ -160,10 +160,10 @@ class FileRequestTest extends TestCase
     public function test_the_modal_may_ask_for_single_extensions(): void
     {
         $user = $this->staff();
-        $this->create($user, ['allowedExtensions' => ['pdf', 'docx', 'odt']]);
+        $this->create($user, ['allowedExtensions' => ['pdf', 'docx', 'csv']]);
 
         $request = FileRequest::firstOrFail();
-        $this->assertSame(['pdf', 'docx', 'odt'], $request->allowed_extensions);
+        $this->assertSame(['pdf', 'docx', 'csv'], $request->allowed_extensions);
 
         $this->upload($request->token, UploadedFile::fake()->create('scan.pdf', 8, 'application/pdf'))
             ->assertStatus(201);
