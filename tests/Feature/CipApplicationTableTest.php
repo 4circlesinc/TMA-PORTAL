@@ -242,23 +242,44 @@ class CipApplicationTableTest extends TestCase
         }
 
         $this->actingAs($staff);
+        $five = $this->countQueries('/portal/cip/applications');
+
+        // Twice the applications, twice the people. A per-row family count or
+        // a per-row provider lookup would show up here as a doubling.
+        foreach (range(1, 5) as $i) {
+            $this->application($staff, $provider, 3, true);
+        }
+
+        $ten = $this->countQueries('/portal/cip/applications');
+
+        $this->assertSame(
+            $five,
+            $ten,
+            "The table must not scale its queries with its rows: {$five} queries for five "
+            ."applications, {$ten} for ten.",
+        );
+    }
+
+    /**
+     * Queries one request costs, with the cache warm.
+     *
+     * The first request of a test warms portal settings and permission reads,
+     * so a cold count carries a handful of one-off queries that say nothing
+     * about the page. Asking twice and measuring the second is what makes two
+     * counts comparable.
+     */
+    private function countQueries(string $url): int
+    {
+        $this->getJson($url)->assertOk();
+
+        DB::flushQueryLog();
         DB::enableQueryLog();
-        $this->getJson('/portal/cip/applications')->assertOk();
+        $this->getJson($url)->assertOk();
         $count = count(DB::getQueryLog());
         DB::disableQueryLog();
+        DB::flushQueryLog();
 
-        // Five applications of six people each. A per-row family count or a
-        // per-row provider lookup would put this in the dozens. The budget
-        // includes one grouped read for the application thread (section 24), the
-        // same shape as the document-comment unread query, and one more for
-        // the checklist tally primed across the page ({@see Review::primeTally}),
-        // which is the fixed price of NOT counting documents once per row.
-        //
-        // 23 -> 24 for the family eager-load on an unfiltered page. This page
-        // has no phase, so it can hold post-approval files, and those draw a
-        // row per member; loaded per row that was one document read and one
-        // file read per person. One fixed grouped read buys both back.
-        $this->assertLessThan(24, $count, 'The table must not scale its queries with its rows.');
+        return $count;
     }
 
     public function test_it_lists_applications_not_clients(): void
@@ -409,12 +430,20 @@ class CipApplicationTableTest extends TestCase
         }
 
         $this->actingAs($staff);
-        DB::enableQueryLog();
-        $this->getJson('/portal/cip/applications?sort=applicant&dir=asc')->assertOk();
-        $count = count(DB::getQueryLog());
-        DB::disableQueryLog();
+        $five = $this->countQueries('/portal/cip/applications?sort=applicant&dir=asc');
 
-        $this->assertLessThan(24, $count, 'A sorted listing must not scale its queries with its rows.');
+        foreach (range(1, 5) as $i) {
+            $this->application($staff, $provider, 3, true);
+        }
+
+        $ten = $this->countQueries('/portal/cip/applications?sort=applicant&dir=asc');
+
+        $this->assertSame(
+            $five,
+            $ten,
+            "A sorted listing must not scale its queries with its rows: {$five} queries for "
+            ."five applications, {$ten} for ten.",
+        );
     }
 
     public function test_it_sorts_status_in_lifecycle_order(): void

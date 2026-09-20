@@ -464,7 +464,7 @@ class WorkflowHubTest extends TestCase
         $this->actingAs($ada)->get('/workflows/updates')->assertOk();
     }
 
-    public function test_updates_required_is_scoped_to_applications_the_officer_holds(): void
+    public function test_updates_required_covers_the_whole_firm_book_not_only_files_an_officer_holds(): void
     {
         $ada = $this->user('Administrator', 'ada@example.com', 'Ada Admin');
         $ben = $this->user('Reviewing Officer', 'ben@example.com', 'Ben Staff');
@@ -485,10 +485,14 @@ class WorkflowHubTest extends TestCase
             ->assertJsonCount(1, 'items')
             ->assertJsonPath('counts.updates', 1);
 
+        // Cara holds nothing on this file and still sees it: since ad33de43
+        // the firm book is shared, and the Updates list reads through
+        // ApplicationScope like every other CIP surface. Assignment names who
+        // is working the file, it does not hide it from a colleague.
         $this->actingAs($cara)->getJson('/portal/files/workflows/updates')
             ->assertOk()
-            ->assertJsonCount(0, 'items')
-            ->assertJsonPath('counts.updates', 0);
+            ->assertJsonCount(1, 'items')
+            ->assertJsonPath('counts.updates', 1);
     }
 
     public function test_a_provider_contact_sees_updates_required_on_their_firm_files(): void

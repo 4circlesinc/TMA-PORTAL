@@ -520,14 +520,16 @@ class DashboardWorkTest extends TestCase
             'mentions' => [$ben->id],
         ])->assertCreated();
 
+        // Ben's own comment and request, plus the CIP slot awaiting an
+        // update: an officer reads the whole firm book (ad33de43), so a
+        // colleague's outstanding slot is on his strip too.
         $feed = $this->actingAs($ben)->getJson('/portal/dashboard/work?want=feed')
             ->assertOk()
-            ->assertJsonCount(2, 'feed')
+            ->assertJsonCount(3, 'feed')
             ->json('feed');
 
-        $this->assertSame(['comment', 'request'], array_column($feed, 'kind'));
+        $this->assertSame(['comment', 'request', 'update'], array_column($feed, 'kind'));
         $this->assertSame('Please look at this', $feed[0]['item']['body']);
-        $this->assertNotContains('update', array_column($feed, 'kind'));
     }
 
     /**

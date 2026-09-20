@@ -944,11 +944,22 @@ class CipIntakeTest extends TestCase
 
         // Correcting a date of birth they typed a moment ago is filling in
         // the form, not amending a filing.
-        $this->edit($contact, $draft, $this->edits($provider, [
+        //
+        // Through the autosave door the wizard actually uses. POSTing the
+        // application itself files the draft (3109a819) and rightly asks for
+        // the whole document set, which is a different question from whether
+        // the identity guard lets a provider contact type their own answers.
+        Intake::update($draft->fresh('people'), $contact, $this->edits($provider, [
             'firstName' => 'Vernon',
             'lastName' => 'Francis',
             'dateOfBirth' => '1991-02-02',
-        ]))->assertOk();
+        ]));
+
+        $main = $draft->fresh('people')->people
+            ->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+
+        $this->assertSame('1991-02-02', $main->date_of_birth->toDateString());
+        $this->assertSame(Status::DRAFT, $draft->fresh()->status);
     }
 
     /**

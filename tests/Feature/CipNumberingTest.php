@@ -122,9 +122,16 @@ class CipNumberingTest extends TestCase
         $this->assertSame("PRI-AO-{$yy}-00001", $other->internal_number);
         $this->assertSame("GAL{$yy}-00002", $nextFamily->internal_number);
 
+        // Until the Unit issues one, the AO reference is what every screen
+        // shows.
         $this->assertSame($first->internal_number, $first->displayNumber());
-        $first->forceFill(['cip_number' => '10T1GSHOULDNOT'])->save();
-        $this->assertSame("GAL-AO-{$yy}-00001", $first->fresh()->displayNumber());
+
+        // Once it does, that number leads (32a22235): the Unit gives an
+        // Add-On a CIP number of its own, and the AO reference stays on the
+        // row for audit.
+        $first->forceFill(['cip_number' => '10T1G12662P'])->save();
+        $this->assertSame('10T1G12662P', $first->fresh()->displayNumber());
+        $this->assertSame("GAL-AO-{$yy}-00001", $first->fresh()->internal_number);
     }
 
     public function test_reserving_an_add_on_number_does_not_advance_the_family_sequence(): void

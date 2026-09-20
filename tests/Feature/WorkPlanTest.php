@@ -7,6 +7,16 @@ use App\Models\WorkDay;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
+/**
+ * What survives of the work plan.
+ *
+ * The calendar's work-plan editor and its /portal/calendar/work-plan routes
+ * were removed in 62063858, because WorkDay::resolveFor defaulted every
+ * weekday to "In office" and stamped a chip on days the person was not
+ * there. WorkDay itself stayed: the presence board, messaging and /me still
+ * read it. These are the tests for that remainder; the three that drove the
+ * deleted endpoints went with them.
+ */
 class WorkPlanTest extends TestCase
 {
     use RefreshDatabase;
@@ -19,58 +29,6 @@ class WorkPlanTest extends TestCase
             'email_verified_at' => now(),
             'profile_completed_at' => now(),
             'onboarding_completed_at' => now(),
-        ]);
-    }
-
-    public function test_weekday_defaults_to_office_hours(): void
-    {
-        $user = $this->staff();
-
-        // Pick a known Monday.
-        $monday = '2026-07-20';
-
-        $this->actingAs($user)
-            ->getJson('/portal/calendar/work-plan/'.$monday)
-            ->assertOk()
-            ->assertJsonPath('day.status', 'in_office')
-            ->assertJsonPath('day.startsAt', '08:00')
-            ->assertJsonPath('day.endsAt', '17:00')
-            ->assertJsonPath('day.isDefault', true);
-    }
-
-    public function test_weekend_defaults_to_not_working(): void
-    {
-        $user = $this->staff();
-
-        $this->actingAs($user)
-            ->getJson('/portal/calendar/work-plan/2026-07-25')
-            ->assertOk()
-            ->assertJsonPath('day.status', 'not_working')
-            ->assertJsonPath('day.isDefault', true);
-    }
-
-    public function test_user_can_upsert_work_plan(): void
-    {
-        $user = $this->staff();
-
-        $this->actingAs($user)
-            ->putJson('/portal/calendar/work-plan', [
-                'date' => '2026-07-21',
-                'status' => 'remote',
-                'startsAt' => '09:00',
-                'endsAt' => '15:00',
-                'location' => 'Home',
-                'note' => 'Deep work',
-                'visibility' => 'colleagues',
-            ])
-            ->assertOk()
-            ->assertJsonPath('day.status', 'remote')
-            ->assertJsonPath('day.location', 'Home');
-
-        $this->assertDatabaseHas('work_days', [
-            'user_id' => $user->id,
-            'status' => 'remote',
-            'location' => 'Home',
         ]);
     }
 

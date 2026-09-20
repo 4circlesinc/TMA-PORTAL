@@ -134,7 +134,10 @@ class LiveTableUpdatesTest extends TestCase
                 'first_name' => 'Live',
                 'last_name' => 'Target',
                 'email' => $target->email,
-                'account_type' => Role::COMPLIANCE_OFFICER,
+                // The officer type as it is spelt now. "Compliance Officer"
+                // was joined into it and is no longer a type the Users page
+                // issues, so patching it is a 422 rather than a change.
+                'account_type' => Role::REVIEWING_OFFICER,
             ])->assertSuccessful();
         });
 

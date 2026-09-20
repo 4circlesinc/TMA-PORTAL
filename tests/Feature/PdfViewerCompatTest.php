@@ -137,15 +137,22 @@ class PdfViewerCompatTest extends TestCase
         $this->assertStringNotContainsString("export * from './pdf.min.mjs'", $loader);
     }
 
-    public function test_the_file_viewer_loads_the_whole_pdf(): void
+    public function test_the_file_viewer_reads_the_whole_pdf_on_desktop_and_ranges_in_the_browser(): void
     {
         // Range+disableAutoFetch is how the desktop app shows "1 / 1" on a
-        // white sheet: the trailer arrives, the page bytes do not.
+        // white sheet: the trailer arrives, the page bytes do not. So the
+        // desktop app reads the file end to end.
+        //
+        // The browser must not: reading whole files there was the slowest
+        // thing on the site, 1.4 MB average through a PHP worker held for
+        // the whole transfer while the rest of the page queued behind it
+        // (9fc965a8). Page one arrives by Range; the rest follows the
+        // reader.
         $files = $this->js('js/portal-files.js');
         $lightbox = $this->js('js/portal-lightbox.js');
 
-        $this->assertStringContainsString('pdfDocument(url, { complete: true })', $files);
-        $this->assertStringContainsString('loadPdfDocument(url, { complete: true })', $lightbox);
+        $this->assertStringContainsString('window.TMADesktop.isDesktop', $files);
+        $this->assertStringContainsString('pdfDocument(url, { complete: desktop })', $files);
         $this->assertStringContainsString('if (complete) return wholeFilePdf', $lightbox);
     }
 

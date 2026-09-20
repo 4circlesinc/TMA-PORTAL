@@ -116,9 +116,13 @@ class CipAdminPermissionsTest extends TestCase
         $this->patchJson('/portal/cip/distribution', ['extraEmails' => ['unit@example.com']])
             ->assertForbidden();
 
+        // Forbidden, not missing: since ad33de43 an officer reads the whole
+        // firm book, so the file is plainly there. What they may not do is
+        // hand it out, and refusing that is not a reason to pretend the
+        // application does not exist.
         $this->postJson('/portal/cip/applications/'.$application->uuid.'/assignments', [
             'userId' => $officer->id,
-        ])->assertNotFound();
+        ])->assertForbidden();
 
         $this->assertFalse(Role::canViewSettingsPage($officer, 'cip-admin'));
         $this->assertFalse(Role::canViewSettingsPage($officer, 'cip-distribution'));

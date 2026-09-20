@@ -289,8 +289,10 @@ final class Hub
      * Feedback and Comments lists file comments, and that page defaults to
      * threads that name you. An officer requesting a clearer scan is not in
      * that set, so the reason never appeared there. This list is the
-     * checklist question instead: which slots on files you hold still need
-     * an update, and why. Access is {@see ApplicationScope}, the same door
+     * checklist question instead: which slots still need an update, and why.
+     * It follows the firm book rather than the reader's own queue — an
+     * officer sees a colleague's outstanding slots the same way they can
+     * open the application itself. Access is {@see ApplicationScope}, the same door
      * as the application itself, not {@see FileAccess} — a reviewer who can
      * open the file in CIP can see the reason here even when the library
      * folder is assigned to someone else.
