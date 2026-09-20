@@ -7,6 +7,8 @@ use App\Models\FileItem;
 use App\Models\FileRequest;
 use App\Models\Folder;
 use App\Models\User;
+use App\Support\Files\FileRequests;
+use App\Support\Files\FileType;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Mail;
@@ -191,6 +193,53 @@ class FileRequestTest extends TestCase
         $this->upload($token, UploadedFile::fake()->create('two.pdf', 4, 'application/pdf'))->assertStatus(422);
 
         $this->assertSame(1, FileItem::count());
+    }
+
+    /**
+     * An explicit count is enforced per upload, not just the one-file case.
+     *
+     * `allowMultiple: false` collapses to a limit of one and is covered above;
+     * this is the ordinary "I want three documents" link, which is the setting
+     * the dialog actually offers.
+     */
+    public function test_an_explicit_file_count_is_enforced_on_the_public_link(): void
+    {
+        $user = $this->staff();
+        $this->create($user, ['maxFiles' => 3]);
+
+        $token = FileRequest::firstOrFail()->token;
+
+        foreach (['a.pdf', 'b.pdf', 'c.pdf'] as $name) {
+            $this->upload($token, UploadedFile::fake()->create($name, 4, 'application/pdf'))->assertCreated();
+        }
+
+        // The fourth is refused however it is sent — the count is re-read from
+        // the record on every upload, never taken from the page.
+        $this->upload($token, UploadedFile::fake()->create('d.pdf', 4, 'application/pdf'))->assertStatus(422);
+
+        $this->assertSame(3, FileItem::count());
+    }
+
+    /**
+     * The per-file ceiling is the requester's number or the library's,
+     * whichever is smaller — a link cannot be made more permissive than the
+     * vault itself by posting a larger one.
+     */
+    public function test_a_requester_cannot_raise_the_limits_past_the_ceilings(): void
+    {
+        $user = $this->staff();
+
+        // Past MAX_FILES_CEILING is refused at creation.
+        $this->actingAs($user)->postJson('/portal/files/requests', [
+            'title' => 'Everything you have',
+            'maxFiles' => FileRequests::MAX_FILES_CEILING + 1,
+        ])->assertStatus(422);
+
+        // A size past the vault's own ceiling is clamped down to it, not honoured.
+        $this->create($user, ['maxBytes' => FileType::MAX_BYTES * 4]);
+        $request = FileRequest::firstOrFail();
+
+        $this->assertSame(FileType::MAX_BYTES, FileRequests::maxBytes($request));
     }
 
     public function test_an_expired_link_is_closed_to_both_the_page_and_the_upload(): void
