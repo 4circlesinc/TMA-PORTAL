@@ -8,7 +8,6 @@ use App\Models\FileRequest;
 use App\Support\Files\ClientDocuments;
 use App\Support\Files\FileAccess;
 use App\Support\Files\FileRequests;
-use App\Support\Files\FileType;
 use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
 use App\Support\Presence\LastSeen;
@@ -50,7 +49,7 @@ class FileRequestController extends BaseFilesController
             'requests' => $requests->map(fn (FileRequest $r) => FileRequests::present($r))->values(),
             'sizeChoices' => FileRequests::SIZE_CHOICES,
             'typeGroups' => FileRequests::TYPE_GROUPS,
-            'maxBytes' => FileType::MAX_BYTES,
+            'maxBytes' => FileRequests::MAX_BYTES_CEILING,
         ]);
     }
 

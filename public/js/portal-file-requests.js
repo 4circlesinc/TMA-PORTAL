@@ -26,28 +26,31 @@
   var GB = 1024 * 1024 * 1024;
   var MB = 1024 * 1024;
 
+  /* Matches FileRequests::MAX_BYTES_CEILING. A request with no stored maximum
+     still lands here, so "no maximum" is never announced as unbounded. */
+  var MAX_BYTES_CEILING = 10 * MB;
+
   /* Mirrors App\Support\Files\FileRequests::TYPE_GROUPS. The server owns the
      real list; these are the labels and the order they are offered in. */
   var TYPE_GROUPS = [
-    { key: 'documents', label: 'Documents', hint: 'PDF, Word, text' },
-    { key: 'spreadsheets', label: 'Spreadsheets', hint: 'Excel, CSV' },
-    { key: 'presentations', label: 'Presentations', hint: 'PowerPoint' },
-    { key: 'images', label: 'Images', hint: 'JPG, PNG, HEIC' },
-    { key: 'archives', label: 'Archives', hint: 'ZIP, RAR' },
+    { key: 'documents', label: 'PDF, Word, ODF text' },
+    { key: 'spreadsheets', label: 'Excel, ODF sheets, CSV' },
+    { key: 'presentations', label: 'PowerPoint, ODF slides' },
+    { key: 'images', label: 'Photos' },
+    { key: 'archives', label: 'ZIP archives' },
   ];
 
+  /* Both choices are small on purpose, see App\Support\Files\FileRequests,
+     which refuses anything above the larger one whatever is asked for. */
   var SIZE_CHOICES = [
+    { value: 5 * MB, label: '5 MB' },
     { value: 10 * MB, label: '10 MB' },
-    { value: 25 * MB, label: '25 MB' },
-    { value: 100 * MB, label: '100 MB' },
-    { value: 500 * MB, label: '500 MB' },
-    { value: 0, label: 'No limit (up to 2 GB)' },
   ];
 
   function humanSize(bytes) {
-    if (!bytes) return '2 GB';
-    if (bytes >= GB) return (bytes / GB).toFixed(bytes % GB ? 1 : 0) + ' GB';
-    return Math.round(bytes / MB) + ' MB';
+    var n = Math.min(bytes || MAX_BYTES_CEILING, MAX_BYTES_CEILING);
+    if (n >= GB) return (n / GB).toFixed(n % GB ? 1 : 0) + ' GB';
+    return Math.round(n / MB) + ' MB';
   }
 
   function copyText(text) {
@@ -108,7 +111,7 @@
       recipientEmail: '',
       recipientName: '',
       groups: {},
-      maxBytes: 100 * MB,
+      maxBytes: MAX_BYTES_CEILING,
       maxFiles: 20,
       allowMultiple: true,
       password: '',

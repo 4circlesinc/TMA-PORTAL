@@ -235,11 +235,17 @@ class FileRequestTest extends TestCase
             'maxFiles' => FileRequests::MAX_FILES_CEILING + 1,
         ])->assertStatus(422);
 
-        // A size past the vault's own ceiling is clamped down to it, not honoured.
-        $this->create($user, ['maxBytes' => FileType::MAX_BYTES * 4]);
+        // A size past the request ceiling is clamped down to it, not honoured.
+        $this->create($user, ['maxBytes' => FileType::MAX_BYTES]);
         $request = FileRequest::firstOrFail();
 
-        $this->assertSame(FileType::MAX_BYTES, FileRequests::maxBytes($request));
+        $this->assertSame(FileRequests::MAX_BYTES_CEILING, FileRequests::maxBytes($request));
+
+        // And a link created with no maximum at all still stops at the ceiling,
+        // rather than falling back to what a signed-in upload may weigh.
+        $request->max_bytes = null;
+
+        $this->assertSame(FileRequests::MAX_BYTES_CEILING, FileRequests::maxBytes($request));
     }
 
     public function test_an_expired_link_is_closed_to_both_the_page_and_the_upload(): void

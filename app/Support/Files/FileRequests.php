@@ -29,11 +29,18 @@ final class FileRequests
 {
     /** Per-file ceiling offered in the modal, in bytes. */
     public const SIZE_CHOICES = [
+        5 * 1024 * 1024,
         10 * 1024 * 1024,
-        25 * 1024 * 1024,
-        100 * 1024 * 1024,
-        500 * 1024 * 1024,
     ];
+
+    /**
+     * The most a stranger may send through a request link, whatever was asked
+     * for. A request link is the one door an unauthenticated visitor can push
+     * bytes through, and every byte is scanned before it lands; a small cap
+     * keeps that door narrow. It is deliberately far below FileType::MAX_BYTES,
+     * which governs uploads from people who have already signed in.
+     */
+    public const MAX_BYTES_CEILING = 10 * 1024 * 1024;
 
     /** Named bundles the modal offers instead of making people type extensions. */
     public const TYPE_GROUPS = [
@@ -114,7 +121,7 @@ final class FileRequests
         return $out === [] ? null : $out;
     }
 
-    /** Cap the per-file size at something the library would accept anyway. */
+    /** Cap the per-file size at what a request link is allowed to accept. */
     public static function normalizeMaxBytes(mixed $bytes): ?int
     {
         $n = (int) $bytes;
@@ -123,13 +130,20 @@ final class FileRequests
             return null;
         }
 
-        return min($n, FileType::MAX_BYTES);
+        return min($n, self::MAX_BYTES_CEILING);
     }
 
-    /** The effective per-file ceiling, whether or not one was chosen. */
+    /**
+     * The effective per-file ceiling, whether or not one was chosen.
+     *
+     * An older request created before the ceiling dropped may still carry a
+     * larger max_bytes, so the min() is applied on read as well as on write.
+     */
     public static function maxBytes(FileRequest $request): int
     {
-        return $request->max_bytes ? min((int) $request->max_bytes, FileType::MAX_BYTES) : FileType::MAX_BYTES;
+        return $request->max_bytes
+            ? min((int) $request->max_bytes, self::MAX_BYTES_CEILING)
+            : self::MAX_BYTES_CEILING;
     }
 
     public static function setPassword(FileRequest $request, ?string $password): void
