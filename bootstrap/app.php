@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\ApplySecurityPolicyHeaders;
+use App\Http\Middleware\EnforceGeoAccess;
 use App\Http\Middleware\EnforceSessionExpiry;
 use App\Http\Middleware\EnforceTwoFactor;
 use App\Http\Middleware\EnsureAccountApproved;
@@ -47,10 +48,17 @@ return Application::configure(basePath: dirname(__DIR__))
             'onboarded' => EnsureOnboarded::class,
         ]);
 
-        // First in the group so its clock wraps every other middleware, the
-        // controller and the render: what the browser sees as server time.
+        // Its clock wraps every other middleware, the controller and the
+        // render: what the browser sees as server time.
         $middleware->prependToGroup('web', ReportServerTiming::class);
+
         $middleware->prependToGroup('web', VerifyTurnstile::class);
+
+        // Prepended last so it runs FIRST, ahead of Turnstile and the timer:
+        // a request from a refused country should cost the app a policy read
+        // and nothing more — no session, no queries, no Turnstile round trip
+        // to Cloudflare on behalf of somebody being turned away anyway.
+        $middleware->prependToGroup('web', EnforceGeoAccess::class);
         $middleware->appendToGroup('web', ApplySecurityPolicyHeaders::class);
         $middleware->appendToGroup('web', IssueTrustedDeviceCookie::class);
         $middleware->appendToGroup('web', EnsureStaySignedInChoice::class);

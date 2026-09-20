@@ -3657,7 +3657,8 @@
               return '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">' + t2[1] + '</span>' +
                 ui().toggle(p.autoRemediation[t2[0]], 'data-secpol-toggle="' + t2[0] + '"' + (admin ? '' : ' disabled'), t2[1]) + '</div>';
             }).join('')) +
-          (admin ? saveBtn('data-secpol-save') : '');
+          (admin ? saveBtn('data-secpol-save') : '') +
+          geoPanel(all, admin);
 
         function save() {
           secApi('PUT', '/admin/security-policies/security', p).then(function (res) {
@@ -3665,6 +3666,8 @@
             else res.json().then(function (j) { ui().toast((j && j.message) || 'Could not save'); }).catch(function () {});
           });
         }
+
+        wireGeo(root, all, admin);
 
         root.querySelectorAll('[data-secpol-toggle]').forEach(function (t2) {
           t2.addEventListener('change', function () {
@@ -3680,6 +3683,72 @@
       }).catch(function () { root.innerHTML = '<p class="tma-portal-note">Couldn\'t load the security policy. Refresh to try again.</p>'; });
     },
   };
+
+  /* ── Geographic restrictions (real: /admin/security-policies/geo) ───
+     Countries are typed as ISO codes rather than picked from a 250-entry
+     menu: the firm blocks or admits a handful, and a searchable country
+     picker is a bigger component than the setting deserves. The server
+     normalises and validates whatever arrives, and refuses a list that would
+     lock the administrator out. */
+
+  function geoPanel(all, admin) {
+    var g = all.geoPolicy || { mode: 'off', countries: [], blockUnknown: false, message: '' };
+    var mine = all.yourCountry;
+    var modes = [
+      { value: 'off', label: 'Off — record only, do not block' },
+      { value: 'allow', label: 'Allow list — only these countries' },
+      { value: 'block', label: 'Block list — everywhere except these' }
+    ];
+
+    return '<h3 class="tma-portal-section__title">Geographic restrictions</h3>' +
+      ui().section('',
+        '<p class="tma-portal-note">Where the portal may be reached from. Applies to sign-in and to public links, and is recorded either way. It is one control beside sign-in and permissions, not a replacement for them; a VPN defeats it.</p>' +
+        (mine ? '<p class="tma-portal-note">You are signing in from <strong>' + ui().esc(mine) + '</strong>. A list that excludes you is refused.</p>'
+              : '<p class="tma-portal-note">Your country is not being reported, so this request did not come through Cloudflare. Restrictions have no effect on traffic like this.</p>') +
+        ui().field('Mode', ui().select(modes, g.mode, 'data-geo-mode' + (admin ? '' : ' disabled'), 'Mode')) +
+        ui().field('Countries (two-letter codes, comma separated)',
+          ui().textarea({
+            attrs: 'data-geo-countries' + (admin ? '' : ' disabled'),
+            placeholder: 'LC, CA, US',
+            value: (g.countries || []).join(', '),
+            ariaLabel: 'Countries'
+          })) +
+        '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Block requests with no country</span>' +
+        ui().toggle(g.blockUnknown, 'data-geo-unknown' + (admin ? '' : ' disabled'), 'Block requests with no country') + '</div>' +
+        '<p class="tma-portal-note">Strict. Only applies to public internet traffic — the health check and anything inside the network are never refused on this, or a Cloudflare outage would take the portal down with it.</p>' +
+        ui().field('Message shown to a refused visitor',
+          ui().input({
+            attrs: 'data-geo-message' + (admin ? '' : ' disabled'),
+            value: g.message || '',
+            ariaLabel: 'Message shown to a refused visitor'
+          })) +
+        (admin ? saveBtn('data-geo-save') : ''));
+  }
+
+  function wireGeo(root, all, admin) {
+    if (!admin) return;
+    var btnEl = root.querySelector('[data-geo-save]');
+    if (!btnEl) return;
+
+    btnEl.addEventListener('click', function () {
+      var raw = (root.querySelector('[data-geo-countries]').value || '');
+      var codes = raw.split(/[\s,;]+/).filter(function (c) { return c; });
+
+      secApi('PUT', '/admin/security-policies/geo', {
+        mode: root.querySelector('[data-geo-mode]').value,
+        countries: codes,
+        blockUnknown: root.querySelector('[data-geo-unknown]').checked,
+        message: (root.querySelector('[data-geo-message]').value || '').trim()
+      }).then(function (res) {
+        if (res.ok) { ui().toast('Geographic restrictions saved'); return; }
+        // The server refuses a list that would lock this administrator out,
+        // and says which country is missing. Show that, not "Could not save".
+        res.json().then(function (j) {
+          ui().toast((j && j.message) || 'Could not save');
+        }).catch(function () { ui().toast('Could not save'); });
+      });
+    });
+  }
 
   /* ── Security Alert Settings (real: /admin/security-policies) ───────
      Only the two events the portal actually detects are offered. The screen

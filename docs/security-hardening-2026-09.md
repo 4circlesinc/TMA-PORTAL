@@ -143,10 +143,61 @@ something outside the codebase.
   and none of them contain secrets, so this is tidiness rather than exposure
   — but it depends on that one nginx rule, and a deploy behind a different
   server would not have it.
-- **Geo-blocking** is detection-only: country is recorded and unusual
-  movement is flagged, but nothing blocks by country. Building configurable
-  geographic restrictions is a product decision, not a bug fix, and was not
-  in this pass.
+- **Geo-blocking** now exists (see below) but ships **off**. It does nothing
+  until an administrator configures it, which is deliberate: a country list
+  is the firm's legal decision, not a deploy's.
 - **Cloudflare WAF, DDoS, bot and rate-limit rules** are dashboard
   configuration, not code. Turnstile is wired; the rest is not verifiable
   from here.
+
+## Geographic restrictions (added 20 Sep 2026)
+
+Configured at Account settings › Security › Geographic restrictions, by
+administrators only. Nothing is hard-coded: mode, countries, strictness and
+the refusal message are all stored policy.
+
+- **Mode** — Off (record only), Allow list (only these countries), or Block
+  list (everywhere except these).
+- **Countries** — ISO 3166-1 alpha-2 codes, normalised and validated server
+  side; junk and duplicates are dropped rather than stored.
+- **Block requests with no country** — the strict setting. See below.
+- **Message** — what a refused visitor reads. The page says nothing else: not
+  the country seen, not the policy, not whether an account exists.
+
+Enforced by `EnforceGeoAccess`, first in the `web` group so a refused request
+costs a policy read and nothing else — no session, no queries, and no
+Turnstile round trip on behalf of somebody being turned away. It covers
+every door, including the public ones (`/r/{token}`, signing links), which is
+what "reaching the portal" was asked to mean.
+
+### The rails, and why they are not negotiable
+
+The country comes from Cloudflare's `CF-IPCountry`. That header exists only
+when the request actually went through the edge, so "no country" means either
+a visitor Cloudflare could not place **or** a request that never touched
+Cloudflare at all. On this database every one of the 38 localhost sign-ins
+has no country, and none of them are foreign traffic.
+
+So `blockUnknown` bites only where a country could genuinely have been
+reported — a public, routable client address. Loopback and private ranges are
+unknown-but-allowed. Without that rule, turning the setting on would take the
+portal down the first time Cloudflare was bypassed or misconfigured, and the
+control meant to protect the portal would be the thing that broke it.
+
+Three more rails, all tested:
+
+- `/up` is never geo-blocked. Refusing the health check makes the platform
+  recycle a container that is working.
+- An **empty allow list** is treated as unconfigured rather than "refuse the
+  world", which would include whoever is trying to populate it.
+- The save endpoint **refuses a policy that would lock the administrator
+  out** — an allow list without their own country, or a block list containing
+  it — and says which code is missing. Without this the only way back would
+  be editing `portal_settings` by hand.
+
+### What it is not
+
+One control beside authentication, MFA and the capability matrix. A VPN
+defeats it in seconds. It is useful as compliance evidence and as friction,
+and it is not what keeps an attacker out. If geographic restriction is a
+KYC/AML requirement, this is one input to that control, never the whole of it.

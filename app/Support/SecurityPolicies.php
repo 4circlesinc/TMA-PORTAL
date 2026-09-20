@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\DB;
  */
 class SecurityPolicies
 {
-    public const SECTIONS = ['sign-in', 'security', 'device', 'alerts'];
+    public const SECTIONS = ['sign-in', 'security', 'device', 'alerts', 'geo'];
 
     /**
      * Account types an administrator may require an authenticator for from
@@ -89,6 +89,25 @@ class SecurityPolicies
          * new laptop would page them, and an alert nobody reads is worse than
          * no alert. Alternate contacts default to none.
          */
+        /*
+         * Geographic restrictions. Off by default and deliberately so: a
+         * country list is a legal/compliance decision for the firm, not
+         * something a deploy should start enforcing on its own.
+         *
+         * `mode` is 'off', 'allow' (only these countries may in) or 'block'
+         * (these may not). `countries` is a list of ISO 3166-1 alpha-2 codes.
+         *
+         * `blockUnknown` refuses a request whose country the edge did not
+         * report. It is the strict setting the firm asked for, and it is the
+         * one that can strand people, so {@see \App\Support\Security\GeoAccess}
+         * never applies it where there is no edge to report a country at all.
+         */
+        'geo' => [
+            'mode' => 'off',
+            'countries' => [],
+            'blockUnknown' => false,
+            'message' => 'The portal is not available from your location.',
+        ],
         'alerts' => [
             'newDevice' => ['admins' => false],
             'failedSignIns' => ['admins' => true],

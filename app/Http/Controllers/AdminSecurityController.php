@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Security\Detectors;
+use App\Support\Security\GeoAccess;
 use App\Support\Security\SecurityAlertPolicy;
 use App\Support\SecurityPolicies;
 use Illuminate\Http\JsonResponse;
@@ -35,6 +37,11 @@ class AdminSecurityController extends Controller
             'securityPolicy' => SecurityPolicies::get('security'),
             'deviceSecurity' => SecurityPolicies::get('device'),
             'alertSettings' => SecurityPolicies::get('alerts'),
+            'geoPolicy' => GeoAccess::policy(),
+            // The country the edge reports for the administrator reading this
+            // screen. Without it they are choosing codes blind and cannot tell
+            // whether an allow-list they are about to save includes them.
+            'yourCountry' => Detectors::countryFromRequest(),
             // What each alert means and when it fires, from the server. The
             // screen used to describe four events the portal cannot detect;
             // sourcing the copy here is what keeps it honest about the two it
@@ -105,11 +112,52 @@ class AdminSecurityController extends Controller
                 'selfDestruct' => ['required', Rule::in(['Never', 'After 1 day offline', 'After 7 days offline', 'After 30 days offline'])],
             ]),
             'alerts' => $this->alertRules($request),
+            'geo' => $this->geoRules($request),
         };
 
         SecurityPolicies::put($section, $value, $request->user()->id);
 
         return response()->json(['status' => 'ok']);
+    }
+
+    /**
+     * Geographic restrictions.
+     *
+     * The one rule enforced here rather than left to the administrator: an
+     * allow-list that does not include the country they are sitting in is
+     * refused. Saving it would log them out on the next request and leave
+     * nobody able to reach the screen that undoes it — the only way back
+     * would be editing the database by hand.
+     *
+     * @return array<string, mixed>
+     */
+    private function geoRules(Request $request): array
+    {
+        $data = $request->validate([
+            'mode' => ['required', Rule::in([GeoAccess::MODE_OFF, GeoAccess::MODE_ALLOW, GeoAccess::MODE_BLOCK])],
+            'countries' => ['present', 'array', 'max:250'],
+            'countries.*' => ['string', 'size:2', 'regex:/^[A-Za-z]{2}$/'],
+            'blockUnknown' => ['required', 'boolean'],
+            'message' => ['present', 'string', 'max:300'],
+        ]);
+
+        $countries = GeoAccess::normalizeCountries($data['countries']);
+        $mine = Detectors::countryFromRequest();
+
+        if ($data['mode'] === GeoAccess::MODE_ALLOW && $countries !== [] && $mine !== null && ! in_array($mine, $countries, true)) {
+            abort(422, 'Add '.$mine.' to the allowed list first — saving this would lock you out of the portal.');
+        }
+
+        if ($data['mode'] === GeoAccess::MODE_BLOCK && $mine !== null && in_array($mine, $countries, true)) {
+            abort(422, 'That list blocks '.$mine.', which is where you are signing in from.');
+        }
+
+        return [
+            'mode' => $data['mode'],
+            'countries' => $countries,
+            'blockUnknown' => (bool) $data['blockUnknown'],
+            'message' => trim($data['message']) ?: 'The portal is not available from your location.',
+        ];
     }
 
     /**
