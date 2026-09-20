@@ -23,6 +23,7 @@ use App\Support\Cip\Assignments;
 use App\Support\Clients\ClientDirectory;
 use App\Support\Companies\CompanyMembers;
 use App\Support\DeviceName;
+use App\Support\Security\IpLocation;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Invitations\Invitations;
 use App\Support\Mail\Deliveries;
@@ -505,6 +506,14 @@ class AdminUsersController extends Controller
                 'sortAt' => $event->created_at->getTimestamp(),
                 'ip' => $event->ip,
                 'device' => DeviceName::describe((string) $event->user_agent),
+                'location' => IpLocation::describe([
+                    'city' => $event->city,
+                    'region' => $event->region,
+                    'country' => $event->country,
+                ]),
+                'postal' => $event->postal,
+                'latitude' => $event->latitude,
+                'longitude' => $event->longitude,
             ]);
 
         $events = $authEvents;

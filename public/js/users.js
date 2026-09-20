@@ -222,7 +222,10 @@
         // activity_logs rows carry the sentence they were written with;
         // auth_events rows are a bare event name that ACT_LABELS translates.
         var title = ev.label || ACT_LABELS[ev.event] || ev.event;
-        var meta = [at, ev.ip, ev.device, ev.detail].filter(function (x) { return x; });
+        // Location only when the lookup resolved one: rows recorded before
+        // it existed, and requests that never reached the edge, have none.
+        var place = ev.location ? ev.location + (ev.postal ? ' ' + ev.postal : '') : '';
+        var meta = [at, ev.ip, ev.device, place, ev.detail].filter(function (x) { return x; });
         var failed = ev.status === 'failure'
           || ev.event === 'login_failed' || ev.event === 'lockout' || ev.event === 'social_failed';
         return '<div class="tma-rup__event"' + (failed ? ' data-failed' : '') + '>' +

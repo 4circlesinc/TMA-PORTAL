@@ -6,7 +6,10 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['user_id', 'event', 'detail', 'ip', 'user_agent', 'country', 'created_at'])]
+#[Fillable([
+    'user_id', 'event', 'detail', 'ip', 'user_agent', 'country', 'created_at',
+    'city', 'region', 'postal', 'latitude', 'longitude',
+])]
 class AuthEvent extends Model
 {
     public $timestamps = false;
@@ -15,6 +18,8 @@ class AuthEvent extends Model
     {
         return [
             'created_at' => 'datetime',
+            'latitude' => 'float',
+            'longitude' => 'float',
         ];
     }
 

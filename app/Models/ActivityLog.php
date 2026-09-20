@@ -18,6 +18,7 @@ use Illuminate\Support\Str;
     'uid', 'actor_id', 'activity_type', 'module', 'action', 'description',
     'subject_type', 'subject_id', 'client_id', 'old_values', 'new_values',
     'ip_address', 'user_agent', 'status', 'metadata',
+    'country', 'city', 'region', 'postal', 'latitude', 'longitude',
 ])]
 class ActivityLog extends Model
 {
@@ -31,6 +32,10 @@ class ActivityLog extends Model
             'old_values' => 'array',
             'new_values' => 'array',
             'metadata' => 'array',
+            // Decimal columns come back as strings otherwise, and a map needs
+            // numbers.
+            'latitude' => 'float',
+            'longitude' => 'float',
         ];
     }
 

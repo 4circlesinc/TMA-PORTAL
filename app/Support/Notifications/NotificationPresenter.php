@@ -7,6 +7,7 @@ use App\Models\MailSenderPhoto;
 use App\Models\Notification;
 use App\Models\User;
 use App\Support\DeviceName;
+use App\Support\Security\IpLocation;
 
 /**
  * Turns notification and activity rows into the JSON shapes the portal front-end
@@ -73,6 +74,17 @@ final class NotificationPresenter
             'subjectId' => $log->subject_id,
             'ip' => $includeSensitive ? $log->ip_address : null,
             'device' => $includeSensitive && $log->user_agent ? DeviceName::describe($log->user_agent) : null,
+            // Where the address sits, to the nearest city. Sensitive for the
+            // same reason the IP is: it says where a colleague was, so only
+            // viewers already trusted with the address see it.
+            'location' => $includeSensitive ? IpLocation::describe([
+                'city' => $log->city,
+                'region' => $log->region,
+                'country' => $log->country,
+            ]) : null,
+            'postal' => $includeSensitive ? $log->postal : null,
+            'latitude' => $includeSensitive ? $log->latitude : null,
+            'longitude' => $includeSensitive ? $log->longitude : null,
             'oldValues' => $includeSensitive ? $log->old_values : null,
             'newValues' => $includeSensitive ? $log->new_values : null,
             'createdAt' => $log->created_at?->toIso8601String(),

@@ -35827,8 +35827,18 @@ span.tma-dash__messages-profile-avatar {
   background: var(--color-hover);
 }
 .tma-dash__actlog-detail-line { display: flex; gap: var(--space-8); font-size: var(--text-size-12); }
-.tma-dash__actlog-detail-line > span:first-child { flex: 0 0 96px; color: var(--color-text-secondary); }
+.tma-dash__actlog-detail-line > span:first-child { flex: 0 0 110px; color: var(--color-text-secondary); }
 .tma-dash__actlog-detail-line code { font-family: ui-monospace, monospace; font-size: 11px; word-break: break-all; color: var(--color-black); }
+.tma-dash__actlog-detail-line a { color: var(--color-primary); text-decoration: underline; }
+
+/* Where the sign-in came from, under the sentence it belongs to. min-width:0
+   lets the truncation inside actually bite inside the grid cell. */
+.tma-dash__actlog-desc { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tma-dash__actlog-where {
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 
 .tma-dash[data-theme="dark"] .tma-dash__actlog-filter-panel,
 :root[data-theme="dark"] .tma-dash__actlog-filter-panel,

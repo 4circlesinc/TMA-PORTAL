@@ -10,6 +10,7 @@ use App\Support\Mail\Postcards;
 use App\Support\Messaging\PresenceService;
 use App\Support\Notifications\Notifier;
 use App\Support\Security\Detectors;
+use App\Support\Security\IpLocation;
 use App\Support\Security\SecurityAlertPolicy;
 use App\Support\Security\SecurityAudit;
 use Illuminate\Auth\Events\Failed;
@@ -29,6 +30,12 @@ use Throwable;
  */
 class RecordAuthEvent
 {
+    /**
+     * How long after a sign-in a second Login event is treated as the same
+     * sign-in rather than a new one. See handleLogin().
+     */
+    private const DUPLICATE_LOGIN_SECONDS = 10;
+
     public function handleRegistered(Registered $event): void
     {
         $this->record('registered', $event->user->getAuthIdentifier());
@@ -87,6 +94,20 @@ class RecordAuthEvent
         $ip = request()->ip();
         $ua = (string) request()->userAgent();
 
+        // One sign-in, one row. Laravel fires Login again whenever the guard
+        // re-authenticates the same person in the same request cycle — the
+        // remember-me re-login in StaySignedIn::applyRemember, and again on
+        // the two-factor path — which wrote the same sign-in two or three
+        // times and filled the audit trail with sign-ins nobody performed.
+        //
+        // Deliberately not a unique index: a genuine second sign-in seconds
+        // later (another tab, another device) is legitimate and must still be
+        // recorded. Only a repeat of the same address and agent inside the
+        // window is treated as an echo of the one we already wrote.
+        if ($this->alreadyRecordedLogin($userId, $ip, $ua)) {
+            return;
+        }
+
         // A device is "known" if this user has signed in from this IP or agent
         // before. Notify only when a returning user signs in somewhere new — a
         // first-ever login is expected, and every-login alerts are just noise.
@@ -117,6 +138,14 @@ class RecordAuthEvent
                 'type' => 'security.login',
                 'description' => $event->user->name.' signed in',
                 'subject' => $event->user,
+                // record() resolved this a moment ago and the lookup is
+                // cached per address, so this reuses the answer rather than
+                // asking again.
+                'location' => IpLocation::lookup($ip) ?? [
+                    'country' => Detectors::countryFromRequest(),
+                    'city' => null, 'region' => null, 'postal' => null,
+                    'latitude' => null, 'longitude' => null,
+                ],
             ]);
         }
 
@@ -212,14 +241,48 @@ class RecordAuthEvent
         $this->record('lockout', null);
     }
 
+    /**
+     * Has this exact sign-in already been written moments ago?
+     *
+     * The re-login paths all land in the same request or the one right after
+     * it, so a few seconds is wide enough to catch every echo and far too
+     * narrow to swallow a real second sign-in.
+     */
+    private function alreadyRecordedLogin(int|string|null $userId, ?string $ip, string $ua): bool
+    {
+        if ($userId === null) {
+            return false;
+        }
+
+        return AuthEvent::where('user_id', $userId)
+            ->where('event', 'login')
+            ->where('created_at', '>=', now()->subSeconds(self::DUPLICATE_LOGIN_SECONDS))
+            ->where(fn ($q) => $q->where('ip', $ip)->orWhereNull('ip'))
+            ->where(fn ($q) => $q->where('user_agent', $ua)->orWhereNull('user_agent'))
+            ->exists();
+    }
+
     private function record(string $event, int|string|null $userId): void
     {
+        $ip = request()->ip();
+
+        // The edge header is authoritative for country when it is there; the
+        // lookup fills in the rest, and the country too when there is no edge
+        // in front of us. Both may be null, and a null location is recorded
+        // as null rather than guessed at.
+        $location = IpLocation::lookup($ip);
+
         AuthEvent::create([
             'user_id' => $userId,
             'event' => $event,
-            'ip' => request()->ip(),
+            'ip' => $ip,
             'user_agent' => (string) request()->userAgent(),
-            'country' => Detectors::countryFromRequest(),
+            'country' => Detectors::countryFromRequest() ?? ($location['country'] ?? null),
+            'city' => $location['city'] ?? null,
+            'region' => $location['region'] ?? null,
+            'postal' => $location['postal'] ?? null,
+            'latitude' => $location['latitude'] ?? null,
+            'longitude' => $location['longitude'] ?? null,
             'created_at' => now(),
         ]);
     }

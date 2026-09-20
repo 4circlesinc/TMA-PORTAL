@@ -5,6 +5,7 @@ namespace App\Support\Activity;
 use App\Models\ActivityLog;
 use App\Models\Client;
 use App\Models\User;
+use App\Support\Security\IpLocation;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Request;
@@ -73,6 +74,9 @@ final class ActivityLogger
      *     metadata:    array|null      (redacted)
      *     ip:          string|null     defaults from the request
      *     user_agent:  string|null     defaults from the request
+     *     location:    bool|array|null true resolves city/region from the ip;
+     *                                  an array supplies an already-resolved
+     *                                  one (see App\Support\Security\IpLocation)
      * }
      */
     public static function log(array $attrs): ?ActivityLog
@@ -101,8 +105,24 @@ final class ActivityLogger
         }
 
         $subject = $attrs['subject'] ?? null;
+        $ip = $attrs['ip'] ?? self::currentIp();
+
+        // Opt-in, not automatic. Resolving a location costs a cached lookup
+        // and the trail records file downloads and field edits by the
+        // hundred; paying it on every row to learn the same office address
+        // over and over would be waste. Sign-ins ask for it, where the
+        // question "where was this from" is the point of the row.
+        $location = ($attrs['location'] ?? false) === true
+            ? IpLocation::lookup($ip)
+            : (($attrs['location'] ?? null) ?: null);
 
         return ActivityLog::create([
+            'country' => (is_array($location) ? $location['country'] : null) ?? null,
+            'city' => is_array($location) ? $location['city'] : null,
+            'region' => is_array($location) ? $location['region'] : null,
+            'postal' => is_array($location) ? $location['postal'] : null,
+            'latitude' => is_array($location) ? $location['latitude'] : null,
+            'longitude' => is_array($location) ? $location['longitude'] : null,
             'actor_id' => self::idOf($attrs['actor'] ?? null),
             'activity_type' => $type,
             'module' => $attrs['module'] ?? self::moduleFor($type),
@@ -113,7 +133,7 @@ final class ActivityLogger
             'client_id' => self::idOf($attrs['client'] ?? null),
             'old_values' => self::redact($attrs['old'] ?? null),
             'new_values' => self::redact($attrs['new'] ?? null),
-            'ip_address' => $attrs['ip'] ?? self::currentIp(),
+            'ip_address' => $ip,
             'user_agent' => mb_substr((string) ($attrs['user_agent'] ?? self::currentUserAgent() ?? ''), 0, 255) ?: null,
             'status' => $attrs['status'] ?? ActivityLog::STATUS_SUCCESS,
             'metadata' => self::redact($attrs['metadata'] ?? null),

@@ -230,3 +230,60 @@ Treat VPN blocking as policy enforcement against ordinary users and as
 evidence that the firm applies the control. It is not a security boundary,
 and it does not reduce what authentication, MFA and the permission model are
 doing.
+
+---
+
+## The same key also gives you sign-in locations
+
+Added 20 Sep 2026. The audit trail records where each sign-in came from —
+city, region, postal code and the coordinates of that city — beside the
+address and device it already recorded.
+
+This costs no extra configuration and no second subscription. Both providers
+above return location in the very same response the VPN check already asks
+for, so setting `IP_REPUTATION_DRIVER` and `IP_REPUTATION_KEY` for step 3
+turns on both at once. Without a key you get the country alone, from
+Cloudflare's `CF-IPCountry` header, and only when the request actually
+reached the edge.
+
+Where it shows up, for administrators only:
+
+- **Dashboard → Activity** — location, device and address on each row, with
+  the postal code and a map link when you expand it.
+- **Admin → Users → a user → Portal access** — the same, per person.
+
+Nobody else sees any of it. Location is withheld from exactly the people the
+IP address is already withheld from, because where a colleague was sitting is
+as personal as the address they were sitting behind.
+
+### What "location" actually means here
+
+An IP resolves to where the ISP routes the block. That is a city-level guess:
+right for a home line in a city, wrong by tens of kilometres in a rural area,
+and wrong by a country for a corporate VPN or a mobile carrier that backhauls
+to one gateway.
+
+There is no street address, and no service sells one. The coordinates are the
+centroid of a city or region, never a building — the map link is there to
+answer "roughly where", and it must never be read as a fix on a person's
+door. Treat the whole field as "this sign-in came from roughly here", which
+is what an audit trail needs: enough to notice that an account that always
+signs in from Toronto has suddenly signed in from Lagos.
+
+### When it is blank
+
+A dash means the lookup could not resolve that address, and nothing is
+invented to fill the gap:
+
+- no `IP_REPUTATION_KEY` set (the common case — country only);
+- a sign-in from localhost, a private range, or the console;
+- the provider was down, slow, or did not know the address;
+- the row predates 20 Sep 2026. Existing history was deliberately not
+  backfilled: resolving thousands of old addresses would spend the lookup
+  budget to place sign-ins that are months stale. New sign-ins fill in from
+  the moment a key is set.
+
+The lookup is cached per address for `IP_REPUTATION_CACHE_HOURS` (24 by
+default) and shares that budget with the VPN check, so a staff member signing
+in all day costs roughly one lookup. Like the VPN check, every failure path
+is silent: a sign-in never waits on, or fails because of, a geo API.

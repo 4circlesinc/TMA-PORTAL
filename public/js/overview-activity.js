@@ -200,16 +200,29 @@
     function row(item) {
       var tone = toneFor(item);
       var icon = MODULE_ICON[item.module] || 'Notification';
-      var canExpand = state.isAdmin && (item.ip || item.device || (item.oldValues) || (item.newValues) || item.status !== 'success');
+      var canExpand = state.isAdmin && (item.ip || item.device || item.location || (item.oldValues) || (item.newValues) || item.status !== 'success');
       var open = !!state.expanded[item.id];
       var statusDot = item.status && item.status !== 'success'
         ? '<span class="tma-dash__actlog-status tma-dash__actlog-status--' + esc(item.status) + '">' + esc(item.status) + '</span>' : '';
 
       var desc = item.description || item.title || item.type || 'Activity';
+      // Where and from what, on the row itself. These are the questions an
+      // administrator opens this tab to answer, and burying them behind an
+      // expander meant every row had to be clicked to read the one thing it
+      // was being read for. Serialised for administrators only, so everyone
+      // else's rows carry nothing extra.
+      var where = [item.location, item.device, item.ip].filter(function (x) { return x; }).join(' · ');
+      var whereLine = where
+        ? '<span class="tma-dash__actlog-where" title="' + esc(where) + '">' + esc(where) + '</span>'
+        : '';
+
       var main = '<div class="tma-dash__ctr tma-dash__ctr--body tma-dash__ctr--overview tma-dash__actlog-row" data-actlog-row="' + esc(item.id) + '" role="row">' +
         '<div class="tma-dash__cc tma-dash__cc--activity">' +
           '<span class="tma-dash__overview-file-icon tma-dash__overview-file-icon--' + tone + '" aria-hidden="true"><img src="' + ICON + esc(icon) + '.svg" alt="" width="16" height="16"></span>' +
-          '<span class="tma-dash__cc-truncate" title="' + esc(desc) + '">' + esc(desc) + '</span>' + statusDot +
+          '<span class="tma-dash__actlog-desc">' +
+            '<span class="tma-dash__cc-truncate" title="' + esc(desc) + '">' + esc(desc) + '</span>' +
+            whereLine +
+          '</span>' + statusDot +
         '</div>' +
         userCell(item) +
         '<div class="tma-dash__cc tma-dash__cc--module"><span class="tma-dash__actlog-tag">' + esc(MODULE_LABEL[item.module] || item.module) + '</span></div>' +
@@ -233,11 +246,25 @@
         diff = '<div class="tma-dash__actlog-detail-line"><span>Changes</span><code>' +
           esc(JSON.stringify({ before: item.oldValues || null, after: item.newValues || null })) + '</code></div>';
       }
+      // Coordinates are a city centroid, not a doorstep, so they are offered
+      // as a map link rather than printed as if they were a fix on a person.
+      var coords = (item.latitude != null && item.longitude != null)
+        ? '<div class="tma-dash__actlog-detail-line"><span>Approximate location</span>' +
+          '<a href="https://www.openstreetmap.org/?mlat=' + encodeURIComponent(item.latitude) +
+          '&mlon=' + encodeURIComponent(item.longitude) + '#map=11/' +
+          encodeURIComponent(item.latitude) + '/' + encodeURIComponent(item.longitude) + '"' +
+          ' target="_blank" rel="noopener noreferrer">' +
+          esc(item.latitude + ', ' + item.longitude) + '</a></div>'
+        : '';
+
       return '<div class="tma-dash__actlog-detail" role="row">' +
         line('Type', item.type) +
         line('Status', item.status) +
         line('IP address', item.ip) +
         line('Device', item.device) +
+        line('Location', item.location) +
+        line('Postal code', item.postal) +
+        coords +
         (item.client ? line('Client', item.client.name) : '') +
         diff +
       '</div>';
