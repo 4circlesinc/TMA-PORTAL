@@ -20,6 +20,19 @@ class SecurityPolicies
      * Account types an administrator may require an authenticator for from
      * Sign-in policy. Canonical Role values only (aliases resolve at check time).
      *
+     * The four types the firm actually issues. Role::EMPLOYEE is deliberately
+     * absent: it is parked, never granted by the Users page or an invitation
+     * (see AdminUsersController::ACCOUNT_TYPES), so offering it here was a
+     * fifth checkbox for a type nobody can be.
+     *
+     * This list is also the filter in {@see normalizeAuthenticatorAccountTypes()},
+     * so dropping a type here stops any *stored* requirement for it applying
+     * as well. That is the intended reading — a parked type cannot be required
+     * — but it means removing a LIVE type from this list would quietly switch
+     * off its requirement rather than merely hide the checkbox. There are no
+     * Employee accounts for it to affect; if one is ever created, the type has
+     * been unparked and belongs back in this list.
+     *
      * @var list<string>
      */
     public const AUTHENTICATOR_ACCOUNT_TYPES = [
@@ -27,7 +40,6 @@ class SecurityPolicies
         Role::REVIEWING_OFFICER,
         Role::SERVICE_PROVIDER_ADMIN,
         Role::CLIENT,
-        Role::EMPLOYEE,
     ];
 
     /**
@@ -40,7 +52,6 @@ class SecurityPolicies
         Role::REVIEWING_OFFICER => 'CRO / Reviewing officers',
         Role::SERVICE_PROVIDER_ADMIN => 'Service Provider admins',
         Role::CLIENT => 'Clients',
-        Role::EMPLOYEE => 'Employees',
     ];
 
     public const DEFAULTS = [

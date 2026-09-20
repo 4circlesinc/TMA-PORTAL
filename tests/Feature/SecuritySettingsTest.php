@@ -5,8 +5,10 @@ namespace Tests\Feature;
 use App\Mail\Postcard;
 use App\Models\Notification;
 use App\Models\User;
+use App\Support\Access\Role;
 use App\Support\Mail\Postcards;
 use App\Support\Security\SecurityAlerts;
+use App\Support\SecurityPolicies;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -37,6 +39,33 @@ class SecuritySettingsTest extends TestCase
     }
 
     // ------------------------------------------------------------ phone number
+
+    /**
+     * The picker offers the account types the firm can actually issue.
+     *
+     * Role::EMPLOYEE is parked — never granted by the Users page or an
+     * invitation — so a fifth checkbox for it was asking an administrator to
+     * reason about a type nobody can be. This also guards the reverse: the
+     * same list filters stored values, so a type silently reappearing here
+     * would start applying a requirement nobody set.
+     */
+    public function test_the_authenticator_picker_offers_only_issuable_account_types(): void
+    {
+        $this->assertSame([
+            Role::ADMINISTRATOR,
+            Role::REVIEWING_OFFICER,
+            Role::SERVICE_PROVIDER_ADMIN,
+            Role::CLIENT,
+        ], SecurityPolicies::AUTHENTICATOR_ACCOUNT_TYPES);
+
+        $this->assertNotContains(Role::EMPLOYEE, SecurityPolicies::AUTHENTICATOR_ACCOUNT_TYPES);
+
+        // Every offered type has a label; an unlabelled one falls back to the
+        // raw stored string, which is not English.
+        foreach (SecurityPolicies::AUTHENTICATOR_ACCOUNT_TYPES as $type) {
+            $this->assertArrayHasKey($type, SecurityPolicies::AUTHENTICATOR_ACCOUNT_TYPE_LABELS);
+        }
+    }
 
     public function test_data_includes_the_phone_number_and_alert_switches(): void
     {
