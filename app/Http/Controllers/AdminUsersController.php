@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ActivityLog;
 use App\Models\AuthEvent;
 use App\Models\CipApplicationAssignment;
 use App\Models\Client;
@@ -480,23 +481,88 @@ class AdminUsersController extends Controller
     {
         abort_unless($this->isAdmin($request->user()), 403, 'Only administrators can view user activity.');
 
-        // 'login' = sign-in history; 'app' = account & application events.
+        // Two trails feed this panel and they record different things:
+        // auth_events is every sign-in attempt and every administrative act on
+        // the account, activity_logs is everything the person then did in the
+        // portal. 'login' wants only the first; 'app' wants the rest of
+        // auth_events merged with activity_logs, newest first, so an
+        // administrator reading the tab sees one continuous history rather
+        // than half of it.
         $loginEvents = ['login', 'logout', 'login_failed', 'lockout', 'social_failed'];
+        $type = $request->query('type') === 'login' ? 'login' : 'app';
 
-        $events = AuthEvent::where('user_id', $user->id)
-            ->when($request->query('type') === 'login', fn ($q) => $q->whereIn('event', $loginEvents))
-            ->when($request->query('type') === 'app', fn ($q) => $q->whereNotIn('event', $loginEvents))
+        $authEvents = AuthEvent::where('user_id', $user->id)
+            ->when($type === 'login', fn ($q) => $q->whereIn('event', $loginEvents))
+            ->when($type === 'app', fn ($q) => $q->whereNotIn('event', $loginEvents))
             ->orderByDesc('created_at')
-            ->limit(100)
+            ->limit(200)
             ->get()
             ->map(fn (AuthEvent $event) => [
                 'event' => $event->event,
                 'detail' => $event->detail,
                 'when' => $event->created_at->diffForHumans(),
                 'atIso' => $event->created_at->toIso8601String(),
+                'sortAt' => $event->created_at->getTimestamp(),
                 'ip' => $event->ip,
                 'device' => DeviceName::describe((string) $event->user_agent),
             ]);
+
+        $events = $authEvents;
+
+        if ($type === 'app') {
+            // Their own actions, plus what administrators did *to* the account
+            // (subject = this user), which is the half an audit reader needs
+            // most and the half auth_events records least.
+            // The auth listener writes sign-ins to BOTH tables, so without this
+            // every login would appear twice here and crowd the application
+            // activity out of its own tab. The Logins tab is where they belong.
+            $logs = ActivityLog::query()
+                ->whereNotIn('activity_type', ['security.login', 'security.logout'])
+                ->where(fn ($q) => $q->where('actor_id', $user->id)
+                    ->orWhere(fn ($s) => $s->where('subject_type', User::class)->where('subject_id', $user->id)))
+                ->latestFirst()
+                ->limit(200)
+                ->get()
+                ->map(fn (ActivityLog $log) => [
+                    'event' => $log->activity_type,
+                    // The sentence ActivityLogger already wrote is better than
+                    // anything a label map could reconstruct from the type.
+                    'label' => $log->description,
+                    'module' => $log->module,
+                    'status' => $log->status,
+                    'detail' => null,
+                    'when' => $log->created_at->diffForHumans(),
+                    'atIso' => $log->created_at->toIso8601String(),
+                    'sortAt' => $log->created_at->getTimestamp(),
+                    'ip' => $log->ip_address,
+                    'device' => DeviceName::describe((string) $log->user_agent),
+                ]);
+
+            // Several administrative acts write to both tables in the same
+            // request, and the activity_logs sentence is the better of the two
+            // because it names the administrator who acted. Where a pair is
+            // recorded for the same second, keep that one and drop the thinner
+            // auth_events label. Matching on the type as well as the second
+            // means an unrelated event that merely shares a timestamp stays.
+            $pairs = [
+                'account_approved' => 'account.approved',
+                'account_denied' => 'account.denied',
+                'two_factor_reset' => 'account.two_factor_reset',
+                'two_factor_required' => 'account.two_factor_required',
+                'two_factor_requirement_cleared' => 'account.two_factor_requirement_cleared',
+            ];
+            $covered = $logs->map(fn (array $l) => $l['event'].'@'.$l['sortAt'])->flip();
+            $events = $authEvents
+                ->reject(function (array $e) use ($pairs, $covered) {
+                    $twin = $pairs[$e['event']] ?? null;
+
+                    return $twin !== null && isset($covered[$twin.'@'.$e['sortAt']]);
+                })
+                ->concat($logs)
+                ->sortByDesc('sortAt')
+                ->values()
+                ->take(200);
+        }
 
         $lastLogin = AuthEvent::where('user_id', $user->id)
             ->where('event', 'login')
@@ -506,6 +572,14 @@ class AdminUsersController extends Controller
             ->where('event', 'logout')
             ->orderByDesc('created_at')
             ->first();
+        $lastFailed = AuthEvent::where('user_id', $user->id)
+            ->where('event', 'login_failed')
+            ->orderByDesc('created_at')
+            ->first();
+        $failedSince = AuthEvent::where('user_id', $user->id)
+            ->where('event', 'login_failed')
+            ->where('created_at', '>=', now()->subDays(30))
+            ->count();
 
         return response()->json([
             'joined' => $user->created_at->diffForHumans(),
@@ -514,7 +588,9 @@ class AdminUsersController extends Controller
             'lastLoginIso' => $lastLogin?->created_at->toIso8601String(),
             'lastLogout' => $lastLogout?->created_at->diffForHumans(),
             'lastLogoutIso' => $lastLogout?->created_at->toIso8601String(),
-            'events' => $events,
+            'lastFailedIso' => $lastFailed?->created_at->toIso8601String(),
+            'failedLast30Days' => $failedSince,
+            'events' => $events->values(),
         ]);
     }
 
@@ -747,6 +823,30 @@ class AdminUsersController extends Controller
         ])->save();
 
         $this->record($user->id, 'two_factor_reset');
+
+        // Clearing somebody's second factor is a security decision by a named
+        // administrator, so it belongs in the audit trail and not only in the
+        // account's own sign-in history.
+        ActivityLogger::log([
+            'actor' => $request->user(),
+            'type' => 'account.two_factor_reset',
+            'module' => 'account',
+            'description' => $request->user()->name.' reset the authenticator app on '.$user->name.'’s account',
+            'subject' => $user,
+        ]);
+
+        // They are now one password away from the account, so tell them it
+        // happened; a silent reset looks identical to a compromise.
+        Notifier::send([
+            'user' => $user,
+            'actor' => $request->user(),
+            'type' => 'security.two_factor_changed',
+            'title' => 'Your authenticator app was reset',
+            'message' => 'An administrator reset two-factor authentication on your account. Set it up again from Settings.',
+            'action_url' => '/account-settings?settings-page=security',
+        ]);
+
+        Live::staffAnd(Live::USERS, [$user->id]);
 
         return response()->json(['status' => 'ok']);
     }

@@ -1150,6 +1150,9 @@
 .tma-rup__event { display: flex; flex-direction: column; gap: 2px; padding: var(--space-6) 0; border-bottom: 0.5px solid var(--color-border-soft); font-size: var(--text-size-12); line-height: var(--text-lh-12); }
 .tma-rup__event strong { color: var(--color-text-primary); font-weight: var(--font-weight-semibold); }
 .tma-rup__event span { color: var(--color-text-secondary); }
+/* A refused sign-in has to be findable by eye in a long trail; the title
+   carries the colour because the timestamp line is shared with every row. */
+.tma-rup__event[data-failed] strong { color: var(--color-danger, #d92d20); }
 .tma-rup__footer { display: flex; justify-content: flex-end; gap: var(--space-8); padding: var(--space-12) var(--space-16); border-top: 0.5px solid var(--color-border-soft); background: var(--color-white); }
 .tma-dash[data-theme="dark"] .tma-rup__footer,
 :root[data-theme="dark"] .tma-rup__footer { background: var(--color-bg-card); }

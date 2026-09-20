@@ -158,6 +158,14 @@
         paint();
         return;
       }
+      var actionBtn = e.target.closest('[data-user-info-action]');
+      if (actionBtn) {
+        e.preventDefault();
+        if (session && session.onAction) {
+          session.onAction(actionBtn.getAttribute('data-user-info-action'), session.row, session.index);
+        }
+        return;
+      }
       if (e.target.closest('[data-user-info-save]')) {
         e.preventDefault();
         save();
@@ -307,6 +315,35 @@
     }).join('');
   }
 
+  /* A read-only line with buttons on it: the value states where the account
+     stands, the buttons are what an administrator can do about it. Used for
+     the authenticator controls, which are decisions rather than form fields —
+     they take effect on click, not on Save. */
+  function extraActionFieldsHtml(row, session) {
+    if (!session || !session.extraActionFields) return '';
+    var fields = typeof session.extraActionFields === 'function'
+      ? session.extraActionFields(row)
+      : session.extraActionFields;
+    if (!fields || !fields.length) return '';
+    return fields.map(function (field) {
+      var buttons = (field.actions || []).map(function (action) {
+        return '<button type="button" class="tma-user-info-panel__text-btn tma-user-info-panel__field-action"' +
+          ' data-user-info-action="' + escapeHtml(action.id) + '"' +
+          (action.danger ? ' data-danger' : '') +
+          (action.busy ? ' disabled' : '') + '>' +
+          escapeHtml(action.busy ? action.busyLabel || action.label : action.label) + '</button>';
+      }).join('');
+      return '<div class="tma-user-info-panel__field tma-user-info-panel__field--muted">' +
+        '<p class="tma-user-info-panel__field-label">' + escapeHtml(field.label) + '</p>' +
+        '<div class="tma-user-info-panel__field-row">' +
+          '<span class="tma-user-info-panel__field-value">' + escapeHtml(field.value || '') + '</span>' +
+          buttons +
+        '</div>' +
+        (field.hint ? '<p class="tma-user-info-panel__field-label">' + escapeHtml(field.hint) + '</p>' : '') +
+      '</div>';
+    }).join('');
+  }
+
   function renderPanel(row, index, rows, session) {
     var labels = fieldLabels(session);
     var entity = (session && session.entityLabel) || 'user';
@@ -366,6 +403,7 @@
       renderField(labels.address, 'address', row.address, session && session.addressOptions ? { select: session.addressOptions } : null) +
       renderField(labels.date, 'date', formatPanelDate(row.date), { readOnly: true, muted: true, icon: 'CalendarBlank16' }) +
       extraReadOnlyFieldsHtml(row, session) +
+      extraActionFieldsHtml(row, session) +
       (session && session.profileFields
         ? renderField('Phone', 'phone', row.phone || '', { leadingIcon: 'phosphor/DeviceMobile', placeholder: '+1 555 123 4567' }) +
           renderField('Role', 'jobTitle', row.jobTitle || '') +
@@ -453,6 +491,7 @@
       readOnlyEmail: !!options.readOnlyEmail,
       extraTabs: options.extraTabs || null,
       extraReadOnlyFields: options.extraReadOnlyFields || null,
+      extraActionFields: options.extraActionFields || null,
       addressOptions: options.addressOptions || null,
       avatarChoices: options.avatarChoices || null,
       profileFields: !!options.profileFields,
@@ -462,6 +501,7 @@
       entityLabel: options.entityLabel || 'user',
       panelLabel: options.panelLabel || 'User information',
       onSave: options.onSave,
+      onAction: options.onAction,
       onDelete: options.onDelete,
       onDuplicate: options.onDuplicate,
       hideDuplicate: !!options.hideDuplicate,

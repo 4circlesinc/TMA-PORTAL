@@ -210,16 +210,24 @@
       if (type === 'login') {
         summary = mutedField('Account created', formatActivityWhen(j.joinedIso || row.joinedIso, j.joined || row.date)) +
           mutedField('Last signed in', formatActivityWhen(j.lastLoginIso || row.lastLoginIso, j.lastLogin || row.lastLogin) || 'Never') +
-          mutedField('Last signed out', formatActivityWhen(j.lastLogoutIso || row.lastLogoutIso, j.lastLogout || row.lastLogout) || 'Never');
+          mutedField('Last signed out', formatActivityWhen(j.lastLogoutIso || row.lastLogoutIso, j.lastLogout || row.lastLogout) || 'Never') +
+          mutedField('Failed attempts (30 days)', String(j.failedLast30Days || 0) +
+            (j.lastFailedIso ? ' · last ' + formatActivityWhen(j.lastFailedIso, '') : ''));
       }
       var empty = type === 'login'
         ? 'No sign-ins yet.'
         : 'No application activity yet - this fills in as they use the portal.';
       var rows = j.events.length ? j.events.map(function (ev) {
         var at = formatActivityWhen(ev.atIso, ev.when);
-        return '<div class="tma-rup__event"><strong>' + escapeHtml(ACT_LABELS[ev.event] || ev.event) + '</strong>' +
-          '<span>' + escapeHtml(at) + (ev.ip ? ' · ' + escapeHtml(ev.ip) : '') + (ev.device ? ' · ' + escapeHtml(ev.device) : '') +
-          (ev.detail ? ' · ' + escapeHtml(ev.detail) : '') + '</span></div>';
+        // activity_logs rows carry the sentence they were written with;
+        // auth_events rows are a bare event name that ACT_LABELS translates.
+        var title = ev.label || ACT_LABELS[ev.event] || ev.event;
+        var meta = [at, ev.ip, ev.device, ev.detail].filter(function (x) { return x; });
+        var failed = ev.status === 'failure'
+          || ev.event === 'login_failed' || ev.event === 'lockout' || ev.event === 'social_failed';
+        return '<div class="tma-rup__event"' + (failed ? ' data-failed' : '') + '>' +
+          '<strong>' + escapeHtml(title) + '</strong>' +
+          '<span>' + escapeHtml(meta.join(' · ')) + '</span></div>';
       }).join('') : '<p class="tma-user-info-panel__field-label">' + empty + '</p>';
       el.innerHTML = summary + '<div>' + rows + '</div>';
     }).catch(function () {
@@ -873,6 +881,42 @@ if (state.filters.user) {
       }).catch(function () { usersToast('That action failed.', false); });
     }
 
+    /* The authenticator verbs, in one place: the row menu, the status menu and
+       the information panel all call these, so the confirmation wording and
+       what happens afterwards can't drift between the three entry points. */
+    function setRequireTwoFactor(row, required, done) {
+      usersApi('POST', '/admin/users/' + row._id + '/require-two-factor', { required: required })
+        .then(function (res) {
+          return res.json().catch(function () { return {}; }).then(function (j) {
+            if (!res.ok) { usersToast((j && j.message) || 'That action failed.', false); if (done) done(false); return; }
+            row._requireTwoFactor = required;
+            row._mustUseAuthenticator = required || row._policyRequiresAuthenticator;
+            usersToast(required
+              ? row.user + ' must now set up an authenticator app'
+              : (row._policyRequiresAuthenticator
+                ? 'Person requirement cleared; Sign-in policy still requires the authenticator for this account type'
+                : 'Authenticator is no longer required for ' + row.user), true);
+            if (done) done(true);
+            loadRealUsers();
+          });
+        })
+        .catch(function () { usersToast('That action failed.', false); if (done) done(false); });
+    }
+
+    function resetTwoFactor(row, done) {
+      usersApi('POST', '/admin/users/' + row._id + '/reset-two-factor')
+        .then(function (res) {
+          return res.json().catch(function () { return {}; }).then(function (j) {
+            if (!res.ok) { usersToast((j && j.message) || 'Could not reset two-factor.', false); if (done) done(false); return; }
+            row._twoFactor = false;
+            usersToast('Authenticator reset for ' + row.user, true);
+            if (done) done(true);
+            loadRealUsers();
+          });
+        })
+        .catch(function () { usersToast('Could not reset two-factor.', false); if (done) done(false); });
+    }
+
     /* ── row context menu ───────────────────────────────
      *
      * Right-click any account: the same verbs the status menu carries, plus
@@ -1093,24 +1137,9 @@ if (state.filters.user) {
           });
         });
       }
-      if (act === 'require-2fa') {
-        statusAction('/admin/users/' + row._id + '/require-two-factor', { required: true },
-          row.user + ' must now set up an authenticator app');
-      }
-      if (act === 'clear-2fa') {
-        statusAction('/admin/users/' + row._id + '/require-two-factor', { required: false },
-          row._policyRequiresAuthenticator
-            ? 'Person requirement cleared; Sign-in policy still requires the authenticator for this account type'
-            : 'Authenticator is no longer required for ' + row.user);
-      }
-      if (act === 'reset-2fa') {
-        usersApi('POST', '/admin/users/' + row._id + '/reset-two-factor').then(function (res) {
-          return res.json().catch(function () { return {}; }).then(function (j) {
-            usersToast(res.ok ? 'Authenticator reset for ' + row.user : ((j && j.message) || 'Could not reset two-factor.'), res.ok);
-            if (res.ok) loadRealUsers();
-          });
-        });
-      }
+      if (act === 'require-2fa') setRequireTwoFactor(row, true);
+      if (act === 'clear-2fa') setRequireTwoFactor(row, false);
+      if (act === 'reset-2fa') resetTwoFactor(row);
       if (act === 'delete') confirmDeleteUser(row);
     }
 
@@ -1185,24 +1214,9 @@ if (state.filters.user) {
         if (kind === 'approve-sp-admin') openServiceProviderPicker(row, { admin: true });
         if (kind === 'suspend') statusAction('/admin/users/' + row._id + '/suspend');
         if (kind === 'reactivate') statusAction('/admin/users/' + row._id + '/reactivate');
-        if (kind === 'require-2fa') {
-          statusAction('/admin/users/' + row._id + '/require-two-factor', { required: true },
-            row.user + ' must now set up an authenticator app');
-        }
-        if (kind === 'clear-2fa') {
-          statusAction('/admin/users/' + row._id + '/require-two-factor', { required: false },
-            row._policyRequiresAuthenticator
-              ? 'Person requirement cleared; Sign-in policy still requires the authenticator for this account type'
-              : 'Authenticator is no longer required for ' + row.user);
-        }
-        if (kind === 'reset-2fa') {
-          usersApi('POST', '/admin/users/' + row._id + '/reset-two-factor').then(function (res) {
-            return res.json().catch(function () { return {}; }).then(function (j) {
-              usersToast(res.ok ? 'Authenticator reset for ' + row.user : ((j && j.message) || 'Could not reset two-factor.'), res.ok);
-              if (res.ok) loadRealUsers();
-            });
-          });
-        }
+        if (kind === 'require-2fa') setRequireTwoFactor(row, true);
+        if (kind === 'clear-2fa') setRequireTwoFactor(row, false);
+        if (kind === 'reset-2fa') resetTwoFactor(row);
         if (kind === 'delete') confirmDeleteUser(row);
         if (kind === 'send-reset') {
           usersApi('POST', '/admin/users/' + row._id + '/send-reset').then(function (res) {
@@ -1552,7 +1566,6 @@ if (state.filters.user) {
         extraReadOnlyFields: state.live ? function (r2) {
           var fields = [
             { label: 'Last signed in', value: r2.lastLogin ? formatActivityWhen(r2.lastLoginIso, r2.lastLogin) : 'Never', icon: 'CalendarBlank16' },
-            { label: 'Two-factor', value: twoFactorLabel(r2) },
           ];
           var firms = serviceProviderNames(r2);
           if (firms || r2.address === 'Service Provider Contact' || r2.address === 'Service Provider admin') {
@@ -1560,6 +1573,41 @@ if (state.filters.user) {
           }
           return fields;
         } : null,
+        /* Two-factor is the one thing here that isn't a form field: it takes
+           effect on click, not on Save, so it renders as a state line with the
+           verbs that apply to that state. An administrator can't require an
+           authenticator they can also reset away in the same breath without
+           seeing which one they're pressing. */
+        extraActionFields: state.live && state.canManage ? function (r2) {
+          var actions = [];
+          if (r2._requireTwoFactor) {
+            actions.push({ id: 'clear-2fa', label: 'Stop requiring' });
+          } else {
+            actions.push({ id: 'require-2fa', label: 'Require' });
+          }
+          if (r2._twoFactor) {
+            actions.push({ id: 'reset-2fa', label: 'Reset', danger: true });
+          }
+          return [{
+            label: 'Authenticator app',
+            value: twoFactorLabel(r2),
+            actions: actions,
+            // Account-type policy can require it even with the per-person
+            // switch off, so say so rather than let "Stop requiring" look broken.
+            hint: r2._policyRequiresAuthenticator && !r2._requireTwoFactor
+              ? 'Required by the sign-in policy for this account type'
+              : null,
+          }];
+        } : null,
+        onAction: function (actionId, targetRow) {
+          function after() {
+            if (!window.TMAUserInfoPanel.isOpen()) return;
+            window.TMAUserInfoPanel.refresh();
+          }
+          if (actionId === 'require-2fa') setRequireTwoFactor(targetRow, true, after);
+          if (actionId === 'clear-2fa') setRequireTwoFactor(targetRow, false, after);
+          if (actionId === 'reset-2fa') resetTwoFactor(targetRow, after);
+        },
         onSave: function (targetRow, index, data) {
           if (state.live) {
             if (data.address === 'Service Provider admin' || data.address === 'Service Provider Contact') {

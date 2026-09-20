@@ -263,6 +263,24 @@
 
 .tma-user-info-panel__text-btn:hover { background: var(--color-hover); }
 
+/* Buttons sitting on a read-only field row (the authenticator controls).
+   They must not stretch with the value beside them, and a destructive one
+   reads as destructive without a second button style. */
+.tma-user-info-panel__field-action {
+  flex: 0 0 auto;
+  background: var(--color-overlay-4);
+  white-space: nowrap;
+}
+
+.tma-user-info-panel__field-action[data-danger] {
+  color: var(--color-danger, #c0392b);
+}
+
+.tma-user-info-panel__field-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .tma-dash__ctr--info-open,
 .tma-dash__uavatar-tile--info-open {
   background: var(--color-hover);
