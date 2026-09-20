@@ -98,13 +98,137 @@ class EnforceTwoFactorTest extends TestCase
         $this->assertJson($response->getContent());
     }
 
-    public function test_a_page_request_still_redirects_to_set_up_two_factor(): void
+    public function test_a_page_request_is_sent_to_the_set_up_screen(): void
     {
         $this->requireMfa(true);
 
         $this->actingAs($this->user())
             ->get('/clients')
-            ->assertRedirect(route('security-settings', ['notice' => 'mfa-required']));
+            ->assertRedirect(route('required-authenticator.show'));
+    }
+
+    /**
+     * Account settings used to be exempt so it could render itself. It is a
+     * portal page like any other, and leaving it open meant everything its
+     * shell offers stayed reachable while the gate was up.
+     */
+    public function test_the_settings_home_is_gated_too(): void
+    {
+        $this->requireMfa(true);
+
+        $this->actingAs($this->user())
+            ->get('/account-settings')
+            ->assertRedirect(route('required-authenticator.show'));
+    }
+
+    /**
+     * These three sit outside the portal route group, so the gate never saw
+     * them: typing the URL walked straight past a requirement the rest of the
+     * portal enforced.
+     */
+    public function test_the_pages_outside_the_portal_group_are_gated(): void
+    {
+        $this->requireMfa(true);
+        $user = $this->user();
+
+        foreach (['/design/mail', '/dev/cbi', '/onboarding'] as $url) {
+            $this->actingAs($user)
+                ->get($url)
+                ->assertRedirect(route('required-authenticator.show'));
+        }
+    }
+
+    public function test_the_set_up_screen_renders_for_someone_who_needs_it(): void
+    {
+        $this->requireMfa(true);
+
+        $this->actingAs($this->user())
+            ->get(route('required-authenticator.show'))
+            ->assertOk()
+            ->assertSee('Set up two-factor authentication');
+    }
+
+    /**
+     * The screen must not trap anyone who has no business on it, or an account
+     * that has just finished setting up would be stuck looking at it.
+     */
+    public function test_the_set_up_screen_turns_away_anyone_who_does_not_need_it(): void
+    {
+        $this->requireMfa(false);
+
+        $this->actingAs($this->user())
+            ->get(route('required-authenticator.show'))
+            ->assertRedirect('/');
+
+        $this->requireMfa(true);
+
+        $this->actingAs($this->user(withTwoFactor: true))
+            ->get(route('required-authenticator.show'))
+            ->assertRedirect('/');
+    }
+
+    public function test_the_json_answer_points_at_the_set_up_screen(): void
+    {
+        $this->requireMfa(true);
+
+        $this->actingAs($this->user())
+            ->getJson('/admin/users')
+            ->assertForbidden()
+            ->assertJsonPath('redirect', route('required-authenticator.show'));
+    }
+
+    /**
+     * The administrator's per-person switch (the Users drawer) must gate the
+     * portal exactly as the firm-wide policy does, with the policy off.
+     */
+    public function test_a_person_marked_required_by_an_admin_is_gated(): void
+    {
+        $this->requireMfa(false);
+
+        $person = User::factory()->create([
+            'status' => 'approved',
+            'account_type' => Role::REVIEWING_OFFICER,
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+            'require_two_factor' => true,
+        ]);
+
+        $this->actingAs($person)
+            ->get('/clients')
+            ->assertRedirect(route('required-authenticator.show'));
+
+        $this->actingAs($person)
+            ->get(route('required-authenticator.show'))
+            ->assertOk();
+    }
+
+    /**
+     * Finishing on this screen has to actually let them in, or the gate is a
+     * dead end. Confirming the code is Fortify's; what matters here is that
+     * the screen wires it up and stops gating afterwards.
+     */
+    public function test_setting_the_authenticator_up_opens_the_portal(): void
+    {
+        $this->requireMfa(true);
+        $user = $this->user();
+
+        $secret = app(\Laravel\Fortify\Actions\EnableTwoFactorAuthentication::class);
+        $secret($user);
+        $user->refresh();
+
+        $code = (new \PragmaRX\Google2FA\Google2FA)->getCurrentOtp(decrypt($user->two_factor_secret));
+
+        $this->actingAs($user)
+            ->withSession(['auth.password_confirmed_at' => time()])
+            ->post(route('required-authenticator.store'), [
+                'app' => 'microsoft',
+                'code' => $code,
+            ])
+            ->assertRedirect('/');
+
+        $this->assertNotNull($user->fresh()->two_factor_confirmed_at);
+        $this->actingAs($user->fresh())->getJson('/admin/users')->assertOk();
     }
 
     public function test_the_shell_can_still_hydrate_itself(): void
@@ -115,13 +239,6 @@ class EnforceTwoFactorTest extends TestCase
         // page they are being sent to. Blocking it strands them on a
         // half-drawn screen with no way to finish setting 2FA up.
         $this->actingAs($this->user())->getJson('/me')->assertOk();
-    }
-
-    public function test_the_settings_home_stays_reachable(): void
-    {
-        $this->requireMfa(true);
-
-        $this->actingAs($this->user())->get('/account-settings')->assertOk();
     }
 
     public function test_a_user_with_two_factor_confirmed_is_unaffected(): void

@@ -109,6 +109,7 @@ use App\Http\Controllers\PreferencesController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfileSetupController;
 use App\Http\Controllers\ReportsController;
+use App\Http\Controllers\RequiredAuthenticatorController;
 use App\Http\Controllers\SecuritySettingsController;
 use App\Http\Controllers\ServiceTeamsController;
 use App\Http\Controllers\Signatures\PublicSigningController;
@@ -1503,7 +1504,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
  * gating it on either would loop. It collects everything profile-setup asks
  * for, which is why a client never sees that screen.
  */
-Route::middleware(['auth', 'verified', 'account.approved'])->group(function () {
+Route::middleware(['auth', 'verified', 'account.approved', 'mfa.enforced'])->group(function () {
     Route::get('/onboarding', [ClientOnboardingController::class, 'index'])->name('onboarding.index');
     Route::get('/onboarding/{step}', [ClientOnboardingController::class, 'show'])
         ->where('step', '[a-z-]+')->name('onboarding.show');
@@ -1512,6 +1513,18 @@ Route::middleware(['auth', 'verified', 'account.approved'])->group(function () {
     Route::post('/onboarding/{step}/back', [ClientOnboardingController::class, 'back'])
         ->where('step', '[a-z-]+')->name('onboarding.back');
     Route::post('/onboarding-complete', [ClientOnboardingController::class, 'complete'])->name('onboarding.complete');
+});
+
+/*
+ * The required-authenticator stop screen. Outside 'mfa.enforced' on purpose —
+ * it is the screen that middleware redirects to, so gating it on itself would
+ * loop. It refuses to render for anyone who does not need it.
+ */
+Route::middleware(['auth', 'verified', 'account.approved'])->group(function () {
+    Route::get('/auth/required-authenticator', [RequiredAuthenticatorController::class, 'show'])
+        ->name('required-authenticator.show');
+    Route::post('/auth/required-authenticator', [RequiredAuthenticatorController::class, 'store'])
+        ->name('required-authenticator.store');
 });
 
 Route::middleware(['auth', 'verified', 'account.approved'])->group(function () {
@@ -1705,7 +1718,7 @@ Route::get('/client-invite/{token}', fn (string $token) => redirect('/invite/'.$
  * local-only /design previews below) so it can actually be signed off on.
  */
 Route::get('/design/mail', [MailPreviewController::class, 'index'])
-    ->middleware(['auth', 'verified', 'account.approved'])
+    ->middleware(['auth', 'verified', 'account.approved', 'mfa.enforced'])
     ->name('design.mail.index');
 
 /*
@@ -1714,7 +1727,7 @@ Route::get('/design/mail', [MailPreviewController::class, 'index'])
  * controller 404s unless FEATURE_CBI is on and the caller is an admin.
  */
 Route::get('/dev/cbi', [CbiController::class, 'page'])
-    ->middleware(['auth', 'verified', 'account.approved'])
+    ->middleware(['auth', 'verified', 'account.approved', 'mfa.enforced'])
     ->name('dev.cbi');
 
 /*
@@ -1736,7 +1749,7 @@ Route::redirect('/two-step-verification', '/auth/two-factor-challenge');
 if (app()->environment('local')) {
     // Read-only database browser (local dev, admin-only, secrets redacted).
     Route::get('/design/db', DevDatabaseController::class)
-        ->middleware(['auth', 'verified', 'account.approved'])
+        ->middleware(['auth', 'verified', 'account.approved', 'mfa.enforced'])
         ->name('dev.database');
 
     Route::view('/demo/avatars', 'demo.avatars');

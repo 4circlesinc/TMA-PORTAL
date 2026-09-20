@@ -241,6 +241,21 @@ body:has(.tma-auth__card--tall) {
   border-color: rgba(0, 0, 0, 0.4);
 }
 
+/* The field is a fixed-height flex row, so a visible label inside it lands on
+   top of the input. These fields are titled by the section heading above them;
+   the label stays for screen readers only. */
+.tma-auth__field-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Related inputs share one rounded block instead of three separate pills. */
 .tma-auth__stack {
   display: flex;
