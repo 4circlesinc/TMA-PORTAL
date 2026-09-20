@@ -190,10 +190,29 @@ class Requirements
      */
     public static function materialise(CipPerson $person): Collection
     {
+        self::settleChecklist($person);
+
+        // Re-read rather than handing back what was just built: the row the
+        // database holds carries the column defaults, a new slot's
+        // `pending_upload` status among them, and the caller is entitled to
+        // the checklist as it actually stands.
+        return $person->documents()->get();
+    }
+
+    /**
+     * Settle the person's checklist against the templates, and say nothing.
+     *
+     * The body of {@see self::materialise()} without its closing re-read, for
+     * callers settling a whole family: opening an application settles every
+     * member, and the list each one returns is discarded. On a file of six
+     * that was six queries paid for nothing.
+     */
+    public static function settleChecklist(CipPerson $person): void
+    {
         $person->loadMissing('application');
 
         if (! self::isOpen($person->application)) {
-            return $person->documents()->get();
+            return;
         }
 
         $phase = $person->application->phase ?? Phase::PRE_APPROVAL;
@@ -229,12 +248,6 @@ class Requirements
                 ->get()
                 ->each(fn (CipDocument $slot) => self::withdraw($slot));
         });
-
-        // Re-read rather than handing back what was just built: the row the
-        // database holds carries the column defaults, a new slot's
-        // `pending_upload` status among them, and the caller is entitled to
-        // the checklist as it actually stands.
-        return $person->documents()->get();
     }
 
     /**
@@ -250,7 +263,10 @@ class Requirements
 
         foreach ($application->people as $person) {
             $person->setRelation('application', $application);
-            self::materialise($person);
+            // Settle the checklist, but do not pay for the re-read:
+            // materialise() hands back the whole list because most callers
+            // want it, and this one throws it away once per person.
+            self::settleChecklist($person);
         }
     }
 

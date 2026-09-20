@@ -2167,8 +2167,25 @@ class CipApplicationController extends Controller
          */
         $presenter ??= self::presenterFor($viewer, [$application]);
 
+        /*
+         * The application every person and every checklist row belongs to is
+         * the one already in hand. Saying so costs nothing and saves a query
+         * each time something asks.
+         *
+         * Package::locksFile reads $slot->application three or four times to
+         * decide whether a row is frozen, and it is asked once per slot. Left
+         * unset, that lazy-loaded the same application row back out of the
+         * database a hundred times on a six-person file.
+         */
         foreach ($application->people as $person) {
             $person->setRelation('application', $application);
+
+            if ($person->relationLoaded('documents')) {
+                foreach ($person->documents as $slot) {
+                    $slot->setRelation('application', $application);
+                    $slot->setRelation('person', $person);
+                }
+            }
         }
 
         $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
@@ -2182,6 +2199,26 @@ class CipApplicationController extends Controller
             ->values();
 
         $phase = $application->phase ?? Phase::PRE_APPROVAL;
+
+        /*
+         * The comment flags and open update reasons for the whole family, in
+         * one pair of lookups.
+         *
+         * These used to be asked inside person(), which reads correctly — one
+         * lookup for that person's checklist rather than one per line — but
+         * person() is called once per member, so a file of six paid five
+         * queries six times over for something two queries answer. The maps
+         * are keyed by file id and document id, so a slot reads its own
+         * entry out of them exactly as it did before.
+         */
+        $slots = $application->people->flatMap(fn (CipPerson $p) => $p->documents);
+        $slotComments = CommentReads::flagsForFiles(
+            $presenter->viewer(),
+            $slots->map(fn ($slot) => $slot->file?->id)->filter()->unique()->values()->all(),
+        );
+        $updateReasons = DocumentComments::latestOpenBodies(
+            $slots->pluck('id')->unique()->values()->all(),
+        );
 
         return [
             'id' => $application->uuid,
@@ -2257,9 +2294,15 @@ class CipApplicationController extends Controller
             'sponsored' => (bool) $application->sponsored,
             'familySize' => $application->familySize(),
             'familyLabel' => $application->familyLabel(),
-            'applicant' => $main ? $this->person($main, $presenter, $phase) : null,
-            'sponsor' => $sponsor ? $this->person($sponsor, $presenter, $phase) : null,
-            'dependents' => $dependents->map(fn (CipPerson $p) => $this->person($p, $presenter, $phase))->all(),
+            'applicant' => $main
+                ? $this->person($main, $presenter, $phase, $slotComments, $updateReasons)
+                : null,
+            'sponsor' => $sponsor
+                ? $this->person($sponsor, $presenter, $phase, $slotComments, $updateReasons)
+                : null,
+            'dependents' => $dependents
+                ->map(fn (CipPerson $p) => $this->person($p, $presenter, $phase, $slotComments, $updateReasons))
+                ->all(),
             // Section 4d's Timeline card on Overview: how far the file has travelled,
             // and, because the steps it has not reached are answered too —
             // how far it has left to go.
@@ -2377,8 +2420,17 @@ class CipApplicationController extends Controller
      * asked for, and a sponsor that described itself differently from an
      * applicant would mean two ways to read the same person.
      */
-    private function person(CipPerson $person, Presenter $presenter, string $applicationPhase): array
-    {
+    /**
+     * @param  array<int, mixed>|null  $slotComments  comment flags by file id, primed for the whole family
+     * @param  array<int, string>|null  $updateReasons  open update reasons by document id
+     */
+    private function person(
+        CipPerson $person,
+        Presenter $presenter,
+        string $applicationPhase,
+        ?array $slotComments = null,
+        ?array $updateReasons = null,
+    ): array {
         $photoFile = $this->photoFileModel($person);
         $phase = $applicationPhase;
         $allowedRequirements = Requirements::forPhase(
@@ -2388,13 +2440,14 @@ class CipApplicationController extends Controller
             $person,
         )->pluck('id')->map(fn ($id) => (int) $id)->all();
 
-        // One lookup for this person's whole checklist rather than one per
-        // line: a main applicant owes a dozen documents.
-        $slotComments = CommentReads::flagsForFiles(
+        // Primed across the family by the caller. A caller that renders one
+        // person on their own still asks here, for this person's whole
+        // checklist rather than one query per line.
+        $slotComments ??= CommentReads::flagsForFiles(
             $presenter->viewer(),
             $person->documents->map(fn ($slot) => $slot->file?->id)->filter()->all()
         );
-        $updateReasons = DocumentComments::latestOpenBodies(
+        $updateReasons ??= DocumentComments::latestOpenBodies(
             $person->documents->pluck('id')->all()
         );
 
@@ -2450,9 +2503,16 @@ class CipApplicationController extends Controller
                 ])
                 ->values()
                 ->map(function ($slot) use ($slotComments, $phase, $presenter, $updateReasons) {
-                    DocumentSlots::reconcile($slot, null, false);
-                    $slot->refresh();
-                    $slot->loadMissing('file');
+                    // Only a slot reconcile actually rewrote needs re-reading.
+                    // refresh() is not free and it is not narrow: it re-SELECTs
+                    // the row and drops every relation already loaded with it,
+                    // so an unconditional one here threw away the eager-loaded
+                    // file and requirement of all seventy-odd rows on a
+                    // six-person file and bought them back one at a time.
+                    if (DocumentSlots::reconcile($slot, null, false)) {
+                        $slot->refresh();
+                        $slot->loadMissing(['file', 'requirement']);
+                    }
                     $status = $slot->displayStatus();
                     $reason = $status === DocumentStatus::UPDATE_REQUIRED
                         ? ($updateReasons[$slot->id] ?? $slot->file?->review_note)
