@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Security\Anonymiser;
+use App\Support\Security\CountryList;
 use App\Support\Security\Detectors;
 use App\Support\Security\GeoAccess;
 use App\Support\Security\SecurityAlertPolicy;
@@ -39,6 +40,9 @@ class AdminSecurityController extends Controller
             'deviceSecurity' => SecurityPolicies::get('device'),
             'alertSettings' => SecurityPolicies::get('alerts'),
             'geoPolicy' => GeoAccess::policy(),
+            // The picker's options, named server-side so the browser never
+            // carries its own copy of the country list to fall out of step.
+            'countryOptions' => CountryList::options(),
             // The country the edge reports for the administrator reading this
             // screen. Without it they are choosing codes blind and cannot tell
             // whether an allow-list they are about to save includes them.

@@ -3719,13 +3719,7 @@
 
     return ui().section('Countries',
         ui().field('Mode', ui().select(modes, g.mode, 'data-geo-mode' + (admin ? '' : ' disabled'), 'Mode')) +
-        ui().field('Countries (two-letter codes)',
-          ui().textarea({
-            attrs: 'data-geo-countries' + (admin ? '' : ' disabled'),
-            placeholder: 'LC, CA, US',
-            value: (g.countries || []).join(', '),
-            ariaLabel: 'Countries'
-          })) +
+        countryPicker(all.countryOptions || [], g.countries || [], admin) +
         '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Block requests with no country</span>' +
         ui().toggle(g.blockUnknown, 'data-geo-unknown' + (admin ? '' : ' disabled'), 'Block requests with no country') + '</div>' +
         ui().field('Message shown when refused',
@@ -3750,14 +3744,90 @@
         { description: 'Detection is a judgement and has no exception list; a corporate VPN can be refused too.' });
   }
 
+  /*
+   * Country picker.
+   *
+   * A checklist, not a free-text field: nobody should have to know that St
+   * Lucia is LC, and a typo in a blocked-countries box is a rule that
+   * silently does nothing. 249 rows need filtering, so a search box sits
+   * above them and hides what does not match; the scroll box keeps the page
+   * from becoming a mile long.
+   *
+   * Chosen countries stay checked and visible regardless of the filter,
+   * because the question an administrator asks most often is "what is on
+   * this list", and a search that hides the answer is a search that makes
+   * them retype it.
+   */
+  function countryPicker(options, chosen, admin) {
+    var picked = {};
+    (chosen || []).forEach(function (c) { picked[String(c).toUpperCase()] = true; });
+
+    var rows = options.map(function (o) {
+      return '<label class="tma-portal-country" data-geo-country-row data-name="' +
+        ui().esc(o.name.toLowerCase()) + '" data-code="' + ui().esc(o.code.toLowerCase()) + '">' +
+        '<input type="checkbox" data-geo-country="' + ui().esc(o.code) + '"' +
+        (picked[o.code] ? ' checked' : '') + (admin ? '' : ' disabled') + '>' +
+        '<span>' + ui().esc(o.name) + '</span>' +
+        '<span class="tma-portal-country__code">' + ui().esc(o.code) + '</span>' +
+        '</label>';
+    }).join('');
+
+    return '<div class="tma-portal-field">' +
+      '<span class="tma-portal-field__label">Countries</span>' +
+      '<div class="tma-portal-countries">' +
+      '<input class="tma-portal-input" type="search" data-geo-country-search placeholder="Search countries" aria-label="Search countries"' +
+      (admin ? '' : ' disabled') + '>' +
+      '<p class="tma-portal-note" data-geo-country-count></p>' +
+      '<div class="tma-portal-countries__list">' + rows + '</div>' +
+      '</div></div>';
+  }
+
   function wireGeo(root, all, admin) {
+    var search = root.querySelector('[data-geo-country-search]');
+    var rows = Array.prototype.slice.call(root.querySelectorAll('[data-geo-country-row]'));
+    var count = root.querySelector('[data-geo-country-count]');
+
+    function chosenCodes() {
+      return Array.prototype.slice
+        .call(root.querySelectorAll('[data-geo-country]:checked'))
+        .map(function (c) { return c.getAttribute('data-geo-country'); });
+    }
+
+    function tellCount() {
+      if (!count) return;
+      var n = chosenCodes().length;
+      count.textContent = n === 0 ? 'None selected' : n + (n === 1 ? ' country selected' : ' countries selected');
+    }
+
+    function applyFilter() {
+      var q = (search && search.value || '').trim().toLowerCase();
+      rows.forEach(function (row) {
+        // A chosen country stays visible whatever is typed: the list is also
+        // how you read back what is already set.
+        var checked = row.querySelector('input').checked;
+        var hit = q === '' || checked ||
+          row.getAttribute('data-name').indexOf(q) !== -1 ||
+          row.getAttribute('data-code').indexOf(q) === 0;
+        row.hidden = !hit;
+      });
+    }
+
+    if (search) search.addEventListener('input', applyFilter);
+    rows.forEach(function (row) {
+      row.querySelector('input').addEventListener('change', function () {
+        tellCount();
+        applyFilter();
+      });
+    });
+    tellCount();
+    applyFilter();
+
     if (!admin) return;
     var btnEl = root.querySelector('[data-geo-save]');
     if (!btnEl) return;
 
     btnEl.addEventListener('click', function () {
-      var raw = (root.querySelector('[data-geo-countries]').value || '');
-      var codes = raw.split(/[\s,;]+/).filter(function (c) { return c; });
+      var codes = chosenCodes();
 
       secApi('PUT', '/admin/security-policies/geo', {
         mode: root.querySelector('[data-geo-mode]').value,

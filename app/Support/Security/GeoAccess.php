@@ -110,7 +110,10 @@ final class GeoAccess
         $clean = [];
         foreach ($countries as $code) {
             $code = strtoupper(trim((string) $code));
-            if (preg_match('/^[A-Z]{2}$/', $code) && ! in_array($code, $clean, true)) {
+            // Assignable codes only. A rule naming a country that cannot be
+            // reported is a rule that never fires, and it would sit in the
+            // list looking as though it did.
+            if (CountryList::isAssignable($code) && ! in_array($code, $clean, true)) {
                 $clean[] = $code;
             }
         }

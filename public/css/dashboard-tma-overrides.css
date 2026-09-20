@@ -2642,3 +2642,48 @@ body::-webkit-scrollbar,
 .tma-portal-section__title + .tma-portal-section__card {
   margin-top: var(--space-8);
 }
+
+/*
+ * Country picker (Security › Location & VPN Access).
+ *
+ * A scroll box rather than 249 rows down the page: the list is something you
+ * search, and a control you have to scroll the window past is a control that
+ * buries the settings under it. Capped at roughly nine rows so the section
+ * below it stays on screen.
+ */
+.tma-portal-countries {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.tma-portal-countries__list {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-12);
+  padding: var(--space-4);
+}
+
+.tma-portal-country {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8);
+  border-radius: var(--radius-8);
+  cursor: pointer;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+}
+
+.tma-portal-country:hover { background: rgba(0, 0, 0, 0.04); }
+
+.tma-portal-country[hidden] { display: none; }
+
+/* The code is the answer to "why is this one called that"; present, not loud. */
+.tma-portal-country__code {
+  margin-left: auto;
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}

@@ -256,6 +256,36 @@ class GeoAccessTest extends TestCase
         );
     }
 
+    public function test_the_picker_is_offered_with_names_not_bare_codes(): void
+    {
+        $admin = $this->admin();
+
+        $res = $this->actingAs($admin)
+            ->getJson('/admin/security-policies', $this->edge('LC'))
+            ->assertOk();
+
+        $options = $res->json('countryOptions');
+        $this->assertNotEmpty($options);
+
+        $byCode = collect($options)->keyBy('code');
+        $this->assertSame('St. Lucia', $byCode['LC']['name']);
+        $this->assertSame('Canada', $byCode['CA']['name']);
+
+        // Sorted by name, so the list reads the way somebody scans it.
+        $names = array_column($options, 'name');
+        $sorted = $names;
+        usort($sorted, 'strcasecmp');
+        $this->assertSame($sorted, $names);
+    }
+
+    public function test_a_code_that_is_not_a_country_is_dropped(): void
+    {
+        // The picker cannot send these, but a hand-rolled request can, and a
+        // rule naming a country that can never be reported is a rule that
+        // sits in the list looking as though it works.
+        $this->assertSame(['CA', 'LC'], GeoAccess::normalizeCountries(['LC', 'CA', 'ZZ', 'XX', 'QQ']));
+    }
+
     public function test_only_administrators_may_change_the_policy(): void
     {
         $officer = User::factory()->create([
