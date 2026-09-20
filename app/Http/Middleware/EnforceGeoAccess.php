@@ -31,7 +31,16 @@ class EnforceGeoAccess
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if ($request->is('up') || $request->routeIs('logout')) {
+        /*
+         * The health check, the way out, and the screen a refused visitor is
+         * sent to. That last one has to be reachable or the redirect below
+         * would point at a page that refuses itself, which is a loop.
+         *
+         * Matched on the path, not routeIs(): this middleware is prepended to
+         * the web group, so it runs before the router has resolved a route
+         * and routeIs() has nothing to match against yet.
+         */
+        if ($request->is('up', 'not-available') || $request->routeIs('logout')) {
             return $next($request);
         }
 
@@ -86,6 +95,20 @@ class EnforceGeoAccess
             ], 403);
         }
 
-        return response()->view('errors.geo-blocked', ['message' => $message], 403);
+        /*
+         * Send the browser somewhere it can sit.
+         *
+         * Rendering the screen in place of the requested URL left the address
+         * bar on a page that refuses itself: every reload re-ran the refusal,
+         * and the portal's scripts kept firing XHRs behind it that each came
+         * back 403. One redirect, to one address that reloads cleanly.
+         *
+         * This is presentation only. The request that got here was refused,
+         * and the next one will be refused too — /not-available is a static
+         * page and reaching it is not access to anything.
+         */
+        // Not redirect()->guest(): that parks the refused URL as url.intended
+        // so a later sign-in would bounce them straight back to it.
+        return redirect()->to(route('geo.blocked'));
     }
 }

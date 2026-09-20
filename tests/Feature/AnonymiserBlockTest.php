@@ -65,7 +65,7 @@ class AnonymiserBlockTest extends TestCase
         $this->policy();
 
         $this->get('/auth/login', ['REMOTE_ADDR' => self::VPN_IP, 'CF-IPCountry' => 'LC'])
-            ->assertStatus(403);
+            ->assertRedirect(route('geo.blocked'));
 
         $this->get('/auth/login', ['REMOTE_ADDR' => self::HOME_IP, 'CF-IPCountry' => 'LC'])
             ->assertOk();
@@ -77,7 +77,7 @@ class AnonymiserBlockTest extends TestCase
 
         // Cloudflare labels Tor exits with the pseudo-country T1.
         $this->get('/auth/login', ['REMOTE_ADDR' => self::HOME_IP, 'CF-IPCountry' => 'T1'])
-            ->assertStatus(403);
+            ->assertRedirect(route('geo.blocked'));
     }
 
     public function test_a_waf_rule_can_state_the_verdict_directly(): void
@@ -91,7 +91,7 @@ class AnonymiserBlockTest extends TestCase
             'REMOTE_ADDR' => self::HOME_IP,
             'CF-IPCountry' => 'LC',
             'CF-Anonymiser' => 'vpn',
-        ])->assertStatus(403);
+        ])->assertRedirect(route('geo.blocked'));
 
         $this->get('/auth/login', [
             'REMOTE_ADDR' => self::HOME_IP,
@@ -109,7 +109,7 @@ class AnonymiserBlockTest extends TestCase
             'REMOTE_ADDR' => self::HOME_IP,
             'CF-IPCountry' => 'LC',
             'CF-Bot-Score' => '1',
-        ])->assertStatus(403);
+        ])->assertRedirect(route('geo.blocked'));
 
         // A person on a VPN is not a bot, and a middling score must not be
         // read as one — that would refuse ordinary clients by the dozen.
@@ -132,7 +132,7 @@ class AnonymiserBlockTest extends TestCase
             'REMOTE_ADDR' => self::HOME_IP,
             'CF-IPCountry' => 'LC',
             'CF-Threat-Score' => '45',
-        ])->assertStatus(403);
+        ])->assertRedirect(route('geo.blocked'));
 
         $this->get('/auth/login', [
             'REMOTE_ADDR' => self::HOME_IP,
@@ -163,12 +163,13 @@ class AnonymiserBlockTest extends TestCase
     {
         $this->policy(['vpnMessage' => 'Please disconnect your VPN.']);
 
-        $body = $this->get('/auth/login', ['REMOTE_ADDR' => self::VPN_IP])
-            ->assertStatus(403)
-            ->getContent();
+        $this->get('/auth/login', ['REMOTE_ADDR' => self::VPN_IP])
+            ->assertRedirect(route('geo.blocked'));
 
         // Unlike a country block, this one has a remedy, so the page says it.
-        $this->assertStringContainsString('Please disconnect your VPN.', $body);
+        $this->get(route('geo.blocked'), ['REMOTE_ADDR' => self::VPN_IP])
+            ->assertStatus(403)
+            ->assertSee('Please disconnect your VPN.', false);
     }
 
     public function test_a_json_client_gets_a_distinct_code(): void
@@ -228,7 +229,7 @@ class AnonymiserBlockTest extends TestCase
 
         // A residential address the free signals would have let through.
         $this->get('/auth/login', ['REMOTE_ADDR' => self::HOME_IP, 'CF-IPCountry' => 'LC'])
-            ->assertStatus(403);
+            ->assertRedirect(route('geo.blocked'));
     }
 
     public function test_a_verdict_is_cached_so_one_address_is_not_looked_up_twice(): void
@@ -245,7 +246,7 @@ class AnonymiserBlockTest extends TestCase
 
         foreach (range(1, 3) as $ignored) {
             $this->get('/auth/login', ['REMOTE_ADDR' => self::HOME_IP, 'CF-IPCountry' => 'LC'])
-                ->assertStatus(403);
+                ->assertRedirect(route('geo.blocked'));
         }
 
         // Three refusals, one paid lookup.
@@ -275,7 +276,7 @@ class AnonymiserBlockTest extends TestCase
         Http::fake();
 
         $this->get('/auth/login', ['REMOTE_ADDR' => self::HOME_IP, 'CF-IPCountry' => 'CN'])
-            ->assertStatus(403);
+            ->assertRedirect(route('geo.blocked'));
 
         // Already refused for where they are; do not also pay to ask about it.
         Http::assertNothingSent();

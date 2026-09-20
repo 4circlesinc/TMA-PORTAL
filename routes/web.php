@@ -89,6 +89,7 @@ use App\Http\Controllers\Files\ThumbnailController;
 use App\Http\Controllers\Files\UploadController;
 use App\Http\Controllers\Files\WorkflowHubController;
 use App\Http\Controllers\GettingStartedController;
+use App\Http\Controllers\GeoBlockedController;
 use App\Http\Controllers\GraphWebhookController;
 use App\Http\Controllers\GroupsController;
 use App\Http\Controllers\InvitationAcceptController;
@@ -153,6 +154,21 @@ Route::middleware(['auth'])->group(function () {
 Route::get('/auth/email/confirm/{id}/{hash}', UnsignedVerifyEmailController::class)
     ->middleware(['signed', 'throttle:6,1'])
     ->name('verification.verify.unsigned');
+
+/*
+ * Where a refused visitor lands.
+ *
+ * A dedicated route rather than rendering the screen in place of whatever
+ * they asked for: a 403 body at /account-settings leaves the browser on a
+ * URL it will retry on every reload, and the portal's own scripts keep
+ * firing XHRs behind it that each come back 403. One address to sit on,
+ * which reloads cleanly and says the same thing every time.
+ *
+ * EnforceGeoAccess lets this path through, so it can actually render; it is
+ * a static page that reads the firm's message and nothing else. Being here
+ * grants no access to anything.
+ */
+Route::get('/not-available', [GeoBlockedController::class, 'show'])->name('geo.blocked');
 
 /*
  * Microsoft Graph change notifications. Must be reachable without a session

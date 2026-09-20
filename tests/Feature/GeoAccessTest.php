@@ -62,7 +62,7 @@ class GeoAccessTest extends TestCase
     {
         $this->policy(['mode' => GeoAccess::MODE_BLOCK, 'countries' => ['CN', 'RU']]);
 
-        $this->get('/auth/login', $this->edge('CN'))->assertStatus(403);
+        $this->get('/auth/login', $this->edge('CN'))->assertRedirect(route('geo.blocked'));
         $this->get('/auth/login', $this->edge('LC'))->assertOk();
     }
 
@@ -72,7 +72,7 @@ class GeoAccessTest extends TestCase
 
         $this->get('/auth/login', $this->edge('LC'))->assertOk();
         $this->get('/auth/login', $this->edge('CA'))->assertOk();
-        $this->get('/auth/login', $this->edge('CN'))->assertStatus(403);
+        $this->get('/auth/login', $this->edge('CN'))->assertRedirect(route('geo.blocked'));
     }
 
     public function test_an_empty_allow_list_is_treated_as_unconfigured(): void
@@ -89,7 +89,7 @@ class GeoAccessTest extends TestCase
         $this->policy(['mode' => GeoAccess::MODE_BLOCK, 'countries' => ['CN'], 'blockUnknown' => true]);
 
         // Routable client, but the edge reported nothing.
-        $this->get('/auth/login', ['REMOTE_ADDR' => self::PUBLIC_IP])->assertStatus(403);
+        $this->get('/auth/login', ['REMOTE_ADDR' => self::PUBLIC_IP])->assertRedirect(route('geo.blocked'));
     }
 
     public function test_block_unknown_does_not_refuse_traffic_that_never_passed_the_edge(): void
@@ -130,10 +130,14 @@ class GeoAccessTest extends TestCase
             'message' => 'Not available in your region.',
         ]);
 
-        $body = $this->get('/auth/login', $this->edge('CN'))->assertStatus(403)->getContent();
+        // The refused request redirects; the message lives on the page it
+        // lands on, which is the whole point of giving it an address.
+        $this->get('/auth/login', $this->edge('CN'))->assertRedirect(route('geo.blocked'));
 
-        $this->assertStringContainsString('Not available in your region.', $body);
-        $this->assertStringNotContainsString('CN', $body);
+        $page = $this->get(route('geo.blocked'), $this->edge('CN'))->assertStatus(403);
+        $page->assertSee('Not available in your region.', false);
+        // It names no country, no policy and no account.
+        $page->assertDontSee('>CN<', false);
     }
 
     public function test_the_policy_applies_to_public_links_not_only_sign_in(): void
@@ -144,11 +148,45 @@ class GeoAccessTest extends TestCase
         // token is alphanumeric (the route constrains it) and need not exist:
         // the point is that the refusal happens before the app ever looks it
         // up, so a blocked country cannot even probe for valid tokens.
-        $this->get('/r/aaaabbbbccccdddd', $this->edge('CN'))->assertStatus(403);
+        $this->get('/r/aaaabbbbccccdddd', $this->edge('CN'))->assertRedirect(route('geo.blocked'));
 
         // And the same door is open from an allowed country — 404 here is the
         // token not existing, which is the app working normally.
         $this->get('/r/aaaabbbbccccdddd', $this->edge('LC'))->assertStatus(404);
+    }
+
+    /**
+     * The redirect is presentation. It is not a way in.
+     *
+     * "Show the screen once" must mean the browser stops bouncing, never that
+     * the second attempt succeeds — otherwise the control is a notice anybody
+     * defeats with a reload.
+     */
+    public function test_landing_on_the_block_page_does_not_grant_access(): void
+    {
+        $this->policy(['mode' => GeoAccess::MODE_BLOCK, 'countries' => ['CN']]);
+
+        // Sent there once…
+        $this->get('/auth/login', $this->edge('CN'))->assertRedirect(route('geo.blocked'));
+        $this->get(route('geo.blocked'), $this->edge('CN'))->assertStatus(403);
+
+        // …and still refused on every subsequent attempt, however many.
+        foreach (range(1, 3) as $ignored) {
+            $this->get('/auth/login', $this->edge('CN'))->assertRedirect(route('geo.blocked'));
+            $this->get('/account-settings', $this->edge('CN'))->assertRedirect(route('geo.blocked'));
+            $this->getJson('/portal/files', $this->edge('CN'))->assertStatus(403);
+        }
+    }
+
+    /**
+     * Somebody no longer refused is not left reading a message about
+     * themselves that has stopped being true.
+     */
+    public function test_the_block_page_sends_an_allowed_visitor_back(): void
+    {
+        $this->policy(['mode' => GeoAccess::MODE_BLOCK, 'countries' => ['CN']]);
+
+        $this->get(route('geo.blocked'), $this->edge('LC'))->assertRedirect('/');
     }
 
     public function test_an_admin_cannot_save_an_allow_list_that_excludes_their_own_country(): void
