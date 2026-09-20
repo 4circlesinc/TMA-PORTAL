@@ -44,6 +44,7 @@
     { id: 'security-insights', label: 'Security Insights', group: 'Security' },
     { id: 'signin-policy', label: 'Sign In Policy', group: 'Security' },
     { id: 'security-policy', label: 'Security Policy', group: 'Security' },
+    { id: 'geo-access', label: 'Location & VPN Access', group: 'Security' },
     { id: 'alert-settings', label: 'Security Alert Settings', group: 'Security' },
     { id: 'device-security', label: 'Configure Device Security', group: 'Security' },
     { id: 'connectors', label: 'Connectors', group: 'Settings' },

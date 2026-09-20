@@ -120,6 +120,7 @@
     'security-insights': 'settings.security',
     'signin-policy': 'settings.security',
     'security-policy': 'settings.security',
+    'geo-access': 'settings.security',
     'alert-settings': 'settings.security',
     'device-security': 'settings.security',
     'storage-usage': 'settings.storage',

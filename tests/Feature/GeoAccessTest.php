@@ -219,6 +219,43 @@ class GeoAccessTest extends TestCase
         $this->assertSame('Contact the firm.', $policy['message']);
     }
 
+    /**
+     * The settings page is its own rail item now, so it needs its own gate.
+     *
+     * {@see Role::canViewSettingsPage()} returns true for any page it has
+     * never heard of, so a new page that nobody registers is a new page
+     * everybody can open — including one that turns off access to the portal
+     * by country.
+     */
+    public function test_the_settings_page_is_gated_to_administrators(): void
+    {
+        $admin = $this->admin();
+        $officer = User::factory()->create([
+            'status' => 'approved',
+            'account_type' => Role::REVIEWING_OFFICER,
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+        ]);
+        $client = User::factory()->create([
+            'status' => 'approved',
+            'account_type' => Role::CLIENT,
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+        ]);
+
+        $this->assertTrue(Role::canViewSettingsPage($admin, 'geo-access'));
+        $this->assertFalse(Role::canViewSettingsPage($officer, 'geo-access'));
+        $this->assertFalse(Role::canViewSettingsPage($client, 'geo-access'));
+
+        // Held to the same capability as the rest of the Security rail.
+        $this->assertSame(
+            Role::canViewSettingsPage($officer, 'security-policy'),
+            Role::canViewSettingsPage($officer, 'geo-access'),
+        );
+    }
+
     public function test_only_administrators_may_change_the_policy(): void
     {
         $officer = User::factory()->create([

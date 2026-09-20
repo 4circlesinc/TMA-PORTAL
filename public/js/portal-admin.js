@@ -66,6 +66,7 @@
       { id: 'security-insights', label: 'Security Insights' },
       { id: 'signin-policy', label: 'Sign In Policy' },
       { id: 'security-policy', label: 'Security Policy' },
+      { id: 'geo-access', label: 'Location & VPN Access' },
       { id: 'alert-settings', label: 'Security Alert Settings' },
       { id: 'device-security', label: 'Configure Device Security' },
     ] },
@@ -3657,8 +3658,7 @@
               return '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">' + t2[1] + '</span>' +
                 ui().toggle(p.autoRemediation[t2[0]], 'data-secpol-toggle="' + t2[0] + '"' + (admin ? '' : ' disabled'), t2[1]) + '</div>';
             }).join('')) +
-          (admin ? saveBtn('data-secpol-save') : '') +
-          geoPanel(all, admin);
+          (admin ? saveBtn('data-secpol-save') : '');
 
         function save() {
           secApi('PUT', '/admin/security-policies/security', p).then(function (res) {
@@ -3666,8 +3666,6 @@
             else res.json().then(function (j) { ui().toast((j && j.message) || 'Could not save'); }).catch(function () {});
           });
         }
-
-        wireGeo(root, all, admin);
 
         root.querySelectorAll('[data-secpol-toggle]').forEach(function (t2) {
           t2.addEventListener('change', function () {
@@ -3684,12 +3682,36 @@
     },
   };
 
-  /* ── Geographic restrictions (real: /admin/security-policies/geo) ───
+  /* ── Location & VPN Access (real: /admin/security-policies/geo) ─────
+     Its own rail item rather than a section under Security Policy: it holds
+     two independent controls (which countries, and whether anonymised
+     connections are refused), either of which can shut people out of the
+     portal entirely. That is not a footnote to the password rules.
+
      Countries are typed as ISO codes rather than picked from a 250-entry
      menu: the firm blocks or admits a handful, and a searchable country
      picker is a bigger component than the setting deserves. The server
      normalises and validates whatever arrives, and refuses a list that would
      lock the administrator out. */
+
+  PAGES['geo-access'] = {
+    render: function () {
+      return '<div data-geo-root>' + ui().loading() + '</div>';
+    },
+    wire: function (el) {
+      var root = el.querySelector('[data-geo-root]');
+      if (!root) return;
+      secApi('GET', '/admin/security-policies').then(function (r) { return r.json(); }).then(function (all) {
+        var admin = all.isAdmin;
+        root.innerHTML =
+          (admin ? '' : '<p class="tma-portal-note">Only administrators can change these settings.</p>') +
+          geoPanel(all, admin);
+        wireGeo(root, all, admin);
+      }).catch(function () {
+        root.innerHTML = '<p class="tma-portal-note">Couldn\'t load these settings. Refresh to try again.</p>';
+      });
+    },
+  };
 
   function geoPanel(all, admin) {
     var g = all.geoPolicy || { mode: 'off', countries: [], blockUnknown: false, message: '' };
@@ -3700,8 +3722,7 @@
       { value: 'block', label: 'Block list — everywhere except these' }
     ];
 
-    return '<h3 class="tma-portal-section__title">Geographic restrictions</h3>' +
-      ui().section('',
+    return ui().section('',
         '<p class="tma-portal-note">Where the portal may be reached from. Applies to sign-in and to public links, and is recorded either way. It is one control beside sign-in and permissions, not a replacement for them; a VPN defeats it.</p>' +
         (mine ? '<p class="tma-portal-note">You are signing in from <strong>' + ui().esc(mine) + '</strong>. A list that excludes you is refused.</p>'
               : '<p class="tma-portal-note">Your country is not being reported, so this request did not come through Cloudflare. Restrictions have no effect on traffic like this.</p>') +
