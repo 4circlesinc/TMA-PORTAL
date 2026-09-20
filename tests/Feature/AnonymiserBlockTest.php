@@ -319,6 +319,45 @@ class AnonymiserBlockTest extends TestCase
         $this->assertSame('Disconnect your VPN.', $policy['vpnMessage']);
     }
 
+    /**
+     * The clouds a browser-extension VPN actually exits from.
+     *
+     * The first list covered the VPN-specialist networks (M247, Vultr,
+     * DigitalOcean…) and missed AWS, Google Cloud and Azure, which is where
+     * the free tier of most Chrome extensions runs. A Chrome VPN walked
+     * through the portal because of it.
+     */
+    public function test_the_big_cloud_platforms_are_treated_as_hosting(): void
+    {
+        foreach ([
+            '52.95.110.1',     // AWS
+            '3.5.140.1',       // AWS
+            '34.102.136.180',  // Google Cloud
+            '35.190.1.1',      // Google Cloud
+            '20.190.128.1',    // Azure
+            '40.77.167.51',    // Azure
+            '129.146.1.1',     // Oracle Cloud
+            '51.15.1.1',       // Scaleway
+            '161.97.1.1',      // Contabo
+        ] as $ip) {
+            $this->assertTrue(Anonymiser::inHostingRange($ip), $ip.' should read as hosting');
+        }
+    }
+
+    /**
+     * Cloudflare's own ranges are NOT hosting, and must never be.
+     *
+     * The portal sits behind Cloudflare. If its edge addresses read as an
+     * anonymiser, then the first request to arrive after the toggle went on
+     * would refuse itself and take the whole portal down.
+     */
+    public function test_cloudflares_own_ranges_are_never_refused(): void
+    {
+        foreach (['104.16.0.1', '172.64.0.1', '198.41.128.1', '162.158.0.1'] as $ip) {
+            $this->assertFalse(Anonymiser::inHostingRange($ip), $ip.' is Cloudflare and must stay allowed');
+        }
+    }
+
     public function test_known_hosting_ranges_are_recognised_and_homes_are_not(): void
     {
         foreach (['159.65.44.10', '45.32.1.1', '104.131.9.9', '5.9.100.1', '51.75.2.2'] as $ip) {

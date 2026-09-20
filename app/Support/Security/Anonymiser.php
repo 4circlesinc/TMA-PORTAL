@@ -96,6 +96,66 @@ final class Anonymiser
         ['5.79.64.0', 18],
         ['37.48.64.0', 18],
         ['95.211.0.0', 16],
+        /*
+         * The big cloud platforms.
+         *
+         * Added 20 Sep 2026 after a browser-extension VPN walked straight
+         * through: the free tiers of those extensions mostly run on AWS,
+         * Google Cloud and Azure rather than on the VPN-specialist networks
+         * above, so a list without them missed the kind of VPN a person is
+         * most likely to have installed.
+         *
+         * These are the broad public ranges, not the whole of each provider —
+         * the point is coverage of the common exits, and every one of these
+         * is a datacentre either way. Nothing a household connects from.
+         */
+        // Amazon AWS
+        ['3.0.0.0', 8],
+        ['13.32.0.0', 12],
+        ['18.32.0.0', 11],
+        ['34.192.0.0', 10],
+        ['35.152.0.0', 13],
+        ['52.0.0.0', 8],
+        ['54.64.0.0', 10],
+        ['99.77.128.0', 17],
+        // Google Cloud
+        ['34.64.0.0', 11],
+        ['34.96.0.0', 12],
+        ['34.128.0.0', 10],
+        ['35.184.0.0', 13],
+        ['35.192.0.0', 11],
+        ['35.224.0.0', 12],
+        ['104.154.0.0', 15],
+        ['104.196.0.0', 14],
+        ['130.211.0.0', 16],
+        ['146.148.0.0', 16],
+        // Microsoft Azure
+        ['13.64.0.0', 11],
+        ['20.0.0.0', 8],
+        ['40.64.0.0', 10],
+        ['51.4.0.0', 15],
+        ['52.224.0.0', 11],
+        ['104.40.0.0', 13],
+        ['168.61.0.0', 16],
+        ['191.232.0.0', 13],
+        // Oracle Cloud
+        ['129.146.0.0', 15],
+        ['132.145.0.0', 16],
+        ['140.238.0.0', 16],
+        ['150.230.0.0', 16],
+        // Scaleway / Online.net
+        ['51.15.0.0', 16],
+        ['51.158.0.0', 15],
+        ['163.172.0.0', 16],
+        ['212.129.0.0', 18],
+        // Contabo, Alibaba, Tencent — the cheap tiers behind many free VPNs.
+        ['161.97.0.0', 16],
+        ['173.212.192.0', 18],
+        ['207.180.192.0', 18],
+        ['47.52.0.0', 14],
+        ['47.240.0.0', 14],
+        ['119.28.0.0', 15],
+        ['170.106.0.0', 16],
     ];
 
     /**
