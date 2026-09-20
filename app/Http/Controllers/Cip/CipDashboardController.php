@@ -38,11 +38,16 @@ class CipDashboardController extends Controller
 {
     public function __invoke(Request $request): JsonResponse
     {
-        $user = $request->user();
+        return response()->json(self::payload($request->user()));
+    }
+
+    /** @return array<string, mixed> */
+    public static function payload(?\App\Models\User $user): array
+    {
         $dashboard = Buckets::setFor($user);
 
         if ($dashboard === null) {
-            return response()->json(['cip' => false, 'buckets' => []]);
+            return ['cip' => false, 'buckets' => []];
         }
 
         $summaries = Buckets::summaries($user);
@@ -50,7 +55,7 @@ class CipDashboardController extends Controller
         $post = $summaries[Phase::POST_APPROVAL];
         $addon = $summaries[Phase::ADD_ON];
 
-        return response()->json([
+        return [
             'cip' => true,
             /*
              * Which side of the firm this reader is on.
@@ -111,6 +116,6 @@ class CipDashboardController extends Controller
                     'total' => $addon['total'],
                 ],
             ],
-        ]);
+        ];
     }
 }

@@ -39,6 +39,12 @@ class DashboardMetricsController extends Controller
 
     public function __invoke(Request $request): JsonResponse
     {
+        return response()->json(self::payload($request));
+    }
+
+    /** @return array<string, mixed> */
+    public static function payload(Request $request): array
+    {
         $user = $request->user();
         $period = Period::for(Period::parse($request->query('period')), $user);
         $metrics = new DashboardMetrics($user, $period);
@@ -54,15 +60,15 @@ class DashboardMetricsController extends Controller
                 fn () => $metrics->toArray(),
             );
 
-            return response()->json(['staff' => true] + $payload);
+            return ['staff' => true] + $payload;
         }
 
         if ($metrics->isProviderContact()) {
-            return response()->json(['staff' => false, 'provider' => true] + $metrics->providerToArray());
+            return ['staff' => false, 'provider' => true] + $metrics->providerToArray();
         }
 
         // The period is echoed even here so the dashboard's warm-start snapshot
         // can tell which selection it was measured for.
-        return response()->json(['staff' => false, 'period' => $period->key]);
+        return ['staff' => false, 'period' => $period->key];
     }
 }

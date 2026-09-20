@@ -58,6 +58,23 @@ class MailMessage extends Model
     }
 
     /**
+     * Columns a folder listing needs. Bodies stay off this list: they are the
+     * bulk of a mailbox and the reading pane loads them on open.
+     *
+     * @return list<string>
+     */
+    public static function listColumns(): array
+    {
+        return [
+            'id', 'uuid', 'user_id', 'thread_id', 'folder',
+            'subject', 'snippet', 'from_name', 'from_email', 'to',
+            'is_read', 'is_starred', 'is_important', 'is_pinned',
+            'snoozed_until', 'has_attachments', 'sent_at',
+            'created_at', 'updated_at',
+        ];
+    }
+
+    /**
      * The list-row shape the email UI renders. Bodies are deliberately absent —
      * the list never needs them, and they are the bulk of a mailbox.
      */

@@ -317,12 +317,12 @@
    */
   var FRESH_MS = 60000;         // Recent Files, Favorites, Default Folders
   var METRICS_FRESH_MS = 300000; // the KPI row is a rolling measurement
-  var PRESENCE_FRESH_MS = 20000; // who is online moves faster than anything else
+  var PRESENCE_FRESH_MS = 60000; // presence also arrives over the staff socket
   /* A bucket only moves when an application does, and every CIP write raises
      the live signal this card listens to, so the window is a backstop for the
      changes whose signal we never saw (another firm's officer, a queued job),
      not the way the counts normally arrive. */
-  var CIP_FRESH_MS = 30000;
+  var CIP_FRESH_MS = 60000;
 
   function stale(at, within) { return (Date.now() - at) > (within || FRESH_MS); }
 
@@ -765,31 +765,12 @@
         }
       });
 
-    // Keep inbox fresh while the home view is open (same cadence as People).
-    if (!homeEmailTimer && !opts.skipTimer) {
-      homeEmailTimer = setInterval(function () {
-        // Hidden tabs skip the poll; the visibilitychange below catches up.
-        if (document.visibilityState === 'hidden') return;
-        var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
-        if (!mountEl || !mountEl.isConnected) return;
-        if (homeEmailInflight) return;
-        if (homeEmail && homeEmail.connected === false) return;
-        loadHomeEmail(mountEl, { skipTimer: true });
-      }, 30000);
-    }
-
     if (!window.__tmaHomeEmailLiveBound) {
       window.__tmaHomeEmailLiveBound = true;
       document.addEventListener('tma-email-count', function () {
         var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
         if (!mountEl || !mountEl.isConnected) return;
-        loadHomeEmail(mountEl, { skipTimer: true });
-      });
-      document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState !== 'visible') return;
-        var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
-        if (!mountEl || !mountEl.isConnected) return;
-        loadHomeEmail(mountEl, { skipTimer: true });
+        loadHomeBoard(mountEl, { parts: ['mail'], skipTimer: true });
       });
     }
   }
@@ -969,27 +950,6 @@
         }
       });
 
-    // Messaging has no shell-wide realtime listener, only the Messages view
-    // subscribes, so the tile polls while the dashboard is open.
-    if (!homeChatsTimer && !opts.skipTimer) {
-      homeChatsTimer = setInterval(function () {
-        var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
-        if (!mountEl || !mountEl.isConnected) return;
-        if (document.visibilityState === 'hidden') return;
-        if (homeChatsInflight) return;
-        loadHomeChats(mountEl, { skipTimer: true });
-      }, 60000);
-    }
-
-    if (!window.__tmaHomeChatsLiveBound) {
-      window.__tmaHomeChatsLiveBound = true;
-      document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState !== 'visible') return;
-        var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
-        if (!mountEl || !mountEl.isConnected) return;
-        loadHomeChats(mountEl, { skipTimer: true });
-      });
-    }
   }
 
   /*
@@ -2012,19 +1972,6 @@
 
     var settled = homeWorkInflight;
 
-    if (!homeWorkTimer && !opts.skipTimer) {
-      homeWorkTimer = setInterval(function () {
-        var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
-        if (!mountEl || !mountEl.isConnected) return;
-        // A hidden tab polling is pure cost; the visibilitychange handler
-        // below catches up on the way back.
-        if (document.visibilityState === 'hidden') return;
-        if (homeWorkInflight) return;
-        if (homeWork && homeWork.enabled === false) return;
-        loadHomeWork(mountEl, { skipTimer: true });
-      }, WORK_FRESH_MS);
-    }
-
     if (!window.__tmaHomeWorkLiveBound) {
       window.__tmaHomeWorkLiveBound = true;
 
@@ -2036,12 +1983,6 @@
         var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
         if (!mountEl || !mountEl.isConnected) return;
         homeWorkAt = 0;
-        loadHomeWork(mountEl, { skipTimer: true });
-      });
-      document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState !== 'visible') return;
-        var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
-        if (!mountEl || !mountEl.isConnected) return;
         loadHomeWork(mountEl, { skipTimer: true });
       });
     }
@@ -2264,19 +2205,6 @@
         }
       });
 
-    // Keep presence fresh while the home view is open.
-    if (!homeStaffTimer && !opts.skipTimer) {
-      homeStaffTimer = setInterval(function () {
-        var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
-        if (!mountEl || !mountEl.isConnected) return;
-        // A hidden tab polling presence is pure cost, the visibilitychange
-        // handler catches up on the way back.
-        if (document.visibilityState === 'hidden') return;
-        if (homeStaffInflight) return;
-        if (homeStaff && homeStaff.staff === false) return;
-        loadHomeStaff(mountEl, { skipTimer: true });
-      }, 30000);
-    }
   }
 
   /*
@@ -3185,6 +3113,159 @@
   }
 
   /*
+   * Every home widget except files, in one request.
+   *
+   * The tiles used to poll themselves (mail and CIP every 30s, presence every
+   * 20s, work and chats every 60s). Twenty open dashboards turned that into
+   * a few requests a second against php-fpm. Live changes still arrive
+   * through TMALive / tma-email-count; this is the backstop while the board
+   * is visible.
+   */
+  var HOME_BOARD_MS = 60000;
+  var homeBoardInflight = null;
+  var homeBoardTimer = null;
+
+  function applyHomeBoard(json) {
+    if (!json) return false;
+    var changed = false;
+
+    if (json.metrics) {
+      var metricsBefore = JSON.stringify(homeMetrics || null);
+      homeMetrics = json.metrics;
+      homeMetricsAt = Date.now();
+      homeMetricsLoaded = true;
+      homeReal.metrics = true;
+      keepWarm('metrics', json.metrics);
+      if (JSON.stringify(homeMetrics) !== metricsBefore) changed = true;
+    }
+
+    if (json.staff) {
+      var staffBefore = staffSignature(homeStaff);
+      homeStaff = json.staff;
+      homeStaffAt = Date.now();
+      homeStaffLoaded = true;
+      homeReal.staff = true;
+      keepWarm('staff', json.staff);
+      if (staffSignature(homeStaff) !== staffBefore) changed = true;
+    }
+
+    if (json.work) {
+      var workBefore = workSignature(homeWork);
+      homeWork = json.work;
+      homeWorkWant = Array.isArray(json.work.want) ? json.work.want.slice() : homeWorkWant;
+      homeWorkAt = Date.now();
+      homeWorkLoaded = true;
+      homeReal.work = true;
+      keepWarm('work', json.work);
+      if (workSignature(homeWork) !== workBefore) changed = true;
+      publishWorkCounts(json.work.counts);
+    }
+
+    if (json.cip) {
+      var cipBefore = JSON.stringify(homeCip || null);
+      homeCip = json.cip;
+      homeCipAt = Date.now();
+      homeCipLoaded = true;
+      homeReal.cip = true;
+      keepWarm('cip', json.cip);
+      if (JSON.stringify(homeCip || null) !== cipBefore) changed = true;
+    }
+
+    if (json.mail) {
+      var mailPayload = {
+        connected: json.mail.connected !== false,
+        messages: Array.isArray(json.mail.messages) ? json.mail.messages : [],
+        real: true,
+      };
+      if (emailPayloadSignature(mailPayload) !== emailPayloadSignature(homeEmail)) changed = true;
+      homeEmail = mailPayload;
+      homeEmailLoaded = true;
+      homeEmailAt = Date.now();
+      homeReal.email = true;
+      keepWarm('email', mailPayload);
+      if (typeof json.mail.inboxUnread === 'number') {
+        inboxUnreadCount = Math.max(0, json.mail.inboxUnread);
+      }
+    }
+
+    if (json.chats) {
+      var chatsPayload = { real: true, chats: json.chats.chats || json.chats || [] };
+      if (!Array.isArray(chatsPayload.chats)) chatsPayload.chats = [];
+      if (chatsPayloadSignature(chatsPayload) !== chatsPayloadSignature(homeChats)) changed = true;
+      homeChats = chatsPayload;
+      homeChatsLoaded = true;
+      homeChatsAt = Date.now();
+      homeReal.chats = true;
+      keepWarm('chats', chatsPayload);
+    }
+
+    if (typeof json.pendingUsers === 'number') {
+      pendingUsersCount = json.pendingUsers;
+    }
+
+    return changed;
+  }
+
+  function loadHomeBoard(el, opts) {
+    opts = opts || {};
+    if (homeBoardInflight) return homeBoardInflight;
+
+    var period = metricsPeriod();
+    var want = wantedWorkTiles();
+    var url = '/portal/dashboard/home?period=' + encodeURIComponent(period);
+    if (want.length) url += '&want=' + encodeURIComponent(want.join(','));
+    if (opts.parts && opts.parts.length) {
+      url += '&parts=' + encodeURIComponent(opts.parts.join(','));
+    }
+
+    homeBoardInflight = fetch(url, {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; })
+      .then(function (json) {
+        homeBoardInflight = null;
+        var changed = applyHomeBoard(json);
+        if (json) {
+          if (!homeMetricsLoaded) homeMetricsLoaded = true;
+          if (!homeStaffLoaded) homeStaffLoaded = true;
+          if (!homeEmailLoaded) homeEmailLoaded = true;
+          if (!homeChatsLoaded) homeChatsLoaded = true;
+          if (!homeCipLoaded) homeCipLoaded = true;
+          if (!homeWorkLoaded) homeWorkLoaded = true;
+        }
+        if ((changed || opts.force) && el && el.isConnected) {
+          mount(el, { fromLoad: true });
+        } else if (json && el && el.isConnected && el.childElementCount === 0) {
+          mount(el, { fromLoad: true });
+        }
+      });
+
+    if (!homeBoardTimer && !opts.skipTimer) {
+      homeBoardTimer = setInterval(function () {
+        var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+        if (!mountEl || !mountEl.isConnected) return;
+        if (document.visibilityState === 'hidden') return;
+        if (homeBoardInflight) return;
+        loadHomeBoard(mountEl, { skipTimer: true });
+      }, HOME_BOARD_MS);
+    }
+
+    if (!window.__tmaHomeBoardLiveBound) {
+      window.__tmaHomeBoardLiveBound = true;
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState !== 'visible') return;
+        var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
+        if (!mountEl || !mountEl.isConnected) return;
+        loadHomeBoard(mountEl, { skipTimer: true });
+      });
+    }
+
+    return homeBoardInflight;
+  }
+
+  /*
    * The picker changed. A different period is a different set of numbers, so
    * the cards go back to skeletons rather than showing last month's figures
    * under this week's label while the new ones load.
@@ -3199,7 +3280,7 @@
     homeMetricsAt = 0;
     homeReal.metrics = false;
     if (el.isConnected && el.childElementCount) mount(el, { fromLoad: true });
-    loadHomeMetrics(el);
+    loadHomeBoard(el, { parts: ['metrics'], skipTimer: true });
   }
 
   // Shortcut badges: Email = exact inbox unread, Calendar = today's events,
@@ -3231,26 +3312,6 @@
       applyEmail(window.TMAEmail.getInboxUnreadCount(emailState));
     } else if (inboxUnreadCount !== null) {
       setCount('email', inboxUnreadCount);
-    }
-
-    if (!inboxUnreadInflight && canReach('mail.use')) {
-      inboxUnreadInflight = fetch('/portal/mail', {
-        credentials: 'same-origin',
-        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-      })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (j) {
-          // No mailbox → 0 (hide badge). Connected → exact inbox unread.
-          var n = (j && j.connected && j.folders && j.folders.inbox)
-            ? (j.folders.inbox.unread || 0)
-            : 0;
-          applyEmail(n);
-          try {
-            document.dispatchEvent(new CustomEvent('tma-email-count', { detail: { count: n } }));
-          } catch (e) { /* ignore */ }
-        })
-        .catch(function () {})
-        .then(function () { inboxUnreadInflight = null; });
     }
 
     var cal = (window.TMACalendar && window.TMACalendar.getTodayEventCount) ? window.TMACalendar.getTodayEventCount() : 0;
@@ -3721,18 +3782,15 @@
         if (changed && el.isConnected) mount(el, { fromLoad: true, fromHydrate: true });
       });
       if (force || !homeFilesLoaded || stale(homeFilesAt)) loadHomeFiles(el);
-      if (force || !homeMetricsLoaded || stale(homeMetricsAt, METRICS_FRESH_MS)) loadHomeMetrics(el);
-      if (force || !homeStaffLoaded || stale(homeStaffAt, PRESENCE_FRESH_MS)) loadHomeStaff(el);
+      var boardStale = force
+        || !homeMetricsLoaded || stale(homeMetricsAt, METRICS_FRESH_MS)
+        || !homeStaffLoaded || stale(homeStaffAt, PRESENCE_FRESH_MS)
+        || !homeEmailLoaded || stale(homeEmailAt)
+        || !homeChatsLoaded || stale(homeChatsAt)
+        || !homeCipLoaded || stale(homeCipAt, CIP_FRESH_MS)
+        || (canReach('workflows.view') && (!homeWorkLoaded || stale(homeWorkAt, WORK_FRESH_MS)));
+      if (boardStale) loadHomeBoard(el, { force: force });
       else bindStaffUserListener();
-      // The mailbox tile costs two round trips (index, then messages), so it
-      // gets the same treatment. Both keep polling on their own timers while
-      // the board is open, and both listen for their live signals.
-      if (canReach('mail.use') && (force || !homeEmailLoaded || stale(homeEmailAt))) loadHomeEmail(el);
-      if (force || !homeChatsLoaded || stale(homeChatsAt)) loadHomeChats(el);
-      if (force || !homeCipLoaded || stale(homeCipAt, CIP_FRESH_MS)) loadHomeCip(el);
-      if (canReach('workflows.view') && (force || !homeWorkLoaded || stale(homeWorkAt, WORK_FRESH_MS))) {
-        loadHomeWork(el);
-      }
       if (window.TMAPortalHomeLibrary) {
         // Only forced on an explicit refresh. A forced load replaced
         // state.defaults with preview-less folders straight away, so every card

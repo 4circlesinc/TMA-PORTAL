@@ -28,16 +28,22 @@ class DashboardWorkController extends Controller
 
     public function __invoke(Request $request): JsonResponse
     {
+        return response()->json(self::payload($request));
+    }
+
+    /** @return array<string, mixed> */
+    public static function payload(Request $request): array
+    {
         $user = $request->user();
 
         if (! CipAccess::canViewWorkflows($user)) {
-            return response()->json([
+            return [
                 'enabled' => false,
                 'requests' => [],
                 'comments' => [],
                 'feed' => [],
                 'counts' => null,
-            ]);
+            ];
         }
 
         // A tile the reader turned off must not cost a query. Each list is a
@@ -77,7 +83,7 @@ class DashboardWorkController extends Controller
             ? Hub::updates($user, ['limit' => self::LIMIT])
             : null;
 
-        return response()->json([
+        return [
             'enabled' => true,
             // Echoed back so the board can tell "nothing waiting on you" from
             // "this tile was switched on after the last request went out".
@@ -99,7 +105,7 @@ class DashboardWorkController extends Controller
                 ?? $feedComments['counts']
                 ?? $updates['counts']
                 ?? Hub::counts($user),
-        ]);
+        ];
     }
 
     /**

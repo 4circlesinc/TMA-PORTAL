@@ -46,6 +46,7 @@ use App\Http\Controllers\CompanyStaffController;
 use App\Http\Controllers\ConnectorsController;
 use App\Http\Controllers\ContactsController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DashboardHomeController;
 use App\Http\Controllers\DashboardMetricsController;
 use App\Http\Controllers\DashboardWorkController;
 use App\Http\Controllers\Design\MailPreviewController;
@@ -185,6 +186,11 @@ Route::post('/hooks/microsoft-graph', GraphWebhookController::class)
  */
 Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', 'onboarded', 'mfa.enforced'])->group(function () {
     Route::get('/', DashboardController::class);
+
+    // One payload for every home tile. Individual endpoints below stay for
+    // Overview, Email, and live refetch of a single widget.
+    Route::get('/portal/dashboard/home', DashboardHomeController::class)
+        ->name('dashboard.home');
 
     // KPI cards on the portal home. Staff and service-provider contacts:
     // see DashboardMetricsController.

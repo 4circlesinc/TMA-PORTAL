@@ -21,10 +21,14 @@ class StaffPresenceController extends Controller
 {
     public function __invoke(Request $request): JsonResponse
     {
-        $viewer = $request->user();
+        return response()->json(self::payload($request->user()));
+    }
 
-        if (! Role::can($viewer, 'presence.view')) {
-            return response()->json(['staff' => false, 'employees' => []]);
+    /** @return array<string, mixed> */
+    public static function payload(?User $viewer): array
+    {
+        if ($viewer === null || ! Role::can($viewer, 'presence.view')) {
+            return ['staff' => false, 'employees' => []];
         }
 
         /*
@@ -85,11 +89,11 @@ class StaffPresenceController extends Controller
             mb_strtolower((string) $p['name']),
         ])->values();
 
-        return response()->json([
+        return [
             'staff' => true,
             'employees' => $employees,
             // Administrators always see the widget; employees may too.
             'canManage' => Role::can($viewer, 'users.manage'),
-        ]);
+        ];
     }
 }
