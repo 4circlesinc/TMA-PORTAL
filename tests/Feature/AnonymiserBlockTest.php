@@ -210,6 +210,32 @@ class AnonymiserBlockTest extends TestCase
         }
     }
 
+    /**
+     * An account with no credits left must not refuse anybody.
+     *
+     * This is the exact body IPQS returns once the monthly free tier is
+     * spent, and it arrives as HTTP 200 with success:false — so a check on
+     * the status code alone would read it as a valid answer. Seen for real
+     * on a new account before its credits were provisioned.
+     */
+    public function test_an_exhausted_reputation_account_is_not_a_verdict(): void
+    {
+        config([
+            'services.ip_reputation.driver' => 'ipqualityscore',
+            'services.ip_reputation.key' => 'test-key',
+        ]);
+        $this->policy();
+
+        Http::fake(['ipqualityscore.com/*' => Http::response([
+            'success' => false,
+            'message' => 'You have insufficient credits to make this query. Please contact IPQualityScore support if this error persists.',
+            'api_version' => 1,
+        ], 200)]);
+
+        $this->get('/auth/login', ['REMOTE_ADDR' => self::HOME_IP, 'CF-IPCountry' => 'LC'])
+            ->assertOk();
+    }
+
     public function test_the_reputation_provider_is_believed_when_it_answers(): void
     {
         config([
