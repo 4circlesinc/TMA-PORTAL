@@ -14,11 +14,17 @@
   var TMA_BY_EXT = {
     doc: 'DocxIcon.svg',
     docx: 'DocxIcon.svg',
+    // OpenDocument wears the mark of the thing it is, a text document, a
+    // sheet, a deck. There is no ODF mark in the set, and DefaultIcon beside
+    // a row of branded marks reads as "unrecognised" rather than "open format".
+    odt: 'DocxIcon.svg',
     xls: 'XlsxIcon.svg',
     xlsx: 'XlsxIcon.svg',
     csv: 'XlsxIcon.svg',
+    ods: 'XlsxIcon.svg',
     ppt: 'PptIcon.svg',
     pptx: 'PptIcon.svg',
+    odp: 'PptIcon.svg',
     one: 'OnenoteIcon.svg',
     onetoc2: 'OnenoteIcon.svg',
     txt: 'TxtIcon.svg',

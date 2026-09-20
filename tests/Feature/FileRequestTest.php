@@ -153,6 +153,26 @@ class FileRequestTest extends TestCase
     }
 
     /**
+     * The modal ticks one extension per chip, so a bare list has to be stored
+     * as given. Group keys still expand, because links issued before the chips
+     * became per-extension stored "documents" and must keep working.
+     */
+    public function test_the_modal_may_ask_for_single_extensions(): void
+    {
+        $user = $this->staff();
+        $this->create($user, ['allowedExtensions' => ['pdf', 'docx', 'odt']]);
+
+        $request = FileRequest::firstOrFail();
+        $this->assertSame(['pdf', 'docx', 'odt'], $request->allowed_extensions);
+
+        $this->upload($request->token, UploadedFile::fake()->create('scan.pdf', 8, 'application/pdf'))
+            ->assertStatus(201);
+
+        $this->upload($request->token, UploadedFile::fake()->create('book.xlsx', 8))
+            ->assertStatus(422);
+    }
+
+    /**
      * "Any file type" is the requester's list, not the safety check — an
      * executable is still refused.
      */

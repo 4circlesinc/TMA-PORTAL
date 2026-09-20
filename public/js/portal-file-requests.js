@@ -30,15 +30,54 @@
      still lands here, so "no maximum" is never announced as unbounded. */
   var MAX_BYTES_CEILING = 10 * MB;
 
-  /* Mirrors App\Support\Files\FileRequests::TYPE_GROUPS. The server owns the
-     real list; these are the labels and the order they are offered in. */
-  var TYPE_GROUPS = [
-    { key: 'documents', label: 'PDF, Word, ODF text' },
-    { key: 'spreadsheets', label: 'Excel, ODF sheets, CSV' },
-    { key: 'presentations', label: 'PowerPoint, ODF slides' },
-    { key: 'images', label: 'Photos' },
-    { key: 'archives', label: 'ZIP archives' },
+  /*
+   * The extensions a request link may ask for, one chip each.
+   *
+   * These were five bundles ("Documents", "Spreadsheets") whose contents were
+   * only described in grey hint text, so nobody choosing "Documents" could see
+   * that it also let in .rtf and .md. A person deciding what a stranger may
+   * send them is deciding about extensions, so extensions are what the modal
+   * offers. The server still accepts the old group keys, see
+   * FileRequests::normalizeExtensions, so links made before this still work.
+   *
+   * Each carries its own file mark, resolved through TMAFileIcons from a
+   * sample filename, which is the same map the file lists draw from.
+   */
+  var EXTENSIONS = [
+    { ext: 'pdf', label: 'PDF' },
+    { ext: 'doc', label: 'DOC' },
+    { ext: 'docx', label: 'DOCX' },
+    { ext: 'odt', label: 'ODT' },
+    { ext: 'rtf', label: 'RTF' },
+    { ext: 'txt', label: 'TXT' },
+    { ext: 'xls', label: 'XLS' },
+    { ext: 'xlsx', label: 'XLSX' },
+    { ext: 'ods', label: 'ODS' },
+    { ext: 'csv', label: 'CSV' },
+    { ext: 'ppt', label: 'PPT' },
+    { ext: 'pptx', label: 'PPTX' },
+    { ext: 'odp', label: 'ODP' },
+    { ext: 'jpg', label: 'JPG' },
+    { ext: 'png', label: 'PNG' },
+    { ext: 'heic', label: 'HEIC' },
+    { ext: 'zip', label: 'ZIP' },
   ];
+
+  /** The file mark for an extension, from the one map the file lists use. */
+  function extIconSrc(ext) {
+    if (window.TMAFileIcons && window.TMAFileIcons.fileIconFromFilename) {
+      return window.TMAFileIcons.fileIconFromFilename('sample.' + ext);
+    }
+    return 'images/icons/tma/DefaultIcon.svg';
+  }
+
+  /* Ink marks (the ZIP mark is one) get .is-mono so dark mode may flip them;
+     the brand marks must not be touched. Same stamp file-thumbs.js applies. */
+  function extIconClass(src) {
+    var mono = window.TMAFileIcons && window.TMAFileIcons.isMonoIcon
+      && window.TMAFileIcons.isMonoIcon(src);
+    return 'tma-portal-request__chip-icon' + (mono ? ' is-mono' : '');
+  }
 
   /* Both choices are small on purpose, see App\Support\Files\FileRequests,
      which refuses anything above the larger one whatever is asked for. */
@@ -191,10 +230,13 @@
 
       optionRow('Allowed file types', 'Everything is accepted when none are ticked.',
         '<div class="tma-portal-request__chips">' +
-        TYPE_GROUPS.map(function (g) {
+        EXTENSIONS.map(function (e) {
+          var src = extIconSrc(e.ext);
           return '<label class="tma-portal-request__chip">' +
-            '<input type="checkbox" data-req-group="' + g.key + '">' +
-            '<span>' + esc(g.label) + '</span></label>';
+            '<input type="checkbox" data-req-group="' + esc(e.ext) + '">' +
+            '<img class="' + extIconClass(src) + '" src="' + esc(src) + '"' +
+            ' alt="" width="16" height="16" aria-hidden="true">' +
+            '<span>' + esc(e.label) + '</span></label>';
         }).join('') +
         '</div>') +
 

@@ -2075,6 +2075,21 @@
   color: var(--color-primary-dark, var(--color-primary));
 }
 
+/* The file mark rides at the label's own size. Most are brand marks (Acrobat
+   red, the Office blues) and must never be tinted; the ink ones carry
+   .is-mono, stamped in portal-file-requests.js, and only those flip in dark. */
+.tma-portal-request__chip-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.tma-dash[data-theme="dark"] .tma-portal-request__chip-icon.is-mono,
+:root[data-theme="dark"] .tma-portal-request__chip-icon.is-mono {
+  filter: invert(1) brightness(1.6);
+}
+
 /* Where uploads land — one line, always visible, always changeable. */
 .tma-portal-request__dest {
   display: flex;
