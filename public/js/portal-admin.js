@@ -3522,7 +3522,7 @@
             return '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Require authenticator app<span class="tma-portal-note"> Hides Set later during onboarding and blocks the portal until the app is confirmed.</span></span>' +
               ui().toggle(!!p.requireAuthenticatorApp || !!p.requireMfa, 'data-signin-authapp' + (admin ? '' : ' disabled'), 'Require authenticator') + '</div>';
           }
-          return '<p class="tma-portal-note" style="margin:0 0 0.75rem">Tick an account type to require the authenticator app for everyone with that type. You can still require it on one person from Users. The stricter rule wins.</p>' +
+          return '<p class="tma-portal-note" style="margin:0 0 0.75rem">One person can still be required from Users; the stricter rule wins.</p>' +
             authOptions.map(function (opt) {
               return '<label class="tma-portal-checkbox" style="display:flex;align-items:center;gap:0.5rem;margin:0.4rem 0">' +
                 '<input type="checkbox" data-signin-auth-type="' + esc(opt.id) + '"' +
@@ -3532,32 +3532,29 @@
             }).join('');
         }
 
-        root.innerHTML = '<h3 class="tma-portal-section__title">Password requirements</h3>' +
-          '<p class="tma-portal-subtitle">Applies to registration, password changes, and password resets.</p>' +
+        root.innerHTML =
           (admin ? '' : '<p class="tma-portal-note">Only administrators can change these settings.</p>') +
-          ui().section('',
+          ui().section('Password requirements',
             '<p>Minimum length:<br><strong>' + p.minLength + ' characters</strong></p>' +
             '<p>Numbers required:<br><strong>' + p.numbersRequired + '</strong></p>' +
             '<p>Special characters required:<br><strong>' + p.specialRequired + '</strong></p>' +
-            (admin ? '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Edit', icon: 'PencilSimple', variant: 'ghost', attrs: 'data-signin-edit' }) + '</div>' : '')) +
-          '<h3 class="tma-portal-section__title">Two-factor authentication</h3>' +
-          '<p class="tma-portal-subtitle">Everyone confirms a new or unrecognised sign-in with a 6-digit code. Email codes are always on. An authenticator app is recommended, and can be required so onboarding cannot skip it. Once the app is set up, sign-in uses the app code instead of email.</p>' +
-          ui().section('',
-            '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Email verification codes<span class="tma-portal-note"> Always on. Sent when someone signs in from a new browser or device and they have not set up an authenticator app.</span></span>' +
+            (admin ? '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Edit', icon: 'PencilSimple', variant: 'ghost', attrs: 'data-signin-edit' }) + '</div>' : ''),
+            { description: 'Applies to registration, password changes and resets.' }) +
+          ui().section('Two-factor authentication',
+            '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Email verification codes</span>' +
             ui().toggle(true, 'disabled', 'Email codes') + '</div>' +
             '<div style="margin-top:0.75rem"><span class="tma-portal-toggle-row__label">Require authenticator app by account type</span>' +
-            authTypeRows() + '</div>') +
-          '<h3 class="tma-portal-section__title">Sign-in lifetime</h3>' +
-          '<p class="tma-portal-subtitle">Everyone is signed out after this many days, including people who chose Stay signed in. Trusted devices use the same window.</p>' +
-          ui().section('',
-            ui().field('Sign-in expires after (days)', ui().input({ type: 'number', value: String(p.sessionDays || 7), attrs: 'data-signin-days min="1" max="30"' + (admin ? '' : ' disabled') }))) +
-          '<h3 class="tma-portal-section__title">Getting started requirements</h3>' +
-          '<p class="tma-portal-subtitle">Turn these on to require staff to connect accounts during Set up your account. Off means the step stays optional.</p>' +
-          ui().section('', 
+            authTypeRows() + '</div>',
+            { description: 'Email codes are always on. An authenticator app replaces them once set up.' }) +
+          ui().section('Sign-in lifetime',
+            ui().field('Sign-in expires after (days)', ui().input({ type: 'number', value: String(p.sessionDays || 7), attrs: 'data-signin-days min="1" max="30"' + (admin ? '' : ' disabled') })),
+            { description: 'Everyone signs in again after this, Stay signed in included.' }) +
+          ui().section('Getting started requirements',
             '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Require Microsoft connect</span>' +
             ui().toggle(!!p.requireMicrosoftConnect, 'data-signin-ms' + (admin ? '' : ' disabled'), 'Require Microsoft') + '</div>' +
             '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Require Google connect</span>' +
-            ui().toggle(!!p.requireGoogleConnect, 'data-signin-google' + (admin ? '' : ' disabled'), 'Require Google') + '</div>');
+            ui().toggle(!!p.requireGoogleConnect, 'data-signin-google' + (admin ? '' : ' disabled'), 'Require Google') + '</div>',
+            { description: 'Off leaves the step optional during Set up your account.' });
 
         function syncAuthFlagsFromTypes() {
           p.requireAuthenticatorForAccountTypes = authTypes.slice();
@@ -3644,21 +3641,19 @@
           ['failedSignIns', 'Multiple failed sign-in attempts'],
           ['suspiciousIp', 'Suspicious IP activity'],
         ];
-        root.innerHTML = '<h3 class="tma-portal-section__title">Trusted domains</h3>' +
+        root.innerHTML =
           (admin ? '' : '<p class="tma-portal-note">Only administrators can change these settings.</p>') +
-          ui().section('',
-            '<p class="tma-portal-note">Domains listed here may embed the portal in an iframe. Sent to browsers as a Content-Security-Policy header.</p>' +
-            '<div class="tma-portal-field"><span class="tma-portal-field__label">Allowed domains (comma separated list):</span>' +
-            '<textarea class="tma-portal-textarea" data-secpol-domains placeholder="example.com, app.example.com"' + (admin ? '' : ' disabled') + '>' + ui().esc(p.trustedDomains) + '</textarea></div>') +
-          '<h3 class="tma-portal-section__title">Auto-remediation</h3>' +
-          ui().section('',
-            '<p class="tma-portal-note">Scenarios flagged for automatic follow-up in the suspicious-login checks.</p>' +
-            '<p><strong>Scenarios</strong></p>' +
+          ui().section('Trusted domains',
+            ui().field('Allowed domains',
+              '<textarea class="tma-portal-textarea" data-secpol-domains placeholder="example.com, app.example.com"' + (admin ? '' : ' disabled') + '>' + ui().esc(p.trustedDomains) + '</textarea>'),
+            { description: 'These domains may embed the portal in an iframe.' }) +
+          ui().section('Auto-remediation',
             toggles.map(function (t2) {
               return '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">' + t2[1] + '</span>' +
                 ui().toggle(p.autoRemediation[t2[0]], 'data-secpol-toggle="' + t2[0] + '"' + (admin ? '' : ' disabled'), t2[1]) + '</div>';
-            }).join('')) +
-          (admin ? saveBtn('data-secpol-save') : '');
+            }).join('') +
+            (admin ? saveBtn('data-secpol-save') : ''),
+            { description: 'Flagged for follow-up in the suspicious-login checks.' });
 
         function save() {
           secApi('PUT', '/admin/security-policies/security', p).then(function (res) {
@@ -3717,17 +3712,14 @@
     var g = all.geoPolicy || { mode: 'off', countries: [], blockUnknown: false, message: '' };
     var mine = all.yourCountry;
     var modes = [
-      { value: 'off', label: 'Off — record only, do not block' },
-      { value: 'allow', label: 'Allow list — only these countries' },
-      { value: 'block', label: 'Block list — everywhere except these' }
+      { value: 'off', label: 'Off; record only' },
+      { value: 'allow', label: 'Allow list; only these countries' },
+      { value: 'block', label: 'Block list; everywhere except these' }
     ];
 
-    return ui().section('',
-        '<p class="tma-portal-note">Where the portal may be reached from. Applies to sign-in and to public links, and is recorded either way. It is one control beside sign-in and permissions, not a replacement for them; a VPN defeats it.</p>' +
-        (mine ? '<p class="tma-portal-note">You are signing in from <strong>' + ui().esc(mine) + '</strong>. A list that excludes you is refused.</p>'
-              : '<p class="tma-portal-note">Your country is not being reported, so this request did not come through Cloudflare. Restrictions have no effect on traffic like this.</p>') +
+    return ui().section('Countries',
         ui().field('Mode', ui().select(modes, g.mode, 'data-geo-mode' + (admin ? '' : ' disabled'), 'Mode')) +
-        ui().field('Countries (two-letter codes, comma separated)',
+        ui().field('Countries (two-letter codes)',
           ui().textarea({
             attrs: 'data-geo-countries' + (admin ? '' : ' disabled'),
             placeholder: 'LC, CA, US',
@@ -3736,23 +3728,26 @@
           })) +
         '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Block requests with no country</span>' +
         ui().toggle(g.blockUnknown, 'data-geo-unknown' + (admin ? '' : ' disabled'), 'Block requests with no country') + '</div>' +
-        '<p class="tma-portal-note">Strict. Only applies to public internet traffic — the health check and anything inside the network are never refused on this, or a Cloudflare outage would take the portal down with it.</p>' +
-        ui().field('Message shown to a refused visitor',
+        ui().field('Message shown when refused',
           ui().input({
             attrs: 'data-geo-message' + (admin ? '' : ' disabled'),
             value: g.message || '',
-            ariaLabel: 'Message shown to a refused visitor'
-          })) +
+            ariaLabel: 'Message shown when refused'
+          })),
+        { description: mine
+            ? 'You are signing in from ' + mine + '; a list that excludes you is refused.'
+            : 'Your country is not being reported, so these rules do not apply to this connection.' }) +
+      ui().section('VPNs and proxies',
         '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Refuse VPNs, proxies and Tor</span>' +
         ui().toggle(g.blockVpn, 'data-geo-vpn' + (admin ? '' : ' disabled'), 'Refuse VPNs, proxies and Tor') + '</div>' +
-        '<p class="tma-portal-note">Detection is a judgement, not a fact, and there is no exception list. It will also refuse corporate VPNs, iCloud Private Relay and some mobile networks, so a real client can be turned away with no way for you to let them in — every refusal is recorded so you can see who. It does not stop a residential proxy, which looks like home broadband.</p>' +
-        ui().field('Message shown to a refused VPN user',
+        ui().field('Message shown when refused',
           ui().input({
             attrs: 'data-geo-vpn-message' + (admin ? '' : ' disabled'),
             value: g.vpnMessage || '',
-            ariaLabel: 'Message shown to a refused VPN user'
+            ariaLabel: 'Message shown when refused'
           })) +
-        (admin ? saveBtn('data-geo-save') : ''));
+        (admin ? saveBtn('data-geo-save') : ''),
+        { description: 'Detection is a judgement and has no exception list; a corporate VPN can be refused too.' });
   }
 
   function wireGeo(root, all, admin) {

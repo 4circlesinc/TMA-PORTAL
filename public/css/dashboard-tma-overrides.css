@@ -2609,3 +2609,36 @@ body::-webkit-scrollbar,
     justify-content: flex-end;
   }
 }
+
+/*
+ * Breathing room between settings sections.
+ *
+ * `.tma-portal-section` sets the gap *inside* a section (title to card) but
+ * nothing ever set the gap *between* consecutive ones, so a settings panel
+ * that stacks three or four of them read as one continuous wall: a card, a
+ * heading hard against its bottom edge, another card. The Security Policy
+ * page was the worst of them.
+ *
+ * Set on the section rather than on a wrapper because these panels have no
+ * common parent — each page writes its own `root.innerHTML` — and a rule
+ * keyed to the sibling is the only one that reaches all of them at once.
+ *
+ * A hand-written `<h3 class="tma-portal-section__title">` before a section
+ * is the same shape and gets the same treatment: it is a heading introducing
+ * what follows, so its space belongs above it, and it must not inherit the
+ * margin meant to separate whole sections from each other.
+ */
+.tma-portal-section + .tma-portal-section,
+.tma-portal-section + .tma-portal-section__title,
+.tma-portal-section__card + .tma-portal-section__title {
+  margin-top: var(--space-32);
+}
+
+/*
+ * A heading immediately followed by its own card is one unit; the 32px above
+ * belongs to the group, not between the heading and the thing it names.
+ */
+.tma-portal-section__title + .tma-portal-section,
+.tma-portal-section__title + .tma-portal-section__card {
+  margin-top: var(--space-8);
+}
