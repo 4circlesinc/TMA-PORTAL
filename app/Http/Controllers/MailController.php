@@ -217,7 +217,12 @@ class MailController extends Controller
         $page = $query
             ->orderByDesc('is_pinned')
             ->orderByDesc('sent_at')
-            ->paginate($perPage, ['*'], 'page', $data['page'] ?? 1);
+            ->paginate(
+                $perPage,
+                array_map(fn (string $column) => 'mail_messages.'.$column, MailMessage::listColumns()),
+                'page',
+                $data['page'] ?? 1,
+            );
 
         return response()->json([
             'messages' => $this->withThreadCounts(
@@ -2484,12 +2489,36 @@ class MailController extends Controller
      */
     private function folderCounts(int $userId): array
     {
+        // Every badge on the sidebar answers from one pass over the mailbox.
+        //
+        // This used to be five aggregations: one grouped by folder, one per
+        // flag view, one for snoozed. Each scanned the same rows with a
+        // different predicate, and the email page asks for them every 30
+        // seconds per signed-in person, so twenty open tabs meant a hundred
+        // full-mailbox aggregations a minute. The predicates are cheap; the
+        // scan is what costs. Folding them into conditional sums leaves the
+        // numbers identical and live, and reads the rows once.
+        $flags = '';
+        foreach (self::VIRTUAL_FOLDER_COLUMNS as $view => $column) {
+            // Flag views cut across folders but match the listing's scope:
+            // no trash, spam or drafts, and nothing currently snoozed.
+            $visible = "{$column} and folder not in ('trash', 'spam', 'draft') and snoozed_until is null";
+            $flags .= ", sum(case when {$visible} then 1 else 0 end) as {$view}_total";
+            $flags .= ", sum(case when {$visible} and not is_read then 1 else 0 end) as {$view}_unread";
+        }
+
         // Snoozed mail is hidden from its real folder, so it must not badge
         // it either, an Inbox count including invisible rows reads as a bug.
         $rows = MailMessage::query()
-            ->selectRaw('folder, count(*) as total, sum(case when is_read then 0 else 1 end) as unread')
+            ->selectRaw(
+                'folder'
+                .', sum(case when snoozed_until is null then 1 else 0 end) as total'
+                .', sum(case when snoozed_until is null and not is_read then 1 else 0 end) as unread'
+                .', sum(case when snoozed_until is not null then 1 else 0 end) as snoozed_total'
+                .', sum(case when snoozed_until is not null and not is_read then 1 else 0 end) as snoozed_unread'
+                .$flags
+            )
             ->where('user_id', $userId)
-            ->whereNull('snoozed_until')
             ->groupBy('folder')
             ->get()
             ->keyBy('folder');
@@ -2505,33 +2534,14 @@ class MailController extends Controller
             ];
         }
 
-        // Important, Starred and Pinned are flags, not folders, so each needs
-        // its own pass; scope matches the listing (no trash / spam / drafts).
-        foreach (self::VIRTUAL_FOLDER_COLUMNS as $view => $column) {
-            $row = MailMessage::query()
-                ->selectRaw('count(*) as total, sum(case when is_read then 0 else 1 end) as unread')
-                ->where('user_id', $userId)
-                ->where($column, true)
-                ->whereNotIn('folder', ['trash', 'spam', 'draft'])
-                ->whereNull('snoozed_until')
-                ->first();
-
+        // The flag views and Snoozed span every folder, so their totals are
+        // the per-folder sums added up.
+        foreach ([...array_keys(self::VIRTUAL_FOLDER_COLUMNS), 'snoozed'] as $view) {
             $counts[$view] = [
-                'total' => (int) ($row->total ?? 0),
-                'unread' => (int) ($row->unread ?? 0),
+                'total' => (int) $rows->sum(fn ($row) => (int) $row->{$view.'_total'}),
+                'unread' => (int) $rows->sum(fn ($row) => (int) $row->{$view.'_unread'}),
             ];
         }
-
-        $snoozed = MailMessage::query()
-            ->selectRaw('count(*) as total, sum(case when is_read then 0 else 1 end) as unread')
-            ->where('user_id', $userId)
-            ->whereNotNull('snoozed_until')
-            ->first();
-
-        $counts['snoozed'] = [
-            'total' => (int) ($snoozed->total ?? 0),
-            'unread' => (int) ($snoozed->unread ?? 0),
-        ];
 
         return $counts;
     }
