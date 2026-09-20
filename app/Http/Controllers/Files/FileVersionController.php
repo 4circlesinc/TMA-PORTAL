@@ -132,6 +132,7 @@ class FileVersionController extends BaseFilesController
         $user = $this->user($request);
         $file = $this->findFile($uuid, withTrashed: true);
         FileAccess::authorize($user, 'download', $file);
+        $this->assertNotInfected($file, $user);
 
         $version = $this->findVersion($file, $versionUuid);
         \App\Support\Files\Activity::forFile($user->id, $file, 'download', [
@@ -153,6 +154,7 @@ class FileVersionController extends BaseFilesController
         $user = $this->user($request);
         $file = $this->findFile($uuid, withTrashed: true);
         FileAccess::authorize($user, 'preview', $file);
+        $this->assertNotInfected($file, $user);
 
         $version = $this->findVersion($file, $versionUuid);
         abort_unless(FileType::isPreviewable((string) $version->extension), 415, 'This version can’t be previewed.');

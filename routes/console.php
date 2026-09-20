@@ -169,6 +169,41 @@ Schedule::command('portal:prune-history')->dailyAt('03:20')->withoutOverlapping(
 Schedule::command('recordings:prune')->dailyAt('03:40')->withoutOverlapping(180);
 
 /*
+ * Sign-in history retention.
+ *
+ * `auth_events` is the security trail — who signed in, from which address and
+ * country, on what device — so it is personal data about every member of the
+ * firm, and it grew without limit. Keeping it forever is the wrong default
+ * twice over: it is more of people's movements than anyone needs, and a bigger
+ * prize if the database is ever read by the wrong party.
+ *
+ * Two years is the window. It is long enough to investigate an incident found
+ * late and to show a pattern across annual review cycles, and short enough
+ * that the table is not a decade-long location history. The append-only copy
+ * in storage/logs/security.log ({@see \App\Support\Security\SecurityAudit})
+ * is governed separately by log rotation, so this does not destroy the only
+ * record of anything.
+ *
+ * Deleted in chunks: one unbounded DELETE over a table this size locks it for
+ * long enough to stall sign-in, which is the one thing a retention job must
+ * never do.
+ */
+Artisan::command('security:prune-auth-events {--days=730}', function () {
+    $days = max(30, (int) $this->option('days'));
+    $cutoff = now()->subDays($days);
+    $removed = 0;
+
+    do {
+        $batch = AuthEvent::query()->where('created_at', '<', $cutoff)->limit(1000)->delete();
+        $removed += $batch;
+    } while ($batch > 0);
+
+    $this->info('Removed '.$removed.' sign-in event(s) older than '.$days.' days.');
+})->purpose('Drop sign-in history past the retention window');
+
+Schedule::command('security:prune-auth-events')->dailyAt('03:50')->withoutOverlapping(180);
+
+/*
  * Recompute recurring account reports whose next run is due.
  *
  * This is what makes the Reporting page's "recurring" tab mean anything: a

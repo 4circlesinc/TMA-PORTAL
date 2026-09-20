@@ -10,6 +10,7 @@ use App\Models\Folder;
 use App\Models\User;
 use App\Support\Files\FileAccess;
 use App\Support\Files\FolderProvisioner;
+use App\Support\Files\MalwareScanner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -146,6 +147,39 @@ class FileManagerTest extends TestCase
         $browse = $this->actingAs($user)->getJson('/portal/files/?section=filebox');
         $browse->assertOk()->assertJsonPath('files.0.name', 'report.pdf');
         $this->assertStringNotContainsString('vault/', json_encode($browse->json()));
+    }
+
+    /**
+     * A file that scanned as infected is refused on the signed-in doors too,
+     * not just on public links. A client folder is shared, so one bad upload
+     * was otherwise reachable by every colleague who could open the folder.
+     */
+    public function test_an_infected_file_is_refused_on_download_and_preview(): void
+    {
+        $user = $this->approvedUser();
+
+        $id = $this->actingAs($user)
+            ->post('/portal/files/files', [
+                'file' => UploadedFile::fake()->createWithContent('notes.txt', 'harmless for now'),
+            ])
+            ->assertCreated()
+            ->json('id');
+
+        // Clean bytes are served as normal.
+        $this->actingAs($user)->get("/portal/files/files/{$id}/download")->assertOk();
+
+        FileItem::where('uuid', $id)->first()
+            ->forceFill(['malware_status' => MalwareScanner::INFECTED])->save();
+
+        $this->actingAs($user)->get("/portal/files/files/{$id}/download")->assertStatus(403);
+        $this->actingAs($user)->get("/portal/files/files/{$id}/preview")->assertStatus(403);
+
+        // A queued scan that has not run yet must not make the vault look
+        // broken, so PENDING still serves.
+        FileItem::where('uuid', $id)->first()
+            ->forceFill(['malware_status' => MalwareScanner::PENDING])->save();
+
+        $this->actingAs($user)->get("/portal/files/files/{$id}/download")->assertOk();
     }
 
     public function test_pdf_preview_length_matches_bytes_on_disk_not_a_stale_size(): void

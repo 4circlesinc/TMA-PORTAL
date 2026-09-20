@@ -178,6 +178,18 @@ class FileType
             }
         }
 
+        // Magic-byte guard, independent of what finfo concluded.
+        //
+        // The MIME denylist above catches a Windows .exe (application/x-dosexec)
+        // and a shell script (text/x-shellscript), but a Linux/macOS binary
+        // sniffs as plain application/octet-stream — so `malware.bin` renamed
+        // to `document.pdf` walked straight through. Reading the first bytes
+        // catches it whatever finfo says, because an executable's header is
+        // fixed and a PDF's is not negotiable either.
+        if (self::looksExecutable($absolutePath)) {
+            throw new FileValidationException('That file appears to be an executable or script, which is not allowed.');
+        }
+
         return [
             'extension' => $ext,
             'mime' => $mime,
@@ -186,6 +198,49 @@ class FileType
             'previewable' => self::isPreviewable($ext),
             'size' => $size,
         ];
+    }
+
+    /**
+     * Do the opening bytes belong to a program rather than a document?
+     *
+     * Checked by signature, not by name or by finfo's verdict: these headers
+     * are what the loader on each platform actually reads, so a file carrying
+     * one is a program no matter what it is called. Kept to unambiguous
+     * signatures — a false positive here refuses a client's genuine passport
+     * scan, which is its own kind of failure.
+     */
+    private static function looksExecutable(string $absolutePath): bool
+    {
+        $handle = @fopen($absolutePath, 'rb');
+        if ($handle === false) {
+            return false;
+        }
+
+        $head = (string) fread($handle, 8);
+        fclose($handle);
+
+        if (strlen($head) < 4) {
+            return false;
+        }
+
+        $magic = [
+            "\x7fELF",         // Linux/BSD ELF
+            'MZ',              // Windows PE/DOS
+            "\xfe\xed\xfa\xce", // Mach-O 32-bit
+            "\xfe\xed\xfa\xcf", // Mach-O 64-bit
+            "\xce\xfa\xed\xfe", // Mach-O 32-bit, byte-swapped
+            "\xcf\xfa\xed\xfe", // Mach-O 64-bit, byte-swapped
+            "\xca\xfe\xba\xbe", // Mach-O universal / Java class
+            '#!',              // Any interpreter shebang
+        ];
+
+        foreach ($magic as $signature) {
+            if (str_starts_with($head, $signature)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function mimeLooksLikeImage(string $mime): bool

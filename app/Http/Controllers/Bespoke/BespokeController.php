@@ -109,7 +109,7 @@ class BespokeController extends Controller
         $local = Knowledge::match($user, $identity, $page, $lastUser, $fieldHints);
         $source = 'local';
         $reply = is_array($local) ? (string) $local['answer'] : null;
-        $toolbox = new Toolbox($user, $identity, $page, $conversation);
+        $toolbox = new Toolbox($user, $identity, $page, $conversation, $lastUser);
 
         // How the portal is built, secured, hosted, or paid for is not the
         // model's to discuss; the question never reaches it.

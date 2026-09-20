@@ -202,6 +202,7 @@ class FileController extends BaseFilesController
         $file = $this->findFile($uuid);
         $user = $this->user($request);
         FileAccess::authorize($user, 'download', $file);
+        $this->assertNotInfected($file, $user);
 
         Activity::forFile($user->id, $file, 'download');
         SecurityAudit::record('file.download', [
@@ -219,6 +220,7 @@ class FileController extends BaseFilesController
         $file = $this->findFile($uuid);
         $user = $this->user($request);
         FileAccess::authorize($user, 'preview', $file);
+        $this->assertNotInfected($file, $user);
         abort_unless(FileType::isPreviewable((string) $file->extension), 415, 'This file type can’t be previewed.');
 
         Activity::forFile($user->id, $file, 'preview');

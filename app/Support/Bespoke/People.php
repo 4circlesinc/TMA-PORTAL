@@ -87,6 +87,28 @@ final class People
     }
 
     /**
+     * One reachable person by email address, or null.
+     *
+     * The reader's own address counts: drafting to yourself is ordinary, and
+     * {@see reachableById} excludes self only because you cannot message
+     * yourself in the portal.
+     */
+    public static function reachableByEmail(User $viewer, string $email): ?User
+    {
+        $email = trim(mb_strtolower($email));
+
+        if ($email === '') {
+            return null;
+        }
+
+        if ($email === mb_strtolower((string) $viewer->email)) {
+            return $viewer;
+        }
+
+        return self::reachable($viewer)->whereRaw('LOWER(email) = ?', [$email])->first();
+    }
+
+    /**
      * Facts for the prompt: the administrators this reader can reach, and
      * the person whose job title says they look after the portal.
      *

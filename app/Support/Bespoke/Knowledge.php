@@ -194,7 +194,11 @@ final class Knowledge
         $text .= "\n\n**Save as draft** (and autosave) keep the file in Draft. **Add** files it into New Applications when required fields and files are complete. Filing follows Document Requirements: every required upload for the applicant, a sponsor if Sponsored is Yes, and each dependent on the form. **Save** on an application already on file does not re-demand outstanding pack documents; those stay on the checklist.";
 
         if ($empty !== []) {
-            $text .= "\n\nOn this form, these labels look empty: **".implode('**, **', $empty).'**. Required fields also show a red asterisk.';
+            // Labels are scraped from the reader's DOM and land in the system
+            // message, so they are fenced rather than interpolated bare.
+            $text .= "\n\nOn this form, these labels look empty: "
+                .Untrusted::wrap(implode(', ', $empty), 'form field labels')
+                .' Required fields also show a red asterisk.';
         } else {
             $text .= "\n\nI cannot read the live form values. Check each red asterisk before you click Add.";
         }
