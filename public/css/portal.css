@@ -2804,15 +2804,41 @@
   overflow-y: visible;
 }
 
-/* Recent email — show ~4 rows upfront; scroll for the rest (up to 8).
+/* Recent email — show the rows the tile has room for; scroll for the rest.
    Requests and Comments scroll the same way: ten rows would otherwise make
-   one column of the board twice the height of the other two. */
+   one column of the board twice the height of the other two.
+
+   The budget is the body the list sits in, not a row count in pixels. It was
+   `calc(4 * 72px)`, and the row it was counting is 58px of min-height plus
+   16px of padding — 66.6, not 72. Four of those leave 21px over, which is
+   exactly enough of a fifth row to show the top of its avatar and cut it in
+   half at the tile's edge.
+
+   Tracking the body also fixes the other end of it: the packer stretches the
+   bottom card of each column so the column bottoms line up, and a list frozen
+   at 288px turned all of that extra height into blank space under the rows.
+
+   --tma-work-row-h is one row, measured rather than assumed: 58px of
+   min-height loses to three lines of meta (16 + 15.3 + 15.3) plus 16px of
+   padding. Kept as a token so the row rule and the budget that counts rows
+   cannot drift apart again, which is how 72 outlived the row it described. */
 .tma-portal-email-list,
 .tma-portal-work-list {
+  --tma-work-row-h: 66.6px;
   display: flex;
   flex-direction: column;
   gap: 0;
-  max-height: calc(4 * 72px);
+  flex: 1 1 auto;
+  /* Whole rows only. The list takes the body it is given and rounds down to
+     the last row that fits, so the edge it scrolls at is always between two
+     rows instead of through the middle of somebody's avatar.
+
+     round(down, …) rather than calc(floor(…)): floor() is rejected here by
+     current Chromium, and a max-height it cannot parse is no max-height at
+     all — the declaration drops silently and the row is cut again. The
+     plain 100% below is the fallback for anything without round(). */
+  max-height: 100%;
+  max-height: round(down, 100%, var(--tma-work-row-h));
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -2877,6 +2903,11 @@
    *
    * Matching the file row exactly, rather than each tile guessing, is what
    * keeps that true the next time one of these grows a line.
+   *
+   * This is a floor, not the height: three lines of meta plus the padding
+   * come to more than 58, so the row is as tall as its content. Anything
+   * budgeting rows in pixels has to measure one rather than assume — see
+   * --tma-work-row-h below.
    */
   min-height: 58px;
 }

@@ -218,19 +218,27 @@
    * its slot scrolls inside the tile (the packed panel body already does),
    * the way People has always worked; a shorter one keeps the slot. In
    * pixels: a 70px panel frame (padding, head, gap) plus the rows, which are
-   * 58px each with the panel's 12px gap in Recent Files and Favorites and
-   * no gap inside the email, chat and work lists (capped at 4 x 72 by the
-   * stylesheet). People is six 52px rows and their 2px gaps. Shortcuts is
-   * the one tile measured, because its height is its capability count, and
-   * its loading tile is the real tile with the glass taken out.
+   * 58px each with the panel's 12px gap in Recent Files and Favorites. People
+   * is six 52px rows and their 2px gaps. Shortcuts is the one tile measured,
+   * because its height is its capability count, and its loading tile is the
+   * real tile with the glass taken out.
+   *
+   * Email, Requests and Comments are four rows of the email/work lists, which
+   * are 66.6px each and gapless: 70 + 4 x 66.6 is 337. They were 358, carried
+   * over from a row assumed to be 72px, and the 21px of difference was not
+   * nothing — the stylesheet rounds those lists down to whole rows, so the
+   * remainder came out as a band of empty card under the last one, and the
+   * fifth row it was almost tall enough for was sliced through the avatar.
+   * The 66.6 lives in the stylesheet as --tma-work-row-h; these two move
+   * together.
    */
   var TILE_SLOT = {
     recentFiles: 478,
     favorites: 338,
-    email: 358,
+    email: 337,
     messages: 360,
-    requests: 358,
-    comments: 358,
+    requests: 337,
+    comments: 337,
     employees: 392,
     cipStatus: 300,
     road: 328,
