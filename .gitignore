@@ -18,7 +18,22 @@
 /auth.json
 /dist-pages
 /node_modules
-/public/build
+# /public/build is COMMITTED on purpose.
+#
+# The shell lists 107 scripts and 29 stylesheets one by one, because that list
+# is the load order. AssetBundle rewrites those tags to the two built files
+# when a build exists; with no build it serves the raw tags, which is 135
+# requests and 7.1 MB before the dashboard can paint.
+#
+# `npm run build` only ever ran from `composer setup`, so deploys never built
+# one and production served the unbundled shell. esbuild is a devDependency,
+# so a build-on-deploy hook would skip silently on any host that installs
+# without dev dependencies — and a fix that can silently stop working is how
+# this went unnoticed in the first place. Committing it means the bundle is
+# always there.
+#
+# Rebuild with `npm run build` before pushing a change to anything under
+# public/js or public/css; AssetBundleTest fails when it is stale.
 /public/fonts-manifest.dev.json
 /public/hot
 /public/storage
