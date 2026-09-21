@@ -2621,6 +2621,38 @@
   height: 0;
 }
 
+/*
+ * Recent Files and Favorites stack their rows straight in the panel body, so
+ * the body is their scroller and there is no inner list to round off. Same
+ * treatment as the lists that do have one: the body takes the height the
+ * masonry gave the tile and rounds it down to whole rows, or a file row is
+ * cut through its thumbnail at the bottom of the card.
+ *
+ * A row is 58px with the panel's 12px gap above it; the +12/-12 is the gap
+ * the last visible row does not have. Only these two tiles, because every
+ * other body holds something that is not a stack of file rows.
+ *
+ * The percentage is the tile's height, not the body's — a max-height percent
+ * resolves against the parent box and knows nothing about the head and the
+ * padding above it — so the chrome comes off first: 40 of panel padding, the
+ * head's own line and the 12px gap under it.
+ */
+.tma-portal-home-grid.is-packed > [data-tile-id="recentFiles"] > .tma-portal-panel__body,
+.tma-portal-home-grid.is-packed > [data-tile-id="favorites"] > .tma-portal-panel__body {
+  --tma-file-row-h: calc(58px + var(--space-12));
+  --tma-panel-chrome: calc(
+    2 * var(--space-20) + var(--text-lh-14) + var(--space-12)
+  );
+  max-height: 100%;
+  max-height: calc(
+    round(
+      down,
+      100% - var(--tma-panel-chrome) + var(--space-12),
+      var(--tma-file-row-h)
+    ) - var(--space-12)
+  );
+}
+
 @media (max-width: 1100px) {
   .tma-portal-home-grid:not(.is-packed) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -2703,12 +2735,32 @@
   flex: 1 1 auto;
 }
 
+/*
+ * The list takes the room the tile has left after the title and the week
+ * strip, rounded down to whole items.
+ *
+ * It used to demand five items through min-height, and the slot does not
+ * stretch to cover it: 328 of tile, less the title, the week strip and the
+ * padding, leaves 180 for a list that insisted on 188.25. The 8px it could
+ * not have overflowed the block around it, so the fifth item was cut through
+ * by an edge belonging to something else, with the rest of the overflow left
+ * as a band of empty card underneath.
+ *
+ * A row is one avatar and the padding either side of it, which is the same
+ * arithmetic the min-height used; what changed is that it is now a ceiling
+ * the tile can meet rather than a floor it cannot.
+ */
 .tma-portal-tile--road .tma-dash__overview-road-list {
   --tma-road-item-row: calc(var(--dash-avatar-size, 24px) + var(--space-8));
   justify-content: flex-start;
-  flex: 0 1 auto;
-  min-height: calc(5 * var(--tma-road-item-row) + 4 * var(--space-8));
+  flex: 1 1 auto;
+  min-height: 0;
   max-height: calc(5 * var(--tma-road-item-row) + 4 * var(--space-8));
+  max-height: min(
+    calc(5 * var(--tma-road-item-row) + 4 * var(--space-8)),
+    round(down, 100% + var(--space-8), calc(var(--tma-road-item-row) + var(--space-8)))
+      - var(--space-8)
+  );
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -2775,10 +2827,11 @@
  *
  * Once packed, the tile has a definite height, and it is usually taller than it
  * asked for: the masonry stretches the bottom card in each column so the
- * columns end level. Keeping the cap there is what left a third of the card
- * empty under six names. The cap is dropped instead, and the panel body — which
- * already flexes to the tile and scrolls (see .is-packed above) — shows however
- * many rows actually fit.
+ * columns end level. Keeping the six-row cap there is what left a third of the
+ * card empty under six names. Packed, the cap becomes the tile's own height
+ * instead — rounded down to whole rows, because a height the masonry chose has
+ * no reason to be a multiple of anything, and the remainder is a name sliced
+ * through its avatar at the bottom edge.
  */
 .tma-portal-employees--scroll {
   overflow-x: hidden;
@@ -2798,10 +2851,31 @@
   max-height: calc(6 * 52px + 5 * 2px);
 }
 
-/* The list is as tall as the body it sits in; the body owns the scrolling. */
+/* The list is as tall as the body it sits in, rounded down to whole rows: the
+   tile's height is the masonry's, and owes nothing to any row, so left alone
+   it cuts the last name through the middle of its avatar. The +2/-2 is the
+   trailing gap the last visible row does not have. */
 .tma-portal-home-grid.is-packed .tma-portal-employees--scroll {
+  /*
+   * 16px of padding around the taller of the two things in the row — the
+   * 36px avatar, or the name and status stacked: the name's own line box
+   * (13px at normal leading, so ~16.9 and not fluid), a --text-lh-12 line
+   * under it, and the meta's 2px between them. Plus the 2px gap the list
+   * puts above each row.
+   *
+   * The avatar wins on a wide screen; below 1025 the fluid type overtakes
+   * it and the row grows to 52.89, which a flat 52 + gap would cut.
+   */
+  --tma-employee-row-h: calc(
+    16px + max(36px, calc(16.9px + var(--text-lh-12) + 2px)) + 2px
+  );
   max-height: none;
-  overflow-y: visible;
+  max-height: calc(
+    round(down, 100% + 2px, var(--tma-employee-row-h)) - 2px
+  );
+  /* Back to scrolling itself: with a max-height of its own, handing the
+     overflow up to the body would just move the cut row somewhere else. */
+  overflow-y: auto;
 }
 
 /* Recent email — show the rows the tile has room for; scroll for the rest.
@@ -2818,13 +2892,20 @@
    bottom card of each column so the column bottoms line up, and a list frozen
    at 288px turned all of that extra height into blank space under the rows.
 
-   --tma-work-row-h is one row, measured rather than assumed: 58px of
-   min-height loses to three lines of meta (16 + 15.3 + 15.3) plus 16px of
-   padding. Kept as a token so the row rule and the budget that counts rows
-   cannot drift apart again, which is how 72 outlived the row it described. */
+   --tma-work-row-h is one row, built from the same parts the row is: 16px of
+   padding, a 16px top line (the 13px author/sender label's line box), and two
+   --text-lh-12 lines with the meta's 2px gaps between the three.
+
+   Composed rather than constant because the type is fluid — --text-lh-12 is a
+   clamp() on vw, so a row is 66.6px at 1500, 65.3 at 1200 and 72 below 1025.
+   A frozen number is right at one width and cuts a row at every other, which
+   is what 72 was doing. */
 .tma-portal-email-list,
 .tma-portal-work-list {
-  --tma-work-row-h: 66.6px;
+  --tma-work-row-h: max(
+    58px,
+    calc(16px + 16px + 2 * var(--text-lh-12) + 2 * 2px)
+  );
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -2857,14 +2938,40 @@
 }
 
 /* Messages — five rows, so it never needs to scroll. */
+/*
+ * Messages — five rows, and the tile is sized for five, but "sized for" is
+ * not the same as "a whole number of": the chat row is two lines where the
+ * work rows are three, and at the narrow end of the fluid type it grows past
+ * its share of the tile and the fifth name is cut through the avatar.
+ *
+ * Same treatment as the lists above, with the chat row's own parts: 16px of
+ * padding, a 16px top line and one --text-lh-12 line under it, plus the 2px
+ * the meta puts between them.
+ */
 .tma-portal-chat-list {
+  /* Two lines and a 32px avatar leave this row under the 58px floor the row
+     rule sets, so the floor is what it actually measures — but only while the
+     type is small enough, hence max() rather than a flat 58. */
+  --tma-chat-row-h: max(58px, calc(16px + 16px + var(--text-lh-12) + 2px));
   display: flex;
   flex-direction: column;
   gap: 0;
   overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  max-height: 100%;
+  max-height: round(down, 100%, var(--tma-chat-row-h));
   min-height: 0;
   margin: 0 -4px;
   padding: 0 4px;
+}
+
+.tma-portal-chat-list::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .tma-portal-panel--email > .tma-portal-panel__body,

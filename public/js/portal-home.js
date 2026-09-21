@@ -241,7 +241,11 @@
     comments: 337,
     employees: 392,
     cipStatus: 300,
-    road: 328,
+    // 148 of chrome (title, week strip, padding) plus the five road items
+    // the list is sized for: 5 x 31.25 and the 8px gaps between them. It was
+    // 328, which is 8px short of the five it promised, so the list overflowed
+    // the block around it and the fifth item was cut by that edge.
+    road: 337,
   };
 
   var renderQueued = null;
