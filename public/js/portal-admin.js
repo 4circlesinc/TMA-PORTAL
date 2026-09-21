@@ -3756,13 +3756,22 @@
    * Chosen countries stay checked and visible regardless of the filter,
    * because the question an administrator asks most often is "what is on
    * this list", and a search that hides the answer is a search that makes
-   * them retype it.
+   * them retype it. For the same reason they sort to the top: the answer
+   * should not be scattered down 249 alphabetical rows. The order is fixed
+   * at render, so ticking a country does not make it jump under the cursor.
    */
   function countryPicker(options, chosen, admin) {
     var picked = {};
     (chosen || []).forEach(function (c) { picked[String(c).toUpperCase()] = true; });
 
-    var rows = options.map(function (o) {
+    var ordered = (options || []).slice().sort(function (a, b) {
+      var ap = picked[a.code] ? 0 : 1;
+      var bp = picked[b.code] ? 0 : 1;
+      if (ap !== bp) return ap - bp;
+      return a.name.localeCompare(b.name);
+    });
+
+    var rows = ordered.map(function (o) {
       return '<label class="tma-portal-country" data-geo-country-row data-name="' +
         ui().esc(o.name.toLowerCase()) + '" data-code="' + ui().esc(o.code.toLowerCase()) + '">' +
         '<input type="checkbox" data-geo-country="' + ui().esc(o.code) + '"' +
