@@ -682,11 +682,15 @@
     var name = isNamePath(path);
     var shown = name ? upperName(state.draft[path] || '') : (state.draft[path] || '');
     if (fieldsLocked()) return lockedField(path, shown, opts);
+    // Keyed by path for the same reason selectField is: a row that grows or
+    // loses a field must not hand one control's wired handler to another.
     return '<label class="tma-portal-field' + (state.errors[path] ? ' is-invalid' : '') +
-      (name ? ' tma-portal-field--name' : '') + '">' +
+      (name ? ' tma-portal-field--name' : '') + '"' +
+      ' data-key="field:' + esc(path) + '">' +
       fieldLabel(path, opts.label || labelFor(path)) +
       '<input class="tma-portal-input' + (name ? ' tma-portal-input--name' : '') + '"' +
       ' type="' + (opts.type || 'text') + '"' +
+      ' data-key="input:' + esc(path) + '"' +
       ' data-cip-field="' + esc(path) + '"' +
       ' value="' + esc(shown) + '"' +
       (opts.placeholder ? ' placeholder="' + esc(opts.placeholder) + '"' : '') +
@@ -804,9 +808,24 @@
     opts = opts || {};
     if (fieldsLocked()) return lockedField(path, selectShown(path, options), opts);
     var list = [{ value: '', label: placeholder }].concat(options);
-    return '<label class="tma-portal-field' + (state.errors[path] ? ' is-invalid' : '') + '">' +
+    /*
+     * data-key names which field this is, so Morph pairs controls by identity
+     * rather than by position.
+     *
+     * Every select in a row carries the same data attributes, so a row that
+     * grows a field in the middle looked to Morph like the ones after it had
+     * simply changed. It reused the node — and its wired change handler — for
+     * a different field: picking Enterprise Project inserts the category
+     * select before Sponsored, so Sponsored's node became the category box
+     * and every category pick ran Sponsored's handler. The answer went into
+     * the wrong draft field and the re-render drew the category empty again,
+     * which read on screen as a select that refused to hold an answer.
+     */
+    return '<label class="tma-portal-field' + (state.errors[path] ? ' is-invalid' : '') + '"' +
+      ' data-key="field:' + esc(path) + '">' +
       fieldLabel(path, opts.label || labelFor(path)) +
-      '<select class="tma-portal-select" data-cip-field="' + esc(path) + '"' + requiredAttr(path) + '>' +
+      '<select class="tma-portal-select" data-key="select:' + esc(path) + '"' +
+      ' data-cip-field="' + esc(path) + '"' + requiredAttr(path) + '>' +
       list.map(function (o) {
         return '<option value="' + esc(o.value) + '"' +
           (String(state.draft[path]) === String(o.value) ? ' selected' : '') + '>' +
@@ -2738,14 +2757,23 @@
         if (announce) setDraftButtonBusy(opts.button, false);
         if (res.status === 422 && json.errors) {
           /*
-           * The payload was wrong, not the save path. Painting the fields
-           * keeps autosave on — a missing provider is something they can
-           * fix, and turning the timer off for that left the next keystroke
-           * unsaved.
+           * The payload was wrong, not the save path. Autosave stays on — a
+           * missing provider is something they can fix, and turning the timer
+           * off for that left the next keystroke unsaved.
+           *
+           * But only a save the reader PRESSED may redraw the form. The timer
+           * fires 1.2s after a keystroke, so an unprompted re-render landed
+           * while somebody was still answering the next question and took
+           * their half-made choice with it: pick Enterprise Project with no
+           * provider yet, and the autosave's 422 redrew the Investment row
+           * under the category select, so choosing a category appeared to do
+           * nothing at all. A background save now stays silent and leaves the
+           * screen alone.
            */
-          applyErrors(json.errors);
-          render(state.root);
-          if (announce || state.draftAnnounce) {
+          var pressed = announce || state.draftAnnounce;
+          if (pressed) {
+            applyErrors(json.errors);
+            render(state.root);
             ui().toastError(firstError(json.errors) || 'Could not save this draft');
           }
           state.draftAnnounce = false;
