@@ -37,8 +37,28 @@ class StaffPresenceController extends Controller
          * counts the same as a colleague. Work-plan status still belongs to
          * staff only - clients do not keep one.
          */
+        /*
+         * The columns the board actually draws, never `select *`.
+         *
+         * `users.preferences` is a JSON blob, and one of them holds an email
+         * signature with a base64 image pasted into it: 5.4 MB on one row
+         * against about a kilobyte on every other. The board reads every
+         * approved account, so `select *` handed that row to PHP and paid
+         * json_decode on it — 55ms of the board's 59ms, on every poll, for
+         * every signed-in person, to answer a question about green dots.
+         *
+         * Only the messaging slice of preferences is wanted here (the
+         * online-status and last-seen visibility settings), so that is the
+         * only part fetched. {@see MessagingSettings::for()} reads it back
+         * out of the same `preferences` key it always did.
+         */
         $users = User::query()
             ->where('status', User::STATUS_APPROVED)
+            ->select([
+                'id', 'name', 'first_name', 'job_title', 'account_type',
+                'avatar_url', 'provider_avatar_url', 'status',
+            ])
+            ->selectJsonPreference('messaging')
             ->with('presence')
             ->orderBy('name')
             ->get();

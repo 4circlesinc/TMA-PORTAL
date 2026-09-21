@@ -11,6 +11,7 @@ use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -135,6 +136,38 @@ class User extends Authenticatable implements MustVerifyEmail
     public function photoUrl(): ?string
     {
         return $this->avatar_url ?: $this->provider_avatar_url;
+    }
+
+    /**
+     * Select one key of `preferences` as the whole `preferences` column.
+     *
+     * A listing that wants a single setting should not carry the blob it
+     * lives in. The column holds whatever the person has ever configured,
+     * and a pasted email signature makes that megabytes: one row on this
+     * firm is 5.4 MB against a kilobyte for everybody else, and a board
+     * that reads every account paid to decode it on every poll.
+     *
+     * The value still arrives shaped like `preferences`, so
+     * {@see \App\Support\Messaging\MessagingSettings::for()} and anything
+     * else reading that key works unchanged — it simply cannot see the keys
+     * that were not asked for. Do not use this on a query whose rows are
+     * going to be saved: what is loaded is what would be written back.
+     */
+    public function scopeSelectJsonPreference(Builder $query, string $key): Builder
+    {
+        $driver = $query->getConnection()->getDriverName();
+
+        // The key is cast on the way in: Postgres will not infer the type of
+        // a bare placeholder standing where a function argument goes.
+        $sql = match ($driver) {
+            'pgsql' => 'json_build_object(?::text, (preferences::jsonb -> ?::text)) as preferences',
+            'mysql', 'mariadb' => "json_object(?, json_extract(preferences, concat('$.', ?))) as preferences",
+            // SQLite, and anything else, where json_object/json_extract exist
+            // but concat does not: '$.' || ? is the portable spelling.
+            default => "json_object(?, json_extract(preferences, '$.' || ?)) as preferences",
+        };
+
+        return $query->selectRaw($sql, [$key, $key]);
     }
 
     /**
