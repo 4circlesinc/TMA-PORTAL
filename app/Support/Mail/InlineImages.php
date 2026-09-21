@@ -25,6 +25,19 @@ final class InlineImages
      */
     public static function extract(string $html): array
     {
+        /*
+         * A signature's pictures are stored objects now, not data: URIs
+         * ({@see SignatureImages}), and the URL they carry is served to
+         * signed-in people only — a recipient has no session here, so it
+         * would reach them as a broken image. Their bytes come back first,
+         * and then take the cid: path below like any other inline picture.
+         *
+         * This sits here rather than in each provider because this is the one
+         * door every outbound message already goes through, and a send path
+         * that forgot the step would put broken images in real mail.
+         */
+        $html = SignatureImages::inline($html);
+
         if ($html === '' || stripos($html, 'data:image/') === false) {
             return [$html, []];
         }

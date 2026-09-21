@@ -24,6 +24,7 @@ use App\Support\Mail\MailSynchronizer;
 use App\Support\Mail\OutboundFiles;
 use App\Support\Mail\OutboundImages;
 use App\Support\Mail\RecipientSuggester;
+use App\Support\Mail\SignatureImages;
 use App\Support\Mail\SignatureImporter;
 use App\Support\Microsoft\ChangeNotifications;
 use App\Support\Templates\ComposeTemplates;
@@ -2476,9 +2477,19 @@ class MailController extends Controller
         return $merged;
     }
 
+    /**
+     * A signature on its way into `users.preferences`.
+     *
+     * Pictures go to object storage first and leave a URL behind, so the
+     * column keeps settings rather than megabytes of base64 (see
+     * {@see SignatureImages}). Every save path — the editor's blur save, a
+     * full library write, the importer's chosen signature — arrives here,
+     * which is why the upload belongs at this one point and not at each of
+     * them. The length cap then applies to what is actually stored.
+     */
     private function clipSignatureHtml(string $html): string
     {
-        return mb_substr($html, 0, SignatureImporter::MAX_LENGTH);
+        return mb_substr(SignatureImages::store($html), 0, SignatureImporter::MAX_LENGTH);
     }
 
     /**

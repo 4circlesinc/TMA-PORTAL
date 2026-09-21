@@ -6,9 +6,11 @@ use App\Models\ConnectedAccount;
 use App\Models\MailMessage;
 use App\Models\User;
 use App\Support\Mail\MailSynchronizer;
+use App\Support\Mail\SignatureImages;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -20,6 +22,9 @@ use Tests\TestCase;
 class MailboxTest extends TestCase
 {
     use RefreshDatabase;
+
+    /** A real 1x1 PNG, so a signature logo actually decodes. */
+    private const PNG_1X1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
     private function user(): User
     {
@@ -425,12 +430,27 @@ class MailboxTest extends TestCase
             ->assertJsonPath('preferences.signatures.0.html', '<div>Work</div>');
     }
 
-    public function test_signature_html_keeps_a_full_size_logo_data_uri(): void
+    /**
+     * A full-resolution logo survives a save, at its full resolution.
+     *
+     * It is no longer kept in the settings column as base64: that made one
+     * account's `preferences` 5.4 MB and every query that loaded a user
+     * decode it. The bytes go to object storage and the signature keeps a
+     * URL, which is what stops the picture being truncated *and* stops the
+     * column growing. What must not change is that the logo is still there,
+     * whole, at the size the person chose.
+     */
+    public function test_signature_html_keeps_a_full_size_logo(): void
     {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+
         $user = $this->user();
         $this->account($user);
 
-        $logo = 'data:image/png;base64,'.str_repeat('A', 120000);
+        // A real PNG, repeated into something big enough to have been cut by
+        // the old 100 KB cap.
+        $bytes = base64_decode(self::PNG_1X1, true).str_repeat("\0", 120000);
+        $logo = 'data:image/png;base64,'.base64_encode($bytes);
         $html = '<div><img src="'.$logo.'" width="160" height="80" alt="Logo"></div>';
         $this->assertGreaterThan(100000, strlen($html));
 
@@ -441,16 +461,33 @@ class MailboxTest extends TestCase
             ->assertOk();
 
         $stored = (string) data_get($user->fresh()->preferences, 'mail.signature');
-        $this->assertSame($html, $stored);
-        $this->assertGreaterThan(100000, strlen($stored));
-        $this->assertStringContainsString($logo, $stored);
+
+        // The picture is referenced, not embedded, so the column stays small.
+        $this->assertMatchesRegularExpression('#src="/media/signatures/[a-f0-9-]{36}\.png"#', $stored);
+        $this->assertLessThan(1000, strlen($stored), 'the settings column must not carry the image');
+        $this->assertStringContainsString('width="160"', $stored, 'the tag it was pasted with is kept');
+
+        // And nothing was truncated: the object holds every byte.
+        preg_match('#/media/signatures/([a-f0-9-]{36}\.png)#', $stored, $m);
+        $this->assertSame(
+            $bytes,
+            Storage::disk(config('filesystems.avatar_disk', 'public'))
+                ->get(SignatureImages::PREFIX.'/'.$m[1]),
+        );
     }
 
+    /**
+     * The same for a signature imported from the mailbox: the logo arrives
+     * whole, and lands in storage rather than in the settings column.
+     */
     public function test_import_signature_keeps_a_full_size_logo(): void
     {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+
         $user = $this->user();
         $account = $this->account($user);
-        $payload = str_repeat('B', 110000);
+        $bytes = base64_decode(self::PNG_1X1, true).str_repeat("\0", 110000);
+        $payload = base64_encode($bytes);
         $logo = 'data:image/png;base64,'.$payload;
 
         $this->message($user, $account, [
@@ -467,9 +504,18 @@ class MailboxTest extends TestCase
 
         $applied = $this->pickImportedSignature($user);
         $stored = (string) data_get($applied, 'preferences.signature');
-        $this->assertGreaterThan(100000, strlen($stored));
-        $this->assertStringContainsString($payload, $stored);
-        $this->assertStringNotContainsString('Hi', $stored);
+
+        $this->assertMatchesRegularExpression('#src="/media/signatures/[a-f0-9-]{36}\.png"#', $stored);
+        $this->assertLessThan(1000, strlen($stored), 'the settings column must not carry the image');
+        $this->assertStringNotContainsString('Hi', $stored, 'the message body is not part of the signature');
+
+        // Whole, not cut at the old cap.
+        preg_match('#/media/signatures/([a-f0-9-]{36}\.png)#', $stored, $m);
+        $this->assertSame(
+            $bytes,
+            Storage::disk(config('filesystems.avatar_disk', 'public'))
+                ->get(SignatureImages::PREFIX.'/'.$m[1]),
+        );
     }
 
     public function test_import_signature_copies_the_mailbox_signature_into_preferences(): void

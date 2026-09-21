@@ -11,6 +11,7 @@ use App\Http\Controllers\AvatarController;
 use App\Http\Controllers\BackgroundOperationsController;
 use App\Http\Controllers\Bespoke\BespokeController;
 use App\Http\Controllers\BrandingController;
+use App\Http\Controllers\SignatureImageController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\CalendarEventController;
 use App\Http\Controllers\CalendarIcsController;
@@ -141,6 +142,12 @@ Route::middleware(['auth'])->group(function () {
     // The company logo, for the same reason: the onboarding and profile-setup
     // screens wear the firm's branding before 'profile.complete' passes.
     Route::get('/media/branding/{name}', [BrandingController::class, 'logo'])->name('branding.logo');
+
+    // Pictures inside email signatures. They used to sit in users.preferences
+    // as data: URIs, which made that column megabytes on any account with a
+    // logo in its signature; see App\Support\Mail\SignatureImages.
+    Route::get('/media/signatures/{name}', [SignatureImageController::class, 'show'])
+        ->name('signature.image');
 
     // Poll target for the "Confirm your email" screen — another device may
     // have already followed the signed link.
