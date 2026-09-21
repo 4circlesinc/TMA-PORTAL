@@ -2866,6 +2866,19 @@
   min-width: 0;
   color: inherit;
   flex-shrink: 0;
+  /*
+   * The same height as the skeleton row that stands in for these.
+   *
+   * Email, Messages, Comments and Requests all paint skeletonFileRows()
+   * while they load, which is a .tma-portal-file-row at 58px, and then swap
+   * in one of these at 50. Four rows a tile, three tiles: the board pulled
+   * itself up by nearly a hundred pixels as the data arrived, and what the
+   * reader saw was the page jumping under the pointer.
+   *
+   * Matching the file row exactly, rather than each tile guessing, is what
+   * keeps that true the next time one of these grows a line.
+   */
+  min-height: 58px;
 }
 
 .tma-portal-email-row:hover,
@@ -3331,6 +3344,23 @@
   cursor: pointer;
   width: 100%;
   min-width: 0;
+  /*
+   * One height, whatever is in the row.
+   *
+   * A tile paints skeleton rows and then swaps the real ones in, and these
+   * three did not agree: the skeleton came to 48px, a row with a path to 58,
+   * and a row without one to 40. Every file tile therefore moved itself and
+   * everything under it as its data arrived, in whichever direction the
+   * answer happened to fall — which is what the browser measures as layout
+   * shift, and the dashboard scored 0.55 for.
+   *
+   * 58px is the tall case stated plainly: the name's line (22) over the
+   * path's (18), the 2px between them, and 8px of padding at each end. A row
+   * with no path is padded to the same height rather than being allowed to
+   * shrink, so a tile's height is decided by how many rows it has and never
+   * by what is in them.
+   */
+  min-height: 58px;
 }
 
 .tma-portal-file-row:hover { background: var(--color-hover); }
