@@ -208,6 +208,28 @@ class BespokeToolsTest extends TestCase
         $this->assertStringContainsString('no Email in the portal', $prompt);
     }
 
+    public function test_the_firms_own_service_account_is_never_offered_as_a_colleague(): void
+    {
+        config(['portal.system_account_email' => 'portal@example.com']);
+        $this->user(Role::ADMINISTRATOR, ['name' => 'TM ANTOINE Advisory', 'email' => 'portal@example.com', 'job_title' => 'ADMIN']);
+        $this->user(Role::ADMINISTRATOR, ['name' => 'Vernon Francis', 'job_title' => 'IT & Web Solutions Specialist']);
+        $client = $this->user(Role::CLIENT);
+
+        $prompt = Prompt::system($client, Bespoke::identity($client), Page::fromClient(['path' => '/']), []);
+        $this->assertStringContainsString('Administrators this reader can reach: Vernon Francis', $prompt);
+        $this->assertStringNotContainsString('TM ANTOINE Advisory.', $prompt);
+
+        // Not searchable, and not a valid message recipient either.
+        $box = $this->toolbox($client);
+        $names = array_column($box->call('lookup_people', ['query' => 'administrator'])['people'], 'name');
+        $this->assertSame(['Vernon Francis'], $names);
+
+        $system = User::where('email', 'portal@example.com')->firstOrFail();
+        $refused = $box->call('propose_message', ['userId' => $system->id, 'body' => 'hello']);
+        $this->assertArrayHasKey('error', $refused);
+        $this->assertSame([], $box->actions());
+    }
+
     // -------------------------------------------------------------- email
 
     public function test_email_drafts_need_mail_access_and_valid_addresses(): void

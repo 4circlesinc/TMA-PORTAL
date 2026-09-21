@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\UserBlock;
 use App\Support\Access\ContactScope;
 use App\Support\Access\Role;
+use App\Support\Files\FolderProvisioner;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -15,6 +16,12 @@ use Illuminate\Support\Collection;
  * The reach is exactly Messages' own: staff see the approved directory, a
  * client sees the staff assigned to them plus every administrator. Blocks
  * cut both ways. Nothing here widens what the Messages page would show.
+ *
+ * One exception, narrower than Messages: the firm's own service account
+ * (portal.system_account_email) is an Administrator row so it can own the
+ * firm's files, but it is not a colleague. Offering "TM ANTOINE Advisory"
+ * as someone to message sends the reader to a mailbox nobody reads, and it
+ * crowded a real administrator out of the choices.
  */
 final class People
 {
@@ -159,10 +166,12 @@ final class People
             ->values();
 
         $reachable = ContactScope::visibleUserIds($viewer);
+        $system = FolderProvisioner::systemAccountId();
 
         return User::query()
             ->where('id', '!=', $viewer->id)
             ->where('status', User::STATUS_APPROVED)
+            ->when($system !== null && $system !== $viewer->id, fn (Builder $q) => $q->where('id', '!=', $system))
             ->when($blocked->isNotEmpty(), fn (Builder $q) => $q->whereNotIn('id', $blocked))
             ->when($reachable !== null, fn (Builder $q) => $q->whereIn('id', $reachable));
     }
