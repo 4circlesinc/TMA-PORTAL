@@ -991,8 +991,38 @@
   height: 22px;
 }
 
+/* The presence pill's own stylesheet (presence.css) is added by
+   presence-status.js after the bundle runs, so at first paint the pill is a
+   bare <button>: an inline-block sitting on its wrapper's text baseline, which
+   put a 39px line box where a 36px row would settle and moved the whole
+   header, and everything under it, by 3px when the stylesheet landed. The
+   geometry lives here, in a sheet the shell links, so the row is 36px from
+   the first frame; presence.css still owns the look. */
+.tma-dash__header-presence {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
 .tma-dash__header .tma-presence-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 36px;
   min-height: 36px;
+  /* The width of the two statuses nearly every reader shows, Online and
+     Offline, so the empty button the shell paints already holds the room
+     its label will take and the icons beside it never move. */
+  min-width: 76px;
+  /* The metrics presence.css gives the label, restated so its arrival
+     changes nothing the label has already been measured by. */
+  gap: 6px;
+  padding: var(--space-4, 4px) var(--space-12, 12px);
+  border: none;
+  font: inherit;
+  font-size: var(--text-size-12, 12px);
+  line-height: 16px;
+  white-space: nowrap;
 }
 
 .tma-dash__header .tma-dash__email-search img {
@@ -35649,7 +35679,66 @@ span.tma-dash__messages-profile-avatar {
   --dash-icon-lg: clamp(20px, calc(6.67cqi + 7.47px), 24px);
   --dash-icon-sm: clamp(13px, calc(5cqi + 3.6px), 16px);
   --dash-icon-text-gap: clamp(8px, calc(6.67cqi - 4.53px), 12px);
+  /* The settled heights of the pieces a section is built from, so a section
+     can reserve its full height before its data is in (below). The 1.4 and
+     1.35 are the line-height tokens above, restated as factors because the
+     em values only resolve inside the text they size. */
+  --rb-title-h: calc(1.4 * var(--text-size-14) + 2 * var(--space-8));
+  --rb-row-h: calc(var(--dash-icon-lg) + 2 * var(--space-8));
+  --rb-contact-h: calc(1.4 * var(--text-size-14) + 1.35 * var(--text-size-12) + 2 * var(--space-4));
+  --rb-footer-h: 46px;
 }
+
+/* ── Reserved section heights ──
+   Each section paints a three-row skeleton, and then grew to however many rows
+   its data held: Activities went 167px to 349px, and everything under it moved
+   twice, once per store that answered. A section now stands at the height it
+   reaches with its preview cap of rows and its See all footer, from the shell's
+   own skeleton onwards, so a store answering changes what is inside the section
+   and nothing else. The caps are the ones right-sidebar.js asks for, declared
+   here so the CSS and the script cannot disagree: previewLimits() reads them
+   back from the rail's computed style. Applications is last in the rail, so it
+   has nothing under it to move and keeps its natural height. */
+.tma-dash__rightbar {
+  --rb-cap-notifications: 6;
+  --rb-cap-activities: 6;
+  --rb-cap-applications: 15;
+}
+@media (max-height: 899px) {
+  .tma-dash__rightbar { --rb-cap-applications: 10; }
+}
+@media (max-height: 819px) {
+  .tma-dash__rightbar { --rb-cap-notifications: 5; --rb-cap-activities: 4; }
+}
+@media (max-height: 779px) {
+  .tma-dash__rightbar { --rb-cap-applications: 6; }
+}
+@media (max-height: 719px) {
+  .tma-dash__rightbar { --rb-cap-notifications: 4; --rb-cap-activities: 3; }
+}
+@media (max-height: 639px) {
+  .tma-dash__rightbar { --rb-cap-notifications: 3; --rb-cap-activities: 2; }
+}
+.tma-dash__rb-section[data-rb-section="notifications"] { --rb-cap: var(--rb-cap-notifications); }
+.tma-dash__rb-section[data-rb-section="activities"] { --rb-cap: var(--rb-cap-activities); }
+.tma-dash__rb-section[data-rb-section="notifications"],
+.tma-dash__rb-section[data-rb-section="activities"] {
+  --rb-body-min: calc(var(--rb-cap) * var(--rb-row-h) + (var(--rb-cap) - 1) * var(--space-4));
+  min-height: calc(var(--rb-title-h) + var(--rb-body-min) + var(--rb-footer-h) + 2 * var(--space-4));
+}
+.tma-dash__rb-section[data-rb-section="notifications"] .tma-dash__rb-body,
+.tma-dash__rb-section[data-rb-section="activities"] .tma-dash__rb-body {
+  min-height: var(--rb-body-min);
+}
+/* Every row kind is exactly the height its placeholder was, so the rows a
+   section already shows do not move when the ones under them fill in. */
+.tma-dash__rb-title { box-sizing: border-box; min-height: var(--rb-title-h); }
+.tma-dash__notice,
+.tma-dash__activity,
+.tma-dash__rb-skel { box-sizing: border-box; min-height: var(--rb-row-h); }
+.tma-dash__contact,
+.tma-dash__rb-section[data-rb-section="applications"] .tma-dash__rb-skel { box-sizing: border-box; min-height: var(--rb-contact-h); }
+.tma-dash__rb-footer { box-sizing: border-box; min-height: var(--rb-footer-h); }
 
 /* Inner 230px ≈ outer 262px — below the 280px default, not at it. */
 @container dash-rightbar (max-width: 230px) {

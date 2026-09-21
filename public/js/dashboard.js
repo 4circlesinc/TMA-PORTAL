@@ -1915,96 +1915,17 @@
        eats height) rather than scrolling. Measured, not a vh formula, so role
        pruning, an expanded submenu and the shortcuts tab all re-fit. */
     var navEl = root.querySelector('.tma-dash__sidebar-nav');
-    var NAV_GAP_BASE = 10;  // --space-10, the resting rhythm
-    var NAV_GAP_TIGHT = 8;  // long menu: keep a readable gap; the rail scrolls instead
-    var NAV_GAP_MAX = 18;   // past this the rows stop reading as one list
     var navFitQueued = false;
 
-    function isVisibleNavChild(el) {
-      return !el.hidden && el.getClientRects().length > 0;
-    }
-
-    function isSubnav(el) {
-      return !!(el.classList && el.classList.contains('tma-dash__subnav'));
-    }
-
-    /* One unit per gap the leftover space is split across: every gap between
-       visible rows, plus the break above a divided section (it tracks the same
-       custom property). An open submenu is deliberately not a row here, see
-       fitNavSpacing. */
-    function countNavGapUnits(sections) {
-      var units = 0;
-      sections.forEach(function (section) {
-        var rows = Array.prototype.slice.call(section.children).filter(function (el) {
-          return isVisibleNavChild(el) && !isSubnav(el);
-        });
-        if (!rows.length) return;
-        units += rows.length - 1;
-        if (section.classList.contains('tma-dash__nav-section--divided')) units += 1;
-      });
-      return units;
-    }
-
-    /* How much height the open submenus are taking: each one's box, its
-       margins, and the single row gap that separates it from its parent. */
-    function openSubnavHeight(sections, gap) {
-      var total = 0;
-      sections.forEach(function (section) {
-        Array.prototype.slice.call(section.children).forEach(function (el) {
-          if (!isSubnav(el) || !isVisibleNavChild(el)) return;
-          var cs = window.getComputedStyle(el);
-          total += el.getBoundingClientRect().height +
-            (parseFloat(cs.marginTop) || 0) +
-            (parseFloat(cs.marginBottom) || 0) +
-            gap;
-        });
-      });
-      return total;
-    }
-
+    /* The measuring and the arithmetic live in portal-access.js, which runs
+       undeferred in <head> and fits the rail once more the moment the sidebar
+       has parsed, before the first paint. This is the same function on the
+       same element, so the fit it settles on here is the one already on
+       screen: the menu used to tighten from its resting rhythm by 2px a row
+       when the bundle finally ran. Constants and the breakpoint are there. */
     function fitNavSpacing() {
-      if (!navEl) return;
-      // The mobile drawer has its own tighter, scrolling rhythm.
-      if (isMobileSidebar()) { navEl.style.removeProperty('--dash-nav-gap'); return; }
-      // Always measure from the resting gap, never from whatever the last run
-      // grew it to, or each pass would compound the one before it.
-      navEl.style.setProperty('--dash-nav-gap', NAV_GAP_BASE + 'px');
-      var sections = Array.prototype.slice
-        .call(navEl.querySelectorAll('.tma-dash__nav-section'))
-        .filter(isVisibleNavChild);
-      var last = sections[sections.length - 1];
-      if (!last) return;
-      var units = countNavGapUnits(sections);
-      if (!units) return;
-      // scrollHeight floors at the client height, so it can't report a *short*
-      // content box, measure the last section's bottom edge instead.
-      var padBottom = parseFloat(window.getComputedStyle(navEl).paddingBottom) || 0;
-      var free = navEl.getBoundingClientRect().bottom - padBottom - last.getBoundingClientRect().bottom;
-      /*
-       * Both rects are in viewport coordinates, so a scrolled nav reports its
-       * last section that much higher and the sum reads as spare room that is
-       * not there. Nothing scrolled the rail before an open submenu could
-       * overflow it; now clicking a group near the bottom scrolls it into
-       * view, and without this the menu jumped to its widest spacing.
-       */
-      free -= navEl.scrollTop;
-      /*
-       * Measure as if every group were closed.
-       *
-       * Otherwise opening File Library ate the free space and this handed the
-       * shortfall to every gap in the menu, so expanding one group visibly
-       * squeezed all the rows above and below it together, and closing it
-       * spread them back out. The rail's rhythm is a property of the window's
-       * height, not of which group happens to be open: a submenu now simply
-       * drops in underneath its parent, and the nav scrolls if the two no
-       * longer fit together.
-       */
-      free += openSubnavHeight(sections, NAV_GAP_BASE);
-      // Negative free space means the rows already overflow. Keep a readable
-      // floor and let the rail scroll rather than packing the long admin list.
-      var gap = NAV_GAP_BASE + Math.floor(free / units);
-      gap = Math.max(NAV_GAP_TIGHT, Math.min(NAV_GAP_MAX, gap));
-      navEl.style.setProperty('--dash-nav-gap', gap + 'px');
+      if (!navEl || !window.TMAPortalAccess || !window.TMAPortalAccess.fitNavSpacing) return;
+      window.TMAPortalAccess.fitNavSpacing(navEl);
     }
 
     function queueNavFit() {

@@ -114,8 +114,20 @@
   // an em-dash is honest about the gap; a number would not be.
   var KPI_UNAVAILABLE = { value: '-', delta: 'Unavailable', deltaUp: false, hint: 'Could not load this metric.' };
 
+  /*
+   * Whether this reader gets a KPI row at all, decided from the boot flags
+   * the shell serves rather than waited for: staff (the same capability the
+   * shell's own placeholder row is gated on) and service-provider contacts.
+   * A row of four shimmering cards that then vanishes is a layout shift
+   * with nothing behind it.
+   */
+  function kpiRowExpected() {
+    return canReach('overview.view') || window.TMABootProviderContact === true;
+  }
+
   function renderKpis() {
     if (!homeMetricsLoaded) {
+      if (!kpiRowExpected()) return '';
       return '<div class="tma-dash__cards" aria-busy="true">' +
         kpiSkeletonCard('blue') + kpiSkeletonCard('purple') + kpiSkeletonCard('blue') + kpiSkeletonCard('purple') +
         '</div>';
@@ -172,6 +184,96 @@
   var homeReal = { files: false, metrics: false, staff: false, email: false, chats: false, cip: false, work: false };
 
   /*
+   * ── One request, one render, one pack ─────────────────────────────
+   *
+   * The board is answered by /portal/dashboard/home. HOME_PARTS is what a
+   * boot asks for; `files` (Recent Files and Favorites) travels as a request
+   * of its own because on a real library it costs as much as the other
+   * seven tiles together, and the tile that paints the page's largest text
+   * should not queue behind them. PortalShell starts both from <head>, with
+   * the URL beside each, and loadHomeBoard takes the promise when the URL
+   * is the one it would have built. The strings must match byte for byte,
+   * see HomeBoard::bootUrl.
+   *
+   * Every arrival used to render and re-pack the board on its own, three
+   * times in two hundred milliseconds, with the road tile hopping between
+   * columns each time. Renders now queue into one animation frame, and
+   * inside the boot window the board keeps the geometry it was first packed
+   * with until the board has landed (or the window closes), whichever
+   * comes first.
+   */
+  var HOME_PARTS = ['metrics', 'staff', 'work', 'cip', 'mail', 'chats', 'pending'];
+  var FILES_PARTS = ['files'];
+  var BOOT_WINDOW_MS = 1500;
+  /* The strip under the grid sits a viewport and a half down the page. It
+     loads when the reader gets near it, or this long after the first mount,
+     rather than racing the tiles above it for the same PHP workers. */
+  var LIBRARY_DEFER_MS = 3000;
+
+  /*
+   * Each tile's height, decided here rather than by what arrives.
+   *
+   * The skeleton and the tile it becomes are the same height, so the pack
+   * done over skeletons is the pack the data lands in. A list longer than
+   * its slot scrolls inside the tile (the packed panel body already does),
+   * the way People has always worked; a shorter one keeps the slot. In
+   * pixels: a 70px panel frame (padding, head, gap) plus the rows, which are
+   * 58px each with the panel's 12px gap in Recent Files and Favorites and
+   * no gap inside the email, chat and work lists (capped at 4 x 72 by the
+   * stylesheet). People is six 52px rows and their 2px gaps. Shortcuts is
+   * the one tile measured, because its height is its capability count, and
+   * its loading tile is the real tile with the glass taken out.
+   */
+  var TILE_SLOT = {
+    recentFiles: 478,
+    favorites: 338,
+    email: 358,
+    messages: 360,
+    requests: 358,
+    comments: 358,
+    employees: 392,
+    cipStatus: 300,
+    road: 328,
+  };
+
+  var renderQueued = null;
+
+  /* Draw the board once for everything that has landed by the next frame. */
+  function scheduleRender(el) {
+    el = el || dashPortalMount();
+    if (!el || renderQueued) return;
+    renderQueued = requestAnimationFrame(function () {
+      renderQueued = null;
+      if (el.isConnected) mount(el, { fromLoad: true });
+    });
+  }
+
+  /*
+   * The boot window: from the first mount that asked for the board until it
+   * has landed, or BOOT_WINDOW_MS, whichever is first. Inside it nothing
+   * re-packs, nothing fetches a single tile on its own, and the tiles keep
+   * the visibility they were first drawn with.
+   */
+  var bootAt = 0;
+  var bootDone = false;
+
+  function bootOpen() {
+    return bootAt > 0 && !bootDone && (Date.now() - bootAt) < BOOT_WINDOW_MS;
+  }
+
+  function settleBoot() {
+    if (bootDone) return;
+    bootDone = true;
+    // A tile switched on while the board was in the air, or a layout that
+    // hydrated to a different set of work lists: ask once more, now.
+    if (homeWorkRetry) {
+      homeWorkRetry = false;
+      refreshWorkForTiles();
+    }
+    scheduleRender();
+  }
+
+  /*
    * ── Warm boot ─────────────────────────────────────────────────────
    *
    * Every tile below keeps its last answer in the store and starts from it.
@@ -200,7 +302,7 @@
 
     var remount = function () {
       var el = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
-      if (el && el.isConnected && el.childElementCount) mount(el, { fromLoad: true });
+      if (el && el.isConnected && el.childElementCount) scheduleRender(el);
     };
 
     window.TMAStore.get('home:files').then(function (snap) {
@@ -388,13 +490,22 @@
     return new Array(n).fill(row).join('');
   }
 
+  /*
+   * Skeleton rows inside the list the real rows will sit in, so the two are
+   * the same height: those lists have no gap between rows where the panel
+   * body has 12px, and the email and work lists are capped by the stylesheet.
+   */
+  function skeletonList(cls, n) {
+    return '<div class="' + cls + '">' + skeletonFileRows(n) + '</div>';
+  }
+
   function renderRecentFiles(s) {
     // data-key ties this panel to *itself* across renders. Panels are siblings
     // in one grid and can be shown or hidden individually, so without a key a
     // hidden neighbour would shift the others along and this panel's contents —
     // thumbnails included, would be rewritten onto a different node.
     if (!homeFilesLoaded) {
-      return tileShell('recentFiles', 'panel-recent', 'Recent files', panelHead('Recent Files'), skeletonFileRows(3), '', true);
+      return tileShell('recentFiles', 'panel-recent', 'Recent files', panelHead('Recent Files'), skeletonFileRows(6), '', true);
     }
     var rows = s.recentFiles.map(function (f) {
       // Keyed by kind+id: a folder and a file can share a numeric id, and
@@ -432,12 +543,17 @@
      * one have to agree about a number that is written down once.
      */
     if (!homeFilesLoaded) {
-      var tile = '<div class="tma-portal-shortcut tma-portal-shortcut--skeleton" aria-hidden="true">' +
-        '<span class="tma-portal-shortcut__icon tma-skeleton"></span>' +
-        '<span class="tma-skeleton tma-skeleton--text"></span></div>';
+      // The label is printed, not shimmered: it is known here, and a label
+      // that wraps to two lines is what decides the tile's height.
       return tileShell(
         'shortcuts', 'panel-shortcuts', 'Shortcuts', panelHead('Shortcuts'),
-        '<div class="tma-portal-shortcuts">' + new Array(shown.length).fill(tile).join('') + '</div>',
+        '<div class="tma-portal-shortcuts">' +
+        shown.map(function (sc) {
+          return '<div class="tma-portal-shortcut tma-portal-shortcut--skeleton" aria-hidden="true">' +
+            '<span class="tma-portal-shortcut__icon tma-skeleton"></span>' +
+            '<span class="tma-portal-shortcut__label">' + ui().esc(sc.label) + '</span></div>';
+        }).join('') +
+        '</div>',
         '', true
       );
     }
@@ -561,7 +677,7 @@
     return tileShell(
       'employees', 'panel-employees', 'People', panelHead('People'),
       '<div class="tma-portal-employees" aria-hidden="true">' +
-      new Array(5).fill(
+      new Array(6).fill(
         '<div class="tma-portal-employee tma-portal-employee--skeleton">' +
         '<span class="tma-skeleton tma-skeleton--avatar" style="width:36px;height:36px;border-radius:50%"></span>' +
         '<span class="tma-portal-employee__meta" style="flex:1">' +
@@ -576,9 +692,10 @@
   }
 
   function renderEmployees() {
-    // Identity/API may still be loading, show a skeleton rather than vanishing.
-    // The server is the source of truth for staff vs client (`staff: false`).
-    if (!homeStaffLoaded) return employeesSkeleton();
+    // The server is the source of truth for staff vs client (`staff: false`),
+    // and it decides on the same capability the shell already handed over,
+    // so a reader it will refuse is not shown a board that then vanishes.
+    if (!homeStaffLoaded) return canReach('presence.view') ? employeesSkeleton() : '';
 
     if (!homeStaff || homeStaff.staff === false) return '';
 
@@ -665,7 +782,7 @@
     if (!homeEmailLoaded) {
       return tileShell(
         'email', 'panel-email', 'Recent email', panelHead('Recent Email'),
-        skeletonFileRows(4), 'tma-portal-panel--email', true
+        skeletonList('tma-portal-email-list', 5), 'tma-portal-panel--email', true
       );
     }
 
@@ -855,7 +972,7 @@
     if (!homeChatsLoaded) {
       return tileShell(
         'messages', 'panel-messages', 'Messages', panelHead('Messages'),
-        skeletonFileRows(4), 'tma-portal-panel--messages', true
+        skeletonList('tma-portal-chat-list', HOME_CHAT_LIMIT), 'tma-portal-panel--messages', true
       );
     }
 
@@ -1001,6 +1118,18 @@
     'emerald', 'slate', 'lime', 'navy', 'gold', 'plum', 'mint', 'stone',
     'clay', 'sand', 'moss', 'laurel', 'garnet',
   ];
+
+  /*
+   * Whether a card is coming, from the boot flags rather than /me: the
+   * module has to be reachable, and the reader has to be one of the two
+   * kinds it draws a summary for (staff, or a service-provider contact).
+   * A private client reaches the module through their own application and
+   * gets no card, so their skeleton would only ever vanish.
+   */
+  function cipCardExpected() {
+    if (window.TMABootCipReach !== true) return false;
+    return canReach('overview.view') || window.TMABootProviderContact === true;
+  }
 
   function cipCardVisible(payload) {
     if (!payload || payload.cip === false) return false;
@@ -1336,7 +1465,7 @@
      * the card itself is the server's decision, taken below on data that has
      * landed, so a wrong guess here cannot hide anybody's queues.
      */
-    if (!homeCipLoaded) return isStaffUser() === false ? '' : cipSkeleton();
+    if (!homeCipLoaded) return cipCardExpected() ? cipSkeleton() : '';
 
     /*
      * Three different silences, and all of them are the right answer.
@@ -1464,7 +1593,7 @@
         // Same counts, same rows, leave the card alone. Every loader on this
         // board answers on every visit, and each answer used to repaint it.
         if ((!wasLoaded || JSON.stringify(homeCip || null) !== before) && el.isConnected) {
-          mount(el, { fromLoad: true });
+          scheduleRender(el);
         }
       });
   }
@@ -1633,8 +1762,7 @@
         homeWork.counts = j.counts;
         keepWarm('work', homeWork);
         publishWorkCounts(j.counts);
-        var el = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
-        if (el && el.isConnected) mount(el, { fromLoad: true });
+        scheduleRender();
       })
       .catch(function () { /* the badge settles on the next poll */ });
   }
@@ -1648,7 +1776,7 @@
     if (!workListReady('comments')) {
       return tileShell(
         'comments', 'panel-comments', 'Comments', panelHead('Comments'),
-        skeletonFileRows(4), 'tma-portal-panel--work', true
+        skeletonList('tma-portal-work-list', 5), 'tma-portal-panel--work', true
       );
     }
 
@@ -1694,7 +1822,7 @@
     if (!workListReady('requests')) {
       return tileShell(
         'requests', 'panel-requests', 'Requests', panelHead('Requests'),
-        skeletonFileRows(4), 'tma-portal-panel--work', true
+        skeletonList('tma-portal-work-list', 5), 'tma-portal-panel--work', true
       );
     }
 
@@ -1729,16 +1857,6 @@
     return wfStripItems().length > 0;
   }
 
-  function wfStripSkeleton() {
-    var card = '<article class="tma-portal-wf-card tma-portal-wf-card--preview tma-portal-wf-strip__skel" aria-hidden="true">' +
-      '<span class="tma-skeleton tma-skeleton--avatar" style="width:32px;height:32px"></span>' +
-      '<span class="tma-skeleton" style="display:block;height:128px;border-radius:8px"></span>' +
-      '<span class="tma-skeleton tma-skeleton--text" style="width:70%"></span>' +
-      '<span class="tma-skeleton tma-skeleton--text" style="width:45%"></span>' +
-      '</article>';
-    return new Array(4).fill('<div class="tma-portal-wf-strip__slide">' + card + '</div>').join('');
-  }
-
   function feedItemStillNew(entry) {
     var kind = entry && entry.kind;
     var item = (entry && entry.item) || {};
@@ -1754,38 +1872,39 @@
     return false;
   }
 
+  /*
+   * No loading state for the strip. Whether it is on the page at all is a
+   * fact about the data (nothing new, no strip), so four shimmering cards
+   * could only ever be replaced or removed, and removing 256px from above
+   * the grid was the single largest shift on the board. It appears once,
+   * when the board lands with something to show.
+   */
   function renderWfStrip() {
     if (!canReach('workflows.view') || !workflowStripVisible()) return '';
 
-    var ready = workListReady('feed');
+    if (!workListReady('feed')) return '';
     var items = wfStripItems();
     var work = window.TMAPortalWork;
-    if (ready && (!items.length || !work || !work.homeCard)) return '';
-    var cards = !ready
-      ? wfStripSkeleton()
-      : (work && work.homeCard
-        ? items.map(function (entry) {
-            var item = entry.item || {};
-            var key = (entry.kind || 'request') + '-' + (item.id || '');
-            return '<div class="tma-portal-wf-strip__slide" data-key="wf-strip-' + ui().esc(key) + '">' +
-              work.homeCard(entry, { preview: true, expanded: homeWfExpanded }) +
-              '</div>';
-          }).join('')
-        : '');
+    if (!items.length || !work || !work.homeCard) return '';
+    var cards = items.map(function (entry) {
+      var item = entry.item || {};
+      var key = (entry.kind || 'request') + '-' + (item.id || '');
+      return '<div class="tma-portal-wf-strip__slide" data-key="wf-strip-' + ui().esc(key) + '">' +
+        work.homeCard(entry, { preview: true, expanded: homeWfExpanded }) +
+        '</div>';
+    }).join('');
 
-    var arrows = ready && items.length
-      ? '<div class="tma-portal-wf-strip__nav">' +
+    var arrows = '<div class="tma-portal-wf-strip__nav">' +
         '<button type="button" class="tma-portal-wf-strip__arrow" data-home-wf-prev aria-label="Previous workflows">' +
         '<img src="images/icons/phosphor/CaretLeft.svg" alt="" width="16" height="16">' +
         '</button>' +
         '<button type="button" class="tma-portal-wf-strip__arrow" data-home-wf-next aria-label="Next workflows">' +
         '<img src="images/icons/phosphor/CaretRight.svg" alt="" width="16" height="16">' +
         '</button>' +
-        '</div>'
-      : '';
+        '</div>';
 
     return '<section class="tma-portal-wf-strip" data-key="wf-strip" data-home-wf-strip-root' +
-      (ready ? '' : ' aria-busy="true"') + ' aria-label="Workflows">' +
+      ' aria-label="Workflows">' +
       '<div class="tma-portal-wf-strip__head">' +
       '<div class="tma-portal-wf-strip__tools">' +
       '<button type="button" class="tma-portal-link" data-home-wf-all>See all</button>' +
@@ -1816,7 +1935,7 @@
         e.stopPropagation();
         var expandId = hit.getAttribute('data-wfh-expand');
         homeWfExpanded[expandId] = !homeWfExpanded[expandId];
-        if (el.isConnected) mount(el, { fromLoad: true });
+        scheduleRender(el);
         return;
       }
 
@@ -1958,7 +2077,7 @@
         }
 
         if ((!wasLoaded || workSignature(homeWork) !== before) && el && el.isConnected) {
-          mount(el, { fromLoad: true });
+          scheduleRender(el);
         }
 
         // A tile was switched on while this request was in the air, so what
@@ -1978,16 +2097,28 @@
       // The Workflows page republishes these after every answer given there,
       // and answering something is exactly when this board is stale. Our own
       // publish is skipped, or every load would schedule the next one.
-      document.addEventListener('tma-workflow-counts', function () {
+      document.addEventListener('tma-workflow-counts', function (e) {
         if (publishingWorkCounts) return;
         var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
         if (!mountEl || !mountEl.isConnected) return;
+        // The shell publishes its own figure at boot, while the board that
+        // carries the same counts is already on its way; and a figure equal
+        // to the one on the tiles is not news.
+        if (boardInflight() || bootOpen()) return;
+        if (homeWork && homeWork.counts && sameWorkCounts(homeWork.counts, e && e.detail)) return;
         homeWorkAt = 0;
         loadHomeWork(mountEl, { skipTimer: true });
       });
     }
 
     return settled;
+  }
+
+  function sameWorkCounts(a, b) {
+    if (!a || !b) return false;
+    return (a.waiting || 0) === (b.waiting || 0) &&
+      (a.unread || 0) === (b.unread || 0) &&
+      (a.updates || 0) === (b.updates || 0);
   }
 
   /*
@@ -2009,7 +2140,9 @@
     if (!el || !el.isConnected) return;
 
     homeWorkAt = 0;
-    if (homeWorkInflight) { homeWorkRetry = true; return; }
+    // The board on its way carries a work list; asking beside it would be a
+    // second copy of the same answer. settleBoot() asks again on landing.
+    if (homeWorkInflight || boardInflight() || bootOpen()) { homeWorkRetry = true; return; }
     loadHomeWork(el, { skipTimer: true });
   }
 
@@ -2046,12 +2179,27 @@
     window.location.assign(root + '/folders/all?' + params.toString());
   }
 
+  /* Upcoming Events, drawn by overview.js from the calendar. The tile is a
+     fixed slot: the list inside already holds five rows and scrolls past
+     them, so the calendar landing cannot move anything on the board. */
   function renderRoadPanel() {
     if (!window.TMAOverview || !window.TMAOverview.renderRoad) return '';
     return '<div class="tma-portal-panel tma-portal-tile tma-portal-tile--road tma-portal-tile--third"' +
-      ' data-tile-id="road" data-tile-span="third" data-key="panel-road" aria-label="Upcoming Events">' +
+      ' data-tile-id="road" data-tile-span="third" data-key="panel-road" aria-label="Upcoming Events"' +
+      ' style="min-height:' + TILE_SLOT.road + 'px">' +
       window.TMAOverview.renderRoad() +
       '</div>';
+  }
+
+  /* The calendar behind the road tile is read once per visit and once a
+     minute, not once per render: every arrival used to re-ask it. */
+  var roadAt = 0;
+
+  function refreshRoad(el) {
+    if (!window.TMAOverview || typeof window.TMAOverview.refreshRoad !== 'function') return;
+    if (!stale(roadAt)) return;
+    roadAt = Date.now();
+    window.TMAOverview.refreshRoad(el);
   }
 
   function renderHomeGrid(s, show) {
@@ -2118,14 +2266,18 @@
       }
       // Re-fetch default folders once identity is *newly* known, the first
       // load may have raced ahead of /me and skipped staff-only chrome. A /me
-      // that says the same thing as last time changes nothing on this board.
-      if (!settled && answer && window.TMAPortalHomeLibrary && window.TMAPortalHomeLibrary.refresh) {
-        window.TMAPortalHomeLibrary.refresh();
+      // that says the same thing as last time changes nothing on this board,
+      // and a strip that has not loaded yet reads the identity when it does.
+      var lib = window.TMAPortalHomeLibrary;
+      if (!settled && answer && lib && lib.refresh && lib.state && lib.state.loaded) {
+        lib.refresh();
       }
-      if (!homeStaffLoaded || (answer && (!homeStaff || !homeStaff.staff))) {
+      // The board in flight is the staff request; a second one beside it
+      // would answer the same question twice.
+      if ((!homeStaffLoaded || (answer && (!homeStaff || !homeStaff.staff))) && !boardInflight() && !bootOpen()) {
         loadHomeStaff(mountEl);
       } else if (!settled) {
-        mount(mountEl, { fromLoad: true });
+        scheduleRender(mountEl);
       }
     });
   }
@@ -2160,10 +2312,7 @@
         person.statusLabel = p.label;
         return person;
       });
-      if (staffSignature(homeStaff) !== before) {
-        var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
-        if (mountEl && mountEl.isConnected) mount(mountEl, { fromLoad: true });
-      }
+      if (staffSignature(homeStaff) !== before) scheduleRender();
     });
   }
 
@@ -2201,7 +2350,7 @@
           homeStaff = { staff: true, employees: [], error: true };
         }
         if ((!wasLoaded || staffSignature(homeStaff) !== before) && el && el.isConnected) {
-          mount(el, { fromLoad: true });
+          scheduleRender(el);
         }
       });
 
@@ -2452,6 +2601,37 @@
     return placed;
   }
 
+  /*
+   * A tile's height for the pack.
+   *
+   * The slot when the tile has one, which is every tile but Shortcuts. A
+   * tile without a slot is measured once, in whatever state the grid is in:
+   * unpacked, its box is its natural height; packed, its body's scroll
+   * height plus the frame around it says the same thing without tearing
+   * the board down to ask. The answer is kept on the grid, because the
+   * structure it measures does not change between renders.
+   */
+  function tileHeight(grid, node, packed) {
+    var id = node.getAttribute('data-tile-id');
+    if (TILE_SLOT[id]) return TILE_SLOT[id];
+    var known = grid._slots && grid._slots[id];
+    if (known) return known;
+
+    var h;
+    if (!packed) {
+      h = node.getBoundingClientRect().height;
+    } else {
+      var body = node.querySelector('.tma-portal-panel__body');
+      h = body
+        ? body.scrollHeight + (node.getBoundingClientRect().height - body.getBoundingClientRect().height)
+        : node.scrollHeight;
+    }
+    h = Math.max(120, Math.ceil(h));
+    grid._slots = grid._slots || {};
+    grid._slots[id] = h;
+    return h;
+  }
+
   function layoutHomeMasonry(grid) {
     if (!grid) return;
     var width = grid.clientWidth || grid.offsetWidth;
@@ -2466,26 +2646,18 @@
 
     var cols = homeGridCols(width);
     var gap = TILE_GAP;
+    var packed = grid.classList.contains('is-packed');
 
-    // Drop back to the CSS-grid fallback so heights match real column widths.
-    grid.classList.remove('is-packed');
-    grid.style.height = '';
-    nodes.forEach(function (node) {
-      node.style.position = '';
-      node.style.left = '';
-      node.style.top = '';
-      node.style.width = '';
-      node.style.height = '';
-    });
-    void grid.offsetHeight;
-
+    // Heights are decided before anything is read from the DOM, so the
+    // board is never dropped back to the CSS grid to be measured: that
+    // teardown was a forced reflow per render, and what it measured was
+    // whatever had arrived so far.
     var items = nodes.map(function (node) {
       var id = node.getAttribute('data-tile-id');
       var span = node.getAttribute('data-tile-span') || 'third';
       var frac = tileWidthFrac(span, cols);
       var wPx = fractionToPx(frac, width, gap, cols);
-      var h = Math.max(120, Math.ceil(node.getBoundingClientRect().height));
-      return { id: id, wPx: wPx, h: h, node: node };
+      return { id: id, wPx: wPx, h: tileHeight(grid, node, packed), node: node };
     });
 
     var packed = packHomeTiles(items, width, gap);
@@ -2524,57 +2696,56 @@
     grid.style.height = maxBottom + 'px';
     grid.classList.add('is-packed');
     grid._masonryWidth = width;
-    grid._masonrySig = items.map(function (i) { return i.id + ':' + i.h; }).join('|');
+    grid._masonrySig = masonrySignature(grid);
+  }
+
+  /* What the pack depends on: which tiles, in what order, at what width.
+     Heights are slots, so they are not part of it. */
+  function masonrySignature(grid) {
+    var ids = Array.prototype.map.call(
+      grid.querySelectorAll('[data-tile-id]'),
+      function (n) { return n.getAttribute('data-tile-id'); }
+    ).join('|');
+    return ids + '@' + Math.round(grid.clientWidth || 0);
   }
 
   /*
-   * Pack only if the board isn't already packed at the width it is now.
+   * Pack the board, now, if anything the pack depends on has changed.
    *
-   * The path taken when a render produced identical markup. Two cases still
-   * need work: the very first paint, and a return to a view that was packed
-   * while it was hidden (a hidden view measures 0px wide, so layoutHomeMasonry
-   * bails and the tiles are left in the CSS-grid fallback).
+   * Synchronous on purpose: it runs right after the morph, inside the same
+   * task, so the CSS-grid fallback is never painted; a frame of it was a
+   * shift of its own. Inside the boot window the first pack is the only
+   * one, whatever arrives, the geometry is the same by construction, and
+   * the board is left alone until settleBoot() renders once more. A hidden
+   * view measures 0px wide and is skipped; the return to it packs.
    */
-  function ensureHomeMasonry(root) {
+  function packHome(root) {
     var grid = root.querySelector('.tma-portal-home-grid');
     if (!grid) return;
     var width = grid.clientWidth || 0;
     if (width < 40) return;
-    if (grid.classList.contains('is-packed') && Math.abs((grid._masonryWidth || 0) - width) < 1) return;
-    bindHomeMasonry(root);
+    var packed = grid.classList.contains('is-packed');
+    if (packed && bootOpen()) return;
+    if (packed && grid._masonrySig === masonrySignature(grid)) return;
+    layoutHomeMasonry(grid);
+    watchHomeWidth(grid);
   }
 
-  function bindHomeMasonry(root) {
-    var grid = root.querySelector('.tma-portal-home-grid');
-    if (!grid) return;
-
-    requestAnimationFrame(function () {
-      layoutHomeMasonry(grid);
-      // Second pass after images/fonts settle natural heights.
-      requestAnimationFrame(function () { layoutHomeMasonry(grid); });
-    });
-
-    if (!grid._masonryRo && typeof ResizeObserver !== 'undefined') {
-      var timer = null;
-      grid._masonryRo = new ResizeObserver(function () {
-        if (timer) cancelAnimationFrame(timer);
-        timer = requestAnimationFrame(function () {
-          timer = null;
-          var w = grid.clientWidth || 0;
-          if (grid._masonryWidth && Math.abs(grid._masonryWidth - w) < 1) {
-            // Width unchanged, still re-pack if content height likely changed.
-            var sig = Array.prototype.map.call(
-              grid.querySelectorAll('[data-tile-id]'),
-              function (n) { return n.getAttribute('data-tile-id'); }
-            ).join('|');
-            if (grid._masonryNodeSig === sig && grid.classList.contains('is-packed')) return;
-            grid._masonryNodeSig = sig;
-          }
-          layoutHomeMasonry(grid);
-        });
+  /* A resize is the one thing that changes the pack without a render, and
+     it is coalesced to one pack per frame. */
+  function watchHomeWidth(grid) {
+    if (grid._masonryRo || typeof ResizeObserver === 'undefined') return;
+    var timer = null;
+    grid._masonryRo = new ResizeObserver(function () {
+      if (timer) return;
+      timer = requestAnimationFrame(function () {
+        timer = null;
+        var w = grid.clientWidth || 0;
+        if (w < 40 || Math.abs((grid._masonryWidth || 0) - w) < 1) return;
+        layoutHomeMasonry(grid);
       });
-      grid._masonryRo.observe(grid);
-    }
+    });
+    grid._masonryRo.observe(grid);
   }
 
   /* true = staff, false = client, null = /me not loaded yet.
@@ -2614,10 +2785,14 @@
   function tileShell(id, key, aria, headHtml, bodyHtml, extraClass, busy) {
     var span = TILE_SPAN[id] || 'third';
     var spanClass = span === 'full' ? ' tma-portal-tile--full' : ' tma-portal-tile--third';
+    // The slot, so the tile is that tall before the pack as well as after
+    // it, and a loading tile and the tile it becomes are the same box.
+    var slot = TILE_SLOT[id];
     return '<section class="tma-portal-panel tma-portal-tile' + spanClass + (extraClass ? ' ' + extraClass : '') + '"' +
       tileAttrs(id) +
       ' data-key="' + key + '"' +
       ' aria-label="' + ui().esc(aria) + '"' +
+      (slot ? ' style="min-height:' + slot + 'px"' : '') +
       (busy ? ' aria-busy="true"' : '') + '>' +
       headHtml +
       '<div class="tma-portal-panel__body">' + bodyHtml + '</div>' +
@@ -2918,7 +3093,7 @@
     if (!homeFilesLoaded) {
       return tileShell(
         'favorites', 'panel-favorites', 'Favorites', panelHead('Favorites'),
-        skeletonFileRows(2),
+        skeletonFileRows(4),
         '', true
       );
     }
@@ -2976,6 +3151,10 @@
   function applyRecentFromLibrary() {
     var lib = window.TMAPortalHomeLibrary && window.TMAPortalHomeLibrary.state;
     if (!lib || !lib.recent) return;
+    // Before the strip has rows of its own (its full load, or the eight the
+    // board seeded it with) its empty list is nothing to derive from, and
+    // deriving from it emptied a tile the board had just filled.
+    if (!lib.loaded && !lib.seeded) return;
     var s = data().state();
     var recentFolders = (lib.recent.folders || []).map(function (f) {
       return {
@@ -2997,82 +3176,66 @@
       .slice(0, 6);
   }
 
+  /*
+   * Recent Files and Favorites, refetched on their own.
+   *
+   * The board's `files` part, asked for by itself: the live `files` signal
+   * and the viewer's after-action callbacks want these two tiles and nothing
+   * else. At boot the same part arrives on the request the shell started.
+   */
   function loadHomeFiles(el) {
-    var net = window.TMAFilesNet;
-    if (!net) { homeFilesLoaded = true; return; }
+    return loadHomeBoard(el, { parts: FILES_PARTS, skipTimer: true });
+  }
 
-    // One flight at a time. Returning to the Dashboard while a refresh is still
-    // running used to start a second identical pair of requests, and whichever
-    // landed last won.
-    if (homeFilesInflight) return;
+  /*
+   * The eight recent rows, folders and files merged by recency exactly as
+   * the strip's forty-row table does it, kept beside the state and cut to
+   * the tile's six.
+   */
+  function applyHomeFiles(files) {
+    var s = data().state();
+    var recent = (files && files.recent) || {};
+    var favs = (files && files.favorites) || {};
 
-    // Recent Files and Favorites are server-owned, so any value persisted by the
-    // old localStorage mock must never reach the screen. That purge belongs to
-    // the *first* load only, doing it on every refresh is what emptied the
-    // panel and forced the skeleton back each time the Dashboard was opened.
-    if (!homeFilesLoaded) {
-      var s0 = data().state();
-      s0.recentFiles = [];
-      s0.folders = s0.folders || {};
-      s0.folders.favorites = [];
-    }
-
-    // If the fetch stalls (slow single-threaded dev server), stop showing the
-    // skeleton after a while and fall back to the empty state. The real data is
-    // still applied whenever it eventually arrives.
-    var giveUp = setTimeout(function () {
-      if (homeFilesLoaded) return;
-      homeFilesLoaded = true;
-      if (el.isConnected) mount(el, { fromLoad: true });
-    }, 12000);
-
-    // The server orders folders before files within a page (same windowing
-    // every other section uses), so a plain perPage=6 could return e.g. 6
-    // folders and cut off a file modified a minute ago. Ask for a wider
-    // candidate pool and do the true recency merge across both types here.
-    homeFilesInflight = Promise.all([
-      net.fetchJSON(net.url('/?section=favorites&perPage=8&lean=1')).catch(function () { return null; }),
-    ]).then(function (res) {
-      clearTimeout(giveUp);
-      homeFilesInflight = null;
-      var favRes = res[0];
-
-      if (!favRes) { homeFilesLoaded = true; return; }
-
-      var wasLoaded = homeFilesLoaded;
-      homeFilesLoaded = true;
-      homeFilesAt = Date.now();
-      var s = data().state();
-      var beforeRecent = fileListSignature(s.recentFiles);
-      var beforeFavs = fileListSignature(s.folders && s.folders.favorites);
-
-      var favFolders = (favRes.folders || []).map(function (f) {
-        return { kind: 'folder', id: f.id, name: f.name, fileCount: f.fileCount, colour: f.colour, path: pathLabel('folder', f.path) };
-      });
-      var favFiles = (favRes.files || []).map(function (f) {
-        rememberFilePayload(f);
-        return {
-          kind: 'file', id: f.id, name: f.name, type: f.extension || '', icon: f.icon, thumbUrl: f.thumbUrl,
-          category: f.category, mime: f.mime, previewUrl: f.previewUrl, permissions: f.permissions,
-          size: f.size,
-          folderId: f.folder && f.folder.id, path: pathLabel('file', f.path),
-        };
-      });
-      s.folders = s.folders || {};
-      s.folders.favorites = favFolders.concat(favFiles);
-
-      homeReal.files = true;
-      keepWarm('files', {
-        recentFiles: s.recentFiles || [],
-        favorites: (s.folders && s.folders.favorites) || [],
-      });
-
-      var changed = !wasLoaded ||
-        fileListSignature(s.recentFiles) !== beforeRecent ||
-        fileListSignature(s.folders && s.folders.favorites) !== beforeFavs;
-
-      if (changed && el.isConnected) mount(el, { fromLoad: true });
+    var recentFolders = (recent.folders || []).map(function (f) {
+      return {
+        kind: 'folder', id: f.id, name: f.name, fileCount: f.fileCount, colour: f.colour,
+        path: pathLabel('folder', f.path), sortAt: f.modifiedAt,
+      };
     });
+    var recentFiles = (recent.files || []).map(function (f) {
+      rememberFilePayload(f);
+      return {
+        kind: 'file', id: f.id, name: f.name, type: f.extension || '', icon: f.icon, thumbUrl: f.thumbUrl,
+        category: f.category, mime: f.mime, previewUrl: f.previewUrl, permissions: f.permissions,
+        size: f.size,
+        folderId: f.folder && f.folder.id, path: pathLabel('file', f.path), sortAt: f.updatedAt,
+      };
+    });
+    s.recentFiles = recentFolders.concat(recentFiles)
+      .sort(function (a, b) { return new Date(b.sortAt || 0) - new Date(a.sortAt || 0); })
+      .slice(0, 6);
+
+    var favFolders = (favs.folders || []).map(function (f) {
+      return { kind: 'folder', id: f.id, name: f.name, fileCount: f.fileCount, colour: f.colour, path: pathLabel('folder', f.path) };
+    });
+    var favFiles = (favs.files || []).map(function (f) {
+      rememberFilePayload(f);
+      return {
+        kind: 'file', id: f.id, name: f.name, type: f.extension || '', icon: f.icon, thumbUrl: f.thumbUrl,
+        category: f.category, mime: f.mime, previewUrl: f.previewUrl, permissions: f.permissions,
+        size: f.size,
+        folderId: f.folder && f.folder.id, path: pathLabel('file', f.path),
+      };
+    });
+    s.folders = s.folders || {};
+    s.folders.favorites = favFolders.concat(favFiles);
+
+    // The strip's Recent Files tab starts from the same eight rows, so a
+    // reader who scrolls down before its own load has something true to
+    // read rather than a skeleton.
+    var lib = window.TMAPortalHomeLibrary;
+    if (lib && typeof lib.seed === 'function') lib.seed(recent);
   }
 
   /* The KPI row, measured server-side from real activity: response times come
@@ -3107,7 +3270,7 @@
         homeMetricsLoaded = true;
         // Same numbers, same cards, leave the row alone.
         if ((!wasLoaded || JSON.stringify(homeMetrics || null) !== before) && el.isConnected) {
-          mount(el, { fromLoad: true });
+          scheduleRender(el);
         }
       });
   }
@@ -3122,7 +3285,7 @@
    * is visible.
    */
   var HOME_BOARD_MS = 60000;
-  var homeBoardInflight = null;
+  var homeBoardInflight = {};
   var homeBoardTimer = null;
 
   function applyHomeBoard(json) {
@@ -3203,31 +3366,93 @@
       pendingUsersCount = json.pendingUsers;
     }
 
+    if (json.files) {
+      var s = data().state();
+      var recentBefore = fileListSignature(s.recentFiles);
+      var favsBefore = fileListSignature(s.folders && s.folders.favorites);
+      var wasLoaded = homeFilesLoaded;
+      applyHomeFiles(json.files);
+      homeFilesLoaded = true;
+      homeFilesAt = Date.now();
+      homeReal.files = true;
+      keepWarm('files', {
+        recentFiles: s.recentFiles || [],
+        favorites: (s.folders && s.folders.favorites) || [],
+      });
+      if (!wasLoaded ||
+        fileListSignature(s.recentFiles) !== recentBefore ||
+        fileListSignature(s.folders && s.folders.favorites) !== favsBefore) {
+        changed = true;
+      }
+    }
+
     return changed;
+  }
+
+  /*
+   * The request the board makes for a set of parts, byte for byte what the
+   * shell writes into the document for the same reader (HomeBoard::bootUrl):
+   * the period, the work lists, then the parts, all as plain lists.
+   */
+  function boardUrl(parts) {
+    var url = '/portal/dashboard/home?';
+    if (parts !== FILES_PARTS) {
+      var want = wantedWorkTiles();
+      url += 'period=' + metricsPeriod();
+      if (want.length) url += '&want=' + want.join(',');
+      url += '&';
+    }
+    return url + 'parts=' + parts.join(',');
+  }
+
+  /*
+   * The promise the shell started for this URL, if it started one and it is
+   * this URL, taken once. A different URL (a period picked in another
+   * session, a layout that hydrated to other tiles) is left where it is:
+   * the answer would be for a board nobody is looking at.
+   */
+  function takeHeadStart(url) {
+    var pairs = [['TMABootHome', 'TMABootHomeUrl'], ['TMABootHomeFiles', 'TMABootHomeFilesUrl']];
+    for (var i = 0; i < pairs.length; i++) {
+      var promise = window[pairs[i][0]];
+      if (promise && typeof promise.then === 'function' && window[pairs[i][1]] === url) {
+        window[pairs[i][0]] = null;
+        return promise;
+      }
+    }
+    return null;
+  }
+
+  function boardInflight() {
+    for (var url in homeBoardInflight) {
+      if (Object.prototype.hasOwnProperty.call(homeBoardInflight, url)) return true;
+    }
+    return false;
   }
 
   function loadHomeBoard(el, opts) {
     opts = opts || {};
-    if (homeBoardInflight) return homeBoardInflight;
+    var parts = opts.parts && opts.parts.length ? opts.parts : HOME_PARTS;
+    var url = boardUrl(parts);
+    // One flight per URL: the board and the files part travel side by side,
+    // and a second ask for either joins the one in the air.
+    if (homeBoardInflight[url]) return homeBoardInflight[url];
 
-    var period = metricsPeriod();
-    var want = wantedWorkTiles();
-    var url = '/portal/dashboard/home?period=' + encodeURIComponent(period);
-    if (want.length) url += '&want=' + encodeURIComponent(want.join(','));
-    if (opts.parts && opts.parts.length) {
-      url += '&parts=' + encodeURIComponent(opts.parts.join(','));
-    }
+    var boot = parts === HOME_PARTS && !homeMetricsLoaded && !homeStaffLoaded;
+    if (boot && !bootAt) bootAt = Date.now();
 
-    homeBoardInflight = fetch(url, {
+    var request = takeHeadStart(url) || fetch(url, {
       credentials: 'same-origin',
       headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-    })
+    });
+
+    homeBoardInflight[url] = request
       .then(function (r) { return r.ok ? r.json() : null; })
       .catch(function () { return null; })
       .then(function (json) {
-        homeBoardInflight = null;
+        delete homeBoardInflight[url];
         var changed = applyHomeBoard(json);
-        if (json) {
+        if (json && parts !== FILES_PARTS) {
           if (!homeMetricsLoaded) homeMetricsLoaded = true;
           if (!homeStaffLoaded) homeStaffLoaded = true;
           if (!homeEmailLoaded) homeEmailLoaded = true;
@@ -3235,10 +3460,17 @@
           if (!homeCipLoaded) homeCipLoaded = true;
           if (!homeWorkLoaded) homeWorkLoaded = true;
         }
+        if (!json && parts === FILES_PARTS && !homeFilesLoaded) {
+          // Nothing to draw and nothing coming: the tiles settle into their
+          // empty state rather than shimmer until the next signal.
+          homeFilesLoaded = true;
+          changed = true;
+        }
+        if (parts !== FILES_PARTS) settleBoot();
         if ((changed || opts.force) && el && el.isConnected) {
-          mount(el, { fromLoad: true });
+          scheduleRender(el);
         } else if (json && el && el.isConnected && el.childElementCount === 0) {
-          mount(el, { fromLoad: true });
+          scheduleRender(el);
         }
       });
 
@@ -3247,7 +3479,7 @@
         var mountEl = document.querySelector('[data-view="dashboard"] [data-portal-mount]');
         if (!mountEl || !mountEl.isConnected) return;
         if (document.visibilityState === 'hidden') return;
-        if (homeBoardInflight) return;
+        if (boardInflight()) return;
         loadHomeBoard(mountEl, { skipTimer: true });
       }, HOME_BOARD_MS);
     }
@@ -3262,7 +3494,11 @@
       });
     }
 
-    return homeBoardInflight;
+    // The window closes on its own if the board is slow, so the board is
+    // packed with whatever has landed rather than held for a straggler.
+    if (boot && !bootDone) setTimeout(settleBoot, BOOT_WINDOW_MS);
+
+    return homeBoardInflight[url];
   }
 
   /*
@@ -3279,7 +3515,7 @@
     homeMetricsLoaded = false;
     homeMetricsAt = 0;
     homeReal.metrics = false;
-    if (el.isConnected && el.childElementCount) mount(el, { fromLoad: true });
+    if (el.isConnected && el.childElementCount) scheduleRender(el);
     loadHomeBoard(el, { parts: ['metrics'], skipTimer: true });
   }
 
@@ -3331,9 +3567,11 @@
     }
 
     // Painted from cache when known, so the badge does not blink back to zero
-    // and re-populate on every render.
+    // and re-populate on every render. The board carries the count, so it is
+    // asked for on its own only when no board is bringing it, which is the
+    // failed-request case.
     if (pendingUsersCount !== null) { setCount('users', pendingUsersCount); }
-    else {
+    else if (canReach('users.view') && !boardInflight() && !bootOpen()) {
       fetch('/admin/users/pending-count', { credentials: 'same-origin', headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
         .then(function (r) { return r.ok ? r.json() : { count: 0 }; })
         .then(function (j) {
@@ -3544,15 +3782,11 @@
     if (window.TMAOverview && typeof window.TMAOverview.bindRoadActions === 'function') {
       window.TMAOverview.bindRoadActions(el);
     }
-    if (window.TMAOverview && typeof window.TMAOverview.refreshRoad === 'function') {
-      window.TMAOverview.refreshRoad(el);
-    }
+    if (!opts.fromLoad) refreshRoad(el);
 
-    // Re-packing costs a forced reflow of the whole board; skip it when the
-    // markup it would measure is the one already on screen. The ResizeObserver
-    // inside still handles a genuine width change.
-    if (!unchanged) bindHomeMasonry(el);
-    else ensureHomeMasonry(el);
+    // Packed here, in the same task as the morph, so the CSS-grid fallback
+    // is never painted. packHome decides whether anything has to move.
+    packHome(el);
 
     el._homeLibRerender = function () { mount(el, { fromLoad: true }); };
     if (window.TMAPortalHomeLibrary) {
@@ -3778,10 +4012,13 @@
          not to answer somebody who has just asked. */
       var force = !!opts.refresh;
       hydrateLayoutFromServer(function (changed) {
-        // Re-render once when the account layout differs from local cache.
-        if (changed && el.isConnected) mount(el, { fromLoad: true, fromHydrate: true });
+        // Re-render once when the account layout differs from local cache,
+        // and ask for the work lists that layout wants if they differ from
+        // the ones on their way.
+        if (!changed || !el.isConnected) return;
+        scheduleRender(el);
+        refreshWorkForTiles();
       });
-      if (force || !homeFilesLoaded || stale(homeFilesAt)) loadHomeFiles(el);
       var boardStale = force
         || !homeMetricsLoaded || stale(homeMetricsAt, METRICS_FRESH_MS)
         || !homeStaffLoaded || stale(homeStaffAt, PRESENCE_FRESH_MS)
@@ -3791,19 +4028,12 @@
         || (canReach('workflows.view') && (!homeWorkLoaded || stale(homeWorkAt, WORK_FRESH_MS)));
       if (boardStale) loadHomeBoard(el, { force: force });
       else bindStaffUserListener();
-      if (window.TMAPortalHomeLibrary) {
-        // Only forced on an explicit refresh. A forced load replaced
-        // state.defaults with preview-less folders straight away, so every card
-        // on the strip read "Nothing in this folder yet" until the previews came
-        // back, the Default Folders blanking on every visit. Left to itself the
-        // strip revalidates on its own schedule and repaints only what changed.
-        window.TMAPortalHomeLibrary.load(function () {
-          applyRecentFromLibrary();
-          if (el.isConnected) mount(el, { fromLoad: true });
-        }, force);
-      }
-    } else if (!homeStaffInflight && (!homeStaffLoaded || (isStaffUser() && homeStaff && homeStaff.staff === false))) {
-      // Retry when identity arrives after an early "not staff" guess.
+      if (force || !homeFilesLoaded || stale(homeFilesAt)) loadHomeFiles(el);
+      loadLibrarySoon(el, force);
+    } else if (!boardInflight() && !bootOpen() && !homeStaffInflight &&
+      (!homeStaffLoaded || (isStaffUser() && homeStaff && homeStaff.staff === false))) {
+      // Retry when identity arrives after an early "not staff" guess, unless
+      // the board that answers it is already on its way.
       loadHomeStaff(el);
     } else {
       bindStaffUserListener();
@@ -3814,6 +4044,56 @@
         el._homeMountQueued = false;
         mount(el, { fromLoad: true });
       }
+    }
+  }
+
+  /*
+   * The strip under the grid: Default Folders and the forty-row table.
+   *
+   * Its first load is eight requests (shortcuts, two listings, the library
+   * settings, a preview per default folder) for a section that starts a
+   * viewport and a half down the page, and at boot they queued in front of
+   * the tiles the reader was actually looking at. So the first load waits:
+   * for the strip to come near the viewport, or LIBRARY_DEFER_MS after the
+   * first mount, whichever is first. Once the strip has loaded, revisits
+   * revalidate on its own schedule as before, and an explicit refresh
+   * loads at once.
+   *
+   * Only forced on an explicit refresh. A forced load replaced
+   * state.defaults with preview-less folders straight away, so every card
+   * on the strip read "Nothing in this folder yet" until the previews came
+   * back, the Default Folders blanking on every visit. Left to itself the
+   * strip revalidates on its own schedule and repaints only what changed.
+   */
+  var libraryLoadPending = false;
+
+  function loadLibrarySoon(el, force) {
+    var lib = window.TMAPortalHomeLibrary;
+    if (!lib) return;
+
+    var load = function () {
+      libraryLoadPending = false;
+      if (!el.isConnected) return;
+      lib.load(function () {
+        applyRecentFromLibrary();
+        scheduleRender(el);
+      }, force);
+    };
+
+    if (force || (lib.state && lib.state.loaded)) { load(); return; }
+    if (libraryLoadPending) return;
+    libraryLoadPending = true;
+
+    var timer = setTimeout(load, LIBRARY_DEFER_MS);
+    var strip = el.querySelector('[data-key="home-below"]');
+    if (strip && typeof IntersectionObserver !== 'undefined') {
+      var io = new IntersectionObserver(function (entries) {
+        if (!entries.some(function (entry) { return entry.isIntersecting; })) return;
+        io.disconnect();
+        clearTimeout(timer);
+        load();
+      }, { rootMargin: '200px' });
+      io.observe(strip);
     }
   }
 
@@ -3847,8 +4127,7 @@
       if (!window.TMAPortalHomeLibrary) return null;
       return window.TMAPortalHomeLibrary.refresh(function () {
         applyRecentFromLibrary();
-        var live = dashMount();
-        if (live) mount(live, { fromLoad: true });
+        scheduleRender(dashMount());
       });
     }, {
       // Registered for the life of the page, so skip the work whenever the

@@ -73,6 +73,15 @@
     if (d && d._syncPendingUsersBadge) d._syncPendingUsersBadge();
   }
 
+  /* The directory GET, shared through TMABoot so the Users page, the Overview
+     tab and the socket's first refresh in the same breath cost one round
+     trip. A body reads once, so every consumer gets its own clone. */
+  function fetchDirectory() {
+    var ask = function () { return usersApi('GET', '/admin/users'); };
+    if (!window.TMABoot || !window.TMABoot.once) return ask();
+    return window.TMABoot.once('GET /admin/users', ask).then(function (res) { return res.clone(); });
+  }
+
   function usersToast(message, ok) {
     if (window.TMAToast && window.TMAToast.showFloatingToast) {
       window.TMAToast.showFloatingToast(message, { state: ok ? 'positive' : 'negative' });
@@ -799,7 +808,8 @@ if (state.filters.user) {
      *   refresh fails, see the guards below.
      */
     function loadRealUsers(silent) {
-      return usersApi('GET', '/admin/users').then(function (res) {
+      state.booted = true;
+      return fetchDirectory().then(function (res) {
         if (!res.ok) {
           // A refresh nobody asked for must not replace a working directory
           // with an error banner; the next one can correct it.
@@ -867,8 +877,18 @@ if (state.filters.user) {
     // way clients.js hangs its controller off the mount root, because this
     // module mounts more than once (the Users page and the Overview tab each
     // get their own state) and a live refresh has to reach every live one.
-    container._usersReload = loadRealUsers;
-    loadRealUsers();
+    container._usersReload = function (silent) {
+      // A live signal before the first load has nothing to keep current.
+      if (!state.booted) return Promise.resolve();
+      return loadRealUsers(silent);
+    };
+    if (isOverview || !window.TMABoot || !window.TMABoot.deferUnless) {
+      loadRealUsers();
+    } else {
+      // The page mounts with the shell; its table loads when Users is
+      // entered, or once the shell has gone quiet.
+      window.TMABoot.deferUnless(['users', 'add-data'], loadRealUsers);
+    }
 
     function closeStatusMenu() {
       var open = document.querySelector('[data-users-status-menu]');

@@ -62,3 +62,4 @@ android/*.jks
 android/.idea/
 android/.kotlin/
 android/app/google-services.json
+tests/Browser/.state/

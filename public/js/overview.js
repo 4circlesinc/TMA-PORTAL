@@ -156,11 +156,18 @@
     window.addEventListener('load', hydrateOverviewOnce);
   }
 
+  /* Every read here is an idempotent GET, and the Dashboard's road tile asks
+     for the week's events on each of its renders: TMABoot folds the repeats
+     into one round trip. */
   function apiGet(url) {
-    return fetch(ROOT + url, {
-      credentials: 'same-origin',
-      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-    }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+    var ask = function () {
+      return fetch(ROOT + url, {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+    };
+    if (window.TMABoot && window.TMABoot.once) return window.TMABoot.once('GET ' + ROOT + url, ask);
+    return ask();
   }
 
   function formatRoadTime(iso) {
@@ -1029,7 +1036,13 @@
     setActiveTab(container, activeTab);
 
     OVERVIEW_CONTAINER = container;
-    refreshOverviewData(container);
+    if (window.TMABoot && window.TMABoot.deferUnless) {
+      // Four requests for a page that mounts with the shell: they run when
+      // Overview is entered, or once the shell has gone quiet.
+      window.TMABoot.deferUnless(['overview'], function () { refreshOverviewData(container); });
+    } else {
+      refreshOverviewData(container);
+    }
 
     // /me may resolve after first paint, reveal the admin-only tabs then.
     if (window.TMACurrentUser && typeof window.TMACurrentUser.onChange === 'function') {

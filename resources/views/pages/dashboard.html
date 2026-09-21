@@ -22,17 +22,17 @@
     });
     window.__TMA_ME__.catch(function () {});
   </script>
-  <!-- Inter comes from a third-party origin, so the font file costs a DNS
-       lookup + TCP + TLS handshake before it can even start downloading.
-       Warming both origins here overlaps that with the stylesheet parse. -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/tokens.css">
+  <!-- Inter is served from this origin (the @font-face rules open tokens.css)
+       with font-display: optional, so text never swaps fonts after it has
+       painted. The preload starts the one file the first paint needs before
+       the stylesheets have even parsed; crossorigin is required or the
+       browser fetches it a second time for the @font-face. -->
+  <link rel="preload" href="fonts/inter/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/tokens.css?v=2">
   <link rel="stylesheet" href="css/theme.css">
   <link rel="stylesheet" href="css/components.css?v=4">
   <link rel="stylesheet" href="css/pagination.css?v=4">
-  <link rel="stylesheet" href="css/dashboard.css?v=331">
+  <link rel="stylesheet" href="css/dashboard.css?v=332">
   <link rel="stylesheet" href="css/global-search.css?v=5">
   <link rel="stylesheet" href="css/filter-and-sort.css">
   <link rel="stylesheet" href="css/table-filter-sort.css?v=6">
@@ -61,7 +61,7 @@
        sidebar paints, so a client never sees Clients/Users/Email flash by.
        The capabilities are injected immediately above by App\Support\
        PortalShell, so it needs no round trip to know which rows to drop. -->
-  <script src="js/portal-access.js?v=28"></script>
+  <script src="js/portal-access.js?v=29"></script>
   <script>
     if (/\/email\/compose\/?$/.test(location.pathname)) {
       document.documentElement.classList.add('tma-dash--compose-popout');
@@ -74,6 +74,26 @@
 </head>
 <body>
   <div class="tma-dash" data-node-id="32546:96098">
+    <script>
+      /* The rail's resting width is a per-user choice: the hover style rests
+         collapsed at 72px, the standard style keeps 225px unless the reader
+         collapsed it. dashboard.js applies that from the same localStorage
+         keys, but only once the whole bundle has run, and production paints
+         long before then: the page laid out with the wide rail and the entire
+         content column jumped left when the class arrived. Runs during parse,
+         on the element just opened, so the first paint already has the right
+         rail; /me then only corrects a stale local value. The same keys and
+         defaults as getSidebarStyle() and applySidebarStyle(); below the
+         drawer breakpoint the classes are not used. */
+      (function (root) {
+        if (!root || window.innerWidth <= 1024) return;
+        var get = function (k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } };
+        var standard = get('tma.sidebarStyle') === 'standard';
+        if (standard) root.className += ' tma-dash--sidebar-standard';
+        if (!standard || get('tma.sidebarCollapsed') === '1') root.className += ' is-sidebar-collapsed';
+        if (get('tma.rightbarCollapsed') === '1') root.className += ' is-rightbar-collapsed';
+      })(document.currentScript && document.currentScript.parentNode);
+    </script>
 
     <!-- ── Sidebar ─────────────────────────────────────── -->
     <aside class="tma-dash__sidebar" aria-label="Primary">
@@ -613,6 +633,9 @@
 
   <script src="js/auth-session.js?v=2" defer></script>
   <script src="js/dom-morph.js" defer></script>
+  <!-- Which page is being entered and what may wait: every page module asks
+       TMABoot before starting boot work the Dashboard does not need. -->
+  <script src="js/boot-priority.js?v=1" defer></script>
   <script src="js/portal-live.js?v=3" defer></script>
   <!-- Presence phrasing, shared by every board that says when somebody was
        last around. Must precede them; deferred scripts run in document order. -->
@@ -697,7 +720,7 @@
   <script src="js/users.js?v=14" defer></script>
   <script src="js/notify-store.js?v=12" defer></script>
   <script src="js/notify-render.js?v=10" defer></script>
-  <script src="js/right-sidebar.js?v=8" defer></script>
+  <script src="js/right-sidebar.js?v=9" defer></script>
   <script src="js/notify-realtime.js?v=2" defer></script>
   <script src="js/activity-popups.js?v=3" defer></script>
   <script src="js/portal-search-index.js?v=17" defer></script>
@@ -727,7 +750,7 @@
   <script src="js/portal-shortcuts.js" defer></script>
   <script src="js/portal-home-library.js?v=28" defer></script>
   <script src="js/portal-home.js?v=61" defer></script>
-  <script src="js/dashboard.js?v=57" defer></script>
+  <script src="js/dashboard.js?v=58" defer></script>
   <script src="js/pull-refresh.js?v=1" defer></script>
   <script src="js/phone-input.js" defer></script>
   <script src="js/presence-status.js?v=14" defer></script>

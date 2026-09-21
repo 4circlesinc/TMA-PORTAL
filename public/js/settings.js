@@ -466,6 +466,8 @@
   function flushPrefSync() {
     var body = prefPending; prefPending = {}; prefTimer = null;
     if (!Object.keys(body).length) return;
+    // A write changes the answer a shared read just gave.
+    if (window.TMABoot && window.TMABoot.forget) window.TMABoot.forget('GET /me/preferences');
     fetch('/me/preferences', {
       method: 'PUT',
       credentials: 'same-origin',
@@ -564,11 +566,21 @@
 
   var prefsHydrated = false;
   var prefsHydration = null;
+  /* Shared through TMABoot: the Dashboard's board reads the same preferences
+     at boot, and one answer serves both. */
+  function fetchPrefs() {
+    var ask = function () {
+      return fetch('/me/preferences', {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      }).then(function (r) { return r.ok ? r.json() : null; });
+    };
+    if (window.TMABoot && window.TMABoot.once) return window.TMABoot.once('GET /me/preferences', ask);
+    return ask();
+  }
+
   function hydratePrefs(root) {
-    return fetch('/me/preferences', {
-      credentials: 'same-origin',
-      headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-    }).then(function (r) { return r.ok ? r.json() : null; }).then(function (p) {
+    return fetchPrefs().then(function (p) {
       if (!p) return;
       Object.keys(PREF_SERVER_KEYS).forEach(function (localKey) {
         var serverKey = PREF_SERVER_KEYS[localKey];
@@ -1438,22 +1450,45 @@
     return head + rows;
   }
 
+  /* The same GET notify-store makes for its toast channels; one answer
+     serves both through TMABoot. */
+  function fetchNotificationPrefs() {
+    var ask = function () {
+      return fetch('/portal/notifications/preferences', { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; });
+    };
+    if (window.TMABoot && window.TMABoot.once) return window.TMABoot.once('GET /portal/notifications/preferences', ask);
+    return ask();
+  }
+
+  var notifPrefsPending = false;
+
   function loadNotificationPrefs(root) {
     var host = root.querySelector('[data-notif-prefs]');
-    if (!host || host.dataset.loaded === '1' || host.dataset.loading === '1') return;
+    if (!host || host.dataset.loaded === '1' || host.dataset.loading === '1' || notifPrefsPending) return;
     host.dataset.loading = '1';
-    fetch('/portal/notifications/preferences', { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (data) {
-        host.dataset.loading = '';
-        if (!data || !data.preferences) { host.innerHTML = '<div class="tma-dash__notifprefs-loading">Could not load preferences.</div>'; return; }
-        host.dataset.loaded = '1';
-        notifPrefsCache = data.preferences;
-        host.innerHTML = notifPrefsGridHtml(data.preferences);
-        var master = root.querySelector('[data-settings-notify="email"]');
-        if (master) master.checked = notifEmailMasterOn();
-      })
-      .catch(function () { host.dataset.loading = ''; if (host) host.innerHTML = '<div class="tma-dash__notifprefs-loading">Could not load preferences.</div>'; });
+    notifPrefsPending = true;
+    var fill = function () {
+      notifPrefsPending = false;
+      // Settings re-renders on every mount; fill the grid that is on screen now.
+      host = root.querySelector('[data-notif-prefs]') || host;
+      host.dataset.loading = '1';
+      fetchNotificationPrefs()
+        .then(function (data) {
+          host.dataset.loading = '';
+          if (!data || !data.preferences) { host.innerHTML = '<div class="tma-dash__notifprefs-loading">Could not load preferences.</div>'; return; }
+          host.dataset.loaded = '1';
+          notifPrefsCache = data.preferences;
+          host.innerHTML = notifPrefsGridHtml(data.preferences);
+          var master = root.querySelector('[data-settings-notify="email"]');
+          if (master) master.checked = notifEmailMasterOn();
+        })
+        .catch(function () { host.dataset.loading = ''; if (host) host.innerHTML = '<div class="tma-dash__notifprefs-loading">Could not load preferences.</div>'; });
+    };
+    // Settings mounts with the shell and this grid is not on screen then:
+    // ask when Settings is entered, or once the shell has gone quiet.
+    if (window.TMABoot && window.TMABoot.deferUnless) window.TMABoot.deferUnless(['settings', 'admin'], fill);
+    else fill();
   }
 
   function saveNotificationPref(group, channel, on) {
@@ -1674,17 +1709,27 @@
      them server-side), so this panel reads and writes that endpoint rather
      than duplicating the state. */
   var privacyCache = null;
+  var privacyLoading = false;
 
   function loadPrivacySettings(root) {
     if (privacyCache) { applyPrivacySettings(root); return; }
-    fetch('/portal/messaging/settings', {
-      credentials: 'same-origin',
-      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-    }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
-      if (!d || !d.settings) return;
-      privacyCache = d.settings;
-      applyPrivacySettings(root);
-    }).catch(function () {});
+    if (privacyLoading) return;
+    privacyLoading = true;
+    var fill = function () {
+      fetch('/portal/messaging/settings', {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+        privacyLoading = false;
+        if (!d || !d.settings) return;
+        privacyCache = d.settings;
+        applyPrivacySettings(root);
+      }).catch(function () { privacyLoading = false; });
+    };
+    // Same as the notification grid: not on screen when Settings mounts with
+    // the shell, so it waits for Settings or an idle shell.
+    if (window.TMABoot && window.TMABoot.deferUnless) window.TMABoot.deferUnless(['settings', 'admin'], fill);
+    else fill();
   }
 
   function applyPrivacySettings(root) {

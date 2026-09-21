@@ -428,8 +428,142 @@
     ensureBespoke();
   }
 
+  /* ── Sidebar rhythm: spread the menu to the window's height ──
+     The menu is a fixed set of rows, so on a tall window it ended well above
+     the profile block with a large dead gap under the last item. Measure
+     what is actually left under the last section and hand it back to the row
+     gaps: the rail breathes on a big monitor and tightens back to its
+     resting rhythm on a short one (or in the desktop app, whose title bar
+     eats height) rather than scrolling. Measured, not a vh formula, so role
+     pruning, an expanded submenu and the shortcuts tab all re-fit.
+
+     It lives here rather than in dashboard.js because it has to run before
+     the first paint as well as after every later change. dashboard.js runs
+     deferred, at the end of the bundle, and an administrator's eighteen rows
+     overflow any laptop-height window, so the menu painted at its resting
+     10px rhythm and then tightened by 2px a row when the bundle got round to
+     it: every row from Overview down moved. fitNavBeforePaint() below does
+     the same fit the moment the sidebar has parsed; dashboard.js then calls
+     fitNavSpacing() with the same element on every later change and lands on
+     the value already on screen. Below the drawer breakpoint (1024px,
+     SIDEBAR_BP in dashboard.js) the mobile drawer has its own tighter,
+     scrolling rhythm and the property is left alone. */
+  var NAV_GAP_BASE = 10;  // --space-10, the resting rhythm
+  var NAV_GAP_TIGHT = 8;  // long menu: keep a readable gap; the rail scrolls instead
+  var NAV_GAP_MAX = 18;   // past this the rows stop reading as one list
+  var NAV_DRAWER_BP = 1024;
+
+  function isVisibleNavChild(el) {
+    return !el.hidden && el.getClientRects().length > 0;
+  }
+
+  function isSubnav(el) {
+    return !!(el.classList && el.classList.contains('tma-dash__subnav'));
+  }
+
+  /* One unit per gap the leftover space is split across: every gap between
+     visible rows, plus the break above a divided section (it tracks the same
+     custom property). An open submenu is deliberately not a row here, see
+     fitNavSpacing. */
+  function countNavGapUnits(sections) {
+    var units = 0;
+    sections.forEach(function (section) {
+      var rows = Array.prototype.slice.call(section.children).filter(function (el) {
+        return isVisibleNavChild(el) && !isSubnav(el);
+      });
+      if (!rows.length) return;
+      units += rows.length - 1;
+      if (section.classList.contains('tma-dash__nav-section--divided')) units += 1;
+    });
+    return units;
+  }
+
+  /* How much height the open submenus are taking: each one's box, its
+     margins, and the single row gap that separates it from its parent. */
+  function openSubnavHeight(sections, gap) {
+    var total = 0;
+    sections.forEach(function (section) {
+      Array.prototype.slice.call(section.children).forEach(function (el) {
+        if (!isSubnav(el) || !isVisibleNavChild(el)) return;
+        var cs = window.getComputedStyle(el);
+        total += el.getBoundingClientRect().height +
+          (parseFloat(cs.marginTop) || 0) +
+          (parseFloat(cs.marginBottom) || 0) +
+          gap;
+      });
+    });
+    return total;
+  }
+
+  function fitNavSpacing(navEl) {
+    if (!navEl) return;
+    if (window.innerWidth <= NAV_DRAWER_BP) { navEl.style.removeProperty('--dash-nav-gap'); return; }
+    // Always measure from the resting gap, never from whatever the last run
+    // grew it to, or each pass would compound the one before it.
+    navEl.style.setProperty('--dash-nav-gap', NAV_GAP_BASE + 'px');
+    var sections = Array.prototype.slice
+      .call(navEl.querySelectorAll('.tma-dash__nav-section'))
+      .filter(isVisibleNavChild);
+    var last = sections[sections.length - 1];
+    if (!last) return;
+    var units = countNavGapUnits(sections);
+    if (!units) return;
+    // scrollHeight floors at the client height, so it can't report a *short*
+    // content box, measure the last section's bottom edge instead.
+    var padBottom = parseFloat(window.getComputedStyle(navEl).paddingBottom) || 0;
+    var free = navEl.getBoundingClientRect().bottom - padBottom - last.getBoundingClientRect().bottom;
+    /*
+     * Both rects are in viewport coordinates, so a scrolled nav reports its
+     * last section that much higher and the sum reads as spare room that is
+     * not there. Nothing scrolled the rail before an open submenu could
+     * overflow it; now clicking a group near the bottom scrolls it into
+     * view, and without this the menu jumped to its widest spacing.
+     */
+    free -= navEl.scrollTop;
+    /*
+     * Measure as if every group were closed.
+     *
+     * Otherwise opening File Library ate the free space and this handed the
+     * shortfall to every gap in the menu, so expanding one group visibly
+     * squeezed all the rows above and below it together, and closing it
+     * spread them back out. The rail's rhythm is a property of the window's
+     * height, not of which group happens to be open: a submenu now simply
+     * drops in underneath its parent, and the nav scrolls if the two no
+     * longer fit together.
+     */
+    free += openSubnavHeight(sections, NAV_GAP_BASE);
+    // Negative free space means the rows already overflow. Keep a readable
+    // floor and let the rail scroll rather than packing the long admin list.
+    var gap = NAV_GAP_BASE + Math.floor(free / units);
+    gap = Math.max(NAV_GAP_TIGHT, Math.min(NAV_GAP_MAX, gap));
+    navEl.style.setProperty('--dash-nav-gap', gap + 'px');
+  }
+
+  /* The fit before the first paint. This file runs while <head> is parsing,
+     so the sidebar does not exist yet; a mutation observer sees the parser's
+     insertions as they happen, in a microtask, which the browser always
+     drains before it renders. The header follows the sidebar in the shell,
+     so its arrival is the sign that the rail, profile block included, has
+     parsed in full: measured any earlier the nav would read taller than the
+     space the profile leaves it. The hold CSS above has already taken the
+     denied rows out of the layout, so they are not counted. */
+  function fitNavBeforePaint() {
+    if (document.readyState !== 'loading' || !window.MutationObserver) return;
+    if (window.innerWidth <= NAV_DRAWER_BP) return;
+    var observer = new MutationObserver(function () {
+      if (!document.querySelector('.tma-dash__header')) return;
+      observer.disconnect();
+      fitNavSpacing(document.querySelector('.tma-dash__sidebar-nav'));
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    document.addEventListener('DOMContentLoaded', function () { observer.disconnect(); });
+  }
+
+  fitNavBeforePaint();
+
   window.TMAPortalAccess = {
     can: can,
+    fitNavSpacing: fitNavSpacing,
     holds: holds,
     canSettingsPage: function (pageId) { return can(SETTINGS_CAPABILITIES[pageId]); },
     settingsCapabilities: function () { return SETTINGS_CAPABILITIES; },

@@ -69,6 +69,15 @@
 
   window.TMANotifyAPI = { api: api, qs: qs, root: ROOT };
 
+  /* A GET the shell asks for twice in the same breath (the sidebar's first
+     load and the socket's first catch-up) shares one round trip. */
+  function sharedGet(url) {
+    if (window.TMABoot && window.TMABoot.once) {
+      return window.TMABoot.once('GET ' + url, function () { return api(url); });
+    }
+    return api(url);
+  }
+
   /* ── A tiny pub/sub base every store shares. ──────────────────────── */
   function createEmitter() {
     var subs = [];
@@ -123,12 +132,13 @@
       state.error = false;
       changed();
       var params = Object.assign({ limit: opts.limit || 20 }, state.filters);
-      loadPromise = api(NOTIF_BASE + qs(params)).then(function (data) {
+      loadPromise = sharedGet(NOTIF_BASE + qs(params)).then(function (data) {
         state.items = data.items || [];
         state.cursor = data.nextCursor || null;
         state.hasMore = !!data.nextCursor;
         state.unread = data.unread || 0;
         state.loaded = true;
+        state.loadedAt = Date.now();
         state.loading = false;
         loadPromise = null;
         changed();
@@ -171,7 +181,7 @@
     }
 
     function refreshCount() {
-      return api(NOTIF_BASE + '/count').then(function (data) {
+      return sharedGet(NOTIF_BASE + '/count').then(function (data) {
         state.unread = data.unread || 0;
         state.actionRequired = data.actionRequired || 0;
         changed();
@@ -354,7 +364,7 @@
       state.error = false;
       changed();
       var params = Object.assign({ limit: opts.limit || 25 }, state.filters);
-      loadPromise = api(ACT_BASE + qs(params)).then(function (data) {
+      loadPromise = sharedGet(ACT_BASE + qs(params)).then(function (data) {
         state.items = data.items || [];
         state.cursor = data.nextCursor || null;
         state.hasMore = !!data.nextCursor;
@@ -400,7 +410,7 @@
     }
 
     function refreshCount() {
-      return api(ACT_BASE + '/count').then(function (data) {
+      return sharedGet(ACT_BASE + '/count').then(function (data) {
         state.newCount = data.new || 0;
         state.failedCount = data.failed || 0;
         changed();
@@ -463,9 +473,14 @@
      banner the user asked for. Sound is additionally behind the global
      notification-sounds switch, as before. */
   var channelPrefs = null;
-  api(NOTIF_BASE + '/preferences').then(function (d) {
-    if (d && d.preferences) channelPrefs = d.preferences;
-  }).catch(function () { /* fail open */ });
+  function loadChannelPrefs() {
+    sharedGet(NOTIF_BASE + '/preferences').then(function (d) {
+      if (d && d.preferences) channelPrefs = d.preferences;
+    }).catch(function () { /* fail open */ });
+  }
+  // Open until it arrives, so it can wait for the shell to go quiet.
+  if (window.TMABoot && window.TMABoot.afterIdle) window.TMABoot.afterIdle(loadChannelPrefs);
+  else loadChannelPrefs();
 
   function channelOn(module, channel) {
     if (!channelPrefs || !module || !(module in channelPrefs)) return true;
@@ -688,6 +703,13 @@
     opts = opts || {};
     if (catchingUp) return;
     catchingUp = true;
+
+    // The socket's first 'connected' lands seconds after the sidebar's own
+    // load; a list that fresh is reconciled by its count alone.
+    var loadedAt = notifications.state.loadedAt || 0;
+    if (opts.forceLoad && loadedAt && Date.now() - loadedAt < 5000) {
+      opts = { forceToast: opts.forceToast };
+    }
 
     var prevUnread = notifications.state.unread;
     var knownIds = {};

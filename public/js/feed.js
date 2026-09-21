@@ -4836,6 +4836,12 @@
     if (root._feedMounted) {
       state.el = root;
       render();
+      // The load held back for this page runs now.
+      if (root._feedBootPending) {
+        var pendingBoot = root._feedBootPending;
+        root._feedBootPending = null;
+        pendingBoot();
+      }
       return;
     }
 
@@ -4895,7 +4901,10 @@
 
     // Who is asking, then what they left open, then the data. The order
     // matters: the memory is keyed by account.
-    loadViewer()
+    var boot = function () {
+      root._feedBooted = true;
+      root._feedBootPending = null;
+      loadViewer()
       .then(function () {
         loadMemory();
 
@@ -4937,6 +4946,16 @@
         }
         render();
       });
+    };
+    if (window.TMABoot && window.TMABoot.deferUnless && !deepLink) {
+      // The Feed mounts with the shell. Its channels and posts load when the
+      // Feed is entered, or once the shell has gone quiet; a deep link means
+      // somebody is on their way to a post and does not wait.
+      var runBoot = window.TMABoot.deferUnless(['feed'], boot);
+      if (!root._feedBooted) root._feedBootPending = runBoot;
+    } else {
+      boot();
+    }
   }
 
   /*

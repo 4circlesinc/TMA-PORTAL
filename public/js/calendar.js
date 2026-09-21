@@ -289,8 +289,18 @@
     return { from: from.toISOString(), to: to.toISOString() };
   }
 
+  /* GETs the shell asks for more than once in the same breath, the boot load
+     and the socket's first refresh, the nav badge and Overview's road, share
+     one round trip through TMABoot. */
+  function sharedNet(url) {
+    if (window.TMABoot && window.TMABoot.once) {
+      return window.TMABoot.once('GET ' + url, function () { return net(url); });
+    }
+    return net(url);
+  }
+
   function loadCalendars() {
-    return net(BASE + '/calendars').then(function (data) {
+    return sharedNet(BASE + '/calendars').then(function (data) {
       state.calendars = (data && data.calendars) || [];
       state.sections = (data && data.sections) || [];
       state.defaultCalendar = data && data.defaultCalendar;
@@ -316,7 +326,7 @@
     var range = windowRange();
     var url = BASE + '/events?from=' + encodeURIComponent(range.from) +
       '&to=' + encodeURIComponent(range.to);
-    return net(url).then(function (data) {
+    return sharedNet(url).then(function (data) {
       state.events = (data && data.events) || [];
       // The page has fresher data than the badge cache; hand it over rather
       // than letting a second request go out for the same information.
@@ -4392,8 +4402,24 @@
 
   /* Called when the calendar view becomes visible (SPA nav). Mount only
      runs once; pending opens from Overview/Dashboard land here too. */
+  /* The first load. The page mounts with the shell, so this waits for the
+     Calendar to be entered or the shell to go quiet; activate() runs it early
+     when the reader gets there first, and a live signal before it has nothing
+     to keep current. */
+  var firstLoadStarted = false;
+  var runFirstLoad = null;
+
+  function firstLoad() {
+    firstLoadStarted = true;
+    load(false).then(function () {
+      if (consumePendingOpens()) return;
+      goToday();
+    });
+  }
+
   function activate() {
     if (!state.el) return;
+    if (!firstLoadStarted && runFirstLoad) { runFirstLoad(); return; }
     if (consumePendingOpens()) return;
     if (isEditingCalendar()) return;
     goToday();
@@ -4407,10 +4433,11 @@
     applyTodayDates();
     startTodayClock();
 
-    load(false).then(function () {
-      if (consumePendingOpens()) return;
-      goToday();
-    });
+    if (window.TMABoot && window.TMABoot.deferUnless) {
+      runFirstLoad = window.TMABoot.deferUnless(['calendar'], firstLoad);
+    } else {
+      firstLoad();
+    }
   }
 
   /* ── today's event count (nav + home shortcut badges) ─────── */
@@ -4439,7 +4466,7 @@
     var url = BASE + '/events?from=' + encodeURIComponent(start.toISOString()) +
       '&to=' + encodeURIComponent(end.toISOString());
 
-    net(url)
+    sharedNet(url)
       .then(function (data) {
         todayCount.value = ((data && data.events) || []).length;
         todayCount.fetchedAt = Date.now();
@@ -4485,7 +4512,7 @@
   if (window.TMALive) {
     window.TMALive.register(
       window.TMALive.RESOURCES.CALENDAR,
-      function () { return load(true); },
+      function () { return firstLoadStarted ? load(true) : Promise.resolve(); },
       { active: function () { return !!state.el && document.contains(state.el); } }
     );
   }

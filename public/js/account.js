@@ -266,9 +266,15 @@
   function mountPromo(root) {
     var host = root || document;
     if (!host.querySelector || !host.querySelector('[data-desktop-download]')) return;
-    desktopReleases().then(function (data) {
-      applyDesktopReleases(host, data);
-    });
+    var fill = function () {
+      desktopReleases().then(function (data) {
+        applyDesktopReleases(host, data);
+      });
+    };
+    // The page mounts with the shell and the pills stay inert until a build
+    // is named: ask when Account is entered, or once the shell is quiet.
+    if (window.TMABoot && window.TMABoot.deferUnless) window.TMABoot.deferUnless(['account'], fill);
+    else fill();
   }
 
   function bindPromoClicks(container) {

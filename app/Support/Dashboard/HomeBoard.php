@@ -5,6 +5,7 @@ namespace App\Support\Dashboard;
 use App\Http\Controllers\Cip\CipDashboardController;
 use App\Http\Controllers\DashboardMetricsController;
 use App\Http\Controllers\DashboardWorkController;
+use App\Http\Controllers\Files\BrowserController;
 use App\Http\Controllers\StaffPresenceController;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
@@ -30,14 +31,36 @@ use Illuminate\Support\Facades\DB;
  *
  * Individual endpoints stay for Overview, Email, Messages and live
  * refetch of a single tile.
+ *
+ * The Recent Files and Favorites tiles are answered as `files`: the same
+ * lean listing the File Library answers, read through {@see BrowserController}
+ * so the rows are the rows every other list draws. Before that, the tile
+ * that paints the page's largest text waited on a forty-row request that
+ * queued behind ninety others. It is asked for by name rather than folded
+ * into the default set: the listing costs sixty-odd queries of its own on a
+ * real library (its per-row permission walk), and the seven tiles above
+ * would then wait on it. The shell starts both requests together instead.
  */
 final class HomeBoard
 {
     public const PARTS = ['metrics', 'staff', 'work', 'cip', 'mail', 'chats', 'pending'];
 
+    /** Parts answered only when named. */
+    public const OPTIONAL_PARTS = ['files'];
+
     public const CHAT_LIMIT = 5;
 
     public const MAIL_LIMIT = 8;
+
+    public const FILE_LIMIT = 8;
+
+    /**
+     * The period the board is measured over when the reader has not picked
+     * one. portal-home.js keeps the picker's choice in localStorage, which
+     * the server cannot read, so this is what the head start assumes; a
+     * reader on another period gets an ordinary request instead.
+     */
+    public const DEFAULT_PERIOD = 'month';
 
     /**
      * @param  list<string>|null  $parts
@@ -48,7 +71,7 @@ final class HomeBoard
         $user = $request->user();
         $want = $parts === null || $parts === []
             ? self::PARTS
-            : array_values(array_intersect(self::PARTS, $parts));
+            : array_values(array_intersect([...self::PARTS, ...self::OPTIONAL_PARTS], $parts));
 
         $out = [];
 
@@ -84,7 +107,105 @@ final class HomeBoard
                 : 0;
         }
 
+        if (in_array('files', $want, true)) {
+            $out['files'] = self::files($request);
+        }
+
         return $out;
+    }
+
+    /**
+     * The request the dashboard issues at boot for this reader, byte for
+     * byte, so the shell can start it before the bundle has downloaded and
+     * portal-home.js can tell that the answer on its way is the one it wants.
+     *
+     * Mirrors loadHomeBoard() and wantedWorkTiles() in portal-home.js: the
+     * period, then the work lists the board shows (the strip only for a
+     * reader with the Workflows section), then every part. Both sides must
+     * write the same string, or the head start is wasted rather than wrong.
+     */
+    public static function bootUrl(User $user): string
+    {
+        $url = '/portal/dashboard/home?period='.self::DEFAULT_PERIOD;
+        $want = self::wantedWork($user);
+
+        if ($want !== []) {
+            $url .= '&want='.implode(',', $want);
+        }
+
+        return $url.'&parts='.implode(',', self::PARTS);
+    }
+
+    /**
+     * The Recent Files and Favorites request, started beside the board.
+     * Nothing about it depends on the reader's preferences, so the string is
+     * the same for everyone and loadHomeBoard() matches it the same way.
+     */
+    public static function bootFilesUrl(): string
+    {
+        return '/portal/dashboard/home?parts=files';
+    }
+
+    /**
+     * Which work lists the board draws, from the saved dashboard preferences.
+     *
+     * @return list<string>
+     */
+    public static function wantedWork(User $user): array
+    {
+        $prefs = is_array($user->preferences) ? $user->preferences : [];
+        $tiles = is_array($prefs['dashboardTiles'] ?? null) ? $prefs['dashboardTiles'] : [];
+        $want = [];
+
+        if (Role::can($user, 'workflows.view') && ($prefs['dashboardWorkflowStrip'] ?? true) !== false) {
+            $want[] = 'feed';
+        }
+        if (($tiles['requests'] ?? true) !== false) {
+            $want[] = 'requests';
+        }
+        if (($tiles['comments'] ?? true) !== false) {
+            $want[] = 'comments';
+        }
+
+        return $want;
+    }
+
+    /**
+     * Recent Files and Favorites, eight lean rows each.
+     *
+     * Read through the File Library's own listing rather than a second query
+     * here, so what the tiles draw is exactly what Folders shows for the same
+     * section: the same visibility scope, the same recency merge, the same
+     * row shape. The controller is handed a request of its own for each
+     * section, as if the browser had asked, with this reader on it.
+     *
+     * @return array{recent: array<string, mixed>, favorites: array<string, mixed>}
+     */
+    private static function files(Request $request): array
+    {
+        $browser = app(BrowserController::class);
+
+        $listing = function (string $section) use ($request, $browser): array {
+            $sub = Request::create('/portal/files', 'GET', [
+                'section' => $section,
+                'perPage' => self::FILE_LIMIT,
+                'lean' => 1,
+            ]);
+            $sub->setUserResolver($request->getUserResolver());
+
+            $rows = $browser->index($sub)->getData(true);
+
+            return [
+                'folders' => $rows['folders'] ?? [],
+                'files' => $rows['files'] ?? [],
+                'hasMore' => (bool) ($rows['hasMore'] ?? false),
+            ];
+        };
+
+        return [
+            'recent' => $listing('recent'),
+            'favorites' => $listing('favorites'),
+        ];
     }
 
     /**

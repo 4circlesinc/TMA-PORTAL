@@ -9291,6 +9291,12 @@
 
     if (root._messagesMounted) {
       render();
+      // The list load held back for this page runs now.
+      if (root._messagesBootPending) {
+        var pendingBoot = root._messagesBootPending;
+        root._messagesBootPending = null;
+        pendingBoot();
+      }
       if (opts.openDirectUserId) {
         startConversationWith(root, state, render, opts.openDirectUserId, opts.startCall);
         return;
@@ -9430,6 +9436,8 @@
       }
       if (!root.isConnected) return;
       window.TMAMessagingAPI.heartbeat();
+      // Nothing to reconcile before the first load has run.
+      if (root._messagesBootPending) return;
       loadConversations(root, state, render, { silent: true });
     });
 
@@ -9460,20 +9468,33 @@
     });
 
     render();
-    loadConversations(root, state, render).then(function () {
-      if (opts.openDirectUserId) {
-        startConversationWith(root, state, render, opts.openDirectUserId, opts.startCall);
-        return;
-      }
-      // Arriving from a message or missed-call notification: open the
-      // conversation it came from. Read from the URL as well as the mount
-      // options so a cold load of /social/messages?conversation=… lands in the
-      // same place an in-shell navigation does.
-      var wanted = opts.openConversationId || takePendingConversationId();
-      if (wanted) {
-        openConversationFromId(root, state, render, wanted, opts.startCall || takePendingCallMedia());
-      }
-    });
+    var boot = function () {
+      root._messagesBooted = true;
+      root._messagesBootPending = null;
+      loadConversations(root, state, render).then(function () {
+        if (opts.openDirectUserId) {
+          startConversationWith(root, state, render, opts.openDirectUserId, opts.startCall);
+          return;
+        }
+        // Arriving from a message or missed-call notification: open the
+        // conversation it came from. Read from the URL as well as the mount
+        // options so a cold load of /social/messages?conversation=… lands in the
+        // same place an in-shell navigation does.
+        var wanted = opts.openConversationId || takePendingConversationId();
+        if (wanted) {
+          openConversationFromId(root, state, render, wanted, opts.startCall || takePendingCallMedia());
+        }
+      });
+    };
+    if (window.TMABoot && window.TMABoot.deferUnless && !opts.openDirectUserId && !opts.openConversationId) {
+      // Messages mounts with the shell. The heartbeat above keeps presence
+      // live from the first moment; the list itself loads when Messages is
+      // entered, or once the shell has gone quiet.
+      var runBoot = window.TMABoot.deferUnless(['messages'], boot);
+      if (!root._messagesBooted) root._messagesBootPending = runBoot;
+    } else {
+      boot();
+    }
   }
 
   /*

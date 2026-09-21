@@ -38,6 +38,7 @@
   var host = null;
   var cards = {}; // key -> { el, minimized, dismissed, doneTimer }
   var timer = null;
+  var startedByWatch = false;
   var startedAt = Date.now();
 
   function ensureHost() {
@@ -340,13 +341,19 @@
     card.pendingUntil = Date.now() + QUEUE_GRACE_MS;
 
     startedAt = Date.now();
+    startedByWatch = true;
     if (timer) { clearTimeout(timer); timer = null; }
     poll();
   }
 
   function boot() {
     if (!document.body) return;
-    poll();
+    // No page paints from this: the first poll waits for the shell to go
+    // quiet. watch() still polls at once for a sync the reader just started,
+    // and then this one has nothing left to start.
+    var first = function () { if (!timer && !startedByWatch) poll(); };
+    if (window.TMABoot && window.TMABoot.afterIdle) window.TMABoot.afterIdle(first);
+    else first();
   }
 
   if (document.readyState === 'loading') {

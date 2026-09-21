@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\CipAccess;
 use App\Support\Companies\CompanyAccess;
+use App\Support\Dashboard\HomeBoard;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Session;
 
@@ -22,6 +23,9 @@ use Illuminate\Support\Facades\Session;
  * nav is right in the first paint, with no gap and no flash of staff tooling a
  * client may not use. /me still arrives and re-applies, so this is a head
  * start, never the authority.
+ *
+ * On "/" the same script also starts the home board's one request, so the
+ * data is on its way while the bundle is still downloading. See bootScript.
  *
  * Safe to inline per-account data here only because the shell is served
  * no-store (see headers below), it is never written to a shared cache.
@@ -79,10 +83,23 @@ final class PortalShell
             return $html;
         }
 
-        return substr($html, 0, $at).self::bootScript($user).substr($html, $at);
+        return substr($html, 0, $at).self::bootScript($user, self::bootsDashboard()).substr($html, $at);
     }
 
-    private static function bootScript(User $user): string
+    /**
+     * Only "/" boots into the Dashboard view (routeFromPath in dashboard.js
+     * and the inline skeleton switch in the shell agree on that), so only
+     * "/" gets the board's request started early. Every other entry path
+     * would be paying for a payload its view never reads.
+     */
+    private static function bootsDashboard(): bool
+    {
+        $path = rtrim((string) request()->getPathInfo(), '/');
+
+        return $path === '';
+    }
+
+    private static function bootScript(User $user, bool $dashboard): string
     {
         $flags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR;
         $json = json_encode(array_values(Role::capabilities($user)), $flags);
@@ -120,6 +137,36 @@ final class PortalShell
             .'window.TMABootProviderCompany='.$firmJson.';'
             .'window.TMABootIsAdmin='.$admin.';'
             .'window.TMABootBespoke='.$bespoke.';'
-            .'window.TMACsrfToken='.$token.';</script>'."\n  ";
+            .'window.TMACsrfToken='.$token.';'
+            .($dashboard ? self::homeHeadStart($user, $flags) : '')
+            .'</script>'."\n  ";
+    }
+
+    /**
+     * The home board's requests, started from <head>.
+     *
+     * The dashboard used to ask for its board only once the whole bundle had
+     * downloaded, parsed and mounted, a few hundred milliseconds on a good
+     * day and a second or more on a phone. This runs at parse, before the
+     * first stylesheet has landed, so by the time portal-home.js mounts the
+     * answer is usually already here. loadHomeBoard() takes a promise when
+     * the URL is the one it would have asked for, and ignores it otherwise,
+     * which is why each URL is written out beside its fetch rather than left
+     * to be guessed. Two requests, not one: the file rows are the page's
+     * largest text and cost as much as the other seven tiles together, so
+     * they travel on their own worker rather than queue behind them (see
+     * HomeBoard). Nothing here is the authority: the board's timer and live
+     * signals refetch exactly as before.
+     */
+    private static function homeHeadStart(User $user, int $flags): string
+    {
+        $board = json_encode(HomeBoard::bootUrl($user), $flags);
+        $files = json_encode(HomeBoard::bootFilesUrl(), $flags);
+        $init = '{credentials:"same-origin",headers:{Accept:"application/json","X-Requested-With":"XMLHttpRequest"}}';
+
+        return 'window.TMABootHomeUrl='.$board.';'
+            .'window.TMABootHome=fetch('.$board.','.$init.');'
+            .'window.TMABootHomeFilesUrl='.$files.';'
+            .'window.TMABootHomeFiles=fetch('.$files.','.$init.');';
     }
 }

@@ -118,7 +118,10 @@
 
     status = 'loading';
     render();
-    inFlight = net().fetchJSON(net().url('/shortcuts'))
+    var url = net().url('/shortcuts');
+    var ask = function () { return net().fetchJSON(url); };
+    // The Dashboard's library tiles read the same list; one answer serves both.
+    inFlight = (window.TMABoot && window.TMABoot.once ? window.TMABoot.once('GET ' + url, ask) : ask())
       .then(apply)
       .catch(function () { status = 'error'; render(); return []; })
       .then(function (r) { inFlight = null; return r; });
@@ -259,9 +262,20 @@
       if (status === 'ready') load(true);
     });
 
-    // Loaded up front (not on first tab open) so the File Library's folder
-    // menu can offer the right "Add"/"Remove" wording straight away.
-    load();
+    // Asked for straight away only when the list is on screen (the Folders
+    // tab open at boot) or the File Library needs its Add/Remove wording.
+    // Otherwise it waits for the tab to open or the shell to go quiet, and
+    // folder contents are never preloaded: opening a shortcut is a navigation
+    // into the library, which asks for them itself.
+    var tabOpen = false;
+    try { tabOpen = localStorage.getItem('tma.sidebarList') === 'shortcuts'; } catch (e) {}
+    if (tabOpen || !window.TMABoot || !window.TMABoot.deferUnless) {
+      load();
+      return;
+    }
+    var run = window.TMABoot.deferUnless(['folders'], function () { load(); });
+    var tab = document.querySelector('[data-list-tab="shortcuts"]');
+    if (tab) tab.addEventListener('click', run);
   }
 
   window.TMASidebarShortcuts = {

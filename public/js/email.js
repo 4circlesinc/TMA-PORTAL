@@ -2545,14 +2545,20 @@
     if (FIRM_TEMPLATES.loading) return;
     if (FIRM_TEMPLATES.loaded && !force) return;
     FIRM_TEMPLATES.loading = true;
-    api().composeTemplates()
-      .then(function (d) { FIRM_TEMPLATES.items = (d && d.templates) || []; })
-      .catch(function () { /* an empty list, not a broken mailbox */ })
-      .then(function () {
-        FIRM_TEMPLATES.loading = false;
-        FIRM_TEMPLATES.loaded = true;
-        if (render) render();
-      });
+    var ask = function () {
+      api().composeTemplates()
+        .then(function (d) { FIRM_TEMPLATES.items = (d && d.templates) || []; })
+        .catch(function () { /* an empty list, not a broken mailbox */ })
+        .then(function () {
+          FIRM_TEMPLATES.loading = false;
+          FIRM_TEMPLATES.loaded = true;
+          if (render) render();
+        });
+    };
+    // Asked for on the first render, which the shell does at boot for a
+    // mailbox nobody is looking at: wait for Email, or an idle shell.
+    if (window.TMABoot && window.TMABoot.deferUnless) window.TMABoot.deferUnless(['email'], ask);
+    else ask();
   }
 
   function firmTemplateById(id) {
@@ -14165,6 +14171,13 @@
        * way out was a browser refresh, which is exactly the complaint. This
        * re-boots quietly instead, keeping whatever mail is already on screen.
        */
+      // The boot that was held back for this page runs now, whole.
+      if (root._emailBootPending) {
+        var pendingBoot = root._emailBootPending;
+        root._emailBootPending = null;
+        pendingBoot();
+        return;
+      }
       if (root._emailState.bootstrapFailed || root._emailState.connected === null) {
         bootstrapMailbox(root, root._emailState, root._emailRender);
       }
@@ -14393,10 +14406,23 @@
     // waits.
     bindCurrentUser(render);
     render();
-    bootstrapMailbox(root, state, render);
-    // Show the sync's stage and counts, bottom-right.
-    stopSyncPolling();
-    pollSyncStatus();
+    var boot = function () {
+      root._emailBooted = true;
+      root._emailBootPending = null;
+      bootstrapMailbox(root, state, render);
+      // Show the sync's stage and counts, bottom-right.
+      stopSyncPolling();
+      pollSyncStatus();
+    };
+    if (window.TMABoot && window.TMABoot.deferUnless) {
+      // The mailbox mounts with the shell. Its inbox loads when Email is
+      // entered, or once the shell has gone quiet; the sidebar's unread badge
+      // is the shell's own request and does not wait on this.
+      var runBoot = window.TMABoot.deferUnless(['email'], boot);
+      if (!root._emailBooted) root._emailBootPending = runBoot;
+    } else {
+      boot();
+    }
 
     // Landing back from the OAuth connect flow: confirm the connection
     // immediately (the analysis is already running server-side) and strip
@@ -14482,7 +14508,13 @@
    * is most of the difference between an inbox that is ready when opened and
    * one that starts loading when opened.
    */
-  primeMailbox();
+  if (window.TMABoot && window.TMABoot.deferUnless) {
+    // Only when the mailbox is the page being opened. Everywhere else the
+    // inbox is asked for once the shell is quiet, with the mount's own boot.
+    window.TMABoot.deferUnless(['email'], primeMailbox);
+  } else {
+    primeMailbox();
+  }
 
   window.TMAEmail = {
     mount: mount,

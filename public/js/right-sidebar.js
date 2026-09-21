@@ -32,13 +32,12 @@
     if (!rightbar || rightbar._rbMounted) return;
     rightbar._rbMounted = true;
 
-    // Prefer the shell's empty hosts (skeletons, no sample names). Fall back to
-    // building them when an older page still has prototype filler.
+    // Prefer the shell's hosts: their skeleton rows are already on screen and
+    // stay there until real rows morph over them, so nothing is emptied and
+    // refilled. Fall back to building them when an older page still has
+    // prototype filler.
     var host = rightbar.querySelector('[data-rb-sections]');
     if (host) {
-      Array.prototype.slice.call(host.querySelectorAll('[data-rb-body]')).forEach(function (body) {
-        body.innerHTML = '';
-      });
       ['notifications', 'activities'].forEach(function (kind) {
         var sec = host.querySelector('[data-rb-section="' + kind + '"]');
         if (sec && !sec.querySelector('[data-rb-footer="' + kind + '"]')) {
@@ -66,9 +65,26 @@
     // navigates to the full Overview tabs instead of expanding in place.
     var expanded = { notifications: false, activities: false };
 
-    /* Adaptive preview counts: keep ≥6 applications visible; trim notif/activity
-       previews when the sidebar is short so nested scrollbars are avoided. */
+    /* Preview counts per section: more on a tall window, fewer on a short
+       one so Applications still starts above the fold. The stylesheet is the
+       authority (--rb-cap-* on .tma-dash__rightbar, dashboard.css): it
+       reserves each section's height for exactly this many rows before the
+       data is in, and reading the caps back from it is what keeps the two
+       from disagreeing. The arithmetic below is the same ladder for a page
+       whose stylesheet predates the tokens. */
     function previewLimits() {
+      var style = window.getComputedStyle(rightbar);
+      var fromCss = function (kind) {
+        var n = parseInt(style.getPropertyValue('--rb-cap-' + kind), 10);
+        return n > 0 ? n : 0;
+      };
+      var caps = {
+        applications: fromCss('applications'),
+        notifications: fromCss('notifications'),
+        activities: fromCss('activities'),
+      };
+      if (caps.applications && caps.notifications && caps.activities) return caps;
+
       var h = rightbar.clientHeight || window.innerHeight || 800;
       var appsLimit = APPS_MIN;
       if (h >= 900) appsLimit = APPS_MAX;
@@ -81,9 +97,9 @@
       if (h < 640) { notifLimit = 3; actLimit = 2; }
 
       return {
-        applications: appsLimit,
-        notifications: notifLimit,
-        activities: actLimit,
+        applications: caps.applications || appsLimit,
+        notifications: caps.notifications || notifLimit,
+        activities: caps.activities || actLimit,
       };
     }
 
@@ -95,6 +111,15 @@
       var top = rightbar.scrollTop;
       fn();
       rightbar.scrollTop = top;
+    }
+
+    /* Reconcile rather than rewrite: a re-render keeps the rows that did not
+       change, so a person's photo is not re-fetched and the section is never
+       empty between one paint and the next. The shell's skeleton rows are
+       morphed over the same way. */
+    function patch(el, html) {
+      if (window.TMAMorph && window.TMAMorph.patch) window.TMAMorph.patch(el, html);
+      else el.innerHTML = html;
     }
 
     function moreControl(kind, hasMore) {
@@ -112,7 +137,7 @@
       if (!foot) return;
       // Always offer See all so users can open the full page even with few items.
       var html = seeAllControl(kind) + moreControl(kind, hasMore);
-      foot.innerHTML = html;
+      patch(foot, html);
       foot.hidden = !html;
     }
 
@@ -122,12 +147,14 @@
       var s = window.TMANotifications.state;
       var limits = previewLimits();
       withScroll(function () {
-        if (!s.loaded && s.loading) { el.innerHTML = R().skeleton(3); syncFooter('notifications', 0, limits.notifications, false); return; }
-        if (s.error && !s.items.length) { el.innerHTML = R().errorState('Could not load notifications.'); syncFooter('notifications', 0, limits.notifications, false); return; }
-        if (!s.items.length) { el.innerHTML = R().emptyState('You are all caught up.', 'Bell'); syncFooter('notifications', 0, limits.notifications, false); return; }
+        // Not yet asked as well as still loading: the skeleton stays until
+        // there is an answer, rather than "all caught up" for a frame.
+        if (!s.loaded && !s.error) { patch(el, R().skeleton(3)); syncFooter('notifications', 0, limits.notifications, false); return; }
+        if (s.error && !s.items.length) { patch(el, R().errorState('Could not load notifications.')); syncFooter('notifications', 0, limits.notifications, false); return; }
+        if (!s.items.length) { patch(el, R().emptyState('You are all caught up.', 'Bell')); syncFooter('notifications', 0, limits.notifications, false); return; }
         var preview = limits.notifications;
         var rows = expanded.notifications ? s.items : s.items.slice(0, preview);
-        el.innerHTML = rows.map(function (it) { return R().notificationItem(it, 'sidebar'); }).join('');
+        patch(el, rows.map(function (it) { return R().notificationItem(it, 'sidebar'); }).join(''));
         syncFooter('notifications', s.items.length, preview, !!s.hasMore);
       });
     }
@@ -138,14 +165,14 @@
       var s = window.TMAActivities.state;
       var limits = previewLimits();
       withScroll(function () {
-        if (!s.loaded && s.loading) { el.innerHTML = R().skeleton(3); syncFooter('activities', 0, limits.activities, false); return; }
-        if (s.error && !s.items.length) { el.innerHTML = R().errorState('Could not load activity.'); syncFooter('activities', 0, limits.activities, false); return; }
-        if (!s.items.length) { el.innerHTML = R().emptyState('No recent activity.', 'ClockCounterClockwise'); syncFooter('activities', 0, limits.activities, false); return; }
+        if (!s.loaded && !s.error) { patch(el, R().skeleton(3)); syncFooter('activities', 0, limits.activities, false); return; }
+        if (s.error && !s.items.length) { patch(el, R().errorState('Could not load activity.')); syncFooter('activities', 0, limits.activities, false); return; }
+        if (!s.items.length) { patch(el, R().emptyState('No recent activity.', 'ClockCounterClockwise')); syncFooter('activities', 0, limits.activities, false); return; }
         var preview = limits.activities;
         var rows = expanded.activities ? s.items : s.items.slice(0, preview);
-        el.innerHTML = rows.map(function (it) {
+        patch(el, rows.map(function (it) {
           return R().activityItem(it, 'sidebar');
-        }).join('');
+        }).join(''));
         syncFooter('activities', s.items.length, preview, !!s.hasMore);
       });
     }
@@ -155,7 +182,7 @@
       if (!el) return;
       var limits = previewLimits();
       withScroll(function () {
-        if (apps.loading && !apps.loaded) { el.innerHTML = R().skeleton(3); return; }
+        if (!apps.loaded && !apps.error) { patch(el, R().skeleton(3)); return; }
         if (apps.forbidden) {
           // No reach into the module (the feature is off, or this account is
           // not part of it). Hide the section rather than explain it.
@@ -163,9 +190,9 @@
           if (sec) sec.hidden = true;
           return;
         }
-        if (apps.error && !apps.items.length) { el.innerHTML = R().errorState('Could not load applications.'); return; }
-        if (!apps.items.length) { el.innerHTML = R().emptyState('No applications yet.', 'IdentificationCard'); return; }
-        el.innerHTML = apps.items.slice(0, limits.applications).map(applicationItem).join('');
+        if (apps.error && !apps.items.length) { patch(el, R().errorState('Could not load applications.')); return; }
+        if (!apps.items.length) { patch(el, R().emptyState('No applications yet.', 'IdentificationCard')); return; }
+        patch(el, apps.items.slice(0, limits.applications).map(applicationItem).join(''));
       });
     }
 
@@ -225,7 +252,8 @@
       loadApplications();
     }
 
-    // Paint whatever is already known, then ensure fresh data.
+    // Paint whatever is already known, then ensure fresh data. A section with
+    // nothing known yet keeps the shell's skeleton rows.
     renderNotifications();
     renderActivities();
     renderApplications();

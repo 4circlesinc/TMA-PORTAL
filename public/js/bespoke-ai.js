@@ -2352,11 +2352,16 @@
     open = false;
   }
 
+  /* The launcher and its greeting are not part of any page's first paint:
+     they wait for the shell to go quiet, unless the reader arrived on the
+     assistant's own page. The page chrome is DOM only and stays immediate. */
+  var widgetAllowed = false;
+
   function consider() {
     if (isComposePopout()) return;
     if (enabled()) {
       ensurePageChrome();
-      if (!host) mountWidget();
+      if (!host && widgetAllowed) mountWidget();
       if (widget && widget.bannerEl) widget.bannerEl.hidden = configured;
       return;
     }
@@ -2372,13 +2377,19 @@
         consider();
       });
     }
-    if (window.TMABootBespoke !== true && window.TMABootBespoke !== 'true') {
-      api('/portal/bespoke/suggestions').then(function (data) {
-        window.TMABootBespoke = true;
-        configured = !!(data && data.configured);
-        consider();
-      }).catch(function () { /* 404 = still dark */ });
-    }
+    var allow = function () {
+      widgetAllowed = true;
+      consider();
+      if (window.TMABootBespoke !== true && window.TMABootBespoke !== 'true') {
+        api('/portal/bespoke/suggestions').then(function (data) {
+          window.TMABootBespoke = true;
+          configured = !!(data && data.configured);
+          consider();
+        }).catch(function () { /* 404 = still dark */ });
+      }
+    };
+    if (window.TMABoot && window.TMABoot.deferUnless) window.TMABoot.deferUnless(['bespoke'], allow);
+    else allow();
   }
 
   if (window.TMAPortalViews) {

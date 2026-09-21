@@ -539,6 +539,16 @@
     });
   }
 
+  /* A directory GET the shell can ask for twice in the same breath, the boot
+   * load and the socket's first refresh, shares one round trip through
+   * TMABoot; the search palette and the People screens key the same URLs. */
+  function sharedGet(url) {
+    if (window.TMABoot && window.TMABoot.once) {
+      return window.TMABoot.once('GET ' + url, function () { return clientsFetch(url); });
+    }
+    return clientsFetch(url);
+  }
+
   /* In-flight / warm directory share: live refresh, remount and any other
    * consumer hitting list() in the same burst reuse one network round trip. */
   var directoryPromise = null;
@@ -553,7 +563,7 @@
         return Promise.resolve(directoryCache);
       }
       if (!force && directoryPromise) return directoryPromise;
-      directoryPromise = clientsFetch(CLIENTS_BASE).then(function (data) {
+      directoryPromise = sharedGet(CLIENTS_BASE).then(function (data) {
         directoryCache = data;
         directoryCacheAt = Date.now();
         directoryPromise = null;
@@ -704,7 +714,7 @@
   };
 
   var CompaniesAPI = {
-    list: function () { return clientsFetch(COMPANIES_BASE); },
+    list: function () { return sharedGet(COMPANIES_BASE); },
     get: function (uid) {
       return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid));
     },
@@ -777,6 +787,10 @@
   }
 
   var clientsLoaded = false;
+  /* Whether the directory has been asked for at all this session. The boot
+     load waits for the Clients page or an idle shell, and a live signal that
+     lands first has nothing on screen to keep current. */
+  var clientsBootStarted = false;
 
   function firstDirectoryItem() {
     for (var i = 0; i < DIRECTORY.length; i++) {
@@ -16672,6 +16686,7 @@
      * A failure is now its own state, it says so, and it offers a retry.
      */
     function loadClients() {
+      clientsBootStarted = true;
       var staffDirectory = holdsClientDirectory();
       var companiesDirectory = canLoadCompaniesDirectory();
 
@@ -16770,7 +16785,13 @@
     root._clientsController.retryLoad = loadClients;
 
     if (clientsLoaded) startClients();
-    else loadClients();
+    else if (window.TMABoot && window.TMABoot.deferUnless) {
+      // The directory is 600 KB the Dashboard never shows. It loads when the
+      // Clients page is entered, or once the shell has gone quiet.
+      window.TMABoot.deferUnless(['clients'], loadClients);
+    } else {
+      loadClients();
+    }
   }
 
   /*
@@ -16785,6 +16806,7 @@
    */
   if (window.TMALive) {
     window.TMALive.register(window.TMALive.RESOURCES.CLIENTS, function () {
+      if (!clientsBootStarted) return Promise.resolve();
       if (!holdsClientDirectory() && !canLoadCompaniesDirectory()) return Promise.resolve();
       if (holdsClientDirectory()) ClientsAPI.invalidateList();
       return Promise.all([
