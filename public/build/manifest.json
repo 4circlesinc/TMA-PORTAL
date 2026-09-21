@@ -1,6 +1,6 @@
 {
-  "css": "app-711a5f07fddd.css",
-  "js": "app-70579a7ec831.js",
+  "css": "app-b8bfc55358f4.css",
+  "js": "app-a7157db38931.js",
   "sources": {
     "css": [
       "tokens.css",
@@ -36,6 +36,7 @@
     "js": [
       "auth-session.js",
       "dom-morph.js",
+      "boot-priority.js",
       "portal-live.js",
       "last-seen.js",
       "tooltip.js",
