@@ -17,7 +17,7 @@ use Illuminate\Support\Str;
  */
 #[Fillable([
     'uuid', 'application_id', 'author_id', 'company_member_id',
-    'author_name', 'lane', 'body',
+    'author_name', 'lane', 'reply_to_id', 'body',
 ])]
 class CipApplicationMessage extends Model
 {
@@ -47,6 +47,11 @@ class CipApplicationMessage extends Model
     public function companyMember(): BelongsTo
     {
         return $this->belongsTo(CompanyMember::class, 'company_member_id');
+    }
+
+    public function replyTo(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'reply_to_id');
     }
 
     public function isInternal(): bool

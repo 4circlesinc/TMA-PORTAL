@@ -10356,7 +10356,10 @@
     if (!app || !isApplicationProfile(app) || !app.id) return;
     subscribeCipThread(app.id, state, render);
     if (state.cipThreadLoadedFor === app.id && !(opts && opts.force)) return;
-    if (state.cipThreadLoadedFor !== app.id) state.cipThread = null;
+    if (state.cipThreadLoadedFor !== app.id) {
+      state.cipThread = null;
+      state.cipReplyTo = null;
+    }
     state.cipThreadLoading = !state.cipThread;
     state.cipThreadLoadedFor = app.id;
     if (!(opts && opts.quiet)) {
@@ -10455,6 +10458,35 @@
       '</span>';
   }
 
+  function cipReplyPreview(body) {
+    var text = String(body || '').replace(/\s+/g, ' ').trim();
+    if (!text) return 'Message';
+    return text.length > 96 ? text.slice(0, 96) + '…' : text;
+  }
+
+  function renderCipQuote(reply) {
+    if (!reply || !reply.id) return '';
+    return '<button type="button" class="tma-dash__messages-bubble-quote" data-cip-thread-jump="' + esc(reply.id) + '">' +
+      '<span class="tma-dash__messages-bubble-quote-bar" aria-hidden="true"></span>' +
+      '<span class="tma-dash__messages-bubble-quote-body">' +
+      '<span class="tma-dash__messages-bubble-quote-name">' + esc(reply.senderName || 'Someone') + '</span>' +
+      '<span class="tma-dash__messages-bubble-quote-text">' + esc(reply.preview || '') + '</span>' +
+      '</span></button>';
+  }
+
+  function renderCipReplyPreview(reply) {
+    if (!reply || !reply.id) return '';
+    var label = reply.mine ? 'Replying to yourself' : ('Replying to ' + (reply.name || 'them'));
+    return '<div class="tma-dash__messages-reply-preview">' +
+      '<span class="tma-dash__messages-reply-preview-bar" aria-hidden="true"></span>' +
+      '<span class="tma-dash__messages-reply-preview-body">' +
+      '<span class="tma-dash__messages-reply-preview-label">' + esc(label) + '</span>' +
+      '<span class="tma-dash__messages-reply-preview-text">' + esc(reply.preview || '') + '</span>' +
+      '</span>' +
+      '<button type="button" class="tma-dash__messages-reply-preview-clear" data-cip-thread-reply-clear aria-label="Cancel reply">' +
+      '<span aria-hidden="true">×</span></button></div>';
+  }
+
   function renderCipBubble(m, previous, next) {
     var side = m.mine ? 'out' : 'in';
     var author = m.author || {};
@@ -10479,8 +10511,12 @@
     var shareHtml = m.canShare
       ? '<button type="button" class="tma-cip-thread__share" data-cip-thread-share="' + esc(m.id) + '">Send to service provider</button>'
       : '';
+    var actions = '<div class="tma-cip-thread__actions">' +
+      '<button type="button" class="tma-cip-thread__share" data-cip-thread-reply="' + esc(m.id) + '">Reply</button>' +
+      shareHtml +
+      '</div>';
 
-    return '<div class="tma-dash__messages-bubble-row tma-dash__messages-bubble-row--' + side + '">' +
+    return '<div class="tma-dash__messages-bubble-row tma-dash__messages-bubble-row--' + side + '" data-cip-message-id="' + esc(m.id) + '">' +
       '<div class="tma-dash__messages-bubble-swipe">' +
       '<div class="tma-dash__messages-bubble-track">' +
       renderCipBubbleAvatar(author, side, endsRun) +
@@ -10488,6 +10524,7 @@
       laneHtml +
       '<div class="tma-dash__messages-bubble tma-dash__messages-bubble--' + side + '">' +
       senderHtml +
+      renderCipQuote(m.replyTo) +
       '<div class="tma-dash__messages-bubble-text">' +
       '<p class="tma-dash__messages-bubble-line">' +
       '<span class="tma-dash__messages-bubble-copy">' + esc(m.body) + '</span>' +
@@ -10495,7 +10532,7 @@
       (m.createdAt ? ' datetime="' + esc(m.createdAt) + '"' : '') + '>' +
       esc(cipClockTime(m.createdAt)) +
       '</time></p></div></div>' +
-      shareHtml +
+      actions +
       '</div></div></div></div>';
   }
 
@@ -10513,6 +10550,7 @@
     var canInternal = !!(data && data.canPostInternal);
     var lane = state.cipThreadLane || (canInternal ? 'internal' : 'provider');
     var draft = state.cipThreadDraft || '';
+    var reply = state.cipReplyTo && state.cipReplyTo.applicationId === app.id ? state.cipReplyTo : null;
     var rows = messages.length
       ? '<div class="tma-cip-thread">' + messages.map(function (m, index) {
         var previous = messages[index - 1];
@@ -10539,9 +10577,10 @@
 
     return rows +
       '<form class="tma-cip-thread__composer" data-cip-thread-form>' +
+      renderCipReplyPreview(reply) +
       laneField +
       '<textarea class="tma-portal-textarea" data-cip-thread-body rows="3" maxlength="4000" placeholder="' +
-      (canInternal ? 'Write a note or a message to the provider' : 'Write a message') +
+      (reply ? 'Write a reply' : (canInternal ? 'Write a note or a message to the provider' : 'Write a message')) +
       '">' + esc(draft) + '</textarea>' +
       '<div class="tma-portal-form-actions">' +
       '<button type="submit" class="tma-no-data__btn">Send</button></div></form>';
@@ -15457,13 +15496,15 @@
         var laneEl = threadForm.querySelector('[data-cip-thread-lane]:checked');
         var canInternal = !!(state.cipThread && state.cipThread.canPostInternal);
         var lane = laneEl ? laneEl.value : (canInternal ? 'internal' : 'provider');
+        var reply = state.cipReplyTo && state.cipReplyTo.applicationId === held.id ? state.cipReplyTo : null;
         var save = threadForm.querySelector('button[type="submit"]');
         if (save) { save.disabled = true; save.textContent = 'Sending…'; }
         clientsFetch('/portal/cip/applications/' + encodeURIComponent(held.id) + '/messages', {
           method: 'POST',
-          json: { body: body, lane: lane },
+          json: { body: body, lane: lane, replyTo: reply ? reply.id : null },
         }).then(function (row) {
           state.cipThreadDraft = '';
+          state.cipReplyTo = null;
           state.cipThreadLane = lane;
           if (!state.cipThread) state.cipThread = { messages: [], canPostInternal: canInternal };
           state.cipThread.messages = (state.cipThread.messages || []).concat([row]);
@@ -15476,7 +15517,18 @@
       });
       threadForm.addEventListener('change', function (e) {
         if (e.target && e.target.getAttribute('data-cip-thread-lane')) {
-          state.cipThreadLane = e.target.value;
+          var nextLane = e.target.value;
+          var held = applicationFor(state.selectedId);
+          var reply = state.cipReplyTo;
+          if (reply && held && reply.applicationId === held.id && reply.lane === 'internal' && nextLane === 'provider') {
+            state.cipReplyTo = null;
+            state.cipThreadLane = nextLane;
+            clientsToast('That note stays internal, so it isn’t quoted to the service provider.', 'negative');
+            if (usesPagedClientsFlow(state)) render();
+            else render({ detailOnly: true });
+            return;
+          }
+          state.cipThreadLane = nextLane;
         }
       });
       threadForm.addEventListener('input', function (e) {
@@ -15485,6 +15537,55 @@
         }
       });
     }
+
+    function cipMessageById(id) {
+      var messages = (state.cipThread && state.cipThread.messages) || [];
+      for (var i = 0; i < messages.length; i++) {
+        if (messages[i].id === id) return messages[i];
+      }
+      return null;
+    }
+
+    MORPH.unwired(root, '[data-cip-thread-reply]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        var held = applicationFor(state.selectedId);
+        var id = btn.getAttribute('data-cip-thread-reply');
+        var message = cipMessageById(id);
+        if (!held || !held.id || !message) return;
+        state.cipReplyTo = {
+          applicationId: held.id,
+          id: message.id,
+          name: (message.author && message.author.name) || 'Someone',
+          preview: cipReplyPreview(message.body),
+          lane: message.lane,
+          mine: !!message.mine,
+        };
+        if (message.lane === 'internal' || message.lane === 'provider') {
+          state.cipThreadLane = message.lane;
+        }
+        if (usesPagedClientsFlow(state)) render();
+        else render({ detailOnly: true });
+        var input = document.querySelector('[data-cip-thread-body]');
+        if (input) input.focus();
+      });
+    });
+
+    var clearReply = MORPH.unwiredOne(root, '[data-cip-thread-reply-clear]');
+    if (clearReply) {
+      MORPH.on(clearReply, 'click', function () {
+        state.cipReplyTo = null;
+        if (usesPagedClientsFlow(state)) render();
+        else render({ detailOnly: true });
+      });
+    }
+
+    MORPH.unwired(root, '[data-cip-thread-jump]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        var id = btn.getAttribute('data-cip-thread-jump');
+        var target = id && root.querySelector('[data-cip-message-id="' + id + '"]');
+        if (target && target.scrollIntoView) target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      });
+    });
 
     MORPH.unwired(root, '[data-cip-thread-share]').forEach(function (btn) {
       MORPH.on(btn, 'click', function () {

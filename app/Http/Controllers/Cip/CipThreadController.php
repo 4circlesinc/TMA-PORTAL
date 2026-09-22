@@ -48,6 +48,7 @@ class CipThreadController extends Controller
         $data = $request->validate([
             'body' => ['required', 'string', 'max:'.Threads::MAX_LENGTH],
             'lane' => ['nullable', 'string', 'max:16'],
+            'replyTo' => ['nullable', 'uuid'],
         ]);
 
         $message = Threads::create(
@@ -55,9 +56,10 @@ class CipThreadController extends Controller
             $user,
             $data['body'],
             (string) ($data['lane'] ?? ''),
+            $data['replyTo'] ?? null,
         );
 
-        return response()->json(Threads::present($message->fresh()->load(['author', 'companyMember']), $user), 201);
+        return response()->json(Threads::present($message->fresh()->load(['author', 'companyMember', 'replyTo']), $user), 201);
     }
 
     public function share(Request $request, string $uuid, string $message): JsonResponse
@@ -74,6 +76,6 @@ class CipThreadController extends Controller
 
         $shared = Threads::shareWithProvider($application, $row, $user);
 
-        return response()->json(Threads::present($shared->fresh()->load(['author', 'companyMember']), $user));
+        return response()->json(Threads::present($shared->fresh()->load(['author', 'companyMember', 'replyTo']), $user));
     }
 }

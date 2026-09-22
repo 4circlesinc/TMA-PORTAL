@@ -307,6 +307,62 @@ class CipThreadTest extends TestCase
             ])->assertStatus(422);
     }
 
+    public function test_a_reply_quotes_the_message_it_answers(): void
+    {
+        [$staff, $contact, $application] = $this->filed();
+
+        $original = $this->actingAs($contact)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/messages', [
+                'body' => 'The scan is attached.',
+                'lane' => 'provider',
+            ])->assertCreated()->json();
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/messages', [
+                'body' => 'Received, thank you.',
+                'lane' => 'provider',
+                'replyTo' => $original['id'],
+            ])->assertCreated()
+            ->assertJsonPath('replyTo.id', $original['id'])
+            ->assertJsonPath('replyTo.senderName', 'Gil Contact')
+            ->assertJsonPath('replyTo.preview', 'The scan is attached.');
+
+        $this->actingAs($contact)
+            ->getJson('/portal/cip/applications/'.$application->uuid.'/messages')
+            ->assertOk()
+            ->assertJsonPath('messages.1.replyTo.preview', 'The scan is attached.');
+    }
+
+    public function test_an_internal_note_cannot_be_quoted_to_the_service_provider(): void
+    {
+        [$staff, $contact, $application] = $this->filed();
+
+        $note = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/messages', [
+                'body' => 'Do not send this wording.',
+                'lane' => 'internal',
+            ])->assertCreated()->json();
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/messages', [
+                'body' => 'Please send the original.',
+                'lane' => 'provider',
+                'replyTo' => $note['id'],
+            ])->assertStatus(422);
+
+        $this->actingAs($contact)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/messages', [
+                'body' => 'Guessing at a staff note.',
+                'lane' => 'provider',
+                'replyTo' => $note['id'],
+            ])->assertStatus(422);
+
+        $this->actingAs($contact)
+            ->getJson('/portal/cip/applications/'.$application->uuid.'/messages')
+            ->assertOk()
+            ->assertJsonPath('messages', []);
+    }
+
     public function test_the_module_being_dark_hides_the_thread(): void
     {
         [$staff, , $application] = $this->filed();

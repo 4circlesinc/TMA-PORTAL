@@ -21849,6 +21849,16 @@ a.tma-dash__clients-edit-btn--accent:visited {
   margin-left: 0;
 }
 
+.tma-cip-thread__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-12);
+}
+
+.tma-cip-thread__composer .tma-dash__messages-reply-preview {
+  margin-bottom: var(--space-4);
+}
+
 .tma-cip-thread__share {
   appearance: none;
   border: 0;

@@ -45,7 +45,7 @@ class Threads
             : [CipApplicationMessage::LANE_PROVIDER];
     }
 
-    public static function create(CipApplication $application, User $author, string $body, string $lane): CipApplicationMessage
+    public static function create(CipApplication $application, User $author, string $body, string $lane, ?string $replyTo = null): CipApplicationMessage
     {
         $body = trim($body);
         $lane = self::normaliseLane($lane, $author);
@@ -62,6 +62,8 @@ class Threads
             ]);
         }
 
+        $parent = self::resolveReply($application, $author, $replyTo, $lane);
+
         $application->loadMissing('provider');
         $stamp = ContactIdentity::stamp($author, $application->provider?->company_id);
 
@@ -71,6 +73,7 @@ class Threads
             'company_member_id' => $stamp['company_member_id'],
             'author_name' => $stamp['actor_name'] ?: $author->name,
             'lane' => $lane,
+            'reply_to_id' => $parent?->id,
             'body' => $body,
         ]);
 
@@ -183,7 +186,7 @@ class Threads
         return CipApplicationMessage::query()
             ->where('application_id', $application->id)
             ->whereIn('lane', $lanes)
-            ->with(['author', 'companyMember'])
+            ->with(['author', 'companyMember', 'replyTo'])
             ->orderBy('id')
             ->get()
             ->map(fn (CipApplicationMessage $message) => self::present($message, $viewer))
@@ -292,8 +295,65 @@ class Threads
                 $message->company_member_id,
             ),
             'canShare' => $message->isInternal() && self::canPostInternal($viewer),
+            'replyTo' => self::presentReply($message, $viewer),
             'createdAt' => $message->created_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * The quoted original, omitted when this reader must not see that lane.
+     *
+     * An internal note quoted inside a staff reply stays off the provider
+     * payload even if a row were ever linked that way.
+     *
+     * @return array{id: string, senderName: string, preview: string, lane: string}|null
+     */
+    private static function presentReply(CipApplicationMessage $message, User $viewer): ?array
+    {
+        $parent = $message->replyTo;
+
+        if ($parent === null) {
+            return null;
+        }
+
+        if ($parent->isInternal() && ! self::canPostInternal($viewer)) {
+            return null;
+        }
+
+        return [
+            'id' => $parent->uuid,
+            'senderName' => $parent->author_name,
+            'preview' => Str::limit($parent->body, 140),
+            'lane' => $parent->lane,
+        ];
+    }
+
+    private static function resolveReply(CipApplication $application, User $author, ?string $replyTo, string $lane): ?CipApplicationMessage
+    {
+        $replyTo = trim((string) $replyTo);
+
+        if ($replyTo === '') {
+            return null;
+        }
+
+        $parent = CipApplicationMessage::query()
+            ->where('application_id', $application->id)
+            ->where('uuid', $replyTo)
+            ->first();
+
+        if ($parent === null || ($parent->isInternal() && ! self::canPostInternal($author))) {
+            throw ValidationException::withMessages([
+                'replyTo' => 'That message is no longer on this file.',
+            ]);
+        }
+
+        if ($lane === CipApplicationMessage::LANE_PROVIDER && $parent->isInternal()) {
+            throw ValidationException::withMessages([
+                'replyTo' => 'An internal note can’t be quoted to the service provider.',
+            ]);
+        }
+
+        return $parent;
     }
 
     private static function normaliseLane(string $lane, User $author): string
