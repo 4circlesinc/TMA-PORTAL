@@ -958,7 +958,27 @@
     return out;
   }
 
+  /*
+   * Organization folders, for the accounts allowed to ask for them.
+   *
+   * The endpoint is administrator-only (FileLibraryController::authorizeAdmin).
+   * This used to be called on every dashboard load regardless, so every
+   * non-admin — every client, every employee — spent a request per visit
+   * earning a 403. The catch below swallowed it, so the strip still drew
+   * correctly and nothing looked broken, but the browser still records a
+   * failed request, which is what filled the console with 403s.
+   *
+   * The shell already knows the reader's capabilities before first paint,
+   * so the honest answer for an account without `files.settings` is an
+   * empty list without a round trip. The catch stays: capabilities are a
+   * client-side copy, and the server remains the authority.
+   */
   function fetchAdminOrgFolders() {
+    var access = window.TMAPortalAccess;
+    if (access && typeof access.can === 'function' && !access.can('files.settings')) {
+      return Promise.resolve([]);
+    }
+
     var root = window.__TMA_SITE_ROOT || '';
     return fetch(root + '/portal/file-library/settings', {
       credentials: 'same-origin',

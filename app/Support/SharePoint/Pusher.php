@@ -425,6 +425,39 @@ class Pusher
             'recycled_at' => null,
         ];
 
+        /*
+         * `(connection_id, graph_item_id)` is the table's unique key, and the
+         * row we were handed was found by `file_id`, which is NOT unique. One
+         * portal file can hold two mappings — the same document uploaded to
+         * SharePoint twice, so two driveItems point back at one local file.
+         *
+         * When that happens the upload returns the OTHER row's graph id, and
+         * stamping it onto this row violates the unique index. The throw
+         * escaped mid-push and, because markFailure() then tried the same
+         * doomed update, it escaped from the error handler too: the job died
+         * before it could record a failure, and every later push in that run
+         * went with it.
+         *
+         * So the graph id decides which row is written. If another row already
+         * holds it, that row IS this item's mapping; the row we arrived with
+         * is the stale duplicate and is dropped rather than left to collide
+         * again on the next pass.
+         */
+        $graphItemId = $attributes['graph_item_id'];
+
+        $owner = $graphItemId
+            ? SharePointItem::where('connection_id', $connection->id)
+                ->where('graph_item_id', $graphItemId)
+                ->first()
+            : null;
+
+        if ($owner && $mapping && $owner->id !== $mapping->id) {
+            $mapping->delete();
+            $mapping = $owner;
+        } elseif ($owner && ! $mapping) {
+            $mapping = $owner;
+        }
+
         $mapping ? $mapping->update($attributes) : SharePointItem::create($attributes);
     }
 
@@ -512,12 +545,38 @@ class Pusher
         return $mapping?->connection?->pushesBack() ? $mapping->connection : null;
     }
 
+    /**
+     * Record that this item's push failed.
+     *
+     * This runs inside a `catch`, which makes it the last place that may
+     * throw: an exception here replaces the real error with its own and
+     * takes down the job that was in the middle of handling it. That is how
+     * a single unmappable file stopped a whole library's push — the write
+     * below hit the unique index, and the failure it was trying to record
+     * was never written, so the item came back and failed the same way on
+     * every later run.
+     *
+     * Writing only the failure columns cannot collide (the unique key is not
+     * among them), but the row may also be gone by now, so the write is
+     * guarded and the original error is preserved for the caller to report.
+     */
     private static function markFailure(?SharePointItem $mapping, string $error): void
     {
-        $mapping?->update([
-            'sync_status' => SharePointItem::FAILED,
-            'last_error' => Str::limit($error, 500),
-            'failure_count' => $mapping->failure_count + 1,
-        ]);
+        if (! $mapping) {
+            return;
+        }
+
+        try {
+            $mapping->forceFill([
+                'sync_status' => SharePointItem::FAILED,
+                'last_error' => Str::limit($error, 500),
+                'failure_count' => $mapping->failure_count + 1,
+            ])->saveQuietly();
+        } catch (\Throwable $e) {
+            Log::warning('Could not record a SharePoint push failure', [
+                'mapping' => $mapping->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

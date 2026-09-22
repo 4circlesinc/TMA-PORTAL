@@ -22,6 +22,7 @@ use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -843,6 +844,80 @@ class SharePointSyncTest extends TestCase
 
         $this->assertSame('pushed', $result['status'], $result['reason'] ?? '');
         $this->assertSame(SharePointItem::SYNCED, SharePointItem::first()->sync_status);
+    }
+
+    /**
+     * One portal file, two mapping rows: the same document was uploaded to
+     * SharePoint twice, so two driveItems point back at one local file.
+     *
+     * `sharepoint_items` is unique on (connection_id, graph_item_id) but only
+     * indexed on file_id, so the push used to read one row by file_id, upload,
+     * and stamp the id the OTHER row already held onto it. That threw a unique
+     * violation from inside the push AND again from markFailure(), so the job
+     * died before recording anything — which is how a handful of duplicated
+     * files stopped a whole library from syncing.
+     */
+    public function test_a_file_with_two_mappings_does_not_break_the_push(): void
+    {
+        $this->fakeGraph([], []);
+
+        // setUp() re-roots the local disk via config(), but Storage caches a
+        // resolved disk, so forget it before writing or the bytes land under
+        // the old root and Vault::localCopy() reports the file unreadable.
+        Storage::forgetDisk('local');
+
+        $path = 'vault/brief.txt';
+        Storage::disk('local')->put($path, 'brief-bytes');
+
+        // Suspended so creating the row does not push it before the test does.
+        $file = Pusher::suspend(fn () => FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'folder_id' => $this->connection->folder_id,
+            'name' => 'Brief.txt',
+            'extension' => 'txt',
+            'mime_type' => 'text/plain',
+            'size' => 11,
+            'disk' => 'local',
+            'storage_path' => $path,
+            'owner_id' => $this->owner->id,
+            'uploaded_by' => $this->owner->id,
+            'origin' => 'portal',
+        ]));
+
+        // Two mappings for one file, each naming a different driveItem. The
+        // upload below answers with 'i-1', the id the SECOND row holds.
+        $stale = SharePointItem::create([
+            'connection_id' => $this->connection->id,
+            'graph_item_id' => 'i-stale',
+            'graph_parent_id' => 'root-1',
+            'item_type' => 'file',
+            'file_id' => $file->id,
+            'name' => $file->name,
+            'sync_status' => SharePointItem::FAILED,
+        ]);
+        $keeper = SharePointItem::create([
+            'connection_id' => $this->connection->id,
+            'graph_item_id' => 'i-1',
+            'graph_parent_id' => 'root-1',
+            'item_type' => 'file',
+            'file_id' => $file->id,
+            'name' => $file->name,
+            'sync_status' => SharePointItem::SYNCED,
+        ]);
+
+        $result = Pusher::pushFile($file->fresh());
+
+        $this->assertSame('pushed', $result['status'], $result['reason'] ?? '');
+
+        // The duplicate is gone, and the file keeps exactly one mapping: the
+        // row that owns the graph id SharePoint answered with.
+        $this->assertNull(SharePointItem::find($stale->id));
+        $this->assertSame(1, SharePointItem::where('file_id', $file->id)->count());
+
+        $mapping = SharePointItem::where('file_id', $file->id)->firstOrFail();
+        $this->assertSame($keeper->id, $mapping->id);
+        $this->assertSame('i-1', $mapping->graph_item_id);
+        $this->assertSame(SharePointItem::SYNCED, $mapping->sync_status);
     }
 
     public function test_a_file_outside_any_linked_library_is_not_pushed(): void
