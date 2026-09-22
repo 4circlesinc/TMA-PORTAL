@@ -84,6 +84,41 @@ class Threads
     }
 
     /**
+     * An internal note was the wrong lane.
+     *
+     * The row stays — same author, same words — and becomes a service-provider
+     * message. That is the moment the provider side is told: the same postcard
+     * and bell a message written on that lane would have sent. Sending it
+     * again is refused, so a second click cannot mail them twice.
+     */
+    public static function shareWithProvider(CipApplication $application, CipApplicationMessage $message, User $actor): CipApplicationMessage
+    {
+        if (! self::canPostInternal($actor)) {
+            abort(404);
+        }
+
+        if ((int) $message->application_id !== (int) $application->id) {
+            abort(404);
+        }
+
+        if ($message->lane !== CipApplicationMessage::LANE_INTERNAL) {
+            throw ValidationException::withMessages([
+                'lane' => 'This message is already with the service provider.',
+            ]);
+        }
+
+        $message->forceFill(['lane' => CipApplicationMessage::LANE_PROVIDER])->save();
+
+        $author = $message->author ?? $actor;
+        self::announce($application, $message, $author);
+        CipThreadChanged::dispatch($application, 'shared');
+        Live::staff(Live::CIP);
+        Live::users(Live::CIP, self::recipientUserIds($application, $message, $author));
+
+        return $message;
+    }
+
+    /**
      * File a message the portal is already sending by another route.
      *
      * The covering note on a status dialog — "the Unit wants the spouse's
@@ -256,6 +291,7 @@ class Threads
                 $message->author_id,
                 $message->company_member_id,
             ),
+            'canShare' => $message->isInternal() && self::canPostInternal($viewer),
             'createdAt' => $message->created_at?->toIso8601String(),
         ];
     }

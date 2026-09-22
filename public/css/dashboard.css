@@ -21849,6 +21849,29 @@ a.tma-dash__clients-edit-btn--accent:visited {
   margin-left: 0;
 }
 
+.tma-cip-thread__share {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+
+.tma-cip-thread__share:hover {
+  text-decoration: underline;
+}
+
+.tma-cip-thread__share:disabled {
+  opacity: 0.6;
+  cursor: default;
+  text-decoration: none;
+}
+
 .tma-cip-thread__composer {
   display: flex;
   flex-direction: column;

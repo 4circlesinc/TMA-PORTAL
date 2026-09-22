@@ -321,4 +321,56 @@ class CipThreadTest extends TestCase
                 'body' => 'hello',
             ])->assertNotFound();
     }
+
+    public function test_sharing_an_internal_note_notifies_the_service_provider(): void
+    {
+        Mail::fake();
+
+        [$staff, $contact, $application] = $this->filed();
+
+        $created = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/messages', [
+                'body' => 'Hold this until the scan arrives.',
+                'lane' => 'internal',
+            ])->assertCreated()
+            ->assertJsonPath('canShare', true)
+            ->json();
+
+        Mail::assertNothingQueued();
+        $this->assertNull($this->attention($contact, $application));
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/messages/'.$created['id'].'/share')
+            ->assertOk()
+            ->assertJsonPath('lane', 'provider')
+            ->assertJsonPath('body', 'Hold this until the scan arrives.')
+            ->assertJsonPath('canShare', false);
+
+        $this->actingAs($contact)
+            ->getJson('/portal/cip/applications/'.$application->uuid.'/messages')
+            ->assertOk()
+            ->assertJsonPath('messages.0.body', 'Hold this until the scan arrives.')
+            ->assertJsonPath('messages.0.lane', 'provider')
+            ->assertJsonPath('messages.0.canShare', false);
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) {
+            return $mail->hasTo('gil@galaxy.example')
+                && str_contains($mail->subjectLine, 'new message')
+                && str_contains(json_encode($mail->payload), 'Hold this until the scan arrives.');
+        });
+        Mail::assertQueuedCount(1);
+        $this->assertDatabaseHas('portal_notifications', [
+            'user_id' => $contact->id, 'type' => 'cip.message',
+        ]);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/messages/'.$created['id'].'/share')
+            ->assertStatus(422);
+
+        Mail::assertQueuedCount(1);
+
+        $this->actingAs($contact)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/messages/'.$created['id'].'/share')
+            ->assertNotFound();
+    }
 }

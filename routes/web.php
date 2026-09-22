@@ -506,6 +506,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
             ->name('applications.messages.index');
         Route::post('/applications/{uuid}/messages', [CipThreadController::class, 'store'])
             ->name('applications.messages.store');
+        Route::post('/applications/{uuid}/messages/{message}/share', [CipThreadController::class, 'share'])
+            ->name('applications.messages.share');
         // Multipart carries the files, and PHP only parses a body for POST —
         // so the update is posted with _method, the way every other form in
         // the portal that sends files does it.

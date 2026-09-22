@@ -10476,6 +10476,9 @@
     var laneHtml = side === 'out' && m.lane === 'internal' && startsRun
       ? '<span class="tma-portal-tag tma-cip-thread__lane">Internal</span>'
       : '';
+    var shareHtml = m.canShare
+      ? '<button type="button" class="tma-cip-thread__share" data-cip-thread-share="' + esc(m.id) + '">Send to service provider</button>'
+      : '';
 
     return '<div class="tma-dash__messages-bubble-row tma-dash__messages-bubble-row--' + side + '">' +
       '<div class="tma-dash__messages-bubble-swipe">' +
@@ -10491,7 +10494,9 @@
       '<time class="tma-dash__messages-bubble-time"' +
       (m.createdAt ? ' datetime="' + esc(m.createdAt) + '"' : '') + '>' +
       esc(cipClockTime(m.createdAt)) +
-      '</time></p></div></div></div></div></div></div>';
+      '</time></p></div></div>' +
+      shareHtml +
+      '</div></div></div></div>';
   }
 
   function renderCipThread(state, app) {
@@ -15480,6 +15485,31 @@
         }
       });
     }
+
+    MORPH.unwired(root, '[data-cip-thread-share]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        var held = applicationFor(state.selectedId);
+        var id = btn.getAttribute('data-cip-thread-share');
+        if (!held || !held.id || !id || btn.disabled) return;
+        if (!window.confirm('Send this to the service provider? They will be notified and can read it.')) return;
+        btn.disabled = true;
+        clientsFetch('/portal/cip/applications/' + encodeURIComponent(held.id) + '/messages/' + encodeURIComponent(id) + '/share', {
+          method: 'POST',
+          json: {},
+        }).then(function (row) {
+          var messages = (state.cipThread && state.cipThread.messages) || [];
+          state.cipThread.messages = messages.map(function (m) {
+            return m.id === row.id ? row : m;
+          });
+          if (usesPagedClientsFlow(state)) render();
+          else render({ detailOnly: true });
+          clientsToast('Sent to the service provider.');
+        }).catch(function (err) {
+          btn.disabled = false;
+          clientsToast((err && err.message) || 'Could not send this to the service provider.', 'negative');
+        });
+      });
+    });
 
     MORPH.unwired(root, '[data-clients-open-thread]').forEach(function (btn) {
       MORPH.on(btn, 'click', function () {

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Cip;
 
 use App\Http\Controllers\Controller;
+use App\Models\CipApplicationMessage;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Threads;
@@ -57,5 +58,22 @@ class CipThreadController extends Controller
         );
 
         return response()->json(Threads::present($message->fresh()->load(['author', 'companyMember']), $user), 201);
+    }
+
+    public function share(Request $request, string $uuid, string $message): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless(CipAccess::canReach($user), 404);
+        abort_unless(Threads::canPostInternal($user), 404);
+
+        $application = ApplicationScope::findOrFail($user, $uuid);
+        $row = CipApplicationMessage::query()
+            ->where('application_id', $application->id)
+            ->where('uuid', $message)
+            ->firstOrFail();
+
+        $shared = Threads::shareWithProvider($application, $row, $user);
+
+        return response()->json(Threads::present($shared->fresh()->load(['author', 'companyMember']), $user));
     }
 }
