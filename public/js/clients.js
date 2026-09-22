@@ -10608,8 +10608,8 @@
         '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Internal note</label>' +
         '<label class="tma-portal-radio"><input type="radio" name="cip-thread-lane" value="provider" data-cip-thread-lane' +
         (lane === 'provider' ? ' checked' : '') + '>' +
-        '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Service provider</label>' +
-        '<p class="tma-cip-thread__lane-hint" data-cip-thread-lane-hint>' + esc(copy.hint) + '</p></div>'
+        '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Service provider</label></div>' +
+        '<p class="tma-cip-thread__lane-hint" data-cip-thread-lane-hint>' + esc(copy.hint) + '</p>'
       : '';
 
     return rows +
