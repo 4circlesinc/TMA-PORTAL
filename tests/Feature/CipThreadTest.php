@@ -477,4 +477,140 @@ class CipThreadTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    /**
+     * Reopening a thread you are already caught up on must say nothing.
+     *
+     * The read event goes to every tab on the file's channel, including the
+     * one that did the reading, and a tab on the Messages tab answers it by
+     * fetching the thread again — which marks it read again. So a read that
+     * writes nothing new but still broadcasts is not a wasted event, it is a
+     * cycle: fetch, broadcast, fetch, with the table repainting on every lap.
+     */
+    public function test_reopening_a_read_thread_broadcasts_nothing(): void
+    {
+        [$staff, $contact, $application] = $this->filed();
+        $path = '/portal/cip/applications/'.$application->uuid.'/messages';
+
+        $this->actingAs($staff)
+            ->postJson($path, ['body' => 'Please send the scan.', 'lane' => 'provider'])
+            ->assertCreated();
+
+        // First look: genuinely new, so the sender's screen does need telling.
+        $this->actingAs($contact)->getJson($path)->assertOk();
+
+        Event::fake([CipThreadChanged::class]);
+
+        $this->actingAs($contact)->getJson($path)->assertOk();
+        $this->actingAs($contact)->getJson($path)->assertOk();
+
+        Event::assertNotDispatched(CipThreadChanged::class);
+    }
+
+    public function test_reopening_a_thread_whose_newest_message_is_your_own_broadcasts_nothing(): void
+    {
+        [$staff, $contact, $application] = $this->filed();
+        $path = '/portal/cip/applications/'.$application->uuid.'/messages';
+
+        $this->actingAs($contact)
+            ->postJson($path, ['body' => 'Scan attached.', 'lane' => 'provider'])
+            ->assertCreated();
+
+        $this->actingAs($staff)->getJson($path)->assertOk();
+
+        // Staff answer: now the newest row is the staff reader's own, which
+        // no receipt is ever written for.
+        $this->actingAs($staff)
+            ->postJson($path, ['body' => 'Received, thank you.', 'lane' => 'provider'])
+            ->assertCreated();
+
+        Event::fake([CipThreadChanged::class]);
+
+        $this->actingAs($staff)->getJson($path)->assertOk();
+        $this->actingAs($staff)->getJson($path)->assertOk();
+
+        Event::assertNotDispatched(CipThreadChanged::class);
+    }
+
+    public function test_reopening_a_thread_after_an_internal_note_broadcasts_nothing(): void
+    {
+        [$staff, $contact, $application] = $this->filed();
+        $path = '/portal/cip/applications/'.$application->uuid.'/messages';
+
+        $this->actingAs($contact)
+            ->postJson($path, ['body' => 'Scan attached.', 'lane' => 'provider'])
+            ->assertCreated();
+
+        $this->actingAs($staff)->getJson($path)->assertOk();
+        $this->actingAs($contact)->getJson($path)->assertOk();
+
+        $this->actingAs($staff)
+            ->postJson($path, ['body' => 'Chase the medical.', 'lane' => 'internal'])
+            ->assertCreated();
+
+        Event::fake([CipThreadChanged::class]);
+
+        // The provider cannot see the note, so their cursor cannot reach it.
+        $this->actingAs($contact)->getJson($path)->assertOk();
+        $this->actingAs($contact)->getJson($path)->assertOk();
+
+        Event::assertNotDispatched(CipThreadChanged::class);
+    }
+
+    public function test_the_author_can_edit_their_message_for_fifteen_minutes(): void
+    {
+        Mail::fake();
+
+        [$staff, $contact, $application] = $this->filed();
+        $application->load('client');
+        $path = '/portal/cip/applications/'.$application->uuid.'/messages';
+
+        Carbon::setTestNow(Carbon::parse('2026-09-22 16:00:00'));
+
+        $created = $this->actingAs($staff)
+            ->postJson($path, ['body' => 'Please send the scan.', 'lane' => 'provider'])
+            ->assertCreated()
+            ->assertJsonPath('canEdit', true)
+            ->json();
+
+        $this->actingAs($staff)
+            ->postJson('/portal/clients/'.$application->client->uid.'/conversations', ['with' => 'provider'])
+            ->assertCreated();
+
+        $this->actingAs($contact)
+            ->patchJson($path.'/'.$created['id'], ['body' => 'Changed by someone else'])
+            ->assertForbidden();
+
+        Carbon::setTestNow(Carbon::parse('2026-09-22 16:14:00'));
+
+        $this->actingAs($staff)
+            ->patchJson($path.'/'.$created['id'], ['body' => 'Please send the updated scan.'])
+            ->assertOk()
+            ->assertJsonPath('body', 'Please send the updated scan.')
+            ->assertJsonPath('edited', true)
+            ->assertJsonPath('lane', 'provider')
+            ->assertJsonPath('canEdit', true);
+
+        $opened = $this->actingAs($staff)
+            ->postJson('/portal/clients/'.$application->client->uid.'/conversations', ['with' => 'provider'])
+            ->assertCreated()
+            ->json('conversation.id');
+
+        $chat = collect($this->actingAs($staff)
+            ->getJson('/portal/messaging/conversations/'.$opened.'/messages')
+            ->assertOk()
+            ->json('messages'))
+            ->pluck('body');
+
+        $this->assertTrue($chat->contains('Please send the updated scan.'));
+        $this->assertFalse($chat->contains('Please send the scan.'));
+
+        Carbon::setTestNow(Carbon::parse('2026-09-22 16:16:00'));
+
+        $this->actingAs($staff)
+            ->patchJson($path.'/'.$created['id'], ['body' => 'Too late'])
+            ->assertForbidden();
+
+        Carbon::setTestNow();
+    }
 }

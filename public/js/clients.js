@@ -10359,6 +10359,7 @@
     if (state.cipThreadLoadedFor !== app.id) {
       state.cipThread = null;
       state.cipReplyTo = null;
+      state.cipEditing = null;
     }
     state.cipThreadLoading = !state.cipThread;
     state.cipThreadLoadedFor = app.id;
@@ -10545,8 +10546,12 @@
     var shareHtml = m.canShare
       ? '<button type="button" class="tma-cip-thread__share" data-cip-thread-share="' + esc(m.id) + '">Send to service provider</button>'
       : '';
+    var editHtml = m.canEdit
+      ? '<button type="button" class="tma-cip-thread__share" data-cip-thread-edit="' + esc(m.id) + '">Edit</button>'
+      : '';
     var actions = '<div class="tma-cip-thread__actions">' +
       '<button type="button" class="tma-cip-thread__share" data-cip-thread-reply="' + esc(m.id) + '">Reply</button>' +
+      editHtml +
       shareHtml +
       '</div>';
 
@@ -10565,6 +10570,7 @@
       '<time class="tma-dash__messages-bubble-time"' +
       (m.createdAt ? ' datetime="' + esc(m.createdAt) + '"' : '') + '>' +
       esc(cipClockTime(m.createdAt)) +
+      (m.edited ? ' <span class="tma-dash__messages-bubble-edited">edited</span>' : '') +
       '</time></p></div></div>' +
       renderCipSeen(m.seenBy) +
       actions +
@@ -10586,6 +10592,7 @@
     var lane = state.cipThreadLane || (canInternal ? 'internal' : 'provider');
     var draft = state.cipThreadDraft || '';
     var reply = state.cipReplyTo && state.cipReplyTo.applicationId === app.id ? state.cipReplyTo : null;
+    var editing = state.cipEditing && state.cipEditing.applicationId === app.id ? state.cipEditing : null;
     var rows = messages.length
       ? '<div class="tma-cip-thread">' + messages.map(function (m, index) {
         var previous = messages[index - 1];
@@ -10600,8 +10607,8 @@
           : 'No messages on this file yet.') +
         '</div>';
 
-    var copy = cipComposerCopy(lane, reply, canInternal);
-    var laneField = canInternal
+    var copy = cipComposerCopy(lane, reply, canInternal, editing);
+    var laneField = canInternal && !editing
       ? '<div class="tma-portal-radio-row tma-cip-thread__lanes">' +
         '<label class="tma-portal-radio"><input type="radio" name="cip-thread-lane" value="internal" data-cip-thread-lane' +
         (lane === 'internal' ? ' checked' : '') + '>' +
@@ -10614,7 +10621,8 @@
 
     return rows +
       '<form class="tma-cip-thread__composer" data-cip-thread-form>' +
-      renderCipReplyPreview(reply) +
+      renderCipEditPreview(editing) +
+      renderCipReplyPreview(editing ? null : reply) +
       laneField +
       '<textarea class="tma-portal-textarea" data-cip-thread-body rows="3" maxlength="4000" placeholder="' +
       esc(copy.placeholder) +
@@ -10623,7 +10631,26 @@
       '<button type="submit" class="tma-no-data__btn">' + esc(copy.button) + '</button></div></form>';
   }
 
-  function cipComposerCopy(lane, reply, canInternal) {
+  function renderCipEditPreview(editing) {
+    if (!editing) return '';
+    return '<div class="tma-dash__messages-reply-preview">' +
+      '<span class="tma-dash__messages-reply-preview-bar" aria-hidden="true"></span>' +
+      '<span class="tma-dash__messages-reply-preview-body">' +
+      '<span class="tma-dash__messages-reply-preview-label">Editing your message</span>' +
+      '<span class="tma-dash__messages-reply-preview-text">You can correct it for 15 minutes after you sent it.</span>' +
+      '</span>' +
+      '<button type="button" class="tma-dash__messages-reply-preview-clear" data-cip-thread-edit-clear aria-label="Cancel edit">' +
+      '<span aria-hidden="true">×</span></button></div>';
+  }
+
+  function cipComposerCopy(lane, reply, canInternal, editing) {
+    if (editing) {
+      return {
+        hint: '',
+        placeholder: 'Edit your message',
+        button: 'Save',
+      };
+    }
     if (!canInternal) {
       return {
         hint: '',
@@ -15565,6 +15592,35 @@
         var laneEl = threadForm.querySelector('[data-cip-thread-lane]:checked');
         var canInternal = !!(state.cipThread && state.cipThread.canPostInternal);
         var lane = laneEl ? laneEl.value : (canInternal ? 'internal' : 'provider');
+        var editing = state.cipEditing && state.cipEditing.applicationId === held.id ? state.cipEditing : null;
+        if (editing) {
+          if (body === (editing.original || '')) {
+            state.cipEditing = null;
+            state.cipThreadDraft = '';
+            if (usesPagedClientsFlow(state)) render();
+            else render({ detailOnly: true });
+            return;
+          }
+          var saveEdit = threadForm.querySelector('button[type="submit"]');
+          if (saveEdit) { saveEdit.disabled = true; saveEdit.textContent = 'Saving…'; }
+          clientsFetch('/portal/cip/applications/' + encodeURIComponent(held.id) + '/messages/' + encodeURIComponent(editing.id), {
+            method: 'PATCH',
+            json: { body: body },
+          }).then(function (row) {
+            state.cipThreadDraft = '';
+            state.cipEditing = null;
+            var list = (state.cipThread && state.cipThread.messages) || [];
+            for (var i = 0; i < list.length; i++) {
+              if (list[i].id === row.id) list[i] = row;
+            }
+            if (usesPagedClientsFlow(state)) render();
+            else render({ detailOnly: true });
+          }).catch(function (err) {
+            if (saveEdit) { saveEdit.disabled = false; saveEdit.textContent = 'Save'; }
+            clientsToast((err && err.message) || 'This message could not be edited.', 'negative');
+          });
+          return;
+        }
         var reply = state.cipReplyTo && state.cipReplyTo.applicationId === held.id ? state.cipReplyTo : null;
         var save = threadForm.querySelector('button[type="submit"]');
         if (save) { save.disabled = true; save.textContent = 'Sending…'; }
@@ -15633,6 +15689,8 @@
         var id = btn.getAttribute('data-cip-thread-reply');
         var message = cipMessageById(id);
         if (!held || !held.id || !message) return;
+        if (state.cipEditing) state.cipThreadDraft = '';
+        state.cipEditing = null;
         state.cipReplyTo = {
           applicationId: held.id,
           id: message.id,
@@ -15650,6 +15708,40 @@
         if (input) input.focus();
       });
     });
+
+    MORPH.unwired(root, '[data-cip-thread-edit]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function () {
+        var held = applicationFor(state.selectedId);
+        var id = btn.getAttribute('data-cip-thread-edit');
+        var message = cipMessageById(id);
+        if (!held || !held.id || !message) return;
+        state.cipReplyTo = null;
+        state.cipEditing = {
+          applicationId: held.id,
+          id: message.id,
+          original: message.body || '',
+        };
+        state.cipThreadDraft = message.body || '';
+        if (usesPagedClientsFlow(state)) render();
+        else render({ detailOnly: true });
+        var input = document.querySelector('[data-cip-thread-body]');
+        if (input) {
+          input.focus();
+          var end = input.value.length;
+          if (input.setSelectionRange) input.setSelectionRange(end, end);
+        }
+      });
+    });
+
+    var clearEdit = MORPH.unwiredOne(root, '[data-cip-thread-edit-clear]');
+    if (clearEdit) {
+      MORPH.on(clearEdit, 'click', function () {
+        state.cipEditing = null;
+        state.cipThreadDraft = '';
+        if (usesPagedClientsFlow(state)) render();
+        else render({ detailOnly: true });
+      });
+    }
 
     var clearReply = MORPH.unwiredOne(root, '[data-cip-thread-reply-clear]');
     if (clearReply) {

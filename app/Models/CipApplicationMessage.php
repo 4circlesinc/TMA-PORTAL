@@ -17,7 +17,7 @@ use Illuminate\Support\Str;
  */
 #[Fillable([
     'uuid', 'application_id', 'author_id', 'company_member_id',
-    'author_name', 'lane', 'reply_to_id', 'body',
+    'author_name', 'lane', 'reply_to_id', 'body', 'edited_at',
 ])]
 class CipApplicationMessage extends Model
 {
@@ -26,6 +26,13 @@ class CipApplicationMessage extends Model
     public const LANE_PROVIDER = 'provider';
 
     public const LANES = [self::LANE_INTERNAL, self::LANE_PROVIDER];
+
+    protected function casts(): array
+    {
+        return [
+            'edited_at' => 'datetime',
+        ];
+    }
 
     protected static function booted(): void
     {

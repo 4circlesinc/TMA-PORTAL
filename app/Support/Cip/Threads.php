@@ -32,6 +32,9 @@ class Threads
 {
     public const MAX_LENGTH = 4000;
 
+    /** How long the author may correct a message after they sent it. */
+    public const EDIT_WINDOW_MINUTES = 15;
+
     public const PROVIDER_LABEL = 'Service provider';
 
     public static function canPostInternal(?User $user): bool
@@ -289,6 +292,56 @@ class Threads
         ClientConversations::mirrorProviderMessage($message);
     }
 
+    /**
+     * The author corrects their own message, inside the edit window.
+     *
+     * The lane does not change, and nobody is mailed again. A copy already
+     * sitting in the case chat is corrected with it.
+     */
+    public static function revise(CipApplication $application, CipApplicationMessage $message, User $editor, string $body): CipApplicationMessage
+    {
+        if ((int) $message->application_id !== (int) $application->id) {
+            abort(404);
+        }
+
+        if ($message->isInternal() && ! self::canPostInternal($editor)) {
+            abort(404);
+        }
+
+        if (! self::canEdit($message, $editor)) {
+            abort(403, 'This message can no longer be edited.');
+        }
+
+        $body = trim($body);
+
+        if ($body === '') {
+            throw ValidationException::withMessages([
+                'body' => 'A message can’t be empty.',
+            ]);
+        }
+
+        if ($body === $message->body) {
+            return $message;
+        }
+
+        $message->forceFill([
+            'body' => $body,
+            'edited_at' => now(),
+        ])->save();
+
+        ClientConversations::reflectFileEdit($message);
+        CipThreadChanged::dispatch($application, 'edited');
+
+        return $message;
+    }
+
+    public static function canEdit(CipApplicationMessage $message, User $viewer): bool
+    {
+        return (int) $message->author_id === (int) $viewer->id
+            && $message->created_at !== null
+            && $message->created_at->gt(now()->subMinutes(self::EDIT_WINDOW_MINUTES));
+    }
+
     public static function path(CipApplication $application): string
     {
         $application->loadMissing('client');
@@ -330,6 +383,8 @@ class Threads
                 $message->company_member_id,
             ),
             'canShare' => $message->isInternal() && self::canPostInternal($viewer),
+            'canEdit' => self::canEdit($message, $viewer),
+            'edited' => $message->edited_at !== null,
             'replyTo' => self::presentReply($message, $viewer),
             'seenBy' => $seenBy,
             'createdAt' => $message->created_at?->toIso8601String(),

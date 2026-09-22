@@ -27,7 +27,7 @@ class Message extends Model
     public const TYPE_SYSTEM = 'system';
 
     /** How long after sending the author may still edit a text message. */
-    public const EDIT_WINDOW_MINUTES = 10;
+    public const EDIT_WINDOW_MINUTES = 15;
 
     protected function casts(): array
     {

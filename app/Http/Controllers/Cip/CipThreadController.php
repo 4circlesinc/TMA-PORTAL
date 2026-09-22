@@ -78,4 +78,27 @@ class CipThreadController extends Controller
 
         return response()->json(Threads::present($shared->fresh()->load(['author', 'companyMember', 'replyTo']), $user));
     }
+
+    public function update(Request $request, string $uuid, string $message): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless(CipAccess::canReach($user), 404);
+
+        $application = ApplicationScope::findOrFail($user, $uuid);
+        $row = CipApplicationMessage::query()
+            ->where('application_id', $application->id)
+            ->where('uuid', $message)
+            ->firstOrFail();
+
+        $data = $request->validate([
+            'body' => ['required', 'string', 'max:'.Threads::MAX_LENGTH],
+        ]);
+
+        $updated = Threads::revise($application, $row, $user, $data['body']);
+
+        return response()->json(Threads::present(
+            $updated->fresh()->load(['author', 'companyMember', 'replyTo']),
+            $user,
+        ));
+    }
 }

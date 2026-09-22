@@ -977,6 +977,7 @@ class MessagingController extends Controller
         }
 
         $message->update(['body' => $body, 'edited_at' => now()]);
+        ClientConversations::reflectChatEdit($message);
         $message->load(['sender', 'attachments', 'reactions.user', 'stars', 'replyTo.sender', 'replyTo.attachments']);
 
         Broadcaster::toOthers(new MessageUpdated($message));

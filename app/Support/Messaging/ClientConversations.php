@@ -2,7 +2,9 @@
 
 namespace App\Support\Messaging;
 
+use App\Events\CipThreadChanged;
 use App\Events\MessageSent;
+use App\Events\MessageUpdated;
 use App\Models\CallRecording;
 use App\Models\CipApplication;
 use App\Models\CipApplicationMessage;
@@ -693,6 +695,54 @@ class ClientConversations
 
         if ($copied) {
             self::touchLastMessage($conversation);
+        }
+    }
+
+    /**
+     * A correction on the file replaces the copy in the case chat.
+     */
+    public static function reflectFileEdit(CipApplicationMessage $message): void
+    {
+        Message::query()
+            ->where('cip_application_message_id', $message->id)
+            ->get()
+            ->each(function (Message $copy) use ($message) {
+                $copy->forceFill([
+                    'body' => $message->body,
+                    'edited_at' => $message->edited_at,
+                ])->save();
+                $copy->load('conversation');
+
+                if ($copy->conversation) {
+                    Broadcaster::to(new MessageUpdated($copy));
+                }
+            });
+    }
+
+    /**
+     * A correction in the case chat replaces the file message it was copied from.
+     */
+    public static function reflectChatEdit(Message $message): void
+    {
+        if (! $message->cip_application_message_id) {
+            return;
+        }
+
+        $file = CipApplicationMessage::query()->find($message->cip_application_message_id);
+
+        if (! $file || $file->body === $message->body) {
+            return;
+        }
+
+        $file->forceFill([
+            'body' => $message->body,
+            'edited_at' => $message->edited_at ?? now(),
+        ])->save();
+
+        $file->load('application');
+
+        if ($file->application) {
+            CipThreadChanged::dispatch($file->application, 'edited');
         }
     }
 
