@@ -21899,6 +21899,14 @@ a.tma-dash__clients-edit-btn--accent:visited {
   margin: 0;
 }
 
+.tma-cip-thread__lane-hint {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
 .tma-dash__clients-schedule {
   flex: 1;
   min-height: 0;

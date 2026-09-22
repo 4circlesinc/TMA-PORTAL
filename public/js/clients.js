@@ -10600,14 +10600,16 @@
           : 'No messages on this file yet.') +
         '</div>';
 
+    var copy = cipComposerCopy(lane, reply, canInternal);
     var laneField = canInternal
       ? '<div class="tma-portal-radio-row tma-cip-thread__lanes">' +
         '<label class="tma-portal-radio"><input type="radio" name="cip-thread-lane" value="internal" data-cip-thread-lane' +
         (lane === 'internal' ? ' checked' : '') + '>' +
-        '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Internal</label>' +
+        '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Internal note</label>' +
         '<label class="tma-portal-radio"><input type="radio" name="cip-thread-lane" value="provider" data-cip-thread-lane' +
         (lane === 'provider' ? ' checked' : '') + '>' +
-        '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Service provider</label></div>'
+        '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Service provider</label>' +
+        '<p class="tma-cip-thread__lane-hint" data-cip-thread-lane-hint>' + esc(copy.hint) + '</p></div>'
       : '';
 
     return rows +
@@ -10615,10 +10617,42 @@
       renderCipReplyPreview(reply) +
       laneField +
       '<textarea class="tma-portal-textarea" data-cip-thread-body rows="3" maxlength="4000" placeholder="' +
-      (reply ? 'Write a reply' : (canInternal ? 'Write a note or a message to the provider' : 'Write a message')) +
+      esc(copy.placeholder) +
       '">' + esc(draft) + '</textarea>' +
       '<div class="tma-portal-form-actions">' +
-      '<button type="submit" class="tma-no-data__btn">Send</button></div></form>';
+      '<button type="submit" class="tma-no-data__btn">' + esc(copy.button) + '</button></div></form>';
+  }
+
+  function cipComposerCopy(lane, reply, canInternal) {
+    if (!canInternal) {
+      return {
+        hint: '',
+        placeholder: reply ? 'Write a reply' : 'Write a message',
+        button: 'Send',
+      };
+    }
+    if (lane === 'provider') {
+      return {
+        hint: 'The service provider can read this and is notified.',
+        placeholder: reply ? 'Reply to the service provider' : 'Write a message to the service provider',
+        button: 'Send to provider',
+      };
+    }
+    return {
+      hint: 'Only staff on this file can read this.',
+      placeholder: reply ? 'Reply with an internal note' : 'Write an internal note',
+      button: 'Add note',
+    };
+  }
+
+  function applyCipComposerLabels(form, lane, reply, canInternal) {
+    var copy = cipComposerCopy(lane, reply, canInternal);
+    var hint = form.querySelector('[data-cip-thread-lane-hint]');
+    if (hint) hint.textContent = copy.hint;
+    var body = form.querySelector('[data-cip-thread-body]');
+    if (body) body.placeholder = copy.placeholder;
+    var save = form.querySelector('button[type="submit"]');
+    if (save && !save.disabled) save.textContent = copy.button;
   }
 
   function renderClientMessagesPanel(state, hidden) {
@@ -15546,12 +15580,15 @@
           if (usesPagedClientsFlow(state)) render();
           else render({ detailOnly: true });
         }).catch(function (err) {
-          if (save) { save.disabled = false; save.textContent = 'Send'; }
+          if (save) {
+            save.disabled = false;
+            save.textContent = cipComposerCopy(lane, reply, canInternal).button;
+          }
           clientsToast((err && err.message) || 'Could not send the message.', 'negative');
         });
       });
       threadForm.addEventListener('change', function (e) {
-        if (e.target && e.target.getAttribute('data-cip-thread-lane')) {
+        if (e.target && e.target.hasAttribute('data-cip-thread-lane')) {
           var nextLane = e.target.value;
           var held = applicationFor(state.selectedId);
           var reply = state.cipReplyTo;
@@ -15564,6 +15601,15 @@
             return;
           }
           state.cipThreadLane = nextLane;
+          var stillReplying = state.cipReplyTo && held && state.cipReplyTo.applicationId === held.id
+            ? state.cipReplyTo
+            : null;
+          applyCipComposerLabels(
+            threadForm,
+            nextLane,
+            stillReplying,
+            !!(state.cipThread && state.cipThread.canPostInternal)
+          );
         }
       });
       threadForm.addEventListener('input', function (e) {
