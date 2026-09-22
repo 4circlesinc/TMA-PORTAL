@@ -56,8 +56,23 @@ class ApplySecurityPolicyHeaders
             'camera=(self), microphone=(self), geolocation=(self), payment=(), usb=(), interest-cohort=()'
         );
 
+        /*
+         * A year, every subdomain, and preload — the form browser vendors
+         * require to accept the domain onto their built-in HSTS list. Once a
+         * domain is on that list, a browser refuses plain http to it before
+         * the first request is ever sent, which closes the one window HSTS
+         * alone leaves open: a brand-new visitor typing the bare hostname.
+         *
+         * Preload is a one-way door in practice — removal takes months to
+         * reach browsers — so it commits every current and future subdomain
+         * to https. That is already true of this app: RequireSecureTransport
+         * refuses plain http, and nothing here is served without TLS.
+         */
         if ($this->secure($request)) {
-            $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+            $response->headers->set(
+                'Strict-Transport-Security',
+                'max-age=31536000; includeSubDomains; preload'
+            );
         }
 
         return $response;

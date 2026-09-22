@@ -12,6 +12,7 @@ use App\Http\Middleware\EnsureStaySignedInChoice;
 use App\Http\Middleware\IssueTrustedDeviceCookie;
 use App\Http\Middleware\PreventDisablingRequiredAuthenticator;
 use App\Http\Middleware\ReportServerTiming;
+use App\Http\Middleware\RequireSecureTransport;
 use App\Http\Middleware\VerifyTurnstile;
 use App\Support\Files\FileValidationException;
 use App\Support\Files\UploadConflictException;
@@ -59,6 +60,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // and nothing more — no session, no queries, no Turnstile round trip
         // to Cloudflare on behalf of somebody being turned away anyway.
         $middleware->prependToGroup('web', EnforceGeoAccess::class);
+
+        // Prepended after the geo check so it runs BEFORE it: a request that
+        // arrived in the clear is turned around without the app reading a
+        // policy, touching the session or looking at who sent it.
+        $middleware->prependToGroup('web', RequireSecureTransport::class);
         $middleware->appendToGroup('web', ApplySecurityPolicyHeaders::class);
         $middleware->appendToGroup('web', IssueTrustedDeviceCookie::class);
         $middleware->appendToGroup('web', EnsureStaySignedInChoice::class);
