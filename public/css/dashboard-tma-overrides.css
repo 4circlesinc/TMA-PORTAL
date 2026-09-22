@@ -2687,3 +2687,26 @@ body::-webkit-scrollbar,
   color: var(--color-text-secondary);
   font-variant-numeric: tabular-nums;
 }
+
+/* ── casual-copy friction, non-administrators only ──────────────────────
+ *
+ * .tma-locked is set on <html> by ui-lockdown.js, which PortalShell emits
+ * only for a reader who is not an administrator. Scoped to that class and
+ * not applied outright because this file is served to everyone, including
+ * the account that needs to inspect the page.
+ *
+ * The JS half handles drag and the context menu; these two cannot be done
+ * from script. Deliberately narrow: images only. Text stays selectable,
+ * because a reader who cannot copy an address out of the page reads that
+ * as broken rather than as protected.
+ */
+.tma-locked img,
+.tma-locked picture,
+.tma-locked [data-tma-thumb] {
+  /* Long-press on iOS and Android otherwise raises "Save Image". */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  /* A dragged image ghosts under the cursor before dragstart is seen. */
+  -webkit-user-drag: none;
+}

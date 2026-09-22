@@ -139,7 +139,35 @@ final class PortalShell
             .'window.TMABootBespoke='.$bespoke.';'
             .'window.TMACsrfToken='.$token.';'
             .($dashboard ? self::homeHeadStart($user, $flags) : '')
-            .'</script>'."\n  ";
+            .'</script>'."\n  "
+            .self::lockdownTag($user);
+    }
+
+    /**
+     * Casual-copy friction for everyone except administrators.
+     *
+     * Blocks dragging images out of the page and the browser's own context
+     * menu; see public/js/ui-lockdown.js for what that is and is not worth.
+     * An administrator gets nothing, which is the developer's way back to a
+     * normal page: Role::ADMINISTRATOR is the top of the matrix and holds
+     * every capability by definition, so there is no capability that could
+     * express "may bypass this" — the absence of the script is the bypass.
+     *
+     * Emitted here rather than written into dashboard.html because
+     * AssetBundle::tag() abandons the whole bundle rewrite unless the shell's
+     * script list matches the build manifest exactly. A raw tag added to the
+     * shell would degrade every account to ~117 requests with no error. This
+     * one is undeferred and outside the bundler's regex (it matches only
+     * `js/…` tags that carry `defer`), so it cannot join the bundle and
+     * cannot break it.
+     */
+    private static function lockdownTag(User $user): string
+    {
+        if (Role::isAdmin($user)) {
+            return '';
+        }
+
+        return '<script src="js/ui-lockdown.js?v=1"></script>'."\n  ";
     }
 
     /**
