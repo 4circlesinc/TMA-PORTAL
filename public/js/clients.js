@@ -10381,6 +10381,119 @@
       });
   }
 
+  /*
+   * Same face the Messages thread draws beside a bubble: the photo when there
+   * is one, otherwise the initials tile in that person's colour. A run of
+   * messages from one person keeps an empty slot of the same width so the
+   * column does not jump.
+   */
+  var CIP_INITIAL_COLOURS = ['blue', 'green', 'purple', 'amber', 'rose'];
+
+  function cipInitials(name) {
+    var parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+  }
+
+  function cipInitialColour(name) {
+    var sum = 0;
+    var text = String(name || '');
+    for (var i = 0; i < text.length; i++) sum = (sum + text.charCodeAt(i)) % 9973;
+    return CIP_INITIAL_COLOURS[sum % CIP_INITIAL_COLOURS.length];
+  }
+
+  function cipClockTime(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  }
+
+  function cipSameDay(a, b) {
+    if (!a || !b) return false;
+    var x = new Date(a);
+    var y = new Date(b);
+    return x.getFullYear() === y.getFullYear() && x.getMonth() === y.getMonth() && x.getDate() === y.getDate();
+  }
+
+  function cipDayLabel(iso) {
+    var date = new Date(iso);
+    if (isNaN(date.getTime())) return '';
+    var today = new Date();
+    var start = function (d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+    var diffDays = Math.round((start(today) - start(date)) / 86400000);
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return date.toLocaleDateString(undefined, { weekday: 'long' });
+    return date.toLocaleDateString(undefined, {
+      day: 'numeric',
+      month: 'long',
+      year: date.getFullYear() === today.getFullYear() ? undefined : 'numeric',
+    });
+  }
+
+  function cipAuthorKey(m) {
+    var author = (m && m.author) || {};
+    return (m && m.mine ? 'me:' : 'them:') + (author.email || author.name || '');
+  }
+
+  function renderCipBubbleAvatar(author, side, show) {
+    if (side === 'out') return '';
+    var person = show ? (author || {}) : null;
+    if (!person || (!person.avatar && !person.name)) {
+      return '<span class="tma-dash__messages-bubble-avatar tma-dash__messages-bubble-avatar--blank" aria-hidden="true"></span>';
+    }
+    if (person.avatar) {
+      return '<span class="tma-dash__messages-bubble-avatar" title="' + esc(person.name || '') + '">' +
+        '<img src="' + esc(person.avatar) + '" alt="" loading="lazy"></span>';
+    }
+    return '<span class="tma-dash__messages-bubble-avatar tma-dash__messages-bubble-avatar--initial ' +
+      'tma-dash__messages-row-avatar--' + cipInitialColour(person.name) +
+      '" title="' + esc(person.name) + '">' +
+      esc(cipInitials(person.name)) +
+      '</span>';
+  }
+
+  function renderCipBubble(m, previous, next) {
+    var side = m.mine ? 'out' : 'in';
+    var author = m.author || {};
+    var name = author.name || 'Someone';
+    var key = cipAuthorKey(m);
+    var startsRun = !previous ||
+      cipAuthorKey(previous) !== key ||
+      previous.lane !== m.lane ||
+      !cipSameDay(previous.createdAt, m.createdAt);
+    var endsRun = !next ||
+      cipAuthorKey(next) !== key ||
+      next.lane !== m.lane ||
+      !cipSameDay(m.createdAt, next.createdAt);
+    var senderHtml = side === 'in' && startsRun
+      ? '<span class="tma-dash__messages-bubble-sender">' + esc(name) +
+        (m.lane === 'internal' ? '<span class="tma-portal-tag">Internal</span>' : '') +
+        '</span>'
+      : '';
+    var laneHtml = side === 'out' && m.lane === 'internal' && startsRun
+      ? '<span class="tma-portal-tag tma-cip-thread__lane">Internal</span>'
+      : '';
+
+    return '<div class="tma-dash__messages-bubble-row tma-dash__messages-bubble-row--' + side + '">' +
+      '<div class="tma-dash__messages-bubble-swipe">' +
+      '<div class="tma-dash__messages-bubble-track">' +
+      renderCipBubbleAvatar(author, side, endsRun) +
+      '<div class="tma-dash__messages-bubble-main">' +
+      laneHtml +
+      '<div class="tma-dash__messages-bubble tma-dash__messages-bubble--' + side + '">' +
+      senderHtml +
+      '<div class="tma-dash__messages-bubble-text">' +
+      '<p class="tma-dash__messages-bubble-line">' +
+      '<span class="tma-dash__messages-bubble-copy">' + esc(m.body) + '</span>' +
+      '<time class="tma-dash__messages-bubble-time"' +
+      (m.createdAt ? ' datetime="' + esc(m.createdAt) + '"' : '') + '>' +
+      esc(cipClockTime(m.createdAt)) +
+      '</time></p></div></div></div></div></div></div>';
+  }
+
   function renderCipThread(state, app) {
     var data = state.cipThread;
     if (data && state.cipThreadLoadedFor !== app.id) data = null;
@@ -10396,14 +10509,13 @@
     var lane = state.cipThreadLane || (canInternal ? 'internal' : 'provider');
     var draft = state.cipThreadDraft || '';
     var rows = messages.length
-      ? '<ol class="tma-cip-thread">' + messages.map(function (m) {
-        return '<li class="tma-cip-thread__item' + (m.mine ? ' is-mine' : '') + '">' +
-          '<div class="tma-cip-thread__meta">' +
-          '<span class="tma-cip-thread__who">' + esc((m.author && m.author.name) || 'Someone') + '</span>' +
-          (m.lane === 'internal' ? '<span class="tma-portal-tag">Internal</span>' : '') +
-          '<span class="tma-cip-thread__when">' + esc(recordingWhenLabel(m.createdAt)) + '</span></div>' +
-          '<p class="tma-cip-thread__body">' + esc(m.body) + '</p></li>';
-      }).join('') + '</ol>'
+      ? '<div class="tma-cip-thread">' + messages.map(function (m, index) {
+        var previous = messages[index - 1];
+        var day = (!previous || !cipSameDay(previous.createdAt, m.createdAt))
+          ? '<div class="tma-dash__messages-divider">' + esc(cipDayLabel(m.createdAt)) + '</div>'
+          : '';
+        return day + renderCipBubble(m, previous, messages[index + 1]);
+      }).join('') + '</div>'
       : '<div class="tma-dash__clients-assigned-empty">' +
         (canInternal
           ? 'No messages on this file yet. Internal notes stay with staff. Service provider messages go to the provider.'

@@ -21824,51 +21824,29 @@ a.tma-dash__clients-edit-btn--accent:visited {
   background: var(--color-hover);
 }
 
+/*
+ * The file thread is a Messages conversation.
+ *
+ * Same bubble, photo, and wash as the chat — the classes are the Messages
+ * ones — so a note on a file reads as a message. The wash is what lets the
+ * white incoming bubble sit on this card; without it the bubble is the card.
+ */
 .tma-cip-thread {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+  margin: 0 0 var(--space-16);
+  padding: var(--space-16);
   display: flex;
   flex-direction: column;
-  gap: var(--space-12);
+  gap: var(--space-16);
+  border-radius: var(--radius-16);
+  background: color-mix(in srgb, var(--color-primary) 4%, var(--color-white));
 }
 
-.tma-cip-thread__item {
-  padding: var(--space-8) 0;
-  border-bottom: 1px solid var(--color-overlay-4);
-}
-
-.tma-cip-thread__item:last-child {
-  border-bottom: 0;
-}
-
-.tma-cip-thread__meta {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: var(--space-8);
-  margin-bottom: var(--space-4);
-}
-
-.tma-cip-thread__who {
-  font-size: var(--text-size-13);
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
-
-.tma-cip-thread__when {
-  font-size: var(--text-size-12);
-  color: var(--color-text-secondary);
-  margin-left: auto;
-}
-
-.tma-cip-thread__body {
-  margin: 0;
-  font-size: var(--text-size-14);
-  line-height: 1.45;
-  color: var(--color-text-primary);
+.tma-cip-thread .tma-dash__messages-bubble-copy {
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
+}
+
+.tma-cip-thread__lane {
+  margin-left: 0;
 }
 
 .tma-cip-thread__composer {
