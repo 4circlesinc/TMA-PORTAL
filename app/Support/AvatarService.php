@@ -65,7 +65,7 @@ class AvatarService
         // No explicit visibility argument: the bucket stays private and photos
         // are served through the app (AvatarController), so confidential file
         // manager documents in the same bucket are never publicly reachable.
-        $disk = config('filesystems.avatar_disk', 'public');
+        $disk = config('filesystems.avatar_disk', 'local');
         Storage::disk($disk)->put($name, (string) ob_get_clean());
 
         self::deletePrevious($previousUrl);
@@ -92,7 +92,7 @@ class AvatarService
         // only matches our own objects, so provider/system URLs are left alone.
         $path = parse_url($url, PHP_URL_PATH) ?: '';
         if (preg_match('#(?:^|/)(avatars/[^/]+\.jpg)$#', $path, $m)) {
-            Storage::disk(config('filesystems.avatar_disk', 'public'))->delete($m[1]);
+            Storage::disk(config('filesystems.avatar_disk', 'local'))->delete($m[1]);
         }
     }
 }

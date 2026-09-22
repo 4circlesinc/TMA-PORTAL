@@ -1,2 +1,16 @@
+# The portal is a private application: everything behind sign-in is already
+# unreachable to a crawler, and the static tree it CAN reach (the component
+# demo pages, letter previews, the built bundles, 1,900 icons) is of no use
+# in a search result. Allow only the public marketing and legal pages that
+# are meant to be found.
+#
+# This is not a security control. It asks well-behaved crawlers not to index;
+# it does not stop anyone fetching a URL. Authorisation is what protects the
+# private surfaces, and it runs on every request.
+
 User-agent: *
-Disallow:
+Allow: /$
+Allow: /privacy-policy
+Allow: /terms-of-service
+Allow: /pricing
+Disallow: /

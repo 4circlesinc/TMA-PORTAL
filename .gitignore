@@ -37,6 +37,15 @@
 /public/fonts-manifest.dev.json
 /public/hot
 /public/storage
+
+# Editor and recovery leftovers. These used to be committed under public/,
+# where they were older, unminified copies of shipped JS and CSS sitting in
+# the web root: the asset bundler never touches them, so they were served
+# raw to anyone who asked. nginx and .htaccess both refuse them now; this
+# keeps them from coming back.
+*.bak
+*.orig
+*.rej
 /storage/*.key
 /storage/app/private/**
 !/storage/app/private/.gitignore

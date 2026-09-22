@@ -49,7 +49,7 @@ class SignatureImages
 
     private static function disk(): string
     {
-        return config('filesystems.avatar_disk', 'public');
+        return config('filesystems.avatar_disk', 'local');
     }
 
     /**

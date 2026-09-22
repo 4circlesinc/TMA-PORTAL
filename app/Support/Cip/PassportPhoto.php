@@ -180,7 +180,7 @@ class PassportPhoto
     /** The same disk avatars use, one bucket for likenesses. */
     private static function disk(): string
     {
-        return config('filesystems.avatar_disk', 'public');
+        return config('filesystems.avatar_disk', 'local');
     }
 
     private static function extension(string $binary): string

@@ -25,7 +25,7 @@ class SignatureImageController extends Controller
     {
         abort_unless(SignatureImages::isStoredName($name), 404);
 
-        $disk = Storage::disk(config('filesystems.avatar_disk', 'public'));
+        $disk = Storage::disk(config('filesystems.avatar_disk', 'local'));
         $path = SignatureImages::PREFIX.'/'.$name;
 
         abort_unless($disk->exists($path), 404);

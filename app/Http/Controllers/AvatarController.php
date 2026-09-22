@@ -19,7 +19,7 @@ class AvatarController extends Controller
         // Only our own generated names (uuid.jpg). Blocks path traversal.
         abort_unless(preg_match('/^[a-f0-9-]{36}\.jpg$/', $name) === 1, 404);
 
-        $disk = Storage::disk(config('filesystems.avatar_disk', 'public'));
+        $disk = Storage::disk(config('filesystems.avatar_disk', 'local'));
         $path = 'avatars/'.$name;
 
         abort_unless($disk->exists($path), 404);

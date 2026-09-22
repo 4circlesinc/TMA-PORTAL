@@ -24,9 +24,17 @@ return [
     | Laravel Cloud (wiped on deploy, not shared across instances), so set
     | AVATAR_DISK=s3 in production to persist uploads in a bucket.
     |
+    | Defaults to 'local', not 'public'. The 'public' disk writes into
+    | storage/app/public, which public/storage symlinks into the web root:
+    | Apache and `artisan serve` hand those bytes to anyone who asks for the
+    | path, with no session and no signature. A deployment that simply forgot
+    | to set AVATAR_DISK should not publish its uploads as the price. 'local'
+    | keeps them behind AvatarController, which streams them to signed-in
+    | readers only; it is the same disk the file vault already defaults to.
+    |
     */
 
-    'avatar_disk' => env('AVATAR_DISK', 'public'),
+    'avatar_disk' => env('AVATAR_DISK', 'local'),
 
     // Disk that stores file-manager (vault) bytes. 'local' for dev; 's3' (R2)
     // in production so uploads persist across deploys. Chunk assembly and

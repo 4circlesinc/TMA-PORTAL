@@ -1,3 +1,35 @@
+# -----------------------------------------------------------------------
+# Things that must never be served.
+#
+# These mirror the deny rules in docker/nginx/templates/app.conf.template.
+# The Docker image is the production path and nginx already refuses all of
+# this; Apache was left with stock Laravel rules, which serve any file that
+# exists on disk. Every rule below closes a door nginx already has shut, so
+# the two deployments cannot disagree about what is public.
+# -----------------------------------------------------------------------
+
+# public/storage is a symlink to storage/app/public, which holds avatars,
+# signature images and CIP passport photos. Apache follows the symlink and
+# serves those bytes with no session and no signature, because the front
+# controller below only runs for paths that do NOT exist on disk.
+#
+# Laravel registers its own authorising GET storage/{path} route (the local
+# disk sets 'serve' => true), and that route requires a valid signature.
+# Refusing the prefix here leaves that route as the only way in.
+RedirectMatch 404 ^/storage/
+
+# public/ contains committed *.corrupt.bak files: older, unminified copies of
+# shipped JS and CSS that bypass the asset bundler entirely.
+#
+# ~* in nginx, NC here. The match must be case-insensitive because the
+# filesystem underneath may not be: on a macOS or Windows bind mount,
+# /FOO.BAK opens the very same inode as /foo.bak, so a case-sensitive rule
+# is bypassed by changing the case of the request.
+RedirectMatch 404 (?i)\.(bak|orig|corrupt)$
+
+# Dotfiles, except ACME challenges.
+RedirectMatch 404 ^/\.(?!well-known)
+
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes
