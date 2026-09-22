@@ -2644,6 +2644,70 @@
     return h;
   }
 
+  /*
+   * Tell each tile, in pixels, how much room its body actually has.
+   *
+   * The lists round their height down to whole rows so the tile never cuts
+   * one in half, and rounding needs a length to round. A percentage cannot
+   * be that length: `round(down, 100%, row)` on the body resolves its 100%
+   * against the tile's padding box — the whole card, head and padding
+   * included — so it rounds a number larger than the body will ever get and
+   * comes out a no-op; on an inner list the 100% is the body's height
+   * *before* max-height applies, which is circular, and CSS drops it the
+   * same way. Subtracting a written-down chrome instead is what this used to
+   * do, and it double-counted: `100% - 58.2px` took the head off a figure
+   * the padding was never in, and Recent Files lost exactly one 70px row
+   * while 70px of card sat blank under it.
+   *
+   * So the one place that knows the tile's height measures the chrome around
+   * the body and publishes the remainder. Everything is read before anything
+   * is written, in one pass each, so this adds no layout thrash to the pack.
+   */
+  function publishBodySpace(nodes, byId) {
+    var reads = nodes.map(function (node) {
+      var p = byId[node.getAttribute('data-tile-id')];
+      if (!p) return null;
+      // The panel body on every tile but the road one, which stacks its own
+      // block in the same place; both are the flex child that gets the rest.
+      var body = node.querySelector('.tma-portal-panel__body')
+        || node.querySelector('.tma-dash__overview-block--road');
+      if (!body || body.parentElement !== node) return null;
+      var cs = getComputedStyle(node);
+      // Everything the tile spends before the body: its own padding, each
+      // sibling the body sits under, and the flex gap between them all.
+      var chrome = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+      var gap = parseFloat(cs.rowGap) || 0;
+      var siblings = 0;
+      Array.prototype.forEach.call(node.children, function (child) {
+        if (child === body) return;
+        if (getComputedStyle(child).display === 'none') return;
+        chrome += child.getBoundingClientRect().height;
+        siblings += 1;
+      });
+      chrome += gap * siblings;
+
+      /*
+       * Rounded up to the pixel, and this is the whole of why it is not a
+       * raw measurement. The chrome is measured at subpixel precision — a
+       * head whose line box is 18.203125px — so the space came out 407.797
+       * where six 58px rows and their five 12px gaps need 408. Two tenths
+       * of a pixel short, and round(down, …) does not lose two tenths: it
+       * drops to the multiple below and loses the entire sixth row, which
+       * is the 70px of blank card this whole thing was reported for.
+       *
+       * Ceil rather than a fudge factor: the fractional pixel is an artifact
+       * of measuring, the row stack underneath is whole pixels, and a box
+       * one pixel taller than its rows cannot cut one.
+       */
+      return { node: node, space: Math.max(0, Math.ceil(p.h - chrome)) };
+    });
+
+    reads.forEach(function (r) {
+      if (!r) return;
+      r.node.style.setProperty('--tma-tile-body-space', r.space + 'px');
+    });
+  }
+
   function layoutHomeMasonry(grid) {
     if (!grid) return;
     var width = grid.clientWidth || grid.offsetWidth;
@@ -2704,6 +2768,8 @@
       node.style.width = p.w + 'px';
       node.style.height = p.h + 'px';
     });
+
+    publishBodySpace(nodes, byId);
 
     grid.style.height = maxBottom + 'px';
     grid.classList.add('is-packed');

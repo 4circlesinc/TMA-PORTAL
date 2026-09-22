@@ -2632,22 +2632,25 @@
  * the last visible row does not have. Only these two tiles, because every
  * other body holds something that is not a stack of file rows.
  *
- * The percentage is the tile's height, not the body's — a max-height percent
- * resolves against the parent box and knows nothing about the head and the
- * padding above it — so the chrome comes off first: 40 of panel padding, the
- * head's own line and the 12px gap under it.
+ * What is rounded is --tma-tile-body-space: the pixels the masonry measured
+ * for this body after taking off the padding, the head and the gap (see
+ * publishBodySpace in portal-home.js). It cannot be a percentage — 100% here
+ * is the tile's padding box, the whole card, so rounding it is a no-op that
+ * leaves a part row showing; and the fixed chrome this used to subtract from
+ * that percentage took the head off a figure the padding had never been in,
+ * which cost Recent Files a whole 70px row while 70px of card sat empty.
+ *
+ * Without the variable there is nothing to round, so the fallback is the
+ * plain flex height: a possible part row at the bottom, never a lost one.
  */
 .tma-portal-home-grid.is-packed > [data-tile-id="recentFiles"] > .tma-portal-panel__body,
 .tma-portal-home-grid.is-packed > [data-tile-id="favorites"] > .tma-portal-panel__body {
   --tma-file-row-h: calc(58px + var(--space-12));
-  --tma-panel-chrome: calc(
-    2 * var(--space-20) + var(--text-lh-14) + var(--space-12)
-  );
   max-height: 100%;
   max-height: calc(
     round(
       down,
-      100% - var(--tma-panel-chrome) + var(--space-12),
+      var(--tma-tile-body-space, 100%) + var(--space-12),
       var(--tma-file-row-h)
     ) - var(--space-12)
   );
@@ -2758,8 +2761,11 @@
   max-height: calc(5 * var(--tma-road-item-row) + 4 * var(--space-8));
   max-height: min(
     calc(5 * var(--tma-road-item-row) + 4 * var(--space-8)),
-    round(down, 100% + var(--space-8), calc(var(--tma-road-item-row) + var(--space-8)))
-      - var(--space-8)
+    round(
+      down,
+      var(--tma-tile-body-space, 100%) + var(--space-8),
+      calc(var(--tma-road-item-row) + var(--space-8))
+    ) - var(--space-8)
   );
   overflow-x: hidden;
   overflow-y: auto;
@@ -2871,7 +2877,7 @@
   );
   max-height: none;
   max-height: calc(
-    round(down, 100% + 2px, var(--tma-employee-row-h)) - 2px
+    round(down, var(--tma-tile-body-space, 100%) + 2px, var(--tma-employee-row-h)) - 2px
   );
   /* Back to scrolling itself: with a max-height of its own, handing the
      overflow up to the body would just move the cut row somewhere else. */
@@ -2916,10 +2922,15 @@
 
      round(down, …) rather than calc(floor(…)): floor() is rejected here by
      current Chromium, and a max-height it cannot parse is no max-height at
-     all — the declaration drops silently and the row is cut again. The
-     plain 100% below is the fallback for anything without round(). */
+     all — the declaration drops silently and the row is cut again.
+
+     The length rounded is the masonry's measurement of this body, not 100%:
+     on an inner list a max-height percentage resolves against the body's
+     height *before* the max-height applies, which is circular, so CSS drops
+     it and the rounding never happens. The plain 100% above is the fallback
+     for anything without round() or without a packed board. */
   max-height: 100%;
-  max-height: round(down, 100%, var(--tma-work-row-h));
+  max-height: round(down, var(--tma-tile-body-space, 100%), var(--tma-work-row-h));
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -2961,8 +2972,9 @@
   overscroll-behavior: contain;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  /* The masonry's measurement, for the reason the work list above gives. */
   max-height: 100%;
-  max-height: round(down, 100%, var(--tma-chat-row-h));
+  max-height: round(down, var(--tma-tile-body-space, 100%), var(--tma-chat-row-h));
   min-height: 0;
   margin: 0 -4px;
   padding: 0 4px;
