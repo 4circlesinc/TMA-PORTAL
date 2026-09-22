@@ -244,9 +244,17 @@ final class Completions
                 && preg_match('/max_tokens|temperature/i', $message) === 1;
 
             $code = $response->json('error.code');
+            // Hand over to the next listed model whenever this one cannot
+            // answer for a reason the next might not share: a retired model,
+            // a rate limit we already waited out, an entitlement this key
+            // lacks, or the host itself faltering. Listing a second model is
+            // the whole point of the list, and stopping at the first failure
+            // meant a single bad model took the assistant down with it.
             $next = in_array($code, ['model_not_found', 'model_decommissioned'], true)
                 || ($response->status() === 404 && preg_match('/\\bmodel\\b/i', $message) === 1)
-                || preg_match('/decommissioned/i', $message) === 1;
+                || preg_match('/decommissioned/i', $message) === 1
+                || in_array($response->status(), [403, 429], true)
+                || $response->status() >= 500;
 
             return ['message' => null, 'retry' => $retry, 'next' => $next];
         }

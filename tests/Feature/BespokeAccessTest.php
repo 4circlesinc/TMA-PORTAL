@@ -316,7 +316,9 @@ class BespokeAccessTest extends TestCase
 
         $this->assertTrue($payload['configured']);
         $this->assertSame('local', $payload['source']);
-        $this->assertStringContainsString('could not reach the language model', $payload['reply']);
+        $this->assertStringContainsString('can’t answer that one right now', $payload['reply']);
+        // The reader is never told what the portal runs on, even when it breaks.
+        $this->assertStringNotContainsString('language model', $payload['reply']);
         Http::assertSentCount(1);
         Log::shouldHaveReceived('warning')->once()->with(
             'Bespoke AI HTTP error',

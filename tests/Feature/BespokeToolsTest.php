@@ -379,6 +379,51 @@ class BespokeToolsTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_a_second_model_answers_when_the_first_is_rate_limited_or_unentitled(): void
+    {
+        config(['services.bespoke.model' => 'openai/gpt-oss-120b,openai/gpt-oss-20b']);
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        \App\Support\Bespoke\Completions::$sleeper = fn () => null;
+        Http::fake([
+            'api.groq.com/*' => Http::sequence()
+                // Long enough that waiting is refused, so the list is the only way through.
+                ->push(['error' => ['message' => 'Please try again in 41s.', 'code' => 'rate_limit_exceeded']], 429)
+                ->push($this->textResponse('Here you go.')),
+        ]);
+
+        try {
+            $payload = $this->actingAs($officer)
+                ->postJson('/portal/bespoke/chat', ['messages' => [['role' => 'user', 'content' => 'hi']]])
+                ->assertOk()
+                ->json();
+        } finally {
+            \App\Support\Bespoke\Completions::$sleeper = null;
+        }
+
+        $this->assertSame('model', $payload['source']);
+        $this->assertSame('Here you go.', $payload['reply']);
+        Http::assertSentCount(2);
+    }
+
+    public function test_a_bad_key_is_not_retried_against_every_model(): void
+    {
+        config(['services.bespoke.model' => 'openai/gpt-oss-120b,openai/gpt-oss-20b']);
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        Http::fake([
+            'api.groq.com/*' => Http::response(['error' => ['message' => 'Invalid API Key', 'code' => 'invalid_api_key']], 401),
+        ]);
+
+        $payload = $this->actingAs($officer)
+            ->postJson('/portal/bespoke/chat', ['messages' => [['role' => 'user', 'content' => 'hi']]])
+            ->assertOk()
+            ->json();
+
+        // The same key fails the same way on every model; trying them all only
+        // makes the reader wait longer for the same answer.
+        $this->assertSame('local', $payload['source']);
+        Http::assertSentCount(1);
+    }
+
     // -------------------------------------------------------------- chips
 
     public function test_the_empty_chat_offers_the_new_abilities_only_when_the_model_is_live(): void

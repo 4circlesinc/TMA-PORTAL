@@ -143,10 +143,12 @@ class BespokeController extends Controller
             }
         }
 
+        // Nothing came back. The reader does not need to hear about models or
+        // hosts — that is both meaningless to them and the sort of plumbing
+        // detail Confidential exists to keep in. Say it is momentary, because
+        // it is, and leave them somewhere useful.
         if ($reply === null || $reply === '') {
-            $reply = $configured
-                ? 'I could not reach the language model. Try a suggestion, or ask an administrator.'
-                : 'Bespoke AI isn’t configured for live answers. I can still help with navigation and the user guide. Try a suggestion, or ask an administrator.';
+            $reply = 'I can’t answer that one right now. Try again in a moment, or ask me where something is and I’ll take you there.';
             $source = 'local';
         }
 
