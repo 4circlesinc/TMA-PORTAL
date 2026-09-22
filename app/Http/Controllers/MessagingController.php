@@ -31,6 +31,7 @@ use App\Support\Messaging\MessageNotifier;
 use App\Support\Messaging\MessagingPresenter;
 use App\Support\Messaging\MessagingSearch;
 use App\Support\Messaging\MessagingSettings;
+use App\Support\Messaging\ReadReceipts;
 use App\Support\Messaging\OrganizationChat;
 use App\Support\Messaging\PresenceService;
 use App\Support\Messaging\TabCounts;
@@ -281,9 +282,11 @@ class MessagingController extends Controller
 
             $messages = $older->reverse()->concat($newer)->values();
 
+            $seen = ReadReceipts::forMessages($messages, $conversation, $user);
+
             return response()->json([
                 'messages' => $messages->map(
-                    fn (Message $m) => MessagingPresenter::message($m, $user, $conversation)
+                    fn (Message $m) => MessagingPresenter::message($m, $user, $conversation, $seen[(int) $m->id] ?? [])
                 ),
                 // More history exists above if the window did not reach the start.
                 'hasMore' => $older->count() > $half,
@@ -313,9 +316,11 @@ class MessagingController extends Controller
         // history just to look at its last entry.
         $conversation->load(['messages' => fn ($q) => $q->latest('id')->limit(1)]);
 
+        $seen = ReadReceipts::forMessages($messages, $conversation, $user);
+
         return response()->json([
             'messages' => $messages->map(
-                fn (Message $m) => MessagingPresenter::message($m, $user, $conversation)
+                fn (Message $m) => MessagingPresenter::message($m, $user, $conversation, $seen[(int) $m->id] ?? [])
             ),
             'hasMore' => $hasMore,
             'conversation' => MessagingPresenter::conversation(
@@ -417,15 +422,23 @@ class MessagingController extends Controller
             $conversation->forceFill(['last_message_at' => $message->created_at])->save();
 
             // Sending is also reading: the sender's own message must not come
-            // back to them as unread, and their draft is now spent.
-            ConversationParticipant::where('conversation_id', $conversation->id)
+            // back to them as unread, and their draft is now spent. Stamp
+            // everyone else's messages first, while the old cursor is still
+            // the time they were actually seen.
+            $participant = ConversationParticipant::query()
+                ->where('conversation_id', $conversation->id)
                 ->where('user_id', $user->id)
-                ->update([
+                ->first();
+
+            if ($participant) {
+                ReadReceipts::note($participant, $message->id);
+                $participant->forceFill([
                     'last_read_message_id' => $message->id,
                     'last_read_at' => now(),
                     'marked_unread_at' => null,
                     'draft' => null,
-                ]);
+                ])->save();
+            }
 
             return $message;
         });
@@ -1288,9 +1301,12 @@ class MessagingController extends Controller
         $participant = $conversation->participantFor($user);
 
         $newest = $conversation->messages()->max('id') ?? 0;
+        $through = max($newest, $participant->last_read_message_id ?? 0);
+
+        ReadReceipts::note($participant, $through);
 
         $participant->forceFill([
-            'last_read_message_id' => max($newest, $participant->last_read_message_id ?? 0),
+            'last_read_message_id' => $through,
             'last_read_at' => now(),
             'marked_unread_at' => null,
             // Reading ends the unread streak: the next one reminds from tier 1.
@@ -1493,6 +1509,10 @@ class MessagingController extends Controller
         $participant = $conversation->participantFor($user);
 
         $newest = $conversation->messages()->max('id') ?? 0;
+
+        // Freeze the messages they had actually opened. Clearing the thread
+        // moves the cursor to the end, and that must not invent a "seen".
+        ReadReceipts::note($participant, (int) ($participant->last_read_message_id ?? 0));
 
         $participant->forceFill([
             'cleared_before_message_id' => $newest,

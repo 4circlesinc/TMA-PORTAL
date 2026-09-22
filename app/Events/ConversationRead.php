@@ -43,6 +43,12 @@ class ConversationRead implements ShouldBroadcastNow
             'conversationId' => $this->conversation->uuid,
             'readerId' => $this->reader->id,
             'lastReadSeq' => $this->lastReadMessageId,
+            'reader' => [
+                'id' => $this->reader->id,
+                'name' => $this->reader->name,
+                'avatar' => $this->reader->photoUrl(),
+            ],
+            'seenAt' => now()->toIso8601String(),
         ];
     }
 }

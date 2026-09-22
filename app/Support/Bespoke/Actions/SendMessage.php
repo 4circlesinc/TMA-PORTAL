@@ -11,6 +11,7 @@ use App\Support\Bespoke\People;
 use App\Support\Messaging\Broadcaster;
 use App\Support\Messaging\ClientConversations;
 use App\Support\Messaging\MessageNotifier;
+use App\Support\Messaging\ReadReceipts;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -53,14 +54,20 @@ final class SendMessage
 
             $conversation->forceFill(['last_message_at' => $message->created_at])->save();
 
-            ConversationParticipant::where('conversation_id', $conversation->id)
+            $participant = ConversationParticipant::query()
+                ->where('conversation_id', $conversation->id)
                 ->where('user_id', $sender->id)
-                ->update([
+                ->first();
+
+            if ($participant) {
+                ReadReceipts::note($participant, $message->id);
+                $participant->forceFill([
                     'last_read_message_id' => $message->id,
                     'last_read_at' => now(),
                     'marked_unread_at' => null,
                     'draft' => null,
-                ]);
+                ])->save();
+            }
 
             return $message;
         });

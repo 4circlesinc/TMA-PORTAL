@@ -311,11 +311,19 @@ class MessagingPresenter
         ];
     }
 
-    /** One message bubble. */
-    public static function message(Message $message, User $viewer, ?Conversation $conversation = null): array
+    /**
+     * One message bubble.
+     *
+     * `$seenBy` is the batch the thread endpoint already loaded. A single
+     * message (a send, an edit) looks its own readers up.
+     *
+     * @param  list<array{id: int, name: string, avatar: ?string, seenAt: string}>|null  $seenBy
+     */
+    public static function message(Message $message, User $viewer, ?Conversation $conversation = null, ?array $seenBy = null): array
     {
         $conversation ??= $message->conversation;
         $deleted = $message->trashed();
+        $seenBy ??= ReadReceipts::forMessages(collect([$message]), $conversation, $viewer)[(int) $message->id] ?? [];
 
         return [
             'id' => $message->uuid,
@@ -347,6 +355,7 @@ class MessagingPresenter
             'status' => $message->user_id === $viewer->id
                 ? self::deliveryStatus($message, $conversation)
                 : null,
+            'seenBy' => $seenBy,
             'can' => [
                 'edit' => ! $deleted && $message->isEditableBy($viewer),
                 'delete' => ! $deleted && $message->isDeletableBy($viewer, $conversation->participantFor($viewer)),

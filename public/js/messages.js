@@ -2443,8 +2443,8 @@
 
     var state = messageDeliveryState(msg);
 
-    // "Seen" is the one state that belongs under the bubble rather than in it.
-    if (state === 'read') return '';
+    // Faces under the bubble already say who has seen it.
+    if (state === 'read' || (msg.seenBy && msg.seenBy.length)) return '';
 
     var label = {
       pending: 'Sending',
@@ -2471,7 +2471,56 @@
    * message has necessarily been read too, so a column of "Seen" lines would
    * repeat one fact once per bubble.
    */
+  function receiptSeenTitle(person) {
+    var when = '';
+    if (person.seenAt) {
+      var d = new Date(person.seenAt);
+      if (!isNaN(d.getTime())) {
+        when = d.toLocaleString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+        });
+      }
+    }
+    return (person.name || 'Someone') + (when ? ' · Seen ' + when : ' · Seen');
+  }
+
+  function renderReceiptFace(person) {
+    var title = receiptSeenTitle(person);
+    if (person.avatar) {
+      return (
+        '<span class="tma-dash__messages-bubble-receipt-face" title="' + esc(title) + '">' +
+        '<img src="' + esc(person.avatar) + '" alt="" loading="lazy"></span>'
+      );
+    }
+    return (
+      '<span class="tma-dash__messages-bubble-receipt-face tma-dash__messages-bubble-receipt-face--initial ' +
+      'tma-dash__messages-row-avatar--' + initialColourFor(person.name) +
+      '" title="' + esc(title) + '">' +
+      esc(initialsFor(person.name)) +
+      '</span>'
+    );
+  }
+
+  function renderReceiptFaces(people) {
+    var list = (people || []).filter(function (person) {
+      return person && (person.name || person.avatar);
+    });
+    if (!list.length) return '';
+    return (
+      '<div class="tma-dash__messages-bubble-receipt" aria-label="' +
+      esc(list.map(receiptSeenTitle).join(', ')) + '">' +
+      list.map(renderReceiptFace).join('') +
+      '</div>'
+    );
+  }
+
   function renderBubbleReceipt(msg, show) {
+    var faces = renderReceiptFaces(msg.seenBy);
+    if (faces) return faces;
+
     if (!show || msg.direction !== 'out') return '';
     if (messageDeliveryState(msg) !== 'read') return '';
 
@@ -3945,9 +3994,10 @@
       : null;
 
     /*
-     * "Seen" is drawn once, on the newest message of yours that has been read
-     *, see renderBubbleReceipt. Scanning backwards finds it; everything above
-     * it has been read too and stays unmarked.
+     * The word "Seen" is a fallback for a message the server marked read
+     * without naming anyone. The photos of who saw it travel on the message
+     * itself. Scanning backwards finds the newest fully-read bubble, which
+     * is the only place that fallback is drawn.
      */
     var seenIndex = -1;
     for (var i = messages.length - 1; i >= 0; i--) {
@@ -6202,9 +6252,24 @@
       // Someone else read up to `lastReadSeq`; turn our ticks over.
       var list = getMessages(payload.conversationId);
       var changed = false;
+      var reader = payload.reader || {};
+      var readerId = reader.id || payload.readerId;
       list.forEach(function (msg) {
-        if (msg.direction === 'out' && msg.seq && msg.seq <= payload.lastReadSeq && msg.status !== 'read') {
+        if (!(msg.direction === 'out' && msg.seq && msg.seq <= payload.lastReadSeq)) return;
+        if (msg.status !== 'read') {
           msg.status = 'read';
+          changed = true;
+        }
+        if (!readerId) return;
+        if (!msg.seenBy) msg.seenBy = [];
+        var known = msg.seenBy.some(function (person) { return person.id === readerId; });
+        if (!known) {
+          msg.seenBy.push({
+            id: readerId,
+            name: reader.name || 'Someone',
+            avatar: reader.avatar || null,
+            seenAt: payload.seenAt || new Date().toISOString(),
+          });
           changed = true;
         }
       });

@@ -6,6 +6,7 @@ use App\Events\CipThreadChanged;
 use App\Models\CipApplication;
 use App\Models\CipApplicationMessage;
 use App\Models\CipApplicationMessageRead;
+use App\Models\CipApplicationMessageReceipt;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Companies\ContactIdentity;
@@ -13,6 +14,8 @@ use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
 use App\Support\Notifications\Notifier;
 use App\Support\Realtime\Live;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -183,13 +186,17 @@ class Threads
     {
         $lanes = self::lanesFor($viewer);
 
-        return CipApplicationMessage::query()
+        $messages = CipApplicationMessage::query()
             ->where('application_id', $application->id)
             ->whereIn('lane', $lanes)
             ->with(['author', 'companyMember', 'replyTo'])
             ->orderBy('id')
-            ->get()
-            ->map(fn (CipApplicationMessage $message) => self::present($message, $viewer))
+            ->get();
+
+        $seen = self::seenByFor($messages, $viewer);
+
+        return $messages
+            ->map(fn (CipApplicationMessage $message) => self::present($message, $viewer, $seen[$message->id] ?? []))
             ->all();
     }
 
@@ -209,11 +216,20 @@ class Threads
             'application_id' => $application->id,
         ]);
 
-        if ((int) $row->last_read_id >= $through) {
+        $previous = (int) $row->last_read_id;
+        $wrote = self::recordReceipts($application, $viewer, $row, $through);
+
+        if ($previous >= $through) {
             return;
         }
 
         $row->forceFill(['last_read_id' => $through])->save();
+
+        // The other side of the file is looking at the thread and needs the
+        // new face. A caught-up reopen writes nothing, so it does not loop.
+        if ($wrote) {
+            CipThreadChanged::dispatch($application, 'read');
+        }
     }
 
     /**
@@ -270,14 +286,19 @@ class Threads
         return Pages::application($application->client->uid, 'tab=messages');
     }
 
-    /** @return array<string, mixed> */
-    public static function present(CipApplicationMessage $message, User $viewer): array
+    /**
+     * @param  list<array{id: int, name: string, avatar: ?string, seenAt: string}>|null  $seenBy
+     * @return array<string, mixed>
+     */
+    public static function present(CipApplicationMessage $message, User $viewer, ?array $seenBy = null): array
     {
         $author = ContactIdentity::present(
             $message->author,
             $message->companyMember,
             $message->author_name,
         );
+
+        $seenBy ??= self::seenByFor(collect([$message]), $viewer)[(int) $message->id] ?? [];
 
         return [
             'id' => $message->uuid,
@@ -296,8 +317,164 @@ class Threads
             ),
             'canShare' => $message->isInternal() && self::canPostInternal($viewer),
             'replyTo' => self::presentReply($message, $viewer),
+            'seenBy' => $seenBy,
             'createdAt' => $message->created_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * Faces under these messages. The author and the person asking are left
+     * off. A provider never appears on an internal note: their cursor only
+     * covers the lane they can read, and the fallback below checks the lane
+     * again so an interleaved id cannot leak it.
+     *
+     * @param  Collection<int, CipApplicationMessage>  $messages
+     * @return array<int, list<array{id: int, name: string, avatar: ?string, seenAt: string}>>
+     */
+    private static function seenByFor(Collection $messages, User $viewer): array
+    {
+        $out = [];
+
+        foreach ($messages as $message) {
+            $out[(int) $message->id] = [];
+        }
+
+        if ($messages->isEmpty()) {
+            return $out;
+        }
+
+        $applicationId = (int) $messages->first()->application_id;
+
+        $reads = CipApplicationMessageRead::query()
+            ->where('application_id', $applicationId)
+            ->where('user_id', '!=', $viewer->id)
+            ->with('user')
+            ->get();
+
+        if ($reads->isEmpty()) {
+            return $out;
+        }
+
+        $rows = CipApplicationMessageReceipt::query()
+            ->whereIn('message_id', $messages->map(fn (CipApplicationMessage $message) => (int) $message->id)->all())
+            ->get()
+            ->groupBy(fn (CipApplicationMessageReceipt $row) => $row->message_id.'-'.$row->user_id);
+
+        $snapshotted = CipApplicationMessageReceipt::query()
+            ->where('application_id', $applicationId)
+            ->whereIn('user_id', $reads->pluck('user_id'))
+            ->distinct()
+            ->pluck('user_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        foreach ($messages as $message) {
+            $faces = [];
+
+            foreach ($reads as $read) {
+                $reader = $read->user;
+
+                if (! $reader || (int) $reader->id === (int) $message->author_id) {
+                    continue;
+                }
+
+                if (! self::readerCanSee($reader, $message)) {
+                    continue;
+                }
+
+                $row = $rows->get($message->id.'-'.$reader->id)?->first();
+                $seenAt = $row?->seen_at;
+
+                if ($seenAt === null && ! in_array((int) $reader->id, $snapshotted, true)) {
+                    if ((int) $read->last_read_id >= (int) $message->id) {
+                        $seenAt = $read->updated_at;
+                    }
+                }
+
+                if ($seenAt === null) {
+                    continue;
+                }
+
+                $faces[] = [
+                    'id' => (int) $reader->id,
+                    'name' => $reader->name,
+                    'avatar' => $reader->photoUrl(),
+                    'seenAt' => $seenAt->toIso8601String(),
+                ];
+            }
+
+            usort($faces, fn (array $a, array $b) => strcmp($a['seenAt'], $b['seenAt']));
+            $out[(int) $message->id] = $faces;
+        }
+
+        return $out;
+    }
+
+    private static function readerCanSee(User $reader, CipApplicationMessage $message): bool
+    {
+        if ($message->isInternal()) {
+            return self::canPostInternal($reader);
+        }
+
+        return true;
+    }
+
+    /**
+     * Stamp messages the cursor is about to cover. Already-stamped messages
+     * keep the time they were first seen.
+     */
+    private static function recordReceipts(CipApplication $application, User $viewer, CipApplicationMessageRead $read, int $through): bool
+    {
+        $previous = (int) $read->last_read_id;
+        $already = CipApplicationMessageReceipt::query()
+            ->where('application_id', $application->id)
+            ->where('user_id', $viewer->id)
+            ->exists();
+        $covered = min($previous, $through);
+        $wrote = false;
+
+        if (! $already && $covered > 0) {
+            $wrote = self::stampReceipts($application, $viewer, 0, $covered, $read->updated_at ?? now());
+        }
+
+        $start = $already ? $previous : $covered;
+
+        if ($through > $start) {
+            $wrote = self::stampReceipts($application, $viewer, $start, $through, now()) || $wrote;
+        }
+
+        return $wrote;
+    }
+
+    private static function stampReceipts(CipApplication $application, User $viewer, int $after, int $through, mixed $seenAt): bool
+    {
+        $ids = CipApplicationMessage::query()
+            ->where('application_id', $application->id)
+            ->whereIn('lane', self::lanesFor($viewer))
+            ->where('id', '>', $after)
+            ->where('id', '<=', $through)
+            ->where(function ($query) use ($viewer) {
+                $query->whereNull('author_id')
+                    ->orWhere('author_id', '!=', $viewer->id);
+            })
+            ->pluck('id');
+
+        if ($ids->isEmpty()) {
+            return false;
+        }
+
+        $stamp = Carbon::parse($seenAt)->toDateTimeString();
+
+        foreach ($ids->chunk(400) as $chunk) {
+            CipApplicationMessageReceipt::query()->insertOrIgnore($chunk->map(fn ($id) => [
+                'application_id' => $application->id,
+                'message_id' => $id,
+                'user_id' => $viewer->id,
+                'seen_at' => $stamp,
+            ])->all());
+        }
+
+        return true;
     }
 
     /**

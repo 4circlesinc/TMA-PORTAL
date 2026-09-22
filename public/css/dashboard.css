@@ -33025,18 +33025,45 @@ button.tma-dash__header-popup-item:focus-visible {
 }
 
 /*
- * "Seen" sits below the bubble, outside it, on the newest read message only.
- * Outside because it is about the other person, not about the message — the
- * same reason iMessage and Teams put it there.
+ * Who has seen the message sits below the bubble: one small photo each.
+ * Hovering a photo says when that person saw it.
  */
 .tma-dash__messages-bubble-receipt {
-  display: inline-flex;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-4);
-  padding: 0 2px;
+  gap: 2px;
+  max-width: 132px;
+  padding: 0;
   font-size: 11px;
   line-height: 14px;
   color: var(--color-text-secondary);
+}
+
+.tma-dash__messages-bubble-receipt-face {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  cursor: default;
+}
+
+.tma-dash__messages-bubble-receipt-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tma-dash__messages-bubble-receipt-face--initial {
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--color-white);
 }
 
 .tma-dash__messages-bubble-receipt .tma-dash__messages-icon {

@@ -14,6 +14,7 @@ use App\Support\Access\Role;
 use App\Support\Cip\Applications;
 use App\Support\Cip\Assignments;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -428,5 +429,52 @@ class CipThreadTest extends TestCase
         $this->actingAs($contact)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/messages/'.$created['id'].'/share')
             ->assertNotFound();
+    }
+
+    public function test_a_reader_shows_on_the_message_they_saw_and_not_on_an_internal_note(): void
+    {
+        [$staff, $contact, $application] = $this->filed();
+        $path = '/portal/cip/applications/'.$application->uuid.'/messages';
+
+        Carbon::setTestNow(Carbon::parse('2026-09-22 12:00:00'));
+
+        $this->actingAs($staff)
+            ->postJson($path, ['body' => 'Keep this in the office.', 'lane' => 'internal'])
+            ->assertCreated();
+
+        $this->actingAs($staff)
+            ->postJson($path, ['body' => 'Please send the scan.', 'lane' => 'provider'])
+            ->assertCreated();
+
+        $this->actingAs($contact)->getJson($path)->assertOk();
+
+        Carbon::setTestNow(Carbon::parse('2026-09-22 15:00:00'));
+
+        $this->actingAs($staff)
+            ->postJson($path, ['body' => 'Any news on the scan?', 'lane' => 'provider'])
+            ->assertCreated();
+
+        $this->actingAs($contact)->getJson($path)->assertOk();
+
+        $messages = collect(
+            $this->actingAs($staff)->getJson($path)->assertOk()->json('messages')
+        );
+
+        $internal = $messages->firstWhere('body', 'Keep this in the office.');
+        $this->assertSame([], $internal['seenBy']);
+
+        $first = $messages->firstWhere('body', 'Please send the scan.');
+        $this->assertSame($contact->id, $first['seenBy'][0]['id']);
+        $this->assertSame('Gil Contact', $first['seenBy'][0]['name']);
+        $this->assertTrue(
+            Carbon::parse($first['seenBy'][0]['seenAt'])->equalTo(Carbon::parse('2026-09-22 12:00:00'))
+        );
+
+        $second = $messages->firstWhere('body', 'Any news on the scan?');
+        $this->assertTrue(
+            Carbon::parse($second['seenBy'][0]['seenAt'])->equalTo(Carbon::parse('2026-09-22 15:00:00'))
+        );
+
+        Carbon::setTestNow();
     }
 }

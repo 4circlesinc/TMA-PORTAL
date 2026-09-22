@@ -10487,6 +10487,40 @@
       '<span aria-hidden="true">×</span></button></div>';
   }
 
+  function cipSeenTitle(person) {
+    var when = '';
+    if (person.seenAt) {
+      var d = new Date(person.seenAt);
+      if (!isNaN(d.getTime())) {
+        when = d.toLocaleString(undefined, {
+          month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+        });
+      }
+    }
+    return (person.name || 'Someone') + (when ? ' · Seen ' + when : ' · Seen');
+  }
+
+  function renderCipSeen(people) {
+    var list = (people || []).filter(function (person) {
+      return person && (person.name || person.avatar);
+    });
+    if (!list.length) return '';
+    return '<div class="tma-dash__messages-bubble-receipt" aria-label="' +
+      esc(list.map(cipSeenTitle).join(', ')) + '">' +
+      list.map(function (person) {
+        var title = cipSeenTitle(person);
+        if (person.avatar) {
+          return '<span class="tma-dash__messages-bubble-receipt-face" title="' + esc(title) + '">' +
+            '<img src="' + esc(person.avatar) + '" alt="" loading="lazy"></span>';
+        }
+        return '<span class="tma-dash__messages-bubble-receipt-face tma-dash__messages-bubble-receipt-face--initial ' +
+          'tma-dash__messages-row-avatar--' + cipInitialColour(person.name) +
+          '" title="' + esc(title) + '">' +
+          esc(cipInitials(person.name)) + '</span>';
+      }).join('') +
+      '</div>';
+  }
+
   function renderCipBubble(m, previous, next) {
     var side = m.mine ? 'out' : 'in';
     var author = m.author || {};
@@ -10532,6 +10566,7 @@
       (m.createdAt ? ' datetime="' + esc(m.createdAt) + '"' : '') + '>' +
       esc(cipClockTime(m.createdAt)) +
       '</time></p></div></div>' +
+      renderCipSeen(m.seenBy) +
       actions +
       '</div></div></div></div>';
   }
