@@ -12,6 +12,7 @@ use App\Support\Access\Role;
 use App\Support\Companies\ContactIdentity;
 use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
+use App\Support\Messaging\ClientConversations;
 use App\Support\Notifications\Notifier;
 use App\Support\Realtime\Live;
 use Illuminate\Support\Carbon;
@@ -82,6 +83,7 @@ class Threads
 
         self::markRead($application, $author, $message->id);
         self::announce($application, $message, $author);
+        self::mirrorToCaseChat($message);
         CipThreadChanged::dispatch($application, 'created');
         Live::staff(Live::CIP);
         Live::users(Live::CIP, self::recipientUserIds($application, $message, $author));
@@ -117,6 +119,7 @@ class Threads
 
         $author = $message->author ?? $actor;
         self::announce($application, $message, $author);
+        self::mirrorToCaseChat($message);
         CipThreadChanged::dispatch($application, 'shared');
         Live::staff(Live::CIP);
         Live::users(Live::CIP, self::recipientUserIds($application, $message, $author));
@@ -169,6 +172,7 @@ class Threads
         // The author has plainly read what they just typed; without this the
         // thread would come back with an unread badge for its own writer.
         self::markRead($application, $author, $message->id);
+        self::mirrorToCaseChat($message);
 
         // The signal, but not the letter: screens showing this thread should
         // repaint, and the status change's own notice is the email.
@@ -273,6 +277,16 @@ class Threads
         }
 
         return $out;
+    }
+
+    /**
+     * The case group is the same conversation as the service-provider lane.
+     * An internal note never crosses. If the group does not exist yet, the
+     * next time someone opens Message copies whatever is already on the file.
+     */
+    private static function mirrorToCaseChat(CipApplicationMessage $message): void
+    {
+        ClientConversations::mirrorProviderMessage($message);
     }
 
     public static function path(CipApplication $application): string

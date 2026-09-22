@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\CallRecording;
+use App\Models\CipApplication;
 use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\Company;
@@ -13,6 +14,7 @@ use App\Models\Message;
 use App\Models\User;
 use App\Support\Cip\Applications;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
@@ -563,5 +565,66 @@ class ClientConversationTest extends TestCase
             );
             $this->assertSame('/media/avatars/amy.jpg', $row['members'][0]['photo']);
         }
+    }
+
+    public function test_the_case_chat_opens_on_the_service_provider_messages_already_on_the_file(): void
+    {
+        Mail::fake();
+
+        $fx = $this->applicantWithProvider();
+        $application = CipApplication::query()->where('client_id', $fx['client']->id)->firstOrFail();
+        $path = '/portal/cip/applications/'.$application->uuid.'/messages';
+
+        $this->actingAs($fx['staff'])
+            ->postJson($path, ['body' => 'Please send the scan.', 'lane' => 'provider'])
+            ->assertCreated();
+        $this->actingAs($fx['staff'])
+            ->postJson($path, ['body' => 'Keep this in the office.', 'lane' => 'internal'])
+            ->assertCreated();
+
+        $opened = $this->actingAs($fx['staff'])
+            ->postJson('/portal/clients/'.$fx['client']->uid.'/conversations', ['with' => 'provider'])
+            ->assertCreated()
+            ->json('conversation');
+
+        $asStaff = collect($this->actingAs($fx['staff'])
+            ->getJson('/portal/messaging/conversations/'.$opened['id'].'/messages')
+            ->assertOk()
+            ->json('messages'))
+            ->pluck('body');
+
+        $this->assertTrue($asStaff->contains('Please send the scan.'));
+        $this->assertFalse($asStaff->contains('Keep this in the office.'));
+
+        $asProvider = collect($this->actingAs($fx['providerUser'])
+            ->getJson('/portal/messaging/conversations/'.$opened['id'].'/messages')
+            ->assertOk()
+            ->json('messages'))
+            ->pluck('body');
+
+        $this->assertTrue($asProvider->contains('Please send the scan.'));
+        $this->assertFalse($asProvider->contains('Keep this in the office.'));
+
+        $this->actingAs($fx['providerUser'])
+            ->postJson('/portal/clients/'.$fx['client']->uid.'/conversations', ['with' => 'provider'])
+            ->assertCreated();
+
+        $conversation = Conversation::query()->where('uuid', $opened['id'])->firstOrFail();
+        $this->assertSame(
+            1,
+            $conversation->messages()->where('body', 'Please send the scan.')->count()
+        );
+
+        $this->actingAs($fx['providerUser'])
+            ->postJson($path, ['body' => 'The scan is attached.', 'lane' => 'provider'])
+            ->assertCreated();
+
+        $after = collect($this->actingAs($fx['staff'])
+            ->getJson('/portal/messaging/conversations/'.$opened['id'].'/messages')
+            ->assertOk()
+            ->json('messages'))
+            ->pluck('body');
+
+        $this->assertTrue($after->contains('The scan is attached.'));
     }
 }

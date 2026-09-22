@@ -2,8 +2,10 @@
 
 namespace App\Support\Messaging;
 
+use App\Events\MessageSent;
 use App\Models\CallRecording;
 use App\Models\CipApplication;
+use App\Models\CipApplicationMessage;
 use App\Models\ClientAssignment;
 use App\Models\Client;
 use App\Models\Company;
@@ -329,6 +331,10 @@ class ClientConversations
                 }
             }
 
+            // The file already has the provider conversation. The group should
+            // open on that history, not on an empty room.
+            self::syncProviderFile($conversation);
+
             return $conversation->fresh([
                 'activeParticipants.user.presence',
                 'client:id,uid,name,photo_url',
@@ -614,6 +620,164 @@ class ClientConversations
             'role' => $role,
             'joined_at' => now(),
         ]);
+    }
+
+    /**
+     * Copy the file's service-provider messages into this case group.
+     *
+     * Internal notes stay on the file. A message already copied is left
+     * where it is, so opening the group again does not repeat it. People
+     * who had already read the chat stay caught up; the history is there
+     * when they scroll, without a badge for words that were already on the file.
+     */
+    public static function syncProviderFile(Conversation $conversation): void
+    {
+        $applicationId = $conversation->cip_application_id;
+
+        if (! $applicationId && $conversation->client_id) {
+            $client = $conversation->relationLoaded('client')
+                ? $conversation->client
+                : Client::query()->find($conversation->client_id);
+            $applicationId = $client ? self::applicationFor($client)?->id : null;
+        }
+
+        if (! $applicationId) {
+            return;
+        }
+
+        $previousMax = (int) $conversation->messages()->max('id');
+
+        $rows = CipApplicationMessage::query()
+            ->where('application_id', $applicationId)
+            ->where('lane', CipApplicationMessage::LANE_PROVIDER)
+            ->orderBy('id')
+            ->get();
+
+        foreach ($rows as $row) {
+            self::copyProviderMessage($conversation, $row, false);
+        }
+
+        self::keepCaughtUpReaders($conversation, $previousMax);
+        self::touchLastMessage($conversation);
+    }
+
+    /**
+     * A service-provider message just landed on the file. If the case group
+     * already exists, it lands there too. Opening the group later copies
+     * anything that arrived before the group did.
+     */
+    public static function mirrorProviderMessage(CipApplicationMessage $message): void
+    {
+        if ($message->lane !== CipApplicationMessage::LANE_PROVIDER) {
+            return;
+        }
+
+        $message->loadMissing('application');
+        $clientId = $message->application?->client_id;
+
+        if (! $clientId) {
+            return;
+        }
+
+        $conversation = Conversation::query()
+            ->where('client_id', $clientId)
+            ->where('subject', Conversation::SUBJECT_PROVIDER)
+            ->first();
+
+        if (! $conversation) {
+            return;
+        }
+
+        $conversation->cip_application_id ??= $message->application_id;
+        $copied = self::copyProviderMessage($conversation, $message, true);
+
+        if ($copied) {
+            self::touchLastMessage($conversation);
+        }
+    }
+
+    private static function copyProviderMessage(Conversation $conversation, CipApplicationMessage $source, bool $broadcast): bool
+    {
+        if (Message::query()->where('cip_application_message_id', $source->id)->exists()) {
+            return false;
+        }
+
+        $replyToId = $source->reply_to_id
+            ? Message::query()->where('cip_application_message_id', $source->reply_to_id)->value('id')
+            : null;
+
+        $copy = new Message([
+            'conversation_id' => $conversation->id,
+            'user_id' => $source->author_id,
+            'type' => Message::TYPE_TEXT,
+            'body' => $source->body,
+            'reply_to_id' => $replyToId,
+            'cip_application_message_id' => $source->id,
+        ]);
+        $copy->timestamps = false;
+        $copy->created_at = $source->created_at ?? now();
+        $copy->updated_at = $source->updated_at ?? $copy->created_at;
+        $copy->save();
+
+        if ($broadcast) {
+            $copy->setRelation('conversation', $conversation);
+            Broadcaster::to(new MessageSent($copy));
+        }
+
+        return true;
+    }
+
+    /**
+     * A backfill must not turn old file messages into a pile of unread chat.
+     * Anyone already caught up, and anyone whose chat had no real messages
+     * yet, keeps a cursor at the end. A person who still had unread chat
+     * keeps that unread.
+     */
+    private static function keepCaughtUpReaders(Conversation $conversation, int $previousMax): void
+    {
+        $newMax = (int) $conversation->messages()->max('id');
+
+        if ($newMax <= $previousMax) {
+            return;
+        }
+
+        $hadChat = Message::query()
+            ->where('conversation_id', $conversation->id)
+            ->where('type', '!=', Message::TYPE_SYSTEM)
+            ->whereNull('cip_application_message_id')
+            ->where('id', '<=', $previousMax)
+            ->exists();
+
+        $query = ConversationParticipant::query()->where('conversation_id', $conversation->id);
+
+        if ($hadChat) {
+            $query->where('last_read_message_id', '>=', $previousMax);
+        } else {
+            $query->where(function ($inner) use ($previousMax) {
+                $inner->whereNull('last_read_message_id')
+                    ->orWhere('last_read_message_id', '>=', $previousMax);
+            });
+        }
+
+        $query->update([
+            'last_read_message_id' => $newMax,
+            'last_read_at' => now(),
+        ]);
+    }
+
+    private static function touchLastMessage(Conversation $conversation): void
+    {
+        $latest = $conversation->messages()
+            ->where('type', '!=', Message::TYPE_SYSTEM)
+            ->max('created_at');
+
+        if ($latest === null) {
+            return;
+        }
+
+        if ($conversation->last_message_at === null || $conversation->last_message_at->lt($latest)) {
+            $conversation->forceFill(['last_message_at' => $latest])->save();
+        }
     }
 
     /** @param  array<string, mixed>  $detail */
