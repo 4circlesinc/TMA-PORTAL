@@ -415,10 +415,10 @@
     if (window.TMABespoke || document.querySelector('script[src*="bespoke-ai.js"]')) return;
     var css = document.createElement('link');
     css.rel = 'stylesheet';
-    css.href = 'css/bespoke-ai.css?v=17';
+    css.href = 'css/bespoke-ai.css?v=20';
     (document.head || document.documentElement).appendChild(css);
     var js = document.createElement('script');
-    js.src = 'js/bespoke-ai.js?v=14';
+    js.src = 'js/bespoke-ai.js?v=20';
     js.defer = true;
     (document.head || document.documentElement).appendChild(js);
   }

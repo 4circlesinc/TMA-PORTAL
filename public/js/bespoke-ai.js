@@ -70,6 +70,9 @@
   var page = null;
   var lastFocus = null;
   var open = false;
+  var lightboxEl = null;
+  var previewStore = {};
+  var previewSeq = 1;
   var configured = false;
   var faq = FALLBACK_FAQ.slice();
   var allowedPaths = ['/', '/calendar', '/signatures', '/social/messages', '/account-settings', '/folders/recent', '/bespoke-ai'];
@@ -394,23 +397,338 @@
     return ICON_FILE;
   }
 
-  function sizeLabel(bytes) {
-    bytes = Number(bytes) || 0;
-    if (bytes >= 1048576) return (Math.round(bytes / 104857.6) / 10) + ' MB';
-    if (bytes >= 1024) return Math.round(bytes / 1024) + ' KB';
-    return bytes + ' B';
+  function entryMime(entry) {
+    return String(entry.mime || (entry.file && entry.file.type) || '');
   }
 
-  /* Chips for the files on a sent message, in the bubble. */
-  function attachmentsHtml(list) {
-    if (!Array.isArray(list) || !list.length) return '';
-    return '<div class="tma-bespoke__files">' + list.map(function (a) {
-      var url = a.url ? escapeHtml(a.url) : '';
-      var inner = '<img src="' + fileIcon(a) + '" alt="" width="14" height="14"><span>' + escapeHtml(a.name || 'file') + '</span>';
-      return url
-        ? '<a class="tma-bespoke__file" href="' + url + '" target="_blank" rel="noopener">' + inner + '</a>'
-        : '<span class="tma-bespoke__file">' + inner + '</span>';
-    }).join('') + '</div>';
+  function entryName(entry) {
+    return String(entry.name || (entry.file && entry.file.name) || 'file');
+  }
+
+  function isImageEntry(entry) {
+    var mime = entryMime(entry);
+    var name = entryName(entry).toLowerCase();
+    return entry.isImage === true || /^image\//.test(mime) || /\.(jpe?g|png|webp)$/.test(name);
+  }
+
+  function isPdfEntry(entry) {
+    var mime = entryMime(entry);
+    var name = entryName(entry).toLowerCase();
+    return entry.isPdf === true || mime === 'application/pdf' || /\.pdf$/.test(name);
+  }
+
+  function isTextEntry(entry) {
+    var mime = entryMime(entry);
+    var name = entryName(entry).toLowerCase();
+    return /^text\//.test(mime) || /\.(txt|md|csv)$/.test(name);
+  }
+
+  function previewKey(entry) {
+    if (!entry._key) {
+      entry._key = 'p' + (previewSeq++);
+      previewStore[entry._key] = entry;
+    }
+    return entry._key;
+  }
+
+  function acceptedFile(file) {
+    var name = String(file && file.name || '').toLowerCase();
+    var mime = String(file && file.type || '').toLowerCase();
+    if (/\.(pdf|jpe?g|png|webp|txt|md|csv)$/.test(name)) return true;
+    return mime === 'application/pdf' || mime === 'text/plain' || /^image\/(jpeg|png|webp)$/.test(mime);
+  }
+
+  function imageSrc(entry) {
+    if (entry.thumb) return entry.thumb;
+    if (entry.file) {
+      entry.thumb = URL.createObjectURL(entry.file);
+      entry.thumbRevoke = true;
+      return entry.thumb;
+    }
+    return entry.url || '';
+  }
+
+  function rasterizePdfThumb(blob) {
+    return blob.arrayBuffer().then(function (buffer) {
+      return loadPdfjs().then(function (lib) {
+        return lib.getDocument({ data: new Uint8Array(buffer) }).promise;
+      });
+    }).then(function (doc) {
+      return doc.getPage(1).then(function (page) {
+        var base = page.getViewport({ scale: 1 });
+        var scale = 144 / Math.max(1, base.width);
+        var viewport = page.getViewport({ scale: scale });
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(viewport.width));
+        canvas.height = Math.max(1, Math.round(viewport.height));
+        return page.render({ canvas: canvas, viewport: viewport, background: '#ffffff' }).promise.then(function () {
+          try { doc.destroy(); } catch (e) { /* ignore */ }
+          return canvas.toDataURL('image/jpeg', 0.8);
+        });
+      });
+    });
+  }
+
+  function showThumb(media, src) {
+    var img = document.createElement('img');
+    img.className = 'tma-bespoke__preview-img';
+    img.alt = '';
+    img.src = src;
+    media.innerHTML = '';
+    media.classList.remove('is-text');
+    media.appendChild(img);
+  }
+
+  function liveMedia(entry) {
+    if (!entry._key) return null;
+    return document.querySelector('[data-bespoke-preview="' + entry._key + '"] [data-bespoke-preview-media]');
+  }
+
+  function fillPreview(tile, entry) {
+    var media = tile.querySelector('[data-bespoke-preview-media]');
+    if (!media) return;
+    if (isImageEntry(entry)) {
+      var src = imageSrc(entry);
+      if (src) showThumb(media, src);
+      return;
+    }
+    if (isPdfEntry(entry)) {
+      if (entry.thumb) {
+        showThumb(media, entry.thumb);
+        return;
+      }
+      media.innerHTML = '<img class="tma-bespoke__preview-icon" src="' + ICON_PDF + '" alt="" width="22" height="22">';
+      if (entry.thumbPending) return;
+      var blob = entry.file || null;
+      var job = blob
+        ? rasterizePdfThumb(blob)
+        : (entry.url
+          ? fetch(entry.url, { credentials: 'same-origin' }).then(function (res) {
+            if (!res.ok) throw new Error('fetch');
+            return res.blob();
+          }).then(rasterizePdfThumb)
+          : Promise.reject());
+      entry.thumbPending = true;
+      job.then(function (url) {
+        entry.thumb = url;
+        entry.thumbPending = false;
+        var live = tile.isConnected ? media : liveMedia(entry);
+        if (live) showThumb(live, url);
+      }).catch(function () {
+        entry.thumbPending = false;
+      });
+      return;
+    }
+    if (entry.snippet) {
+      media.textContent = entry.snippet;
+      media.classList.add('is-text');
+      return;
+    }
+    if (isTextEntry(entry) && entry.file && entry.file.text) {
+      entry.file.text().then(function (text) {
+        var snip = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+        entry.snippet = snip;
+        var live = tile.isConnected ? media : liveMedia(entry);
+        if (!live) return;
+        live.textContent = snip || 'Text file';
+        live.classList.add('is-text');
+      }).catch(function () { /* icon stays */ });
+      return;
+    }
+    if (isTextEntry(entry) && entry.url && !entry.snippetPending) {
+      entry.snippetPending = true;
+      fetch(entry.url, { credentials: 'same-origin' }).then(function (res) {
+        return res.ok ? res.text() : '';
+      }).then(function (text) {
+        entry.snippetPending = false;
+        var snip = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+        entry.snippet = snip;
+        var live = tile.isConnected ? media : liveMedia(entry);
+        if (!live) return;
+        live.textContent = snip || 'Text file';
+        live.classList.add('is-text');
+      }).catch(function () {
+        entry.snippetPending = false;
+      });
+    }
+    media.innerHTML = '<img class="tma-bespoke__preview-icon" src="' + fileIcon(entry) + '" alt="" width="22" height="22">';
+  }
+
+  function previewTile(entry, withRemove) {
+    var tile = document.createElement('div');
+    tile.className = 'tma-bespoke__file tma-bespoke__preview' + (entry.status ? ' tma-bespoke__file--' + entry.status : '');
+    tile.setAttribute('data-bespoke-preview', previewKey(entry));
+    var openBtn = document.createElement('button');
+    openBtn.type = 'button';
+    openBtn.className = 'tma-bespoke__preview-open';
+    openBtn.setAttribute('data-bespoke-preview-open', '');
+    openBtn.setAttribute('aria-label', 'Open ' + entryName(entry));
+    if (entry.status === 'failed') openBtn.title = entry.error || 'Could not upload';
+    var media = document.createElement('span');
+    media.className = 'tma-bespoke__preview-media';
+    media.setAttribute('data-bespoke-preview-media', '');
+    var name = document.createElement('span');
+    name.className = 'tma-bespoke__preview-name';
+    name.textContent = entryName(entry);
+    openBtn.appendChild(media);
+    openBtn.appendChild(name);
+    tile.appendChild(openBtn);
+    if (withRemove) tile.appendChild(withRemove);
+    fillPreview(tile, entry);
+    return tile;
+  }
+
+  function mountFilePreviews(bubble, list) {
+    if (!Array.isArray(list) || !list.length) return;
+    var wrap = document.createElement('div');
+    wrap.className = 'tma-bespoke__files';
+    list.forEach(function (entry) {
+      wrap.appendChild(previewTile(entry, null));
+    });
+    bubble.appendChild(wrap);
+  }
+
+  function lightboxSource(entry) {
+    if (entry.url) return entry.url;
+    if (entry.file) {
+      if (!entry.objectUrl) entry.objectUrl = URL.createObjectURL(entry.file);
+      return entry.objectUrl;
+    }
+    return entry.thumb || '';
+  }
+
+  function closeFileLightbox() {
+    if (lightboxEl && lightboxEl.parentNode) lightboxEl.parentNode.removeChild(lightboxEl);
+    lightboxEl = null;
+  }
+
+  function fillLightbox(stage, entry) {
+    stage.innerHTML = '';
+    if (isImageEntry(entry)) {
+      var img = document.createElement('img');
+      img.className = 'tma-bespoke-lightbox__img';
+      img.alt = entryName(entry);
+      img.src = lightboxSource(entry);
+      stage.appendChild(img);
+      return;
+    }
+    if (isPdfEntry(entry)) {
+      var frame = document.createElement('iframe');
+      frame.className = 'tma-bespoke-lightbox__frame';
+      frame.title = entryName(entry);
+      frame.src = lightboxSource(entry);
+      stage.appendChild(frame);
+      return;
+    }
+    var pre = document.createElement('pre');
+    pre.className = 'tma-bespoke-lightbox__text';
+    pre.textContent = 'Loading…';
+    stage.appendChild(pre);
+    var job = entry.file && entry.file.text
+      ? entry.file.text()
+      : (entry.url
+        ? fetch(entry.url, { credentials: 'same-origin' }).then(function (res) {
+          return res.ok ? res.text() : '';
+        })
+        : Promise.resolve(entry.snippet || ''));
+    job.then(function (text) {
+      if (!pre.isConnected) return;
+      pre.textContent = String(text || '').slice(0, 20000) || 'Nothing to preview.';
+    }).catch(function () {
+      if (pre.isConnected) pre.textContent = entry.snippet || 'Nothing to preview.';
+    });
+  }
+
+  function openFileLightbox(entry) {
+    if (!entry) return;
+    closeFileLightbox();
+    var lb = document.createElement('div');
+    lb.className = 'tma-bespoke-lightbox';
+    lb.setAttribute('role', 'dialog');
+    lb.setAttribute('aria-modal', 'true');
+    lb.setAttribute('aria-label', entryName(entry));
+    lb.innerHTML =
+      '<button type="button" class="tma-bespoke-lightbox__backdrop" data-bespoke-lb-close aria-label="Close preview"></button>' +
+      '<div class="tma-bespoke-lightbox__head">' +
+        '<p class="tma-bespoke-lightbox__title"></p>' +
+        '<button type="button" class="tma-bespoke-lightbox__close" data-bespoke-lb-close aria-label="Close"><img src="' + CLOSE + '" alt="" width="16" height="16"></button>' +
+      '</div>' +
+      '<div class="tma-bespoke-lightbox__stage" data-bespoke-lb-stage></div>';
+    lb.querySelector('.tma-bespoke-lightbox__title').textContent = entryName(entry);
+    document.body.appendChild(lb);
+    lightboxEl = lb;
+    fillLightbox(lb.querySelector('[data-bespoke-lb-stage]'), entry);
+    var closeBtn = lb.querySelector('.tma-bespoke-lightbox__close');
+    if (closeBtn) closeBtn.focus();
+    lb.addEventListener('click', function (e) {
+      if (!(e.target.closest)) return;
+      if (e.target.closest('[data-bespoke-lb-close]')) {
+        closeFileLightbox();
+        return;
+      }
+      if (e.target.closest('img, iframe, pre, video, a, button')) return;
+      if (e.target.closest('[data-bespoke-lb-stage]')) closeFileLightbox();
+    });
+  }
+
+  function onPreviewClick(e) {
+    var btn = e.target.closest && e.target.closest('[data-bespoke-preview-open]');
+    if (!btn) return;
+    var tile = btn.closest('[data-bespoke-preview]');
+    var entry = tile && previewStore[tile.getAttribute('data-bespoke-preview')];
+    if (!entry) return;
+    e.preventDefault();
+    openFileLightbox(entry);
+  }
+
+  function dragHasFiles(e) {
+    var types = e.dataTransfer && e.dataTransfer.types;
+    if (!types) return false;
+    for (var i = 0; i < types.length; i++) {
+      if (types[i] === 'Files') return true;
+    }
+    return false;
+  }
+
+  function bindFileDrop(ctx, el) {
+    if (!el || el.getAttribute('data-bespoke-drop-bound')) return;
+    el.setAttribute('data-bespoke-drop-bound', '1');
+    function stillInside(e) {
+      if (e.relatedTarget && el.contains(e.relatedTarget)) return true;
+      var rect = el.getBoundingClientRect();
+      return e.clientX > rect.left && e.clientX < rect.right && e.clientY > rect.top && e.clientY < rect.bottom;
+    }
+    el.addEventListener('dragenter', function (e) {
+      if (!dragHasFiles(e)) return;
+      e.preventDefault();
+      el.classList.add('is-dropping');
+    });
+    el.addEventListener('dragover', function (e) {
+      if (!dragHasFiles(e)) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+      el.classList.add('is-dropping');
+    });
+    el.addEventListener('dragleave', function (e) {
+      if (!dragHasFiles(e)) return;
+      if (stillInside(e)) return;
+      el.classList.remove('is-dropping');
+    });
+    el.addEventListener('drop', function (e) {
+      if (!dragHasFiles(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      el.classList.remove('is-dropping');
+      var files = e.dataTransfer && e.dataTransfer.files;
+      if (!files || !files.length) return;
+      var list = Array.prototype.filter.call(files, acceptedFile);
+      if (!list.length) {
+        toast('Attach a PDF, an image (JPG, PNG, WebP), or a text file.', true);
+        return;
+      }
+      if (list.length < files.length) toast('Some files were skipped. PDF, image, or text only.', true);
+      attachFiles(ctx, list);
+    });
   }
 
   function readyAttachments(ctx) {
@@ -423,26 +741,20 @@
     ctx.attachEl.innerHTML = '';
     ctx.attachEl.hidden = !list.length;
     list.forEach(function (entry) {
-      var chip = document.createElement('span');
-      chip.className = 'tma-bespoke__file tma-bespoke__file--' + entry.status;
-      var label = entry.status === 'uploading' ? 'Uploading…'
-        : entry.status === 'failed' ? (entry.error || 'Failed')
-        : sizeLabel(entry.size);
-      chip.innerHTML = '<img src="' + fileIcon(entry) + '" alt="" width="14" height="14">' +
-        '<span class="tma-bespoke__file-name">' + escapeHtml(entry.name) + '</span>' +
-        '<span class="tma-bespoke__file-meta">' + escapeHtml(label) + '</span>';
       var remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'tma-bespoke__file-remove';
-      remove.setAttribute('aria-label', 'Remove ' + entry.name);
+      remove.setAttribute('aria-label', 'Remove ' + entryName(entry));
       remove.innerHTML = '<img src="' + CLOSE + '" alt="" width="10" height="10">';
-      remove.addEventListener('click', function () {
-        ctx.pending = ctx.pending.filter(function (e) { return e !== entry; });
+      remove.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (entry.thumbRevoke && entry.thumb) URL.revokeObjectURL(entry.thumb);
+        if (entry.objectUrl) URL.revokeObjectURL(entry.objectUrl);
+        ctx.pending = ctx.pending.filter(function (item) { return item !== entry; });
         renderAttachStrip(ctx);
         resizeInput(ctx);
       });
-      chip.appendChild(remove);
-      ctx.attachEl.appendChild(chip);
+      ctx.attachEl.appendChild(previewTile(entry, remove));
     });
     resizeInput(ctx);
   }
@@ -540,10 +852,11 @@
       return;
     }
     ctx.chipsEl.hidden = false;
-    chips.forEach(function (chip) {
+    chips.forEach(function (chip, index) {
       var btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'tma-bespoke__chip';
+      btn.className = 'tma-bespoke__chip is-rising';
+      btn.style.animationDelay = (index * 70) + 'ms';
       btn.textContent = chip.label;
       btn.addEventListener('click', function () {
         if (chip.path && !chip.prompt) {
@@ -560,6 +873,7 @@
     opts = opts || {};
     var row = document.createElement('div');
     row.className = 'tma-bespoke__row tma-bespoke__row--' + role;
+    if (opts.arrive) row.classList.add('is-arriving');
     if (role === 'assistant') {
       var img = document.createElement('img');
       img.className = 'tma-bespoke__avatar tma-bespoke__mark';
@@ -571,7 +885,8 @@
     }
     var bubble = document.createElement('div');
     bubble.className = 'tma-bespoke__bubble';
-    bubble.innerHTML = html + attachmentsHtml(opts.attachments);
+    bubble.innerHTML = html;
+    mountFilePreviews(bubble, opts.attachments);
     if (opts.copy) {
       var copy = document.createElement('button');
       copy.type = 'button';
@@ -1083,6 +1398,25 @@
     });
   }
 
+  function thinkingHtml() {
+    return '<span class="tma-bespoke__typing">' +
+      '<span class="tma-bespoke__thinking-label">Thinking</span>' +
+      '<span class="tma-bespoke__thinking-by">Powered by Grok</span>' +
+      '</span>';
+  }
+
+  function setThinking(ctx, on) {
+    var el = ctx && ctx.dropEl;
+    if (el) el.classList.toggle('is-thinking', !!on);
+  }
+
+  function pulseSend(ctx) {
+    if (!ctx || !ctx.sendBtn) return;
+    ctx.sendBtn.classList.remove('is-sent');
+    void ctx.sendBtn.offsetWidth;
+    ctx.sendBtn.classList.add('is-sent');
+  }
+
   function ask(ctx, text) {
     text = String(text || '').trim();
     if (!ctx || ctx.busy) return;
@@ -1094,18 +1428,31 @@
     }
     if (!text && !files.length) return;
     if (!text) text = files.length === 1 ? 'Here is a file.' : 'Here are ' + files.length + ' files.';
-    var sent = files.map(function (e) { return e.payload || { id: e.id, name: e.name, url: e.url, mime: e.mime }; });
+    var sent = files.map(function (e) {
+      var payload = e.payload ? Object.assign({}, e.payload) : { id: e.id, name: e.name, url: e.url, mime: e.mime };
+      payload.name = payload.name || e.name;
+      payload.url = payload.url || e.url;
+      payload.mime = payload.mime || e.mime;
+      if (e.thumb) payload.thumb = e.thumb;
+      if (e.snippet) payload.snippet = e.snippet;
+      if (isImageEntry(e)) payload.isImage = true;
+      if (isPdfEntry(e)) payload.isPdf = true;
+      return payload;
+    });
     clearChoices(ctx);
     ctx.messages.push({ role: 'user', content: text, attachments: sent });
-    appendRow(ctx, 'user', renderLite(text), { attachments: sent });
+    appendRow(ctx, 'user', renderLite(text), { attachments: sent, arrive: true });
     renderChips(ctx, []);
     if (ctx.inputEl) ctx.inputEl.value = '';
     ctx.pending = [];
     renderAttachStrip(ctx);
     resizeInput(ctx);
+    pulseSend(ctx);
     ctx.busy = true;
+    setThinking(ctx, true);
     if (ctx.sendBtn) ctx.sendBtn.disabled = true;
-    var bubble = appendRow(ctx, 'assistant', '<span class="tma-bespoke__typing" aria-hidden="true"><span></span><span></span><span></span></span>');
+    announce(ctx, 'Thinking. Powered by Grok.');
+    var bubble = appendRow(ctx, 'assistant', thinkingHtml(), { arrive: true });
     var local = matchFaq(text);
 
     api('/portal/bespoke/chat', {
@@ -1147,7 +1494,8 @@
       typeInto(ctx, bubble, fallback);
     }).then(function () {
       ctx.busy = false;
-      if (ctx.sendBtn) ctx.sendBtn.disabled = !String(ctx.inputEl && ctx.inputEl.value || '').trim();
+      setThinking(ctx, false);
+      if (ctx.sendBtn) ctx.sendBtn.disabled = !String(ctx.inputEl && ctx.inputEl.value || '').trim() && !readyAttachments(ctx).length;
       if (ctx.inputEl) ctx.inputEl.focus();
     });
   }
@@ -1634,6 +1982,9 @@
       }
     });
     ctx.logEl.addEventListener('click', onNavClick);
+    ctx.logEl.addEventListener('click', onPreviewClick);
+    if (ctx.attachEl) ctx.attachEl.addEventListener('click', onPreviewClick);
+    if (ctx.dropEl) bindFileDrop(ctx, ctx.dropEl);
   }
 
   function onNavClick(e) {
@@ -1711,6 +2062,7 @@
         '<div class="sr-only" aria-live="polite" data-bespoke-page-live></div>' +
         '<div class="tma-bespoke__chips" data-bespoke-page-chips></div>' +
         '<div class="tma-bespoke__attach" data-bespoke-page-attach hidden></div>' +
+        '<div class="tma-bespoke__drop" data-bespoke-page-drop>Drop files to attach</div>' +
         '<form class="tma-bespoke__composer" data-bespoke-page-form>' +
           '<button type="button" class="tma-bespoke__clip" data-bespoke-page-clip aria-label="Attach files"><img src="' + CLIP + '" alt=""></button>' +
           '<input type="file" data-bespoke-page-file multiple accept="' + ACCEPT + '" hidden>' +
@@ -1881,6 +2233,7 @@
       clipBtn: root.querySelector('[data-bespoke-page-clip]'),
       fileEl: root.querySelector('[data-bespoke-page-file]'),
       micBtn: root.querySelector('[data-bespoke-page-mic]'),
+      dropEl: root.querySelector('.tma-bespoke-page__thread'),
       pending: [],
       titleEl: root.querySelector('[data-bespoke-page-title]'),
       messages: [],
@@ -2035,6 +2388,7 @@
         '<div class="sr-only" aria-live="polite" data-bespoke-live></div>' +
         '<div class="tma-bespoke__chips" data-bespoke-chips></div>' +
         '<div class="tma-bespoke__attach" data-bespoke-attach hidden></div>' +
+        '<div class="tma-bespoke__drop" data-bespoke-drop>Drop files to attach</div>' +
         '<form class="tma-bespoke__composer" data-bespoke-form>' +
           '<button type="button" class="tma-bespoke__clip" data-bespoke-clip aria-label="Attach files"><img src="' + CLIP + '" alt=""></button>' +
           '<input type="file" data-bespoke-file multiple accept="' + ACCEPT + '" hidden>' +
@@ -2230,6 +2584,12 @@
     // Escape while dictating stops the ear and nothing else.
     var dictating = (open && widget && widget.dictation && widget.dictation.active) ? widget
       : (page && page.dictation && page.dictation.active) ? page : null;
+    if (e.key === 'Escape' && lightboxEl) {
+      e.preventDefault();
+      e.stopPropagation();
+      closeFileLightbox();
+      return;
+    }
     if (e.key === 'Escape' && dictating) {
       e.preventDefault();
       e.stopPropagation();
@@ -2302,6 +2662,7 @@
       clipBtn: host.querySelector('[data-bespoke-clip]'),
       fileEl: host.querySelector('[data-bespoke-file]'),
       micBtn: host.querySelector('[data-bespoke-mic]'),
+      dropEl: panel,
       historyEl: host.querySelector('[data-bespoke-history-panel]'),
       historyListEl: host.querySelector('[data-bespoke-history-list]'),
       historyOpen: false,
@@ -2345,6 +2706,7 @@
 
   function destroy() {
     stopDictation(widget);
+    closeFileLightbox();
     document.removeEventListener('keydown', onKey, true);
     document.removeEventListener('keydown', trap, true);
     if (host && host.parentNode) host.parentNode.removeChild(host);
