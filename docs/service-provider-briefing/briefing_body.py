@@ -24,7 +24,7 @@ def write_briefing(doc, h):
     add_callout(
         doc,
         "NOTE",
-        "Security is never finished. The controls below are in place today. Independent penetration testing is planned and has not yet been completed. We do not hold ISO 27001 or SOC 2 at this time. We say that plainly so you can judge the platform on facts, not on marketing.",
+        "The controls below are in place today. We have already done security testing on the portal — including checks for injection, unsafe uploads, and access between accounts. That work is not finished. A full independent penetration test is still under way. We do not hold ISO 27001 or SOC 2 at this time. We say that plainly so you can judge the platform on facts, not on marketing.",
     )
 
     add_title(doc, "Authenticity and the two domains")
@@ -187,7 +187,7 @@ def write_briefing(doc, h):
     add_callout(
         doc,
         "HONESTY",
-        "We have strong controls, and we are still deepening them. No serious platform is 'finished' with security. Independent testing is on the plan. Until that report exists, treat this briefing as a description of what is built, not as a certificate.",
+        "We have already tested the portal against common attacks. A full independent penetration test is not complete yet. We do not hold ISO 27001 or SOC 2. We will share the outcome when that work is done.",
     )
 
     add_title(doc, "What may be uploaded")
@@ -333,7 +333,7 @@ def write_briefing(doc, h):
             ],
             [
                 "Independent testing (penetration test, vulnerability scan) or ISO 27001 / SOC 2?",
-                "Independent testing is planned and has not been completed. We do not currently hold ISO 27001 or SOC 2. We will share the outcome of testing when it is done.",
+                "We have done security testing on the platform, including injection, unsafe uploads, and access between accounts. A full independent penetration test is not complete yet. We do not currently hold ISO 27001 or SOC 2. We will share the outcome when that work is finished.",
             ],
             [
                 "Backup and disaster recovery?",
