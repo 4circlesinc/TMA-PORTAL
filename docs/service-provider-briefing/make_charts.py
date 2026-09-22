@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Figures for the service-provider briefing (Word + slides)."""
+"""Figures for the service-provider briefing (Word + slides). Portal palette."""
 
 from __future__ import annotations
 
@@ -12,12 +12,15 @@ ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "assets"
 OUT.mkdir(parents=True, exist_ok=True)
 
-NAVY = "#0E2841"
-INK = "#1A1A1A"
+PRIMARY = "#03A5E9"
+PRIMARY_DARK = "#136DA0"
+TINT = "#E6F6FD"
+TINT2 = "#E7F0F6"
+INK = "#000000"
 GREY = "#F2F2F2"
-MUTED = "#5A6570"
-GOLD = "#C4A35A"
+MUTED = "#666666"
 WHITE = "#FFFFFF"
+SOFT = "#7DBBFF"
 
 
 def _save(fig, name: str):
@@ -34,6 +37,7 @@ def layers():
     ax.axis("off")
     fig.patch.set_facecolor(WHITE)
 
+    fills = [PRIMARY_DARK, PRIMARY, "#3AAFDC", "#5BBDE5", SOFT, PRIMARY_DARK]
     items = [
         (5.0, 5.35, 4.55, "People: invitation + TM ANTOINE approval"),
         (5.0, 4.35, 4.35, "Sign-in: email code, trusted device, authenticator"),
@@ -42,37 +46,34 @@ def layers():
         (5.0, 1.35, 3.75, "Files: type check, size cap, malware scan"),
         (5.0, 0.35, 3.55, "Copies: portal store, SharePoint, daily backup"),
     ]
-    for y, (x, yy, w, label) in enumerate(items):
-        shade = 0.12 + y * 0.06
-        color = plt.cm.Blues(0.85 - shade)
+    for i, ((x, yy, w, label), fill) in enumerate(zip(items, fills)):
         box = FancyBboxPatch(
             (x - w, yy),
             w * 2,
             0.78,
-            boxstyle="round,pad=0.02,rounding_size=0.12",
-            facecolor=NAVY if y in (0, 5) else color,
+            boxstyle="round,pad=0.02,rounding_size=0.08",
+            facecolor=fill,
             edgecolor="none",
         )
         ax.add_patch(box)
-        tc = WHITE if y in (0, 5) else NAVY
-        ax.text(x, yy + 0.39, label, ha="center", va="center", color=tc, fontsize=10, fontweight="medium")
+        tc = WHITE if fill in (PRIMARY_DARK, PRIMARY) else INK
+        ax.text(x, yy + 0.39, label, ha="center", va="center", color=tc, fontsize=10)
 
-    ax.set_title("Six layers between a visitor and a client file", loc="left", color=NAVY, fontsize=13, pad=8)
+    ax.set_title("Six layers between a visitor and a client file", loc="left", color=INK, fontsize=13, pad=8)
     _save(fig, "chart-layers.png")
 
 
 def backup_pie():
     fig, ax = plt.subplots(figsize=(6.4, 4.6))
     fig.patch.set_facecolor(WHITE)
-    sizes = [1, 1, 1]
     labels = [
         "Working files\n(portal + R2)",
         "Microsoft 365\nSharePoint mirror",
         "Daily host\nbackup",
     ]
-    colors = [NAVY, GOLD, "#4A6B82"]
-    wedges, texts, autotexts = ax.pie(
-        sizes,
+    colors = [PRIMARY_DARK, PRIMARY, SOFT]
+    ax.pie(
+        [1, 1, 1],
         labels=labels,
         colors=colors,
         startangle=90,
@@ -80,8 +81,8 @@ def backup_pie():
         autopct="",
         textprops={"color": INK, "fontsize": 10},
     )
-    ax.text(0, 0, "Three\ncopies", ha="center", va="center", color=NAVY, fontsize=13, fontweight="bold")
-    ax.set_title("If the portal is unavailable, files are not in one place", color=NAVY, fontsize=12, pad=12)
+    ax.text(0, 0, "Three\ncopies", ha="center", va="center", color=PRIMARY_DARK, fontsize=13, fontweight="bold")
+    ax.set_title("If the portal is unavailable, files are not in one place", color=INK, fontsize=12, pad=12)
     _save(fig, "chart-backup.png")
 
 
@@ -104,16 +105,16 @@ def access_cards():
             (x, 0.35),
             2.25,
             3.5,
-            boxstyle="round,pad=0.04,rounding_size=0.1",
+            boxstyle="round,pad=0.04,rounding_size=0.06",
             facecolor=GREY if i % 2 == 0 else WHITE,
-            edgecolor="#D5D8DC",
-            linewidth=1,
+            edgecolor="#D0D0D0",
+            linewidth=0.8,
         )
         ax.add_patch(box)
-        ax.text(x + 0.18, 3.35, num, color=GOLD, fontsize=12, fontweight="bold")
-        ax.text(x + 0.18, 2.35, title, color=NAVY, fontsize=11, fontweight="bold", va="top")
+        ax.text(x + 0.18, 3.35, num, color=PRIMARY, fontsize=12, fontweight="bold")
+        ax.text(x + 0.18, 2.35, title, color=INK, fontsize=11, fontweight="bold", va="top")
         ax.text(x + 0.18, 1.15, blurb, color=MUTED, fontsize=9, va="top")
-    ax.set_title("Four kinds of portal access", loc="left", color=NAVY, fontsize=13)
+    ax.set_title("Four kinds of portal access", loc="left", color=INK, fontsize=13)
     _save(fig, "chart-access.png")
 
 
@@ -131,7 +132,7 @@ def account_flow():
         (10.3, "Account\ncan sign in"),
     ]
     for i, (x, label) in enumerate(steps):
-        c = Circle((x, 1.7), 0.55, facecolor=NAVY, edgecolor="none")
+        c = Circle((x, 1.7), 0.55, facecolor=PRIMARY_DARK, edgecolor="none")
         ax.add_patch(c)
         ax.text(x, 1.7, str(i + 1), ha="center", va="center", color=WHITE, fontsize=14, fontweight="bold")
         ax.text(x, 0.55, label, ha="center", va="top", color=INK, fontsize=10)
@@ -140,9 +141,9 @@ def account_flow():
                 "",
                 xy=(steps[i + 1][0] - 0.7, 1.7),
                 xytext=(x + 0.7, 1.7),
-                arrowprops=dict(arrowstyle="-|>", color=GOLD, lw=2),
+                arrowprops=dict(arrowstyle="-|>", color=PRIMARY, lw=2),
             )
-    ax.set_title("Nobody reaches the portal until TM ANTOINE approves the account", loc="left", color=NAVY, fontsize=12)
+    ax.set_title("Nobody reaches the portal until TM ANTOINE approves the account", loc="left", color=INK, fontsize=12)
     _save(fig, "chart-account-flow.png")
 
 
@@ -154,13 +155,20 @@ def encryption():
     fig.patch.set_facecolor(WHITE)
 
     rows = [
-        (NAVY, "On the way", "TLS (https). The journey is sealed. A network sniffer cannot read the pages or files."),
-        (GOLD, "At rest", "Files in the vault are stored in ciphertext. Opening them needs the portal's key."),
-        ("#4A6B82", "In the app", "API keys and secrets live only on the server. The assistant cannot see them."),
+        (PRIMARY_DARK, "On the way", "TLS (https). The journey is sealed. A network sniffer cannot read the pages or files."),
+        (PRIMARY, "At rest", "Files in the vault are stored in ciphertext. Opening them needs the portal's key."),
+        ("#0B8EC4", "In the app", "API keys and secrets live only on the server. The assistant cannot see them."),
     ]
     for i, (color, title, text) in enumerate(rows):
         y = 2.7 - i * 1.15
-        box = FancyBboxPatch((0.2, y), 9.6, 1.0, boxstyle="round,pad=0.03,rounding_size=0.08", facecolor=color, edgecolor="none")
+        box = FancyBboxPatch(
+            (0.2, y),
+            9.6,
+            1.0,
+            boxstyle="round,pad=0.03,rounding_size=0.06",
+            facecolor=color,
+            edgecolor="none",
+        )
         ax.add_patch(box)
         ax.text(0.5, y + 0.62, title, color=WHITE, fontsize=12, fontweight="bold")
         ax.text(0.5, y + 0.28, text, color=WHITE, fontsize=9)

@@ -9,16 +9,13 @@ const ROOT = __dirname;
 const ASSETS = path.join(ROOT, "assets");
 const OUT = path.join(ROOT, "..", "TM-ANTOINE-Service-Provider-Webinar.pptx");
 
-const NAVY = "0E2841";
-const GOLD = "C4A35A";
+const PRIMARY = "03A5E9";
+const PRIMARY_DARK = "136DA0";
 const WHITE = "FFFFFF";
-const INK = "1A1A1A";
-const MUTED = "5A6570";
-const CARD = "F4F6F8";
-const FOG = "D5D8DC";
-
-const FONT = "Calibri";
-const TITLE_FONT = "Cambria";
+const INK = "000000";
+const GREY = "F2F2F2";
+const MUTED = "666666";
+const FONT = "Arial";
 
 function img(name) {
   return path.join(ASSETS, name);
@@ -31,10 +28,131 @@ pres.author = "TM ANTOINE Partners & Advisors";
 pres.title = "Service Provider Portal Briefing";
 pres.subject = "Security, access, and support for the TM ANTOINE Advisory Portal";
 
-function footer(slide, page, total) {
-  slide.addText("TM ANTOINE Advisory Portal  ·  Confidential  ·  22 September 2026", {
+const TOTAL = 16;
+const hdr = {
+  fill: { color: GREY },
+  color: INK,
+  bold: true,
+  fontFace: FONT,
+  fontSize: 13,
+  valign: "middle",
+  margin: [6, 8, 6, 8],
+};
+const odd = {
+  fill: { color: WHITE },
+  color: INK,
+  fontFace: FONT,
+  fontSize: 13,
+  valign: "middle",
+  margin: [6, 8, 6, 8],
+};
+const even = {
+  fill: { color: GREY },
+  color: INK,
+  fontFace: FONT,
+  fontSize: 13,
+  valign: "middle",
+  margin: [6, 8, 6, 8],
+};
+const labelCell = {
+  ...odd,
+  bold: true,
+};
+const tableOpts = {
+  fontFace: FONT,
+  color: INK,
+  border: [
+    { pt: 0, color: WHITE },
+    { pt: 0, color: WHITE },
+    { pt: 0.5, color: INK },
+    { pt: 0, color: WHITE },
+  ],
+  valign: "middle",
+};
+
+function page() {
+  const s = pres.addSlide();
+  s.addShape(pres.shapes.RECTANGLE, {
+    x: 0,
+    y: 0,
+    w: 13.333,
+    h: 7.5,
+    fill: { color: WHITE },
+    line: { color: WHITE },
+  });
+  s.addText("TM ANTOINE Advisory Portal", {
     x: 0.55,
-    y: 7.12,
+    y: 0.22,
+    w: 7.2,
+    h: 0.24,
+    fontFace: FONT,
+    fontSize: 11,
+    color: PRIMARY_DARK,
+    margin: 0,
+    isTextBox: true,
+  });
+  s.addText("Service Provider Portal Briefing  ·  Confidential", {
+    x: 7.5,
+    y: 0.22,
+    w: 5.3,
+    h: 0.24,
+    fontFace: FONT,
+    fontSize: 11,
+    color: MUTED,
+    align: "right",
+    margin: 0,
+    isTextBox: true,
+  });
+  return s;
+}
+
+function heading(s, text) {
+  s.addText(text, {
+    x: 0.55,
+    y: 0.52,
+    w: 12.2,
+    h: 0.46,
+    fontFace: FONT,
+    fontSize: 24,
+    color: INK,
+    margin: 0,
+    isTextBox: true,
+  });
+}
+
+function body(s, text, y, h) {
+  s.addText(text, {
+    x: 0.55,
+    y,
+    w: 12.2,
+    h: h || 0.7,
+    fontFace: FONT,
+    fontSize: 15,
+    color: INK,
+    margin: 0,
+    isTextBox: true,
+  });
+}
+
+function caption(s, text, y) {
+  s.addText(text, {
+    x: 0.55,
+    y,
+    w: 12.2,
+    h: 0.28,
+    fontFace: FONT,
+    fontSize: 12,
+    italic: true,
+    color: PRIMARY_DARK,
+    margin: 0,
+    isTextBox: true,
+  });
+}
+
+function footer(s, n) {
+  s.addText("Confidential — intended recipients only  ·  22 September 2026  ·  Version 1.0", {
+    x: 0.55,
+    y: 7.14,
     w: 10.2,
     h: 0.22,
     fontFace: FONT,
@@ -43,10 +161,10 @@ function footer(slide, page, total) {
     margin: 0,
     isTextBox: true,
   });
-  slide.addText(String(page) + "  /  " + String(total), {
-    x: 11.5,
-    y: 7.12,
-    w: 1.3,
+  s.addText(String(n) + "  /  " + String(TOTAL), {
+    x: 11.4,
+    y: 7.14,
+    w: 1.4,
     h: 0.22,
     fontFace: FONT,
     fontSize: 10,
@@ -57,1119 +175,452 @@ function footer(slide, page, total) {
   });
 }
 
-function lightSlide() {
-  const s = pres.addSlide();
-  s.addShape(pres.shapes.RECTANGLE, {
-    x: 0,
-    y: 0,
-    w: 13.333,
-    h: 7.5,
-    fill: { color: WHITE },
-    line: { color: WHITE },
-  });
-  return s;
-}
-
-function darkSlide() {
-  const s = pres.addSlide();
-  s.addShape(pres.shapes.RECTANGLE, {
-    x: 0,
-    y: 0,
-    w: 13.333,
-    h: 7.5,
-    fill: { color: NAVY },
-    line: { color: NAVY },
-  });
-  return s;
-}
-
-const TOTAL = 16;
-
-// 1 Title
-{
-  const s = darkSlide();
-  s.addText("SERVICE PROVIDER BRIEFING", {
-    x: 0.7,
-    y: 1.55,
-    w: 12,
-    h: 0.35,
-    fontFace: FONT,
-    fontSize: 14,
-    color: GOLD,
-    charSpacing: 3,
-    margin: 0,
-    isTextBox: true,
-  });
-  s.addText("How we protect the portal\nyou will work in", {
-    x: 0.7,
-    y: 2.05,
-    w: 11.5,
-    h: 2.1,
-    fontFace: TITLE_FONT,
-    fontSize: 40,
-    color: WHITE,
-    margin: 0,
-    isTextBox: true,
-  });
-  s.addText(
-    "TM ANTOINE Advisory Portal   ·   Built in-house   ·   portal.tmantoinelaw.com",
+function callout(s, kind, text, y) {
+  s.addTable(
+    [
+      [
+        { text: kind, options: { ...labelCell, fill: { color: GREY } } },
+        { text: text, options: { ...odd, fill: { color: GREY } } },
+      ],
+    ],
     {
-      x: 0.7,
-      y: 4.5,
-      w: 11.5,
-      h: 0.4,
-      fontFace: FONT,
-      fontSize: 16,
-      color: "C9D3DC",
-      margin: 0,
-      isTextBox: true,
+      ...tableOpts,
+      x: 0.55,
+      y,
+      w: 12.2,
+      colW: [1.8, 10.4],
+      border: [
+        { pt: 0.5, color: INK },
+        { pt: 0, color: WHITE },
+        { pt: 0.5, color: INK },
+        { pt: 0, color: WHITE },
+      ],
     }
   );
-  s.addText("Webinar handout  ·  22 September 2026  ·  Version 1.0", {
-    x: 0.7,
-    y: 6.55,
-    w: 11.5,
-    h: 0.3,
-    fontFace: FONT,
-    fontSize: 14,
-    color: GOLD,
-    margin: 0,
-    isTextBox: true,
+}
+
+function dataTable(s, headers, rows, y, colW, x) {
+  const head = headers.map((h) => ({ text: h, options: hdr }));
+  const bodyRows = rows.map((row, i) =>
+    row.map((cell, c) => ({
+      text: cell,
+      options: {
+        ...(i % 2 === 1 ? even : odd),
+        bold: c === 0,
+      },
+    }))
+  );
+  s.addTable([head, ...bodyRows], {
+    ...tableOpts,
+    x: x == null ? 0.55 : x,
+    y,
+    w: colW.reduce((a, b) => a + b, 0),
+    colW,
   });
 }
 
-// 2 Agenda
 {
-  const s = lightSlide();
-  s.addText("What we will cover", {
-    x: 0.55,
-    y: 0.4,
-    w: 12,
-    h: 0.55,
-    fontFace: TITLE_FONT,
-    fontSize: 32,
-    color: NAVY,
-    margin: 0,
-    isTextBox: true,
-  });
-  const items = [
-    ["01", "Who we are on the internet", "The live domain, the staging mailbox, built in-house."],
-    ["02", "Who may enter", "Four access types. Invitation is not enough."],
-    ["03", "How we lock the door", "Codes today. Authenticator after this session."],
-    ["04", "Files, copies, encryption", "PDF and images. Three copies. Plain-English encryption."],
-    ["05", "Help when it breaks", "Bespoke AI, Messages, support@tmantoinelaw.com."],
-    ["06", "Answers for your file", "The questions compliance teams have already sent."],
-  ];
-  items.forEach((row, i) => {
-    const col = i % 2;
-    const r = Math.floor(i / 2);
-    const x = 0.55 + col * 6.35;
-    const y = 1.2 + r * 1.75;
-    s.addShape(pres.shapes.ROUNDED_RECTANGLE, {
-      x,
-      y,
-      w: 6.05,
-      h: 1.55,
-      fill: { color: CARD },
-      rectRadius: 0.08,
-    });
-    s.addText(row[0], {
-      x: x + 0.25,
-      y: y + 0.22,
-      w: 1.1,
-      h: 0.4,
-      fontFace: FONT,
-      fontSize: 18,
-      color: GOLD,
-      bold: true,
-      margin: 0,
-      isTextBox: true,
-    });
-    s.addText(row[1], {
-      x: x + 1.4,
-      y: y + 0.22,
-      w: 4.35,
-      h: 0.4,
-      fontFace: FONT,
-      fontSize: 18,
-      color: NAVY,
-      bold: true,
-      margin: 0,
-      isTextBox: true,
-    });
-    s.addText(row[2], {
-      x: x + 1.4,
-      y: y + 0.72,
-      w: 4.35,
-      h: 0.55,
-      fontFace: FONT,
-      fontSize: 14,
-      color: MUTED,
-      margin: 0,
-      isTextBox: true,
-    });
-  });
-  footer(s, 2, TOTAL);
+  const s = page();
+  heading(s, "Document Control");
+  body(
+    s,
+    "This briefing explains how the TM ANTOINE Advisory Portal is built, who may use it, and how we protect service-provider firms and their clients.",
+    1.08,
+    0.65
+  );
+  dataTable(
+    s,
+    ["Item", "Detail"],
+    [
+      ["Document title", "Service Provider Portal Briefing"],
+      ["Subtitle", "Security, access, and answers for firms using the portal"],
+      ["Product", "TM ANTOINE Advisory Portal"],
+      ["Host", "https://portal.tmantoinelaw.com"],
+      ["Support", "support@tmantoinelaw.com"],
+      ["Version / date", "1.0  ·  22 September 2026"],
+      ["Prepared for", "Service-provider firms"],
+      ["Classification", "Confidential — intended recipients only"],
+    ],
+    1.8,
+    [3.2, 9.0]
+  );
+  footer(s, 1);
 }
 
-// 3 Authenticity
 {
-  const s = lightSlide();
-  s.addText("This is the real portal", {
-    x: 0.55,
-    y: 0.4,
-    w: 12,
-    h: 0.5,
-    fontFace: TITLE_FONT,
-    fontSize: 32,
-    color: NAVY,
-    margin: 0,
-    isTextBox: true,
-  });
-  s.addText("One firm. Two addresses that used to confuse people. Live work is only on tmantoinelaw.com.", {
-    x: 0.55,
-    y: 1.0,
-    w: 12.2,
-    h: 0.4,
-    fontFace: FONT,
-    fontSize: 16,
-    color: MUTED,
-    margin: 0,
-    isTextBox: true,
-  });
-  const boxes = [
-    ["Use these", NAVY, WHITE, GOLD, [
-      "portal.tmantoinelaw.com",
-      "portal@tmantoinelaw.com",
-      "support@tmantoinelaw.com",
-    ]],
-    ["Staging — do not use", CARD, NAVY, MUTED, [
-      "support@tmantoine.com",
-      "was the staging mailbox",
-      "not the live contact",
-    ]],
-  ];
-  boxes.forEach((b, i) => {
-    const x = 0.55 + i * 6.35;
-    s.addShape(pres.shapes.ROUNDED_RECTANGLE, {
-      x,
-      y: 1.6,
-      w: 6.05,
-      h: 3.55,
-      fill: { color: b[1] },
-      rectRadius: 0.08,
-    });
-    s.addText(b[0], {
-      x: x + 0.35,
-      y: 1.85,
-      w: 5.35,
-      h: 0.4,
-      fontFace: FONT,
-      fontSize: 14,
-      color: b[3],
-      charSpacing: 1,
-      margin: 0,
-      isTextBox: true,
-    });
-    s.addText(b[4].map((line) => ({ text: line, options: { breakLine: true } })), {
-      x: x + 0.35,
-      y: 2.45,
-      w: 5.35,
-      h: 2.3,
-      fontFace: FONT,
-      fontSize: 22,
-      color: b[2],
-      paraSpaceAfter: 10,
-      margin: 0,
-      isTextBox: true,
-    });
-  });
-  s.addText("Built in-house. Not a white-label product. There is no underlying portal vendor to name.", {
-    x: 0.55,
-    y: 5.4,
-    w: 12.2,
-    h: 0.45,
-    fontFace: FONT,
-    fontSize: 16,
-    color: INK,
-    margin: 0,
-    isTextBox: true,
-  });
-  s.addText("If the address bar is not portal.tmantoinelaw.com, stop. Write to support before you type a code.", {
-    x: 0.55,
-    y: 5.95,
-    w: 12.2,
-    h: 0.4,
-    fontFace: FONT,
-    fontSize: 15,
-    italic: true,
-    color: NAVY,
-    margin: 0,
-    isTextBox: true,
-  });
-  footer(s, 3, TOTAL);
+  const s = page();
+  heading(s, "Contents");
+  dataTable(
+    s,
+    ["#", "Section"],
+    [
+      ["1", "Authenticity and the two domains"],
+      ["2", "Who can enter the portal"],
+      ["3", "How a person at your firm gets an account"],
+      ["4", "Sign-in today, authenticator after this webinar"],
+      ["5", "Where the portal may be used"],
+      ["6", "How we protect the connection and the files"],
+      ["7", "What may be uploaded"],
+      ["8", "Where things live, and how they come back"],
+      ["9", "Bespoke AI"],
+      ["10", "If something goes wrong"],
+      ["11", "Questions already asked — security and data"],
+      ["12", "What we ask of you after the webinar"],
+    ],
+    1.12,
+    [1.2, 11.0]
+  );
+  footer(s, 2);
 }
 
-// 4 Access types
 {
-  const s = lightSlide();
-  s.addText("Four kinds of access", {
-    x: 0.55,
-    y: 0.35,
-    w: 12,
-    h: 0.5,
-    fontFace: TITLE_FONT,
-    fontSize: 32,
-    color: NAVY,
-    margin: 0,
-    isTextBox: true,
-  });
+  const s = page();
+  heading(s, "Authenticity and the two domains");
+  body(
+    s,
+    "One firm. Two addresses that used to confuse people. Live work is only on tmantoinelaw.com. The portal is built in-house. There is no white-label vendor to name.",
+    1.08,
+    0.7
+  );
+  dataTable(
+    s,
+    ["You may see", "What it is"],
+    [
+      ["portal.tmantoinelaw.com", "The live portal. Bookmark this."],
+      ["portal@tmantoinelaw.com", "The correct mailbox for portal mail from TM ANTOINE."],
+      ["support@tmantoinelaw.com", "Support. Shared with TM ANTOINE administrators."],
+      ["support@tmantoine.com", "Used for staging. Do not treat it as the live contact."],
+    ],
+    1.9,
+    [4.0, 8.2]
+  );
+  callout(
+    s,
+    "NOTE",
+    "If the address bar is not portal.tmantoinelaw.com, stop. Write to support before you type a password or a code.",
+    5.5
+  );
+  footer(s, 3);
+}
+
+{
+  const s = page();
+  heading(s, "Who can enter the portal");
+  body(
+    s,
+    "Four kinds of access. Service-provider people only ever hold the first two. The last two belong to TM ANTOINE.",
+    1.05,
+    0.5
+  );
   if (fs.existsSync(img("chart-access.png"))) {
-    s.addImage({ path: img("chart-access.png"), x: 0.45, y: 0.95, w: 8.3, h: 3.4 });
+    s.addImage({ path: img("chart-access.png"), x: 0.55, y: 1.55, w: 12.2, h: 4.85 });
   }
-  s.addShape(pres.shapes.ROUNDED_RECTANGLE, {
-    x: 8.9,
-    y: 1.15,
-    w: 3.9,
-    h: 3.2,
-    fill: { color: NAVY },
-    rectRadius: 0.08,
-  });
-  s.addText("Your firm uses two", {
-    x: 9.15,
-    y: 1.4,
-    w: 3.4,
-    h: 0.4,
-    fontFace: FONT,
-    fontSize: 14,
-    color: GOLD,
-    margin: 0,
-    isTextBox: true,
-  });
-  s.addText("Service provider — works every CIP file for the company, not only ones they created.\n\nService provider admin — invites and removes people at your firm. TM ANTOINE still approves each new account.", {
-    x: 9.15,
-    y: 1.9,
-    w: 3.4,
-    h: 2.2,
-    fontFace: FONT,
-    fontSize: 14,
-    color: WHITE,
-    margin: 0,
-    isTextBox: true,
-  });
-  s.addText("CRO / reviewing officer and Administrator belong to TM ANTOINE. No service-provider person is a portal administrator.", {
-    x: 0.55,
-    y: 4.7,
-    w: 12.2,
-    h: 0.7,
-    fontFace: FONT,
-    fontSize: 16,
-    color: INK,
-    margin: 0,
-    isTextBox: true,
-  });
+  caption(s, "Figure 1. The four account types. Your firm uses Service provider and Service provider admin.", 6.5);
+  footer(s, 4);
+}
+
+{
+  const s = page();
+  heading(s, "How a person at your firm gets an account");
   if (fs.existsSync(img("chart-account-flow.png"))) {
-    s.addImage({ path: img("chart-account-flow.png"), x: 0.45, y: 5.35, w: 12.4, h: 1.55 });
+    s.addImage({ path: img("chart-account-flow.png"), x: 0.45, y: 1.0, w: 12.4, h: 2.5 });
   }
-  footer(s, 4, TOTAL);
+  dataTable(
+    s,
+    ["Access", "In two sentences"],
+    [
+      [
+        "Service provider",
+        "A named person at your firm. They can open every CIP application that belongs to your company, not only the ones they created.",
+      ],
+      [
+        "Service provider admin",
+        "Invites and removes people at your firm. Cannot register a new firm or promote someone else to this role.",
+      ],
+      [
+        "CRO / reviewing officer",
+        "A TM ANTOINE officer who reviews files. They are not a member of your firm.",
+      ],
+      [
+        "Administrator",
+        "A TM ANTOINE administrator. Approves new accounts. No service-provider person holds this role.",
+      ],
+    ],
+    3.6,
+    [3.2, 9.0]
+  );
+  footer(s, 5);
 }
 
-// 5 Sign-in
 {
-  const s = lightSlide();
-  s.addText("Sign-in today  ·  authenticator after this session", {
-    x: 0.55,
-    y: 0.35,
-    w: 12.2,
-    h: 0.5,
-    fontFace: TITLE_FONT,
-    fontSize: 28,
-    color: NAVY,
-    margin: 0,
-    isTextBox: true,
-  });
-  s.addShape(pres.shapes.ROUNDED_RECTANGLE, {
-    x: 0.55,
-    y: 1.05,
-    w: 6.05,
-    h: 5.55,
-    fill: { color: CARD },
-    rectRadius: 0.08,
-  });
-  s.addText("NOW", {
-    x: 0.85,
-    y: 1.25,
-    w: 5.45,
-    h: 0.3,
-    fontFace: FONT,
-    fontSize: 13,
-    color: GOLD,
-    bold: true,
-    margin: 0,
-    isTextBox: true,
-  });
-  s.addText("A dual check", {
-    x: 0.85,
-    y: 1.6,
-    w: 5.45,
-    h: 0.4,
-    fontFace: FONT,
-    fontSize: 22,
-    color: NAVY,
-    bold: true,
-    margin: 0,
-    isTextBox: true,
-  });
-  s.addText("First sign-in from a known setup uses email. If the device changes, a six-digit code is sent only to the address already on the account. Nobody can redirect that code.", {
-    x: 0.85,
-    y: 2.15,
-    w: 5.45,
-    h: 1.5,
-    fontFace: FONT,
-    fontSize: 16,
-    color: INK,
-    margin: 0,
-    isTextBox: true,
-  });
+  const s = page();
+  heading(s, "How sign-in works today, and what changes");
+  body(
+    s,
+    "Today: a dual check. First sign-in from a known setup uses email. If the device changes, a six-digit code is sent only to the address already on the account.",
+    1.05,
+    0.65
+  );
   if (fs.existsSync(img("03-login-code.png"))) {
-    s.addImage({ path: img("03-login-code.png"), x: 1.15, y: 3.7, w: 4.85, h: 2.55 });
+    s.addImage({ path: img("03-login-code.png"), x: 0.55, y: 1.75, w: 5.6, h: 3.15 });
   }
-  s.addShape(pres.shapes.ROUNDED_RECTANGLE, {
-    x: 6.85,
-    y: 1.05,
-    w: 5.95,
-    h: 5.55,
-    fill: { color: NAVY },
-    rectRadius: 0.08,
-  });
-  s.addText("AFTER THIS WEBINAR", {
-    x: 7.15,
-    y: 1.25,
-    w: 5.35,
-    h: 0.3,
-    fontFace: FONT,
-    fontSize: 13,
-    color: GOLD,
-    bold: true,
-    margin: 0,
-    isTextBox: true,
-  });
-  s.addText("Authenticator required", {
-    x: 7.15,
-    y: 1.6,
-    w: 5.35,
-    h: 0.45,
-    fontFace: FONT,
-    fontSize: 22,
-    color: WHITE,
-    bold: true,
-    margin: 0,
-    isTextBox: true,
-  });
-  s.addText("Every service-provider account will connect an authenticator app. A new six-digit number every thirty seconds, on your phone. Password plus email is no longer enough.", {
-    x: 7.15,
-    y: 2.2,
-    w: 5.35,
-    h: 1.55,
-    fontFace: FONT,
-    fontSize: 16,
-    color: WHITE,
-    margin: 0,
-    isTextBox: true,
-  });
-  s.addText("Settings  →  Account Security  →  Authenticator app  →  scan the QR code. Keep recovery codes offline. Never send a code in chat.", {
-    x: 7.15,
-    y: 3.95,
-    w: 5.35,
-    h: 2.1,
-    fontFace: FONT,
-    fontSize: 16,
-    color: "C9D3DC",
-    margin: 0,
-    isTextBox: true,
-  });
-  footer(s, 5, TOTAL);
+  if (fs.existsSync(img("28-two-step.png"))) {
+    s.addImage({ path: img("28-two-step.png"), x: 6.5, y: 1.75, w: 6.25, h: 3.15 });
+  }
+  caption(s, "Figure 2. Email code today.   Figure 3. Settings → Account Security → Authenticator app.", 5.0);
+  callout(
+    s,
+    "SECURITY",
+    "After this webinar every service-provider account must connect an authenticator app. Password plus email will no longer be enough. Keep recovery codes offline. Never send a code in chat.",
+    5.45
+  );
+  footer(s, 6);
 }
 
-// 6 Geography
 {
-  const s = lightSlide();
-  s.addText("The portal is not open to the whole map", {
-    x: 0.55,
-    y: 0.4,
-    w: 12.2,
-    h: 0.55,
-    fontFace: TITLE_FONT,
-    fontSize: 30,
-    color: NAVY,
-    margin: 0,
-    isTextBox: true,
-  });
-  s.addText("We keep the countries where our service-provider clients operate. We refuse the rest, including North Korea, South Korea, and Russia. The country is read at the edge, before sign-in.", {
-    x: 0.55,
-    y: 1.1,
-    w: 12.2,
-    h: 0.85,
-    fontFace: FONT,
-    fontSize: 18,
-    color: INK,
-    margin: 0,
-    isTextBox: true,
-  });
-  const pills = [
-    ["Allowed", "Countries where our provider firms actually work"],
-    ["Refused", "North Korea, South Korea, Russia, and other non-client locations"],
-    ["VPN", "Anonymising proxies can be refused — turn them off if the page asks"],
-  ];
-  pills.forEach((p, i) => {
-    const y = 2.2 + i * 1.35;
-    s.addShape(pres.shapes.ROUNDED_RECTANGLE, {
-      x: 0.55,
-      y,
-      w: 12.2,
-      h: 1.18,
-      fill: { color: i === 1 ? NAVY : CARD },
-      rectRadius: 0.08,
-    });
-    s.addText(p[0], {
-      x: 0.85,
-      y: y + 0.35,
-      w: 2.2,
-      h: 0.45,
-      fontFace: FONT,
-      fontSize: 18,
-      bold: true,
-      color: i === 1 ? GOLD : NAVY,
-      margin: 0,
-      isTextBox: true,
-    });
-    s.addText(p[1], {
-      x: 3.3,
-      y: y + 0.35,
-      w: 9.1,
-      h: 0.5,
-      fontFace: FONT,
-      fontSize: 18,
-      color: i === 1 ? WHITE : INK,
-      margin: 0,
-      isTextBox: true,
-    });
-  });
-  footer(s, 6, TOTAL);
+  const s = page();
+  heading(s, "Where the portal may be used");
+  body(
+    s,
+    "Access is limited to countries where TM ANTOINE's service-provider clients actually operate. The country is read at the network edge, before a session is created.",
+    1.08,
+    0.7
+  );
+  dataTable(
+    s,
+    ["Rule", "What it means"],
+    [
+      ["Allowed", "Countries where our provider firms actually work."],
+      ["Refused", "North Korea, South Korea, Russia, and other non-client locations."],
+      ["VPN / proxy", "Anonymising connections can be refused. Turn a VPN off if the page asks."],
+    ],
+    1.9,
+    [3.2, 9.0]
+  );
+  callout(
+    s,
+    "NOTE",
+    "Geography is one control beside passwords, codes, and roles. It is not the whole of security.",
+    4.85
+  );
+  footer(s, 7);
 }
 
-// 7 Layers
 {
-  const s = lightSlide();
-  s.addText("Six layers, not one lock", {
-    x: 0.55,
-    y: 0.35,
-    w: 12,
-    h: 0.5,
-    fontFace: TITLE_FONT,
-    fontSize: 32,
-    color: NAVY,
-    margin: 0,
-    isTextBox: true,
-  });
+  const s = page();
+  heading(s, "How we protect the connection and the files");
   if (fs.existsSync(img("chart-layers.png"))) {
-    s.addImage({ path: img("chart-layers.png"), x: 0.4, y: 0.95, w: 12.5, h: 5.7 });
+    s.addImage({ path: img("chart-layers.png"), x: 0.7, y: 1.1, w: 11.9, h: 5.3 });
   }
-  footer(s, 7, TOTAL);
+  caption(s, "Figure 4. Six layers. None of them is enough on its own.", 6.5);
+  footer(s, 8);
 }
 
-// 8 Encryption
 {
-  const s = lightSlide();
-  s.addText("Encryption, in ordinary words", {
-    x: 0.55,
-    y: 0.35,
-    w: 12,
-    h: 0.5,
-    fontFace: TITLE_FONT,
-    fontSize: 32,
-    color: NAVY,
-    margin: 0,
-    isTextBox: true,
-  });
+  const s = page();
+  heading(s, "Encryption, in ordinary words");
   if (fs.existsSync(img("chart-encryption.png"))) {
-    s.addImage({ path: img("chart-encryption.png"), x: 0.45, y: 1.0, w: 12.4, h: 4.55 });
+    s.addImage({ path: img("chart-encryption.png"), x: 0.55, y: 1.15, w: 12.2, h: 4.3 });
   }
-  s.addText("Intercepting tools on the network can see that traffic exists. They cannot read it. API keys never leave the server. Bespoke AI cannot see them.", {
-    x: 0.55,
-    y: 5.7,
-    w: 12.2,
-    h: 0.7,
-    fontFace: FONT,
-    fontSize: 16,
-    color: INK,
-    margin: 0,
-    isTextBox: true,
-  });
-  footer(s, 8, TOTAL);
+  callout(
+    s,
+    "HONESTY",
+    "Independent testing is planned and has not been completed. We do not hold ISO 27001 or SOC 2. Treat this as a description of what is built, not as a certificate.",
+    5.6
+  );
+  footer(s, 9);
 }
 
-// 9 Uploads
 {
-  const s = lightSlide();
-  s.addText("What may be uploaded", {
-    x: 0.55,
-    y: 0.4,
-    w: 12,
-    h: 0.5,
-    fontFace: TITLE_FONT,
-    fontSize: 32,
-    color: NAVY,
-    margin: 0,
-    isTextBox: true,
-  });
-  const stats = [
-    ["PDF or image", "CIP files. The portal reads the bytes, not just the name."],
-    ["5–10 MB", "Public upload links. No room for a giant hidden payload."],
-    ["Malware scan", "A failed scan cannot be opened or downloaded."],
-  ];
-  stats.forEach((row, i) => {
-    const x = 0.55 + i * 4.2;
-    s.addShape(pres.shapes.ROUNDED_RECTANGLE, {
-      x,
-      y: 1.15,
-      w: 3.95,
-      h: 3.5,
-      fill: { color: i === 1 ? NAVY : CARD },
-      rectRadius: 0.08,
-    });
-    s.addText(row[0], {
-      x: x + 0.25,
-      y: 1.5,
-      w: 3.45,
-      h: 1.3,
-      fontFace: TITLE_FONT,
-      fontSize: 28,
-      color: i === 1 ? WHITE : NAVY,
-      margin: 0,
-      isTextBox: true,
-    });
-    s.addText(row[1], {
-      x: x + 0.25,
-      y: 3.0,
-      w: 3.45,
-      h: 1.3,
-      fontFace: FONT,
-      fontSize: 16,
-      color: i === 1 ? "C9D3DC" : MUTED,
-      margin: 0,
-      isTextBox: true,
-    });
-  });
-  s.addText("A renamed program posing as a PDF is refused. Do not zip software into an application folder.", {
-    x: 0.55,
-    y: 4.9,
-    w: 12.2,
-    h: 0.55,
-    fontFace: FONT,
-    fontSize: 16,
-    color: INK,
-    margin: 0,
-    isTextBox: true,
-  });
-  s.addText("We are still hardening this door. Size limits and type checks are in place. Independent testing is still to come.", {
-    x: 0.55,
-    y: 5.5,
-    w: 12.2,
-    h: 0.7,
-    fontFace: FONT,
-    fontSize: 16,
-    italic: true,
-    color: MUTED,
-    margin: 0,
-    isTextBox: true,
-  });
-  footer(s, 9, TOTAL);
+  const s = page();
+  heading(s, "What may be uploaded");
+  body(
+    s,
+    "CIP application uploads are PDF files or images. The portal reads the first bytes of the file. A renamed program posing as a PDF is refused.",
+    1.08,
+    0.7
+  );
+  dataTable(
+    s,
+    ["Rule", "What it means for you"],
+    [
+      ["PDF or image for CIP", "Do not zip executables into an application folder and hope the name looks harmless."],
+      ["5–10 MB on request links", "Split a very large scan rather than sending a 200 MB archive."],
+      ["Malware scan", "A file that fails the scan cannot be opened or downloaded."],
+    ],
+    1.9,
+    [3.6, 8.6]
+  );
+  callout(
+    s,
+    "NOTE",
+    "We are still hardening this door. Size limits and type checks are in place. Independent testing is still to come.",
+    5.1
+  );
+  footer(s, 10);
 }
 
-// 10 Hosting + backup
 {
-  const s = lightSlide();
-  s.addText("Where it lives  ·  how it comes back", {
-    x: 0.55,
-    y: 0.35,
-    w: 12.2,
-    h: 0.5,
-    fontFace: TITLE_FONT,
-    fontSize: 30,
-    color: NAVY,
-    margin: 0,
-    isTextBox: true,
-  });
-  s.addText("Application and database run together on Laravel Cloud (AWS, United States). Cloudflare in front. Documents in a private store, mirrored to Microsoft 365.", {
-    x: 0.55,
-    y: 0.95,
-    w: 12.2,
-    h: 0.7,
-    fontFace: FONT,
-    fontSize: 16,
-    color: INK,
-    margin: 0,
-    isTextBox: true,
-  });
+  const s = page();
+  heading(s, "Where things live, and how they come back");
+  body(
+    s,
+    "The application and its database run together on Laravel Cloud (AWS, United States). Cloudflare in front. Documents in a private store, mirrored to Microsoft 365.",
+    1.05,
+    0.65
+  );
   if (fs.existsSync(img("chart-backup.png"))) {
-    s.addImage({ path: img("chart-backup.png"), x: 0.3, y: 1.65, w: 6.6, h: 4.7 });
+    s.addImage({ path: img("chart-backup.png"), x: 0.2, y: 1.7, w: 5.7, h: 4.4 });
   }
-  const lines = [
-    ["Portal + R2", "The files you open while you work."],
-    ["SharePoint", "If the portal is down, the document set is still in Microsoft 365."],
-    ["Daily backup", "A once-a-day copy of the site with the host."],
-    ["Audit log", "Who did what, and when. Not editable by users."],
-  ];
-  lines.forEach((row, i) => {
-    const y = 1.75 + i * 1.15;
-    s.addShape(pres.shapes.ROUNDED_RECTANGLE, {
-      x: 7.1,
-      y,
-      w: 5.65,
-      h: 1.02,
-      fill: { color: CARD },
-      rectRadius: 0.08,
-    });
-    s.addText(row[0], {
-      x: 7.35,
-      y: y + 0.12,
-      w: 5.2,
-      h: 0.32,
-      fontFace: FONT,
-      fontSize: 16,
-      bold: true,
-      color: NAVY,
-      margin: 0,
-      isTextBox: true,
-    });
-    s.addText(row[1], {
-      x: 7.35,
-      y: y + 0.48,
-      w: 5.2,
-      h: 0.4,
-      fontFace: FONT,
-      fontSize: 14,
-      color: MUTED,
-      margin: 0,
-      isTextBox: true,
-    });
-  });
-  footer(s, 10, TOTAL);
+  dataTable(
+    s,
+    ["Copy", "What it is for"],
+    [
+      ["Portal store (R2)", "The files you open while you work. Encrypted at rest."],
+      ["Microsoft 365 / SharePoint", "If the portal is down, the document set is still in SharePoint."],
+      ["Daily host backup", "A once-a-day copy of the site, for disaster recovery of the application."],
+      ["Audit log", "Who did what, and when. Users cannot edit that record."],
+    ],
+    1.85,
+    [2.7, 4.15],
+    6.15
+  );
+  footer(s, 11);
 }
 
-// 11 Bespoke AI
 {
-  const s = lightSlide();
-  s.addText("Ask Bespoke AI first", {
-    x: 0.55,
-    y: 0.4,
-    w: 12,
-    h: 0.5,
-    fontFace: TITLE_FONT,
-    fontSize: 32,
-    color: NAVY,
-    margin: 0,
-    isTextBox: true,
-  });
-  s.addText("It knows this portal. Workflows, missing fields, who to write to. It does not know other firms' files. It does not know API keys.", {
-    x: 0.55,
-    y: 1.05,
-    w: 12.2,
-    h: 0.7,
-    fontFace: FONT,
-    fontSize: 18,
-    color: INK,
-    margin: 0,
-    isTextBox: true,
-  });
-  const asks = [
-    ["Workflow", "How does Pre-Approval move from one step to the next?"],
-    ["This file", "What is still missing on the application I have open?"],
-    ["People", "Who do I speak with if the portal errors?"],
-    ["Never", "Do not paste passwords or authenticator codes into the assistant."],
-  ];
-  asks.forEach((row, i) => {
-    const col = i % 2;
-    const r = Math.floor(i / 2);
-    const x = 0.55 + col * 6.35;
-    const y = 1.95 + r * 2.15;
-    s.addShape(pres.shapes.ROUNDED_RECTANGLE, {
-      x,
-      y,
-      w: 6.05,
-      h: 1.95,
-      fill: { color: i === 3 ? NAVY : CARD },
-      rectRadius: 0.08,
-    });
-    s.addText(row[0], {
-      x: x + 0.3,
-      y: y + 0.28,
-      w: 5.45,
-      h: 0.4,
-      fontFace: FONT,
-      fontSize: 16,
-      bold: true,
-      color: i === 3 ? GOLD : NAVY,
-      margin: 0,
-      isTextBox: true,
-    });
-    s.addText(row[1], {
-      x: x + 0.3,
-      y: y + 0.8,
-      w: 5.45,
-      h: 0.8,
-      fontFace: FONT,
-      fontSize: 18,
-      color: i === 3 ? WHITE : INK,
-      margin: 0,
-      isTextBox: true,
-    });
-  });
-  footer(s, 11, TOTAL);
+  const s = page();
+  heading(s, "Bespoke AI — use it");
+  body(
+    s,
+    "The portal includes a built-in assistant. It answers questions about this portal: how a workflow moves, which field is required, who to write to. It cannot see other firms' files. It cannot see API keys.",
+    1.08,
+    0.8
+  );
+  dataTable(
+    s,
+    ["Ask it", "Example"],
+    [
+      ["Workflow", "How does Pre-Approval move from one step to the next?"],
+      ["This file", "What is still missing on the application I have open?"],
+      ["People", "Who do I speak with if the portal errors?"],
+      ["Never", "Do not paste passwords or authenticator codes into the assistant."],
+    ],
+    2.0,
+    [2.6, 9.6]
+  );
+  callout(
+    s,
+    "TIP",
+    "If you are stuck, ask Bespoke AI before you wait on email. For a true outage, write to support@tmantoinelaw.com.",
+    5.5
+  );
+  footer(s, 12);
 }
 
-// 12 Support
 {
-  const s = lightSlide();
-  s.addText("If the portal is the problem", {
-    x: 0.55,
-    y: 0.35,
-    w: 12,
-    h: 0.5,
-    fontFace: TITLE_FONT,
-    fontSize: 32,
-    color: NAVY,
-    margin: 0,
-    isTextBox: true,
-  });
-  s.addShape(pres.shapes.ROUNDED_RECTANGLE, {
-    x: 0.55,
-    y: 1.05,
-    w: 12.2,
-    h: 1.55,
-    fill: { color: NAVY },
-    rectRadius: 0.08,
-  });
-  s.addText("support@tmantoinelaw.com", {
-    x: 0.85,
-    y: 1.25,
-    w: 11.6,
-    h: 0.55,
-    fontFace: TITLE_FONT,
-    fontSize: 32,
-    color: WHITE,
-    margin: 0,
-    isTextBox: true,
-  });
-  s.addText("Shared with TM ANTOINE administrators. Target reply: within an hour, pending availability. Primary contact: Vernon Francis.", {
-    x: 0.85,
-    y: 1.85,
-    w: 11.6,
-    h: 0.5,
-    fontFace: FONT,
-    fontSize: 16,
-    color: "C9D3DC",
-    margin: 0,
-    isTextBox: true,
-  });
-  const people = [
-    ["Vernon Francis", "Primary technical contact"],
-    ["Cindy McLean", "Administrator  ·  email or Messages"],
-    ["Emmanuel McLean", "Administrator  ·  email or Messages"],
-    ["Krishna Manru", "Administrator  ·  email or Messages"],
-  ];
-  people.forEach((p, i) => {
-    const x = 0.55 + (i % 4) * 3.15;
-    s.addShape(pres.shapes.ROUNDED_RECTANGLE, {
-      x,
-      y: 2.9,
-      w: 3.0,
-      h: 2.15,
-      fill: { color: CARD },
-      rectRadius: 0.08,
-    });
-    s.addText(p[0], {
-      x: x + 0.18,
-      y: 3.15,
-      w: 2.64,
-      h: 0.9,
-      fontFace: FONT,
-      fontSize: 18,
-      bold: true,
-      color: NAVY,
-      margin: 0,
-      isTextBox: true,
-    });
-    s.addText(p[1], {
-      x: x + 0.18,
-      y: 4.15,
-      w: 2.64,
-      h: 0.65,
-      fontFace: FONT,
-      fontSize: 13,
-      color: MUTED,
-      margin: 0,
-      isTextBox: true,
-    });
-  });
-  s.addText("Say the page, the account email, and the CIP number. Never send a sign-in or authenticator code.", {
-    x: 0.55,
-    y: 5.3,
-    w: 12.2,
-    h: 0.45,
-    fontFace: FONT,
-    fontSize: 16,
-    color: INK,
-    margin: 0,
-    isTextBox: true,
-  });
+  const s = page();
+  heading(s, "If something goes wrong");
+  body(
+    s,
+    "Write to support@tmantoinelaw.com. That mailbox is shared with TM ANTOINE administrators. Target response is within an hour, pending availability. Primary technical contact: Vernon Francis.",
+    1.05,
+    0.75
+  );
   if (fs.existsSync(img("11-messages.png"))) {
-    s.addText("Messages inside the portal is equally valid when you can still sign in.", {
-      x: 0.55,
-      y: 5.8,
-      w: 12.2,
-      h: 0.35,
-      fontFace: FONT,
-      fontSize: 15,
-      italic: true,
-      color: MUTED,
-      margin: 0,
-      isTextBox: true,
-    });
+    s.addImage({ path: img("11-messages.png"), x: 0.55, y: 1.85, w: 5.7, h: 3.35 });
   }
-  footer(s, 12, TOTAL);
+  dataTable(
+    s,
+    ["Person", "Role in support"],
+    [
+      ["Vernon Francis", "Primary technical contact for portal faults."],
+      ["Cindy McLean", "Administrator. Email or Messages."],
+      ["Emmanuel McLean", "Administrator. Email or Messages."],
+      ["Krishna Manru", "Administrator. Email or Messages."],
+    ],
+    1.85,
+    [2.5, 3.9],
+    6.5
+  );
+  caption(s, "Figure 5. Built-in Messages, when you can still sign in.", 5.35);
+  callout(
+    s,
+    "NOTE",
+    "Include the page, the account email, and the CIP number. Never include a sign-in code or an authenticator code.",
+    5.75
+  );
+  footer(s, 13);
 }
 
-// 13 FAQ security
 {
-  const s = lightSlide();
-  s.addText("On your compliance file  ·  security", {
-    x: 0.55,
-    y: 0.3,
-    w: 12.2,
-    h: 0.45,
-    fontFace: TITLE_FONT,
-    fontSize: 28,
-    color: NAVY,
-    margin: 0,
-    isTextBox: true,
-  });
-  const rows = [
-    ["Host", "Laravel Cloud on AWS, United States, plus Cloudflare."],
-    ["Encryption", "TLS in transit. Ciphertext at rest in the vault and R2."],
-    ["MFA", "Email code on a new device now. Authenticator required after this webinar."],
-    ["Company members", "See every application for the company, not only their own."],
-    ["Testing / ISO / SOC 2", "Independent testing planned, not yet complete. No ISO 27001 or SOC 2 today."],
-    ["Backup", "Portal store, SharePoint mirror, daily host backup."],
-    ["Audit", "Who did what, when, including document activity."],
-  ];
-  rows.forEach((row, i) => {
-    const y = 0.85 + i * 0.8;
-    s.addShape(pres.shapes.ROUNDED_RECTANGLE, {
-      x: 0.55,
-      y,
-      w: 12.2,
-      h: 0.72,
-      fill: { color: i % 2 === 0 ? CARD : WHITE },
-      rectRadius: 0.06,
-    });
-    s.addText(row[0], {
-      x: 0.75,
-      y: y + 0.18,
-      w: 3.1,
-      h: 0.38,
-      fontFace: FONT,
-      fontSize: 15,
-      bold: true,
-      color: NAVY,
-      margin: 0,
-      isTextBox: true,
-    });
-    s.addText(row[1], {
-      x: 4.0,
-      y: y + 0.18,
-      w: 8.5,
-      h: 0.4,
-      fontFace: FONT,
-      fontSize: 15,
-      color: INK,
-      margin: 0,
-      isTextBox: true,
-    });
-  });
-  footer(s, 13, TOTAL);
+  const s = page();
+  heading(s, "On your compliance file — security");
+  dataTable(
+    s,
+    ["Question", "Answer"],
+    [
+      ["Host", "Laravel Cloud on AWS, United States, plus Cloudflare."],
+      ["Encryption", "TLS in transit. Ciphertext at rest in the vault and R2."],
+      ["MFA", "Email code on a new device now. Authenticator required after this webinar."],
+      ["Company members", "See every application for the company, not only their own."],
+      ["Testing / ISO / SOC 2", "Independent testing planned, not yet complete. No ISO 27001 or SOC 2 today."],
+      ["Backup", "Portal store, SharePoint mirror, daily host backup."],
+      ["Audit", "Who did what, when, including document activity."],
+    ],
+    1.15,
+    [3.5, 8.7]
+  );
+  footer(s, 14);
 }
 
-// 14 FAQ data
 {
-  const s = lightSlide();
-  s.addText("On your compliance file  ·  data", {
-    x: 0.55,
-    y: 0.35,
-    w: 12.2,
-    h: 0.5,
-    fontFace: TITLE_FONT,
-    fontSize: 28,
-    color: NAVY,
-    margin: 0,
-    isTextBox: true,
-  });
-  const blocks = [
-    ["DPA", "Yes — pending review by our legal team. Your paper or ours."],
-    ["Transfers", "Only what CIU, NIC, and Immigration need. Same practice as before the portal. SCCs where legal review says they apply."],
-    ["Retention", "We keep the file unless the applicant asks us to delete it after the case is closed."],
-    ["Sub-processors", "AWS / Laravel Cloud (USA), Cloudflare including R2, Microsoft 365 / SharePoint."],
-    ["Breach", "Playbook being finalised. Confirmed personal-data incidents: notify affected firms without delay."],
-    ["Staff leaving", "Your admin removes them that day. TM ANTOINE is notified. We still approve every new account."],
-  ];
-  blocks.forEach((row, i) => {
-    const col = i % 2;
-    const r = Math.floor(i / 2);
-    const x = 0.55 + col * 6.35;
-    const y = 1.05 + r * 1.85;
-    s.addShape(pres.shapes.ROUNDED_RECTANGLE, {
-      x,
-      y,
-      w: 6.05,
-      h: 1.68,
-      fill: { color: CARD },
-      rectRadius: 0.08,
-    });
-    s.addText(row[0], {
-      x: x + 0.28,
-      y: y + 0.2,
-      w: 5.5,
-      h: 0.35,
-      fontFace: FONT,
-      fontSize: 16,
-      bold: true,
-      color: GOLD,
-      margin: 0,
-      isTextBox: true,
-    });
-    s.addText(row[1], {
-      x: x + 0.28,
-      y: y + 0.6,
-      w: 5.5,
-      h: 0.9,
-      fontFace: FONT,
-      fontSize: 15,
-      color: INK,
-      margin: 0,
-      isTextBox: true,
-    });
-  });
-  footer(s, 14, TOTAL);
+  const s = page();
+  heading(s, "On your compliance file — data and operations");
+  dataTable(
+    s,
+    ["Question", "Answer"],
+    [
+      ["DPA", "Yes — pending review by our legal team. Your paper or ours."],
+      [
+        "Transfers",
+        "Only what CIU, NIC, and Immigration need. Same practice as before the portal.",
+      ],
+      ["Retention", "We keep the file unless the applicant asks us to delete it after the case is closed."],
+      ["Sub-processors", "AWS / Laravel Cloud (USA), Cloudflare including R2, Microsoft 365 / SharePoint."],
+      ["Breach", "Playbook being finalised. Confirmed incidents: notify affected firms without delay."],
+      ["Staff leaving", "Your admin removes them that day. TM ANTOINE is notified, and still approves every new account."],
+    ],
+    1.15,
+    [3.2, 9.0]
+  );
+  footer(s, 15);
 }
 
-// 15 After the webinar
 {
-  const s = lightSlide();
-  s.addText("After this session", {
-    x: 0.55,
-    y: 0.4,
-    w: 12,
-    h: 0.5,
-    fontFace: TITLE_FONT,
-    fontSize: 32,
-    color: NAVY,
-    margin: 0,
-    isTextBox: true,
-  });
-  const steps = [
-    ["1", "Name your service-provider administrator if you have not."],
-    ["2", "Connect an authenticator app on every account you will use."],
-    ["3", "Bookmark portal.tmantoinelaw.com. Treat any other host as suspect."],
-    ["4", "Use Bespoke AI for how-the-screen-works questions."],
-    ["5", "Use support@tmantoinelaw.com or Messages for faults — never for codes."],
-    ["6", "File this briefing with your compliance papers."],
-  ];
-  steps.forEach((row, i) => {
-    const y = 1.1 + i * 0.88;
-    s.addShape(pres.shapes.OVAL, {
-      x: 0.55,
-      y: y + 0.08,
-      w: 0.55,
-      h: 0.55,
-      fill: { color: NAVY },
-    });
-    s.addText(row[0], {
-      x: 0.55,
-      y: y + 0.16,
-      w: 0.55,
-      h: 0.4,
-      fontFace: FONT,
-      fontSize: 16,
-      bold: true,
-      color: WHITE,
-      align: "center",
-      margin: 0,
-      isTextBox: true,
-    });
-    s.addText(row[1], {
-      x: 1.35,
-      y: y + 0.12,
-      w: 11.3,
-      h: 0.5,
-      fontFace: FONT,
-      fontSize: 20,
-      color: INK,
-      margin: 0,
-      isTextBox: true,
-    });
-  });
-  footer(s, 15, TOTAL);
-}
-
-// 16 Close
-{
-  const s = darkSlide();
-  s.addText("We would rather walk it through\nthan leave a gap on your file.", {
-    x: 0.7,
-    y: 1.7,
-    w: 12,
-    h: 1.8,
-    fontFace: TITLE_FONT,
-    fontSize: 32,
-    color: WHITE,
-    margin: 0,
-    isTextBox: true,
-  });
-  s.addText("support@tmantoinelaw.com", {
-    x: 0.7,
-    y: 3.8,
-    w: 12,
-    h: 0.55,
-    fontFace: FONT,
-    fontSize: 24,
-    color: GOLD,
-    margin: 0,
-    isTextBox: true,
-  });
-  s.addText("Vernon Francis  ·  Cindy McLean  ·  Emmanuel McLean  ·  Krishna Manru", {
-    x: 0.7,
-    y: 4.5,
-    w: 12,
-    h: 0.4,
-    fontFace: FONT,
-    fontSize: 16,
-    color: "C9D3DC",
-    margin: 0,
-    isTextBox: true,
-  });
-  s.addText("A written copy of this briefing will follow by email.", {
-    x: 0.7,
-    y: 5.9,
-    w: 12,
-    h: 0.4,
-    fontFace: FONT,
-    fontSize: 16,
-    italic: true,
-    color: WHITE,
-    margin: 0,
-    isTextBox: true,
-  });
+  const s = page();
+  heading(s, "What we ask of you after the webinar");
+  dataTable(
+    s,
+    ["#", "Action"],
+    [
+      ["1", "Name your service-provider administrator if you have not."],
+      ["2", "Connect an authenticator app on every account you will use."],
+      ["3", "Bookmark portal.tmantoinelaw.com. Treat any other host as suspect."],
+      ["4", "Use Bespoke AI for how-the-screen-works questions."],
+      ["5", "Use support@tmantoinelaw.com or Messages for faults — never for codes."],
+      ["6", "File this briefing with your compliance papers."],
+    ],
+    1.15,
+    [1.2, 11.0]
+  );
+  callout(
+    s,
+    "TIP",
+    "A written copy of this briefing will follow by email. We would rather walk remaining points through on a call than leave a gap on your file.",
+    5.55
+  );
+  footer(s, 16);
 }
 
 pres.writeFile({ fileName: OUT }).then(() => {

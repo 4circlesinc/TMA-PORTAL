@@ -40,6 +40,7 @@ def build():
         raise SystemExit(f"Template not found: {g.TEMPLATE}")
 
     g.SHOTS = ASSETS
+    g.NAVY = "136DA0"
     doc = g.Document(str(g.TEMPLATE))
     thankyou = g.strip_template_body(doc)
 
