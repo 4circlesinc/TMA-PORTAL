@@ -324,15 +324,13 @@ class Assignments
                  * the actor, and is for one caller: an officer filing their
                  * own application ({@see Intake::create}).
                  *
-                 * cip.assign is the administrator's, so an officer cannot
-                 * drive NEW -> REVIEW APPLICATION, and without this the whole
-                 * filing died on a 403 from a status change nobody asked for.
-                 * Nobody gains a permission: the assignment above is still
-                 * recorded as the officer's own act, only the status move
-                 * that automatically follows is the system's, the null actor
-                 * {@see Engine::allows} already treats a scheduled job as. An
-                 * officer assigning a file by hand passes false and is
-                 * refused exactly as before.
+                 * Entering Review Applications is a status change
+                 * (`cip.review`), which officers hold, so they can also make
+                 * the move from the status picker. This automatic one is
+                 * still the system's: the assignment above is the officer's
+                 * own act, and the status that follows filing should not
+                 * read as a second status they typed. Handing a file to
+                 * somebody else stays `cip.assign`, administrators only.
                  */
                 Engine::apply($application, Status::REVIEW_APPLICATION, $systemStatusMove ? null : $actor, [
                     'officer' => $officer->name,

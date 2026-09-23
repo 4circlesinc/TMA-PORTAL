@@ -106,7 +106,9 @@ class Engine
      */
     private const TRANSITION_CAPABILITIES = [
         Status::NEW => 'cip.create',
-        Status::REVIEW_APPLICATION => 'cip.assign',
+        // Starting the review is a status change, which officers hold.
+        // Handing the file to an officer stays cip.assign, administrators only.
+        Status::REVIEW_APPLICATION => 'cip.review',
         Status::ASSESSMENT_FEEDBACK => 'cip.review',
         Status::UPDATE_REQUIRED => 'cip.review',
         Status::READY_TO_SUBMIT => 'cip.review',
@@ -218,9 +220,10 @@ class Engine
      * order is the lifecycle's own, which is the order a reader expects to
      * see the choices in.
      *
-     * Officers only DRIVE these mapped next steps. Administrators also
-     * receive {@see availableOverrides()} for pulling a file backwards;
-     * officers receive the same list, locked, from {@see lockedStatuses()}.
+     * These are the mapped next steps. Administrators and CRO / Reviewing
+     * officers also receive {@see availableOverrides()} for a jump off the
+     * map. Everyone else who may change status sees that list locked, from
+     * {@see lockedStatuses()}.
      *
      * @return list<string>
      */
@@ -237,12 +240,12 @@ class Engine
     }
 
     /**
-     * Statuses an administrator may set that are not the next mapped step.
+     * Statuses this reader may set that are not the next mapped step.
      *
-     * Empty for everyone else: pulling Approved back to Assessment Feedback
-     * is an override, not ordinary workflow. Officers still SEE this list,
-     * through {@see lockedStatuses()}, so the picker reads the same for
-     * everyone; only an administrator may pick from it.
+     * Administrators and CRO / Reviewing officers. Pulling Approved back to
+     * Assessment Feedback is an override and is logged as one. Everyone else
+     * gets an empty list; officers used to see the same rows locked, and
+     * that read as though they could not change a status at all.
      *
      * @return list<string>
      */
@@ -256,19 +259,13 @@ class Engine
     }
 
     /**
-     * The same off-map statuses, for staff who may not drive them.
+     * The same off-map statuses, shown locked, for a reader who may see the
+     * lifecycle but may not set those statuses.
      *
-     * An officer used to see one or two next steps and nothing else, which
-     * read as though the lifecycle stopped there: where the file could go
-     * next was information only administrators had. So officers are shown
-     * the whole list, with the off-map part shown as locked rather than
-     * clickable. Seeing where a file can go is not the same as moving it,
-     * and the override stays administrator-only, at the picker and at
-     * {@see set()} both.
-     *
-     * Empty for an administrator, whose copy of this list is actionable and
-     * arrives through {@see availableOverrides()}, and for anyone who may
-     * not change status at all.
+     * Empty for an administrator and for a CRO / Reviewing officer, whose
+     * copy of this list is actionable and arrives through
+     * {@see availableOverrides()}, and for anyone who may not change status
+     * at all.
      *
      * @return list<string>
      */
@@ -559,9 +556,10 @@ class Engine
      * Put the application on this status, whether or not the lifecycle has
      * an edge there from here.
      *
-     * Administrators only. Officers drive {@see apply()} along the mapped
-     * next steps; jumping from Approved back to Assessment Feedback is an
-     * override and is logged as one. DRAFT is not a destination.
+     * Administrators and CRO / Reviewing officers. Mapped next steps go
+     * through {@see apply()}; jumping from Approved back to Assessment
+     * Feedback is an override and is logged as one. DRAFT is not a
+     * destination.
      */
     public static function set(CipApplication $application, string $to, ?User $actor, array $meta = []): CipApplication
     {
@@ -578,7 +576,7 @@ class Engine
 
         if ($actor !== null && ! CipAccess::canOverrideStatus($actor)) {
             throw new AuthorizationException(
-                'Only an administrator can pull an application back to an earlier status.'
+                'You cannot pull this application back to an earlier status.'
             );
         }
 

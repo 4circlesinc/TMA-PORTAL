@@ -1591,9 +1591,9 @@ class CipApplicationController extends Controller
     }
 
     /**
-     * The same jumps, for an officer, who sees the whole lifecycle but may
-     * only drive the mapped next step. Empty for administrators, who get
-     * these as {@see overrides()} instead.
+     * The same jumps, shown locked, for a reader who may not set them.
+     * Empty for administrators and CRO / Reviewing officers, who get these
+     * as {@see overrides()} instead.
      *
      * @return list<array{value:string,label:string,tone:string}>
      */

@@ -13,9 +13,9 @@ use Illuminate\Auth\Access\AuthorizationException;
  * pre-approval and ends at Granted/Denied. After approval each family
  * member has their own lane here.
  *
- * The vocabulary is intentionally small for now; administrators may set
- * any listed value directly (see spec section 7). A transition map can tighten
- * employee choices once the final status list is confirmed.
+ * The vocabulary is intentionally small for now; administrators and
+ * CRO / Reviewing officers may set any listed value directly. A transition
+ * map can tighten employee choices once the final status list is confirmed.
  */
 class PersonStatus
 {
@@ -202,13 +202,12 @@ class PersonStatus
     }
 
     /**
-     * The same off-map statuses, for staff who may see them but not set them.
+     * The same off-map statuses, shown locked, for a reader who may see them
+     * but may not set them.
      *
-     * The person picker reads the same for an officer as for an
-     * administrator — the whole vocabulary, so where a person's paperwork can
-     * go is not administrator-only knowledge — with the off-map part locked
-     * rather than clickable. Empty for an administrator, whose copy is
-     * actionable, and for anyone who may not change status at all.
+     * Empty for an administrator and for a CRO / Reviewing officer, whose
+     * copy is actionable through {@see availableOverrides()}, and for anyone
+     * who may not change status at all.
      *
      * @return list<array{value:string,label:string,tone:string}>
      */
@@ -264,7 +263,7 @@ class PersonStatus
 
         if (! CipAccess::canOverrideStatus($actor)) {
             throw new AuthorizationException(
-                'Only an administrator can pull a person back to an earlier status.'
+                'You cannot pull this person back to an earlier status.'
             );
         }
     }

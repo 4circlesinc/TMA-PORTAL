@@ -15,7 +15,6 @@ use App\Support\Cip\PersonStatus;
 use App\Support\Cip\Phase;
 use App\Support\Cip\PostApproval;
 use App\Support\Cip\Status;
-use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -119,10 +118,11 @@ class CipStatusOverrideTest extends TestCase
         $this->assertSame(Status::GRANTED, $application->fresh()->status);
     }
 
-    public function test_an_officer_cannot_pull_a_status_backwards(): void
+    public function test_an_officer_can_pull_a_status_backwards_with_a_reason(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $officer = $this->user(Role::REVIEWING_OFFICER);
+        $officer->forceFill(['name' => 'Rita Reviewer'])->save();
         $application = $this->application($admin);
         $application->forceFill(['status' => Status::GRANTED])->save();
         Assignments::assign($application->fresh(), $officer, $admin);
@@ -131,12 +131,20 @@ class CipStatusOverrideTest extends TestCase
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::ASSESSMENT_FEEDBACK,
             ])
-            ->assertForbidden();
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Give a reason for changing the status.');
 
         $this->assertSame(Status::GRANTED, $application->fresh()->status);
 
-        $this->expectException(AuthorizationException::class);
-        Engine::set($application->fresh(), Status::ASSESSMENT_FEEDBACK, $officer);
+        $this->actingAs($officer)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::ASSESSMENT_FEEDBACK,
+                'note' => 'The Unit asked for another scan.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::ASSESSMENT_FEEDBACK);
+
+        $this->assertSame(Status::ASSESSMENT_FEEDBACK, $application->fresh()->status);
     }
 
     public function test_an_officer_may_still_move_forward_along_the_map(): void
@@ -154,7 +162,7 @@ class CipStatusOverrideTest extends TestCase
             ->assertJsonPath('application.status', Status::REVIEW_APPLICATION);
     }
 
-    public function test_an_officer_cannot_jump_off_the_lifecycle_map(): void
+    public function test_an_officer_can_jump_off_the_lifecycle_map_with_a_reason(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $officer = $this->user(Role::REVIEWING_OFFICER);
@@ -165,13 +173,15 @@ class CipStatusOverrideTest extends TestCase
         $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::UPDATE_REQUIRED,
+                'note' => 'The provider already owes a replacement scan.',
             ])
-            ->assertForbidden();
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::UPDATE_REQUIRED);
 
-        $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
+        $this->assertSame(Status::UPDATE_REQUIRED, $application->fresh()->status);
     }
 
-    public function test_an_officer_cannot_pull_person_status_backwards(): void
+    public function test_an_officer_may_set_a_person_status_including_backwards(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $officer = $this->user(Role::REVIEWING_OFFICER);
@@ -190,9 +200,12 @@ class CipStatusOverrideTest extends TestCase
             ->postJson('/portal/cip/people/'.$person->uuid.'/status', [
                 'status' => PersonStatus::NOT_STARTED,
             ])
-            ->assertForbidden();
+            ->assertOk()
+            ->assertJsonPath('application.applicant.status', PersonStatus::NOT_STARTED);
 
-        $this->assertSame(PersonStatus::PROCESSING, $person->fresh()->post_approval_status);
+        $this->assertSame(PersonStatus::NOT_STARTED, $person->fresh()->post_approval_status);
+
+        $person->forceFill(['post_approval_status' => PersonStatus::PROCESSING])->save();
 
         $this->actingAs($officer)
             ->postJson('/portal/cip/people/'.$person->uuid.'/status', [

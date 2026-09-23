@@ -503,7 +503,7 @@ final class Knowledge
                 'keywords' => ['queue', 'status list', 'new applications', 'review applications', 'stages'],
                 'cipOnly' => true,
                 'staffOnly' => true,
-                'answer' => "Pre-approval runs in this order unless an administrator overrides:\n\n1. Draft (not a picker status)\n2. New Applications — administrator assigns an officer\n3. Review Applications\n4. Assessment Feedback\n5. Updates Required or Ready to Submit\n6. Pending Review → Non-compliant or Background Check\n7. Approved or Denied\n\nCRO / Reviewing officers drive mapped next steps. They cannot assign officers or pull a file backwards. Open [CIP Applications](/citizenship-applications).",
+                'answer' => "Pre-approval runs in this order unless an administrator or CRO / Reviewing officer overrides:\n\n1. Draft (not a picker status)\n2. New Applications — administrator assigns an officer, or an officer moves the file to Review Applications\n3. Review Applications\n4. Assessment Feedback\n5. Updates Required or Ready to Submit\n6. Pending Review → Non-compliant or Background Check\n7. Approved or Denied\n\nCRO / Reviewing officers change statuses, including a jump off the next step, which asks for a reason. They cannot assign officers. Open [CIP Applications](/citizenship-applications).",
             ],
             [
                 'id' => 'assign-officer',

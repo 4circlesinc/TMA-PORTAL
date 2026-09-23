@@ -12175,8 +12175,9 @@
         return status.lane && status.lane !== lane;
       }),
       lane: lane,
-      // Which set is actionable: an administrator's rest-of-list can be
-      // picked, an officer's is shown locked.
+      // Whoever the server gave an override list — administrators and
+      // CRO / Reviewing officers — can pick from it. A reason is asked
+      // for before the write.
       canOverride: overrides.length > 0,
       current: source && source.status,
     };
@@ -12250,7 +12251,7 @@
       if (!rest.length) return renderCipStatusSub(flat, menu.current);
 
       return renderCipStatusSub(flat, menu.current) +
-        renderCipStatusGroup('Admin override', rest, menu.current, !(menu.overrides || []).length);
+        renderCipStatusGroup('Other statuses', rest, menu.current, !(menu.overrides || []).length);
     }
 
     var own = menu.own || [];

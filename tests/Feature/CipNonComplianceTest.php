@@ -391,14 +391,12 @@ class CipNonComplianceTest extends TestCase
         $this->assertSame('2026-08-18', $fresh->query_received_at?->toDateString());
     }
 
-    public function test_an_officer_cannot_override_a_query_onto_a_file_off_the_map(): void
+    public function test_an_officer_can_override_a_query_onto_a_file_off_the_map(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);
         $application = $this->pending($staff);
         $application->forceFill(['status' => Status::NEW])->save();
         $officer = $this->user('Reviewing Officer', 'off@example.com', 'Olive Officer');
-        // On the file, so the scope shows it to them — the refusal has to be
-        // the override gate, not the application being invisible.
         CipApplicationAssignment::create([
             'application_id' => $application->id,
             'user_id' => $officer->id,
@@ -412,11 +410,13 @@ class CipNonComplianceTest extends TestCase
             ->postJson('/portal/cip/applications/'.$application->uuid.'/query', [
                 'queryReceivedAt' => '2026-08-18',
                 'override' => true,
-                'note' => 'Trying anyway.',
+                'note' => 'Unit letter arrived before the portal caught up.',
             ])
-            ->assertStatus(403);
+            ->assertOk();
 
-        $this->assertSame(Status::NEW, $application->fresh()->status);
+        $fresh = $application->fresh();
+        $this->assertSame(Status::NON_COMPLIANT, $fresh->status);
+        $this->assertSame('2026-08-18', $fresh->query_received_at?->toDateString());
     }
 
     public function test_recording_again_updates_the_date_without_a_second_notice(): void
