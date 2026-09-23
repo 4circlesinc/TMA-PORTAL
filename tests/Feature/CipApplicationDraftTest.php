@@ -8,6 +8,7 @@ use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\Company;
+use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
@@ -268,6 +269,129 @@ class CipApplicationDraftTest extends TestCase
             ->where('application_id', $draft->id)
             ->where('role', CipPerson::ROLE_DEPENDENT)
             ->count(), 'The previous dependent must not be soft-deleted and replaced.');
+    }
+
+    /**
+     * Every scan is kept, including ones added after the first autosave,
+     * and including every dependent's.
+     *
+     * A slot that already held its first file used to ignore the rest of the
+     * list the wizard re-posts, so a second page — and a dependent's papers
+     * dropped a moment later — never reached the folder.
+     */
+    public function test_a_later_autosave_keeps_new_scans_for_every_dependent(): void
+    {
+        Storage::fake('local');
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $first = $this->actingAs($staff)
+            ->post('/portal/cip/applications/draft', $this->answers($provider, [
+                'passportBioPage' => [UploadedFile::fake()->createWithContent('main-bio.pdf', 'main bio page one')],
+                'dependents' => [[
+                    'firstName' => 'Suha',
+                    'lastName' => 'Abtan',
+                    'dateOfBirth' => '2015-06-01',
+                    'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                    'passportPhoto' => UploadedFile::fake()->image('suha.jpg', 600, 600),
+                    'passportBioPage' => [UploadedFile::fake()->createWithContent('suha-bio.pdf', 'suha bio page one')],
+                ]],
+            ]), ['Accept' => 'application/json'])
+            ->assertOk()
+            ->json('draft');
+
+        $suhaId = $first['answers']['dependents.0.id'] ?? null;
+        $this->assertNotEmpty($suhaId);
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications/draft', $this->answers($provider, [
+                'passportBioPage' => [
+                    UploadedFile::fake()->createWithContent('main-bio.pdf', 'main bio page one'),
+                    UploadedFile::fake()->createWithContent('main-bio-2.pdf', 'main bio page two'),
+                ],
+                'birthCertificate' => [UploadedFile::fake()->createWithContent('main-birth.pdf', 'main birth record')],
+                'dependents' => [
+                    [
+                        'id' => $suhaId,
+                        'firstName' => 'Suha',
+                        'lastName' => 'Abtan',
+                        'dateOfBirth' => '2015-06-01',
+                        'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                        'passportPhoto' => UploadedFile::fake()->image('suha.jpg', 600, 600),
+                        'passportBioPage' => [
+                            UploadedFile::fake()->createWithContent('suha-bio.pdf', 'suha bio page one'),
+                            UploadedFile::fake()->createWithContent('suha-bio-2.pdf', 'suha bio page two'),
+                        ],
+                        'birthCertificate' => [UploadedFile::fake()->createWithContent('suha-birth.pdf', 'suha birth record')],
+                    ],
+                    [
+                        'firstName' => 'Omar',
+                        'lastName' => 'Abtan',
+                        'dateOfBirth' => '2008-03-03',
+                        'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                        'passportPhoto' => UploadedFile::fake()->image('omar.jpg', 600, 600),
+                        'passportBioPage' => [UploadedFile::fake()->createWithContent('omar-bio.pdf', 'omar bio page')],
+                        'birthCertificate' => [UploadedFile::fake()->createWithContent('omar-birth.pdf', 'omar birth record')],
+                    ],
+                ],
+            ]), ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $draft = CipApplication::query()->where('uuid', $first['id'])->firstOrFail();
+        $main = $draft->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $dependents = $draft->people()->where('role', CipPerson::ROLE_DEPENDENT)->orderBy('id')->get();
+
+        $this->assertCount(2, $dependents);
+        $this->assertSame($suhaId, $dependents[0]->uuid);
+
+        $this->assertNotNull($main->documents()->where('type', 'passport_bio_page')->whereNotNull('file_id')->first());
+        $this->assertNotNull($main->documents()->where('type', 'birth_certificate')->whereNotNull('file_id')->first());
+        $this->assertSame(2, $this->sheetsNamed($main, 'Passport bio page'), 'The main applicant keeps both bio pages, and the first is not stored twice.');
+
+        $suha = $dependents[0];
+        $this->assertNotNull($suha->photo_path);
+        $this->assertNotNull($suha->documents()->where('type', 'passport_bio_page')->whereNotNull('file_id')->first());
+        $this->assertNotNull($suha->documents()->where('type', 'birth_certificate')->whereNotNull('file_id')->first());
+        $this->assertSame(2, $this->sheetsNamed($suha, 'Passport bio page'));
+        $this->assertSame(1, $this->sheetsNamed($suha, 'Birth certificate'));
+
+        $omar = $dependents[1];
+        $this->assertNotNull($omar->photo_path);
+        $this->assertNotNull($omar->documents()->where('type', 'passport_bio_page')->whereNotNull('file_id')->first());
+        $this->assertNotNull($omar->documents()->where('type', 'birth_certificate')->whereNotNull('file_id')->first());
+        $this->assertSame(1, $this->sheetsNamed($omar, 'Passport bio page'));
+
+        $filed = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/draft?application='.$draft->uuid)
+            ->assertOk()
+            ->json('draft.filed');
+
+        $this->assertContains('passportBioPage', $filed);
+        $this->assertContains('birthCertificate', $filed);
+        $this->assertContains('dependents.0.passportBioPage', $filed);
+        $this->assertContains('dependents.0.passportPhoto', $filed);
+        $this->assertContains('dependents.0.birthCertificate', $filed);
+        $this->assertContains('dependents.1.passportBioPage', $filed);
+        $this->assertContains('dependents.1.birthCertificate', $filed);
+    }
+
+    private function sheetsNamed(CipPerson $person, string $label): int
+    {
+        $roots = array_values(array_filter([$person->folder_id, $person->post_approval_folder_id]));
+        if ($roots === []) {
+            return 0;
+        }
+
+        $ids = Folder::query()
+            ->whereIn('id', $roots)
+            ->orWhereIn('parent_id', $roots)
+            ->pluck('id');
+
+        return FileItem::query()
+            ->whereIn('folder_id', $ids)
+            ->where('name', 'like', '%'.$label.'%')
+            ->count();
     }
 
     /**

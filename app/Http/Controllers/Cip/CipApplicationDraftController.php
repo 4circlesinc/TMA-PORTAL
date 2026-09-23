@@ -308,6 +308,11 @@ class CipApplicationDraftController extends Controller
 
                 continue;
             }
+            // A scan on its own is an answer. Casting the upload to a string
+            // is the temp path, which is not what "has the reader begun" means.
+            if ($value instanceof \Illuminate\Http\UploadedFile) {
+                return true;
+            }
             if ($value !== null && trim((string) $value) !== '' && $value !== false) {
                 return true;
             }

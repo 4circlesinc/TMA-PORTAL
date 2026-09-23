@@ -9,6 +9,8 @@ use App\Models\CipEvent;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\CompanyMember;
+use App\Models\FileItem;
+use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Security\IdentityFields;
@@ -1909,7 +1911,28 @@ class Intake
     {
         $phase = $person->application?->phase ?? Phase::PRE_APPROVAL;
 
-        foreach (self::documentFields(ApplicantType::for($person), $phase, $person->application, $person) as $doc) {
+        $docs = self::documentFields(ApplicantType::for($person), $phase, $person->application, $person);
+
+        /*
+         * A scan can arrive for a row this person's checklist does not
+         * currently name. A dependent's type follows their date of birth,
+         * and that date is often typed after the passport is already in the
+         * box, so the file has to be kept against the field it was sent as
+         * rather than dropped because the list moved.
+         */
+        $known = $docs->pluck('field')->all();
+        foreach (self::allDocumentFieldNames() as $field) {
+            if (in_array($field, $known, true) || ! self::uploadsPresent($data[$field] ?? null)) {
+                continue;
+            }
+
+            $docs->push([
+                'key' => Str::snake($field),
+                'field' => $field,
+            ]);
+        }
+
+        foreach ($docs as $doc) {
             $type = $doc['key'];
             $uploads = $data[$doc['field']] ?? [];
             $givenName = AddOnRequirements::isAdditional($type)
@@ -1920,25 +1943,147 @@ class Intake
                 ->where('type', $type)
                 ->first();
 
-            if ($existing?->file_id
-                && ($existing->status ?? DocumentStatus::PENDING_UPLOAD) !== DocumentStatus::UPDATE_REQUIRED) {
-                continue;
-            }
-
-            $filed = 0;
+            /*
+             * The wizard posts every chosen scan on every autosave. A slot
+             * that already has its first file used to skip the whole list,
+             * so a page dropped a moment later never landed — and the same
+             * thing happened to a dependent's scans once their first sheet
+             * had been saved. Bytes already stored are ignored; anything
+             * new is filed beside the first, numbered so the set stays in
+             * order. A reviewer who sent the slot back still gets a
+             * replacement through fill().
+             */
+            $updating = $existing
+                && ($existing->status ?? DocumentStatus::PENDING_UPLOAD) === DocumentStatus::UPDATE_REQUIRED;
+            $occupied = (bool) $existing?->file_id && ! $updating;
+            $name = $givenName !== '' ? $givenName : null;
 
             foreach (Arr::wrap($uploads) as $upload) {
-                if (! $upload instanceof UploadedFile) {
+                if (! $upload instanceof UploadedFile || self::uploadAlreadyStored($person, $type, $upload, $name)) {
                     continue;
                 }
 
-                $filed === 0
-                    ? DocumentSlots::fill($person, $type, $upload, $creator, $givenName !== '' ? $givenName : null)
-                    : DocumentSlots::attach($person, $type, $upload, $creator, $filed + 1);
+                if (! $occupied) {
+                    DocumentSlots::fill($person, $type, $upload, $creator, $name, $updating);
+                    $occupied = true;
+                    $updating = false;
 
-                $filed++;
+                    continue;
+                }
+
+                DocumentSlots::attach(
+                    $person,
+                    $type,
+                    $upload,
+                    $creator,
+                    self::nextAttachmentNumber($person, $type, $name),
+                );
             }
         }
+    }
+
+    private static function uploadsPresent(mixed $uploads): bool
+    {
+        foreach (Arr::wrap($uploads) as $upload) {
+            if ($upload instanceof UploadedFile) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether these bytes are already the slot's answer or a sheet filed beside it.
+     *
+     * Compared by checksum, and only against this requirement's own files, so
+     * the same PDF dropped on two different rows is still kept twice.
+     */
+    private static function uploadAlreadyStored(CipPerson $person, string $type, UploadedFile $upload, ?string $givenName): bool
+    {
+        $path = $upload->getRealPath();
+        if (! is_string($path) || $path === '' || ! is_file($path)) {
+            return false;
+        }
+
+        $hash = hash_file('sha256', $path);
+        if (! is_string($hash) || $hash === '') {
+            return false;
+        }
+
+        $slot = CipDocument::query()
+            ->where('person_id', $person->id)
+            ->where('type', $type)
+            ->first();
+
+        if ($slot?->file_id) {
+            $filed = FileItem::query()->find($slot->file_id);
+            if ($filed && $filed->checksum === $hash) {
+                return true;
+            }
+        }
+
+        $folderIds = self::personFolderIds($person);
+        if ($folderIds === []) {
+            return false;
+        }
+
+        $stem = self::attachmentStem($person, $type, $givenName);
+
+        return FileItem::query()
+            ->where('checksum', $hash)
+            ->whereIn('folder_id', $folderIds)
+            ->where('name', 'like', $stem.'%')
+            ->exists();
+    }
+
+    /** The next "(2)", "(3)", … that is not already used for this requirement. */
+    private static function nextAttachmentNumber(CipPerson $person, string $type, ?string $givenName): int
+    {
+        $folderIds = self::personFolderIds($person);
+        $stem = self::attachmentStem($person, $type, $givenName);
+        $n = 2;
+
+        if ($folderIds === []) {
+            return $n;
+        }
+
+        while ($n < 40 && FileItem::query()
+            ->whereIn('folder_id', $folderIds)
+            ->where('name', 'like', $stem.' ('.$n.').%')
+            ->exists()) {
+            $n++;
+        }
+
+        return $n;
+    }
+
+    private static function attachmentStem(CipPerson $person, string $type, ?string $givenName): string
+    {
+        if (AddOnRequirements::isAdditional($type)) {
+            return ($givenName !== null && $givenName !== '')
+                ? $givenName
+                : DocumentTypes::label($type);
+        }
+
+        return $person->fullName().' - '.DocumentTypes::label($type);
+    }
+
+    /** The person's drawers, including a requirement folder nested under them. */
+    private static function personFolderIds(CipPerson $person): array
+    {
+        $roots = array_values(array_filter([
+            $person->folder_id,
+            $person->post_approval_folder_id,
+        ]));
+
+        if ($roots === []) {
+            return [];
+        }
+
+        $children = Folder::query()->whereIn('parent_id', $roots)->pluck('id')->all();
+
+        return array_values(array_unique(array_merge($roots, $children)));
     }
 
     public static function filePhoto(CipPerson $person, mixed $upload, User $creator, bool $replace = false): void

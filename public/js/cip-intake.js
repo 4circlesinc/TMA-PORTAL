@@ -203,6 +203,10 @@
        is already filed is answered, the control asks for a replacement, and
        the check below stops demanding one. */
     filed: {},
+    /* name:size of files a successful draft save already stored, per path.
+       The next autosave sends only what is not in here, so a page added
+       later goes up on its own and a scan already kept is not posted again. */
+    savedFiles: {},
     /* Per-slot status from the server, whether a filed answer may be replaced
        here or only through Upload new version in the file viewer. */
     filedMeta: {},
@@ -1967,6 +1971,7 @@
     state.previews = {};
     state.documents = {};
     state.filed = {};
+    state.savedFiles = {};
     state.draftId = null;
     state.dependents = 0;
     state.errors = {};
@@ -2343,7 +2348,9 @@
       if (!sponsored() && path.indexOf('sponsor.') === 0) return;
       if (/^dependents\.(\d+)\./.test(path) && Number(RegExp.$1) >= state.dependents) return;
       var file = state.files[path];
-      if (file) out.push({ name: bracketed(path), file: file, filename: file.name || 'upload' });
+      if (file && !fileAlreadySaved(path, file)) {
+        out.push({ name: bracketed(path), file: file, filename: file.name || 'upload', path: path });
+      }
     });
 
     // The File did not survive Morph; the preview did. Rebuild the upload
@@ -2364,7 +2371,8 @@
       if (!sponsored() && path.indexOf('sponsor.') === 0) return;
       if (/^dependents\.(\d+)\./.test(path) && Number(RegExp.$1) >= state.dependents) return;
       state.documents[path].forEach(function (file) {
-        out.push({ name: bracketed(path) + '[]', file: file, filename: file.name });
+        if (fileAlreadySaved(path, file)) return;
+        out.push({ name: bracketed(path) + '[]', file: file, filename: file.name, path: path });
       });
     });
 
@@ -2544,8 +2552,30 @@
    * rather than numbering an application for it.
    */
   function typedAnything(answers) {
+    if (fileSignature().length) return true;
+
     return Object.keys(answers).some(function (path) {
       return path !== 'providerId';
+    });
+  }
+
+  /* name and size, the same pair fileSignature() uses to tell two scans apart. */
+  function oneFileSig(file) {
+    return (file.name || 'upload') + ':' + file.size;
+  }
+
+  function fileAlreadySaved(path, file) {
+    var bag = (state.savedFiles && state.savedFiles[path]) || [];
+
+    return bag.indexOf(oneFileSig(file)) !== -1;
+  }
+
+  function rememberSavedFiles(list) {
+    state.savedFiles = state.savedFiles || {};
+    (list || []).forEach(function (item) {
+      if (!item || !item.path) return;
+      var bag = state.savedFiles[item.path] || (state.savedFiles[item.path] = []);
+      if (bag.indexOf(item.sig) === -1) bag.push(item.sig);
     });
   }
 
@@ -2747,6 +2777,12 @@
     state.draftDirty = false;
     if (announce) setDraftButtonBusy(opts.button, true);
 
+    // The files this request actually carries. A scan dropped while it is in
+    // flight is not in the list, so the reply must not mark that one saved.
+    var pendingFiles = parts().filter(function (part) { return part.file; }).map(function (part) {
+      return { path: part.path, sig: oneFileSig(part.file) };
+    });
+
     // Multipart, not JSON: the scans go with the answers. FormData sets its
     // own Content-Type boundary, so none is passed here.
     fetch(draftUrl(), {
@@ -2798,6 +2834,7 @@
 
           return;
         }
+        if (json.draft) rememberSavedFiles(pendingFiles);
         rememberFiled(json.draft);
         /*
          * Keep the dependent (and sponsor) ids the server just minted.
@@ -3427,6 +3464,7 @@
     state.previews = {};
     state.documents = {};
     state.filed = {};
+    state.savedFiles = {};
     state.filedMeta = {};
     state.dependents = 0;
     state.errors = {};
