@@ -3201,6 +3201,15 @@
   min-width: 0;
 }
 
+/* The row budget (--tma-work-row-h) counts this line as 16px. Without an
+   explicit line-height the 13px label inherits whatever the page is using,
+   the row and the budget stop agreeing, and the home tile drops a message
+   it had room for. */
+.tma-portal-email-row__sender,
+.tma-portal-email-row__time {
+  line-height: 16px;
+}
+
 .tma-portal-email-row__time,
 .tma-portal-chat-row__time,
 .tma-portal-request-row__time,

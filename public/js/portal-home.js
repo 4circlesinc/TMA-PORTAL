@@ -223,19 +223,26 @@
    * because its height is its capability count, and its loading tile is the
    * real tile with the glass taken out.
    *
-   * Email, Requests and Comments are four rows of the email/work lists, which
-   * are 66.6px each and gapless: 70 + 4 x 66.6 is 337. They were 358, carried
-   * over from a row assumed to be 72px, and the 21px of difference was not
-   * nothing — the stylesheet rounds those lists down to whole rows, so the
-   * remainder came out as a band of empty card under the last one, and the
-   * fifth row it was almost tall enough for was sliced through the avatar.
-   * The 66.6 lives in the stylesheet as --tma-work-row-h; these two move
-   * together.
+   * Requests and Comments are four rows of the work list, 66.6px each and
+   * gapless: 70 + 4 x 66.6 is 337. They were 358, carried over from a row
+   * assumed to be 72px, and the 21px of difference was not nothing — the
+   * stylesheet rounds those lists down to whole rows, so the remainder came
+   * out as a band of empty card under the last one, and the fifth row it was
+   * almost tall enough for was sliced through the avatar. The 66.6 lives in
+   * the stylesheet as --tma-work-row-h; these two move together.
+   *
+   * Recent Email shares that row, but the type is fluid and at the top of
+   * the clamp the row is 68px and the title line is 20, so the chrome is 72
+   * rather than 70. 337 was then a few pixels short of four rows. round()
+   * does not lose a few pixels: it drops the whole fourth message and leaves
+   * a blank band, which is the empty card under the three that were showing.
+   * 72 + 4 x 68 is 344; the extra 4px is so a fractional title line cannot
+   * do that again.
    */
   var TILE_SLOT = {
     recentFiles: 478,
     favorites: 338,
-    email: 337,
+    email: 348,
     messages: 360,
     requests: 337,
     comments: 337,
