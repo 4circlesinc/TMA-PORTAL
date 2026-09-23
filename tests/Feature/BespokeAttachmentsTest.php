@@ -299,9 +299,13 @@ class BespokeAttachmentsTest extends TestCase
             ->assertOk()
             ->json();
 
-        $this->assertCount(1, $payload['actions']);
-        $this->assertSame('photo2x2', $payload['actions'][0]['type']);
-        $this->assertSame($photo['id'], $payload['actions'][0]['attachment']['id']);
+        // "make my photo 2x2" is read as a crop request by the portal itself,
+        // so the most recent image is queued before the model runs; the model
+        // then asks for the other one. Both cards render, neither is doubled.
+        $queued = array_map(fn (array $a) => $a['attachment']['id'], $payload['actions']);
+        $this->assertSame(['photo2x2', 'photo2x2'], array_column($payload['actions'], 'type'));
+        $this->assertEqualsCanonicalizing([$photo['id'], $tiny['id']], $queued);
+        $this->assertSame(count($queued), count(array_unique($queued)));
 
         Http::assertSent(function ($request) {
             $tools = array_values(array_filter($request->data()['messages'], fn ($m) => $m['role'] === 'tool'));
@@ -319,8 +323,62 @@ class BespokeAttachmentsTest extends TestCase
                 && mb_substr_count($read['text'], 'Clause. ') === 750
                 && $read['nextOffset'] === 12000
                 && ($big['ok'] ?? false) === true
-                && str_contains($small['error'] ?? '', 'only 200×200');
+                && ($small['ok'] ?? false) === true;
         });
+    }
+
+    /**
+     * The reason this path exists: the reader dropped a photo, asked for a
+     * 2×2, and the provider was rate-limited. They used to get the photo
+     * size requirements quoted back at them, and on the retry the generic
+     * failure line, while the crop never happened.
+     */
+    public function test_a_crop_request_is_honoured_even_when_the_model_is_down(): void
+    {
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $conversationId = (string) Str::uuid();
+        $photo = $this->upload($officer, $conversationId, UploadedFile::fake()->image('scan.jpg', 2400, 1000));
+
+        Http::fake(['api.groq.com/*' => Http::response(['error' => ['message' => 'rate limit']], 429)]);
+
+        $payload = $this->actingAs($officer)
+            ->postJson('/portal/bespoke/chat', [
+                'messages' => [['role' => 'user', 'content' => 'lets extract the passport photo from this and make it be 2x2']],
+                'conversationId' => $conversationId,
+                'attachments' => [$photo['id']],
+            ])
+            ->assertOk()
+            ->json();
+
+        $this->assertCount(1, $payload['actions']);
+        $this->assertSame('photo2x2', $payload['actions'][0]['type']);
+        $this->assertSame($photo['id'], $payload['actions'][0]['attachment']['id']);
+        // Not the size requirements, and not the generic failure line.
+        $this->assertStringContainsString('2×2', $payload['reply']);
+        $this->assertStringNotContainsString('600×600 pixels or larger', $payload['reply']);
+        $this->assertStringNotContainsString('can’t answer that one right now', $payload['reply']);
+    }
+
+    /** Asking what the rules are is still answered with the rules. */
+    public function test_asking_the_photo_size_still_gets_the_answer_not_a_crop(): void
+    {
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $conversationId = (string) Str::uuid();
+        $photo = $this->upload($officer, $conversationId, UploadedFile::fake()->image('scan.jpg', 1200, 1200));
+
+        Http::fake(['api.groq.com/*' => Http::response(['error' => ['message' => 'down']], 500)]);
+
+        $payload = $this->actingAs($officer)
+            ->postJson('/portal/bespoke/chat', [
+                'messages' => [['role' => 'user', 'content' => 'what photo size is required?']],
+                'conversationId' => $conversationId,
+                'attachments' => [$photo['id']],
+            ])
+            ->assertOk()
+            ->json();
+
+        $this->assertSame([], $payload['actions']);
+        $this->assertStringContainsString('600×600', $payload['reply']);
     }
 
     public function test_a_derived_photo_hangs_off_the_latest_turn_and_shows_on_reopen(): void

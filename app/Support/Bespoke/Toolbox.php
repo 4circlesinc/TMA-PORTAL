@@ -52,7 +52,7 @@ final class Toolbox
     ) {}
 
     /** @return Collection<int, BespokeAttachment> */
-    private function attachments(): Collection
+    public function attachments(): Collection
     {
         if ($this->attachments === null) {
             $this->attachments = $this->conversation
@@ -83,7 +83,14 @@ final class Toolbox
             $lines[] = '- '.$a->uuid.' — '.Untrusted::wrap($a->name, 'filename', $nonce)
                 .' — '.Attachments::describe($a).($a->hasText() ? ', text available via read_attachment' : '');
         }
-        $lines[] = 'read_attachment returns a file\'s text in slices. resize_photo makes a 2×2 inch passport photo (600×600 or larger, square) from an image or the first page of a PDF; the result appears under your answer with Download. You cannot see image contents; never describe a photo.';
+        $lines[] = 'read_attachment returns a file\'s text in slices. resize_photo makes a 2×2 inch passport photo (600×600 or larger, square) from an image or the first page of a PDF: the portal finds the face, crops a square around it with passport headroom, and shows the result with Download and Adjust. You cannot see image contents; never describe a photo.';
+
+        foreach ($this->actions as $queued) {
+            if (($queued['type'] ?? '') === 'photo2x2') {
+                $lines[] = 'The reader has already asked for a 2×2 photo in words, and the portal is making it right now — the card is under your answer. Do NOT call resize_photo for that file and do NOT quote the size requirements at them. Confirm in one or two sentences that it is below with Download, and mention Adjust if the frame lands wrong.';
+                break;
+            }
+        }
 
         return $lines;
     }
@@ -471,6 +478,29 @@ final class Toolbox
         ];
     }
 
+    /**
+     * Queue the 2×2 card for a photo the reader asked about in words, and
+     * return the sentence to say. Null when there is nothing to crop, so
+     * the caller falls back to its usual answer.
+     */
+    public function cropPhoto(?BespokeAttachment $a): ?string
+    {
+        if ($a === null) {
+            return $this->attachments()->isEmpty()
+                ? 'Attach the photo with the paperclip and I’ll cut it to a 2×2 for you.'
+                : null;
+        }
+
+        $result = $this->resizePhoto(['attachmentId' => $a->uuid]);
+        if (isset($result['error'])) {
+            return (string) $result['error'];
+        }
+        $this->used[] = 'resize_photo';
+
+        return 'Cutting it to a 2×2 passport photo now; it’s below with Download. '
+            .'I find the face and crop around it. If it lands wrong, use Adjust to move the frame.';
+    }
+
     /** @param  array<string, mixed>  $args */
     private function resizePhoto(array $args): array
     {
@@ -481,8 +511,23 @@ final class Toolbox
         if (! $a->isImage() && ! $a->isPdf()) {
             return ['error' => 'Only an image or a PDF can become a 2×2 photo.'];
         }
-        if ($a->isImage() && $a->width && $a->height && min($a->width, $a->height) < 600) {
-            return ['error' => 'That image is only '.$a->width.'×'.$a->height.'. A 2×2 photo needs at least 600 pixels on the short side; ask for a larger original.'];
+        // A small original is not refused: the crop is a region of the
+        // picture, so the portal reports the true output size and warns
+        // about softness once it knows what it actually cut.
+        if ($a->isImage() && $a->width && $a->height && max($a->width, $a->height) < 200) {
+            return ['error' => 'That image is only '.$a->width.'×'.$a->height.', too small to make a passport photo from. Ask for a larger original.'];
+        }
+
+        // The reader's own words may have queued this card already; a
+        // second call for the same file must not add a second card.
+        foreach ($this->actions as $queued) {
+            if (($queued['type'] ?? '') === 'photo2x2'
+                && (($queued['attachment']['id'] ?? '') === $a->uuid)) {
+                return [
+                    'ok' => true,
+                    'note' => 'The 2×2 photo for this file is already being made and appears under your answer. Do not ask for it again; just tell the reader it is below with Download.',
+                ];
+            }
         }
 
         $this->actions[] = [
@@ -492,7 +537,7 @@ final class Toolbox
 
         return [
             'ok' => true,
-            'note' => 'The portal is making the 2×2 photo now; it appears under your answer with Download. Tell the reader that. It is 600×600 or larger, square, and trimmed of white margins.',
+            'note' => 'The portal is making the 2×2 photo now; it appears under your answer with Download. Tell the reader that. It finds the face and crops a square around it, 600×600 or larger, and offers Adjust if the frame lands wrong.',
         ];
     }
 

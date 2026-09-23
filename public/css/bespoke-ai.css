@@ -739,6 +739,51 @@ a.tma-bespoke__file:hover {
   background: var(--color-white);
 }
 
+/* Adjust: the detector puts the frame on the face, and these move it when
+   it lands wrong. Same buttons as the card's own, one step smaller. */
+.tma-bespoke__photo-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
+}
+
+.tma-bespoke__photo-tools[hidden] {
+  display: none;
+}
+
+.tma-bespoke__photo-pad,
+.tma-bespoke__photo-zoom {
+  display: flex;
+  gap: 4px;
+}
+
+.tma-bespoke__photo-nudge {
+  appearance: none;
+  margin: 0;
+  padding: 4px 8px;
+  min-width: 28px;
+  border: 0.5px solid var(--color-border-medium);
+  border-radius: var(--radius-8);
+  background: var(--color-white);
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  cursor: pointer;
+  transition: background-color 200ms ease;
+}
+
+.tma-bespoke__photo-nudge:hover {
+  background: var(--color-hover);
+}
+
+.tma-bespoke__photo-nudge:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--color-overlay-4);
+}
+
 a.tma-bespoke__card-btn {
   text-decoration: none;
   display: inline-block;

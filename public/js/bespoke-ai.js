@@ -1303,7 +1303,198 @@
     return box;
   }
 
-  function makeSquarePhoto(a) {
+  /* Where the face is. Three readings, best first:
+   *
+   * 1. FaceDetector, the browser's own, when it exists (Chrome/Edge behind
+   *    a flag, and the desktop shells). Exact, so it wins outright.
+   * 2. Skin-tone clustering. Passport scans are a face on a plain ground,
+   *    often beside a form; the largest run of skin-coloured pixels is the
+   *    head far more reliably than the middle of the sheet is.
+   * 3. The largest non-white region, which is what the old code did to a
+   *    PDF page, kept as the floor.
+   *
+   * Everything works on a downscaled copy: 200 px on the short side is
+   * plenty to find a head and keeps a 4000 px scan under a few ms. */
+
+  function detectorCanvas(canvas) {
+    var w = canvas.width;
+    var h = canvas.height;
+    var scale = Math.min(1, 200 / Math.max(1, Math.min(w, h)));
+    var sw = Math.max(1, Math.round(w * scale));
+    var sh = Math.max(1, Math.round(h * scale));
+    var small = document.createElement('canvas');
+    small.width = sw;
+    small.height = sh;
+    small.getContext('2d').drawImage(canvas, 0, 0, sw, sh);
+    return { canvas: small, scale: scale, w: sw, h: sh };
+  }
+
+  /* Skin in YCbCr, the usual band, widened a little so it holds across
+   * skin tones and the warm cast a scanner adds. Luma is bounded to drop
+   * near-black hair and blown-out white paper. */
+  function isSkin(r, g, b) {
+    var y = 0.299 * r + 0.587 * g + 0.114 * b;
+    if (y < 40 || y > 245) return false;
+    var cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
+    var cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
+    if (cb < 77 || cb > 133 || cr < 133 || cr > 180) return false;
+    // Skin is never blue-dominant, whatever the tone.
+    return r > b - 4;
+  }
+
+  /* Largest connected run of skin pixels, as a box in FULL-image pixels.
+   * Flood fill on a flat mask; iterative, because a 200×200 region would
+   * blow a recursive stack. */
+  function skinBox(canvas) {
+    var d = detectorCanvas(canvas);
+    var data;
+    try {
+      data = d.canvas.getContext('2d').getImageData(0, 0, d.w, d.h).data;
+    } catch (e) {
+      return null; // tainted canvas
+    }
+    var w = d.w, h = d.h, n = w * h;
+    var mask = new Uint8Array(n);
+    var skinCount = 0;
+    for (var i = 0; i < n; i++) {
+      var p = i * 4;
+      if (data[p + 3] > 128 && isSkin(data[p], data[p + 1], data[p + 2])) {
+        mask[i] = 1;
+        skinCount++;
+      }
+    }
+    // Too little skin to be a portrait, or so much that the whole sheet
+    // read as skin (a cream background): trust the other readings instead.
+    if (skinCount < n * 0.005 || skinCount > n * 0.7) return null;
+
+    var seen = new Uint8Array(n);
+    var stack = new Int32Array(n);
+    var best = null;
+    for (var s = 0; s < n; s++) {
+      if (!mask[s] || seen[s]) continue;
+      var top = 0;
+      stack[top++] = s;
+      seen[s] = 1;
+      var count = 0, minX = w, minY = h, maxX = -1, maxY = -1;
+      while (top > 0) {
+        var c = stack[--top];
+        var cx = c % w, cy = (c - cx) / w;
+        count++;
+        if (cx < minX) minX = cx;
+        if (cx > maxX) maxX = cx;
+        if (cy < minY) minY = cy;
+        if (cy > maxY) maxY = cy;
+        // 4-neighbourhood; 8 merges a face with a bare shoulder too eagerly.
+        if (cx > 0 && mask[c - 1] && !seen[c - 1]) { seen[c - 1] = 1; stack[top++] = c - 1; }
+        if (cx < w - 1 && mask[c + 1] && !seen[c + 1]) { seen[c + 1] = 1; stack[top++] = c + 1; }
+        if (cy > 0 && mask[c - w] && !seen[c - w]) { seen[c - w] = 1; stack[top++] = c - w; }
+        if (cy < h - 1 && mask[c + w] && !seen[c + w]) { seen[c + w] = 1; stack[top++] = c + w; }
+      }
+      if (count < n * 0.004) continue;
+      var bw = maxX - minX + 1, bh = maxY - minY + 1;
+      var ratio = bw / Math.max(1, bh);
+      // A head is roughly as tall as it is wide. A long thin run is an arm,
+      // a shadow, or a strip of background, so it is not a candidate.
+      if (ratio < 0.35 || ratio > 2.6) continue;
+      // Prefer the biggest, then the one nearer face-shaped.
+      var shape = 1 - Math.min(1, Math.abs(ratio - 0.78) / 1.5);
+      var score = count * (0.6 + 0.4 * shape);
+      if (!best || score > best.score) {
+        best = { score: score, x: minX, y: minY, w: bw, h: bh };
+      }
+    }
+    if (!best) return null;
+    var k = 1 / d.scale;
+    return {
+      x: best.x * k,
+      y: best.y * k,
+      w: best.w * k,
+      h: best.h * k,
+      source: 'skin'
+    };
+  }
+
+  /* The browser's own detector, when the build carries one. */
+  function nativeFaceBox(canvas) {
+    if (typeof window.FaceDetector !== 'function') return Promise.resolve(null);
+    var det;
+    try {
+      det = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 5 });
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+    return det.detect(canvas).then(function (faces) {
+      if (!faces || !faces.length) return null;
+      // The largest face is the subject; a passport scan may catch a
+      // second, smaller one in a signature or a stamp.
+      var pick = null;
+      faces.forEach(function (f) {
+        var b = f.boundingBox || f;
+        if (!b || !b.width) return;
+        if (!pick || b.width * b.height > pick.width * pick.height) pick = b;
+      });
+      if (!pick) return null;
+      return { x: pick.x, y: pick.y, w: pick.width, h: pick.height, source: 'native' };
+    }).catch(function () { return null; });
+  }
+
+  /* A passport crop is not the face box: the face sits in the upper middle
+   * with headroom above and shoulders below. ICAO-style proportions put the
+   * head at about 70% of the frame height, eyes a little above centre —
+   * these numbers come from that, rounded to something forgiving. */
+  function frameFromFace(face, canvas) {
+    // The detected skin is the face alone. The head with hair is taller
+    // and a little wider, and the passport frame holds the head plus
+    // headroom and shoulders, so the square is built from the larger of
+    // the two dimensions with generous room around it.
+    var side = Math.max(face.w / 0.52, face.h / 0.50);
+    var cx = face.x + face.w / 2;
+
+    // The box is placed from its TOP, not its centre: the skin reading
+    // starts at the forehead, so hair sits above it and would be sliced
+    // off by a centred frame. A fifth of the frame is left over the top
+    // of the detected skin, which covers hair and the headroom a passport
+    // photo wants. The native detector's box starts higher, so it needs
+    // less — hence the smaller share when it is the one that found it.
+    var above = side * (face.source === 'native' ? 0.16 : 0.26);
+    var x = cx - side / 2;
+    var y = face.y - above;
+
+    // Keep the frame on the picture without letting it drift off the face:
+    // clamp, and shrink only if the picture is genuinely smaller.
+    side = Math.min(side, canvas.width, canvas.height);
+    x = Math.max(0, Math.min(x, canvas.width - side));
+    y = Math.max(0, Math.min(y, canvas.height - side));
+    return { x: x, y: y, side: side, source: face.source };
+  }
+
+  /* The frame to cut, best reading first. Always resolves. */
+  function findFrame(canvas, allowTrim) {
+    return nativeFaceBox(canvas).then(function (face) {
+      if (!face) {
+        try { face = skinBox(canvas); } catch (e) { face = null; }
+      }
+      if (face) return frameFromFace(face, canvas);
+
+      // Nothing face-like. Fall back to the old behaviour: the non-white
+      // region for a rasterized page, the whole picture otherwise, then
+      // its centre square.
+      var box = allowTrim
+        ? trimWhite(canvas)
+        : { x: 0, y: 0, w: canvas.width, h: canvas.height };
+      var side = Math.min(box.w, box.h);
+      return {
+        x: box.x + (box.w - side) / 2,
+        y: box.y + (box.h - side) / 2,
+        side: side,
+        source: 'centre'
+      };
+    });
+  }
+
+  /* The picture itself, fetched once. An adjustment re-cuts from this
+   * canvas rather than going back to the network. */
+  function loadPhotoSource(a) {
     return fetch(a.url, { credentials: 'same-origin' }).then(function (res) {
       if (!res.ok) throw new Error('fetch ' + res.status);
       return res.blob();
@@ -1317,29 +1508,29 @@
         if (img.close) img.close();
         return { canvas: canvas, trim: false };
       });
-    }).then(function (src) {
-      var canvas = src.canvas;
-      var box = src.trim ? trimWhite(canvas) : { x: 0, y: 0, w: canvas.width, h: canvas.height };
-      var side = Math.min(box.w, box.h);
-      if (side < 40) throw new Error('empty');
-      var sx = box.x + (box.w - side) / 2;
-      var sy = box.y + (box.h - side) / 2;
-      var out = Math.round(Math.max(PHOTO_MIN, Math.min(PHOTO_MAX, side)));
-      var outCanvas = document.createElement('canvas');
-      outCanvas.width = out;
-      outCanvas.height = out;
-      var c = outCanvas.getContext('2d');
-      c.fillStyle = '#fff';
-      c.fillRect(0, 0, out, out);
-      c.imageSmoothingEnabled = true;
-      c.imageSmoothingQuality = 'high';
-      c.drawImage(canvas, sx, sy, side, side, 0, 0, out, out);
-      return new Promise(function (resolve, reject) {
-        outCanvas.toBlob(function (b) {
-          if (b) resolve({ blob: b, size: out, upscaled: side < PHOTO_MIN });
-          else reject(new Error('blob'));
-        }, 'image/jpeg', 0.92);
-      });
+    });
+  }
+
+  /* Cut one square out of the loaded picture. `frame` is in source pixels;
+   * the output is always square and at least PHOTO_MIN on a side. */
+  function cutSquare(canvas, frame) {
+    var side = frame.side;
+    if (side < 40) throw new Error('empty');
+    var out = Math.round(Math.max(PHOTO_MIN, Math.min(PHOTO_MAX, side)));
+    var outCanvas = document.createElement('canvas');
+    outCanvas.width = out;
+    outCanvas.height = out;
+    var c = outCanvas.getContext('2d');
+    c.fillStyle = '#fff';
+    c.fillRect(0, 0, out, out);
+    c.imageSmoothingEnabled = true;
+    c.imageSmoothingQuality = 'high';
+    c.drawImage(canvas, frame.x, frame.y, side, side, 0, 0, out, out);
+    return new Promise(function (resolve, reject) {
+      outCanvas.toBlob(function (b) {
+        if (b) resolve({ blob: b, size: out, upscaled: side < PHOTO_MIN, frame: frame });
+        else reject(new Error('blob'));
+      }, 'image/jpeg', 0.92);
     });
   }
 
@@ -1348,28 +1539,59 @@
     var card = cardShell(ctx, 'photo');
     card.innerHTML =
       '<p class="tma-bespoke__card-head">2×2 photo from ' + escapeHtml(a.name || 'file') + '</p>' +
-      '<p class="tma-bespoke__card-ask" data-bespoke-photo-status>Preparing…</p>' +
+      '<p class="tma-bespoke__card-ask" data-bespoke-photo-status>Finding the face…</p>' +
       '<div class="tma-bespoke__photo" data-bespoke-photo hidden></div>' +
+      '<div class="tma-bespoke__photo-tools" data-bespoke-photo-tools hidden>' +
+        '<div class="tma-bespoke__photo-pad">' +
+          '<button type="button" class="tma-bespoke__photo-nudge" data-nudge="up" aria-label="Move frame up">↑</button>' +
+          '<button type="button" class="tma-bespoke__photo-nudge" data-nudge="left" aria-label="Move frame left">←</button>' +
+          '<button type="button" class="tma-bespoke__photo-nudge" data-nudge="right" aria-label="Move frame right">→</button>' +
+          '<button type="button" class="tma-bespoke__photo-nudge" data-nudge="down" aria-label="Move frame down">↓</button>' +
+        '</div>' +
+        '<div class="tma-bespoke__photo-zoom">' +
+          '<button type="button" class="tma-bespoke__photo-nudge" data-nudge="in" aria-label="Closer">Closer</button>' +
+          '<button type="button" class="tma-bespoke__photo-nudge" data-nudge="out" aria-label="Wider">Wider</button>' +
+        '</div>' +
+      '</div>' +
       '<div class="tma-bespoke__card-foot" data-bespoke-card-foot></div>';
     var status = card.querySelector('[data-bespoke-photo-status]');
     var slot = card.querySelector('[data-bespoke-photo]');
+    var tools = card.querySelector('[data-bespoke-photo-tools]');
     var foot = card.querySelector('[data-bespoke-card-foot]');
     var base = String(a.name || 'photo').replace(/\.[^.]+$/, '');
     var filename = base + '-2x2.jpg';
 
-    makeSquarePhoto(a).then(function (result) {
-      var objectUrl = URL.createObjectURL(result.blob);
+    // Held across adjustments so a nudge never refetches or re-detects.
+    var source = null;
+    var frame = null;
+    var objectUrl = null;
+    var link = null;
+    var busy = false;
+
+    function describe(result) {
+      var how = frame && frame.source === 'centre'
+        ? 'No face found, so this is the middle of the picture'
+        : 'Cropped around the face';
+      return how + '; ' + result.size + '×' + result.size + ' px, 2×2 in at '
+        + Math.round(result.size / 2) + ' dpi'
+        + (result.upscaled ? '. The original was small, so expect some softness.' : '.');
+    }
+
+    function show(result) {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      objectUrl = URL.createObjectURL(result.blob);
       slot.innerHTML = '<img src="' + objectUrl + '" alt="2×2 photo" width="120" height="120">';
       slot.hidden = false;
-      status.textContent = result.size + '×' + result.size + ' px, 2×2 in at ' + Math.round(result.size / 2) + ' dpi' +
-        (result.upscaled ? '. The original was small; expect some softness.' : '.');
-      var link = document.createElement('a');
-      link.className = 'tma-bespoke__card-btn tma-bespoke__card-btn--primary';
-      link.textContent = 'Download';
+      status.textContent = describe(result);
+      if (!link) {
+        link = document.createElement('a');
+        link.className = 'tma-bespoke__card-btn tma-bespoke__card-btn--primary';
+        link.textContent = 'Download';
+        link.download = filename;
+        foot.appendChild(link);
+      }
       link.href = objectUrl;
-      link.download = filename;
-      foot.appendChild(link);
-      ctx.logEl.scrollTop = ctx.logEl.scrollHeight;
+      tools.hidden = false;
 
       // Keep a copy in the chat: it survives a reload and downloads from
       // the server, which the desktop shells prefer to a blob URL.
@@ -1379,8 +1601,61 @@
       form.append('kind', 'derived');
       return apiForm('/portal/bespoke/attachments', form).then(function (data) {
         var d = data && data.attachment;
-        if (d && d.url) link.href = d.url + '?download=1';
+        if (d && d.url && link) link.href = d.url + '?download=1';
       }).catch(function () { /* the blob link still works */ });
+    }
+
+    /* Move or resize the frame, keeping it on the picture. Steps are a
+     * share of the frame itself, so they feel the same at any zoom. */
+    function adjust(how) {
+      if (busy || !source || !frame) return;
+      var canvas = source.canvas;
+      var step = frame.side * 0.08;
+      var next = { x: frame.x, y: frame.y, side: frame.side, source: frame.source };
+      if (how === 'up') next.y -= step;
+      else if (how === 'down') next.y += step;
+      else if (how === 'left') next.x -= step;
+      else if (how === 'right') next.x += step;
+      else if (how === 'in' || how === 'out') {
+        var factor = how === 'in' ? 0.88 : 1.14;
+        var side = next.side * factor;
+        side = Math.max(40, Math.min(side, canvas.width, canvas.height));
+        // Zoom about the centre, so the face does not walk out of frame.
+        next.x += (next.side - side) / 2;
+        next.y += (next.side - side) / 2;
+        next.side = side;
+      }
+      next.x = Math.max(0, Math.min(next.x, canvas.width - next.side));
+      next.y = Math.max(0, Math.min(next.y, canvas.height - next.side));
+      // A nudge means the reader has taken over: stop calling it detected.
+      next.source = 'manual';
+
+      busy = true;
+      cutSquare(canvas, next).then(function (result) {
+        frame = next;
+        return show(result);
+      }).catch(function () {
+        status.textContent = 'That adjustment did not work. The photo above is unchanged.';
+      }).then(function () { busy = false; });
+    }
+
+    tools.addEventListener('click', function (event) {
+      var btn = event.target.closest('[data-nudge]');
+      if (!btn) return;
+      event.preventDefault();
+      adjust(btn.getAttribute('data-nudge'));
+    });
+
+    loadPhotoSource(a).then(function (src) {
+      source = src;
+      return findFrame(src.canvas, src.trim).then(function (found) {
+        frame = found;
+        return cutSquare(src.canvas, found);
+      });
+    }).then(function (result) {
+      return show(result);
+    }).then(function () {
+      ctx.logEl.scrollTop = ctx.logEl.scrollHeight;
     }).catch(function () {
       status.textContent = 'The photo could not be prepared from this file.';
     });

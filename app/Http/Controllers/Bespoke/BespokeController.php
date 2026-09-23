@@ -13,6 +13,7 @@ use App\Support\Bespoke\Confidential;
 use App\Support\Bespoke\Conversations;
 use App\Support\Bespoke\Knowledge;
 use App\Support\Bespoke\Page;
+use App\Support\Bespoke\PhotoIntent;
 use App\Support\Bespoke\Prompt;
 use App\Support\Bespoke\Suggestions;
 use App\Support\Bespoke\Toolbox;
@@ -106,10 +107,26 @@ class BespokeController extends Controller
 
         $attached = Attachments::claim($conversation, $user, $validated['attachments'] ?? []);
 
+        $toolbox = new Toolbox($user, $identity, $page, $conversation, $lastUser);
+
+        // A dropped photo with "crop it" is answered by cropping it, not by
+        // quoting the size rules. The card is queued before the model runs,
+        // so the reader gets their photo even when the provider is down —
+        // and the model, seeing the tool already used, describes it instead
+        // of asking for it twice.
+        $photoAsk = null;
+        if (PhotoIntent::asksForCrop($lastUser)) {
+            $photoAsk = $toolbox->cropPhoto(
+                PhotoIntent::target($toolbox->attachments(), $lastUser)
+            );
+        }
+
         $local = Knowledge::match($user, $identity, $page, $lastUser, $fieldHints);
         $source = 'local';
         $reply = is_array($local) ? (string) $local['answer'] : null;
-        $toolbox = new Toolbox($user, $identity, $page, $conversation, $lastUser);
+        if ($photoAsk !== null) {
+            $reply = $photoAsk;
+        }
 
         // How the portal is built, secured, hosted, or paid for is not the
         // model's to discuss; the question never reaches it.
