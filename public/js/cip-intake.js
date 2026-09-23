@@ -245,6 +245,9 @@
     submissionKey: null,
     /* An administrator said "file it anyway" to the duplicate warning. */
     allowDuplicate: false,
+    /* The reader was warned that this CIP number is not in the portal and
+       chose to file the Add-On anyway. Cleared when the number changes. */
+    allowUnmatchedParent: false,
     /* ── the autosave ──────────────────────────────────────────────
        New filings only. Editing a filed application is deliberately not
        autosaved: a resumed edit would lay hours-old answers over a record
@@ -1656,6 +1659,7 @@
     state.parent = null;
     state.openAddOn = null;
     state.parentError = '';
+    state.allowUnmatchedParent = false;
     paintParentTick();
   }
 
@@ -2392,6 +2396,10 @@
 
     if (filing && state.allowDuplicate) {
       out.push({ name: 'allowDuplicate', value: '1' });
+    }
+
+    if (filing && state.allowUnmatchedParent) {
+      out.push({ name: 'allowUnmatchedParent', value: '1' });
     }
 
     var draftUuid = (editingDraft() && state.applicationId) ? state.applicationId : state.draftId;
@@ -3143,6 +3151,12 @@
           return;
         }
 
+        if (res.status === 409 && json.unmatchedParent) {
+          confirmUnmatchedParent(json.unmatchedParent);
+
+          return;
+        }
+
         if (!res.ok) {
           ui().toastError(httpFailure(res, json));
 
@@ -3191,6 +3205,34 @@
         host.querySelector('[data-dup-file]').addEventListener('click', function () {
           ui().closeModal();
           state.allowDuplicate = true;
+          submit();
+        });
+      },
+    });
+  }
+
+  /**
+   * The CIP number is not a file in the portal. Filing is still allowed,
+   * but only after the reader says they want to go ahead with what they typed.
+   */
+  function confirmUnmatchedParent(unmatched) {
+    var number = (unmatched && unmatched.cipNumber) || state.draft.parentCipNumber || 'This CIP number';
+    ui().openModal({
+      title: 'CIP number not in the portal',
+      body: '<p class="tma-portal-modal__text">' +
+        esc(number) + ' was not found in the portal. Go ahead and file this Add-On with the number you entered?' +
+        '</p>' +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-unmatched-cancel>Go back</button>' +
+        '<button type="button" class="tma-no-data__btn" data-unmatched-file>Go ahead</button>' +
+        '</div>',
+      onMount: function (host) {
+        host.querySelector('[data-unmatched-cancel]').addEventListener('click', function () {
+          ui().closeModal();
+        });
+        host.querySelector('[data-unmatched-file]').addEventListener('click', function () {
+          ui().closeModal();
+          state.allowUnmatchedParent = true;
           submit();
         });
       },
@@ -3484,6 +3526,7 @@
     // One key for this filing, however many times Add is pressed or retried.
     state.submissionKey = state.applicationId ? null : mintKey();
     state.allowDuplicate = false;
+    state.allowUnmatchedParent = false;
     if (state.draftTimer) { clearTimeout(state.draftTimer); state.draftTimer = null; }
     state.draftSaving = false;
     state.draftDirty = false;

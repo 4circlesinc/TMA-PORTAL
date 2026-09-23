@@ -191,7 +191,12 @@ class AddOn
         $match = self::findByCipNumber($user, $cip);
 
         if ($match === null) {
-            return ['ok' => false, 'error' => 'CIP application number not found.', 'field' => 'parentCipNumber'];
+            return [
+                'ok' => false,
+                'error' => 'CIP application number not found.',
+                'field' => 'parentCipNumber',
+                'reason' => 'not_found',
+            ];
         }
 
         if ($match->phase === Phase::ADD_ON) {

@@ -937,6 +937,81 @@ class CipAddOnTest extends TestCase
         $this->assertNull($reopened['parent']['id'], 'An unmatched parent names no file.');
     }
 
+    public function test_an_add_on_with_an_unknown_cip_number_asks_before_filing(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+        $payload = array_merge([
+            'phase' => Phase::ADD_ON,
+            'providerId' => $provider->uuid,
+            'parentCipNumber' => '99Z9XNONE01P',
+            'parentCorNumber' => 'COR-9999',
+            'parentApplicantName' => 'Ruth Okonjo',
+            'addonType' => AddOn::TYPE_SPOUSE,
+            'firstName' => 'Mei',
+            'lastName' => 'Wei',
+            'dateOfBirth' => '1988-06-01',
+            'nationality' => 'China',
+            'countryOfResidence' => 'China',
+            'passportNumber' => 'X1234567',
+            'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+            'gender' => 'Female',
+            'passportPhoto' => $this->photo(),
+        ], $this->cipRequiredDocumentFiles(AddOn::TYPE_SPOUSE, Phase::ADD_ON, 'Female'));
+
+        $this->file($staff, $payload)
+            ->assertStatus(409)
+            ->assertJsonPath('unmatchedParent.cipNumber', '99Z9XNONE01P');
+
+        $this->assertSame(0, CipApplication::query()->count(), 'Asking is not filing.');
+
+        $filed = $this->file($staff, array_merge($payload, ['allowUnmatchedParent' => '1']))
+            ->assertCreated()
+            ->json('application');
+
+        $row = CipApplication::query()->where('uuid', $filed['id'])->firstOrFail();
+        $this->assertSame(Status::NEW, $row->status);
+        $this->assertNull($row->parent_application_id);
+        $this->assertSame($provider->id, $row->provider_id);
+        $this->assertSame('99Z9XNONE01P', $row->parent_cip_number);
+        $this->assertSame('COR-9999', $row->parent_cor_number);
+        $this->assertSame('Ruth Okonjo', $row->parent_applicant_name);
+    }
+
+    public function test_an_add_on_against_a_file_that_is_not_granted_is_still_refused(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+        $open = Applications::create($provider, $staff, ['investment_type' => 'real_estate']);
+        $this->mainApplicant($open, 'Chen', 'Wei');
+        $open->forceFill([
+            'status' => Status::NEW,
+            'cip_number' => '10T1GADD99P',
+            'cor_number' => 'COR-OPEN',
+        ])->save();
+
+        $this->file($staff, array_merge([
+            'phase' => Phase::ADD_ON,
+            'providerId' => $provider->uuid,
+            'parentCipNumber' => '10T1GADD99P',
+            'parentCorNumber' => 'COR-OPEN',
+            'parentApplicantName' => 'Chen Wei',
+            'addonType' => AddOn::TYPE_SPOUSE,
+            'firstName' => 'Mei',
+            'lastName' => 'Wei',
+            'dateOfBirth' => '1988-06-01',
+            'nationality' => 'China',
+            'countryOfResidence' => 'China',
+            'passportNumber' => 'X1234567',
+            'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+            'gender' => 'Female',
+            'passportPhoto' => $this->photo(),
+            'allowUnmatchedParent' => '1',
+        ], $this->cipRequiredDocumentFiles(AddOn::TYPE_SPOUSE, Phase::ADD_ON, 'Female', 'real_estate')))
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'The parent application must be granted.');
+    }
+
     public function test_the_add_on_table_shows_parent_answers_that_name_no_file(): void
     {
         $staff = $this->staff();

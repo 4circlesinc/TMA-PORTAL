@@ -1148,21 +1148,28 @@ class Intake
                 throw new \RuntimeException('This application has been filed and is no longer a draft.');
             }
 
-            $application->forceFill([
+            $fill = [
                 'phase' => Phase::ADD_ON,
-                'parent_application_id' => $parent->id,
-                'provider_id' => $parent->provider_id,
+                'parent_application_id' => $parent?->id,
                 'addon_type' => $data['addonType'] ?? $application->addon_type,
-                'investment_type' => $parent->investment_type,
-                'investment_type_other' => $parent->investment_type_other,
                 'sponsored' => false,
-            ])->save();
+            ];
+            if ($parent) {
+                $fill['provider_id'] = $parent->provider_id;
+                $fill['investment_type'] = $parent->investment_type;
+                $fill['investment_type_other'] = $parent->investment_type_other;
+            }
+            $application->forceFill($fill)->save();
             // As in createAddOn: the parent is resolved directly here, so keep
             // what was typed for the form rather than leaving it to the link.
             self::retainTypedAddOnParent($application, $data);
-            $application->setRelation('parent', $parent);
-            if ($parent->provider) {
-                $application->setRelation('provider', $parent->provider);
+            if ($parent) {
+                $application->setRelation('parent', $parent);
+                if ($parent->provider) {
+                    $application->setRelation('provider', $parent->provider);
+                }
+            } else {
+                $application->unsetRelation('parent');
             }
 
             self::saveAddOnDraftAnswers($application, $actor, $data);
@@ -2215,24 +2222,25 @@ class Intake
             throw new \InvalidArgumentException($mismatch);
         }
 
-        $application = Applications::create($provider, $creator, [
+        $firm = $parent?->provider ?? $provider;
+        $application = Applications::create($firm, $creator, [
             'phase' => Phase::ADD_ON,
-            'investment_type' => $parent->investment_type,
-            'investment_type_other' => $parent->investment_type_other,
+            'investment_type' => $parent?->investment_type,
+            'investment_type_other' => $parent?->investment_type_other,
             'sponsored' => false,
             'submission_key' => ($data['submissionId'] ?? '') !== '' ? $data['submissionId'] : null,
         ]);
 
         $application->forceFill([
             'phase' => Phase::ADD_ON,
-            'parent_application_id' => $parent->id,
-            'provider_id' => $parent->provider_id,
+            'parent_application_id' => $parent?->id,
+            'provider_id' => $firm->id,
             'addon_type' => $data['addonType'],
         ])->save();
         // The link is resolved here rather than through linkAddOnParent, so
         // the typed answers still have to be kept for the form to read back.
         self::retainTypedAddOnParent($application, $data);
-        if ($parent->provider) {
+        if ($parent?->provider) {
             $application->setRelation('provider', $parent->provider);
         }
 
@@ -2450,13 +2458,25 @@ class Intake
         }
     }
 
-    private static function requireAddOnParent(User $creator, array $data, ?int $ignoreAddOnId = null): CipApplication
+    /**
+     * The granted parent, or null when the reader confirmed a CIP number
+     * the portal does not hold.
+     */
+    private static function requireAddOnParent(User $creator, array $data, ?int $ignoreAddOnId = null): ?CipApplication
     {
-        $parent = AddOn::findParent(
-            $creator,
-            (string) ($data['parentCipNumber'] ?? ''),
-            (string) ($data['parentCorNumber'] ?? ''),
-        );
+        $cip = (string) ($data['parentCipNumber'] ?? '');
+        $cor = (string) ($data['parentCorNumber'] ?? '');
+        $result = AddOn::lookup($creator, $cip, $cor);
+
+        if (! ($result['ok'] ?? false)) {
+            if (($result['reason'] ?? '') === 'not_found' && ! empty($data['allowUnmatchedParent'])) {
+                return null;
+            }
+
+            throw new \InvalidArgumentException($result['error'] ?? 'The parent application could not be found.');
+        }
+
+        $parent = AddOn::findParent($creator, $cip, $cor);
 
         if ($parent === null) {
             throw new \InvalidArgumentException('The parent application could not be found.');

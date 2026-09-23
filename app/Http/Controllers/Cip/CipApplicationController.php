@@ -275,7 +275,14 @@ class CipApplicationController extends Controller
 
         $addOnParent = null;
         if (Intake::isAddOnRequest($draft)) {
-            $addOnParent = $this->addOnParentOrFail($user, $data, $draft);
+            $resolved = $this->addOnParentForFiling($request, $user, $data, $draft);
+            if ($resolved instanceof JsonResponse) {
+                return $resolved;
+            }
+            $addOnParent = $resolved;
+            if ($addOnParent === null) {
+                $data['allowUnmatchedParent'] = true;
+            }
         }
 
         /*
@@ -450,29 +457,41 @@ class CipApplicationController extends Controller
     }
 
     /**
-     * The granted parent this Add-On names, or a 422 naming the field that
-     * is wrong. One open Add-On per parent: the draft being filed is that
-     * profile, so it is ignored rather than blocking itself.
+     * The granted parent this Add-On names.
+     *
+     * A CIP number the portal has never seen is not a mistake to refuse: the
+     * reader is asked, and if they go ahead the filing keeps the number they
+     * typed with no parent row behind it. A number that IS on file and fails
+     * for another reason — not granted, the wrong certificate, another
+     * Add-On — is still refused. One open Add-On per parent: the draft being
+     * filed is that profile, so it is ignored rather than blocking itself.
      *
      * @param  array<string, mixed>  $data
+     * @return CipApplication|JsonResponse|null  null means file with no parent link
      */
-    private function addOnParentOrFail(User $user, array $data, ?CipApplication $draft): CipApplication
+    private function addOnParentForFiling(Request $request, User $user, array $data, ?CipApplication $draft): CipApplication|JsonResponse|null
     {
-        $result = AddOn::lookup(
-            $user,
-            (string) ($data['parentCipNumber'] ?? ''),
-            (string) ($data['parentCorNumber'] ?? ''),
-        );
+        $cip = (string) ($data['parentCipNumber'] ?? '');
+        $cor = (string) ($data['parentCorNumber'] ?? '');
+        $result = AddOn::lookup($user, $cip, $cor);
 
         if (! ($result['ok'] ?? false)) {
+            if (($result['reason'] ?? '') === 'not_found') {
+                if (! $request->boolean('allowUnmatchedParent')) {
+                    return response()->json([
+                        'unmatchedParent' => [
+                            'cipNumber' => trim($cip),
+                        ],
+                    ], 409);
+                }
+
+                return null;
+            }
+
             abort(422, $result['error'] ?? 'The parent application could not be found.');
         }
 
-        $parent = AddOn::findParent(
-            $user,
-            (string) ($data['parentCipNumber'] ?? ''),
-            (string) ($data['parentCorNumber'] ?? ''),
-        );
+        $parent = AddOn::findParent($user, $cip, $cor);
         abort_unless($parent, 422, 'The parent application could not be found.');
 
         if ($why = AddOn::nameMismatch($parent, $data['parentApplicantName'] ?? null)) {
@@ -1963,7 +1982,13 @@ class CipApplicationController extends Controller
         $data = $request->validate(Intake::rules(draft: $draft), Intake::messages());
 
         if (Intake::isAddOnRequest($draft)) {
-            $this->addOnParentOrFail($user, $data, $draft);
+            $resolved = $this->addOnParentForFiling($request, $user, $data, $draft);
+            if ($resolved instanceof JsonResponse) {
+                return $resolved;
+            }
+            if ($resolved === null) {
+                $data['allowUnmatchedParent'] = true;
+            }
         }
 
         try {
