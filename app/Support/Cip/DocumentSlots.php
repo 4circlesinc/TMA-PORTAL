@@ -43,6 +43,9 @@ class DocumentSlots
      */
     private static bool $storing = false;
 
+    /** What an Additional documents upload is called when it arrives nameless. */
+    private const LABEL_FALLBACK = 'Additional document';
+
     /**
      * Every slot this person owes, created empty if it is not there yet.
      *
@@ -104,7 +107,15 @@ class DocumentSlots
             ? AddOnRequirements::filedLabel($type, $givenName ?: $upload->getClientOriginalName())
             : null;
 
-        $name = self::documentName($person, $type, $meta['extension'], null, $template, $filedLabel);
+        $name = self::documentName(
+            $person,
+            $type,
+            $meta['extension'],
+            null,
+            $template,
+            $filedLabel,
+            $upload->getClientOriginalName(),
+        );
 
         return DB::transaction(function () use ($slot, $person, $template, $stored, $meta, $name, $actor, $type, $filedLabel) {
             if ($slot->file_id && $file = $slot->file) {
@@ -368,15 +379,28 @@ class DocumentSlots
             $person,
             $type,
             $meta['extension'],
-            $number,
+            // The open box numbers nothing: its files are separate papers, not
+            // further sheets of one answer, and each keeps the name it came with.
+            AdditionalDocuments::is($type) ? null : $number,
             $template,
             AddOnRequirements::isAdditional($type) ? $slot->label : null,
+            $upload->getClientOriginalName(),
         );
 
         return DB::transaction(fn () => self::storeFile($person, $stored, $meta, $name, $actor, self::destination($person, $template, $actor, $type)));
     }
 
-    /** "Ada Lovelace - Birth certificate (2).pdf", or the G-series label as filed. */
+    /**
+     * "Ada Lovelace - Birth certificate (2).pdf", the G-series label as filed,
+     * or — for the open Additional documents box — the name the file arrived
+     * with, untouched.
+     *
+     * The box holds the papers no checklist named, so the sender's own
+     * filename is the only description of them there is. Collisions are
+     * settled by {@see Naming::nextAvailable} at storeFile(), the same way two
+     * files of one name are settled anywhere else in the library, rather than
+     * by a stem-and-number scheme that would overwrite that description.
+     */
     private static function documentName(
         CipPerson $person,
         string $type,
@@ -384,7 +408,18 @@ class DocumentSlots
         ?int $number = null,
         ?CipDocumentRequirement $template = null,
         ?string $filedLabel = null,
+        ?string $originalName = null,
     ): string {
+        if (AdditionalDocuments::is($type)) {
+            $given = Naming::clean((string) $originalName);
+
+            if ($given === '' || $given === '.'.$extension) {
+                $given = self::LABEL_FALLBACK.'.'.$extension;
+            }
+
+            return $given;
+        }
+
         if (AddOnRequirements::isAdditional($type)) {
             $label = $filedLabel ?: $template?->label ?: AddOnRequirements::filedLabel($type, '');
 
@@ -404,7 +439,7 @@ class DocumentSlots
             $file = FileItem::create([
                 'uuid' => $stored['uuid'],
                 'folder_id' => $folderId,
-                'name' => $name,
+                'name' => self::freeName($name, $folderId),
                 'extension' => $meta['extension'],
                 'mime_type' => $meta['mime'],
                 'size' => $stored['size'],
@@ -421,6 +456,32 @@ class DocumentSlots
         } finally {
             self::$storing = false;
         }
+    }
+
+    /**
+     * The same name if the drawer is free, else "name (1).pdf".
+     *
+     * Slot names are unique by construction — one person, one requirement —
+     * but the open Additional documents box keeps whatever filename arrived,
+     * so two scans really can both be called `scan.pdf`. Letting the second
+     * take the first's name would leave two indistinguishable rows in the
+     * drawer; the library settles that everywhere else this way.
+     */
+    private static function freeName(string $name, ?int $folderId): string
+    {
+        $name = Naming::clean($name);
+
+        if ($name === '' || $folderId === null) {
+            return $name;
+        }
+
+        return Naming::nextAvailable(
+            $name,
+            fn (string $candidate) => FileItem::query()
+                ->where('folder_id', $folderId)
+                ->whereRaw('LOWER(name) = ?', [mb_strtolower($candidate)])
+                ->exists(),
+        );
     }
 
     /**

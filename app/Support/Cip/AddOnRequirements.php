@@ -86,7 +86,13 @@ class AddOnRequirements
     }
 
     /**
-     * Every key the Add-On lane asks of one type, including G1–G3.
+     * Every key the Add-On lane asks of one type: the pack, G1–G3, and the
+     * open Additional documents box every person carries on every lane.
+     *
+     * The box is not this brief's — it is seeded for all five applicant types
+     * by {@see AdditionalDocuments} — but it is asked here, so the pruning
+     * pass in the seeder must not read it as a paper the brief dropped and
+     * take its Add-On tick away.
      *
      * @return list<string>
      */
@@ -95,6 +101,7 @@ class AddOnRequirements
         return array_values(array_unique(array_merge(
             self::packKeys($applicantType),
             self::ADDITIONAL_KEYS,
+            [AdditionalDocuments::KEY],
         )));
     }
 
@@ -181,6 +188,11 @@ class AddOnRequirements
         }
 
         if (self::isAdditional($slot->type) && ! $slot->isFilled()) {
+            return false;
+        }
+
+        // An empty open box is the normal state, not an outstanding document.
+        if (AdditionalDocuments::is($slot->type) && ! $slot->isFilled()) {
             return false;
         }
 

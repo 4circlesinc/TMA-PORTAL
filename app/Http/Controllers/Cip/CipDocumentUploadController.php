@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Cip;
 use App\Http\Controllers\Controller;
 use App\Models\CipDocument;
 use App\Models\User;
+use App\Support\Cip\AdditionalDocuments;
 use App\Support\Cip\Appeal;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\CipAccess;
@@ -65,6 +66,12 @@ class CipDocumentUploadController extends Controller
                 // so a photo arriving on a filled slot is meant to supersede
                 // the one there.
                 Intake::filePhoto($person, $data['file'], $user, replace: true);
+            } elseif (AdditionalDocuments::is($document->type) && $document->file_id) {
+                // The open box is a drawer, not an answer: a second paper
+                // joins the first rather than being refused as a duplicate
+                // filing. The number is unused — these files keep their own
+                // names — but attach() takes one for every other requirement.
+                DocumentSlots::attach($person, $document->type, $data['file'], $user, 0);
             } else {
                 DocumentSlots::fill($person, $document->type, $data['file'], $user, $data['documentName'] ?? null);
             }
@@ -107,6 +114,18 @@ class CipDocumentUploadController extends Controller
         }
 
         $status = $document->displayStatus();
+
+        /*
+         * The open Additional documents box never fills up. Every other slot
+         * holds one answer and closes once it has it, so that a filed document
+         * is replaced deliberately through the file viewer rather than
+         * silently overwritten. This box holds the papers no checklist named,
+         * so "already has one" is no reason to refuse the next. It still shuts
+         * when the package is locked, like everything else.
+         */
+        if (AdditionalDocuments::is($document->type)) {
+            return ! Package::locksDocument($document);
+        }
 
         if (! in_array($status, [DocumentStatus::PENDING_UPLOAD, DocumentStatus::UPDATE_REQUIRED], true)) {
             return false;

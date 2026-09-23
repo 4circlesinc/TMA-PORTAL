@@ -322,6 +322,20 @@
     return /additionalDocumentG[123]$/.test(String(path || ''));
   }
 
+  /*
+   * The open Additional documents box, which every person carries.
+   *
+   * Every other drop box holds one answer, so it closes once it is filled and
+   * a replacement has to go through the file viewer. This one is a drawer, not
+   * an answer: it takes the papers no checklist named, as many as there are,
+   * so it stays open after the first and each file keeps its own name. Note
+   * the G-series (additionalDocumentG1) is a different thing entirely and does
+   * not match here.
+   */
+  function isOpenDocumentsPath(path) {
+    return /(^|\.)additionalDocuments$/.test(String(path || ''));
+  }
+
   function gNamePath(path) {
     return path + 'Name';
   }
@@ -912,7 +926,8 @@
     var files = state.documents[path] || [];
     var meta = state.filedMeta[path];
     var packageFrozen = packageLocked();
-    var locked = packageFrozen || (meta && meta.uploaded && meta.status !== 'update_required');
+    var locked = packageFrozen
+      || (!isOpenDocumentsPath(path) && meta && meta.uploaded && meta.status !== 'update_required');
     var updateReason = meta && meta.status === 'update_required' && meta.updateReason
       ? '<p class="tma-portal-drop__update-reason"><strong>Update required.</strong> ' +
         esc(meta.updateReason) + '</p>'
@@ -959,7 +974,9 @@
       '<span class="tma-portal-drop__hint">' +
       (files.length || state.filed[path]
         ? 'Drop another file here, or choose one'
-        : 'Drop a file here, or choose one') +
+        : isOpenDocumentsPath(path)
+          ? 'Drop files here, or choose them'
+          : 'Drop a file here, or choose one') +
       '</span>' +
       '<span class="tma-portal-drop__meta">PDF or image, up to ' + MAX_DOCUMENT_MB + 'MB</span>' +
       '</button>' +
@@ -967,7 +984,11 @@
       // difference between "this is filed" and "this was never uploaded" —
       // the control looks identical otherwise.
       (state.filed[path] && !files.length
-        ? '<p class="tma-portal-drop__meta">Already filed. Choose a file to replace it.</p>'
+        ? '<p class="tma-portal-drop__meta">' +
+          (isOpenDocumentsPath(path)
+            ? 'Filed. Add another whenever you need to.'
+            : 'Already filed. Choose a file to replace it.') +
+          '</p>'
         : '') +
       documentList(path, files) +
       fieldError(path) +

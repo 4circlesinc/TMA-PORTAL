@@ -3,8 +3,10 @@
 namespace Database\Seeders;
 
 use App\Models\CipDocumentRequirement;
+use App\Support\Cip\AdditionalDocuments;
 use App\Support\Cip\AddOn;
 use App\Support\Cip\AddOnRequirements;
+use App\Support\Cip\ApplicantType;
 use App\Support\Cip\ApplicationRequirements;
 use App\Support\Cip\CorRequirements;
 use App\Support\Cip\DocumentTypes;
@@ -76,6 +78,8 @@ class CipDocumentRequirementSeeder extends Seeder
         if (Schema::hasColumn('cip_document_requirements', 'at_add_on')) {
             $this->syncAddOn();
         }
+
+        $this->syncAdditionalDocuments();
 
         $this->command?->info($added === 0
             ? 'CIP document requirements: already in place, nothing changed.'
@@ -376,4 +380,72 @@ class CipDocumentRequirementSeeder extends Seeder
     {
         return ApplicationRequirements::defaults();
     }
+
+    /**
+     * The open Additional documents box, on every applicant type and lane.
+     *
+     * Unlike the catalogue syncs, this one only ever asserts the row exists
+     * and stays reachable: its label and help are the administrator's to
+     * rewrite, and the one thing the firm must not be able to do by accident
+     * is mark it required — an empty box is the normal state, so a required
+     * one would hold every family back from submission.
+     *
+     * The folder is asserted because {@see DocumentSlots::destination} reads
+     * it to file into the person's own drawer; pointing it elsewhere is how
+     * these papers would stop saying whose they are.
+     */
+    public function syncAdditionalDocuments(): void
+    {
+        $row = AdditionalDocuments::row();
+        $hasLanes = Schema::hasColumn('cip_document_requirements', 'at_add_on');
+        $hasFolder = Schema::hasColumn('cip_document_requirements', 'folder');
+
+        foreach (ApplicantType::ALL as $applicantType) {
+            $existing = CipDocumentRequirement::withTrashed()
+                ->where('applicant_type', $applicantType)
+                ->where('key', AdditionalDocuments::KEY)
+                ->first();
+
+            $flags = [
+                'required' => false,
+                'active' => true,
+            ];
+
+            if ($hasFolder) {
+                $flags['folder'] = $row['folder'];
+            }
+
+            if ($hasLanes) {
+                $flags['at_pre_approval'] = true;
+                $flags['at_post_approval'] = true;
+                // An Add-On file is one person, a spouse or a dependent, so
+                // the principal and sponsor lists are not drawn on that lane
+                // at all. Ticking them here would put the box on a form that
+                // has nobody to hang it from — and the seeder's own pruning
+                // pass would strip the tick straight back off.
+                $flags['at_add_on'] = in_array($applicantType, AddOn::TYPES, true);
+                $flags['carry_forward'] = false;
+            }
+
+            if ($existing === null) {
+                CipDocumentRequirement::create(array_merge([
+                    'uuid' => (string) Str::uuid(),
+                    'applicant_type' => $applicantType,
+                    'key' => AdditionalDocuments::KEY,
+                    'label' => $row['label'],
+                    'help' => $row['help'],
+                    'sort_order' => AdditionalDocuments::SORT_ORDER,
+                ], $flags));
+
+                continue;
+            }
+
+            if ($existing->trashed()) {
+                $existing->restore();
+            }
+
+            $existing->forceFill($flags)->save();
+        }
+    }
+
 }

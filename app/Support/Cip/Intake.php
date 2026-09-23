@@ -13,6 +13,7 @@ use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Files\Naming;
 use App\Support\Security\IdentityFields;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -2033,6 +2034,25 @@ class Intake
         $folderIds = self::personFolderIds($person);
         if ($folderIds === []) {
             return false;
+        }
+
+        /*
+         * The open box files under the sender's own filename, so there is no
+         * stem to match on. The question is the one the slot's own drawer can
+         * answer: are these exact bytes, under this exact name, already filed
+         * for this person? Both halves matter. Checksum alone would refuse a
+         * genuinely different paper that happens to be byte-identical — two
+         * scans of one blank form, say — and the name alone would let an
+         * autosave file the same paper again on every pass.
+         */
+        if (AdditionalDocuments::is($type)) {
+            $name = Naming::clean($upload->getClientOriginalName());
+
+            return FileItem::query()
+                ->where('checksum', $hash)
+                ->whereIn('folder_id', $folderIds)
+                ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
+                ->exists();
         }
 
         $stem = self::attachmentStem($person, $type, $givenName);
