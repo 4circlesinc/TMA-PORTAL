@@ -2610,9 +2610,17 @@
 .tma-portal-home-grid.is-packed > [data-tile-id] > .tma-portal-panel__body {
   overflow-x: hidden;
   overflow-y: auto;
+  /* Rest on a row edge, and stop on one too — see the work list's note. The
+     rows this snaps to are the file rows of Recent Files and Favorites, the
+     only bodies that are themselves a stack of rows. */
+  scroll-snap-type: y proximity;
   overscroll-behavior: contain;
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+.tma-portal-home-grid.is-packed > [data-tile-id] > .tma-portal-panel__body > .tma-portal-file-row {
+  scroll-snap-align: start;
 }
 
 .tma-portal-home-grid.is-packed > [data-tile-id] > .tma-portal-panel__body::-webkit-scrollbar {
@@ -2842,9 +2850,15 @@
 .tma-portal-employees--scroll {
   overflow-x: hidden;
   overflow-y: auto;
+  /* Snapped to the name, for the reason the work list's note gives. */
+  scroll-snap-type: y proximity;
   overscroll-behavior: contain;
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+.tma-portal-employees--scroll > .tma-portal-employee {
+  scroll-snap-align: start;
 }
 
 .tma-portal-employees--scroll::-webkit-scrollbar {
@@ -2933,12 +2947,26 @@
   max-height: round(down, var(--tma-tile-body-space, 100%), var(--tma-work-row-h));
   overflow-x: hidden;
   overflow-y: auto;
+  /* Sizing the box to whole rows only settles where the list *rests*. Scroll
+     it and it stops wherever the wheel left it, which cuts a row at the top
+     edge and another at the bottom at the same time — the tile then reads as
+     broken however carefully its height was chosen. Snapping to the row makes
+     every resting position a row boundary.
+
+     Proximity, not mandatory: mandatory fights a deliberate short drag and
+     will not let the last partial row sit where the reader put it. */
+  scroll-snap-type: y proximity;
   overscroll-behavior: contain;
   scrollbar-width: none;
   -ms-overflow-style: none;
   min-height: 0;
   margin: 0 -4px;
   padding: 0 4px;
+}
+
+.tma-portal-email-list > *,
+.tma-portal-work-list > * {
+  scroll-snap-align: start;
 }
 
 .tma-portal-email-list::-webkit-scrollbar,
@@ -2975,9 +3003,15 @@
   /* The masonry's measurement, for the reason the work list above gives. */
   max-height: 100%;
   max-height: round(down, var(--tma-tile-body-space, 100%), var(--tma-chat-row-h));
+  /* And snapped to the row, for the other reason it gives. */
+  scroll-snap-type: y proximity;
   min-height: 0;
   margin: 0 -4px;
   padding: 0 4px;
+}
+
+.tma-portal-chat-list > * {
+  scroll-snap-align: start;
 }
 
 .tma-portal-chat-list::-webkit-scrollbar {

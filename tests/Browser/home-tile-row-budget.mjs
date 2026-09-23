@@ -23,8 +23,14 @@
  *   CHROME_BIN="…/Google Chrome for Testing" node tests/Browser/home-tile-row-budget.mjs
  *   W=1024 H=900 node tests/Browser/home-tile-row-budget.mjs
  *
- * Exits non-zero naming the tile that cuts a row or wastes a row's worth of
- * space.
+ * Then it scrolls each list by amounts that are not row multiples and checks
+ * nothing rests mid-row: sizing a tile to whole rows fixes where a list
+ * *rests*, not where it *stops*, and an unsnapped list cuts a row at the top
+ * edge and another at the bottom the moment it is scrolled. That is the same
+ * bug reported twice — once at rest, once scrolled.
+ *
+ * Exits non-zero naming the tile that cuts a row, wastes a row's worth of
+ * space, or stops between rows.
  */
 import { chromium } from 'playwright';
 
@@ -234,12 +240,94 @@ for (const t of out) {
   );
 }
 console.log('');
+
+/*
+ * Part two: where the lists STOP.
+ *
+ * Sizing a list to whole rows only settles where it rests. Scrolled, it stops
+ * wherever the wheel left it and cuts a row at the top edge and another at the
+ * bottom at once — which is how this was reported the second time, on a tile
+ * whose resting height was already correct. Each list is scrolled by amounts
+ * that are deliberately not row multiples; scroll snapping should carry every
+ * one of them to a row boundary.
+ */
+const SCROLL_CASES = [
+  ['email', '.tma-portal-email-list', '.tma-portal-email-row'],
+  ['messages', '.tma-portal-chat-list', '.tma-portal-chat-row'],
+  ['requests', '.tma-portal-work-list', '.tma-portal-request-row'],
+  ['comments', '.tma-portal-work-list', '.tma-portal-comment-row'],
+  ['recentFiles', '.tma-portal-panel__body', '.tma-portal-file-row'],
+  ['favorites', '.tma-portal-panel__body', '.tma-portal-file-row'],
+  ['employees', '.tma-portal-employees--scroll', '.tma-portal-employee'],
+];
+
+console.log('  scrolled, every list must stop on a row edge:\n');
+for (const [id, scrollSel, rowSel] of SCROLL_CASES) {
+  const present = await page.evaluate(
+    ([id, scrollSel]) => {
+      const t = document.querySelector(`[data-tile-id="${id}"]`);
+      const s = t && t.querySelector(scrollSel);
+      return !!(s && s.scrollHeight - s.clientHeight > 4);
+    },
+    [id, scrollSel],
+  );
+  if (!present) continue;
+
+  const box = await page.evaluate(
+    ([id, scrollSel]) => {
+      const s = document.querySelector(`[data-tile-id="${id}"] ${scrollSel}`);
+      const b = s.getBoundingClientRect();
+      return { x: Math.round(b.x + b.width / 2), y: Math.round(b.y + b.height / 2) };
+    },
+    [id, scrollSel],
+  );
+
+  let worstCut = 0;
+  const stops = [];
+  for (const delta of [30, 50, 80, 120, 200]) {
+    await page.evaluate(
+      ([id, scrollSel]) => {
+        document.querySelector(`[data-tile-id="${id}"] ${scrollSel}`).scrollTop = 0;
+      },
+      [id, scrollSel],
+    );
+    await page.waitForTimeout(220);
+    await page.mouse.move(box.x, box.y);
+    await page.mouse.wheel(0, delta);
+    await page.waitForTimeout(650);
+
+    const r = await page.evaluate(
+      ([id, scrollSel, rowSel]) => {
+        const list = document.querySelector(`[data-tile-id="${id}"] ${scrollSel}`);
+        const rows = [...list.querySelectorAll(rowSel)];
+        const lb = list.getBoundingClientRect();
+        // A row is cut when the viewport edge passes through its middle.
+        const sliced = rows.filter((row) => {
+          const rb = row.getBoundingClientRect();
+          const topCut = rb.top < lb.top - 1 && rb.bottom > lb.top + 1;
+          const botCut = rb.top < lb.bottom - 1 && rb.bottom > lb.bottom + 1;
+          return topCut || botCut;
+        }).length;
+        return { top: Math.round(list.scrollTop), sliced };
+      },
+      [id, scrollSel, rowSel],
+    );
+    stops.push(r.top);
+    if (r.sliced > worstCut) worstCut = r.sliced;
+  }
+
+  if (worstCut) bad.push(`${id}: scrolling rests mid-row — ${worstCut} row(s) cut by the list's edge`);
+  console.log(
+    `    ${worstCut ? 'BAD ' : 'ok  '} ${id.padEnd(12)} stops at ${stops.join(', ').padEnd(24)} ` +
+      `${worstCut ? `${worstCut} row(s) cut` : 'no row cut'}`,
+  );
+}
+console.log('');
+
 if (bad.length) {
   console.error('Row budget broken:\n  ' + bad.join('\n  ') + '\n');
-  await page.screenshot({ path: 'tests/Browser/_scratch-tile-stress.png', fullPage: true });
   await browser.close();
   process.exit(1);
 }
-console.log('  every list shows whole rows and wastes no space.\n');
-await page.screenshot({ path: 'tests/Browser/_scratch-tile-stress.png', fullPage: true });
+console.log('  every list shows whole rows, wastes no space, and stops on a row edge.\n');
 await browser.close();
