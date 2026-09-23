@@ -938,7 +938,7 @@
     }
 
     return '<div class="tma-portal-drop' + (state.errors[path] ? ' is-invalid' : '') +
-      (files.length ? ' is-filled' : '') + '" data-cip-drop="' + esc(path) + '">' +
+      (files.length ? ' is-filled' : '') + '" data-key="cip-drop:' + esc(path) + '" data-cip-drop="' + esc(path) + '">' +
       fieldLabel(path, labelFor(path)) +
       documentHelp(path) +
       (isGSeriesPath(path) && !locked
@@ -2049,9 +2049,12 @@
 
   function wireDocuments(root) {
     MORPH.unwired(root, '[data-cip-file]').forEach(function (input) {
-      var path = input.getAttribute('data-cip-file');
       input.addEventListener('change', function () {
-        takeDocuments(root, path, input.files, input);
+        // Read at event time. The requirement list changes after the first
+        // paint (gender, investment, a dependent's age, the Add-On type),
+        // and a listener that remembered the path from wiring files the
+        // scan under whichever requirement used to sit in this box.
+        takeDocuments(root, input.getAttribute('data-cip-file'), input.files, input);
       });
     });
 
@@ -2096,8 +2099,6 @@
    */
   function wireDrops(root) {
     MORPH.unwired(root, '[data-cip-drop]').forEach(function (zone) {
-      var path = zone.getAttribute('data-cip-drop');
-
       ['dragenter', 'dragover'].forEach(function (type) {
         zone.addEventListener(type, function (e) {
           e.preventDefault();
@@ -2117,7 +2118,9 @@
         e.preventDefault();
         e.stopPropagation();
         zone.classList.remove('is-dragging');
-        takeDocuments(root, path, e.dataTransfer && e.dataTransfer.files);
+        // The zone's path is the one painted on it now, not the one it had
+        // when the listener was attached. See wireDocuments.
+        takeDocuments(root, zone.getAttribute('data-cip-drop'), e.dataTransfer && e.dataTransfer.files);
       });
     });
   }
