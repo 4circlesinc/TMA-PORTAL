@@ -700,6 +700,58 @@
     ctx.logEl.scrollTop = ctx.logEl.scrollHeight;
   }
 
+  /*
+   * Put a photo the portal just made into the turn it belongs to.
+   *
+   * The crop was being stored on the server and shown inside the card, but
+   * never added to the message — so the tile, and with it Adjust, appeared
+   * only after a reload, while the assistant's reply was already promising
+   * Adjust in the same breath. Both the on-screen bubble and the in-memory
+   * message are updated, so a re-render (a morph, a re-paint of the log)
+   * keeps it.
+   *
+   * A re-frame replaces the tile it supersedes rather than adding a second,
+   * matching what the server does with `replaces`.
+   */
+  function rememberDerived(ctx, attachment) {
+    if (!ctx || !attachment || !attachment.id) return;
+
+    var msgs = ctx.messages || [];
+    var target = null;
+    for (var i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i] && msgs[i].role === 'assistant') { target = msgs[i]; break; }
+    }
+    if (!target) return;
+
+    target.attachments = (target.attachments || []).filter(function (x) {
+      return !(x && x.kind === 'derived' && x.name === attachment.name);
+    });
+    target.attachments.push(attachment);
+
+    // The bubble on screen, which is the last assistant row in the log.
+    if (!ctx.logEl) return;
+    var rows = ctx.logEl.querySelectorAll('.tma-bespoke__row--assistant .tma-bespoke__bubble');
+    var bubble = rows[rows.length - 1];
+    if (!bubble) return;
+
+    var strip = bubble.querySelector('.tma-bespoke__files');
+    if (!strip) {
+      mountFilePreviews(bubble, [attachment]);
+      return;
+    }
+
+    // A re-frame supersedes the crop it replaces: drop any derived tile of
+    // this name, then add the new one. previewKey mints a fresh id per
+    // object, so the name is what identifies the photo across saves.
+    Array.prototype.slice.call(strip.children).forEach(function (tile) {
+      if (tile.getAttribute('data-bespoke-derived') === attachment.name) tile.remove();
+    });
+
+    var fresh = previewTile(attachment, null);
+    fresh.setAttribute('data-bespoke-derived', attachment.name);
+    strip.appendChild(fresh);
+  }
+
   function mountFilePreviews(bubble, list) {
     if (!Array.isArray(list) || !list.length) return;
     var wrap = document.createElement('div');
@@ -1850,6 +1902,10 @@
           savedOnce = true;
           var d = data && data.attachment;
           if (d && d.url && link) link.href = d.url + '?download=1';
+          // The finished photo joins the turn it belongs to, so Adjust is
+          // there straight away rather than only after a reload — which is
+          // what the reply has been promising all along.
+          if (d) rememberDerived(ctx, d);
         }).catch(function () { /* the blob link still works */ });
       }).catch(function () {
         status.textContent = 'That adjustment did not work. The photo above is unchanged.';
@@ -1860,8 +1916,34 @@
     function sideFor(pct) {
       var canvas = source.canvas;
       var widest = Math.min(canvas.width, canvas.height);
-      var tightest = Math.max(40, Math.min(detected.side, widest));
+
+      /*
+       * The slider used to bottom out at the frame the detector chose, so
+       * it could only ever zoom OUT — a face that came back too small could
+       * not be tightened at all. It now runs from a genuine close crop to
+       * the whole picture, with the detected frame sitting wherever it
+       * naturally falls in between.
+       *
+       * The floor is a quarter of the detected head (or 80px, whichever is
+       * larger) rather than a fixed number: on a big scan that is still a
+       * real crop, and on a small one it stops short of magnifying four
+       * pixels into a passport photo.
+       */
+      var tightest = Math.max(80, Math.min(detected.side * 0.25, widest));
+      if (tightest >= widest) return widest;
+
       return tightest + (widest - tightest) * (pct / 100);
+    }
+
+    /* Where the detected frame sits on that scale, so the slider opens with
+       its handle on the crop the reader is actually looking at. */
+    function pctForSide(side) {
+      var canvas = source.canvas;
+      var widest = Math.min(canvas.width, canvas.height);
+      var tightest = Math.max(80, Math.min(detected.side * 0.25, widest));
+      if (widest <= tightest) return 0;
+
+      return Math.max(0, Math.min(100, ((side - tightest) / (widest - tightest)) * 100));
     }
 
     function clampFrame(next) {
@@ -1961,6 +2043,9 @@
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       objectUrl = URL.createObjectURL(result.blob);
       link.href = objectUrl;
+      // The handle starts where the detected crop sits on the scale, so
+      // there is room to drag both ways from the opening frame.
+      range.value = String(Math.round(pctForSide(frame.side)));
       paint();
       return save();
     }

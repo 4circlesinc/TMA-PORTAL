@@ -140,18 +140,21 @@ const adjustCount = await page.locator('[data-bespoke-preview-adjust]').count();
 check(adjustCount === 1, `only the derived crop offers Adjust, not the upload (${adjustCount})`);
 
 // ── it re-opens the editor, against the ORIGINAL ─────────────────────────
-let framedFrom = null;
+// Collect every attachment fetched from here on. The editor loads the
+// original to re-frame from; the tile it then files fetches the new crop,
+// so this asks "was the original fetched", not "what was fetched last".
+const fetched = [];
 page.on('request', (r) => {
   const u = r.url();
-  if (/\/portal\/bespoke\/attachments\/[0-9a-f-]{36}$/.test(u)) framedFrom = u.split('/').pop();
+  if (/\/portal\/bespoke\/attachments\/[0-9a-f-]{36}$/.test(u)) fetched.push(u.split('/').pop());
 });
 
 await adjust.click();
 await page.waitForSelector('[data-bespoke-photo-stage]', { timeout: 10000 });
 await page.waitForTimeout(2500);
 
-check(framedFrom === made.originalId,
-  `re-framing loads the original photo, not the crop (${framedFrom === made.originalId ? 'original' : framedFrom})`);
+check(fetched.includes(made.originalId),
+  `re-framing loads the original photo to cut from (fetched ${fetched.length})`);
 
 const editorShown = await page.$eval('[data-bespoke-photo-editor]', (e) => !e.hidden);
 check(editorShown, 'the framing editor is open');
