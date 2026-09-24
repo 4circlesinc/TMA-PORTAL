@@ -407,6 +407,72 @@ class BespokeAttachmentsTest extends TestCase
         $this->assertSame(0, Attachments::prune($officer));
     }
 
+    /**
+     * Adjusting a 2×2 leaves one photo, not one per frame.
+     *
+     * The crop is re-sent as the reader drags and zooms; without a
+     * supersede the thread filled up with every half-framed pass the
+     * reader made on the way to the one they wanted.
+     */
+    public function test_re_cropping_a_photo_replaces_the_one_before_it(): void
+    {
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $conversationId = (string) Str::uuid();
+        Http::fake(['api.groq.com/*' => Http::response(['choices' => [['message' => ['content' => 'Here it is.']]]])]);
+        $this->actingAs($officer)->postJson('/portal/bespoke/chat', [
+            'messages' => [['role' => 'user', 'content' => 'make it 2x2']],
+            'conversationId' => $conversationId,
+        ])->assertOk();
+
+        $first = $this->upload(
+            $officer,
+            $conversationId,
+            UploadedFile::fake()->image('me-2x2.jpg', 600, 600),
+            ['kind' => 'derived'],
+        );
+        $firstRow = BespokeAttachment::query()->where('uuid', $first['id'])->firstOrFail();
+        $firstPath = $firstRow->path;
+
+        $second = $this->upload(
+            $officer,
+            $conversationId,
+            UploadedFile::fake()->image('me-2x2.jpg', 640, 640),
+            ['kind' => 'derived', 'replaces' => 'me-2x2.jpg'],
+        );
+
+        // The earlier crop is gone, bytes and all; the latest one stands.
+        $this->assertNull(BespokeAttachment::query()->where('uuid', $first['id'])->first());
+        Storage::disk('local')->assertMissing($firstPath);
+        $this->assertNotNull(BespokeAttachment::query()->where('uuid', $second['id'])->first());
+
+        $detail = $this->actingAs($officer)
+            ->getJson('/portal/bespoke/conversations/'.$conversationId)
+            ->assertOk()->json('conversation');
+        $last = end($detail['messages']);
+        $this->assertSame(['me-2x2.jpg'], array_column($last['attachments'], 'name'));
+    }
+
+    /** A file the reader uploaded is never removed by a crop replacing itself. */
+    public function test_superseding_never_removes_a_readers_own_upload(): void
+    {
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $conversationId = (string) Str::uuid();
+
+        $mine = $this->upload($officer, $conversationId, UploadedFile::fake()->image('me-2x2.jpg', 300, 300));
+
+        $this->upload(
+            $officer,
+            $conversationId,
+            UploadedFile::fake()->image('me-2x2.jpg', 600, 600),
+            ['kind' => 'derived', 'replaces' => 'me-2x2.jpg'],
+        );
+
+        $this->assertNotNull(
+            BespokeAttachment::query()->where('uuid', $mine['id'])->first(),
+            'An upload of the reader\'s own must survive a derived crop of the same name.',
+        );
+    }
+
     public function test_stale_staged_files_are_pruned_on_the_next_upload(): void
     {
         $officer = $this->user(Role::REVIEWING_OFFICER);

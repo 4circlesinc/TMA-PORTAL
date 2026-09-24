@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
-#[Fillable(['uuid', 'user_id', 'title', 'last_message_at'])]
+#[Fillable(['uuid', 'user_id', 'title', 'last_message_at', 'pinned_at'])]
 class BespokeConversation extends Model
 {
     protected static function booted(): void
@@ -23,6 +23,7 @@ class BespokeConversation extends Model
     {
         return [
             'last_message_at' => 'datetime',
+            'pinned_at' => 'datetime',
         ];
     }
 

@@ -165,6 +165,38 @@ final class Attachments
             ->update(['message_id' => $message->id]);
     }
 
+    /**
+     * Retire the derived file this one replaces.
+     *
+     * Adjusting a 2×2 crop re-sends the photo each time the reader settles
+     * the frame, and every send used to leave its own copy in the thread —
+     * a trail of half-framed faces behind the finished one. The earlier
+     * copies of the same filename are deleted here, so the chat keeps the
+     * photo rather than the working out.
+     *
+     * Only ever derived files, only in this conversation, and never the one
+     * just stored: a file the reader uploaded themselves is theirs, and is
+     * not something this is allowed to remove.
+     */
+    public static function supersedeDerived(
+        BespokeConversation $conversation,
+        string $name,
+        BespokeAttachment $keep,
+    ): void {
+        $name = self::safeName($name);
+        if ($name === '') {
+            return;
+        }
+
+        BespokeAttachment::query()
+            ->where('conversation_id', $conversation->id)
+            ->where('kind', self::KIND_DERIVED)
+            ->where('name', $name)
+            ->whereKeyNot($keep->getKey())
+            ->get()
+            ->each(fn (BespokeAttachment $old) => self::delete($old));
+    }
+
     public static function findOwned(User $user, string $uuid): ?BespokeAttachment
     {
         return BespokeAttachment::query()

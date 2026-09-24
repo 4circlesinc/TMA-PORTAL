@@ -215,6 +215,10 @@ class BespokeController extends Controller
             'text' => ['sometimes', 'nullable', 'string', 'max:'.Attachments::MAX_TEXT_CHARS],
             'pages' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:5000'],
             'kind' => ['sometimes', 'in:upload,derived'],
+            // The name of a derived file this one supersedes. Adjusting a
+            // 2×2 crop re-sends the photo as the reader moves the frame;
+            // without this every drag would leave its own copy in the chat.
+            'replaces' => ['sometimes', 'nullable', 'string', 'max:255'],
         ]);
 
         $user = $request->user();
@@ -230,6 +234,14 @@ class BespokeController extends Controller
         // message: it hangs off the latest turn, so it is kept and shows
         // when the thread is reopened.
         if ($attachment->kind === Attachments::KIND_DERIVED) {
+            // A re-crop of the same photo takes the old one's place, so the
+            // thread keeps one finished 2×2 rather than every frame the
+            // reader passed through on the way to it.
+            $supersedes = trim((string) ($validated['replaces'] ?? ''));
+            if ($supersedes !== '') {
+                Attachments::supersedeDerived($conversation, $supersedes, $attachment);
+            }
+
             $latest = $conversation->messages()->latest('id')->first();
             if ($latest) {
                 Attachments::attachTo($latest, collect([$attachment]));
@@ -433,14 +445,29 @@ class BespokeController extends Controller
     {
         Bespoke::abortUnlessEnabled();
 
+        // Rename and pin come through the same door, and a request may carry
+        // either. Both are optional so that pinning from the history list
+        // does not have to send a title it was never asked for.
         $validated = $request->validate([
-            'title' => ['required', 'string', 'max:80'],
+            'title' => ['sometimes', 'required', 'string', 'max:80'],
+            'pinned' => ['sometimes', 'boolean'],
         ]);
 
-        $conversation = Conversations::rename(
-            Conversations::findOwnedOrFail($request->user(), $uuid),
-            $validated['title'],
-        );
+        if (! array_key_exists('title', $validated) && ! array_key_exists('pinned', $validated)) {
+            throw ValidationException::withMessages([
+                'title' => 'Nothing to change.',
+            ]);
+        }
+
+        $conversation = Conversations::findOwnedOrFail($request->user(), $uuid);
+
+        if (array_key_exists('title', $validated)) {
+            $conversation = Conversations::rename($conversation, $validated['title']);
+        }
+
+        if (array_key_exists('pinned', $validated)) {
+            $conversation = Conversations::setPinned($conversation, (bool) $validated['pinned']);
+        }
 
         return response()->json([
             'conversation' => Conversations::listPayload($conversation->load('latestMessage')),

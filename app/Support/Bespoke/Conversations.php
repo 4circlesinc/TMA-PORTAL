@@ -97,16 +97,35 @@ final class Conversations
         $conversation->save();
     }
 
-    /** @return Collection<int, BespokeConversation> */
+    /**
+     * This reader's chats, pinned ones first.
+     *
+     * The rest stay in last-spoken-to order, because the page groups them
+     * by date — Today, Yesterday, Previous 7 days — and a group only reads
+     * correctly if the rows inside it are chronological.
+     *
+     * @return Collection<int, BespokeConversation>
+     */
     public static function listFor(User $user): Collection
     {
         return BespokeConversation::query()
             ->where('user_id', $user->id)
             ->whereNotNull('last_message_at')
             ->with('latestMessage')
+            ->orderByRaw('CASE WHEN pinned_at IS NULL THEN 1 ELSE 0 END')
+            ->orderByDesc('pinned_at')
             ->orderByDesc('last_message_at')
             ->limit(100)
             ->get();
+    }
+
+    /** Pin a chat to the top of the list, or let it fall back into its date group. */
+    public static function setPinned(BespokeConversation $conversation, bool $pinned): BespokeConversation
+    {
+        $conversation->pinned_at = $pinned ? now() : null;
+        $conversation->save();
+
+        return $conversation;
     }
 
     public static function rename(BespokeConversation $conversation, string $title): BespokeConversation
@@ -126,6 +145,7 @@ final class Conversations
             'uuid' => $conversation->uuid,
             'title' => $conversation->title ?: 'New chat',
             'updatedAt' => optional($conversation->last_message_at)->toIso8601String(),
+            'pinned' => $conversation->pinned_at !== null,
             'preview' => $last ? self::preview($last->body) : '',
         ];
     }
@@ -139,6 +159,7 @@ final class Conversations
             'uuid' => $conversation->uuid,
             'title' => $conversation->title ?: 'New chat',
             'updatedAt' => optional($conversation->last_message_at)->toIso8601String(),
+            'pinned' => $conversation->pinned_at !== null,
             'messages' => $conversation->messages->sortBy('id')->values()->map(function (BespokeMessage $message) {
                 return [
                     'role' => $message->role,

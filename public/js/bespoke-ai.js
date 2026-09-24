@@ -12,6 +12,17 @@
   if (window.TMABespoke) return;
 
   var LS_OPEN = 'tma.bespoke.open';
+  /*
+   * The chat in progress, remembered for THIS page only.
+   *
+   * It used to live in localStorage, which outlives a reload and is shared
+   * by every tab — so a refresh silently resumed the old thread, and
+   * expanding the launcher to the full page carried that thread across with
+   * it. A reload is the reader saying "start again", so the id is kept in
+   * sessionStorage and cleared as this script loads: whatever is on screen
+   * after a refresh is a new chat, on both surfaces. The old thread is not
+   * lost — it is in History, which is where a reader looks for it.
+   */
   var LS_CONV = 'tma.bespoke.conversationId';
   var LS_HELLO = 'tma.bespoke.helloDismissed';
   var MARK = 'images/brand/tma/bespoke-ai-mark.png';
@@ -95,6 +106,22 @@
     return p === '/bespoke-ai' || p.indexOf('/bespoke-ai/') === 0;
   }
 
+  /*
+   * The chat named by the address bar, if any.
+   *
+   * The shell passes this in when it routes, but the assistant's view is
+   * also mounted by paths that do not carry the options through, and a
+   * /bespoke-ai/{id} link that opened an empty New chat is a broken link.
+   * Reading the URL is the one answer both paths agree on.
+   */
+  function pathConversationId() {
+    var p = currentPath();
+    if (p.indexOf('/bespoke-ai/') !== 0) return '';
+    var id = p.slice('/bespoke-ai/'.length).split('/')[0];
+
+    return isUuid(id) ? id : '';
+  }
+
   function storeGet(k, d) {
     try {
       var v = localStorage.getItem(k);
@@ -107,6 +134,43 @@
   function storeSet(k, v) {
     try { localStorage.setItem(k, v); } catch (e) { /* private mode */ }
   }
+
+  /*
+   * The conversation in progress: this tab, this page view, nothing longer.
+   *
+   * Everything else here is a preference and belongs in localStorage. This
+   * one is a position in a thread, and keeping it that long is what made a
+   * refresh resume the old chat instead of starting a new one.
+   */
+  function convGet() {
+    try {
+      return sessionStorage.getItem(LS_CONV) || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  function convSet(v) {
+    try {
+      if (v) sessionStorage.setItem(LS_CONV, v);
+      else sessionStorage.removeItem(LS_CONV);
+    } catch (e) { /* private mode */ }
+  }
+
+  /*
+   * A load of this script is a fresh start.
+   *
+   * It runs once per full page load, so a refresh, a typed URL and a cold
+   * open all land here; SPA navigation does not re-run it, which is what
+   * lets the launcher keep its thread while the reader moves around the
+   * portal. The stale localStorage key from earlier builds is cleared too,
+   * or a reader who never clears their browser keeps resuming a chat from
+   * before this fix shipped.
+   */
+  (function forgetLastConversation() {
+    convSet('');
+    try { localStorage.removeItem(LS_CONV); } catch (e) { /* private mode */ }
+  }());
 
   function csrf() {
     var m = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
@@ -937,7 +1001,7 @@
   function ensureConversation(ctx) {
     if (!isUuid(ctx.conversationId)) {
       ctx.conversationId = uuid();
-      storeSet(LS_CONV, ctx.conversationId);
+      convSet(ctx.conversationId);
     }
     return ctx.conversationId;
   }
@@ -1538,50 +1602,222 @@
     var a = action.attachment || {};
     var card = cardShell(ctx, 'photo');
     card.innerHTML =
-      '<p class="tma-bespoke__card-head">2×2 photo from ' + escapeHtml(a.name || 'file') + '</p>' +
-      '<p class="tma-bespoke__card-ask" data-bespoke-photo-status>Finding the face…</p>' +
-      '<div class="tma-bespoke__photo" data-bespoke-photo hidden></div>' +
-      '<div class="tma-bespoke__photo-tools" data-bespoke-photo-tools hidden>' +
-        '<div class="tma-bespoke__photo-pad">' +
-          '<button type="button" class="tma-bespoke__photo-nudge" data-nudge="up" aria-label="Move frame up">↑</button>' +
-          '<button type="button" class="tma-bespoke__photo-nudge" data-nudge="left" aria-label="Move frame left">←</button>' +
-          '<button type="button" class="tma-bespoke__photo-nudge" data-nudge="right" aria-label="Move frame right">→</button>' +
-          '<button type="button" class="tma-bespoke__photo-nudge" data-nudge="down" aria-label="Move frame down">↓</button>' +
-        '</div>' +
-        '<div class="tma-bespoke__photo-zoom">' +
-          '<button type="button" class="tma-bespoke__photo-nudge" data-nudge="in" aria-label="Closer">Closer</button>' +
-          '<button type="button" class="tma-bespoke__photo-nudge" data-nudge="out" aria-label="Wider">Wider</button>' +
+      '<p class="tma-bespoke__card-head">2\u00d72 photo from ' + escapeHtml(a.name || 'file') + '</p>' +
+      '<p class="tma-bespoke__card-ask" data-bespoke-photo-status>Finding the face\u2026</p>' +
+      '<div class="tma-bespoke__photo-making" data-bespoke-photo-making>' +
+        '<div class="tma-bespoke__photo-making-frame">' +
+          '<span class="tma-bespoke__photo-making-sweep"></span>' +
+          '<span class="tma-bespoke__photo-making-corner tma-bespoke__photo-making-corner--tl"></span>' +
+          '<span class="tma-bespoke__photo-making-corner tma-bespoke__photo-making-corner--tr"></span>' +
+          '<span class="tma-bespoke__photo-making-corner tma-bespoke__photo-making-corner--bl"></span>' +
+          '<span class="tma-bespoke__photo-making-corner tma-bespoke__photo-making-corner--br"></span>' +
         '</div>' +
       '</div>' +
+      '<div class="tma-bespoke__photo" data-bespoke-photo hidden></div>' +
+      '<div class="tma-bespoke__photo-editor" data-bespoke-photo-editor hidden>' +
+        '<div class="tma-bespoke__photo-stage" data-bespoke-photo-stage>' +
+          '<canvas class="tma-bespoke__photo-canvas" data-bespoke-photo-canvas></canvas>' +
+          '<div class="tma-bespoke__photo-grid" aria-hidden="true"></div>' +
+        '</div>' +
+        '<label class="tma-bespoke__photo-zoom">' +
+          '<span class="tma-bespoke__photo-zoom-label">Zoom</span>' +
+          '<input type="range" class="tma-bespoke__photo-range" data-bespoke-photo-range' +
+            ' min="0" max="100" value="0" aria-label="Zoom">' +
+        '</label>' +
+        '<p class="tma-bespoke__photo-hint">Drag the photo to line up the face.</p>' +
+      '</div>' +
       '<div class="tma-bespoke__card-foot" data-bespoke-card-foot></div>';
+
     var status = card.querySelector('[data-bespoke-photo-status]');
+    var making = card.querySelector('[data-bespoke-photo-making]');
     var slot = card.querySelector('[data-bespoke-photo]');
-    var tools = card.querySelector('[data-bespoke-photo-tools]');
+    var editor = card.querySelector('[data-bespoke-photo-editor]');
+    var stage = card.querySelector('[data-bespoke-photo-stage]');
+    var view = card.querySelector('[data-bespoke-photo-canvas]');
+    var range = card.querySelector('[data-bespoke-photo-range]');
     var foot = card.querySelector('[data-bespoke-card-foot]');
     var base = String(a.name || 'photo').replace(/\.[^.]+$/, '');
     var filename = base + '-2x2.jpg';
 
-    // Held across adjustments so a nudge never refetches or re-detects.
+    // Held across adjustments so moving the frame never refetches or re-detects.
     var source = null;
     var frame = null;
+    var detected = null;
     var objectUrl = null;
     var link = null;
-    var busy = false;
+    var saveTimer = null;
+    var savedOnce = false;
 
     function describe(result) {
       var how = frame && frame.source === 'centre'
         ? 'No face found, so this is the middle of the picture'
-        : 'Cropped around the face';
-      return how + '; ' + result.size + '×' + result.size + ' px, 2×2 in at '
+        : frame && frame.source === 'manual'
+          ? 'Framed by you'
+          : 'Cropped around the face';
+      return how + '; ' + result.size + '\u00d7' + result.size + ' px, 2\u00d72 in at '
         + Math.round(result.size / 2) + ' dpi'
         + (result.upscaled ? '. The original was small, so expect some softness.' : '.');
     }
 
-    function show(result) {
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-      objectUrl = URL.createObjectURL(result.blob);
-      slot.innerHTML = '<img src="' + objectUrl + '" alt="2×2 photo" width="120" height="120">';
-      slot.hidden = false;
+    /*
+     * Paint the frame's contents at the size the card shows.
+     *
+     * Every drag and every zoom tick comes through here, and nothing else:
+     * this is canvas work in the browser, so it costs nothing and can run
+     * on every animation frame. What it deliberately does NOT do is save.
+     */
+    function paint() {
+      if (!source || !frame) return;
+      var box = Math.round(stage.clientWidth || 220);
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      if (view.width !== Math.round(box * dpr)) {
+        view.width = Math.round(box * dpr);
+        view.height = Math.round(box * dpr);
+      }
+      view.style.height = box + 'px';
+      var c = view.getContext('2d');
+      c.save();
+      c.scale(dpr, dpr);
+      c.fillStyle = '#fff';
+      c.fillRect(0, 0, box, box);
+      c.imageSmoothingEnabled = true;
+      c.imageSmoothingQuality = 'high';
+      c.drawImage(source.canvas, frame.x, frame.y, frame.side, frame.side, 0, 0, box, box);
+      c.restore();
+    }
+
+    /*
+     * One photo in the chat, not one per nudge.
+     *
+     * Adjusting used to upload on every single frame, so a reader who
+     * dragged the crop into place left a trail of half-framed photos behind
+     * them. The save now waits until the adjusting stops, and replaces the
+     * copy it saved before instead of adding another.
+     */
+    function saveSoon() {
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = setTimeout(function () {
+        saveTimer = null;
+        save();
+      }, 700);
+    }
+
+    function save() {
+      if (!source || !frame) return Promise.resolve();
+      return cutSquare(source.canvas, frame).then(function (result) {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        objectUrl = URL.createObjectURL(result.blob);
+        status.textContent = describe(result);
+        if (link) link.href = objectUrl;
+
+        var form = new FormData();
+        form.append('file', result.blob, filename);
+        form.append('conversationId', ensureConversation(ctx));
+        form.append('kind', 'derived');
+        // Replaces the copy kept for this card rather than filing another.
+        if (savedOnce) form.append('replaces', filename);
+        return apiForm('/portal/bespoke/attachments', form).then(function (data) {
+          savedOnce = true;
+          var d = data && data.attachment;
+          if (d && d.url && link) link.href = d.url + '?download=1';
+        }).catch(function () { /* the blob link still works */ });
+      }).catch(function () {
+        status.textContent = 'That adjustment did not work. The photo above is unchanged.';
+      });
+    }
+
+    /* Zoom runs from the detected frame out to the whole picture. */
+    function sideFor(pct) {
+      var canvas = source.canvas;
+      var widest = Math.min(canvas.width, canvas.height);
+      var tightest = Math.max(40, Math.min(detected.side, widest));
+      return tightest + (widest - tightest) * (pct / 100);
+    }
+
+    function clampFrame(next) {
+      var canvas = source.canvas;
+      next.side = Math.max(40, Math.min(next.side, canvas.width, canvas.height));
+      next.x = Math.max(0, Math.min(next.x, canvas.width - next.side));
+      next.y = Math.max(0, Math.min(next.y, canvas.height - next.side));
+      return next;
+    }
+
+    function zoomTo(pct) {
+      if (!source || !frame || !detected) return;
+      var side = sideFor(pct);
+      // Zoom about the middle, so the face does not walk out of frame.
+      var cx = frame.x + frame.side / 2;
+      var cy = frame.y + frame.side / 2;
+      frame = clampFrame({ x: cx - side / 2, y: cy - side / 2, side: side, source: 'manual' });
+      paint();
+      saveSoon();
+    }
+
+    /* Drag the picture under the frame. Pointer events cover mouse, pen and
+       touch in one path, so a phone drags exactly like a desktop does. */
+    var dragging = false;
+    var dragId = null;
+    var startX = 0;
+    var startY = 0;
+    var startFrameX = 0;
+    var startFrameY = 0;
+
+    stage.addEventListener('pointerdown', function (e) {
+      if (!source || !frame) return;
+      dragging = true;
+      dragId = e.pointerId;
+      startX = e.clientX;
+      startY = e.clientY;
+      startFrameX = frame.x;
+      startFrameY = frame.y;
+      stage.classList.add('is-dragging');
+      try { stage.setPointerCapture(dragId); } catch (err) { /* older engines */ }
+      e.preventDefault();
+    });
+
+    stage.addEventListener('pointermove', function (e) {
+      if (!dragging || e.pointerId !== dragId) return;
+      var box = stage.clientWidth || 1;
+      // The picture moves with the finger, so the frame moves against it.
+      var scale = frame.side / box;
+      frame = clampFrame({
+        x: startFrameX - (e.clientX - startX) * scale,
+        y: startFrameY - (e.clientY - startY) * scale,
+        side: frame.side,
+        source: 'manual'
+      });
+      paint();
+      e.preventDefault();
+    });
+
+    function endDrag(e) {
+      if (!dragging || (e && e.pointerId !== dragId)) return;
+      dragging = false;
+      stage.classList.remove('is-dragging');
+      try { stage.releasePointerCapture(dragId); } catch (err) { /* ignore */ }
+      saveSoon();
+    }
+
+    stage.addEventListener('pointerup', endDrag);
+    stage.addEventListener('pointercancel', endDrag);
+
+    range.addEventListener('input', function () {
+      zoomTo(Number(range.value) || 0);
+    });
+
+    // A wheel over the picture zooms, the way every other cropper does.
+    stage.addEventListener('wheel', function (e) {
+      if (!source || !frame) return;
+      e.preventDefault();
+      var next = Math.max(0, Math.min(100, (Number(range.value) || 0) + (e.deltaY > 0 ? 4 : -4)));
+      range.value = String(next);
+      zoomTo(next);
+    }, { passive: false });
+
+    function ready(result) {
+      making.hidden = true;
+      slot.hidden = true;
+      editor.hidden = false;
       status.textContent = describe(result);
       if (!link) {
         link = document.createElement('a');
@@ -1590,73 +1826,26 @@
         link.download = filename;
         foot.appendChild(link);
       }
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      objectUrl = URL.createObjectURL(result.blob);
       link.href = objectUrl;
-      tools.hidden = false;
-
-      // Keep a copy in the chat: it survives a reload and downloads from
-      // the server, which the desktop shells prefer to a blob URL.
-      var form = new FormData();
-      form.append('file', result.blob, filename);
-      form.append('conversationId', ensureConversation(ctx));
-      form.append('kind', 'derived');
-      return apiForm('/portal/bespoke/attachments', form).then(function (data) {
-        var d = data && data.attachment;
-        if (d && d.url && link) link.href = d.url + '?download=1';
-      }).catch(function () { /* the blob link still works */ });
+      paint();
+      return save();
     }
-
-    /* Move or resize the frame, keeping it on the picture. Steps are a
-     * share of the frame itself, so they feel the same at any zoom. */
-    function adjust(how) {
-      if (busy || !source || !frame) return;
-      var canvas = source.canvas;
-      var step = frame.side * 0.08;
-      var next = { x: frame.x, y: frame.y, side: frame.side, source: frame.source };
-      if (how === 'up') next.y -= step;
-      else if (how === 'down') next.y += step;
-      else if (how === 'left') next.x -= step;
-      else if (how === 'right') next.x += step;
-      else if (how === 'in' || how === 'out') {
-        var factor = how === 'in' ? 0.88 : 1.14;
-        var side = next.side * factor;
-        side = Math.max(40, Math.min(side, canvas.width, canvas.height));
-        // Zoom about the centre, so the face does not walk out of frame.
-        next.x += (next.side - side) / 2;
-        next.y += (next.side - side) / 2;
-        next.side = side;
-      }
-      next.x = Math.max(0, Math.min(next.x, canvas.width - next.side));
-      next.y = Math.max(0, Math.min(next.y, canvas.height - next.side));
-      // A nudge means the reader has taken over: stop calling it detected.
-      next.source = 'manual';
-
-      busy = true;
-      cutSquare(canvas, next).then(function (result) {
-        frame = next;
-        return show(result);
-      }).catch(function () {
-        status.textContent = 'That adjustment did not work. The photo above is unchanged.';
-      }).then(function () { busy = false; });
-    }
-
-    tools.addEventListener('click', function (event) {
-      var btn = event.target.closest('[data-nudge]');
-      if (!btn) return;
-      event.preventDefault();
-      adjust(btn.getAttribute('data-nudge'));
-    });
 
     loadPhotoSource(a).then(function (src) {
       source = src;
       return findFrame(src.canvas, src.trim).then(function (found) {
         frame = found;
+        detected = { x: found.x, y: found.y, side: found.side, source: found.source };
         return cutSquare(src.canvas, found);
       });
     }).then(function (result) {
-      return show(result);
+      return ready(result);
     }).then(function () {
       ctx.logEl.scrollTop = ctx.logEl.scrollHeight;
     }).catch(function () {
+      making.hidden = true;
       status.textContent = 'The photo could not be prepared from this file.';
     });
     return card;
@@ -1748,7 +1937,7 @@
       if (ctx.bannerEl) ctx.bannerEl.hidden = configured;
       if (data.conversationId) {
         ctx.conversationId = data.conversationId;
-        storeSet(LS_CONV, ctx.conversationId);
+        convSet(ctx.conversationId);
       }
       if (data.title && ctx.setTitle) ctx.setTitle(data.title);
       var reply = data.reply || '';
@@ -2318,6 +2507,10 @@
         '</div>' +
         '<div class="tma-bespoke-page__list" data-bespoke-page-list></div>' +
       '</aside>' +
+      // Drag to set how much of the page the history takes, the same way
+      // the mailbox and messaging panes are sized.
+      '<div class="tma-bespoke-page__resizer" data-bespoke-page-resizer role="separator"' +
+        ' aria-orientation="vertical" aria-label="Resize past chats" tabindex="0"></div>' +
       '<section class="tma-bespoke-page__thread">' +
         '<div class="tma-bespoke-page__thread-head">' +
           '<button type="button" class="tma-bespoke-page__back" data-bespoke-page-back aria-label="Past chats">' +
@@ -2359,6 +2552,57 @@
     if (del) del.hidden = !show;
   }
 
+  /*
+   * Which heading a chat sits under.
+   *
+   * The same buckets the mailbox uses, for the same reason: a list of forty
+   * chats all reading "Sep 14" tells you nothing, while "Yesterday" and
+   * "Previous 7 days" are how people actually remember when they asked
+   * something. Pinned chats are pulled out before this is asked.
+   */
+  function historyBucket(iso) {
+    var d = iso ? new Date(iso) : null;
+    if (!d || isNaN(d.getTime())) return { key: 'older', label: 'Older' };
+
+    var startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    var days = Math.floor((startOfToday.getTime() - d.getTime()) / 86400000);
+
+    if (days < 0) return { key: 'today', label: 'Today' };
+    if (days === 0) return { key: 'yesterday', label: 'Yesterday' };
+    if (days < 7) return { key: 'week', label: 'Previous 7 days' };
+    if (days < 30) return { key: 'month', label: 'Previous 30 days' };
+
+    return {
+      key: 'm-' + d.getFullYear() + '-' + d.getMonth(),
+      label: d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+    };
+  }
+
+  /* A chat's row. Shared by the page rail and the launcher's history. */
+  function historyRow(ctx, row, onOpen) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'tma-bespoke-page__item'
+      + (row.uuid === ctx.conversationId ? ' is-active' : '')
+      + (row.pinned ? ' is-pinned' : '');
+    btn.setAttribute('data-bespoke-open', row.uuid);
+    btn.innerHTML =
+      '<span class="tma-bespoke-page__item-title">' +
+        (row.pinned ? '<span class="tma-bespoke-page__item-pin" aria-label="Pinned">\u25cf</span>' : '') +
+        escapeHtml(row.title || 'New chat') +
+      '</span>' +
+      '<span class="tma-bespoke-page__item-time">' + escapeHtml(timeLabel(row.updatedAt)) + '</span>' +
+      '<span class="tma-bespoke-page__item-preview">' + escapeHtml(row.preview || '') + '</span>';
+    btn.addEventListener('click', function () { onOpen(row.uuid); });
+    btn.addEventListener('contextmenu', function (e) {
+      e.preventDefault();
+      openHistoryMenu(ctx, row, e.clientX, e.clientY);
+    });
+
+    return btn;
+  }
+
   function renderPageList(ctx) {
     var list = ctx.listEl;
     if (!list) return;
@@ -2370,20 +2614,161 @@
       list.appendChild(empty);
       return;
     }
+
+    var open = function (id) { openPageThread(ctx, id, true); };
+    var groups = [];
+    var seen = {};
+
     ctx.conversations.forEach(function (row) {
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'tma-bespoke-page__item' + (row.uuid === ctx.conversationId ? ' is-active' : '');
-      btn.setAttribute('data-bespoke-open', row.uuid);
-      btn.innerHTML =
-        '<span class="tma-bespoke-page__item-title">' + escapeHtml(row.title || 'New chat') + '</span>' +
-        '<span class="tma-bespoke-page__item-time">' + escapeHtml(timeLabel(row.updatedAt)) + '</span>' +
-        '<span class="tma-bespoke-page__item-preview">' + escapeHtml(row.preview || '') + '</span>';
-      btn.addEventListener('click', function () {
-        openPageThread(ctx, row.uuid, true);
-      });
-      list.appendChild(btn);
+      var bucket = row.pinned
+        ? { key: 'pinned', label: 'Pinned' }
+        : historyBucket(row.updatedAt);
+      if (!seen[bucket.key]) {
+        seen[bucket.key] = { label: bucket.label, rows: [] };
+        groups.push(seen[bucket.key]);
+      }
+      seen[bucket.key].rows.push(row);
     });
+
+    groups.forEach(function (group) {
+      var head = document.createElement('p');
+      head.className = 'tma-bespoke-page__group';
+      head.textContent = group.label;
+      list.appendChild(head);
+      group.rows.forEach(function (row) {
+        list.appendChild(historyRow(ctx, row, open));
+      });
+    });
+  }
+
+  /* ── Right-click on a chat ─────────────────────────────────────
+   * Pin, rename and delete, where the reader's hand already is. The menu
+   * is one node reused: opening a second closes the first. */
+  var historyMenuEl = null;
+
+  function closeHistoryMenu() {
+    if (!historyMenuEl) return;
+    historyMenuEl.remove();
+    historyMenuEl = null;
+    document.removeEventListener('pointerdown', onHistoryMenuAway, true);
+    document.removeEventListener('keydown', onHistoryMenuKey, true);
+    window.removeEventListener('blur', closeHistoryMenu);
+  }
+
+  function onHistoryMenuAway(e) {
+    if (historyMenuEl && historyMenuEl.contains(e.target)) return;
+    closeHistoryMenu();
+  }
+
+  function onHistoryMenuKey(e) {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeHistoryMenu();
+    }
+  }
+
+  function openHistoryMenu(ctx, row, x, y) {
+    closeHistoryMenu();
+
+    var menu = document.createElement('div');
+    menu.className = 'tma-bespoke-menu';
+    menu.setAttribute('role', 'menu');
+
+    [
+      { key: 'pin', label: row.pinned ? 'Unpin' : 'Pin to top' },
+      { key: 'rename', label: 'Rename' },
+      { key: 'delete', label: 'Delete', danger: true }
+    ].forEach(function (item) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tma-bespoke-menu__item' + (item.danger ? ' tma-bespoke-menu__item--danger' : '');
+      b.setAttribute('role', 'menuitem');
+      b.textContent = item.label;
+      b.addEventListener('click', function () {
+        closeHistoryMenu();
+        runHistoryAction(ctx, row, item.key);
+      });
+      menu.appendChild(b);
+    });
+
+    menu.style.visibility = 'hidden';
+    document.body.appendChild(menu);
+    historyMenuEl = menu;
+
+    // Keep it on screen when the click lands near an edge.
+    var box = menu.getBoundingClientRect();
+    var left = Math.min(x, window.innerWidth - box.width - 8);
+    var top = Math.min(y, window.innerHeight - box.height - 8);
+    menu.style.left = Math.max(8, left) + 'px';
+    menu.style.top = Math.max(8, top) + 'px';
+    menu.style.visibility = '';
+
+    document.addEventListener('pointerdown', onHistoryMenuAway, true);
+    document.addEventListener('keydown', onHistoryMenuKey, true);
+    window.addEventListener('blur', closeHistoryMenu);
+  }
+
+  /*
+   * Pin, rename or delete, from either surface.
+   *
+   * The launcher and the full page keep separate contexts, and only the
+   * page has a title bar to rename in — so the launcher refreshes its own
+   * list and sends a rename out to the page rather than pretending to have
+   * a control it does not.
+   */
+  function isPageCtx(ctx) {
+    return !!(ctx && page && ctx === page);
+  }
+
+  function reloadHistory(ctx) {
+    if (isPageCtx(ctx)) return loadPageList(ctx);
+
+    return loadWidgetHistory();
+  }
+
+  function runHistoryAction(ctx, row, action) {
+    if (action === 'pin') {
+      api('/portal/bespoke/conversations/' + encodeURIComponent(row.uuid), {
+        method: 'PATCH',
+        body: { pinned: !row.pinned }
+      }).then(function () {
+        reloadHistory(ctx);
+      }).catch(function () { /* the list is unchanged */ });
+      return;
+    }
+
+    if (action === 'rename') {
+      // Renaming happens in the thread's own title, which is the page's.
+      if (!isPageCtx(ctx)) {
+        setOpen(false);
+        go('/bespoke-ai/' + row.uuid);
+        return;
+      }
+      if (ctx.conversationId !== row.uuid) {
+        openPageThread(ctx, row.uuid, true).then(function () { startRename(ctx); });
+        return;
+      }
+      startRename(ctx);
+      return;
+    }
+
+    if (action === 'delete') {
+      confirmDelete(row.title || 'this chat', function () {
+        api('/portal/bespoke/conversations/' + encodeURIComponent(row.uuid), { method: 'DELETE' })
+          .then(function () {
+            if (convGet() === row.uuid) convSet('');
+            if (ctx.conversationId === row.uuid) {
+              if (isPageCtx(ctx)) {
+                resetPageThread(ctx);
+                replaceBespokeUrl('/bespoke-ai', null);
+              } else {
+                newWidgetChat();
+              }
+            }
+            reloadHistory(ctx);
+          });
+      });
+    }
   }
 
   function loadPageList(ctx) {
@@ -2403,7 +2788,7 @@
     ctx.pending = [];
     renderAttachStrip(ctx);
     ctx.conversationId = uuid();
-    storeSet(LS_CONV, ctx.conversationId);
+    convSet(ctx.conversationId);
     ctx.busy = false;
     if (ctx.logEl) ctx.logEl.innerHTML = '';
     setPageTitle(ctx, 'New chat');
@@ -2413,16 +2798,18 @@
     if (ctx.inputEl) ctx.inputEl.focus();
   }
 
+  /* Resolves once the thread is on screen, so a caller can act on it —
+     Rename from the right-click menu opens the chat, then renames it. */
   function openPageThread(ctx, id, pushUrl) {
     if (!id) {
       resetPageThread(ctx);
       if (pushUrl) replaceBespokeUrl('/bespoke-ai', null);
-      return;
+      return Promise.resolve();
     }
-    api('/portal/bespoke/conversations/' + encodeURIComponent(id)).then(function (data) {
+    return api('/portal/bespoke/conversations/' + encodeURIComponent(id)).then(function (data) {
       var conv = data.conversation || {};
       ctx.conversationId = conv.uuid || id;
-      storeSet(LS_CONV, ctx.conversationId);
+      convSet(ctx.conversationId);
       ctx.messages = Array.isArray(conv.messages) ? conv.messages.map(function (row) {
         return { role: row.role, content: row.content, attachments: row.attachments || [] };
       }) : [];
@@ -2435,6 +2822,87 @@
       if (ctx.inputEl) ctx.inputEl.focus();
     }).catch(function () {
       resetPageThread(ctx);
+    });
+  }
+
+  /* ── The rail's width ──────────────────────────────────────────
+   * Dragged, and kept per reader, the same as the mailbox's reading pane.
+   * A ratio rather than pixels, so a narrow laptop and a wide monitor each
+   * get a sensible rail from the same stored number. */
+  var LS_RAIL = 'tma.bespoke.railRatio';
+  var RAIL_MIN = 0.16;
+  var RAIL_MAX = 0.42;
+
+  function railRatio() {
+    var v = parseFloat(storeGet(LS_RAIL, ''));
+    if (isNaN(v)) return 0.22;
+
+    return Math.max(RAIL_MIN, Math.min(RAIL_MAX, v));
+  }
+
+  function applyRailRatio(shell, ratio) {
+    if (!shell) return;
+    shell.style.setProperty('--tma-bespoke-rail', (ratio * 100).toFixed(3) + '%');
+  }
+
+  function wireRailResizer(ctx) {
+    var shell = ctx.shell;
+    var handle = shell && shell.querySelector('[data-bespoke-page-resizer]');
+    if (!handle) return;
+
+    var ratio = railRatio();
+    applyRailRatio(shell, ratio);
+    handle.setAttribute('aria-valuenow', String(Math.round(ratio * 100)));
+
+    var dragging = false;
+
+    function setFrom(clientX) {
+      var rect = shell.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      ratio = Math.max(RAIL_MIN, Math.min(RAIL_MAX, (clientX - rect.left) / rect.width));
+      applyRailRatio(shell, ratio);
+      handle.setAttribute('aria-valuenow', String(Math.round(ratio * 100)));
+    }
+
+    handle.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      dragging = true;
+      shell.classList.add('is-resizing');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      try { handle.setPointerCapture(e.pointerId); } catch (err) { /* older engines */ }
+    });
+
+    handle.addEventListener('pointermove', function (e) {
+      if (!dragging) return;
+      e.preventDefault();
+      setFrom(e.clientX);
+    });
+
+    function stop(e) {
+      if (!dragging) return;
+      dragging = false;
+      shell.classList.remove('is-resizing');
+      document.body.style.removeProperty('cursor');
+      document.body.style.removeProperty('user-select');
+      try { handle.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      storeSet(LS_RAIL, String(ratio));
+    }
+
+    handle.addEventListener('pointerup', stop);
+    handle.addEventListener('pointercancel', stop);
+
+    // The keyboard reaches it too: a separator nobody can move without a
+    // mouse is a control half the readers do not have.
+    handle.addEventListener('keydown', function (e) {
+      var step = e.key === 'ArrowLeft' ? -0.02 : e.key === 'ArrowRight' ? 0.02 : 0;
+      if (!step) return;
+      e.preventDefault();
+      ratio = Math.max(RAIL_MIN, Math.min(RAIL_MAX, ratio + step));
+      applyRailRatio(shell, ratio);
+      handle.setAttribute('aria-valuenow', String(Math.round(ratio * 100)));
+      storeSet(LS_RAIL, String(ratio));
     });
   }
 
@@ -2529,6 +2997,7 @@
     page = ctx;
     setPageTitle(ctx, 'New chat');
     bindComposer(ctx);
+    wireRailResizer(ctx);
     if (ctx.bannerEl) ctx.bannerEl.hidden = configured;
 
     root.querySelector('[data-bespoke-page-new]').addEventListener('click', function () {
@@ -2546,7 +3015,7 @@
       confirmDelete(ctx.title || 'this chat', function () {
         api('/portal/bespoke/conversations/' + encodeURIComponent(ctx.conversationId), { method: 'DELETE' })
           .then(function () {
-            if (storeGet(LS_CONV, '') === ctx.conversationId) storeSet(LS_CONV, '');
+            if (convGet() === ctx.conversationId) convSet('');
             resetPageThread(ctx);
             replaceBespokeUrl('/bespoke-ai', null);
             loadPageList(ctx);
@@ -2555,14 +3024,24 @@
     });
 
     loadPageList(ctx).then(function (list) {
-      var wanted = opts.conversationId || '';
+      /*
+       * A conversation in the URL is the reader asking for that thread — a
+       * History click, an expanded launcher, a shared link — and always
+       * wins. Otherwise we continue only what this page view already had
+       * going, which after a reload is nothing. That is the point: a
+       * refresh lands on a new chat rather than reopening the last one.
+       */
+      var fromPath = pathConversationId();
+      var wanted = opts.conversationId || fromPath || '';
       if (!wanted) {
-        var stored = storeGet(LS_CONV, '');
+        var stored = convGet();
         var found = list.filter(function (row) { return row.uuid === stored; })[0];
         if (found) wanted = found.uuid;
       }
       if (wanted) {
-        openPageThread(ctx, wanted, !opts.conversationId);
+        // Already at its own address when the URL is what named it, so
+        // there is nothing to push.
+        openPageThread(ctx, wanted, !opts.conversationId && wanted !== fromPath);
         return;
       }
       resetPageThread(ctx);
@@ -2728,7 +3207,7 @@
     widget.pending = [];
     renderAttachStrip(widget);
     widget.conversationId = uuid();
-    storeSet(LS_CONV, widget.conversationId);
+    convSet(widget.conversationId);
     if (widget.logEl) widget.logEl.innerHTML = '';
     refreshSuggestions(widget);
     if (widget.inputEl) widget.inputEl.focus();
@@ -2750,16 +3229,29 @@
       list.appendChild(empty);
       return;
     }
+    // Same grouping and same right-click as the full page: the launcher's
+    // list is the same list, in less room.
+    var groups = [];
+    var seen = {};
     rows.forEach(function (row) {
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'tma-bespoke-page__item' + (row.uuid === widget.conversationId ? ' is-active' : '');
-      btn.innerHTML =
-        '<span class="tma-bespoke-page__item-title">' + escapeHtml(row.title || 'New chat') + '</span>' +
-        '<span class="tma-bespoke-page__item-time">' + escapeHtml(timeLabel(row.updatedAt)) + '</span>' +
-        '<span class="tma-bespoke-page__item-preview">' + escapeHtml(row.preview || '') + '</span>';
-      btn.addEventListener('click', function () { openWidgetThread(row.uuid); });
-      list.appendChild(btn);
+      var bucket = row.pinned
+        ? { key: 'pinned', label: 'Pinned' }
+        : historyBucket(row.updatedAt);
+      if (!seen[bucket.key]) {
+        seen[bucket.key] = { label: bucket.label, rows: [] };
+        groups.push(seen[bucket.key]);
+      }
+      seen[bucket.key].rows.push(row);
+    });
+
+    groups.forEach(function (group) {
+      var head = document.createElement('p');
+      head.className = 'tma-bespoke-page__group';
+      head.textContent = group.label;
+      list.appendChild(head);
+      group.rows.forEach(function (row) {
+        list.appendChild(historyRow(widget, row, openWidgetThread));
+      });
     });
   }
 
@@ -2768,7 +3260,7 @@
     api('/portal/bespoke/conversations/' + encodeURIComponent(id)).then(function (data) {
       var conv = data.conversation || {};
       widget.conversationId = conv.uuid || id;
-      storeSet(LS_CONV, widget.conversationId);
+      convSet(widget.conversationId);
       widget.messages = Array.isArray(conv.messages) ? conv.messages.map(function (row) {
         return { role: row.role, content: row.content, attachments: row.attachments || [] };
       }) : [];
@@ -2792,10 +3284,21 @@
     if (btn) btn.setAttribute('aria-pressed', widget.historyOpen ? 'true' : 'false');
     if (!widget.historyOpen) return;
     renderWidgetHistory();
-    api('/portal/bespoke/conversations').then(function (data) {
+    loadWidgetHistory();
+  }
+
+  function loadWidgetHistory() {
+    if (!widget) return Promise.resolve([]);
+
+    return api('/portal/bespoke/conversations').then(function (data) {
       widget.conversations = Array.isArray(data.conversations) ? data.conversations : [];
       if (widget.historyOpen) renderWidgetHistory();
-    }).catch(function () { /* keep whatever the list already shows */ });
+
+      return widget.conversations;
+    }).catch(function () {
+      // Keep whatever the list already shows.
+      return widget.conversations || [];
+    });
   }
 
   function focusables() {
@@ -2944,7 +3447,7 @@
       conversations: [],
       pending: [],
       messages: [],
-      conversationId: storeGet(LS_CONV, ''),
+      conversationId: convGet(),
       busy: false
     };
 
