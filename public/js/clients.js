@@ -12595,13 +12595,13 @@
 
   function cipStatusAttachmentHtml(place) {
     return '<div class="tma-portal-drop" data-cip-status-drop>' +
-      '<span class="tma-portal-field__label">File</span>' +
+      '<span class="tma-portal-field__label">Attach a file <span class="tma-dash__clients-checklist-optional">Optional</span></span>' +
       '<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,application/pdf,image/jpeg,image/png,image/webp,image/heic"' +
       ' class="tma-dash__clients-photo-input" data-cip-status-file aria-hidden="true">' +
       '<button type="button" class="tma-portal-drop__zone" data-cip-status-file-btn>' +
       '<img src="' + ICON + 'UploadSimple.svg" alt="" width="20" height="20">' +
       '<span class="tma-portal-drop__hint">Drop a file here, or choose one</span>' +
-      '<span class="tma-portal-drop__meta">Optional. Saved in ' + esc(place) + '.</span>' +
+      '<span class="tma-portal-drop__meta">Saved in ' + esc(place) + '.</span>' +
       '</button>' +
       '<ul class="tma-portal-drop__files" data-cip-status-file-list hidden></ul>' +
       '</div>';
