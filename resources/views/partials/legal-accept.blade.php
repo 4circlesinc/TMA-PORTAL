@@ -5,15 +5,20 @@
   Props (optional):
     $termsName   — form field for Terms (default: terms)
     $privacyName — form field for Privacy (default: privacy)
+    $always      — open the sheet for the whole page, not just while the
+                   surrounding form is visible (sign-up: consent covers the
+                   provider buttons too)
 --}}
 @php
   $termsName = $termsName ?? 'terms';
   $privacyName = $privacyName ?? 'privacy';
+  $always = $always ?? false;
   $already = old($termsName) && old($privacyName);
 @endphp
 <div
   class="tma-legal-consent{{ $already ? ' is-agreed' : '' }}"
   data-legal-consent
+  @if ($always) data-legal-always @endif
   @if ($already) data-agreed="1" @endif
 >
   {{-- Server-validated fields; filled when they Agree. --}}

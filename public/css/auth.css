@@ -618,6 +618,20 @@ body:has(.tma-auth__card--tall) {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.16);
 }
 
+/*
+ * On the split auth pages the form lives in the right-hand 37% panel, so a
+ * viewport-centred sheet lands over the illustration, away from the buttons it
+ * gates. Dock it to that column instead. Below 960px the stage is hidden and
+ * the panel is the whole page, so the centred default is already right.
+ */
+@media (min-width: 961px) {
+  .tma-legal-consent__sheet--split {
+    right: clamp(24px, 4vw, 56px);
+    left: auto;
+    margin-inline: 0;
+  }
+}
+
 .tma-legal-consent__sheet:not([open]) {
   display: none;
 }

@@ -25,6 +25,11 @@
 
     function openSheet() {
       if (sheet.parentElement !== document.body) {
+        // Reparenting severs the sheet from .tma-auth--split, so carry the
+        // layout over as a class the CSS can still see.
+        if (root.closest('.tma-auth--split')) {
+          sheet.classList.add('tma-legal-consent__sheet--split');
+        }
         document.body.appendChild(sheet);
       }
       if (sheet.open) return;
@@ -82,12 +87,17 @@
       return style.display !== 'none' && style.visibility !== 'hidden';
     }
 
+    // data-legal-always: the sheet gates the whole page, not one form branch
+    // (sign-up consent applies to the provider buttons as much as the email
+    // form, and the partial itself sits inside the hidden email form).
+    var always = root.hasAttribute('data-legal-always');
+
     function syncVisibility() {
       if (root.dataset.agreed === '1' || dismissed) {
         closeSheet();
         return;
       }
-      if (formVisible()) openSheet();
+      if (always || formVisible()) openSheet();
       else closeSheet();
     }
 

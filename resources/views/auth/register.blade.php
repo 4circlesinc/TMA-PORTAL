@@ -156,7 +156,7 @@
           </div>
 
           <div class="tma-auth__group">
-            @include('partials.legal-accept')
+            @include('partials.legal-accept', ['always' => true])
             @error('terms')
               <p class="tma-auth__field-msg">
                 <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
@@ -185,7 +185,7 @@
 @endsection
 
 @push('scripts')
-<script src="/js/legal-accept.js?v=4"></script>
+<script src="/js/legal-accept.js?v=5"></script>
 <script>
   (function () {
     var providers = document.querySelector("[data-auth-providers]");
