@@ -86,7 +86,7 @@ class ClientOnboardingTest extends TestCase
                 'preferred_contact' => 'Email',
             ],
             'calendar' => [],
-            'terms' => ['accept_terms' => '1'],
+            'terms' => ['accept_terms' => '1', 'accept_privacy' => '1'],
         ], $overrides);
 
         foreach ($answers as $step => $payload) {
@@ -131,7 +131,7 @@ class ClientOnboardingTest extends TestCase
 
         $this->app['auth']->forgetGuards();
         $this->post("/invite/{$token}", [
-            'first_name' => 'Bruce', 'last_name' => 'Wayne', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
+            'first_name' => 'Bruce', 'last_name' => 'Wayne', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1', 'privacy' => '1',
         ])->assertRedirect('/');
 
         $invited = User::where('email', 'bruce@wayne.test')->firstOrFail();
@@ -231,7 +231,8 @@ class ClientOnboardingTest extends TestCase
             ->assertSee('Your account')
             ->assertSee('CIP Applications')
             ->assertSee('Manage your CIP applications.')
-            ->assertSee('By continuing you agree')
+            ->assertSee('I have read the')
+            ->assertSee('Privacy Policy')
             ->assertDontSee('Terms and privacy', false);
 
         config(['services.cip.enabled' => false]);
@@ -265,8 +266,9 @@ class ClientOnboardingTest extends TestCase
         $this->actingAs($user)->get('/onboarding/terms')
             ->assertOk()
             ->assertSee('Your account')
-            ->assertSee('By continuing you agree')
-            ->assertDontSee('I agree to the', false);
+            ->assertSee('I have read the')
+            ->assertSee('Terms of Service')
+            ->assertSee('Privacy Policy');
     }
 
     public function test_calendar_is_skipped_when_no_provider_is_configured(): void

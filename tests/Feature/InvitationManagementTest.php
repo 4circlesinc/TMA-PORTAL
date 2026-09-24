@@ -277,7 +277,7 @@ class InvitationManagementTest extends TestCase
         $this->get("/invite/{$token}")->assertOk()->assertSee('withdrawn');
 
         $this->post("/invite/{$token}", [
-            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
+            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1', 'privacy' => '1',
         ]);
         $this->assertDatabaseMissing('users', ['email' => 'owner@acme.test']);
     }

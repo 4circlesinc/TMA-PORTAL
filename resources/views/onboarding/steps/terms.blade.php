@@ -6,7 +6,6 @@
 @include('auth.setup._progress')
 <form class="tma-auth__form" method="POST" action="{{ route('onboarding.store', ['step' => $step]) }}">
   @csrf
-  <input type="hidden" name="accept_terms" value="1">
 
   <div class="tma-auth__group">
     <div class="tma-auth__checklist">
@@ -54,15 +53,25 @@
     </div>
   @endif
 
+  <div class="tma-auth__group">
+    @include('partials.legal-accept', ['termsName' => 'accept_terms', 'privacyName' => 'accept_privacy'])
+    @error('accept_terms')
+      <p class="tma-auth__field-msg">
+        <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
+        <span>{{ $message }}</span>
+      </p>
+    @enderror
+    @error('accept_privacy')
+      <p class="tma-auth__field-msg">
+        <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
+        <span>{{ $message }}</span>
+      </p>
+    @enderror
+  </div>
+
   <div class="tma-auth__nav-actions">
     <button type="submit" class="tma-auth__submit tma-auth__submit--continue">Continue</button>
   </div>
-  <p class="tma-auth__legal">
-    By continuing you agree to the
-    <a href="{{ url('/terms-of-service') }}" target="_blank" rel="noopener">Terms of Service</a>
-    and
-    <a href="{{ url('/privacy-policy') }}" target="_blank" rel="noopener">Privacy Policy</a>.
-  </p>
   @if ($previous)
     <p class="tma-auth__alt-link">
       <button type="submit" form="onboarding-back" class="tma-auth__link-btn">Back</button>

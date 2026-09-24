@@ -95,8 +95,10 @@ class InvitationAcceptController extends Controller
             'last_name' => ['required', 'string', 'max:100'],
             'password' => ['required', 'confirmed', 'min:8'],
             'terms' => ['accepted'],
+            'privacy' => ['accepted'],
         ], [
-            'terms.accepted' => 'Please accept the Terms and Privacy Policy to continue.',
+            'terms.accepted' => 'Please read and accept the Terms of Service to continue.',
+            'privacy.accepted' => 'Please read and accept the Privacy Policy to continue.',
         ]);
 
         $user = Invitations::acceptAsNewUser($invitation, $data['password'], [

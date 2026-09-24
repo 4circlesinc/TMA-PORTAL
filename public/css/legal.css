@@ -315,6 +315,35 @@ html:has(.tma-legal) body {
   overflow-x: clip;
 }
 
+/* Popup / iframe reader: document only, no chrome. */
+html.tma-legal--embed .tma-legal__bar,
+html.tma-legal--embed .tma-legal__side,
+html.tma-legal--embed .tma-legal__footer {
+  display: none !important;
+}
+
+html.tma-legal--embed .tma-legal__frame {
+  display: block;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+html.tma-legal--embed .tma-legal__frame .tma-legal__doc,
+html.tma-legal--embed > .tma-legal > .tma-legal__doc,
+html.tma-legal--embed .tma-legal > .tma-legal__doc {
+  border: 0;
+  border-radius: 0;
+  max-width: none;
+  margin: 0;
+  padding: var(--space-24);
+  background: #ffffff;
+}
+
+html.tma-legal--embed body {
+  background: #ffffff;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   html:has(.tma-legal) { scroll-behavior: smooth; }
 }

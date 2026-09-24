@@ -151,7 +151,7 @@ class AccountApprovalFlowTest extends TestCase
             'email' => 'newbie@example.com',
             'password' => 'password-that-is-long-enough',
             'password_confirmation' => 'password-that-is-long-enough',
-            'terms' => 'on',
+            'terms' => 'on', 'privacy' => 'on',
         ])->assertSessionHasNoErrors();
 
         $newbie = User::where('email', 'newbie@example.com')->firstOrFail();

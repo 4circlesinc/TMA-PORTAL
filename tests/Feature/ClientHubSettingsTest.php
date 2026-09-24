@@ -287,7 +287,7 @@ class ClientHubSettingsTest extends TestCase
 
         // And the POST is refused too — the screen is not the gate.
         $this->post('/invite/'.$token, [
-            'first_name' => 'Acme', 'last_name' => 'Owner', 'password' => 'Sup3rSecret!', 'password_confirmation' => 'Sup3rSecret!', 'terms' => 'on',
+            'first_name' => 'Acme', 'last_name' => 'Owner', 'password' => 'Sup3rSecret!', 'password_confirmation' => 'Sup3rSecret!', 'terms' => 'on', 'privacy' => 'on',
         ])->assertRedirect('/invite/'.$token);
 
         $this->assertDatabaseMissing('users', ['email' => 'owner@acme.test']);

@@ -37,8 +37,10 @@ class CreateNewUser implements CreatesNewUsers
             ],
             'password' => $this->passwordRules(),
             'terms' => ['accepted'],
+            'privacy' => ['accepted'],
         ], [
-            'terms.accepted' => 'Please accept the Terms of Service and Privacy Policy to continue.',
+            'terms.accepted' => 'Please read and accept the Terms of Service to continue.',
+            'privacy.accepted' => 'Please read and accept the Privacy Policy to continue.',
         ])->validate();
 
         $user = User::create([

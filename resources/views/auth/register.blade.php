@@ -156,11 +156,14 @@
           </div>
 
           <div class="tma-auth__group">
-            <label class="tma-auth__terms">
-              <input type="checkbox" name="terms" value="1" @checked(old('terms'))>
-              <span>I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a></span>
-            </label>
+            @include('partials.legal-accept')
             @error('terms')
+              <p class="tma-auth__field-msg">
+                <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
+                <span>{{ $message }}</span>
+              </p>
+            @enderror
+            @error('privacy')
               <p class="tma-auth__field-msg">
                 <img src="/images/icons/phosphor/WarningCircle.svg" alt="" width="14" height="14" aria-hidden="true">
                 <span>{{ $message }}</span>
@@ -182,6 +185,7 @@
 @endsection
 
 @push('scripts')
+<script src="/js/legal-accept.js"></script>
 <script>
   (function () {
     var providers = document.querySelector("[data-auth-providers]");

@@ -218,7 +218,7 @@ class CompanyAccountsTest extends TestCase
 
         $this->app['auth']->forgetGuards();
         $this->post("/invite/{$token}", [
-            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
+            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1', 'privacy' => '1',
         ])->assertRedirect('/');
 
         $member = CompanyMember::where('uuid', $uuid)->first();
@@ -336,7 +336,7 @@ class CompanyAccountsTest extends TestCase
             ->assertDontSee('Access to Acme Group');
 
         $this->post("/invite/{$token}", [
-            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
+            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1', 'privacy' => '1',
         ])->assertRedirect('/');
 
         $member = CompanyMember::first();

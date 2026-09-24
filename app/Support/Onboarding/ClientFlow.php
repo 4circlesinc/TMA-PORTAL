@@ -212,6 +212,7 @@ final class ClientFlow
             ],
             'terms' => [
                 'accept_terms' => ['accepted'],
+                'accept_privacy' => ['accepted'],
             ],
             default => [],
         };
@@ -227,7 +228,10 @@ final class ClientFlow
                 'whatsapp.regex' => 'Enter a WhatsApp number, like +1 555 123 4567.',
                 'preferred_contact.required' => 'Choose how you would like us to reach you.',
             ],
-            'terms' => ['accept_terms.accepted' => 'Please accept the Terms and Privacy Policy to finish.'],
+            'terms' => [
+                'accept_terms.accepted' => 'Please read and accept the Terms of Service to finish.',
+                'accept_privacy.accepted' => 'Please read and accept the Privacy Policy to finish.',
+            ],
             default => [],
         };
     }

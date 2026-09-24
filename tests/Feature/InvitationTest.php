@@ -132,7 +132,8 @@ class InvitationTest extends TestCase
             ->assertSee('owner@acme.test')
             ->assertSee('name="first_name"', false)
             ->assertSee('name="last_name"', false)
-            ->assertDontSee('disabled', false);
+            ->assertSee('data-legal-accept', false)
+            ->assertSee('I have read the');
     }
 
     // -------------------------------------------------------------- accepting
@@ -150,7 +151,7 @@ class InvitationTest extends TestCase
             'last_name' => 'Reed',
             'password' => 'sup3rsecret!',
             'password_confirmation' => 'sup3rsecret!',
-            'terms' => '1',
+            'terms' => '1', 'privacy' => '1',
         ])->assertRedirect('/');
 
         $user = User::where('email', 'owner@acme.test')->first();
@@ -180,7 +181,7 @@ class InvitationTest extends TestCase
         $this->from("/invite/{$token}")->post("/invite/{$token}", [
             'password' => 'sup3rsecret!',
             'password_confirmation' => 'sup3rsecret!',
-            'terms' => '1',
+            'terms' => '1', 'privacy' => '1',
         ])->assertSessionHasErrors(['first_name', 'last_name']);
 
         $this->assertDatabaseMissing('users', ['email' => 'owner@acme.test']);
@@ -213,7 +214,7 @@ class InvitationTest extends TestCase
         $token = $this->inviteAndCaptureToken($client, $staff);
 
         $this->post("/invite/{$token}", [
-            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
+            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1', 'privacy' => '1',
         ]);
 
         $this->app['auth']->forgetGuards();
@@ -225,7 +226,7 @@ class InvitationTest extends TestCase
         // A replay of the POST creates nothing.
         $before = User::count();
         $this->post("/invite/{$token}", [
-            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'another1!', 'password_confirmation' => 'another1!', 'terms' => '1',
+            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'another1!', 'password_confirmation' => 'another1!', 'terms' => '1', 'privacy' => '1',
         ]);
         $this->assertSame($before, User::count());
     }
@@ -265,7 +266,7 @@ class InvitationTest extends TestCase
         $this->get("/invite/{$token}")->assertOk()->assertSee('withdrawn');
 
         $this->post("/invite/{$token}", [
-            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
+            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1', 'privacy' => '1',
         ]);
         $this->assertDatabaseMissing('users', ['email' => 'owner@acme.test']);
     }
@@ -299,7 +300,7 @@ class InvitationTest extends TestCase
         // And registering is refused outright.
         $before = User::count();
         $this->post("/invite/{$token}", [
-            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
+            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1', 'privacy' => '1',
         ]);
         $this->assertSame($before, User::count(), 'a duplicate account was created');
     }
@@ -401,7 +402,7 @@ class InvitationTest extends TestCase
 
         $this->app['auth']->forgetGuards();
         $this->post("/invite/{$token}", [
-            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
+            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1', 'privacy' => '1',
         ])->assertRedirect('/');
 
         $user = User::where('email', 'sam@firm.test')->first();
@@ -661,7 +662,7 @@ class InvitationTest extends TestCase
 
         $this->app['auth']->forgetGuards();
         $this->post("/invite/{$token}", [
-            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
+            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1', 'privacy' => '1',
         ]);
 
         $accepted = ActivityLog::where('description', 'like', '%accepted their invitation%')->first();
@@ -683,7 +684,7 @@ class InvitationTest extends TestCase
 
         $this->app['auth']->forgetGuards();
         $this->post("/invite/{$token}", [
-            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1',
+            'first_name' => 'Dana', 'last_name' => 'Reed', 'password' => 'sup3rsecret!', 'password_confirmation' => 'sup3rsecret!', 'terms' => '1', 'privacy' => '1',
         ]);
 
         $this->assertDatabaseHas('portal_notifications', [
