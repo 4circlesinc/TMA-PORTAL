@@ -7113,7 +7113,14 @@
     // Capture-phase scroll used to dismiss Change status inside the file
     // viewer: the Approvals panel moves when the menu is placed, and that
     // was read as "the page scrolled, close". File status never landed.
-    if (lb && (lb.contains(e.target) || (ctxEl && ctxEl.contains(e.target)))) return;
+    // The same listener was closing the assign menu the moment its own list
+    // scrolled, because that exception only applied while the viewer was open.
+    var t = e.target;
+    if (t && t.nodeType === 1 && (
+      (ctxEl && ctxEl.contains(t)) ||
+      (ctxSubEl && ctxSubEl.contains(t)) ||
+      (lb && lb.contains(t))
+    )) return;
     closeContextMenu();
   }
 
