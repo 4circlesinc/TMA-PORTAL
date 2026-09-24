@@ -7903,6 +7903,19 @@
     if (!el || el._picksBound) return;
     el._picksBound = true;
     el.addEventListener('click', function (e) {
+      var tab = e.target.closest('[data-ctx-tab]');
+      if (tab && el.contains(tab)) {
+        e.preventDefault();
+        e.stopPropagation();
+        var id = tab.getAttribute('data-ctx-tab');
+        el.querySelectorAll('[data-ctx-tab]').forEach(function (b) {
+          b.setAttribute('aria-selected', b === tab ? 'true' : 'false');
+        });
+        el.querySelectorAll('[data-ctx-panel]').forEach(function (panel) {
+          panel.hidden = panel.getAttribute('data-ctx-panel') !== id;
+        });
+        return;
+      }
       var off = e.target.closest('[data-ctx-off]');
       if (off) {
         e.preventDefault();
@@ -7924,15 +7937,40 @@
     });
   }
 
-  function openContextMenu(x, y, item, list) {
+  function menuWithTabs(list, tabs) {
+    var panels = {};
+    tabs.forEach(function (tab) { panels[tab.id] = []; });
+    list.forEach(function (it, i) {
+      var id = it.tab && panels[it.tab] ? it.tab : tabs[0].id;
+      panels[id].push(menuItemHtml(it, i));
+    });
+    var bar = '<div class="tma-portal-context-menu__tabs" role="tablist">' +
+      tabs.map(function (tab, n) {
+        return '<button type="button" class="tma-portal-context-menu__tab" role="tab"' +
+          ' data-ctx-tab="' + esc(tab.id) + '" aria-selected="' + (n === 0 ? 'true' : 'false') + '">' +
+          esc(tab.label) + '</button>';
+      }).join('') +
+      '</div>';
+    var body = tabs.map(function (tab, n) {
+      var rows = panels[tab.id];
+      if (!rows.length) {
+        rows = [menuItemHtml({ label: 'Nobody to assign', static: true }, -1)];
+      }
+      return '<div class="tma-portal-context-menu__panel" role="tabpanel" data-ctx-panel="' +
+        esc(tab.id) + '"' + (n === 0 ? '' : ' hidden') + '>' + rows.join('') + '</div>';
+    }).join('');
+    return bar + body;
+  }
+
+  function openContextMenu(x, y, item, list, tabs) {
     closeContextMenu();
     if (item && item.id && !state.selected[item.id]) { /* keep multi-select if already selected */ }
 
     list = list || contextItems(item);
     ctxEl = document.createElement('div');
-    ctxEl.className = 'tma-portal-context-menu';
+    ctxEl.className = 'tma-portal-context-menu' + (tabs && tabs.length ? ' tma-portal-context-menu--tabs' : '');
     ctxEl.setAttribute('role', 'menu');
-    ctxEl.innerHTML = list.map(menuItemHtml).join('');
+    ctxEl.innerHTML = tabs && tabs.length ? menuWithTabs(list, tabs) : list.map(menuItemHtml).join('');
     (lb || document.body).appendChild(ctxEl);
     placeMenu(ctxEl, x, y);
     ctxEl.style.zIndex = '800';
@@ -8346,10 +8384,10 @@
      * when the caller is not a file (CIP Assigned To) so this does not build
      * Preview/Download for an application uuid.
      */
-    menu: function (x, y, item, onChange, list) {
+    menu: function (x, y, item, onChange, list, tabs) {
       externalItems = item ? [item] : [];
       externalOnChange = onChange || null;
-      openContextMenu(x, y, item || { id: '', type: 'application' }, list);
+      openContextMenu(x, y, item || { id: '', type: 'application' }, list, tabs);
     },
 
     /**

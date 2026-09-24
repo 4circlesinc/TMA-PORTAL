@@ -4350,10 +4350,15 @@
          * because they are already there and a click that appears to work and
          * changes nothing is what made this feel broken.
          */
+        function assignTab(person) {
+          return person && person.role === 'service_provider_contact' ? 'provider' : 'staff';
+        }
+
         var items = live.map(function (a) {
           held[String(a.userId)] = true;
 
           return {
+            tab: assignTab(a),
             label: a.name || a.email || 'Somebody',
             meta: personRoleLabel(a),
             face: personFace(a),
@@ -4369,6 +4374,7 @@
           // named in the cell must not also appear as a person to add.
           if (held[String(o.id)]) return;
           items.push({
+            tab: assignTab(o),
             label: o.name || o.email,
             meta: personRoleLabel(o),
             face: personFace(o),
@@ -4376,19 +4382,22 @@
           });
         });
 
-        if (!items.length) {
-          items.push({ label: 'Nobody to assign', static: true });
-        }
-
         // The people, as the menu's own rows, not file actions for a fake
         // file that we then overwrite. That swap measured a narrow menu and
         // placed it, then grew it off the right of the Assigned To column.
+        var tabs = [
+          { id: 'staff', label: 'Staff' },
+          { id: 'provider', label: 'Service provider' },
+        ];
+        if (isServiceProviderAdmin() && !isClientsAdmin()) tabs.reverse();
+
         window.TMAFileActions.menu(
           box.left,
           box.bottom + 4,
           { id: applicationId, type: 'application' },
           null,
-          items
+          items,
+          tabs
         );
       })
       .catch(function () { clientsToast('Could not load the officers.', 'negative'); });
