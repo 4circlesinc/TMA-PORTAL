@@ -135,6 +135,35 @@
   display: flex;
 }
 
+.tma-filter-popover__tabs {
+  display: flex;
+  position: sticky;
+  top: -12px;
+  z-index: 1;
+  gap: 4px;
+  margin: 4px -12px 4px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.96);
+  border-bottom: 0.5px solid var(--color-border-soft, rgba(0, 0, 0, 0.08));
+}
+
+.tma-filter-popover__tab {
+  flex: 1 1 0;
+  margin: 0;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font: 500 13px/1.2 inherit;
+  color: var(--color-text-secondary, #6b6b6b);
+  cursor: pointer;
+}
+
+.tma-filter-popover__tab[aria-selected="true"] {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--color-text-primary, #111);
+}
+
 .tma-filter-popover__search {
   display: flex;
   align-items: center;

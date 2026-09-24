@@ -117,8 +117,8 @@ class Facets
             ? User::query()
                 ->whereIn('account_type', Role::OFFICERS)
                 ->where('status', 'approved')
-                ->get(['id', 'name', 'email', 'avatar_url'])
-                ->keyBy('id')
+                ->get(['id', 'name', 'email', 'avatar_url', 'account_type'])
+                    ->keyBy('id')
             : collect();
 
         $missing = $held->keys()->diff($people->keys());
@@ -127,7 +127,7 @@ class Facets
             $people = $people->union(
                 User::withTrashed()
                     ->whereIn('id', $missing)
-                    ->get(['id', 'name', 'email', 'avatar_url'])
+                    ->get(['id', 'name', 'email', 'avatar_url', 'account_type'])
                     ->keyBy('id')
             );
         }
@@ -157,7 +157,7 @@ class Facets
                         ->whereIn('id', $colleagueIds)
                         ->whereIn('account_type', Role::EXTERNAL)
                         ->where('status', User::STATUS_APPROVED)
-                        ->get(['id', 'name', 'email', 'avatar_url'])
+                        ->get(['id', 'name', 'email', 'avatar_url', 'account_type'])
                         ->keyBy('id')
                 );
             }
@@ -176,6 +176,7 @@ class Facets
                 'name' => $person->name,
                 'avatar' => $person->photoUrl(),
                 'count' => $total,
+                'group' => in_array($person->account_type, Role::EXTERNAL, true) ? 'provider' : 'staff',
             ];
         }
 

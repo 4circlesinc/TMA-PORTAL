@@ -11294,7 +11294,7 @@
         return { id: b.key, name: b.label, count: b.count, tone: b.tone };
       }));
     } else if (field === 'assignee' && assigneeFilterApplies(state)) {
-      group = filterGroup('assignee', APP_TABLE.assignees);
+      group = assigneeFilterGroups(APP_TABLE.assignees);
     } else if (field === 'provider' && providerFilterApplies(state)) {
       group = filterGroup('provider', APP_TABLE.providers);
     }
@@ -11358,6 +11358,38 @@
     return src
       ? '<img class="tma-filter-popover__face" src="' + esc(src) + '" alt="" width="22" height="22">'
       : '<span class="tma-filter-popover__face tma-filter-popover__face--none" aria-hidden="true"></span>';
+  }
+
+  var assigneeFilterTab = 'staff';
+
+  function assigneeFilterGroups(items) {
+    var list = items || [];
+    var unassigned = list.filter(function (item) { return String(item.id) === 'none'; });
+    var staff = list.filter(function (item) {
+      return String(item.id) !== 'none' && item.group !== 'provider';
+    });
+    var provider = list.filter(function (item) { return item.group === 'provider'; });
+    var tabs = [
+      { id: 'staff', label: 'Staff' },
+      { id: 'provider', label: 'Service provider' },
+    ];
+    return filterGroup('assignee', unassigned) +
+      '<div class="tma-filter-popover__tabs" role="tablist">' +
+      tabs.map(function (tab) {
+        return '<button type="button" class="tma-filter-popover__tab" role="tab"' +
+          ' data-assignee-tab="' + esc(tab.id) + '" aria-selected="' +
+          (assigneeFilterTab === tab.id ? 'true' : 'false') + '">' +
+          esc(tab.label) + '</button>';
+      }).join('') +
+      '</div>' +
+      '<div data-assignee-panel="staff"' + (assigneeFilterTab === 'staff' ? '' : ' hidden') + '>' +
+      (filterGroup('assignee', staff) ||
+        '<div class="tma-filter-popover__note">Nobody to assign</div>') +
+      '</div>' +
+      '<div data-assignee-panel="provider"' + (assigneeFilterTab === 'provider' ? '' : ' hidden') + '>' +
+      (filterGroup('assignee', provider) ||
+        '<div class="tma-filter-popover__note">Nobody to assign</div>') +
+      '</div>';
   }
 
   function filterGroup(field, items) {
@@ -11483,6 +11515,15 @@
        * assembling. The group is redrawn in place instead, so the tick appears
        * and the counts beside it stay put.
        */
+      var assigneeTab = e.target.closest('[data-assignee-tab]');
+      if (assigneeTab) {
+        e.preventDefault();
+        e._cipFilterHandled = true;
+        assigneeFilterTab = assigneeTab.getAttribute('data-assignee-tab') || 'staff';
+        fillFilterField('assignee');
+        return;
+      }
+
       var tick = e.target.closest('[data-cip-filter]');
       if (tick) {
         e.preventDefault();
