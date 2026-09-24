@@ -1882,6 +1882,12 @@ body:has(.tma-dash--bespoke) .tma-bespoke,
  * text that sat still for a second and a half and looked like nothing
  * was happening. */
 
+/* `hidden` has to beat the display below, or the animation never leaves. */
+.tma-bespoke__photo-making[hidden],
+.tma-bespoke__photo-editor[hidden] {
+  display: none !important;
+}
+
 .tma-bespoke__photo-making {
   display: flex;
   align-items: center;
@@ -1950,7 +1956,7 @@ body:has(.tma-dash--bespoke) .tma-bespoke,
 
 .tma-bespoke__photo-stage {
   position: relative;
-  width: min(220px, 100%);
+  width: min(300px, 100%);
   aspect-ratio: 1 / 1;
   border-radius: var(--radius-12);
   overflow: hidden;
@@ -1969,22 +1975,24 @@ body:has(.tma-dash--bespoke) .tma-bespoke,
   height: 100%;
 }
 
-/* Thirds, to line the eyes up against. */
-.tma-bespoke__photo-grid {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
+/* A checkerboard behind the picture, so the letterboxed margins read as
+   "outside the photo" rather than as part of it. */
+.tma-bespoke__photo-stage {
+  background-color: #f2f2f3;
   background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.38) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.38) 1px, transparent 1px);
-  background-size: 33.333% 33.333%;
+    linear-gradient(45deg, #e6e6e8 25%, transparent 25%),
+    linear-gradient(-45deg, #e6e6e8 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #e6e6e8 75%),
+    linear-gradient(-45deg, transparent 75%, #e6e6e8 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
 }
 
 .tma-bespoke__photo-zoom {
   display: flex;
   align-items: center;
   gap: var(--space-8);
-  width: min(220px, 100%);
+  width: min(300px, 100%);
 }
 
 .tma-bespoke__photo-zoom-label {

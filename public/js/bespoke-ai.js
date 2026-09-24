@@ -1617,14 +1617,13 @@
       '<div class="tma-bespoke__photo-editor" data-bespoke-photo-editor hidden>' +
         '<div class="tma-bespoke__photo-stage" data-bespoke-photo-stage>' +
           '<canvas class="tma-bespoke__photo-canvas" data-bespoke-photo-canvas></canvas>' +
-          '<div class="tma-bespoke__photo-grid" aria-hidden="true"></div>' +
         '</div>' +
         '<label class="tma-bespoke__photo-zoom">' +
           '<span class="tma-bespoke__photo-zoom-label">Zoom</span>' +
           '<input type="range" class="tma-bespoke__photo-range" data-bespoke-photo-range' +
             ' min="0" max="100" value="0" aria-label="Zoom">' +
         '</label>' +
-        '<p class="tma-bespoke__photo-hint">Drag the photo to line up the face.</p>' +
+        '<p class="tma-bespoke__photo-hint">Drag the bright square over the face; zoom to resize it.</p>' +
       '</div>' +
       '<div class="tma-bespoke__card-foot" data-bespoke-card-foot></div>';
 
@@ -1660,29 +1659,95 @@
     }
 
     /*
-     * Paint the frame's contents at the size the card shows.
+     * Show the WHOLE picture, with the square that will be kept cut out of
+     * a dim wash over it.
      *
-     * Every drag and every zoom tick comes through here, and nothing else:
-     * this is canvas work in the browser, so it costs nothing and can run
-     * on every animation frame. What it deliberately does NOT do is save.
+     * The first go at this painted only the frame's contents, which looked
+     * tidy and told the reader nothing: with no edges and no surroundings
+     * there was no way to see what was being cut off, or that dragging
+     * moved anything. A crop tool has to show what it is discarding.
+     *
+     * Every drag and zoom tick comes through here and nothing else — canvas
+     * work in the browser, so it costs nothing. It deliberately does NOT save.
      */
     function paint() {
       if (!source || !frame) return;
-      var box = Math.round(stage.clientWidth || 220);
+
+      // The stage is a square by CSS; measure it, and fall back to the
+      // width when height has not settled yet (a card painted in the same
+      // frame it was appended has no laid-out height to read).
+      var box = Math.round(Math.min(
+        stage.clientWidth || 0,
+        stage.clientHeight || stage.clientWidth || 0
+      ) || stage.clientWidth || 260);
+      if (box <= 0) return;
+      var img = source.canvas;
+
+      // The picture, letterboxed to fit the stage. `scale` and the offsets
+      // convert source pixels to stage pixels, and back again when a drag
+      // has to be turned into a move of the frame.
+      var scale = Math.min(box / img.width, box / img.height);
+      var drawW = img.width * scale;
+      var drawH = img.height * scale;
+      var offX = (box - drawW) / 2;
+      var offY = (box - drawH) / 2;
+      view._fit = { scale: scale, offX: offX, offY: offY, box: box };
+
+      // A square backing store, or the picture is stretched into whatever
+      // shape the canvas element happened to have.
       var dpr = Math.min(window.devicePixelRatio || 1, 2);
-      if (view.width !== Math.round(box * dpr)) {
-        view.width = Math.round(box * dpr);
-        view.height = Math.round(box * dpr);
+      var pixels = Math.round(box * dpr);
+      if (view.width !== pixels || view.height !== pixels) {
+        view.width = pixels;
+        view.height = pixels;
       }
-      view.style.height = box + 'px';
+
       var c = view.getContext('2d');
       c.save();
-      c.scale(dpr, dpr);
-      c.fillStyle = '#fff';
-      c.fillRect(0, 0, box, box);
+      c.setTransform(dpr, 0, 0, dpr, 0, 0);
+      c.clearRect(0, 0, box, box);
       c.imageSmoothingEnabled = true;
       c.imageSmoothingQuality = 'high';
-      c.drawImage(source.canvas, frame.x, frame.y, frame.side, frame.side, 0, 0, box, box);
+      c.drawImage(img, 0, 0, img.width, img.height, offX, offY, drawW, drawH);
+
+      // Everything outside the keep-square goes under a wash, so the edges
+      // of the crop are the one thing the eye lands on.
+      var fx = offX + frame.x * scale;
+      var fy = offY + frame.y * scale;
+      var fs = frame.side * scale;
+
+      c.fillStyle = 'rgba(17, 17, 17, 0.55)';
+      c.beginPath();
+      c.rect(0, 0, box, box);
+      c.rect(fx, fy, fs, fs);
+      c.fill('evenodd');
+
+      // The cut line, and thirds inside it to line the eyes up against.
+      c.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+      c.lineWidth = 2;
+      c.strokeRect(fx + 1, fy + 1, fs - 2, fs - 2);
+
+      c.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+      c.lineWidth = 1;
+      c.beginPath();
+      for (var i = 1; i < 3; i++) {
+        c.moveTo(fx + (fs / 3) * i, fy);
+        c.lineTo(fx + (fs / 3) * i, fy + fs);
+        c.moveTo(fx, fy + (fs / 3) * i);
+        c.lineTo(fx + fs, fy + (fs / 3) * i);
+      }
+      c.stroke();
+
+      // Corner ticks, so the square reads as a frame and not a border.
+      var arm = Math.max(10, Math.min(22, fs * 0.18));
+      c.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+      c.lineWidth = 3;
+      c.beginPath();
+      c.moveTo(fx, fy + arm); c.lineTo(fx, fy); c.lineTo(fx + arm, fy);
+      c.moveTo(fx + fs - arm, fy); c.lineTo(fx + fs, fy); c.lineTo(fx + fs, fy + arm);
+      c.moveTo(fx, fy + fs - arm); c.lineTo(fx, fy + fs); c.lineTo(fx + arm, fy + fs);
+      c.moveTo(fx + fs - arm, fy + fs); c.lineTo(fx + fs, fy + fs); c.lineTo(fx + fs, fy + fs - arm);
+      c.stroke();
       c.restore();
     }
 
@@ -1777,12 +1842,14 @@
 
     stage.addEventListener('pointermove', function (e) {
       if (!dragging || e.pointerId !== dragId) return;
-      var box = stage.clientWidth || 1;
-      // The picture moves with the finger, so the frame moves against it.
-      var scale = frame.side / box;
+      // The picture is still; the frame is what the finger carries, so the
+      // square follows the pointer one-for-one. The fit scale converts
+      // stage pixels back into source pixels.
+      var fit = view._fit;
+      if (!fit || !fit.scale) return;
       frame = clampFrame({
-        x: startFrameX - (e.clientX - startX) * scale,
-        y: startFrameY - (e.clientY - startY) * scale,
+        x: startFrameX + (e.clientX - startX) / fit.scale,
+        y: startFrameY + (e.clientY - startY) / fit.scale,
         side: frame.side,
         source: 'manual'
       });
