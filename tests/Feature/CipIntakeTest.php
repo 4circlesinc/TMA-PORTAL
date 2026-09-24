@@ -2237,6 +2237,34 @@ class CipIntakeTest extends TestCase
         $this->assertContains('BLU', $offered(), 'the live firm is untouched');
     }
 
+    public function test_a_second_register_row_for_the_same_firm_is_not_offered(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $company = Company::create(['uid' => 'respect', 'name' => 'Respect Services']);
+        $primary = $this->provider('RESP', $company);
+        $primary->forceFill(['name' => 'Respect Services'])->save();
+        CipProvider::create([
+            'name' => 'Respect Services',
+            'code' => 'RES',
+            'active' => true,
+            'company_id' => $company->id,
+        ]);
+        CipProvider::create([
+            'name' => 'Respect Services',
+            'code' => 'RESX',
+            'active' => true,
+        ]);
+
+        $codes = collect($this->actingAs($staff)
+            ->getJson('/portal/cip/applications/form')->assertOk()->json('providers'))
+            ->pluck('code')->all();
+
+        $this->assertSame(['RESP'], array_values(array_filter(
+            $codes,
+            fn ($code) => in_array($code, ['RESP', 'RES', 'RESX'], true),
+        )));
+    }
+
     public function test_a_provider_without_a_company_is_offered_for_filing(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);

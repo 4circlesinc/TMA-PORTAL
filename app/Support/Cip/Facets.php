@@ -233,8 +233,20 @@ class Facets
                     ->orWhereHas('company')
                     ->orWhereIn('uuid', $filed->keys()))
                 ->orderBy('name')
-                ->get(['uuid', 'name', 'code', 'company_id'])
-            : CipProvider::query()->whereIn('uuid', $filed->keys())->orderBy('name')->get(['uuid', 'name', 'code', 'company_id']);
+                ->orderBy('id')
+                ->get(['id', 'uuid', 'name', 'code', 'company_id'])
+            : CipProvider::query()->whereIn('uuid', $filed->keys())->orderBy('name')->get(['id', 'uuid', 'name', 'code', 'company_id']);
+
+        /*
+         * The same firm the create form offers. A second register row for
+         * Respect Services stays only when applications were already filed
+         * under it, so those rows can still be filtered.
+         */
+        $canonical = Intake::oneFirmEach($firms);
+        $kept = $canonical->pluck('uuid')->all();
+        $firms = $canonical->concat($firms->filter(
+            fn ($firm) => $filed->has($firm->uuid) && ! in_array($firm->uuid, $kept, true)
+        ));
 
         $rows = $firms->sortByDesc(fn ($firm) => (int) ($filed[$firm->uuid] ?? 0))->values();
 

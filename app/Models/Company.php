@@ -79,7 +79,7 @@ class Company extends Model
     /** The CIP numbering registry row, when this company is a service provider. */
     public function cipProvider(): HasOne
     {
-        return $this->hasOne(CipProvider::class, 'company_id');
+        return $this->hasOne(CipProvider::class, 'company_id')->orderBy('id');
     }
 
     /** The firm's own people looking after this company. */

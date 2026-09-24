@@ -2189,23 +2189,25 @@ class Intake
              * list — that firm was put away on purpose. PRI has no company
              * by design.
              */
-            return CipProvider::query()
+            return self::oneFirmEach(CipProvider::query()
                 ->where('active', true)
                 ->where(fn ($q) => $q
                     ->whereNull('company_id')
                     ->orWhereHas('company')
                     ->orWhere('code', CipProvider::PRIVATE_CLIENT_CODE))
                 ->orderBy('name')
-                ->get();
+                ->orderBy('id')
+                ->get());
         }
 
         if (CipAccess::isProviderContact($user)) {
-            return CipProvider::query()
+            return self::oneFirmEach(CipProvider::query()
                 ->where('active', true)
                 ->whereIn('company_id', CompanyMember::query()
                     ->select('company_id')->active()->where('user_id', $user->id))
                 ->orderBy('name')
-                ->get();
+                ->orderBy('id')
+                ->get());
         }
 
         // A private client files under the reserved PRI bucket.
@@ -2213,6 +2215,56 @@ class Intake
             ->where('active', true)
             ->where('code', CipProvider::PRIVATE_CLIENT_CODE)
             ->get();
+    }
+
+    /**
+     * One row per firm the Service providers tab can open.
+     *
+     * The tab lists companies. The register can hold two rows for one firm:
+     * a company-backed code and a folder-born copy of the same name, or two
+     * codes pointing at the same company. The form was offering both, so
+     * Respect Services appeared twice here and once on the tab.
+     *
+     * @param  Collection<int, CipProvider>  $providers
+     * @return Collection<int, CipProvider>
+     */
+    public static function oneFirmEach(Collection $providers): Collection
+    {
+        $kept = collect();
+        $companyIds = [];
+
+        foreach ($providers as $provider) {
+            if ($provider->company_id === null) {
+                continue;
+            }
+            if (isset($companyIds[$provider->company_id])) {
+                continue;
+            }
+            $companyIds[$provider->company_id] = true;
+            $kept->push($provider);
+        }
+
+        $names = $kept->mapWithKeys(fn (CipProvider $provider) => [
+            mb_strtolower(trim($provider->name)) => true,
+        ]);
+
+        foreach ($providers as $provider) {
+            if ($provider->company_id !== null) {
+                continue;
+            }
+            if ($provider->code === CipProvider::PRIVATE_CLIENT_CODE) {
+                $kept->push($provider);
+
+                continue;
+            }
+            $name = mb_strtolower(trim($provider->name));
+            if (isset($names[$name])) {
+                continue;
+            }
+            $kept->push($provider);
+        }
+
+        return $kept->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)->values();
     }
 
     public static function isAddOnRequest(?CipApplication $existing = null): bool
