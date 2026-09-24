@@ -2,10 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Models\CipProvider;
 use App\Models\Client;
+use App\Models\Company;
+use App\Models\CompanyMember;
 use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\Applications;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -149,5 +153,58 @@ class ClientAssignmentTest extends TestCase
         $this->assertContains('An Officer', $names->all());
         $this->assertNotContains('An Admin', $names->all());
         $this->assertNotContains('A Parked Account', $names->all());
+    }
+
+    public function test_the_assignable_list_offers_the_applications_provider_contacts(): void
+    {
+        config(['services.cip.enabled' => true]);
+
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $john = User::factory()->create([
+            'name' => 'John Doe',
+            'status' => 'approved',
+            'account_type' => Role::CLIENT,
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+        ]);
+        $stranger = User::factory()->create([
+            'name' => 'Other Firm',
+            'status' => 'approved',
+            'account_type' => Role::CLIENT,
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+        ]);
+
+        $galaxy = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
+        $elsewhere = Company::create(['uid' => 'elsewhere', 'name' => 'Elsewhere']);
+        foreach ([[$galaxy, $john], [$elsewhere, $stranger]] as [$company, $person]) {
+            CompanyMember::create([
+                'company_id' => $company->id,
+                'user_id' => $person->id,
+                'name' => $person->name,
+                'email' => $person->email,
+                'role' => 'member',
+                'status' => CompanyMember::STATUS_ACTIVE,
+            ]);
+        }
+
+        $provider = CipProvider::create([
+            'name' => 'Galaxy', 'code' => 'GAL', 'company_id' => $galaxy->id,
+        ]);
+        $client = Client::create(['uid' => 'chen-wei', 'name' => 'Chen Wei', 'data' => []]);
+        $application = Applications::create($provider, $admin);
+        $application->forceFill(['client_id' => $client->id])->save();
+
+        $rows = collect(
+            $this->actingAs($admin)->getJson('/portal/clients/'.$client->uid.'/assignments')
+                ->assertOk()->json('assignable')
+        );
+
+        $johnRow = $rows->firstWhere('name', 'John Doe');
+        $this->assertNotNull($johnRow);
+        $this->assertSame('Service provider contact', $johnRow['personRole']);
+        $this->assertNull($rows->firstWhere('name', 'Other Firm'));
     }
 }

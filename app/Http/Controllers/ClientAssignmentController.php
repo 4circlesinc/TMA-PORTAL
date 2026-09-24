@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\Assignments as CipAssignments;
 use App\Support\Clients\Assignments;
 use App\Support\Clients\ClientDirectory;
 use Illuminate\Http\JsonResponse;
@@ -94,8 +95,28 @@ class ClientAssignmentController extends Controller
             'endsAt.after' => 'An end date has to be in the future.',
         ]);
 
-        // Only internal staff can be assigned to a client.
         $staff = User::findOrFail($data['userId']);
+        $application = $client->cipApplications()->with('provider')->latest('id')->first();
+        $contact = $application
+            ? CipAssignments::assignableContacts($application)->firstWhere('id', $staff->id)
+            : null;
+
+        if ($contact) {
+            CipAssignments::grantContact($application, $contact, $request->user());
+            CipAssignments::assign(
+                $application,
+                $contact,
+                $request->user(),
+                CipAssignments::SERVICE_PROVIDER_CONTACT,
+            );
+
+            return response()->json([
+                'assignments' => $this->present($client->fresh()),
+                'assignable' => $this->assignableStaff($client->fresh()),
+            ]);
+        }
+
+        // Only internal staff can be assigned to a client.
         abort_unless(Role::isStaff($staff), 422, 'Only staff can be assigned to a client.');
 
         Assignments::assign($client, $staff, [
@@ -267,7 +288,7 @@ class ClientAssignmentController extends Controller
             $taken[] = (int) $client->created_by;
         }
 
-        return User::whereIn('account_type', Role::OFFICERS)
+        $staff = User::whereIn('account_type', Role::OFFICERS)
             ->where('status', 'approved')
             ->whereNotIn('id', $taken)
             ->orderBy('name')
@@ -278,6 +299,46 @@ class ClientAssignmentController extends Controller
                 'email' => $u->email,
                 'avatar' => $u->photoUrl(),
                 'accountType' => $u->account_type,
+                'personRole' => $u->roleName(),
+            ])->values()->all();
+
+        return array_merge($this->assignableProviderContacts($client, $taken), $staff);
+    }
+
+    /**
+     * Contacts of the service provider that filed this client's application.
+     *
+     * The Assigned picker is how someone is put on the file. The people
+     * responsible inside the firm are that provider's own contacts, not
+     * every contact in the portal.
+     *
+     * @param  list<int>  $taken
+     * @return list<array<string, mixed>>
+     */
+    private function assignableProviderContacts(?Client $client, array $taken): array
+    {
+        if ($client === null) {
+            return [];
+        }
+
+        $application = $client->cipApplications()->with('provider')->latest('id')->first();
+
+        if ($application === null) {
+            return [];
+        }
+
+        return CipAssignments::assignableContacts($application)
+            ->reject(fn (User $u) => in_array($u->id, $taken, true))
+            ->map(fn (User $u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'email' => $u->email,
+                'avatar' => $u->photoUrl(),
+                'accountType' => $u->account_type,
+                'personRole' => Role::isServiceProviderAdmin($u)
+                    ? 'Service Provider admin'
+                    : 'Service provider contact',
+                'role' => CipAssignments::SERVICE_PROVIDER_CONTACT,
             ])->values()->all();
     }
 

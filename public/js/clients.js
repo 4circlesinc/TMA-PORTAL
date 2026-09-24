@@ -6933,7 +6933,11 @@
           ' data-staff-pick="' + esc(String(person.id)) + '">' +
           ctxAvatarHtml(person) +
           '<span class="tma-portal-context-menu__label">' +
-          esc(person.name || person.email || 'Staff') + '</span></button>';
+          esc(person.name || person.email || 'Staff') + '</span>' +
+          (person.personRole
+            ? '<span class="tma-portal-context-menu__meta">' + esc(person.personRole) + '</span>'
+            : '') +
+          '</button>';
       }).join('')
       : '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--static">' +
         '<span class="tma-portal-context-menu__label">Nobody left to assign</span></div>';
@@ -10267,7 +10271,7 @@
        */
       assignForm =
         '<div class="tma-dash__clients-assign-form">' +
-        staffPicker('data-clients-assign-user', unassigned, state.assignPick, 'Assign staff…') +
+        staffPicker('data-clients-assign-user', unassigned, state.assignPick, 'Assign…') +
         '<button type="button" class="tma-dash__clients-assign-btn" data-clients-assign-submit>Assign</button>' +
         '</div>';
     }
