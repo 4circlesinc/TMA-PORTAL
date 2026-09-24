@@ -638,8 +638,66 @@
     openBtn.appendChild(name);
     tile.appendChild(openBtn);
     if (withRemove) tile.appendChild(withRemove);
+
+    /*
+     * A 2×2 the portal made keeps its Adjust.
+     *
+     * The editor used to live only in the turn that produced it, so coming
+     * back to a chat left the reader with a picture and no way to change
+     * it — while the assistant's own reply was still promising Adjust. The
+     * button re-opens the editor against the ORIGINAL upload (sourceId),
+     * because re-cropping the crop would shed a little more of the picture
+     * every time.
+     */
+    if (entry.kind === 'derived' && entry.sourceId && currentCtx()) {
+      var adjust = document.createElement('button');
+      adjust.type = 'button';
+      adjust.className = 'tma-bespoke__preview-adjust';
+      adjust.textContent = 'Adjust';
+      adjust.setAttribute('data-bespoke-preview-adjust', '');
+      adjust.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        reopenPhotoEditor(entry);
+      });
+      tile.appendChild(adjust);
+    }
+
     fillPreview(tile, entry);
     return tile;
+  }
+
+  /* Whichever surface is on screen: the page when it is open, else the
+     launcher. A card has to be appended to the log the reader is looking at. */
+  function currentCtx() {
+    if (isPagePath() && page) return page;
+
+    return widget || page || null;
+  }
+
+  /*
+   * Open the framing editor again for a 2×2 that is already in the thread.
+   *
+   * The card is appended to the end of the log rather than replacing the
+   * old picture in place: the thread is a record of what was said, and
+   * rewriting an earlier turn would make it lie. Saving supersedes the
+   * previous crop, so the chat still ends up with one finished photo.
+   */
+  function reopenPhotoEditor(entry) {
+    var ctx = currentCtx();
+    if (!ctx || !ctx.logEl) return;
+
+    renderPhotoCard(ctx, {
+      type: 'photo2x2',
+      reframe: true,
+      attachment: {
+        id: entry.sourceId,
+        name: entry.name,
+        url: '/portal/bespoke/attachments/' + entry.sourceId,
+        isPdf: false
+      }
+    });
+    ctx.logEl.scrollTop = ctx.logEl.scrollHeight;
   }
 
   function mountFilePreviews(bubble, list) {
@@ -1600,6 +1658,9 @@
 
   function renderPhotoCard(ctx, action) {
     var a = action.attachment || {};
+    // A re-frame from the thread supersedes the crop already filed, from
+    // its very first save; a fresh crop has nothing to replace yet.
+    var supersedes = !!action.reframe;
     var card = cardShell(ctx, 'photo');
     card.innerHTML =
       '<p class="tma-bespoke__card-head">2\u00d72 photo from ' + escapeHtml(a.name || 'file') + '</p>' +
@@ -1635,7 +1696,9 @@
     var view = card.querySelector('[data-bespoke-photo-canvas]');
     var range = card.querySelector('[data-bespoke-photo-range]');
     var foot = card.querySelector('[data-bespoke-card-foot]');
-    var base = String(a.name || 'photo').replace(/\.[^.]+$/, '');
+    // "-2x2" only once, however many times this is re-opened: the name has
+    // to keep matching so a re-frame supersedes the crop it replaces.
+    var base = String(a.name || 'photo').replace(/\.[^.]+$/, '').replace(/-2x2$/, '');
     var filename = base + '-2x2.jpg';
 
     // Held across adjustments so moving the frame never refetches or re-detects.
@@ -1645,7 +1708,7 @@
     var objectUrl = null;
     var link = null;
     var saveTimer = null;
-    var savedOnce = false;
+    var savedOnce = supersedes;
 
     function describe(result) {
       var how = frame && frame.source === 'centre'
@@ -1781,6 +1844,8 @@
         form.append('kind', 'derived');
         // Replaces the copy kept for this card rather than filing another.
         if (savedOnce) form.append('replaces', filename);
+        // Where it was cut from, so reopening the chat can offer Adjust.
+        if (a.id) form.append('sourceId', a.id);
         return apiForm('/portal/bespoke/attachments', form).then(function (data) {
           savedOnce = true;
           var d = data && data.attachment;

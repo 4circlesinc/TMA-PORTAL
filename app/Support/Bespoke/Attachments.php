@@ -48,7 +48,7 @@ final class Attachments
     private const TEXT_EXT = ['txt', 'md', 'csv'];
 
     /**
-     * @param  array{text?: ?string, pages?: ?int, kind?: string}  $options
+     * @param  array{text?: ?string, pages?: ?int, kind?: string, source?: ?BespokeAttachment}  $options
      */
     public static function stage(UploadedFile $file, BespokeConversation $conversation, User $user, array $options = []): BespokeAttachment
     {
@@ -102,6 +102,9 @@ final class Attachments
             'user_id' => $user->id,
             'conversation_id' => $conversation->id,
             'message_id' => null,
+            // What this was cut from, so a reopened chat can re-frame it
+            // from the original pixels rather than from the crop.
+            'source_id' => ($options['source'] ?? null)?->id,
             'kind' => ($options['kind'] ?? '') === self::KIND_DERIVED ? self::KIND_DERIVED : self::KIND_UPLOAD,
             'name' => $name,
             'mime' => $mime,
@@ -244,6 +247,9 @@ final class Attachments
             'width' => $a->width,
             'height' => $a->height,
             'hasText' => $a->hasText(),
+            // The upload this was cut from. Present on a 2×2 crop, and what
+            // lets a reopened chat offer Adjust.
+            'sourceId' => $a->source?->uuid,
             'url' => '/portal/bespoke/attachments/'.$a->uuid,
         ];
     }

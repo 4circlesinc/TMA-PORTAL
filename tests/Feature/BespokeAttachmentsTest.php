@@ -452,6 +452,54 @@ class BespokeAttachmentsTest extends TestCase
         $this->assertSame(['me-2x2.jpg'], array_column($last['attachments'], 'name'));
     }
 
+    /**
+     * A 2×2 remembers the photo it was cut from.
+     *
+     * That link is what lets a reopened chat offer Adjust: re-framing goes
+     * back to the original pixels rather than re-cropping the crop.
+     */
+    public function test_a_derived_crop_keeps_a_link_to_its_original(): void
+    {
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $conversationId = (string) Str::uuid();
+
+        $original = $this->upload($officer, $conversationId, UploadedFile::fake()->image('scan.jpg', 1200, 800));
+
+        $crop = $this->upload(
+            $officer,
+            $conversationId,
+            UploadedFile::fake()->image('scan-2x2.jpg', 600, 600),
+            ['kind' => 'derived', 'sourceId' => $original['id']],
+        );
+
+        $this->assertSame($original['id'], $crop['sourceId']);
+        $this->assertNull($original['sourceId'], 'An ordinary upload has no source.');
+
+        // And it survives a reopen, which is the whole point.
+        $detail = $this->actingAs($officer)
+            ->getJson('/portal/bespoke/conversations/'.$conversationId)
+            ->assertOk()->json('conversation');
+        $this->assertNotNull($detail);
+    }
+
+    /** Another reader's file can never be named as the source. */
+    public function test_a_source_from_another_account_is_ignored(): void
+    {
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $other = $this->user(Role::ADMINISTRATOR, ['email' => 'other@example.com']);
+        $conversationId = (string) Str::uuid();
+        $theirs = $this->upload($other, (string) Str::uuid(), UploadedFile::fake()->image('theirs.jpg', 400, 400));
+
+        $crop = $this->upload(
+            $officer,
+            $conversationId,
+            UploadedFile::fake()->image('mine-2x2.jpg', 600, 600),
+            ['kind' => 'derived', 'sourceId' => $theirs['id']],
+        );
+
+        $this->assertNull($crop['sourceId'], 'A source is only ever this reader\'s own file.');
+    }
+
     /** A file the reader uploaded is never removed by a crop replacing itself. */
     public function test_superseding_never_removes_a_readers_own_upload(): void
     {

@@ -219,15 +219,24 @@ class BespokeController extends Controller
             // 2×2 crop re-sends the photo as the reader moves the frame;
             // without this every drag would leave its own copy in the chat.
             'replaces' => ['sometimes', 'nullable', 'string', 'max:255'],
+            // The upload a derived file was cut from, so a reopened chat can
+            // re-frame it from the original.
+            'sourceId' => ['sometimes', 'nullable', 'uuid'],
         ]);
 
         $user = $request->user();
         $conversation = Conversations::resolveForChat($user, (string) $validated['conversationId']);
 
+        $sourceUuid = trim((string) ($validated['sourceId'] ?? ''));
+        $source = $sourceUuid !== ''
+            ? Attachments::findOwned($user, $sourceUuid)
+            : null;
+
         $attachment = Attachments::stage($validated['file'], $conversation, $user, [
             'text' => $validated['text'] ?? null,
             'pages' => $validated['pages'] ?? null,
             'kind' => $validated['kind'] ?? Attachments::KIND_UPLOAD,
+            'source' => $source,
         ]);
 
         // Something the portal made (a 2×2 photo) is not waiting for a

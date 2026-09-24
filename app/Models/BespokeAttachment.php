@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 #[Fillable([
-    'uuid', 'user_id', 'conversation_id', 'message_id', 'kind', 'name', 'mime', 'extension',
+    'uuid', 'user_id', 'conversation_id', 'message_id', 'source_id', 'kind', 'name', 'mime', 'extension',
     'size', 'disk', 'path', 'encrypted', 'checksum', 'width', 'height', 'pages', 'text',
 ])]
 class BespokeAttachment extends Model
@@ -49,6 +49,12 @@ class BespokeAttachment extends Model
     public function message(): BelongsTo
     {
         return $this->belongsTo(BespokeMessage::class, 'message_id');
+    }
+
+    /** The upload this file was cut from, for a derived 2×2 photo. */
+    public function source(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'source_id');
     }
 
     public function isImage(): bool

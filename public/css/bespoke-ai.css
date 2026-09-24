@@ -2013,3 +2013,32 @@ body:has(.tma-dash--bespoke) .tma-bespoke,
   line-height: var(--text-lh-12);
   color: var(--color-text-secondary);
 }
+
+/* Adjust, on a 2×2 the portal made. It keeps the framing editor reachable
+   after the turn that produced it has scrolled away, or the chat has been
+   reopened on another day. */
+.tma-bespoke__preview-adjust {
+  appearance: none;
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 4px var(--space-8);
+  border: 0;
+  border-top: 0.5px solid var(--color-border-soft);
+  border-radius: 0 0 var(--radius-12) var(--radius-12);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  font-weight: var(--font-weight-semibold);
+  text-align: center;
+  cursor: pointer;
+}
+
+.tma-bespoke__preview-adjust:hover,
+.tma-bespoke__preview-adjust:focus-visible {
+  outline: none;
+  background: var(--color-hover);
+  color: var(--color-text-primary);
+}
