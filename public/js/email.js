@@ -2656,9 +2656,16 @@
    * looking at", the skeleton is more honest than an hour-old inbox. */
   var MAIL_CACHE_TTL = 10 * 60 * 1000;
 
-  /* A prefetch is only worth consuming while it is still the newest thing
-   * anyone asked for; past this, refetch rather than paint a stale answer. */
-  var MAIL_PREFETCH_TTL = 30 * 1000;
+  /* The prefetch is what Email paints when the reader finally opens it.
+   * Throwing it away after half a minute meant a fully loaded portal still
+   * showed a skeleton: the copy was already here, and opening the page
+   * started the wait over. It stays usable for the same window as the
+   * painted cache; the mailbox poll replaces it once the view is open. */
+  var MAIL_PREFETCH_TTL = MAIL_CACHE_TTL;
+
+  /* A boot that has not answered by now is stuck. Opening Email again starts
+   * a fresh one instead of leaving the skeleton up until a browser refresh. */
+  var MAIL_BOOT_STALE_MS = 12 * 1000;
 
   var warmBoot = null;
 
@@ -2797,13 +2804,86 @@
         perPage: loadMailPerPage(),
       })),
       suggest: hold(window.TMAEmailAPI.suggest('')),
+      bootstrapData: null,
+      messagesData: null,
     };
+    warmBoot.bootstrap.then(function (result) {
+      if (warmBoot && result.data) warmBoot.bootstrapData = result.data;
+      stashWarmListing();
+    });
+    warmBoot.messages.then(function (result) {
+      if (warmBoot && result.data) warmBoot.messagesData = result.data;
+      stashWarmListing();
+    });
     warmBoot.suggest.then(function (result) {
       if (result.data && Array.isArray(result.data.suggestions)) {
         suggestCache[''] = result.data.suggestions;
         hydrateRecipientPillAvatars();
       }
     });
+  }
+
+  /* Put the prefetched inbox where a later mount can paint it on the first
+   * frame, including a refresh that never opened Email. */
+  function stashWarmListing() {
+    if (!warmBoot || !warmBoot.messagesData) return;
+    var list = warmBoot.messagesData;
+    if (!Array.isArray(list.messages) || !list.messages.length) return;
+    var boot = warmBoot.bootstrapData;
+    var payload = {
+      at: Date.now(),
+      user: window.TMABootUserId || null,
+      folder: 'inbox',
+      connected: boot ? !!boot.connected : true,
+      account: (boot && boot.account) || null,
+      folders: (boot && boot.folders) || {},
+      labels: (boot && boot.labels) || [],
+      preferences: (boot && boot.preferences) || null,
+      rows: list.messages.slice(0, 50),
+      total: list.total || 0,
+      perPage: list.perPage || loadMailPerPage(),
+      lastPage: list.lastPage || 1,
+    };
+    try {
+      window.sessionStorage.setItem(MAIL_CACHE_KEY, JSON.stringify(payload));
+    } catch (e) { /* a full sessionStorage still leaves the in-memory copy */ }
+    if (window.TMAStore) {
+      try { window.TMAStore.put('mail:warm', payload); } catch (e) { /* session copy remains */ }
+    }
+  }
+
+  /* Paint a prefetch that has already arrived, before the first render.
+   * Anything still in flight is left for bootstrap to consume. */
+  function applySettledWarmBoot(state) {
+    if (!warmBoot || Date.now() - warmBoot.at > MAIL_PREFETCH_TTL) return false;
+    if (rowsOf(state).length) return false;
+    if (state.folder !== 'inbox' || state.search || state.activeLabelId || (state.page || 1) !== 1) return false;
+    var list = warmBoot.messagesData;
+    if (!list || !Array.isArray(list.messages) || !list.messages.length) return false;
+
+    var boot = warmBoot.bootstrapData;
+    if (boot) {
+      state.connected = !!boot.connected;
+      state.account = boot.account || null;
+      rememberMailboxAccount(state.account);
+      state.folderCounts = boot.folders || {};
+      state.labels = (boot.labels || []).filter(function (label) {
+        return !!(label && label.localOnly);
+      });
+      applyMailPreferences(state, boot.preferences);
+    } else if (state.connected == null) {
+      state.connected = true;
+    }
+    applyListPayload(state, list);
+    state._listContext = listContextKey(state);
+    state.loading = false;
+    state.listRefreshing = false;
+    state.loadError = null;
+    return true;
+  }
+
+  function mailBootIsStale(state) {
+    return !!(state && state._bootStartedAt && (Date.now() - state._bootStartedAt > MAIL_BOOT_STALE_MS));
   }
 
   /* Hand a prefetched response to the caller once, if it is still current. */
@@ -2953,6 +3033,8 @@
     }
 
     var token = ++state.loadToken;
+    state._listInflight = true;
+    state._bootStartedAt = state._bootStartedAt || Date.now();
     // Only ever a skeleton when there is genuinely nothing to show. Reloading
     // a list that is already on screen (including a restored cache) is a quiet
     // refresh: blanking mail the reader is looking at, to put it back a moment
@@ -3018,6 +3100,11 @@
       state.rows = [];
       reportMailError(state, err);
       render();
+    }).then(function () {
+      if (token === state.loadToken) {
+        state._listInflight = false;
+        state._bootStartedAt = 0;
+      }
     });
   }
 
@@ -3335,14 +3422,23 @@
 
   /* First load: connection state, folder counts, labels, then the inbox. */
   function bootstrapMailbox(root, state, render) {
+    // A second open while the first request is still out used to start
+    // another one, and the two of them could cancel each other so the
+    // skeleton never came down without a browser refresh.
+    if (state._bootstrapInflight && !mailBootIsStale(state)) return state._bootstrapInflight;
+
     // A mailbox already showing real mail (from the cache, or from the last
     // time this view was opened) revalidates quietly. Only a genuinely empty
     // one waits behind a loading state.
     var warm = rowsOf(state).length > 0;
+    var generation = (state._bootstrapGeneration || 0) + 1;
+    state._bootstrapGeneration = generation;
+    state._bootStartedAt = Date.now();
     state.loading = !warm;
     if (warm) state.listRefreshing = true;
 
-    (takeWarmBoot('bootstrap') || api().bootstrap()).then(function (data) {
+    var job = (takeWarmBoot('bootstrap') || api().bootstrap()).then(function (data) {
+      if (generation !== state._bootstrapGeneration) return;
       state.bootstrapFailed = false;
       state.loadError = null;
       state.connected = !!(data && data.connected);
@@ -3399,6 +3495,7 @@
 
       reloadMessages(root, state, render);
     }).catch(function (err) {
+      if (generation !== state._bootstrapGeneration) return;
       state.loading = false;
       state.listRefreshing = false;
       // Remembered so re-opening Email retries instead of sitting on a failure
@@ -3412,7 +3509,11 @@
       reportMailError(state, err);
       finishPendingPopoutCompose(state);
       render();
+    }).then(function () {
+      if (state._bootstrapInflight === job) state._bootstrapInflight = null;
     });
+    state._bootstrapInflight = job;
+    return job;
   }
 
   /* Open one message by id, used by snooze-reminder deep links. Switches to
@@ -14160,6 +14261,7 @@
         return;
       }
 
+      applySettledWarmBoot(root._emailState);
       root._emailRender();
 
       /*
@@ -14178,8 +14280,13 @@
         pendingBoot();
         return;
       }
-      if (root._emailState.bootstrapFailed || root._emailState.connected === null) {
-        bootstrapMailbox(root, root._emailState, root._emailRender);
+      var again = root._emailState;
+      var stuck = again.loading && !rowsOf(again).length &&
+        !again._listInflight && !again._bootstrapInflight;
+      if (again.bootstrapFailed || again.connected === null || stuck || mailBootIsStale(again)) {
+        if (!again._bootstrapInflight || mailBootIsStale(again)) {
+          bootstrapMailbox(root, again, root._emailRender);
+        }
       }
       return;
     }
@@ -14391,7 +14498,10 @@
     // Paint what the last visit ended on before touching the network, so a
     // reload comes back to real mail rather than to a skeleton. Nothing here
     // is trusted: the bootstrap below overwrites all of it either way.
+    // The in-memory prefetch wins when this tab already asked for the inbox
+    // from another page, so opening Email does not wait on the network.
     hydrateFromCache(state);
+    applySettledWarmBoot(state);
 
     if (state.composePopout) {
       var dashPop = getEmailDashRoot(root);
@@ -14499,21 +14609,21 @@
   }
 
   /*
-   * Ask for the mailbox now, before the shell finishes building itself, and
-   * long before anyone clicks Email.
+   * Ask for the inbox before anyone clicks Email.
    *
-   * This file is deferred, so the DOM is already parsed here but the portal's
-   * own boot work (a few hundred milliseconds of synchronous rendering across
-   * a dozen modules) has not run yet. Two requests in flight across that gap
-   * is most of the difference between an inbox that is ready when opened and
-   * one that starts loading when opened.
+   * On the email address itself the request has to leave now, so the mount
+   * that follows in this same turn can paint it. Everywhere else it leaves
+   * on load: the dashboard has already started its own requests, and the
+   * inbox is in hand by the time the reader opens Email. It used to wait
+   * in the idle queue, so a portal that had finished loading still opened
+   * Email onto a skeleton.
    */
-  if (window.TMABoot && window.TMABoot.deferUnless) {
-    // Only when the mailbox is the page being opened. Everywhere else the
-    // inbox is asked for once the shell is quiet, with the mount's own boot.
-    window.TMABoot.deferUnless(['email'], primeMailbox);
-  } else {
+  if (window.TMABoot && window.TMABoot.route && window.TMABoot.route() === 'email') {
     primeMailbox();
+  } else if (document.readyState === 'complete') {
+    primeMailbox();
+  } else {
+    window.addEventListener('load', primeMailbox);
   }
 
   window.TMAEmail = {
