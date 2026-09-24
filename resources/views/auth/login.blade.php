@@ -93,6 +93,14 @@
         </form>
 
         <p class="tma-auth__alt-link">New to the portal? <a href="{{ route('register') }}">Create an account</a></p>
+
+        {{-- Outside the sign-in form on purpose: that POST takes no terms or
+             privacy fields, so the ticks must not be submitted with it. --}}
+        @include('partials.legal-accept', [
+          'always' => true,
+          'status' => false,
+          'intro' => 'To use the portal you must agree to our legal terms.',
+        ])
       </div>
 
       <p class="tma-auth__copyright">&copy; {{ date('Y') }} TM ANTOINE Advisory</p>
@@ -101,6 +109,7 @@
 @endsection
 
 @push('scripts')
+<script src="/js/legal-accept.js?v=8"></script>
 <script>
   (function () {
     var providers = document.querySelector("[data-auth-providers]");

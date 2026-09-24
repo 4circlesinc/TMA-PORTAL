@@ -4,8 +4,9 @@
 
 @section('body')
   <main class="tma-auth tma-auth--split">
+    {{-- No mark in this corner: the full lockup in the panel beside it already
+         names the firm, and sign-in does not carry one either. --}}
     <section class="tma-auth__stage" aria-hidden="true">
-      <img class="tma-auth__stage-mark" src="/images/brand/tma/tma-logo-mark.png" alt="" width="40" height="40">
       <img class="tma-auth__stage-art" src="/images/illustrations/Illustration28.svg" alt="" width="100" height="75">
     </section>
 
@@ -185,7 +186,7 @@
 @endsection
 
 @push('scripts')
-<script src="/js/legal-accept.js?v=7"></script>
+<script src="/js/legal-accept.js?v=8"></script>
 <script>
   (function () {
     var providers = document.querySelector("[data-auth-providers]");

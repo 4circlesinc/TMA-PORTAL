@@ -278,5 +278,5 @@
 @endsection
 
 @push('scripts')
-  <script src="/js/legal-accept.js?v=7"></script>
+  <script src="/js/legal-accept.js?v=8"></script>
 @endpush

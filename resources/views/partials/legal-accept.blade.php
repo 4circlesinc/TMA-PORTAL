@@ -8,11 +8,16 @@
     $always      — open the sheet for the whole page, not just while the
                    surrounding form is visible (sign-up: consent covers the
                    provider buttons too)
+    $intro       — opening sentence, for surfaces where no account is created
+    $status      — show the status line / reopen link under the form
+                   (false on sign-in, which has no form to gate)
 --}}
 @php
   $termsName = $termsName ?? 'terms';
   $privacyName = $privacyName ?? 'privacy';
   $always = $always ?? false;
+  $status = $status ?? true;
+  $intro = $intro ?? 'To create an account you must agree to our legal terms.';
   $already = old($termsName) && old($privacyName);
 @endphp
 <div
@@ -25,19 +30,21 @@
   <input type="checkbox" class="tma-legal-consent__input" name="{{ $termsName }}" value="1" data-legal-check="terms" tabindex="-1" aria-hidden="true" @checked(old($termsName))>
   <input type="checkbox" class="tma-legal-consent__input" name="{{ $privacyName }}" value="1" data-legal-check="privacy" tabindex="-1" aria-hidden="true" @checked(old($privacyName))>
 
-  <p class="tma-legal-consent__status" data-legal-status>
-    @if ($already)
-      You have agreed to the Terms of Service and Privacy Policy.
-    @else
-      <button type="button" class="tma-legal-consent__reopen" data-legal-reopen>Review the legal terms</button>
-    @endif
-  </p>
+  @if ($status)
+    <p class="tma-legal-consent__status" data-legal-status>
+      @if ($already)
+        You have agreed to the Terms of Service and Privacy Policy.
+      @else
+        <button type="button" class="tma-legal-consent__reopen" data-legal-reopen>Review the legal terms</button>
+      @endif
+    </p>
+  @endif
 
   <dialog class="tma-legal-consent__sheet" data-legal-sheet aria-labelledby="legal-consent-title">
     <h2 class="tma-legal-consent__title" id="legal-consent-title">Legal terms</h2>
 
     <p class="tma-legal-consent__copy">
-      To create an account you must agree to our legal terms. Please read the
+      {{ $intro }} Please read the
       <a href="{{ url('/terms-of-service/') }}" target="_blank" rel="noopener noreferrer" data-legal-visit="terms">Terms of Service</a>
       and the
       <a href="{{ url('/privacy-policy/') }}" target="_blank" rel="noopener noreferrer" data-legal-visit="privacy">Privacy Policy</a>;

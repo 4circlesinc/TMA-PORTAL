@@ -609,7 +609,8 @@ body:has(.tma-auth__card--tall) {
   max-width: calc(100vw - 24px);
   height: fit-content;
   max-height: calc(100vh - 32px);
-  margin: auto;
+  /* Centred across the page, sitting on the bottom edge. */
+  margin: auto auto 24px;
   padding: var(--space-20);
   border: 1px solid var(--color-border-soft);
   border-radius: var(--radius-24);
@@ -642,11 +643,11 @@ body:has(.tma-auth__card--tall) {
 @keyframes tma-legal-sheet-up {
   from {
     opacity: 0;
-    transform: translateY(8px) scale(0.98);
+    transform: translateY(16px);
   }
   to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translateY(0);
   }
 }
 

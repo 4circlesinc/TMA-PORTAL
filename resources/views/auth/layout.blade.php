@@ -8,7 +8,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/tokens.css">
   <link rel="stylesheet" href="/css/theme.css">
-  <link rel="stylesheet" href="/css/auth.css?v=legal-consent-5">
+  <link rel="stylesheet" href="/css/auth.css?v=legal-consent-6">
   <link rel="stylesheet" href="/css/auth-flow.css">
   <!-- Light unless the reader explicitly chose Dark. Dark mode is unfinished, so the device colour scheme is ignored on purpose, see FOLLOW_SYSTEM_THEME in public/js/dashboard.js. -->
   <script>(function(){try{sessionStorage.removeItem("tma.signing-out");}catch(e){}})();</script>
