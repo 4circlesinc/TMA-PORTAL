@@ -576,15 +576,32 @@ body:has(.tma-auth__card--tall) {
 }
 
 .tma-legal-accept__dialog {
+  /* Native <dialog> in the top layer — pin to the viewport, not the form column.
+     Only force flex when open; otherwise UA display:none is overridden and the
+     empty dialog covers the page. */
+  position: fixed;
+  inset: 0;
   width: min(720px, calc(100vw - 32px));
-  max-width: 100%;
+  max-width: min(720px, calc(100vw - 32px));
   height: min(80vh, 720px);
+  max-height: min(80vh, 720px);
+  margin: auto;
   padding: 0;
   border: 1px solid var(--color-border-soft);
   border-radius: var(--radius-16);
   background: #ffffff;
   color: var(--color-text-primary);
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+
+.tma-legal-accept__dialog:not([open]) {
+  display: none;
+}
+
+.tma-legal-accept__dialog[open] {
+  display: flex;
+  flex-direction: column;
 }
 
 .tma-legal-accept__dialog::backdrop {
@@ -592,6 +609,7 @@ body:has(.tma-auth__card--tall) {
 }
 
 .tma-legal-accept__chrome {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -623,13 +641,15 @@ body:has(.tma-auth__card--tall) {
 
 .tma-legal-accept__frame {
   display: block;
+  flex: 1 1 auto;
+  min-height: 0;
   width: 100%;
-  height: calc(100% - 128px);
   border: 0;
   background: var(--color-bg-page);
 }
 
 .tma-legal-accept__foot {
+  flex: 0 0 auto;
   display: flex;
   justify-content: flex-end;
   padding: var(--space-16) var(--space-20);

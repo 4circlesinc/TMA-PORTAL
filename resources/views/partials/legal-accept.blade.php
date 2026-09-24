@@ -23,7 +23,7 @@
     >
     <span>
       I have read the
-      <a href="{{ url('/terms-of-service/?embed=1') }}" data-legal-open="terms">Terms of Service</a>
+      <a href="{{ url('/terms-of-service/') }}?embed=1" data-legal-open="terms">Terms of Service</a>
     </span>
   </label>
 
@@ -38,7 +38,7 @@
     >
     <span>
       I have read the
-      <a href="{{ url('/privacy-policy/?embed=1') }}" data-legal-open="privacy">Privacy Policy</a>
+      <a href="{{ url('/privacy-policy/') }}?embed=1" data-legal-open="privacy">Privacy Policy</a>
     </span>
   </label>
 

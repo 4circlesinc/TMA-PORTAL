@@ -28,6 +28,11 @@
       if (title) title.textContent = titles[key] || 'Legal';
       confirm.disabled = true;
       confirm.textContent = 'Scroll to the end to continue';
+      // Keep the dialog on <body> so width/height resolve against the viewport,
+      // not the narrow auth form column.
+      if (dialog.parentElement !== document.body) {
+        document.body.appendChild(dialog);
+      }
       frame.onload = function () {
         watchScroll();
       };
