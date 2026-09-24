@@ -34,42 +34,33 @@
   </p>
 
   <dialog class="tma-legal-consent__sheet" data-legal-sheet aria-labelledby="legal-consent-title">
-    <div class="tma-legal-consent__head">
-      <span class="tma-legal-consent__icon" aria-hidden="true">
-        <img src="/images/icons/phosphor/ShieldCheck.svg" alt="" width="20" height="20">
-      </span>
-      <div class="tma-legal-consent__headings">
-        <h2 class="tma-legal-consent__title" id="legal-consent-title">Before you continue</h2>
-        <p class="tma-legal-consent__copy">Open each document; the switch turns on once you have.</p>
-      </div>
-    </div>
+    <h2 class="tma-legal-consent__title" id="legal-consent-title">Legal terms</h2>
 
-    <ul class="tma-legal-consent__links">
-      @foreach ([['terms', 'Terms of Service', url('/terms-of-service/')], ['privacy', 'Privacy Policy', url('/privacy-policy/')]] as [$key, $label, $href])
-        <li class="tma-legal-consent__row" data-legal-row="{{ $key }}">
-          <a
-            class="tma-legal-consent__link"
-            href="{{ $href }}"
-            target="_blank"
-            rel="noopener noreferrer"
-            data-legal-visit="{{ $key }}"
-          >
-            <span class="tma-legal-consent__link-name">{{ $label }}</span>
-            <span class="tma-legal-consent__link-hint" data-legal-hint="{{ $key }}">Opens in a new tab</span>
-          </a>
+    <p class="tma-legal-consent__copy">
+      To create an account you must agree to our legal terms. Please read the
+      <a href="{{ url('/terms-of-service/') }}" target="_blank" rel="noopener noreferrer" data-legal-visit="terms">Terms of Service</a>
+      and the
+      <a href="{{ url('/privacy-policy/') }}" target="_blank" rel="noopener noreferrer" data-legal-visit="privacy">Privacy Policy</a>;
+      each switch turns on once you have opened that document.
+    </p>
+
+    <div class="tma-legal-consent__toggles">
+      @foreach ([['terms', 'Terms'], ['privacy', 'Privacy']] as [$key, $label])
+        <span class="tma-legal-consent__toggle" data-legal-row="{{ $key }}">
+          <span class="tma-legal-consent__toggle-label">{{ $label }}</span>
           <span class="tma-auth__switch tma-legal-consent__switch">
             <input class="tma-auth__switch-input" type="checkbox" role="switch" tabindex="-1" aria-label="{{ $label }} read" data-legal-switch="{{ $key }}" disabled>
             <span class="tma-auth__switch-ui" aria-hidden="true"><span class="tma-auth__switch-track"></span><span class="tma-auth__switch-thumb"></span></span>
           </span>
-        </li>
+        </span>
       @endforeach
-    </ul>
+    </div>
 
     <div class="tma-legal-consent__actions">
-      <button type="button" class="tma-auth__submit tma-auth__submit--previous tma-legal-consent__decline" data-legal-decline>
+      <button type="button" class="tma-legal-consent__btn tma-legal-consent__btn--ghost" data-legal-decline>
         Not now
       </button>
-      <button type="button" class="tma-auth__submit tma-legal-consent__agree" data-legal-agree disabled>
+      <button type="button" class="tma-legal-consent__btn tma-legal-consent__btn--primary" data-legal-agree disabled>
         Agree
       </button>
     </div>

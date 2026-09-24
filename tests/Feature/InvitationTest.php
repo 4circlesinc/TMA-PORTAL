@@ -133,7 +133,7 @@ class InvitationTest extends TestCase
             ->assertSee('name="first_name"', false)
             ->assertSee('name="last_name"', false)
             ->assertSee('data-legal-consent', false)
-            ->assertSee('Before you continue');
+            ->assertSee('Legal terms');
     }
 
     // -------------------------------------------------------------- accepting

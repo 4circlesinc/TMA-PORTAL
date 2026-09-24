@@ -59,9 +59,6 @@
       var row = sheet.querySelector('[data-legal-row="' + key + '"]');
       if (row) row.classList.add('is-read');
 
-      var hint = sheet.querySelector('[data-legal-hint="' + key + '"]');
-      if (hint) hint.textContent = 'Opened';
-
       refreshAgree();
     }
 

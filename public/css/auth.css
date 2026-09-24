@@ -664,35 +664,6 @@ body:has(.tma-auth__card--tall) {
   }
 }
 
-.tma-legal-consent__head {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-12);
-}
-
-.tma-legal-consent__icon {
-  display: inline-flex;
-  flex: 0 0 36px;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-pill);
-  background: rgba(0, 0, 0, 0.04);
-}
-
-.tma-legal-consent__icon img {
-  width: 20px;
-  height: 20px;
-}
-
-.tma-legal-consent__headings {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
 .tma-legal-consent__title {
   margin: 0;
   font-size: var(--text-size-16);
@@ -703,67 +674,49 @@ body:has(.tma-auth__card--tall) {
 
 .tma-legal-consent__copy {
   margin: 0;
-  font-size: var(--text-size-12);
-  line-height: var(--text-lh-12);
+  font-size: var(--text-size-14);
+  line-height: 1.55;
   color: var(--color-text-secondary);
 }
 
-.tma-legal-consent__links {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.tma-legal-consent__copy a {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tma-legal-consent__copy a:hover {
+  color: var(--color-text-link);
+}
+
+/* Compact label + switch pairs on one row, divider above and below. */
+.tma-legal-consent__toggles {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8) var(--space-24);
+  padding: var(--space-12) 0;
+  border-top: 1px solid var(--color-border-soft);
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.tma-legal-consent__toggle {
+  display: inline-flex;
+  align-items: center;
   gap: var(--space-8);
 }
 
-.tma-legal-consent__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-12);
-  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-12);
-  border: 1px solid var(--color-border-soft);
-  border-radius: var(--radius-16);
-  background: var(--color-bg-page);
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.tma-legal-consent__row.is-read {
-  border-color: rgba(0, 0, 0, 0.16);
-  background: var(--color-white);
-}
-
-.tma-legal-consent__link {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-  text-decoration: none;
-  outline: 0;
-}
-
-/* Ring the whole row, not the tight inner link box. */
-.tma-legal-consent__row:has(.tma-legal-consent__link:focus-visible) {
-  outline: 2px solid var(--color-text-link);
-  outline-offset: 2px;
-}
-
-.tma-legal-consent__link-name {
+.tma-legal-consent__toggle-label {
   font-size: var(--text-size-14);
   line-height: var(--text-lh-14);
   font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
-}
-
-.tma-legal-consent__link:hover .tma-legal-consent__link-name {
-  text-decoration: underline;
-}
-
-.tma-legal-consent__link-hint {
-  font-size: var(--text-size-12);
-  line-height: var(--text-lh-12);
   color: var(--color-text-secondary);
+  transition: color 0.15s ease;
+}
+
+.tma-legal-consent__toggle.is-read .tma-legal-consent__toggle-label {
+  color: var(--color-text-primary);
 }
 
 .tma-legal-consent__switch {
@@ -776,25 +729,37 @@ body:has(.tma-auth__card--tall) {
   gap: var(--space-8);
 }
 
-.tma-legal-consent__actions .tma-auth__submit {
+.tma-legal-consent__btn {
   flex: 1 1 0;
-  width: auto;
   min-width: 0;
-  min-height: 40px;
-  border-radius: var(--radius-pill);
+  min-height: 38px;
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid transparent;
+  border-radius: var(--radius-12);
+  font-family: inherit;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-/* Keep the two actions apart while Agree is still locked. */
-.tma-legal-consent__decline {
-  border: 1px solid var(--color-border-soft);
+.tma-legal-consent__btn--ghost {
+  border-color: var(--color-border-soft);
   background: var(--color-white);
+  color: var(--color-text-primary);
 }
 
-.tma-legal-consent__decline:hover {
+.tma-legal-consent__btn--ghost:hover {
   background: rgba(0, 0, 0, 0.04);
 }
 
-.tma-legal-consent__agree:disabled {
+.tma-legal-consent__btn--primary {
+  background: var(--color-black);
+  color: var(--color-white);
+}
+
+.tma-legal-consent__btn--primary:disabled {
   background: rgba(0, 0, 0, 0.08);
   color: var(--color-text-secondary);
   cursor: not-allowed;
