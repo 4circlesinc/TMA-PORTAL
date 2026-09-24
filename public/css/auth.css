@@ -604,12 +604,12 @@ body:has(.tma-auth__card--tall) {
  */
 .tma-legal-consent__sheet {
   position: fixed;
-  inset: auto 0 0 0;
+  inset: 0;
   width: min(420px, calc(100vw - 24px));
   max-width: calc(100vw - 24px);
-  height: auto;
-  max-height: none;
-  margin: 0 auto 16px;
+  height: fit-content;
+  max-height: calc(100vh - 32px);
+  margin: auto;
   padding: var(--space-20);
   border: 1px solid var(--color-border-soft);
   border-radius: var(--radius-24);
@@ -624,14 +624,6 @@ body:has(.tma-auth__card--tall) {
  * gates. Dock it to that column instead. Below 960px the stage is hidden and
  * the panel is the whole page, so the centred default is already right.
  */
-@media (min-width: 961px) {
-  .tma-legal-consent__sheet--split {
-    right: clamp(24px, 4vw, 56px);
-    left: auto;
-    margin-inline: 0;
-  }
-}
-
 .tma-legal-consent__sheet:not([open]) {
   display: none;
 }
@@ -644,17 +636,17 @@ body:has(.tma-auth__card--tall) {
 }
 
 .tma-legal-consent__sheet::backdrop {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.32);
 }
 
 @keyframes tma-legal-sheet-up {
   from {
-    opacity: 0.6;
-    transform: translateY(16px);
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 

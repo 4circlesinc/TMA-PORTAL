@@ -25,15 +25,13 @@
 
     function openSheet() {
       if (sheet.parentElement !== document.body) {
-        // Reparenting severs the sheet from .tma-auth--split, so carry the
-        // layout over as a class the CSS can still see.
-        if (root.closest('.tma-auth--split')) {
-          sheet.classList.add('tma-legal-consent__sheet--split');
-        }
         document.body.appendChild(sheet);
       }
       if (sheet.open) return;
-      if (typeof sheet.show === 'function') sheet.show();
+      // Centred over the page, so it is a real modal: showModal() gives the
+      // backdrop and keeps focus inside until they answer.
+      if (typeof sheet.showModal === 'function') sheet.showModal();
+      else if (typeof sheet.show === 'function') sheet.show();
       else sheet.setAttribute('open', '');
     }
 
