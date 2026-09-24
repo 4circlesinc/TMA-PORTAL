@@ -52,8 +52,12 @@
 
   /* Where a native menu is worth more than the friction: a reader still needs
    * spellcheck and paste in a field they are typing in, and copy on text they
-   * have selected. Blocking those reads as a broken page, not a locked one. */
+   * have selected. Blocking those reads as a broken page, not a locked one.
+   * Auth pages (.tma-auth) are not meant to load this script — PortalShell
+   * only emits it inside the SPA — but if one ever does, leave the menu alone
+   * so Paste on sign-in is never the casualty. */
   function wantsNativeMenu(target) {
+    if (document.querySelector('.tma-auth')) return true;
     if (!target || !target.closest) return false;
     if (target.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]')) return true;
 

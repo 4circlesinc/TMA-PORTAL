@@ -48,6 +48,17 @@ app.whenReady().then(() => {
   const blank = build({ isEditable: false, selectionText: '', mediaType: 'none' });
   check('empty space offers no menu', blank.items.length, 0);
 
+  const authBlank = contextMenu.build(
+    contents,
+    { isEditable: false, selectionText: '', mediaType: 'none' },
+    () => {},
+    { authPage: true },
+  );
+  const authRoles = roles(authBlank);
+  check('auth empty space still offers Paste', authRoles.includes('paste'), true);
+  check('auth empty space offers Select All', authRoles.includes('selectall'), true);
+  check('auth empty space does not invent Cut', authRoles.includes('cut'), false);
+
   /* ── a text field ───────────────────────────────────────────────── */
 
   const field = build({ isEditable: true, selectionText: '', mediaType: 'none' });

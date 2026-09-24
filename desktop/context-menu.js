@@ -17,6 +17,12 @@
  * Nothing else appears, because a menu of eleven greyed-out items is how you
  * tell somebody the app was assembled rather than designed.
  *
+ * Auth pages are the exception. Sign-in and register are form pages, and
+ * right-clicking a label or the card around a field used to offer nothing —
+ * Paste looked missing even with a field focused, because `isEditable` is
+ * about the node under the cursor, not the focused one. Those screens always
+ * get Paste / Select All on blank space so the menu is there when filling in.
+ *
  * ROLES, NOT HAND-ROLLED CLICKS
  *
  * `role: 'copy'` is the operating system's own Copy — it carries the platform
@@ -56,18 +62,33 @@ function install(contents, opts = {}) {
     || (url => { shell.openExternal(url).catch(() => {}); });
 
   contents.on('context-menu', (event, params) => {
-    const menu = build(contents, params, openExternally);
-    // An empty menu is not a menu. Right-clicking blank space in a native app
-    // usually does nothing, and popping up a bare frame is worse than that.
-    if (menu.items.length === 0) return;
-    menu.popup({ window: contents.getOwnerBrowserWindow?.() || undefined });
+    const finish = (authPage) => {
+      if (contents.isDestroyed?.()) return;
+      const menu = build(contents, params, openExternally, { authPage: !!authPage });
+      // An empty menu is not a menu. Right-clicking blank space in a native app
+      // usually does nothing, and popping up a bare frame is worse than that.
+      if (menu.items.length === 0) return;
+      menu.popup({ window: contents.getOwnerBrowserWindow?.() || undefined });
+    };
+
+    // .tma-auth marks sign-in, register, invite, onboarding and the rest of
+    // the public auth shell — see resources/views/auth/layout.blade.php.
+    contents.executeJavaScript('!!document.querySelector(".tma-auth")', true)
+      .then(finish)
+      .catch(() => finish(false));
   });
 
   return true;
 }
 
-/** @returns {Electron.Menu} */
-function build(contents, params, openExternally) {
+/**
+ * @param {Electron.WebContents} contents
+ * @param {Electron.ContextMenuParams} params
+ * @param {(url: string) => void} openExternally
+ * @param {{ authPage?: boolean }} [opts]
+ * @returns {Electron.Menu}
+ */
+function build(contents, params, openExternally, opts = {}) {
   const menu = new Menu();
   const add = item => menu.append(new MenuItem(item));
   const sep = () => {
@@ -96,6 +117,13 @@ function build(contents, params, openExternally) {
   } else if (params.selectionText && params.selectionText.trim()) {
     sep();
     add({ role: 'copy' });
+  } else if (opts.authPage && !params.linkURL && params.mediaType === 'none') {
+    // Form page, click landed beside a field: still offer Paste.
+    sep();
+    add({ role: 'paste' });
+    add({ role: 'pasteAndMatchStyle', label: 'Paste and Match Style' });
+    sep();
+    add({ role: 'selectAll' });
   }
 
   link(params, add, sep, openExternally);
