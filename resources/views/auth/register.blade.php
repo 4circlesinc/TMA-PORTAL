@@ -185,7 +185,7 @@
 @endsection
 
 @push('scripts')
-<script src="/js/legal-accept.js?v=2"></script>
+<script src="/js/legal-accept.js?v=3"></script>
 <script>
   (function () {
     var providers = document.querySelector("[data-auth-providers]");

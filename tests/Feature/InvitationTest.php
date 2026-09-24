@@ -132,8 +132,8 @@ class InvitationTest extends TestCase
             ->assertSee('owner@acme.test')
             ->assertSee('name="first_name"', false)
             ->assertSee('name="last_name"', false)
-            ->assertSee('data-legal-accept', false)
-            ->assertSee('I have read the');
+            ->assertSee('data-legal-consent', false)
+            ->assertSee('Open both documents to Agree');
     }
 
     // -------------------------------------------------------------- accepting

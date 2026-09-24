@@ -1,60 +1,59 @@
 {{--
-  Two legal documents. Each opens in a bottom cookie-style sheet; its tick
-  unlocks only after the person confirms they have read it.
+  Cookie-style consent: links open the real legal pages; Agree unlocks after
+  both have been opened. Sets the form ticks the server already expects.
 
   Props (optional):
-    $termsName   — form field for the Terms tick (default: terms)
-    $privacyName — form field for the Privacy tick (default: privacy)
+    $termsName   — form field for Terms (default: terms)
+    $privacyName — form field for Privacy (default: privacy)
 --}}
 @php
   $termsName = $termsName ?? 'terms';
   $privacyName = $privacyName ?? 'privacy';
+  $already = old($termsName) && old($privacyName);
 @endphp
-<div class="tma-legal-accept" data-legal-accept>
-  <p class="tma-legal-accept__lead">Open each document, then tick that you have read it.</p>
+<div
+  class="tma-legal-consent{{ $already ? ' is-agreed' : '' }}"
+  data-legal-consent
+  @if ($already) data-agreed="1" @endif
+>
+  {{-- Server-validated fields; filled when they Agree. --}}
+  <input type="checkbox" class="tma-legal-consent__input" name="{{ $termsName }}" value="1" data-legal-check="terms" tabindex="-1" aria-hidden="true" @checked(old($termsName))>
+  <input type="checkbox" class="tma-legal-consent__input" name="{{ $privacyName }}" value="1" data-legal-check="privacy" tabindex="-1" aria-hidden="true" @checked(old($privacyName))>
 
-  <label class="tma-auth__terms tma-legal-accept__row">
-    <input
-      type="checkbox"
-      name="{{ $termsName }}"
-      value="1"
-      data-legal-check="terms"
-      disabled
-      @checked(old($termsName))
-    >
-    <span>
-      I have read the
-      <a href="{{ url('/terms-of-service/') }}?embed=1" data-legal-open="terms">Terms of Service</a>
-    </span>
-  </label>
+  <p class="tma-legal-consent__status" data-legal-status>
+    @if ($already)
+      You have agreed to the Terms of Service and Privacy Policy.
+    @else
+      Open each document in the consent banner, then Agree.
+    @endif
+  </p>
 
-  <label class="tma-auth__terms tma-legal-accept__row">
-    <input
-      type="checkbox"
-      name="{{ $privacyName }}"
-      value="1"
-      data-legal-check="privacy"
-      disabled
-      @checked(old($privacyName))
-    >
-    <span>
-      I have read the
-      <a href="{{ url('/privacy-policy/') }}?embed=1" data-legal-open="privacy">Privacy Policy</a>
-    </span>
-  </label>
-
-  <dialog class="tma-legal-accept__sheet" data-legal-dialog>
-    <div class="tma-legal-accept__chrome">
-      <h2 class="tma-legal-accept__title" data-legal-title>Terms of Service</h2>
-      <button type="button" class="tma-legal-accept__close" data-legal-close aria-label="Close">
-        <img src="/images/icons/phosphor/X.svg" alt="" width="18" height="18">
-      </button>
-    </div>
-    <iframe class="tma-legal-accept__frame" data-legal-frame title="Legal document" src="about:blank"></iframe>
-    <div class="tma-legal-accept__foot">
-      <button type="button" class="tma-auth__submit tma-legal-accept__confirm" data-legal-confirm disabled>
-        I have read this
-      </button>
-    </div>
+  <dialog class="tma-legal-consent__sheet" data-legal-sheet>
+    <p class="tma-legal-consent__copy">
+      To continue you must agree to our legal terms. Open each page, then Agree.
+    </p>
+    <ul class="tma-legal-consent__links">
+      <li>
+        <a
+          href="{{ url('/terms-of-service/') }}"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-legal-visit="terms"
+        >Terms of Service</a>
+        <span class="tma-legal-consent__mark" data-legal-mark="terms" hidden>✓</span>
+      </li>
+      <li>
+        <a
+          href="{{ url('/privacy-policy/') }}"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-legal-visit="privacy"
+        >Privacy Policy</a>
+        <span class="tma-legal-consent__mark" data-legal-mark="privacy" hidden>✓</span>
+      </li>
+    </ul>
+    <button type="button" class="tma-auth__submit tma-legal-consent__agree" data-legal-agree disabled>
+      Agree
+    </button>
   </dialog>
 </div>

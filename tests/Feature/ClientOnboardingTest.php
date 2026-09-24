@@ -231,7 +231,7 @@ class ClientOnboardingTest extends TestCase
             ->assertSee('Your account')
             ->assertSee('CIP Applications')
             ->assertSee('Manage your CIP applications.')
-            ->assertSee('I have read the')
+            ->assertSee('Open both documents to Agree')
             ->assertSee('Privacy Policy')
             ->assertDontSee('Terms and privacy', false);
 
@@ -266,7 +266,7 @@ class ClientOnboardingTest extends TestCase
         $this->actingAs($user)->get('/onboarding/terms')
             ->assertOk()
             ->assertSee('Your account')
-            ->assertSee('I have read the')
+            ->assertSee('Open both documents to Agree')
             ->assertSee('Terms of Service')
             ->assertSee('Privacy Policy');
     }
