@@ -27,7 +27,7 @@ final class PersonalDataExport
             'policyVersion' => PrivacyPolicy::VERSION,
             'controller' => [
                 'name' => 'TM ANTOINE Advisory',
-                'email' => 'portal@tmantoinelaw.com',
+                'email' => 'support@tmantoinelaw.com',
                 'address' => 'TaylorMarc Court, Rodney Bay, Gros Islet, Saint Lucia',
             ],
             'account' => [
@@ -57,7 +57,7 @@ final class PersonalDataExport
             'activity' => self::activity($user),
             'filesYouUploaded' => self::files($user),
             'matters' => [
-                'note' => 'Citizenship files, identity documents, shared messages, signatures, and call recordings are kept so the firm can do the work you asked for and meet its professional record-keeping duties. Open them in the portal, or email portal@tmantoinelaw.com to ask for a specific copy. This download does not include other people\'s personal data from those files.',
+                'note' => 'Citizenship files, identity documents, shared messages, signatures, and call recordings are kept so the firm can do the work you asked for and meet its professional record-keeping duties. Open them in the portal, or email support@tmantoinelaw.com to ask for a specific copy. This download does not include other people\'s personal data from those files.',
             ],
         ];
     }

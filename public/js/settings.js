@@ -1879,7 +1879,7 @@
           link.remove();
           privacyStatus(root, 'Your download has started.');
         }).catch(function () {
-          privacyStatus(root, 'The download did not start. Try again, or email portal@tmantoinelaw.com.');
+          privacyStatus(root, 'The download did not start. Try again, or email support@tmantoinelaw.com.');
         });
       });
     }

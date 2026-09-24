@@ -24,7 +24,27 @@
       <a class="tma-legal__bar-link" href="/auth/login">Sign in</a>
     </header>
 
-    <main class="tma-legal__doc">
+    <div class="tma-legal__frame">
+      <aside class="tma-legal__side">
+        <nav class="tma-legal__toc" aria-label="Contents">
+          <p class="tma-legal__toc-title">Contents</p>
+          <ol>
+            <li><a href="/privacy-policy/#scope">1. Scope</a></li>
+            <li><a href="/privacy-policy/#collect">2. Information we collect</a></li>
+            <li><a href="/privacy-policy/#connected">3. Connected accounts &amp; third-party data</a></li>
+            <li><a href="/privacy-policy/#use">4. How we use information</a></li>
+            <li><a href="/privacy-policy/#share">5. How we share information</a></li>
+            <li><a href="/privacy-policy/#security">6. Storage, security &amp; retention</a></li>
+            <li><a href="/privacy-policy/#rights">7. Your rights &amp; choices</a></li>
+            <li><a href="/privacy-policy/#cookies">8. Cookies &amp; sessions</a></li>
+            <li><a href="/privacy-policy/#children">9. Children’s privacy</a></li>
+            <li><a href="/privacy-policy/#changes">10. Changes to this policy</a></li>
+            <li><a href="/privacy-policy/#contact">11. Contact us</a></li>
+          </ol>
+        </nav>
+      </aside>
+
+      <main class="tma-legal__doc">
       <p class="tma-legal__eyebrow">Legal</p>
       <h1 class="tma-legal__title">Privacy Policy</h1>
       <p class="tma-legal__updated">Last updated: September 24, 2026</p>
@@ -35,23 +55,6 @@
         <strong>portal.tmantoinelaw.com</strong> (the “Portal”). We are committed to protecting
         the privacy and confidentiality of everyone who uses the Portal.
       </p>
-
-      <nav class="tma-legal__toc" aria-label="Table of contents">
-        <p class="tma-legal__toc-title">Contents</p>
-        <ol>
-          <li><a href="#scope">1. Scope</a></li>
-          <li><a href="#collect">2. Information we collect</a></li>
-          <li><a href="#connected">3. Connected accounts &amp; third-party data</a></li>
-          <li><a href="#use">4. How we use information</a></li>
-          <li><a href="#share">5. How we share information</a></li>
-          <li><a href="#security">6. Storage, security &amp; retention</a></li>
-          <li><a href="#rights">7. Your rights &amp; choices</a></li>
-          <li><a href="#cookies">8. Cookies &amp; sessions</a></li>
-          <li><a href="#children">9. Children’s privacy</a></li>
-          <li><a href="#changes">10. Changes to this policy</a></li>
-          <li><a href="#contact">11. Contact us</a></li>
-        </ol>
-      </nav>
 
       <section class="tma-legal__section" id="scope">
         <h2>1. Scope</h2>
@@ -65,7 +68,7 @@
         <p>
           The controller is <strong>TM ANTOINE Advisory</strong>, TaylorMarc Court, Rodney Bay,
           Gros Islet, Saint Lucia. Email
-          <a href="mailto:portal@tmantoinelaw.com">portal@tmantoinelaw.com</a>.
+          <a href="mailto:support@tmantoinelaw.com">support@tmantoinelaw.com</a>.
           We have not appointed a data-protection officer. We are established in Saint Lucia and
           have not appointed a representative in the UK or the EEA. If UK or EU data-protection
           law applies to you, write to us at the address above and we will handle the request.
@@ -226,7 +229,7 @@
         </ul>
         <p>
           For anything those screens do not cover, email
-          <a href="mailto:portal@tmantoinelaw.com">portal@tmantoinelaw.com</a>.
+          <a href="mailto:support@tmantoinelaw.com">support@tmantoinelaw.com</a>.
           We will respond consistent with applicable law and our professional obligations.
         </p>
       </section>
@@ -270,11 +273,12 @@
         </p>
         <p>
           <strong>TM ANTOINE Advisory</strong><br>
-          Email: <a href="mailto:portal@tmantoinelaw.com">portal@tmantoinelaw.com</a><br>
+          Email: <a href="mailto:support@tmantoinelaw.com">support@tmantoinelaw.com</a><br>
           Address: TaylorMarc Court, Rodney Bay, Gros Islet, Saint Lucia
         </p>
       </section>
-    </main>
+      </main>
+    </div>
 
     <footer class="tma-legal__footer">
       <div class="tma-legal__footer-links">
@@ -285,5 +289,33 @@
       <p class="tma-legal__copyright">&copy; 2026 TM ANTOINE Advisory</p>
     </footer>
   </div>
+  <script>
+    (function () {
+      var links = Array.prototype.slice.call(document.querySelectorAll('.tma-legal__side a'));
+      function mark(id) {
+        links.forEach(function (link) {
+          var on = (link.getAttribute('href') || '').split('#')[1] === id;
+          if (on) link.setAttribute('aria-current', 'location');
+          else link.removeAttribute('aria-current');
+        });
+      }
+      links.forEach(function (link) {
+        link.addEventListener('click', function () {
+          mark((link.getAttribute('href') || '').split('#')[1]);
+        });
+      });
+      if (!('IntersectionObserver' in window)) return;
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) mark(entry.target.id);
+        });
+      }, { rootMargin: '-15% 0px -70% 0px', threshold: 0 });
+      links.forEach(function (link) {
+        var id = (link.getAttribute('href') || '').split('#')[1];
+        var section = id && document.getElementById(id);
+        if (section) observer.observe(section);
+      });
+    })();
+  </script>
 </body>
 </html>

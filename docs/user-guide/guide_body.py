@@ -1712,7 +1712,7 @@ def _support(doc, add_title, add_body, add_table):
         [
             ["Portal", "https://portal.tmantoinelaw.com"],
             ["Support email", "support@tmantoinelaw.com"],
-            ["Privacy contact", "portal@tmantoinelaw.com"],
+            ["Privacy contact", "support@tmantoinelaw.com"],
             ["Phone / hours", "[Information Required]"],
         ],
     )
