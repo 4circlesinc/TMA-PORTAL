@@ -1,6 +1,6 @@
 {{--
-  Cookie-style consent: links open the real legal pages; Agree unlocks after
-  both have been opened. Sets the form ticks the server already expects.
+  Consent sheet: each document has a switch that turns itself on once the page
+  has been opened. Agree confirms; Not now dismisses and leaves the form locked.
 
   Props (optional):
     $termsName   — form field for Terms (default: terms)
@@ -24,36 +24,49 @@
     @if ($already)
       You have agreed to the Terms of Service and Privacy Policy.
     @else
-      Open each document in the consent banner, then Agree.
+      <button type="button" class="tma-legal-consent__reopen" data-legal-reopen>Review the legal terms</button>
     @endif
   </p>
 
-  <dialog class="tma-legal-consent__sheet" data-legal-sheet>
-    <p class="tma-legal-consent__copy">
-      To continue you must agree to our legal terms. Open each page, then Agree.
-    </p>
+  <dialog class="tma-legal-consent__sheet" data-legal-sheet aria-labelledby="legal-consent-title">
+    <div class="tma-legal-consent__head">
+      <span class="tma-legal-consent__icon" aria-hidden="true">
+        <img src="/images/icons/phosphor/ShieldCheck.svg" alt="" width="20" height="20">
+      </span>
+      <div class="tma-legal-consent__headings">
+        <h2 class="tma-legal-consent__title" id="legal-consent-title">Before you continue</h2>
+        <p class="tma-legal-consent__copy">Open each document; the switch turns on once you have.</p>
+      </div>
+    </div>
+
     <ul class="tma-legal-consent__links">
-      <li>
-        <a
-          href="{{ url('/terms-of-service/') }}"
-          target="_blank"
-          rel="noopener noreferrer"
-          data-legal-visit="terms"
-        >Terms of Service</a>
-        <span class="tma-legal-consent__mark" data-legal-mark="terms" hidden>✓</span>
-      </li>
-      <li>
-        <a
-          href="{{ url('/privacy-policy/') }}"
-          target="_blank"
-          rel="noopener noreferrer"
-          data-legal-visit="privacy"
-        >Privacy Policy</a>
-        <span class="tma-legal-consent__mark" data-legal-mark="privacy" hidden>✓</span>
-      </li>
+      @foreach ([['terms', 'Terms of Service', url('/terms-of-service/')], ['privacy', 'Privacy Policy', url('/privacy-policy/')]] as [$key, $label, $href])
+        <li class="tma-legal-consent__row" data-legal-row="{{ $key }}">
+          <a
+            class="tma-legal-consent__link"
+            href="{{ $href }}"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-legal-visit="{{ $key }}"
+          >
+            <span class="tma-legal-consent__link-name">{{ $label }}</span>
+            <span class="tma-legal-consent__link-hint" data-legal-hint="{{ $key }}">Opens in a new tab</span>
+          </a>
+          <span class="tma-auth__switch tma-legal-consent__switch">
+            <input class="tma-auth__switch-input" type="checkbox" role="switch" tabindex="-1" aria-label="{{ $label }} read" data-legal-switch="{{ $key }}" disabled>
+            <span class="tma-auth__switch-ui" aria-hidden="true"><span class="tma-auth__switch-track"></span><span class="tma-auth__switch-thumb"></span></span>
+          </span>
+        </li>
+      @endforeach
     </ul>
-    <button type="button" class="tma-auth__submit tma-legal-consent__agree" data-legal-agree disabled>
-      Agree
-    </button>
+
+    <div class="tma-legal-consent__actions">
+      <button type="button" class="tma-auth__submit tma-auth__submit--previous tma-legal-consent__decline" data-legal-decline>
+        Not now
+      </button>
+      <button type="button" class="tma-auth__submit tma-legal-consent__agree" data-legal-agree disabled>
+        Agree
+      </button>
+    </div>
   </dialog>
 </div>

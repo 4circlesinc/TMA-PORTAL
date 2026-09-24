@@ -1,5 +1,6 @@
 /**
- * Cookie-style legal consent: open each legal page (new tab), then Agree.
+ * Legal consent sheet: opening a document flips its switch on; Agree unlocks
+ * once both are on. Not now dismisses and leaves the form's ticks unset.
  * No document content is embedded — links go to the real pages.
  */
 (function () {
@@ -9,25 +10,17 @@
 
     var sheet = root.querySelector('[data-legal-sheet]');
     var agree = root.querySelector('[data-legal-agree]');
+    var decline = root.querySelector('[data-legal-decline]');
+    var reopen = root.querySelector('[data-legal-reopen]');
     var status = root.querySelector('[data-legal-status]');
     if (!sheet || !agree) return;
 
     var form = root.closest('form');
     var visited = { terms: false, privacy: false };
+    var dismissed = false;
 
     function box(key) {
       return root.querySelector('[data-legal-check="' + key + '"]');
-    }
-
-    function mark(key) {
-      return root.querySelector('[data-legal-mark="' + key + '"]');
-    }
-
-    function formVisible() {
-      if (!form) return true;
-      if (form.hidden || form.hasAttribute('hidden')) return false;
-      var style = window.getComputedStyle(form);
-      return style.display !== 'none' && style.visibility !== 'hidden';
     }
 
     function openSheet() {
@@ -46,15 +39,24 @@
     }
 
     function refreshAgree() {
-      var ready = visited.terms && visited.privacy;
-      agree.disabled = !ready;
-      agree.textContent = ready ? 'Agree' : 'Open both documents to Agree';
+      agree.disabled = !(visited.terms && visited.privacy);
     }
 
     function noteVisit(key) {
+      if (visited[key]) return;
       visited[key] = true;
-      var m = mark(key);
-      if (m) m.hidden = false;
+
+      // Query the sheet, not the root: openSheet() reparents the dialog to
+      // document.body, so these nodes are no longer inside root.
+      var toggle = sheet.querySelector('[data-legal-switch="' + key + '"]');
+      if (toggle) toggle.checked = true;
+
+      var row = sheet.querySelector('[data-legal-row="' + key + '"]');
+      if (row) row.classList.add('is-read');
+
+      var hint = sheet.querySelector('[data-legal-hint="' + key + '"]');
+      if (hint) hint.textContent = 'Opened';
+
       refreshAgree();
     }
 
@@ -73,8 +75,15 @@
       closeSheet();
     }
 
+    function formVisible() {
+      if (!form) return true;
+      if (form.hidden || form.hasAttribute('hidden')) return false;
+      var style = window.getComputedStyle(form);
+      return style.display !== 'none' && style.visibility !== 'hidden';
+    }
+
     function syncVisibility() {
-      if (root.dataset.agreed === '1') {
+      if (root.dataset.agreed === '1' || dismissed) {
         closeSheet();
         return;
       }
@@ -92,7 +101,7 @@
       return;
     }
 
-    root.querySelectorAll('[data-legal-visit]').forEach(function (link) {
+    sheet.querySelectorAll('[data-legal-visit]').forEach(function (link) {
       link.addEventListener('click', function () {
         noteVisit(link.getAttribute('data-legal-visit'));
       });
@@ -103,8 +112,24 @@
       applyAgreed();
     });
 
+    if (decline) {
+      decline.addEventListener('click', function () {
+        dismissed = true;
+        closeSheet();
+      });
+    }
+
+    if (reopen) {
+      reopen.addEventListener('click', function () {
+        dismissed = false;
+        openSheet();
+      });
+    }
+
     sheet.addEventListener('cancel', function (e) {
       e.preventDefault();
+      dismissed = true;
+      closeSheet();
     });
 
     if (form) {
