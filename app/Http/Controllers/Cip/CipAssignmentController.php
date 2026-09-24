@@ -41,12 +41,35 @@ class CipAssignmentController extends Controller
     public function store(Request $request, string $uuid): JsonResponse
     {
         $application = $this->application($request, $uuid);
-        $this->authorizeAssign($request);
 
         $data = $request->validate([
             'userId' => ['required', 'integer', Rule::exists('users', 'id')],
             'role' => ['nullable', Rule::in(array_keys(Assignments::ROLES))],
         ]);
+
+        $contact = Assignments::assignableContacts($application)->firstWhere('id', $data['userId']);
+        if ($contact) {
+            abort_unless(
+                Assignments::canAssignProviderContact($request->user(), $application),
+                403,
+                'You cannot assign a service provider contact to this application.',
+            );
+
+            Assignments::grantContact($application, $contact, $request->user());
+            Assignments::assign(
+                $application,
+                $contact,
+                $request->user(),
+                Assignments::SERVICE_PROVIDER_CONTACT,
+            );
+
+            Live::staffAnd(Live::CIP, [$contact->id]);
+            Live::staffAnd(Live::CLIENTS, [$contact->id]);
+
+            return response()->json($this->payload($request, $application->fresh()), 201);
+        }
+
+        $this->authorizeAssign($request);
 
         // Offered and accepted are the same list, so an account that is not on
         // it, a client, a suspended officer, somebody who already holds the
@@ -95,12 +118,27 @@ class CipAssignmentController extends Controller
     public function destroy(Request $request, string $uuid, int $userId): JsonResponse
     {
         $application = $this->application($request, $uuid);
-        $this->authorizeAssign($request);
 
         $assignment = CipApplicationAssignment::live()
             ->where('application_id', $application->id)
             ->where('user_id', $userId)
             ->first();
+
+        $removingContact = $assignment?->role === Assignments::SERVICE_PROVIDER_CONTACT
+            || ($application->client && $application->client->assignments()->live()
+                ->where('user_id', $userId)
+                ->where('role', Assignments::SERVICE_PROVIDER_CONTACT)
+                ->exists());
+
+        abort_unless(
+            $removingContact
+                ? Assignments::canAssignProviderContact($request->user(), $application)
+                : Assignments::canAssign($request->user()),
+            403,
+            $removingContact
+                ? 'You cannot take a service provider contact off this application.'
+                : 'Only an administrator can assign an application.',
+        );
 
         if ($assignment) {
             Assignments::end($assignment, $request->user());
@@ -189,39 +227,49 @@ class CipAssignmentController extends Controller
      *
      * @return list<array<string, mixed>>
      */
-    private static function holders(CipApplication $application): array
+    private static function holders(CipApplication $application, User $reader): array
     {
+        $canOfficers = Assignments::canAssign($reader);
+        $canContacts = Assignments::canAssignProviderContact($reader, $application);
+        $present = function ($userId, $user, $role, $roleLabel, $assignedAt) use ($canOfficers, $canContacts) {
+            $contact = $role === Assignments::SERVICE_PROVIDER_CONTACT;
+
+            return [
+                'userId' => $userId,
+                'name' => $user?->name,
+                'email' => $user?->email,
+                'avatar' => $user?->photoUrl(),
+                'jobTitle' => $user?->job_title,
+                'accountType' => $user?->account_type,
+                'personRole' => $contact ? 'Service provider contact' : $user?->roleName(),
+                'role' => $role,
+                'roleLabel' => $roleLabel,
+                'assignedAt' => $assignedAt,
+                'canRemove' => $contact ? $canContacts : $canOfficers,
+            ];
+        };
+
         $client = $application->client;
 
         if ($client !== null) {
             return $client->assignments()->live()->with('user')->get()
-                ->map(fn ($a) => [
-                    'userId' => $a->user_id,
-                    'name' => $a->user?->name,
-                    'email' => $a->user?->email,
-                    'avatar' => $a->user?->photoUrl(),
-                    'jobTitle' => $a->user?->job_title,
-                    'accountType' => $a->user?->account_type,
-                    'personRole' => $a->user?->roleName(),
-                    'role' => $a->role,
-                    'roleLabel' => $a->roleLabel(),
-                    'assignedAt' => ($a->starts_at ?? $a->created_at)?->toIso8601String(),
-                ])->values()->all();
+                ->map(fn ($a) => $present(
+                    $a->user_id,
+                    $a->user,
+                    $a->role,
+                    $a->roleLabel(),
+                    ($a->starts_at ?? $a->created_at)?->toIso8601String(),
+                ))->values()->all();
         }
 
         return Assignments::live($application)
-            ->map(fn (CipApplicationAssignment $a) => [
-                'userId' => $a->user_id,
-                'name' => $a->user?->name,
-                'email' => $a->user?->email,
-                'avatar' => $a->user?->photoUrl(),
-                'jobTitle' => $a->user?->job_title,
-                'accountType' => $a->user?->account_type,
-                'personRole' => $a->user?->roleName(),
-                'role' => $a->role,
-                'roleLabel' => Assignments::roleLabel($a->role),
-                'assignedAt' => ($a->starts_at ?? $a->created_at)?->toIso8601String(),
-            ])->values()->all();
+            ->map(fn (CipApplicationAssignment $a) => $present(
+                $a->user_id,
+                $a->user,
+                $a->role,
+                Assignments::roleLabel($a->role),
+                ($a->starts_at ?? $a->created_at)?->toIso8601String(),
+            ))->values()->all();
     }
 
     /**
@@ -230,6 +278,22 @@ class CipAssignmentController extends Controller
     private function payload(Request $request, CipApplication $application): array
     {
         $canAssign = Assignments::canAssign($request->user());
+        $canAssignContact = Assignments::canAssignProviderContact($request->user(), $application);
+
+        $contacts = $canAssignContact
+            ? Assignments::assignableContacts($application)->map(fn (User $u) => [
+                'id' => $u->id,
+                'name' => $u->name,
+                'email' => $u->email,
+                'avatar' => $u->photoUrl(),
+                'accountType' => $u->account_type,
+                'jobTitle' => $u->job_title,
+                'personRole' => Role::isServiceProviderAdmin($u)
+                    ? 'Service Provider admin'
+                    : 'Service provider contact',
+                'role' => Assignments::SERVICE_PROVIDER_CONTACT,
+            ])->values()->all()
+            : [];
 
         return [
             /*
@@ -238,28 +302,31 @@ class CipAssignmentController extends Controller
              * Two records meant staff added in one place were invisible in
              * the other.
              */
-            'assignments' => self::holders($application),
-            'canAssign' => $canAssign,
+            'assignments' => self::holders($application, $request->user()),
+            'canAssign' => $canAssign || $canAssignContact,
             /*
              * Only somebody who may actually hand the file over is shown the
              * firm's officers. The provider side may see who has their
              * application. Section 8's table tells them that already, but reading
              * off every officer who could have had it is not theirs.
              */
-            'assignable' => $canAssign
-                ? Assignments::assignable($application)->map(fn (User $u) => [
-                    'id' => $u->id,
-                    'name' => $u->name,
-                    'email' => $u->email,
-                    'avatar' => $u->photoUrl(),
-                    'accountType' => $u->account_type,
-                    'jobTitle' => $u->job_title,
-                    'personRole' => $u->roleName(),
-                    'role' => Role::isAdmin($u)
-                        ? CipAccess::REVIEWING_OFFICER
-                        : (CipAccess::officerRoles($u)[0] ?? null),
-                ])->values()->all()
-                : [],
+            'assignable' => array_merge(
+                $canAssign
+                    ? Assignments::assignable($application)->map(fn (User $u) => [
+                        'id' => $u->id,
+                        'name' => $u->name,
+                        'email' => $u->email,
+                        'avatar' => $u->photoUrl(),
+                        'accountType' => $u->account_type,
+                        'jobTitle' => $u->job_title,
+                        'personRole' => $u->roleName(),
+                        'role' => Role::isAdmin($u)
+                            ? CipAccess::REVIEWING_OFFICER
+                            : (CipAccess::officerRoles($u)[0] ?? null),
+                    ])->values()->all()
+                    : [],
+                $contacts,
+            ),
             'roles' => collect(Assignments::ROLES)
                 ->map(fn (string $label, string $value) => ['value' => $value, 'label' => $label])
                 ->values()->all(),

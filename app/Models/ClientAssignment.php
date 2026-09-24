@@ -47,6 +47,7 @@ class ClientAssignment extends Model
          */
         'reviewing_officer' => 'Reviewing officer',
         'compliance_officer' => 'Compliance officer',
+        'service_provider_contact' => 'Service provider contact',
         'account_manager' => 'Account manager',
         'booking_coordinator' => 'Booking coordinator',
         'finance' => 'Finance contact',

@@ -6,6 +6,7 @@ use App\Models\CipApplication;
 use App\Models\CipApplicationAssignment;
 use App\Models\CipEvent;
 use App\Models\ClientAssignment;
+use App\Models\CompanyMember;
 use App\Models\CompanyStaffAssignment;
 use App\Models\User;
 use App\Support\Access\Role;
@@ -43,9 +44,18 @@ class Assignments
      * vocabulary, so "assign a Reviewing Officer" and "is a Reviewing Officer"
      * cannot drift into two spellings.
      */
+    /**
+     * Who at the filing firm is responsible for this application.
+     *
+     * Unlike the two officer jobs, several contacts may hold one file at
+     * once: naming John does not take it off Tia. It does not start a review.
+     */
+    public const SERVICE_PROVIDER_CONTACT = 'service_provider_contact';
+
     public const ROLES = [
         CipAccess::REVIEWING_OFFICER => 'Reviewing officer',
         CipAccess::COMPLIANCE_OFFICER => 'Compliance officer',
+        self::SERVICE_PROVIDER_CONTACT => 'Service provider contact',
     ];
 
     /**
@@ -74,6 +84,37 @@ class Assignments
         return $user !== null
             && CipAccess::enabled()
             && (Role::isAdmin($user) || CipAccess::can($user, 'cip.assign'));
+    }
+
+    /**
+     * Who may name a service provider contact on this file.
+     *
+     * Administrators already assign officers. A Service Provider admin may
+     * name contacts of their own firm, and only those: handing the file to
+     * a CRO stays with the firm that employs the CROs.
+     */
+    public static function canAssignProviderContact(?User $user, CipApplication $application): bool
+    {
+        if ($user === null || ! CipAccess::enabled()) {
+            return false;
+        }
+
+        if (self::canAssign($user)) {
+            return true;
+        }
+
+        if (! Role::isServiceProviderAdmin($user)) {
+            return false;
+        }
+
+        $companyId = $application->provider?->company_id;
+
+        return $companyId !== null
+            && CompanyMember::query()
+                ->active()
+                ->where('company_id', $companyId)
+                ->where('user_id', $user->id)
+                ->exists();
     }
 
     /**
@@ -130,6 +171,28 @@ class Assignments
                 'notes' => self::AUTO_NOTE,
             ]);
         }
+    }
+
+    /**
+     * Name a service provider contact on the client's Assigned list.
+     *
+     * The table column and the assignee filter both read that list. A contact
+     * already belongs to the firm, so this does not grant them the company
+     * the way handing a file to an officer does.
+     */
+    public static function grantContact(CipApplication $application, User $contact, User $actor): void
+    {
+        $application->loadMissing('client');
+        $client = $application->client;
+
+        if (! $client) {
+            return;
+        }
+
+        ClientAssignments::assign($client, $contact, [
+            'role' => self::SERVICE_PROVIDER_CONTACT,
+            'level' => 'view_files',
+        ], $actor, announce: false);
     }
 
     /**
@@ -265,7 +328,11 @@ class Assignments
         string $role = CipAccess::REVIEWING_OFFICER,
         bool $systemStatusMove = false,
     ): CipApplicationAssignment {
-        $held = self::live($application)->firstWhere('role', $role);
+        $shared = $role === self::SERVICE_PROVIDER_CONTACT;
+        $live = self::live($application);
+        $held = $shared
+            ? $live->first(fn (CipApplicationAssignment $row) => $row->role === $role && $row->user_id === $officer->id)
+            : $live->firstWhere('role', $role);
 
         // Handing the file to the person who already has it is not a change.
         // An inline picker that fires twice must not read, a year later, as
@@ -277,7 +344,7 @@ class Assignments
         // without a second assignment row. Section 10 still owes the move
         // into review — the hold is theirs, the review has not started.
         if ($held && $held->user_id === $officer->id) {
-            if ($application->status === Status::NEW) {
+            if (! $shared && $application->status === Status::NEW) {
                 Engine::apply($application, Status::REVIEW_APPLICATION, $systemStatusMove ? null : $actor, [
                     'officer' => $officer->name,
                     'role' => $role,
@@ -289,8 +356,10 @@ class Assignments
 
         $fromStatus = $application->status;
 
-        $assignment = DB::transaction(function () use ($application, $officer, $actor, $role, $held, $systemStatusMove) {
-            $held?->end($actor);
+        $assignment = DB::transaction(function () use ($application, $officer, $actor, $role, $held, $shared, $systemStatusMove) {
+            if (! $shared) {
+                $held?->end($actor);
+            }
 
             $assignment = CipApplicationAssignment::create([
                 'application_id' => $application->id,
@@ -318,7 +387,7 @@ class Assignments
              * APPLICATION to record that would throw away the reviewer's work
              * and tell every dashboard the file had started again.
              */
-            if ($application->status === Status::NEW) {
+            if (! $shared && $application->status === Status::NEW) {
                 /*
                  * $systemStatusMove drives that edge as the system instead of
                  * the actor, and is for one caller: an officer filing their
@@ -356,7 +425,7 @@ class Assignments
          * that a new officer holds it, in the filing subject for where the
          * file actually stands.
          */
-        if ($fromStatus !== Status::NEW) {
+        if (! $shared && $fromStatus !== Status::NEW) {
             $application = $application->fresh();
             Notices::announce($application, $application->status, $actor);
         }
@@ -443,6 +512,55 @@ class Assignments
      */
     public static function assignable(CipApplication $application): Collection
     {
+        $held = self::holderIds($application);
+
+        return User::query()
+            // The same rule {@see mayHold} applies to one person.
+            ->whereIn('account_type', [...Role::OFFICERS, Role::ADMINISTRATOR])
+            ->where('status', User::STATUS_APPROVED)
+            ->whereNotIn('id', $held)
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'avatar_url', 'provider_avatar_url', 'account_type', 'job_title']);
+    }
+
+    /**
+     * Service provider contacts of this application's firm who are not already on it.
+     *
+     * Active members with a live login, Client contacts and Service Provider
+     * admins alike: both are people at the firm. Officers are not, and a
+     * contact of another firm is not offered on this file.
+     *
+     * @return Collection<int, User>
+     */
+    public static function assignableContacts(CipApplication $application): Collection
+    {
+        $companyId = $application->provider?->company_id;
+
+        if ($companyId === null) {
+            return collect();
+        }
+
+        $memberIds = CompanyMember::query()
+            ->active()
+            ->where('company_id', $companyId)
+            ->pluck('user_id');
+
+        $held = self::holderIds($application);
+
+        return User::query()
+            ->whereIn('id', $memberIds)
+            ->whereIn('account_type', Role::EXTERNAL)
+            ->where('status', User::STATUS_APPROVED)
+            ->whereNotIn('id', $held)
+            ->orderBy('name')
+            ->get(['id', 'name', 'email', 'avatar_url', 'provider_avatar_url', 'account_type', 'job_title']);
+    }
+
+    /**
+     * @return list<int>
+     */
+    private static function holderIds(CipApplication $application): array
+    {
         $held = self::live($application)->pluck('user_id');
 
         if ($application->client_id) {
@@ -453,13 +571,7 @@ class Assignments
             );
         }
 
-        return User::query()
-            // The same rule {@see mayHold} applies to one person.
-            ->whereIn('account_type', [...Role::OFFICERS, Role::ADMINISTRATOR])
-            ->where('status', User::STATUS_APPROVED)
-            ->whereNotIn('id', $held->unique()->all())
-            ->orderBy('name')
-            ->get(['id', 'name', 'email', 'avatar_url', 'provider_avatar_url', 'account_type', 'job_title']);
+        return $held->unique()->all();
     }
 
     /**
@@ -503,7 +615,8 @@ class Assignments
     public static function refreshCache(CipApplication $application): void
     {
         $live = self::live($application);
-        $holder = $live->firstWhere('role', CipAccess::REVIEWING_OFFICER) ?? $live->first();
+        $holder = $live->firstWhere('role', CipAccess::REVIEWING_OFFICER)
+            ?? $live->first(fn (CipApplicationAssignment $row) => $row->role !== self::SERVICE_PROVIDER_CONTACT);
 
         $application->forceFill(['assigned_officer_id' => $holder?->user_id])->save();
     }

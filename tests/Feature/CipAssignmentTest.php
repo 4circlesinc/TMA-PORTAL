@@ -10,6 +10,7 @@ use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\Company;
+use App\Models\CompanyMember;
 use App\Models\CompanyStaffAssignment;
 use App\Models\EmailDelivery;
 use App\Models\User;
@@ -504,6 +505,92 @@ class CipAssignmentTest extends TestCase
 
         $this->assertCount(1, CompanyScope::query($officer)->get(),
             'the hand-made grant is not the workflow\'s to end');
+    }
+
+    public function test_a_service_provider_contact_can_be_assigned_beside_officers_and_filtered(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Reviewer');
+        $tia = $this->user(Role::REVIEWING_OFFICER, 'tia@example.com', 'Tia Henderson');
+        $john = $this->user(Role::CLIENT, 'john@galaxy.example', 'John Doe');
+        $spAdmin = $this->user(Role::SERVICE_PROVIDER_ADMIN, 'gil@galaxy.example', 'Gil Admin');
+        $other = $this->user(Role::CLIENT, 'other@elsewhere.example', 'Other Contact');
+
+        $company = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
+        $elsewhere = Company::create(['uid' => 'elsewhere', 'name' => 'Elsewhere']);
+        foreach ([$john, $spAdmin] as $member) {
+            CompanyMember::create([
+                'company_id' => $company->id,
+                'user_id' => $member->id,
+                'name' => $member->name,
+                'email' => $member->email,
+                'role' => 'member',
+                'status' => CompanyMember::STATUS_ACTIVE,
+            ]);
+        }
+        CompanyMember::create([
+            'company_id' => $elsewhere->id,
+            'user_id' => $other->id,
+            'name' => $other->name,
+            'email' => $other->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+
+        $provider = CipProvider::create([
+            'name' => 'Galaxy', 'code' => 'GAL', 'company_id' => $company->id,
+        ]);
+        $application = $this->filedUnder($provider, $admin, 'chen-wei');
+        $untouched = $this->filedUnder($provider, $admin, 'other-file');
+
+        $this->assign($admin, $application, $rita)->assertCreated();
+        $this->actingAs($admin)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/assignments', [
+                'userId' => $tia->id,
+                'role' => 'compliance_officer',
+            ])
+            ->assertCreated();
+        $this->assign($admin, $application, $john)
+            ->assertCreated()
+            ->assertJsonFragment(['userId' => $john->id, 'role' => 'service_provider_contact']);
+
+        $fresh = $application->fresh();
+        $this->assertSame(Status::REVIEW_APPLICATION, $fresh->status);
+        $this->assertSame($rita->id, $fresh->assigned_officer_id, 'a contact does not become the cached officer');
+
+        $holders = $this->actingAs($admin)
+            ->getJson('/portal/cip/applications/'.$application->uuid.'/assignments')
+            ->assertOk()
+            ->json('assignments');
+        $this->assertEqualsCanonicalizing(
+            [$rita->id, $tia->id, $john->id],
+            array_column($holders, 'userId'),
+        );
+
+        $listing = $this->actingAs($admin)
+            ->getJson('/portal/cip/applications?assignee='.$john->id.'&perPage=50')
+            ->assertOk()
+            ->json();
+        $this->assertSame(1, $listing['total']);
+        $this->assertSame($application->uuid, $listing['applications'][0]['id']);
+        $names = array_column($listing['assignees'], 'name');
+        $this->assertContains('John Doe', $names);
+
+        $this->assertSame(Status::NEW, $untouched->fresh()->status);
+        $this->assign($spAdmin, $untouched, $john)->assertCreated();
+        $this->assertSame(Status::NEW, $untouched->fresh()->status, 'naming a contact does not start the review');
+
+        $this->assign($spAdmin, $application, $rita)->assertForbidden();
+        $this->assign($spAdmin, $application, $other)->assertForbidden();
+        $this->assign($john, $untouched, $spAdmin)->assertForbidden();
+
+        $this->actingAs($spAdmin)
+            ->deleteJson('/portal/cip/applications/'.$application->uuid.'/assignments/'.$rita->id)
+            ->assertForbidden();
+
+        $this->actingAs($spAdmin)
+            ->deleteJson('/portal/cip/applications/'.$untouched->uuid.'/assignments/'.$john->id)
+            ->assertOk();
     }
 
     /** An application filed under a specific provider, with its client. */

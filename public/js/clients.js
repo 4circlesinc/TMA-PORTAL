@@ -4358,7 +4358,9 @@
             meta: personRoleLabel(a),
             face: personFace(a),
             on: true,
-            remove: function () { changeAssignment(applicationId, 'DELETE', a.userId); },
+            remove: a.canRemove === false
+              ? undefined
+              : function () { changeAssignment(applicationId, 'DELETE', a.userId); },
           };
         });
 
@@ -4375,7 +4377,7 @@
         });
 
         if (!items.length) {
-          items.push({ label: 'No officers to assign', static: true });
+          items.push({ label: 'Nobody to assign', static: true });
         }
 
         // The people, as the menu's own rows, not file actions for a fake
@@ -4503,7 +4505,9 @@
      * what opens the picker.
      */
     var held = list.length > 0;
-    var label = held ? 'Change who holds this' : 'Assign an officer';
+    var label = held
+      ? 'Change who holds this'
+      : (isServiceProviderAdmin() && !isClientsAdmin() ? 'Assign a contact' : 'Assign an officer');
     var picker = row && canAssignApplications()
       ? '<button type="button" class="tma-dash__cip-assign' + (held ? '' : ' tma-dash__cip-assign--add') + '"' +
         ' data-cip-assign="' + esc(row.id) + '"' +
@@ -8737,7 +8741,7 @@
     var access = window.TMAPortalAccess;
     var me = window.TMACurrentUser && window.TMACurrentUser.get();
 
-    return !!((me && me.isAdmin) || (access && access.can && access.can('cip.assign')));
+    return !!((me && me.isAdmin) || (access && access.can && access.can('cip.assign')) || isServiceProviderAdmin());
   }
 
   /* Handing a file to another firm is administrators only — the folder moves
@@ -13024,11 +13028,13 @@
         'The application will move to New Appeal. Appeal papers go in Appeal Documents, ' +
         'which is the only folder open for uploads while the appeal runs.</p>' +
         (override ? cipOverrideFieldsHtml() : '') +
+        cipStatusAttachmentHtml(cipAttachmentPlace(applicationFor(clientUid))) +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-appeal>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-appeal>Lodge appeal</button>' +
         '</div>',
       onMount: function (el) {
+        wireCipStatusAttachment(el);
         var cancel = el.querySelector('[data-cip-cancel-appeal]');
         if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
 
@@ -13057,10 +13063,7 @@
           save.disabled = true;
           save.textContent = 'Lodging…';
 
-          clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/appeal', {
-            method: 'POST',
-            json: body,
-          })
+          cipPostWithAttachment('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/appeal', body, el)
             .then(function (res) {
               queueFolderOpen(res && res.appealFolder, 'Appeal Documents');
               ui.closeModal();
@@ -13106,11 +13109,13 @@
         '<p class="tma-portal-modal__text">' +
         'The service provider will be asked to confirm the appeal is ready on their end.</p>' +
         (override ? cipOverrideFieldsHtml() : '') +
+        cipStatusAttachmentHtml(cipAttachmentPlace(applicationFor(clientUid))) +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-ready>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-ready>Mark ready</button>' +
         '</div>',
       onMount: function (el) {
+        wireCipStatusAttachment(el);
         var cancel = el.querySelector('[data-cip-cancel-ready]');
         if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
 

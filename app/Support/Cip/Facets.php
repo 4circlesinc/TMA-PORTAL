@@ -5,6 +5,7 @@ namespace App\Support\Cip;
 use App\Models\CipApplicationAssignment;
 use App\Models\CipProvider;
 use App\Models\ClientAssignment;
+use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Access\Role;
 use Illuminate\Database\Eloquent\Builder;
@@ -129,6 +130,37 @@ class Facets
                     ->get(['id', 'name', 'email', 'avatar_url'])
                     ->keyBy('id')
             );
+        }
+
+        /*
+         * A provider's own people, including those with nothing on yet.
+         *
+         * Filtering for John Doe is how the firm sees which files he is
+         * responsible for. Staff already meet whoever holds a file through
+         * the tally above; the firm's menu also names every contact, so a
+         * colleague with a clear desk is still a question they can ask.
+         */
+        if (! Role::isStaff($reader)) {
+            $companyIds = CompanyMember::query()
+                ->active()
+                ->where('user_id', $reader->id)
+                ->pluck('company_id');
+
+            if ($companyIds->isNotEmpty()) {
+                $colleagueIds = CompanyMember::query()
+                    ->active()
+                    ->whereIn('company_id', $companyIds)
+                    ->pluck('user_id');
+
+                $people = $people->union(
+                    User::query()
+                        ->whereIn('id', $colleagueIds)
+                        ->whereIn('account_type', Role::EXTERNAL)
+                        ->where('status', User::STATUS_APPROVED)
+                        ->get(['id', 'name', 'email', 'avatar_url'])
+                        ->keyBy('id')
+                );
+            }
         }
 
         $officers = [];
