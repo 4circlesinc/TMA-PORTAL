@@ -4331,10 +4331,10 @@
   function openAssignMenu(button, applicationId) {
     if (!window.TMAFileActions || !window.TMAFileActions.menu) return;
 
-    var box = button.getBoundingClientRect();
-
     clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/assignments')
       .then(function (json) {
+        if (!button.isConnected) return;
+        var box = button.getBoundingClientRect();
         var free = (json && json.assignable) || [];
         var live = (json && json.assignments) || [];
         var held = {};

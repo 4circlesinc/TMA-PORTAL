@@ -7764,18 +7764,27 @@
      opening as file-actions (narrow) then filling with people (wide) is how
      that picker vanished off the right of the window. */
   function placeMenu(el, x, y) {
-    el.style.maxHeight = '';
-    var w = el.offsetWidth, h = el.offsetHeight;
+    var margin = 8;
+    el._anchor = { x: x, y: y };
+    el.style.maxHeight = 'none';
+    el.style.height = '';
+    var w = el.offsetWidth;
+    var h = el.offsetHeight;
+    var below = Math.max(0, window.innerHeight - y - margin);
+    var above = Math.max(0, y - margin);
+    // Stay against the point that opened it. A long list scrolls inside the
+    // room on that side; it does not jump to the top of the window.
+    var openBelow = below >= Math.min(h, 160) || below >= above;
+    var room = Math.max(margin, openBelow ? below : above);
+    var top = openBelow ? y : Math.max(margin, y - Math.min(h, room));
     var left = x;
-    if (left + w > window.innerWidth - 8) left = x - w;
-    el.style.left = Math.max(8, Math.min(left, window.innerWidth - w - 8)) + 'px';
-    var top = y;
-    if (top + h > window.innerHeight - 8) top = Math.max(8, y - h);
-    top = Math.max(8, Math.min(top, window.innerHeight - h - 8));
+    if (left + w > window.innerWidth - margin) left = x - w;
+    if (w > window.innerWidth - margin * 2) left = margin;
+    else left = Math.max(margin, Math.min(left, window.innerWidth - w - margin));
+    el.style.left = left + 'px';
     el.style.top = top + 'px';
-    // Capped to the space below its top: a menu that fills after opening
-    // scrolls inside itself rather than running off the bottom.
-    el.style.maxHeight = (window.innerHeight - top - 8) + 'px';
+    el.style.maxHeight = room + 'px';
+    el.style.height = h > room ? room + 'px' : '';
   }
 
   function menuFaceHtml(it) {
@@ -7914,6 +7923,7 @@
         el.querySelectorAll('[data-ctx-panel]').forEach(function (panel) {
           panel.hidden = panel.getAttribute('data-ctx-panel') !== id;
         });
+        if (el._anchor) placeMenu(el, el._anchor.x, el._anchor.y);
         return;
       }
       var off = e.target.closest('[data-ctx-off]');
