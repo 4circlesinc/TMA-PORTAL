@@ -1,5 +1,6 @@
 {{--
-  Two legal documents, each opened in a popup before its tick can be used.
+  Two legal documents. Each opens in a bottom cookie-style sheet; its tick
+  unlocks only after the person confirms they have read it.
 
   Props (optional):
     $termsName   — form field for the Terms tick (default: terms)
@@ -42,7 +43,7 @@
     </span>
   </label>
 
-  <dialog class="tma-legal-accept__dialog" data-legal-dialog>
+  <dialog class="tma-legal-accept__sheet" data-legal-dialog>
     <div class="tma-legal-accept__chrome">
       <h2 class="tma-legal-accept__title" data-legal-title>Terms of Service</h2>
       <button type="button" class="tma-legal-accept__close" data-legal-close aria-label="Close">

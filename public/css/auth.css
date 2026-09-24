@@ -575,37 +575,56 @@ body:has(.tma-auth__card--tall) {
   cursor: not-allowed;
 }
 
-.tma-legal-accept__dialog {
-  /* Native <dialog> in the top layer — pin to the viewport, not the form column.
-     Only force flex when open; otherwise UA display:none is overridden and the
-     empty dialog covers the page. */
+/*
+ * Cookie-banner style: docked to the bottom, rounded top, soft lift.
+ * Not a centred document modal.
+ */
+.tma-legal-accept__sheet {
   position: fixed;
-  inset: 0;
-  width: min(720px, calc(100vw - 32px));
-  max-width: min(720px, calc(100vw - 32px));
-  height: min(80vh, 720px);
-  max-height: min(80vh, 720px);
-  margin: auto;
+  inset: auto 0 0 0;
+  width: min(440px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  height: min(52vh, 420px);
+  max-height: min(52vh, 420px);
+  margin: 0 auto 12px;
   padding: 0;
   border: 1px solid var(--color-border-soft);
-  border-radius: var(--radius-16);
+  border-radius: var(--radius-24) var(--radius-24) var(--radius-16) var(--radius-16);
   background: #ffffff;
   color: var(--color-text-primary);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.14);
   overflow: hidden;
 }
 
-.tma-legal-accept__dialog:not([open]) {
+.tma-legal-accept__sheet:not([open]) {
   display: none;
 }
 
-.tma-legal-accept__dialog[open] {
+.tma-legal-accept__sheet[open] {
   display: flex;
   flex-direction: column;
+  animation: tma-legal-sheet-up 220ms ease-out;
 }
 
-.tma-legal-accept__dialog::backdrop {
-  background: rgba(0, 0, 0, 0.45);
+.tma-legal-accept__sheet::backdrop {
+  background: rgba(0, 0, 0, 0.28);
+}
+
+@keyframes tma-legal-sheet-up {
+  from {
+    opacity: 0.6;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tma-legal-accept__sheet[open] {
+    animation: none;
+  }
 }
 
 .tma-legal-accept__chrome {
@@ -614,14 +633,14 @@ body:has(.tma-auth__card--tall) {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-12);
-  padding: var(--space-16) var(--space-20);
+  padding: var(--space-14) var(--space-16);
   border-bottom: 1px solid var(--color-border-soft);
 }
 
 .tma-legal-accept__title {
   margin: 0;
-  font-size: var(--text-size-16);
-  line-height: var(--text-lh-16);
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
   font-weight: var(--font-weight-semibold);
 }
 
@@ -651,14 +670,16 @@ body:has(.tma-auth__card--tall) {
 .tma-legal-accept__foot {
   flex: 0 0 auto;
   display: flex;
-  justify-content: flex-end;
-  padding: var(--space-16) var(--space-20);
+  justify-content: stretch;
+  padding: var(--space-12) var(--space-16) var(--space-16);
   border-top: 1px solid var(--color-border-soft);
+  background: #ffffff;
 }
 
 .tma-legal-accept__confirm {
-  width: auto;
-  min-width: 180px;
+  width: 100%;
+  min-width: 0;
+  border-radius: var(--radius-pill);
 }
 
 .tma-legal-accept__confirm:disabled {
