@@ -8,6 +8,7 @@ use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Engine;
 use App\Support\Cip\PersonStatus;
+use App\Support\Cip\StatusAttachment;
 use App\Support\Cip\Phase;
 use App\Support\Realtime\Live;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -32,6 +33,8 @@ class CipPersonStatusController extends Controller
             ->where('uuid', $uuid)
             ->with('application.client')
             ->firstOrFail();
+
+        StatusAttachment::accept($request);
 
         $application = ApplicationScope::findOrFail($user, $person->application->uuid);
 
@@ -74,6 +77,8 @@ class CipPersonStatusController extends Controller
         ]);
 
         $person->forceFill(['post_approval_status' => $to])->save();
+
+        StatusAttachment::storeIfPresent($request, $application, $user, $person);
 
         Engine::record(
             $application,

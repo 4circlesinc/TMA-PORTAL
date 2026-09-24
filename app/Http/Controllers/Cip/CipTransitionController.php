@@ -21,6 +21,7 @@ use App\Support\Cip\NonCompliance;
 use App\Support\Cip\Phase;
 use App\Support\Cip\Stages;
 use App\Support\Cip\Status;
+use App\Support\Cip\StatusAttachment;
 use App\Support\Cip\Submission;
 use App\Support\Cip\Tree;
 use App\Support\Realtime\Live;
@@ -66,6 +67,7 @@ class CipTransitionController extends Controller
     {
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
+        StatusAttachment::accept($request);
 
         $data = $request->validate([
             'status' => ['required', 'string', 'max:32'],
@@ -81,6 +83,7 @@ class CipTransitionController extends Controller
         $meta = $note === '' ? [] : ['note' => $note];
 
         $application = $this->drive($application, $data['status'], $user, $meta);
+        StatusAttachment::storeIfPresent($request, $application, $user);
 
         return response()->json(['application' => $this->record($application, $user)]);
     }
@@ -184,6 +187,7 @@ class CipTransitionController extends Controller
     {
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
+        StatusAttachment::accept($request);
 
         $outstanding = $this->outstanding($application);
 
@@ -211,6 +215,7 @@ class CipTransitionController extends Controller
         }
 
         $application = $this->drive($application, Status::NEW, $user, []);
+        StatusAttachment::storeIfPresent($request, $application, $user);
 
         return response()->json(['application' => $this->record($application, $user)]);
     }
@@ -266,6 +271,7 @@ class CipTransitionController extends Controller
     {
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
+        StatusAttachment::accept($request);
 
         $firstDecision = ! Status::isTerminal($application->status);
 
@@ -305,6 +311,7 @@ class CipTransitionController extends Controller
             abort(422, $e->getMessage());
         }
 
+        StatusAttachment::storeIfPresent($request, $application, $user);
         Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
 
         return response()->json(['application' => $this->record($application, $user)]);
@@ -321,6 +328,7 @@ class CipTransitionController extends Controller
     {
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
+        StatusAttachment::accept($request);
 
         $data = $request->validate([
             // Recorded, not assumed: a Unit letter is dated, and staff enter
@@ -350,6 +358,7 @@ class CipTransitionController extends Controller
             abort(422, $e->getMessage());
         }
 
+        StatusAttachment::storeIfPresent($request, $application, $user);
         Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
 
         return response()->json(['application' => $this->record($application, $user)]);
@@ -367,6 +376,7 @@ class CipTransitionController extends Controller
     {
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
+        StatusAttachment::accept($request);
 
         $data = $request->validate([
             'queryReceivedAt' => ['required', 'date'],
@@ -390,6 +400,7 @@ class CipTransitionController extends Controller
             abort(422, $e->getMessage());
         }
 
+        StatusAttachment::storeIfPresent($request, $application, $user);
         Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
 
         return response()->json(['application' => $this->record($application, $user)]);
@@ -406,6 +417,7 @@ class CipTransitionController extends Controller
     {
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
+        StatusAttachment::accept($request);
 
         $data = $request->validate([
             // Recorded, not assumed: an acceptance letter is dated, and staff
@@ -435,6 +447,7 @@ class CipTransitionController extends Controller
             abort(422, $e->getMessage());
         }
 
+        StatusAttachment::storeIfPresent($request, $application, $user);
         Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
 
         return response()->json(['application' => $this->record($application, $user)]);
@@ -452,6 +465,7 @@ class CipTransitionController extends Controller
     {
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
+        StatusAttachment::accept($request);
 
         $data = $request->validate([
             'reason' => ['nullable', 'string', 'max:2000'],
@@ -463,6 +477,7 @@ class CipTransitionController extends Controller
             abort(422, $e->getMessage());
         }
 
+        StatusAttachment::storeIfPresent($request, $application, $user);
         Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
 
         return response()->json(['application' => $this->record($application, $user)]);
@@ -479,6 +494,7 @@ class CipTransitionController extends Controller
     {
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
+        StatusAttachment::accept($request);
 
         $data = $request->validate([
             'appealLodgedAt' => ['required', 'date'],
@@ -502,6 +518,7 @@ class CipTransitionController extends Controller
             abort(422, $e->getMessage());
         }
 
+        StatusAttachment::storeIfPresent($request, $application, $user);
         Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
 
         return response()->json([
@@ -520,6 +537,7 @@ class CipTransitionController extends Controller
     {
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
+        StatusAttachment::accept($request);
 
         $data = $request->validate([
             'override' => ['nullable', 'boolean'],
@@ -539,6 +557,7 @@ class CipTransitionController extends Controller
             abort(422, $e->getMessage());
         }
 
+        StatusAttachment::storeIfPresent($request, $application, $user);
         Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
 
         return response()->json(['application' => $this->record($application, $user)]);
@@ -549,6 +568,7 @@ class CipTransitionController extends Controller
     {
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
+        StatusAttachment::accept($request);
 
         $data = $request->validate([
             'appealSubmittedAt' => ['required', 'date'],
@@ -572,6 +592,7 @@ class CipTransitionController extends Controller
             abort(422, $e->getMessage());
         }
 
+        StatusAttachment::storeIfPresent($request, $application, $user);
         Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
 
         return response()->json(['application' => $this->record($application, $user)]);
@@ -589,6 +610,7 @@ class CipTransitionController extends Controller
     {
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
+        StatusAttachment::accept($request);
 
         $data = $request->validate([
             'stage' => ['required', 'string', Rule::in(Stages::keys())],
@@ -610,6 +632,7 @@ class CipTransitionController extends Controller
             abort(422, $e->getMessage());
         }
 
+        StatusAttachment::storeIfPresent($request, $application, $user);
         Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
 
         return response()->json(['application' => $this->record($application, $user)]);

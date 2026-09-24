@@ -41,6 +41,7 @@ use App\Support\Cip\Requirements;
 use App\Support\Cip\Review;
 use App\Support\Cip\Stages;
 use App\Support\Cip\Status;
+use App\Support\Cip\StatusAttachment;
 use App\Support\Cip\Submission;
 use App\Support\Cip\Tree;
 use App\Support\Files\CommentReads;
@@ -2015,8 +2016,10 @@ class CipApplicationController extends Controller
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
         abort_unless(CipAccess::canChangeApplicationStatus($user), 403);
+        StatusAttachment::accept($request);
 
         $application = PostApproval::enter($application, $user);
+        StatusAttachment::storeIfPresent($request, $application, $user);
 
         Live::staff(Live::CIP);
 
@@ -2042,6 +2045,7 @@ class CipApplicationController extends Controller
     {
         $user = $request->user();
         $application = ApplicationScope::findOrFail($user, $uuid);
+        StatusAttachment::accept($request);
 
         $data = $request->validate([
             'cipNumber' => ['required', 'string', 'max:'.Submission::MAX_LENGTH],
@@ -2067,6 +2071,7 @@ class CipApplicationController extends Controller
             abort(422, $e->getMessage());
         }
 
+        StatusAttachment::storeIfPresent($request, $application, $user);
         Live::staff(Live::CIP);
 
         return response()->json(['application' => $this->record($application, $user)]);

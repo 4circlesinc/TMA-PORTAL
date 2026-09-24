@@ -182,6 +182,9 @@ class CipEvent extends Model
 
     public const ACTION_APPEAL_SUBMITTED = 'appeal_submitted';
 
+    /** A file optionally uploaded with a status change, filed in that person's folder. */
+    public const ACTION_STATUS_ATTACHMENT = 'status_attachment';
+
     /**
      * The application was taken off the caseload.
      *

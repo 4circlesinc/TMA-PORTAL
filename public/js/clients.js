@@ -11750,6 +11750,7 @@
         : '') +
       hint +
       '</p>' +
+      (correcting ? '' : cipStatusAttachmentHtml(cipAttachmentPlace(app))) +
       '<div class="tma-portal-modal__foot">' +
       '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-number>Cancel</button>' +
       '<button type="button" class="tma-no-data__btn" data-cip-save-number>' +
@@ -11763,6 +11764,7 @@
         var input = el.querySelector('[data-cip-number]');
         if (input) input.focus();
 
+        if (!correcting) wireCipStatusAttachment(el);
         var cancel = el.querySelector('[data-cip-cancel-number]');
         if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
 
@@ -11791,6 +11793,7 @@
           save.disabled = true;
           save.textContent = 'Saving…';
 
+          cipPendingStatusFile = correcting ? null : cipStatusFile(el);
           submitCipNumber(app.id, number, correcting, dateEl ? dateEl.value : null)
             .then(function (json) {
               ui.closeModal();
@@ -11831,10 +11834,7 @@
     var payload = { submittedAt: submittedAt || null };
     if (number) payload.cipNumber = number;
 
-    return clientsFetch(base + '/submission', {
-      method: 'POST',
-      json: payload,
-    });
+    return cipPostWithAttachment(base + '/submission', payload);
   }
 
   function canAssignClients() {
@@ -12448,7 +12448,48 @@
     }, 0);
   }
 
-  function changeCipPersonStatus(to, extra, clientUid, label) {
+  function openCipPersonStatusDialog(to, extra, clientUid, label) {
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal) {
+      changeCipPersonStatus(to, extra, clientUid, label, true);
+      return;
+    }
+
+    var person = cipPersonForStatus(extra, clientUid);
+    var app = cipSourceFor(extra, clientUid) || applicationFor(clientUid);
+    var place = cipAttachmentPlace(app, person);
+
+    ui.openModal({
+      title: 'Change status',
+      body:
+        '<p class="tma-portal-modal__text">Move ' + esc((person && person.name) || 'this person') +
+        ' to ' + esc(label || 'the next status') + '.</p>' +
+        cipStatusAttachmentHtml(place) +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-person-status>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-cip-save-person-status>Change status</button>' +
+        '</div>',
+      onMount: function (el) {
+        wireCipStatusAttachment(el);
+        var cancel = el.querySelector('[data-cip-cancel-person-status]');
+        if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
+        var save = el.querySelector('[data-cip-save-person-status]');
+        if (!save) return;
+        save.addEventListener('click', function () {
+          var file = cipStatusFile(el);
+          if (file && !cipStatusFileAllowed(file)) {
+            clientsToast('Upload a PDF or an image.', 'negative');
+            return;
+          }
+          cipPendingStatusFile = file;
+          ui.closeModal();
+          changeCipPersonStatus(to, extra, clientUid, label, true);
+        });
+      },
+    });
+  }
+
+  function changeCipPersonStatus(to, extra, clientUid, label, confirmed) {
     var personId = extra && extra.personId;
     if (!personId) {
       clientsToast('Could not find this person.', 'negative');
@@ -12459,13 +12500,17 @@
     var person = cipPersonForStatus(extra, clientUid);
     if (person && person.status === to) return;
 
+    if (!confirmed) {
+      openCipPersonStatusDialog(to, extra, clientUid, label);
+      return;
+    }
+
     var ctx = clientsMenuCtx;
     var state = (ctx && ctx.state) || clientsMountState;
     var render = (ctx && ctx.render) || repaintClients;
 
-    clientsFetch('/portal/cip/people/' + encodeURIComponent(personId) + '/status', {
-      method: 'POST',
-      json: { status: to },
+    cipPostWithAttachment('/portal/cip/people/' + encodeURIComponent(personId) + '/status', {
+      status: to,
     })
       .then(function (json) {
         if (json && json.application && clientUid) {
@@ -12519,6 +12564,152 @@
    */
   var CIP_OVERRIDE_WORD = 'OVERRIDE';
 
+  /*
+   * An optional file on every status change. The server files it in that
+   * person's own folder: Main Applicant, or the dependent's folder.
+   */
+  var cipPendingStatusFile = null;
+
+  function cipAttachmentPlace(app, person) {
+    if (person && person.role === 'dependent') return "this dependent's folder";
+    if (person && person.role === 'sponsor') return 'the Sponsor folder';
+    if ((person && /add-on/i.test(person.label || '')) || (app && app.phase === 'add_on')) {
+      return 'the Add-On Applicant folder';
+    }
+
+    return 'the Main Applicant folder';
+  }
+
+  function cipStatusAttachmentHtml(place) {
+    return '<div class="tma-portal-drop" data-cip-status-drop>' +
+      '<span class="tma-portal-field__label">File</span>' +
+      '<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,application/pdf,image/jpeg,image/png,image/webp,image/heic"' +
+      ' class="tma-dash__clients-photo-input" data-cip-status-file aria-hidden="true">' +
+      '<button type="button" class="tma-portal-drop__zone" data-cip-status-file-btn>' +
+      '<img src="' + ICON + 'UploadSimple.svg" alt="" width="20" height="20">' +
+      '<span class="tma-portal-drop__hint">Drop a file here, or choose one</span>' +
+      '<span class="tma-portal-drop__meta">Optional. Saved in ' + esc(place) + '.</span>' +
+      '</button>' +
+      '<ul class="tma-portal-drop__files" data-cip-status-file-list hidden></ul>' +
+      '</div>';
+  }
+
+  function cipStatusFile(root) {
+    if (!root) return null;
+    var input = root.querySelector('[data-cip-status-file]');
+
+    return input && input.files && input.files[0] ? input.files[0] : null;
+  }
+
+  function cipStatusFileAllowed(file) {
+    return /\.(pdf|jpe?g|png|webp|heic)$/i.test(file && file.name || '');
+  }
+
+  function wireCipStatusAttachment(root) {
+    var zone = root && root.querySelector('[data-cip-status-drop]');
+    if (!zone) return;
+
+    var input = zone.querySelector('[data-cip-status-file]');
+    var btn = zone.querySelector('[data-cip-status-file-btn]');
+    var list = zone.querySelector('[data-cip-status-file-list]');
+    if (!input || !btn) return;
+
+    function paint(file) {
+      if (!file) {
+        zone.classList.remove('is-filled');
+        if (list) {
+          list.innerHTML = '';
+          list.hidden = true;
+        }
+        return;
+      }
+
+      zone.classList.add('is-filled');
+      if (!list) return;
+
+      var icon = (window.TMAFileIcons && window.TMAFileIcons.fileIconSrc)
+        ? window.TMAFileIcons.fileIconSrc('', file.name)
+        : ICON + 'File.svg';
+
+      list.hidden = false;
+      list.innerHTML =
+        '<li class="tma-portal-drop__file">' +
+        '<img class="tma-portal-drop__file-icon" src="' + esc(icon) + '" alt="" width="20" height="20">' +
+        '<span class="tma-portal-drop__file-name">' + esc(file.name) + '</span>' +
+        '<button type="button" class="tma-portal-drop__file-remove" data-cip-status-file-remove' +
+        ' aria-label="Remove ' + esc(file.name) + '">' +
+        '<img src="' + ICON + 'Xcircle.svg" alt="" width="16" height="16"></button>' +
+        '</li>';
+
+      var remove = list.querySelector('[data-cip-status-file-remove]');
+      if (remove) {
+        remove.addEventListener('click', function () {
+          input.value = '';
+          paint(null);
+        });
+      }
+    }
+
+    function take(files) {
+      var file = files && files[0];
+      if (!file) return;
+      if (!cipStatusFileAllowed(file)) {
+        clientsToast('Upload a PDF or an image.', 'negative');
+        input.value = '';
+        return;
+      }
+
+      try {
+        var dt = new DataTransfer();
+        dt.items.add(file);
+        input.files = dt.files;
+      } catch (e) { /* The native picker value still stands. */ }
+
+      paint(file);
+    }
+
+    btn.addEventListener('click', function () { input.click(); });
+    input.addEventListener('change', function () { take(input.files); });
+
+    ['dragenter', 'dragover'].forEach(function (type) {
+      zone.addEventListener(type, function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.add('is-dragging');
+      });
+    });
+
+    zone.addEventListener('dragleave', function (e) {
+      if (zone.contains(e.relatedTarget)) return;
+      zone.classList.remove('is-dragging');
+    });
+
+    zone.addEventListener('drop', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      zone.classList.remove('is-dragging');
+      take(e.dataTransfer && e.dataTransfer.files);
+    });
+  }
+
+  function cipPostWithAttachment(url, fields, root) {
+    var file = cipStatusFile(root) || cipPendingStatusFile;
+    cipPendingStatusFile = null;
+    if (!file) {
+      return clientsFetch(url, { method: 'POST', json: fields || {} });
+    }
+
+    var form = new FormData();
+    Object.keys(fields || {}).forEach(function (key) {
+      var value = fields[key];
+      if (value === undefined || value === null || value === '') return;
+      form.append(key, typeof value === 'boolean' ? (value ? '1' : '0') : String(value));
+    });
+    form.append('attachment', file);
+
+    return clientsFetch(url, { method: 'POST', body: form });
+  }
+
   function cipOverrideFieldsHtml() {
     return '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
       '<label class="tma-dash__clients-field-label" for="cip-override-note">Reason</label>' +
@@ -12557,6 +12748,7 @@
       body:
         '<p class="tma-portal-modal__text">Move this file to ' + esc(label || 'the next status') + '. The Activity tab keeps the reason.</p>' +
         cipOverrideFieldsHtml() +
+        cipStatusAttachmentHtml(cipAttachmentPlace(cipSourceFor(extra, clientUid) || applicationFor(clientUid))) +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-override>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-override>Change status</button>' +
@@ -12565,6 +12757,7 @@
         var cancel = el.querySelector('[data-cip-cancel-override]');
         if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
 
+        wireCipStatusAttachment(el);
         var save = el.querySelector('[data-cip-save-override]');
         var field = el.querySelector('[data-cip-override-note]');
         if (field) field.focus();
@@ -12573,14 +12766,58 @@
         save.addEventListener('click', function () {
           var reason = cipOverrideFieldsRead(el);
           if (reason === null) return;
+          var file = cipStatusFile(el);
+          if (file && !cipStatusFileAllowed(file)) {
+            clientsToast('Upload a PDF or an image.', 'negative');
+            return;
+          }
+          cipPendingStatusFile = file;
           ui.closeModal();
-          changeCipStatus(to, extra, clientUid, label, reason);
+          changeCipStatus(to, extra, clientUid, label, reason, true);
         });
       },
     });
   }
 
-  function changeCipStatus(to, extra, clientUid, label, note) {
+  function openCipStatusMoveDialog(to, extra, clientUid, label, note) {
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal) {
+      changeCipStatus(to, extra, clientUid, label, note, true);
+      return;
+    }
+
+    var app = cipSourceFor(extra, clientUid) || applicationFor(clientUid);
+
+    ui.openModal({
+      title: 'Change status',
+      body:
+        '<p class="tma-portal-modal__text">Move this file to ' + esc(label || 'the next status') + '.</p>' +
+        cipStatusAttachmentHtml(cipAttachmentPlace(app)) +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-status>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn" data-cip-save-status>Change status</button>' +
+        '</div>',
+      onMount: function (el) {
+        wireCipStatusAttachment(el);
+        var cancel = el.querySelector('[data-cip-cancel-status]');
+        if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
+        var save = el.querySelector('[data-cip-save-status]');
+        if (!save) return;
+        save.addEventListener('click', function () {
+          var file = cipStatusFile(el);
+          if (file && !cipStatusFileAllowed(file)) {
+            clientsToast('Upload a PDF or an image.', 'negative');
+            return;
+          }
+          cipPendingStatusFile = file;
+          ui.closeModal();
+          changeCipStatus(to, extra, clientUid, label, note, true);
+        });
+      },
+    });
+  }
+
+  function changeCipStatus(to, extra, clientUid, label, note, confirmed) {
     var source = cipSourceFor(extra, clientUid);
     var applicationId = (extra && extra.applicationId) || (source && source.id);
     if (!applicationId) {
@@ -12711,6 +12948,12 @@
       return;
     }
 
+    if (!confirmed) {
+      openCipStatusMoveDialog(to, extra, clientUid, label, note);
+
+      return;
+    }
+
     var url = '/portal/cip/applications/' + encodeURIComponent(applicationId) +
       (leftoverDraft ? '/submit' : '/status');
     var previous = source ? {
@@ -12722,10 +12965,10 @@
     if (clientUid) paintCipApplicationStatus(clientUid, to, { statusLabel: label });
     if (state && render) render({ forceFull: true });
 
-    var body = leftoverDraft ? { method: 'POST' } : { method: 'POST', json: { status: to } };
-    if (!leftoverDraft && note && String(note).trim()) body.json.note = String(note).trim();
+    var fields = leftoverDraft ? {} : { status: to };
+    if (!leftoverDraft && note && String(note).trim()) fields.note = String(note).trim();
 
-    clientsFetch(url, body)
+    cipPostWithAttachment(url, fields)
       .then(function (json) {
         // Name both ends of the move: a file pulled out of Approved should
         // say so, not read like an ordinary step forward.
@@ -12780,11 +13023,13 @@
         '<p class="tma-portal-modal__text">' +
         'The application will move to Non-compliant. Response documents go in Additional Documents.</p>' +
         (override ? cipOverrideFieldsHtml() : '') +
+        cipStatusAttachmentHtml(cipAttachmentPlace(applicationFor(clientUid))) +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-query>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-query>Record query</button>' +
         '</div>',
       onMount: function (el) {
+        wireCipStatusAttachment(el);
         var cancel = el.querySelector('[data-cip-cancel-query]');
         if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
 
@@ -12815,10 +13060,7 @@
           save.disabled = true;
           save.textContent = 'Recording…';
 
-          clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/query', {
-            method: 'POST',
-            json: body,
-          })
+          cipPostWithAttachment('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/query', body, el)
             .then(function (res) {
               var response = res && res.application && res.application.responseFolder;
               var folder = (response && response.uuid)
@@ -12874,11 +13116,13 @@
         '<p class="tma-portal-modal__text">' +
         'The application will move to DD Query. Response documents go in DD Query Responses.</p>' +
         (override ? cipOverrideFieldsHtml() : '') +
+        cipStatusAttachmentHtml(cipAttachmentPlace(applicationFor(clientUid))) +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-dd-query>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-dd-query>Record DD query</button>' +
         '</div>',
       onMount: function (el) {
+        wireCipStatusAttachment(el);
         var cancel = el.querySelector('[data-cip-cancel-dd-query]');
         if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
 
@@ -12909,10 +13153,7 @@
           save.disabled = true;
           save.textContent = 'Recording…';
 
-          clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/dd-query', {
-            method: 'POST',
-            json: body,
-          })
+          cipPostWithAttachment('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/dd-query', body, el)
             .then(function (res) {
               var response = res && res.application && res.application.responseFolder;
               var folder = (response && response.uuid)
@@ -12961,11 +13202,13 @@
         '</div>' +
         '<p class="tma-portal-modal__text">' +
         'The application will move to New Appeal. Appeal papers go in Appeal Documents.</p>' +
+        cipStatusAttachmentHtml(cipAttachmentPlace(applicationFor(clientUid))) +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-req>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-req>Start appeal</button>' +
         '</div>',
       onMount: function (el) {
+        wireCipStatusAttachment(el);
         var cancel = el.querySelector('[data-cip-cancel-req]');
         if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
 
@@ -12979,10 +13222,11 @@
           save.disabled = true;
           save.textContent = 'Starting…';
 
-          clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/appeal-request', {
-            method: 'POST',
-            json: reason ? { reason: reason } : {},
-          })
+          cipPostWithAttachment(
+            '/portal/cip/applications/' + encodeURIComponent(applicationId) + '/appeal-request',
+            reason ? { reason: reason } : {},
+            el
+          )
             .then(function () {
               ui.closeModal();
               clientsToast('Appeal started. Upload the appeal papers in Appeal Documents.', 'positive');
@@ -13028,13 +13272,11 @@
         'The application will move to New Appeal. Appeal papers go in Appeal Documents, ' +
         'which is the only folder open for uploads while the appeal runs.</p>' +
         (override ? cipOverrideFieldsHtml() : '') +
-        cipStatusAttachmentHtml(cipAttachmentPlace(applicationFor(clientUid))) +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-appeal>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-appeal>Lodge appeal</button>' +
         '</div>',
       onMount: function (el) {
-        wireCipStatusAttachment(el);
         var cancel = el.querySelector('[data-cip-cancel-appeal]');
         if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
 
@@ -13063,7 +13305,10 @@
           save.disabled = true;
           save.textContent = 'Lodging…';
 
-          cipPostWithAttachment('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/appeal', body, el)
+          clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/appeal', {
+            method: 'POST',
+            json: body,
+          })
             .then(function (res) {
               queueFolderOpen(res && res.appealFolder, 'Appeal Documents');
               ui.closeModal();
@@ -13109,13 +13354,11 @@
         '<p class="tma-portal-modal__text">' +
         'The service provider will be asked to confirm the appeal is ready on their end.</p>' +
         (override ? cipOverrideFieldsHtml() : '') +
-        cipStatusAttachmentHtml(cipAttachmentPlace(applicationFor(clientUid))) +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-ready>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-ready>Mark ready</button>' +
         '</div>',
       onMount: function (el) {
-        wireCipStatusAttachment(el);
         var cancel = el.querySelector('[data-cip-cancel-ready]');
         if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
 
@@ -13185,11 +13428,13 @@
         '<p class="tma-portal-modal__text">' +
         'The appeal will move to Appeal Submitted.</p>' +
         (override ? cipOverrideFieldsHtml() : '') +
+        cipStatusAttachmentHtml(cipAttachmentPlace(applicationFor(clientUid))) +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-sub>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-sub>Record submission</button>' +
         '</div>',
       onMount: function (el) {
+        wireCipStatusAttachment(el);
         var cancel = el.querySelector('[data-cip-cancel-sub]');
         if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
 
@@ -13218,10 +13463,7 @@
           save.disabled = true;
           save.textContent = 'Recording…';
 
-          clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/appeal-submitted', {
-            method: 'POST',
-            json: body,
-          })
+          cipPostWithAttachment('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/appeal-submitted', body, el)
             .then(function () {
               ui.closeModal();
               clientsToast('Appeal submitted to the Unit.', 'positive');
@@ -13277,11 +13519,13 @@
             '</div>'
           : '') +
         '<p class="tma-portal-modal__text">' + esc(meta.note || '') + '</p>' +
+        cipStatusAttachmentHtml(cipAttachmentPlace(app)) +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-stage>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-stage>' + esc(saveLabel) + '</button>' +
         '</div>',
       onMount: function (el) {
+        wireCipStatusAttachment(el);
         var cancel = el.querySelector('[data-cip-cancel-stage]');
         if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
 
@@ -13309,10 +13553,7 @@
           save.disabled = true;
           save.textContent = 'Recording…';
 
-          clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/stage', {
-            method: 'POST',
-            json: payload,
-          })
+          cipPostWithAttachment('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/stage', payload, el)
             .then(function (json) {
               ui.closeModal();
               clientsToast(saveLabel + ' recorded.', 'positive');
@@ -13358,11 +13599,13 @@
         '<p class="tma-portal-modal__text">' +
         'The application will move to Background check.</p>' +
         (override ? cipOverrideFieldsHtml() : '') +
+        cipStatusAttachmentHtml(cipAttachmentPlace(applicationFor(clientUid))) +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-accept>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-accept>Record acceptance</button>' +
         '</div>',
       onMount: function (el) {
+        wireCipStatusAttachment(el);
         var cancel = el.querySelector('[data-cip-cancel-accept]');
         if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
 
@@ -13393,10 +13636,7 @@
           save.disabled = true;
           save.textContent = 'Recording…';
 
-          clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/acceptance', {
-            method: 'POST',
-            json: body,
-          })
+          cipPostWithAttachment('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/acceptance', body, el)
             .then(function () {
               ui.closeModal();
               clientsToast(override && fromLabel
@@ -13562,6 +13802,7 @@
         ' rows="3" maxlength="2000" placeholder="Optional notes on this decision"></textarea>' +
         '</div>' +
         letterField +
+        cipStatusAttachmentHtml(cipAttachmentPlace(held)) +
         '<p class="tma-portal-modal__text">' +
         (picking
           ? 'The application will move to Approved or Denied.' + letterLine + ' This cannot be undone from here.'
@@ -13578,6 +13819,7 @@
         if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
 
         wireDecisionLetterDrop(el);
+        wireCipStatusAttachment(el);
 
         var save = el.querySelector('[data-cip-save-decision]');
         if (!save) return;
@@ -13622,6 +13864,8 @@
           form.append('decidedAt', date);
           if (note) form.append('note', note);
           if (letterFile) form.append('decisionLetter', letterFile);
+          var attached = cipStatusFile(el);
+          if (attached) form.append('attachment', attached);
 
           clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/decision', {
             method: 'POST',
@@ -13665,11 +13909,13 @@
       body:
         '<p class="tma-portal-modal__text">' +
         'Would you like to place this applicant in Post-Approval?</p>' +
+        cipStatusAttachmentHtml(cipAttachmentPlace(applicationFor(clientUid))) +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-decline-post>Not now</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-confirm-post>Move to post-approval</button>' +
         '</div>',
       onMount: function (el) {
+        wireCipStatusAttachment(el);
         var decline = el.querySelector('[data-cip-decline-post]');
         if (decline) {
           decline.addEventListener('click', function () {
@@ -13685,7 +13931,8 @@
           confirm.disabled = true;
           confirm.textContent = 'Moving…';
 
-          enterPostApproval(applicationId, clientUid)
+          cipPendingStatusFile = cipStatusFile(el);
+          cipPostWithAttachment('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/post-approval', {})
             .then(function () {
               ui.closeModal();
               clientsToast('Moved to post-approval.', 'positive');

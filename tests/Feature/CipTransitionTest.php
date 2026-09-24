@@ -6,6 +6,7 @@ use App\Models\CipApplication;
 use App\Models\CipDocument;
 use App\Models\CipEvent;
 use App\Models\CipPerson;
+use App\Models\FileItem;
 use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\Company;
@@ -19,7 +20,9 @@ use App\Support\Cip\Engine;
 use App\Support\Cip\Phase;
 use App\Support\Cip\Stages;
 use App\Support\Cip\Status;
+use App\Support\Cip\Tree;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 /**
@@ -746,5 +749,33 @@ class CipTransitionTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('application.status', Status::DENIED);
+    }
+
+    public function test_an_application_status_change_can_file_a_document_in_the_main_applicant_folder(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $application = $this->at($this->application($admin), Status::NEW);
+
+        $this->actingAs($admin)->post($this->statusUrl($application), [
+            'status' => Status::REVIEW_APPLICATION,
+            'attachment' => UploadedFile::fake()->createWithContent('cover.pdf', '%PDF-1.4 cover'),
+        ], [
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])->assertOk()
+            ->assertJsonPath('application.status', Status::REVIEW_APPLICATION);
+
+        $application = $application->fresh(['people']);
+        $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $folder = Tree::personFolder($main, Tree::provision($application, $admin), $admin);
+        $file = FileItem::query()->where('name', 'cover.pdf')->first();
+
+        $this->assertNotNull($file);
+        $this->assertSame($folder->id, $file->folder_id);
+        $this->assertSame('Main Applicant', $file->folder->name);
+        $this->assertDatabaseHas('cip_events', [
+            'application_id' => $application->id,
+            'action' => CipEvent::ACTION_STATUS_ATTACHMENT,
+        ]);
     }
 }

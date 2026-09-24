@@ -166,6 +166,7 @@ class Timeline
             CipEvent::ACTION_MILESTONE_CORRECTED => self::milestoneSentence($meta, $who),
             CipEvent::ACTION_DELAYED => self::delayedSentence($meta, $who),
             CipEvent::ACTION_POST_APPROVAL_ENTERED => "{$who} started the post-approval process (Certificate of Registration)",
+            CipEvent::ACTION_STATUS_ATTACHMENT => self::attachmentSentence($meta, $who),
             DocumentEngine::ACTION_STATUS_CHANGED => self::documentSentence($meta, $who, $documents),
             /*
              * An action added to the table after this file was written.
@@ -390,6 +391,18 @@ class Timeline
         $days = $meta['days'] ?? Delay::DAYS;
 
         return "{$who} marked it delayed after {$days} days with no decision";
+    }
+
+    /**
+     * The optional file that rode along with a status change.
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    private static function attachmentSentence(array $meta, string $who): string
+    {
+        $name = $meta['file_name'] ?? 'a file';
+
+        return "{$who} filed {$name} with the status change";
     }
 
     /**

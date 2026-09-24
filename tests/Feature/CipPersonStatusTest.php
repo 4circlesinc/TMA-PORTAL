@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\CipApplication;
 use App\Models\CipEvent;
 use App\Models\CipPerson;
+use App\Models\FileItem;
 use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\User;
@@ -13,7 +14,9 @@ use App\Support\Cip\PersonStatus;
 use App\Support\Cip\Phase;
 use App\Support\Cip\PostApproval;
 use App\Support\Cip\Status;
+use App\Support\Cip\Tree;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -271,5 +274,71 @@ class CipPersonStatusTest extends TestCase
         $this->assertNotNull($match);
         $this->assertNotEmpty($match['documents']);
         $this->assertArrayHasKey('statusLabel', $match['documents'][0]);
+    }
+
+    public function test_a_person_status_change_can_file_an_optional_document_in_that_persons_folder(): void
+    {
+        $staff = $this->staff();
+        $application = $this->postApprovalFamilyApplication($staff);
+        $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $dependent = $application->people->firstWhere('role', CipPerson::ROLE_DEPENDENT);
+
+        $this->actingAs($staff)->post('/portal/cip/people/'.$dependent->uuid.'/status', [
+            'status' => PersonStatus::DOCUMENTS_PENDING,
+            'attachment' => UploadedFile::fake()->createWithContent('birth.pdf', '%PDF-1.4 birth'),
+        ], [
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])->assertOk();
+
+        $dependent = $dependent->fresh();
+        $folder = Tree::postApprovalPersonFolder($dependent, null, $staff);
+        $file = FileItem::query()->where('name', 'birth.pdf')->first();
+
+        $this->assertNotNull($file);
+        $this->assertSame($folder->id, $file->folder_id);
+        $this->assertSame($dependent->post_approval_folder_id, $file->folder_id);
+        $this->assertNotSame($main->fresh()->post_approval_folder_id, $file->folder_id);
+        $this->assertSame(PersonStatus::DOCUMENTS_PENDING, $dependent->post_approval_status);
+    }
+
+    public function test_a_main_applicant_status_file_lands_in_the_main_applicant_folder(): void
+    {
+        $staff = $this->staff();
+        $application = $this->postApprovalApplication($staff);
+        $main = $application->people->first();
+
+        $this->actingAs($staff)->post('/portal/cip/people/'.$main->uuid.'/status', [
+            'status' => PersonStatus::PROCESSING,
+            'attachment' => UploadedFile::fake()->createWithContent('letter.pdf', '%PDF-1.4 letter'),
+        ], [
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])->assertOk();
+
+        $main = $main->fresh();
+        $file = FileItem::query()->where('name', 'letter.pdf')->first();
+
+        $this->assertNotNull($file);
+        $this->assertSame($main->post_approval_folder_id, $file->folder_id);
+        $this->assertSame('Main Applicant', $file->folder->name);
+    }
+
+    public function test_a_bad_status_file_does_not_move_the_person(): void
+    {
+        $staff = $this->staff();
+        $application = $this->postApprovalApplication($staff);
+        $person = $application->people->first();
+
+        $this->actingAs($staff)->post('/portal/cip/people/'.$person->uuid.'/status', [
+            'status' => PersonStatus::PROCESSING,
+            'attachment' => UploadedFile::fake()->create('notes.docx', 20, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'),
+        ], [
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])->assertStatus(422);
+
+        $this->assertSame(PersonStatus::NOT_STARTED, $person->fresh()->post_approval_status);
+        $this->assertSame(0, FileItem::query()->count());
     }
 }
