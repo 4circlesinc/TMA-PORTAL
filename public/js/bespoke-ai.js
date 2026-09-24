@@ -2061,9 +2061,14 @@
       return ready(result);
     }).then(function () {
       ctx.logEl.scrollTop = ctx.logEl.scrollHeight;
-    }).catch(function () {
+    }).catch(function (err) {
+      // Say which step gave up. A card that silently shows nothing is
+      // indistinguishable from one that was never asked for, and that is
+      // exactly how this failed in the field.
       making.hidden = true;
+      editor.hidden = true;
       status.textContent = 'The photo could not be prepared from this file.';
+      if (window.console && console.warn) console.warn('Bespoke 2x2 failed:', err);
     });
     return card;
   }
