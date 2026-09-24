@@ -33,6 +33,12 @@ class ProviderMergeTest extends TestCase
         $numbered = CipProvider::create([
             'name' => 'Respect Services 3', 'code' => 'RESPE', 'active' => true,
         ]);
+        $nadjib = CipProvider::create([
+            'name' => 'NADJIB ZEBILA - 10.10.2023', 'code' => 'NAD', 'active' => true,
+        ]);
+        $nadjibCopy = CipProvider::create([
+            'name' => 'NADJIB ZEBILA - 10.10.1.2023', 'code' => 'NADJ', 'active' => true,
+        ]);
         $distinct = CipProvider::create([
             'name' => 'Soland World - High Volume', 'code' => 'SOL', 'active' => true,
         ]);
@@ -74,5 +80,7 @@ class ProviderMergeTest extends TestCase
 
         $this->assertNotNull(CipProvider::find($distinct->id));
         $this->assertNotNull(CipProvider::find($plain->id));
+        $this->assertNotNull(CipProvider::find($nadjib->id));
+        $this->assertNull(CipProvider::find($nadjibCopy->id));
     }
 }

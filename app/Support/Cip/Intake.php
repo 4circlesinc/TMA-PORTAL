@@ -2231,37 +2231,25 @@ class Intake
     public static function oneFirmEach(Collection $providers): Collection
     {
         $kept = collect();
-        $companyIds = [];
+        $seen = [];
 
         foreach ($providers as $provider) {
-            if ($provider->company_id === null) {
-                continue;
+            $key = ProviderMerge::key($provider->name);
+            $bucket = $key;
+
+            foreach (array_keys($seen) as $existing) {
+                if (ProviderMerge::sameFirm($existing, $key)) {
+                    $bucket = $existing;
+                    break;
+                }
             }
-            if (isset($companyIds[$provider->company_id])) {
-                continue;
-            }
-            $companyIds[$provider->company_id] = true;
-            $kept->push($provider);
+
+            $seen[$bucket][] = $provider;
         }
 
-        $names = $kept->mapWithKeys(fn (CipProvider $provider) => [
-            mb_strtolower(trim($provider->name)) => true,
-        ]);
-
-        foreach ($providers as $provider) {
-            if ($provider->company_id !== null) {
-                continue;
-            }
-            if ($provider->code === CipProvider::PRIVATE_CLIENT_CODE) {
-                $kept->push($provider);
-
-                continue;
-            }
-            $name = mb_strtolower(trim($provider->name));
-            if (isset($names[$name])) {
-                continue;
-            }
-            $kept->push($provider);
+        foreach ($seen as $rows) {
+            $group = collect($rows);
+            $kept->push($group->count() === 1 ? $group->first() : ProviderMerge::choose($group));
         }
 
         return $kept->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)->values();

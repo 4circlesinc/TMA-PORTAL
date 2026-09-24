@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\CipProvider;
 use App\Models\Folder;
+use App\Support\Cip\ProviderMerge;
 use App\Support\Cip\Providers;
 use Illuminate\Console\Command;
 
@@ -39,20 +40,21 @@ class CipProvidersFromFolders extends Command
 
         $made = 0;
         $linked = 0;
+        $providers = CipProvider::query()->orderBy('id')->get();
 
         Folder::query()
             ->where('parent_id', $root->id)
             ->orderBy('name')
             ->get()
-            ->each(function (Folder $folder) use (&$made, &$linked) {
+            ->each(function (Folder $folder) use (&$made, &$linked, &$providers) {
                 $name = trim($folder->name);
                 if ($name === '') {
                     return;
                 }
 
-                $provider = CipProvider::query()
-                    ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
-                    ->first();
+                $provider = $providers->first(
+                    fn (CipProvider $existing) => ProviderMerge::matches($existing, $name)
+                );
 
                 if (! $provider) {
                     $provider = CipProvider::create([
@@ -62,6 +64,7 @@ class CipProvidersFromFolders extends Command
                         'active' => true,
                     ]);
                     $made++;
+                    $providers->push($provider);
                     $this->line('  + '.str_pad($provider->code, 6).$name);
 
                     return;

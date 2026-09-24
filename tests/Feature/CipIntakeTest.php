@@ -2259,7 +2259,7 @@ class CipIntakeTest extends TestCase
             ->getJson('/portal/cip/applications/form')->assertOk()->json('providers'))
             ->pluck('code')->all();
 
-        $this->assertSame(['RESP'], array_values(array_filter(
+        $this->assertSame(['RES'], array_values(array_filter(
             $codes,
             fn ($code) => in_array($code, ['RESP', 'RES', 'RESX'], true),
         )));

@@ -122,4 +122,16 @@ class CipProvidersFromFoldersTest extends TestCase
             $existing->fresh()->folder_id,
         );
     }
+
+    public function test_a_near_copy_of_a_folder_name_does_not_mint_another_provider(): void
+    {
+        $this->library(['iGaphix', 'Respect Services 3', 'SOLAND WORLD - HIGH VOLUME 2']);
+        CipProvider::create(['name' => 'iGraphix', 'code' => 'IGA', 'active' => true]);
+        CipProvider::create(['name' => 'Respect Services', 'code' => 'RES', 'active' => true]);
+        CipProvider::create(['name' => 'Soland World - High Volume', 'code' => 'SOL', 'active' => true]);
+
+        $this->artisan('cip:providers-from-folders')->assertSuccessful();
+
+        $this->assertSame(['IGA', 'RES', 'SOL'], CipProvider::query()->orderBy('code')->pluck('code')->all());
+    }
 }

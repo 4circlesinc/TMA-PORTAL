@@ -56,7 +56,7 @@ class ProviderMerge
      */
     public static function merge(Collection $group): CipProvider
     {
-        $survivor = self::survivor($group);
+        $survivor = self::choose($group);
 
         DB::transaction(function () use ($group, $survivor) {
             foreach ($group as $other) {
@@ -106,9 +106,17 @@ class ProviderMerge
     public static function key(string $name): string
     {
         $key = strtoupper(trim((string) preg_replace('/\s+/', ' ', $name)));
+        // "Nadjib Zebila - 10.10.1.2023" and "Nadjib Zebila - 10.10.2023".
+        $key = (string) preg_replace('/\s+-\s+[\d.]+$/', '', $key);
+        // "Respect Services 3", "High Volume 2", "Resorts 1".
         $key = (string) preg_replace('/\s+\d+$/', '', $key);
 
-        return $key;
+        return trim($key);
+    }
+
+    public static function matches(CipProvider $provider, string $name): bool
+    {
+        return self::sameFirm(self::key($provider->name), self::key($name));
     }
 
     public static function sameFirm(string $left, string $right): bool
@@ -125,7 +133,7 @@ class ProviderMerge
     /**
      * @param  Collection<int, CipProvider>  $group
      */
-    private static function survivor(Collection $group): CipProvider
+    public static function choose(Collection $group): CipProvider
     {
         $preferred = self::preferredCode($group);
         if ($preferred) {
