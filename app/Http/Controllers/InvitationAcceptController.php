@@ -180,7 +180,7 @@ class InvitationAcceptController extends Controller
             'token' => $token,
             'state' => $state,
             'name' => $invitation?->name ?: $invitation?->client?->name,
-            'nameParts' => Invitations::splitName($invitation?->name ?: $invitation?->client?->name),
+            'nameParts' => Invitations::splitName($invitation?->name ?: $invitation?->client?->name, $invitation?->email),
             'email' => $invitation?->email,
             'inviter' => $invitation?->inviter?->name,
             'organisation' => Postcards::site(),

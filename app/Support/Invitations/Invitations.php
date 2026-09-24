@@ -11,6 +11,7 @@ use App\Models\Invitation;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
+use App\Support\People\PersonName;
 use App\Support\Cip\Pages;
 use App\Support\Clients\ClientHubSettings;
 use App\Support\Companies\CompanyMembers;
@@ -217,14 +218,9 @@ final class Invitations
      *
      * @return array{first: string, middle: string, last: string}
      */
-    public static function splitName(?string $name): array
+    public static function splitName(?string $name, ?string $email = null): array
     {
-        $parts = preg_split('/\s+/', trim((string) $name), -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        $first = (string) (array_shift($parts) ?: '');
-        $last = $parts ? (string) array_pop($parts) : '';
-        $middle = $parts ? implode(' ', $parts) : '';
-
-        return ['first' => $first, 'middle' => $middle, 'last' => $last];
+        return PersonName::split($name, $email);
     }
 
     /**
@@ -241,13 +237,16 @@ final class Invitations
         abort_unless($invitation->isAcceptable(), 410, 'This invitation is no longer valid.');
         abort_if($invitation->existingUser() !== null, 409, 'An account already exists for this email address.');
 
-        $fallback = self::splitName($invitation->name ?: $invitation->client?->name);
+        $fallback = self::splitName($invitation->name ?: $invitation->client?->name, $invitation->email);
         $first = trim((string) ($name['first_name'] ?? '')) ?: $fallback['first'];
         $middle = trim((string) ($name['middle_name'] ?? '')) ?: $fallback['middle'];
         $last = trim((string) ($name['last_name'] ?? '')) ?: $fallback['last'];
 
-        if ($first === '') {
-            $first = Str::before($invitation->email, '@');
+        if ($first === '' || PersonName::looksLikeEmail($first)) {
+            $fromMailbox = PersonName::fromMailbox($invitation->email);
+            $first = $fromMailbox['first'] !== '' ? $fromMailbox['first'] : Str::before($invitation->email, '@');
+            $middle = $middle !== '' ? $middle : $fromMailbox['middle'];
+            $last = $last !== '' ? $last : $fromMailbox['last'];
         }
 
         return DB::transaction(function () use ($invitation, $password, $first, $middle, $last) {

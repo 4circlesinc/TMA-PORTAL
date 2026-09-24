@@ -13,6 +13,7 @@ use App\Support\Activity\ActivityLogger;
 use App\Support\AvatarService;
 use App\Support\EmailTwoFactor;
 use App\Support\Invitations\Invitations;
+use App\Support\People\PersonName;
 use App\Support\LoginChallenge;
 use App\Support\LoginSession;
 use App\Support\Microsoft\ChangeNotifications;
@@ -419,15 +420,12 @@ class SocialAuthController extends Controller
         }
 
         if ($invitation && ! $user) {
-            $display = $oauth->getName() ?: (string) Str::of($oauth->getEmail())->before('@');
-            $parts = preg_split('/\s+/', trim($display), -1, PREG_SPLIT_NO_EMPTY) ?: [];
-            $first = array_shift($parts) ?: $display;
-            $last = count($parts) ? array_pop($parts) : '';
+            $parts = PersonName::split($oauth->getName(), $oauth->getEmail());
 
             $user = Invitations::acceptAsNewUser($invitation, Str::password(32), [
-                'first_name' => $first,
-                'middle_name' => count($parts) ? implode(' ', $parts) : null,
-                'last_name' => $last,
+                'first_name' => $parts['first'],
+                'middle_name' => $parts['middle'] !== '' ? $parts['middle'] : null,
+                'last_name' => $parts['last'],
             ]);
             $user->forceFill([
                 'password_auto' => true,
@@ -436,16 +434,17 @@ class SocialAuthController extends Controller
         }
 
         if (! $user) {
-            $display = $oauth->getName() ?: (string) Str::of($oauth->getEmail())->before('@');
-            $parts = preg_split('/\s+/', trim($display), -1, PREG_SPLIT_NO_EMPTY) ?: [];
-            $first = array_shift($parts) ?: $display;
-            $last = count($parts) ? array_pop($parts) : null;
+            $parts = PersonName::split($oauth->getName(), $oauth->getEmail());
+            $display = trim(implode(' ', array_filter([$parts['first'], $parts['middle'], $parts['last']])));
+            if ($display === '') {
+                $display = (string) Str::of($oauth->getEmail())->before('@');
+            }
 
             $user = new User([
                 'name' => $display,
-                'first_name' => $first,
-                'middle_name' => count($parts) ? implode(' ', $parts) : null,
-                'last_name' => $last,
+                'first_name' => $parts['first'] !== '' ? $parts['first'] : $display,
+                'middle_name' => $parts['middle'] !== '' ? $parts['middle'] : null,
+                'last_name' => $parts['last'] !== '' ? $parts['last'] : null,
                 'email' => $email,
                 'password' => Str::password(32),
             ]);

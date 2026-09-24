@@ -29,6 +29,7 @@ use App\Support\Invitations\Invitations;
 use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
 use App\Support\Notifications\Notifier;
+use App\Support\People\PersonName;
 use App\Support\Presence\LastSeen;
 use App\Support\Realtime\Live;
 use App\Support\SecurityPolicies;
@@ -91,6 +92,15 @@ class AdminUsersController extends Controller
             ->whereNotNull('user_id')
             ->groupBy('user_id')
             ->pluck('last_activity', 'user_id');
+
+        // A first name that is an email address is a mailbox that was stored
+        // as a name. Correct it before the directory is drawn, so the panel
+        // shows Camila rather than camila.carvalho@firm.com.
+        User::query()
+            ->where('first_name', 'like', '%@%')
+            ->orderBy('id')
+            ->get()
+            ->each(fn (User $user) => PersonName::repair($user));
 
         $userModels = User::orderByDesc('created_at')->get();
         $workStatuses = WorkDay::publicStatusesForUsers($userModels);

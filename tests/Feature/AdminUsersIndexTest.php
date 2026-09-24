@@ -101,6 +101,30 @@ class AdminUsersIndexTest extends TestCase
         $this->assertSame('Galaxy', $users[$spAdmin->id]['serviceProviders'][0]['name']);
     }
 
+    public function test_a_service_provider_whose_first_name_is_their_email_is_shown_as_a_person(): void
+    {
+        $admin = $this->staff('Administrator');
+        $contact = User::factory()->create([
+            'status' => 'approved',
+            'account_type' => 'Client',
+            'email' => 'camila.carvalho@immigrantinvest.com',
+            'first_name' => 'camila.carvalho@immigrantinvest.com',
+            'last_name' => 'Carvalho',
+            'name' => 'camila.carvalho@immigrantinvest.com Carvalho',
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+        ]);
+
+        $users = collect($this->actingAs($admin)->getJson('/admin/users')->assertOk()->json('users'))
+            ->keyBy('id');
+
+        $this->assertSame('Camila', $users[$contact->id]['firstName']);
+        $this->assertSame('Carvalho', $users[$contact->id]['lastName']);
+        $this->assertSame('Camila Carvalho', $users[$contact->id]['name']);
+        $this->assertSame('Camila', $contact->fresh()->first_name);
+    }
+
     public function test_non_admin_staff_cannot_list_users(): void
     {
         // This table is the account administration: every account's status and

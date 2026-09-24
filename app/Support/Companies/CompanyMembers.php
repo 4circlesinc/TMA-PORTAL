@@ -12,6 +12,7 @@ use App\Support\Cip\Pages;
 use App\Support\Clients\ClientDirectory;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Invitations\Invitations;
+use App\Support\People\PersonName;
 use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
 use App\Support\Messaging\ClientConversations;
@@ -160,11 +161,14 @@ final class CompanyMembers
         $created = false;
         if ($client === null) {
             $name = $member->displayName();
+            $parts = PersonName::split($name, $email);
+            if (PersonName::looksLikeEmail($name) && $parts['first'] !== '') {
+                $name = trim(implode(' ', array_filter([$parts['first'], $parts['middle'], $parts['last']])));
+            }
             $uidBase = Str::slug($name) ?: ($emailKey ? Str::slug(Str::before($emailKey, '@')) : 'contact');
             $uid = self::uniqueClientUid($uidBase !== '' ? $uidBase : 'contact');
-            $parts = preg_split('/\s+/', trim($name)) ?: [];
-            $first = $parts[0] ?? $name;
-            $last = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
+            $first = $parts['first'] !== '' ? $parts['first'] : $name;
+            $last = $parts['last'];
 
             $client = Client::create([
                 'uid' => $uid,
@@ -206,8 +210,26 @@ final class CompanyMembers
                 $patch['email'] = $email;
             }
             // Rows created from an invite often kept the mailbox as `name`.
-            // Once we know the person, prefer their real label.
+            // Once we know the person, prefer their real label. An address is
+            // not a label: camila.carvalho@firm.com is Camila Carvalho.
             $display = $member->displayName();
+            if (PersonName::looksLikeEmail($display)) {
+                $parsed = PersonName::split($display, $email);
+                $human = trim(implode(' ', array_filter([$parsed['first'], $parsed['middle'], $parsed['last']])));
+                if ($human !== '') {
+                    $display = $human;
+                }
+            }
+            $profile = $client->data ?? [];
+            $profileFirst = trim((string) ($profile['firstName'] ?? ''));
+            if (PersonName::looksLikeEmail($profileFirst)) {
+                $parsed = PersonName::split($profileFirst, $email ?: $profileFirst);
+                $profile['firstName'] = $parsed['first'];
+                if (trim((string) ($profile['lastName'] ?? '')) === '' && $parsed['last'] !== '') {
+                    $profile['lastName'] = $parsed['last'];
+                }
+                $patch['data'] = $profile;
+            }
             $stored = trim((string) $client->name);
             $emailKeyStored = strtolower(trim((string) ($client->email ?? '')));
             if ($display !== '' && $display !== $stored
