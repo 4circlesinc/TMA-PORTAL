@@ -82,11 +82,12 @@ html, body { margin: 0; min-height: 100%; }
   align-items: start;
 }
 
+/* Stick to the viewport under the top bar while the policy scrolls. */
 .tma-legal__side {
   position: sticky;
-  top: 88px;
-  max-height: calc(100vh - 104px);
-  overflow: auto;
+  top: 72px;
+  align-self: start;
+  z-index: 5;
 }
 
 .tma-legal__side .tma-legal__toc {
@@ -305,6 +306,14 @@ html, body { margin: 0; min-height: 100%; }
 }
 
 /* ─── Responsive ─── */
+
+html:has(.tma-legal),
+html:has(.tma-legal) body {
+  /* overflow-x: hidden on the shared theme creates a scroll container that
+     stops position: sticky. clip keeps horizontal spill off the page without
+     that side effect. */
+  overflow-x: clip;
+}
 
 @media (prefers-reduced-motion: no-preference) {
   html:has(.tma-legal) { scroll-behavior: smooth; }
