@@ -137,6 +137,7 @@ final class NotificationType
         'account.pending' => ['module' => 'account',  'level' => Notification::LEVEL_APPROVAL, 'icon' => 'UserCirclePlus', 'priority' => 'high',   'pref' => 'approvals', 'action_label' => 'Review Account'],
         'account.approved' => ['module' => 'account',  'level' => Notification::LEVEL_SUCCESS,  'icon' => 'CheckCircle',    'priority' => 'normal', 'pref' => 'approvals', 'action_label' => null],
         'account.denied' => ['module' => 'account',  'level' => Notification::LEVEL_ERROR,    'icon' => 'Xcircle',        'priority' => 'normal', 'pref' => 'approvals', 'action_label' => null],
+        'account.erased' => ['module' => 'account',  'level' => Notification::LEVEL_SECURITY, 'icon' => 'UserCircleMinus', 'priority' => 'high',   'pref' => 'security',  'action_label' => null],
         'security.password_changed' => ['module' => 'security', 'level' => Notification::LEVEL_SECURITY, 'icon' => 'Password',       'priority' => 'high',   'pref' => 'security',  'action_label' => 'Review security activity'],
         'security.new_login' => ['module' => 'security', 'level' => Notification::LEVEL_SECURITY, 'icon' => 'SignIn',         'priority' => 'normal', 'pref' => 'security',  'action_label' => 'Review security activity'],
         'security.suspicious_login' => ['module' => 'security', 'level' => Notification::LEVEL_SECURITY, 'icon' => 'ShieldWarning',  'priority' => 'urgent', 'pref' => 'security',  'action_label' => 'Review security activity'],

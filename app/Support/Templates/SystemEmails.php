@@ -415,6 +415,21 @@ class SystemEmails
                     'body' => "An administrator has closed the {{site}} account for **{{email}}**. You will no longer be able to sign in, and the files, messages and calendars shared with you are no longer available.\n\nIf this is unexpected, or you need anything you had stored there, reply to this email or contact us at support@tmantoinelaw.com.",
                 ],
             ],
+            'account-erased' => [
+                'name' => 'Account erased',
+                'category' => 'Account',
+                'when' => 'Sent when someone erases their own account from Settings → Privacy.',
+                'variables' => $name + $email,
+                'sample' => ['name' => 'Ada', 'email' => 'ada@example.com'],
+                'copy' => [
+                    'subject' => 'Your account has been erased',
+                    'preheader' => 'Your portal login has been erased.',
+                    'eyebrow' => 'Privacy',
+                    'greeting' => self::HI_OR_HELLO,
+                    'title' => 'Your account has been erased',
+                    'body' => "You asked us to erase the {{site}} account for **{{email}}**. Your login, profile, sessions, and connected Google or Microsoft access have been removed.\n\nFiles, messages, signatures, and citizenship records that we have to keep for the matter stay on file, with your name taken off the account itself. This email is the confirmation of that request.\n\nIf you did not ask for this, contact us at support@tmantoinelaw.com.",
+                ],
+            ],
         ];
     }
 

@@ -30,6 +30,31 @@ class ConnectedAccount extends Model
         return $this->belongsTo(User::class);
     }
 
+    protected static function booted(): void
+    {
+        // A restriction stops optional sync even if a screen tries to turn it
+        // back on. The person lifts the restriction from Settings → Privacy.
+        static::saving(function (ConnectedAccount $account): void {
+            if (! $account->user_id) {
+                return;
+            }
+
+            $restricted = User::query()
+                ->whereKey($account->user_id)
+                ->whereNotNull('processing_restricted_at')
+                ->exists();
+
+            if (! $restricted) {
+                return;
+            }
+
+            $account->sync_email = false;
+            $account->sync_calendar = false;
+            $account->sync_onedrive = false;
+            $account->sync_sharepoint = false;
+        });
+    }
+
     /**
      * A killed SyncMailbox run leaves mail_status = syncing forever. The
      * incremental pass is capped at two minutes, so anything still flagged

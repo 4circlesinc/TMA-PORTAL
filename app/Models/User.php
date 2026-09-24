@@ -6,6 +6,7 @@ use App\Listeners\RecordAuthEvent;
 use App\Notifications\PortalResetPassword;
 use App\Notifications\PortalVerifyEmail;
 use App\Support\Access\Role;
+use App\Support\Messaging\MessagingSettings;
 use App\Support\SecurityPolicies;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -88,6 +89,8 @@ class User extends Authenticatable implements MustVerifyEmail
             'password' => 'hashed',
             'preferences' => 'array',
             'require_two_factor' => 'boolean',
+            'privacy_policy_accepted_at' => 'datetime',
+            'processing_restricted_at' => 'datetime',
         ];
     }
 
@@ -148,7 +151,7 @@ class User extends Authenticatable implements MustVerifyEmail
      * that reads every account paid to decode it on every poll.
      *
      * The value still arrives shaped like `preferences`, so
-     * {@see \App\Support\Messaging\MessagingSettings::for()} and anything
+     * {@see MessagingSettings::for()} and anything
      * else reading that key works unchanged — it simply cannot see the keys
      * that were not asked for. Do not use this on a query whose rows are
      * going to be saved: what is loaded is what would be written back.

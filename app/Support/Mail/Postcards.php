@@ -167,6 +167,17 @@ class Postcards
         return self::postcard('account-deleted', ['name' => $name, 'email' => $email]);
     }
 
+    /**
+     * The person erased their own login from Settings → Privacy.
+     *
+     * Sent to the address they had, after the account is closed, because
+     * they can no longer open the portal to read a bell notification.
+     */
+    public static function accountErased(string $email, ?string $name = null): Postcard
+    {
+        return self::postcard('account-erased', ['name' => $name, 'email' => $email]);
+    }
+
     public static function newLogin(array $details, string $reviewUrl): Postcard
     {
         return self::postcard('new-login', ['url' => $reviewUrl], [

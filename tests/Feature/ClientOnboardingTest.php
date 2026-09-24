@@ -8,6 +8,7 @@ use App\Models\ClientAssignment;
 use App\Models\OnboardingProgress;
 use App\Models\User;
 use App\Support\Onboarding\ClientFlow;
+use App\Support\Privacy\PrivacyPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Mail;
@@ -418,6 +419,8 @@ class ClientOnboardingTest extends TestCase
         $this->assertSame('+1 758 555 0101', $user->phone);
         $this->assertNotNull($user->onboarding_completed_at);
         $this->assertNotNull($user->profile_completed_at);
+        $this->assertNotNull($user->privacy_policy_accepted_at);
+        $this->assertSame(PrivacyPolicy::VERSION, $user->privacy_policy_version);
 
         $profile = $client->fresh()->data;
         $this->assertSame('Dana', $profile['firstName']);

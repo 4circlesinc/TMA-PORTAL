@@ -14,6 +14,7 @@ use App\Support\Notifications\Notifier;
 use App\Support\Onboarding\AccountSetupFlow;
 use App\Support\Onboarding\ClientFlow;
 use App\Support\Onboarding\ClientProfile;
+use App\Support\Privacy\PrivacyPolicy;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -76,6 +77,10 @@ class ClientOnboardingController extends Controller
             ClientFlow::rules($step),
             ClientFlow::messages($step),
         );
+
+        if ($step === 'terms') {
+            PrivacyPolicy::recordAcceptance($user);
+        }
 
         if ($step === 'you') {
             if ($request->hasFile('photo')) {

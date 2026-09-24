@@ -204,7 +204,7 @@
       profileInnerDivider() +
       renderRow({
         label: 'Delete my account',
-        desc: 'Permanently delete the account and remove access from all devices.',
+        desc: 'Close your login and erase your profile. Matter records we must keep stay on file.',
         danger: true,
         action: 'delete-account',
         value: '',
@@ -1701,7 +1701,46 @@
         valueMuted: true,
       }) +
       renderPicker('history', '33319:118350', HISTORY_DAYS, prefs.historyDays) +
-      '</div></section>';
+      '</div>' +
+      profileInnerDivider() +
+      renderPrivacyRights() +
+      '</section>';
+  }
+
+  function renderPrivacyRights() {
+    return '<h2 class="tma-dash__settings-section-title">Your information</h2>' +
+      '<div class="tma-dash__account-settings-callout">' +
+        '<div class="tma-dash__account-settings-callout-copy">' +
+          '<p class="tma-dash__account-settings-callout-title">Download your data</p>' +
+          '<p class="tma-dash__account-settings-callout-desc">A copy of your account, settings, sign-ins, and the names of files you uploaded. Matter documents stay in the portal. Correct your name, email, or phone from Profile.</p>' +
+        '</div>' +
+        '<button type="button" class="tma-dash__account-settings-callout-btn" data-privacy-export>Download</button>' +
+      '</div>' +
+      '<div class="tma-dash__account-settings-callout" style="margin-top:12px">' +
+        '<div class="tma-dash__account-settings-callout-copy">' +
+          '<p class="tma-dash__account-settings-callout-title">Limit optional processing</p>' +
+          '<p class="tma-dash__account-settings-callout-desc">Stops Google and Microsoft sync and the extra email copy of notifications. Your account and any matter we are handling stay in place. <a href="/privacy-policy">Privacy Policy</a></p>' +
+        '</div>' +
+        '<button type="button" class="tma-dash__account-settings-callout-btn" data-privacy-restrict>Limit</button>' +
+      '</div>' +
+      '<div class="tma-dash__account-settings-callout" style="margin-top:12px">' +
+        '<div class="tma-dash__account-settings-callout-copy">' +
+          '<p class="tma-dash__account-settings-callout-title">Erase your account</p>' +
+          '<p class="tma-dash__account-settings-callout-desc">Closes your login and removes your profile, sessions, and connected accounts. Files, messages, and citizenship records we must keep stay on the matter.</p>' +
+        '</div>' +
+        '<button type="button" class="tma-dash__account-settings-btn tma-dash__account-settings-btn--danger" data-privacy-erasure-open>Erase</button>' +
+      '</div>' +
+      '<div data-privacy-erasure hidden style="margin-top:12px">' +
+        '<p class="tma-dash__settings-row-desc">Type DELETE to erase this account. You will be signed out.</p>' +
+        '<label class="tma-dash__settings-field" style="margin-top:8px">' +
+          '<input class="tma-dash__settings-field-input tma-dash__settings-field-input--solo" data-privacy-erasure-phrase autocomplete="off" aria-label="Type DELETE to confirm">' +
+        '</label>' +
+        '<div class="tma-dash__account-settings-actions" style="margin-top:8px">' +
+          '<button type="button" class="tma-dash__account-settings-btn tma-dash__account-settings-btn--danger" data-privacy-erasure-submit>Erase my account</button>' +
+          '<button type="button" class="tma-dash__account-settings-btn" data-privacy-erasure-cancel>Cancel</button>' +
+        '</div>' +
+      '</div>' +
+      '<p class="tma-dash__settings-row-desc" data-privacy-status role="status" style="margin-top:8px"></p>';
   }
 
   /* The four messaging privacy controls are stored with the other messaging
@@ -1802,6 +1841,127 @@
     });
 
     syncPrivacyPanelUI(root);
+    bindPrivacyRights(root);
+  }
+
+  function privacyStatus(root, message) {
+    var el = root.querySelector('[data-privacy-status]');
+    if (el) el.textContent = message || '';
+  }
+
+  function bindPrivacyRights(root) {
+    if (root.dataset.privacyRightsBound) return;
+    root.dataset.privacyRightsBound = '1';
+
+    fetch('/me/privacy', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      if (d) setRestrictionLabel(root, !!d.restricted);
+    }).catch(function () {});
+
+    var download = root.querySelector('[data-privacy-export]');
+    if (download) {
+      download.addEventListener('click', function () {
+        privacyStatus(root, 'Preparing your download…');
+        fetch('/me/privacy/export', {
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        }).then(function (r) {
+          if (!r.ok) throw new Error('download failed');
+          return r.blob();
+        }).then(function (blob) {
+          var link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = 'tma-personal-data.json';
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          privacyStatus(root, 'Your download has started.');
+        }).catch(function () {
+          privacyStatus(root, 'The download did not start. Try again, or email portal@tmantoinelaw.com.');
+        });
+      });
+    }
+
+    var restrict = root.querySelector('[data-privacy-restrict]');
+    if (restrict) {
+      restrict.addEventListener('click', function () {
+        var lifting = restrict.getAttribute('data-restricted') === '1';
+        privacyStatus(root, lifting ? 'Resuming optional processing…' : 'Limiting optional processing…');
+        fetch('/me/privacy/restriction', {
+          method: lifting ? 'DELETE' : 'POST',
+          credentials: 'same-origin',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'X-XSRF-TOKEN': csrfToken(),
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+        }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+          if (!d) {
+            privacyStatus(root, 'That did not save. Try again.');
+            return;
+          }
+          setRestrictionLabel(root, !!d.restricted);
+          privacyStatus(root, d.restricted
+            ? 'Optional sync is stopped. Matters we are already handling continue.'
+            : 'Optional processing can be turned on again from your connected accounts.');
+        }).catch(function () {
+          privacyStatus(root, 'That did not save. Try again.');
+        });
+      });
+    }
+
+    var openErase = root.querySelector('[data-privacy-erasure-open]');
+    var eraseBox = root.querySelector('[data-privacy-erasure]');
+    var cancelErase = root.querySelector('[data-privacy-erasure-cancel]');
+    var submitErase = root.querySelector('[data-privacy-erasure-submit]');
+    if (openErase && eraseBox) {
+      openErase.addEventListener('click', function () { eraseBox.hidden = false; });
+    }
+    if (cancelErase && eraseBox) {
+      cancelErase.addEventListener('click', function () { eraseBox.hidden = true; });
+    }
+    if (submitErase) {
+      submitErase.addEventListener('click', function () {
+        var phrase = root.querySelector('[data-privacy-erasure-phrase]');
+        var confirm = phrase ? phrase.value.trim() : '';
+        privacyStatus(root, 'Erasing your account…');
+        fetch('/me/privacy/erasure', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'X-XSRF-TOKEN': csrfToken(),
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          body: JSON.stringify({ confirm: confirm }),
+        }).then(function (r) {
+          return r.json().then(function (body) { return { ok: r.ok, body: body }; });
+        }).then(function (result) {
+          if (!result.ok) {
+            var errors = result.body && result.body.errors;
+            var message = errors && errors.confirm && errors.confirm[0];
+            if (!message && errors && errors.account) message = errors.account[0];
+            privacyStatus(root, message || 'The account was not erased.');
+            return;
+          }
+          privacyStatus(root, 'Your login is closed. Matter records we must keep stay on file. Signing you out…');
+          window.setTimeout(function () { window.location.href = '/auth/login'; }, 1600);
+        }).catch(function () {
+          privacyStatus(root, 'The account was not erased. Try again.');
+        });
+      });
+    }
+  }
+
+  function setRestrictionLabel(root, restricted) {
+    var button = root.querySelector('[data-privacy-restrict]');
+    if (!button) return;
+    button.textContent = restricted ? 'Resume' : 'Limit';
+    button.setAttribute('data-restricted', restricted ? '1' : '0');
   }
 
   function renderPaymentCard(opts) {
@@ -4681,9 +4841,35 @@
         if (input) input.focus();
         return;
       }
-      closePopups(root);
-      showToast(root, 'Your account has been deleted.');
-      form.reset();
+      var submit = form.querySelector('[data-delete-account-submit]');
+      if (submit) submit.disabled = true;
+      fetch('/me/privacy/erasure', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-XSRF-TOKEN': csrfToken(),
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({ confirm: 'DELETE' }),
+      }).then(function (r) {
+        return r.json().then(function (body) { return { ok: r.ok, body: body }; });
+      }).then(function (result) {
+        if (!result.ok) {
+          var errors = result.body && result.body.errors;
+          var message = errors && errors.account && errors.account[0];
+          showToast(root, message || 'The account was not erased.');
+          if (submit) submit.disabled = false;
+          return;
+        }
+        closePopups(root);
+        showToast(root, 'Your login is closed. Matter records we must keep stay on file.');
+        window.setTimeout(function () { window.location.href = '/auth/login'; }, 1600);
+      }).catch(function () {
+        showToast(root, 'The account was not erased. Try again.');
+        if (submit) submit.disabled = false;
+      });
     });
   }
 

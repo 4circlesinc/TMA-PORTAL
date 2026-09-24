@@ -6,6 +6,7 @@ use App\Models\Invitation;
 use App\Support\Clients\ClientHubSettings;
 use App\Support\Invitations\Invitations;
 use App\Support\Mail\Postcards;
+use App\Support\Privacy\PrivacyPolicy;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -103,6 +104,8 @@ class InvitationAcceptController extends Controller
             'middle_name' => $data['middle_name'] ?? null,
             'last_name' => $data['last_name'],
         ]);
+
+        PrivacyPolicy::recordAcceptance($user);
 
         Auth::login($user);
         $request->session()->regenerate();
