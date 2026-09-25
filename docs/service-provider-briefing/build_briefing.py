@@ -66,6 +66,51 @@ def prepare_assets():
     subprocess.check_call([sys.executable, str(ROOT / "make_charts.py")])
 
 
+COVER_JPG = ASSETS / "cover-service-provider-guide.jpg"
+
+
+def replace_cover(path: Path):
+    """Swap the series template cover for the Service Provider Guide cover.
+
+    The cover is the first full-page image in document order (r:embed order),
+    not whichever JPEG happens to be largest on disk.
+    """
+    if not COVER_JPG.exists():
+        raise SystemExit(f"Cover missing: {COVER_JPG}")
+    cover_bytes = COVER_JPG.read_bytes()
+    tmp = path.with_suffix(".cover.docx")
+    with zipfile.ZipFile(path, "r") as zin:
+        doc_xml = zin.read("word/document.xml").decode("utf-8", errors="ignore")
+        embeds = re.findall(r'r:embed="(rId[^"]+)"', doc_xml)
+        rels = zin.read("word/_rels/document.xml.rels").decode("utf-8", errors="ignore")
+        rid_to_target: dict[str, str] = {}
+        for m in re.finditer(r'<Relationship\b[^>]*>', rels):
+            tag = m.group(0)
+            rid_m = re.search(r'\bId="(rId[^"]+)"', tag)
+            tgt_m = re.search(r'\bTarget="(media/[^"]+)"', tag)
+            if rid_m and tgt_m:
+                rid_to_target[rid_m.group(1)] = tgt_m.group(1)
+
+        cover_name = None
+        for rid in embeds:
+            target = rid_to_target.get(rid)
+            if not target:
+                continue
+            if target.lower().endswith((".jpeg", ".jpg", ".png")):
+                cover_name = "word/" + target
+                break
+        if cover_name is None:
+            raise SystemExit("No cover image found in document order")
+        print("replacing cover", cover_name)
+        with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:
+            for item in zin.infolist():
+                if item.filename == cover_name:
+                    zout.writestr(item, cover_bytes)
+                else:
+                    zout.writestr(item, zin.read(item.filename))
+    tmp.replace(path)
+
+
 def resolve_template() -> Path:
     if g.TEMPLATE.exists():
         return g.TEMPLATE
@@ -88,18 +133,28 @@ def prune_unused_media(path: Path):
     """Drop media parts no longer referenced after strip_template_body."""
     with zipfile.ZipFile(path, "r") as zin:
         names = zin.namelist()
-        referenced: set[str] = set()
+        # Relationship Id -> media path
+        rel_targets: dict[str, str] = {}
+        used_rids: set[str] = set()
         for name in names:
-            if not (name.endswith(".rels") or name.endswith(".xml")):
-                continue
-            text = zin.read(name).decode("utf-8", errors="ignore")
-            for m in re.findall(r'Target="(media/[^"]+)"', text):
-                referenced.add("word/" + m)
-            for m in re.findall(r"word/media/[A-Za-z0-9._-]+", text):
-                referenced.add(m)
+            data = zin.read(name).decode("utf-8", errors="ignore")
+            if name.endswith(".rels"):
+                for rid, target in re.findall(
+                    r'Id="(rId[^"]+)"[^>]*Target="(media/[^"]+)"', data
+                ):
+                    rel_targets[rid] = "word/" + target
+                # also Target before Id
+                for target, rid in re.findall(
+                    r'Target="(media/[^"]+)"[^>]*Id="(rId[^"]+)"', data
+                ):
+                    rel_targets[rid] = "word/" + target
+            if name.endswith(".xml"):
+                used_rids.update(re.findall(r'r:embed="(rId[^"]+)"', data))
+                used_rids.update(re.findall(r'r:link="(rId[^"]+)"', data))
 
+        keep = {rel_targets[rid] for rid in used_rids if rid in rel_targets}
         media = [n for n in names if n.startswith("word/media/")]
-        drop = [n for n in media if n not in referenced]
+        drop = [n for n in media if n not in keep]
         if not drop:
             return
         tmp = path.with_suffix(".pruned.docx")
@@ -107,9 +162,38 @@ def prune_unused_media(path: Path):
             for item in zin.infolist():
                 if item.filename in drop:
                     continue
-                zout.writestr(item, zin.read(item.filename))
+                # also drop orphan relationship entries
+                if item.filename.endswith(".rels"):
+                    text = zin.read(item.filename).decode("utf-8")
+                    for rid, target in list(rel_targets.items()):
+                        if target in drop and rid not in used_rids:
+                            text = re.sub(
+                                rf'<Relationship[^>]*Id="{re.escape(rid)}"[^>]*/>',
+                                "",
+                                text,
+                            )
+                            text = re.sub(
+                                rf'<Relationship[^>]*Target="media/{re.escape(target.split("/")[-1])}"[^>]*/>',
+                                "",
+                                text,
+                            )
+                    zout.writestr(item, text.encode("utf-8"))
+                else:
+                    zout.writestr(item, zin.read(item.filename))
         tmp.replace(path)
-        print("pruned unused media:", len(drop))
+        print("pruned unused media:", len(drop), [d.split("/")[-1] for d in drop])
+
+
+def append_thankyou_after_section(doc, thankyou):
+    """Append the thank-you page. Section break already starts a new page."""
+    if thankyou is None:
+        return
+    body = doc.element.body
+    sect = body.find(qn("w:sectPr"))
+    if sect is not None:
+        sect.addprevious(thankyou)
+    else:
+        body.append(thankyou)
 
 
 def bookmark_name(index: int) -> str:
@@ -401,8 +485,12 @@ def assemble(pages: dict[str, int] | None, template: Path):
         ),
     )
 
-    next_page_section(doc)
-    g.append_thankyou(doc, thankyou)
+    # Thank-you starts on its own page (one break only — no blank page).
+    p = doc.add_paragraph(style="Default")
+    g.p_fmt(p, before=0, after=0)
+    run = p.add_run()
+    run.add_break(WD_BREAK.PAGE)
+    append_thankyou_after_section(doc, thankyou)
     add_content_footer(doc)
     if len(doc.sections) > 2:
         close = doc.sections[2]
@@ -415,6 +503,7 @@ def assemble(pages: dict[str, int] | None, template: Path):
     doc.save(str(OUT))
     g.force_fonts_in_package(OUT)
     prune_unused_media(OUT)
+    replace_cover(OUT)
 
 
 def build():

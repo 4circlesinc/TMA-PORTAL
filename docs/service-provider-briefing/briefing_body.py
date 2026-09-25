@@ -57,7 +57,7 @@ def write_briefing(doc, h):
         doc,
         "chart-access.png",
         "Figure 1. The four account types. Service-provider firms use the first two.",
-        width=6.45,
+        width=6.0,
     )
     add_table(
         doc,
@@ -87,7 +87,7 @@ def write_briefing(doc, h):
         doc,
         "chart-account-flow.png",
         "Figure 2. Invitation, acceptance, then TM ANTOINE approval. The last step is required.",
-        width=6.45,
+        width=6.0,
     )
     add_body(
         doc,
@@ -108,13 +108,13 @@ def write_briefing(doc, h):
         doc,
         "02-login-options.png",
         "Figure 3. Sign-in on portal.tmantoinelaw.com. Use the live host, not a look-alike.",
-        width=5.8,
+        width=5.4,
     )
     add_image(
         doc,
         "03-login-code.png",
         "Figure 4. A six-digit email code. Codes are never asked for by chat, and support will never request yours.",
-        width=5.8,
+        width=5.4,
     )
     add_h2(doc, "Authenticator app — required after this webinar")
     add_body(
@@ -125,7 +125,7 @@ def write_briefing(doc, h):
         doc,
         "28-two-step.png",
         "Figure 5. Settings → Account Security. Connect Authenticator app, then keep the recovery codes in a safe place that is not email.",
-        width=6.2,
+        width=5.6,
     )
     add_bullets(
         doc,
@@ -172,14 +172,14 @@ def write_briefing(doc, h):
         doc,
         "chart-layers.png",
         "Figure 6. Six layers. None of them is enough on its own.",
-        width=6.45,
+        width=6.0,
     )
     add_h2(doc, "Encryption, in ordinary words")
     add_image(
         doc,
         "chart-encryption.png",
         "Figure 7. Four places encryption does work you can explain to a client.",
-        width=6.45,
+        width=6.0,
     )
     add_body(
         doc,
@@ -302,7 +302,7 @@ def write_briefing(doc, h):
         doc,
         "11-messages.png",
         "Figure 9. Built-in Messages. You can write to TM ANTOINE administrators from inside the portal when you can still sign in.",
-        width=6.2,
+        width=5.6,
     )
     add_body(
         doc,
