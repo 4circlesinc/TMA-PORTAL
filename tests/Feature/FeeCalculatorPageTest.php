@@ -45,6 +45,7 @@ class FeeCalculatorPageTest extends TestCase
 
             $this->assertStringContainsString('data-nav="calculator"', $html, $accountType.' should see the menu row');
             $this->assertStringContainsString('data-view="calculator"', $html, $accountType.' should get the view host');
+            $this->assertStringContainsString('Real Estate Fee Calculator', $html, $accountType.' should see the Real Estate label');
         }
     }
 

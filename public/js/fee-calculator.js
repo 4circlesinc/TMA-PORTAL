@@ -93,9 +93,10 @@
       '</div>';
   }
 
-  /* The firm's own notes, word for word. */
+  /* The firm's own notes, word for word, scoped to Real Estate. */
   function feeStructure() {
     return '<ul>' +
+      '<li>For the Real Estate investment option only. Admin fees for other investment options are calculated differently.</li>' +
       '<li>Applying Alone: Admin Fee = US ' + money(BASE_ALONE) + '</li>' +
       '<li>Applying With Spouse: Admin Fee = US ' + money(BASE_WITH_SPOUSE) + '</li>' +
       '<li>Dependants (up to 4): Under 18 - ' + money(FEE_UNDER_18) + ' each &middot; 18 and Over - ' + money(FEE_18_AND_OVER) + ' each</li>' +
@@ -130,11 +131,11 @@
       ui().section('Total',
         '<div class="fee-calc__lines" data-fee-lines></div>' +
         '<div class="fee-calc__total">' +
-        '<span class="fee-calc__total-label">Total admin fee</span>' +
+        '<span class="fee-calc__total-label">Total Real Estate admin fee</span>' +
         '<span class="fee-calc__total-amount" data-fee-total>' + money(BASE_ALONE) + '</span>' +
         '</div>' +
-        '<p class="tma-portal-note">Estimates only.</p>') +
-      ui().section('Fee Structure Notes', feeStructure());
+        '<p class="tma-portal-note">Estimates only. Real Estate investment option.</p>') +
+      ui().section('Real Estate Fee Structure Notes', feeStructure());
 
     // The questions on the left, the answer on the right; one column on a
     // phone, questions first.

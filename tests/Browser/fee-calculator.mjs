@@ -155,10 +155,10 @@ try {
   await openByUrl();
   check(new URL(page.url()).pathname === '/calculator', `stays at /calculator (${page.url()})`);
   const row = page.locator('.tma-dash__nav-item[data-nav="calculator"]');
-  check(await row.count() === 1, 'the sidebar carries the Fee Calculator row');
+  check(await row.count() === 1, 'the sidebar carries the Real Estate Fee Calculator row');
   check(await row.isVisible(), 'the row is visible to a client');
   check((await row.getAttribute('class') || '').includes('tma-dash__nav-item--active'), 'the row is marked active');
-  check((await page.locator('[data-page-title]').innerText()).trim() === 'Fee Calculator', 'the header names the page');
+  check((await page.locator('[data-page-title]').innerText()).trim() === 'Real Estate Fee Calculator', 'the header names the page');
   check(await page.locator('.tma-portal-head__title').count() === 0, 'the page does not repeat its title');
   const iconMask = await row.locator('.tma-dash__nav-icon').evaluate((el) => getComputedStyle(el).maskImage || getComputedStyle(el).webkitMaskImage);
   check(/data:image\/svg\+xml/.test(iconMask), 'the row icon resolves to inlined artwork');
