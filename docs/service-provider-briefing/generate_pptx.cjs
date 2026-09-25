@@ -592,8 +592,8 @@ function dataTable(s, headers, rows, y, colW, x) {
     ["Question", "Answer"],
     [
       [
-        "GDPR?",
-        "The portal complies with the GDPR where it applies: DPA, SCCs where right, processors listed, retention/deletion, breach notice.",
+        "GDPR compliant?",
+        "Yes. Where GDPR applies: lawful processing, access/deletion rights, secure storage, access controls, audit logging, retention, transfer safeguards. Privacy Policy on the live portal.",
       ],
       ["DPA", "Yes — pending review by our legal team. Your paper or ours."],
       [
@@ -610,7 +610,7 @@ function dataTable(s, headers, rows, y, colW, x) {
         "portal.tmantoinelaw.com/privacy-policy/ and /terms-of-service/. Accepted before work starts.",
       ],
       ["Sub-processors", "AWS / Laravel Cloud (USA), Cloudflare including R2, Microsoft 365 / SharePoint."],
-      ["Breach", "Playbook being finalised. Confirmed incidents: notify affected firms without delay."],
+      ["Breach", "Confirmed incidents: notify affected firms without delay."],
       ["Staff leaving", "Your admin removes them that day. TM ANTOINE is notified, and still approves every new account."],
     ],
     1.0,

@@ -109,7 +109,7 @@ SECTION = [
     ("b", "Never send a sign-in code or an authenticator code."),
 
     ("h2", "Legal and data — if asked"),
-    ("b", "The portal complies with the GDPR where it applies: DPA, SCCs where right, documented processors, retention and deletion, and breach notice."),
+    ("b", "GDPR: yes — where it applies, GDPR-aligned practices (lawful processing, access and deletion rights, secure storage, access controls, audit logging, retention, transfer safeguards). Privacy Policy on the live portal."),
     ("b", "Host: Laravel Cloud on Amazon Web Services, United States, plus Cloudflare."),
     ("b", "Encrypted in transit, at rest, and at field level for passport numbers and dates of birth."),
     ("b", "Company members see every application for the company, not only their own."),
@@ -120,7 +120,7 @@ SECTION = [
     ("b", "We send onwards only what the Citizenship by Investment Unit, NIC and Immigration need — same practice as before the portal."),
     ("b", "We keep the file unless the applicant asks us to delete it after the case is closed."),
     ("b", "Other processors: AWS, Cloudflare (including file storage), Microsoft 365 / SharePoint."),
-    ("b", "If personal data is breached, we tell affected firms without delay. The written playbook is being finished."),
+    ("b", "If personal data is breached, we tell affected firms without delay."),
 
     ("h2", "Certification — say this plainly"),
     ("b", "ISO 27001 and SOC 2: we are working on them now. We do not hold them yet."),

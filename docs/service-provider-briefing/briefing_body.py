@@ -336,12 +336,8 @@ def write_briefing(doc, h):
         ["Question", "Answer"],
         [
             [
-                "The invitation mentioned support@tmantoine.com, while the portal is on tmantoinelaw.com. How are the domains related?",
-                "One firm. portal.tmantoinelaw.com and portal@tmantoinelaw.com are live. support@tmantoine.com was used for staging. Use support@tmantoinelaw.com from now on.",
-            ],
-            [
                 "Is the portal built in-house, or a licensed / white-label platform? If the latter, who is the vendor?",
-                "Built in-house by TM ANTOINE. There is no underlying portal vendor to name.",
+                "Built in-house by TM ANTOINE Advisory. There is no underlying portal vendor to name.",
             ],
         ],
         col_twips=[3600, 6840],
@@ -405,17 +401,13 @@ def write_briefing(doc, h):
     )
 
     add_h2(doc, "3. Data protection and GDPR")
-    add_body(
-        doc,
-        "The portal is built to comply with the GDPR where it applies to personal data processed through it. The questions below are the ones we expect on your compliance file: what is in place, what we will contract for, and what is still being written down.",
-    )
     add_table(
         doc,
         ["Question", "Answer"],
         [
             [
-                "Does the portal comply with the GDPR?",
-                "Yes. Where the GDPR (or a similar regime) applies to personal data in the portal, processing is supported by a DPA, Standard Contractual Clauses where they are the right tool, documented sub-processors, retention and deletion on request, and breach notification.",
+                "Are you GDPR compliant / certified?",
+                "Yes. Where GDPR applies, the portal follows GDPR-aligned privacy and data-protection practices, including lawful processing, data access and deletion rights, secure storage, access controls, audit logging, retention controls, and appropriate safeguards for international data transfers. View our Privacy Policy: https://portal.tmantoinelaw.com/privacy-policy/",
             ],
             [
                 "Will TM ANTOINE sign a Data Processing Agreement covering data processed through the portal?",
@@ -443,7 +435,7 @@ def write_briefing(doc, h):
             ],
             [
                 "Breach notification process and timeline?",
-                "The written playbook is being finalised. Detection is continuous (sign-in events, country, unusual download volume, malware, anomaly flags). If a breach of personal data is confirmed, we will notify affected firms without delay and will not wait for a newsletter cycle.",
+                "Detection is continuous (sign-in events, country, unusual download volume, malware, anomaly flags). If a breach of personal data is confirmed, we will notify affected firms without delay and will not wait for a newsletter cycle.",
             ],
         ],
         col_twips=[3600, 6840],
