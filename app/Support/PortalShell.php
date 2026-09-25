@@ -167,7 +167,7 @@ final class PortalShell
             return '';
         }
 
-        return '<script src="js/ui-lockdown.js?v=3"></script>'."\n  ";
+        return '<script src="js/ui-lockdown.js?v=4"></script>'."\n  ";
     }
 
     /**
