@@ -7,6 +7,9 @@ use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Cip\Notices;
 use App\Support\Cip\Status;
+use App\Support\Security\CountryList;
+use App\Support\Security\Detectors;
+use App\Support\Security\IpLocation;
 use App\Support\Templates\SystemEmails;
 use Illuminate\Support\HtmlString;
 
@@ -192,6 +195,12 @@ class Postcards
         if ($device = self::deviceLabel(request()?->userAgent())) {
             $details[] = ['Device', $device];
         }
+        if ($ip = request()?->ip()) {
+            $details[] = ['IP address', $ip];
+        }
+        if ($country = self::countryLabel(request()?->ip())) {
+            $details[] = ['Country', $country];
+        }
 
         $postcard = self::postcard('login-code', [
             'name' => $user->first_name ?: self::firstName($user->name),
@@ -202,6 +211,27 @@ class Postcards
         $postcard->skipSentItems = true;
 
         return $postcard;
+    }
+
+    /**
+     * English country name for a sign-in, when it can be known without
+     * blocking the request. Prefers the edge header; falls back to the
+     * cached IP lookup only when that header is missing.
+     */
+    private static function countryLabel(?string $ip): ?string
+    {
+        $code = Detectors::countryFromRequest();
+
+        if ($code === null) {
+            $location = IpLocation::lookup($ip);
+            $code = is_string($location['country'] ?? null) ? $location['country'] : null;
+        }
+
+        if (! is_string($code) || $code === '' || strtoupper($code) === 'XX') {
+            return null;
+        }
+
+        return CountryList::name($code);
     }
 
     /**

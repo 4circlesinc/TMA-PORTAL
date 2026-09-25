@@ -463,7 +463,12 @@ class SystemEmails
                 'sample' => ['name' => 'Ada'],
                 'sampleExtras' => [
                     'code' => '847291',
-                    'details' => [['When', '12 Aug 2026, 9:41 AM'], ['Device', 'Chrome on macOS']],
+                    'details' => [
+                        ['When', '12 Aug 2026, 9:41 AM'],
+                        ['Device', 'Chrome on macOS'],
+                        ['IP address', '203.0.113.40'],
+                        ['Country', 'Canada'],
+                    ],
                 ],
                 'copy' => [
                     'subject' => 'Your sign-in code',

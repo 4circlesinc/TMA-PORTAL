@@ -118,6 +118,31 @@ class EmailLoginCodeTest extends TestCase
         });
     }
 
+    public function test_the_sign_in_code_email_names_the_ip_and_country(): void
+    {
+        $user = $this->user();
+        $this->priorLogin($user);
+
+        Mail::fake();
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.40'])
+            ->withHeader('CF-IPCountry', 'CA')
+            ->withCookie(StaySignedIn::COOKIE, 'yes')
+            ->post('/auth/login', [
+                'email' => $user->email,
+                'password' => 'password',
+            ])
+            ->assertRedirect(route('login-code.show'));
+
+        Mail::assertSent(Postcard::class, function (Postcard $mail) {
+            $details = $mail->payload['details'] ?? [];
+            $rows = collect($details)->mapWithKeys(fn ($row) => [$row[0] => $row[1]]);
+
+            return $rows->get('IP address') === '203.0.113.40'
+                && $rows->get('Country') === 'Canada';
+        });
+    }
+
     public function test_the_code_screen_trusts_this_browser_by_default(): void
     {
         $user = $this->user();
