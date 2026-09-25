@@ -27,6 +27,7 @@
   <style>
     html, body { margin: 0; min-height: 100%; }
   </style>
+  @include('partials.ui-lockdown')
 </head>
 <body>
   <main class="tma-auth">

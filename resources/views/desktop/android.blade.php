@@ -22,6 +22,7 @@
       a.btn { background: #f2f2f2; color: #141414; }
     }
   </style>
+  @include('partials.ui-lockdown')
 </head>
 <body>
   <img class="logo" src="{{ asset('images/brand/tma/tma-logo-horizontal.png') }}" alt="TM ANTOINE Partners Advisory">

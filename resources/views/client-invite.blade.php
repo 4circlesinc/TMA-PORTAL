@@ -25,6 +25,7 @@
     .foot { margin: 20px 0 0; text-align: center; font-size: 12px; color: var(--muted); }
     .foot a { color: var(--blue); text-decoration: none; }
   </style>
+  @include('partials.ui-lockdown')
 </head>
 <body>
   <form class="card" method="POST" action="{{ url('/client-invite/'.$invite->token) }}">

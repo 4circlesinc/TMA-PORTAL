@@ -56,6 +56,7 @@
     p.sub { color:var(--muted); font-size:14px; line-height:22px; margin:0; }
     @yield('style')
   </style>
+  @include('partials.ui-lockdown')
 </head>
 <body>
   <div class="top">

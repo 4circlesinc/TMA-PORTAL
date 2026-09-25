@@ -33,6 +33,7 @@
     input[type=password]{ width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:10px; font:inherit; }
     .err { color:#d1242f; font-size:13px; margin-top:8px; }
   </style>
+  @include('partials.ui-lockdown')
 </head>
 <body>
   <div class="wrap">

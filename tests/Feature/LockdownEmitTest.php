@@ -49,4 +49,11 @@ class LockdownEmitTest extends TestCase
             ->assertOk()
             ->assertDontSee('js/ui-lockdown.js', false);
     }
+
+    public function test_the_sign_in_page_is_locked_for_a_signed_out_reader(): void
+    {
+        $this->get('/auth/login')
+            ->assertOk()
+            ->assertSee('/js/ui-lockdown.js', false);
+    }
 }
