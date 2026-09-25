@@ -265,15 +265,13 @@ html, body { margin: 0; min-height: 100%; }
 
 .tma-legal__section strong { font-weight: var(--font-weight-semibold); }
 
-/* ─── Callout (Google/Microsoft data, disclaimers) ─── */
-
+/* Emphasis block — same type as body copy, no boxed callout. */
 .tma-legal__note {
-  border: 1px solid var(--color-border-soft);
-  border-left: 3px solid var(--color-primary);
-  background: var(--color-bg-card);
-  border-radius: var(--radius-12);
-  padding: var(--space-20) var(--space-24);
-  margin: var(--space-24) 0;
+  margin: var(--space-16) 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: 0;
 }
 
 .tma-legal__note p:last-child { margin-bottom: 0; }
