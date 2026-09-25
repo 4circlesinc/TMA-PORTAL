@@ -1,9 +1,41 @@
 /**
- * Legal consent sheet: opening a document flips its switch on; Agree unlocks
- * once both are on. Not now dismisses and leaves the form's ticks unset.
- * No document content is embedded — links go to the real pages.
+ * Legal consent: opening a document flips its switch on; Agree unlocks once
+ * both are on. No document content is embedded — links go to the real pages.
+ *
+ * The answer lives in localStorage, so it is per browser and per device: a new
+ * browser, a new machine or cleared site data all ask again. Not now only
+ * dismisses for this page view; it is never remembered, so every later visit
+ * asks again until they agree.
+ *
+ * In the desktop and Android shells the same markup renders as a full white
+ * page rather than a docked banner.
  */
 (function () {
+  var STORE_KEY = 'tma.legalAccepted';
+
+  // Both shells expose this; the desktop one cannot be sniffed from the user
+  // agent because it presents as plain Chrome for OAuth.
+  function inApp() {
+    return !!(window.TMADesktop && window.TMADesktop.isDesktop);
+  }
+
+  function storedAgreement() {
+    try {
+      return window.localStorage.getItem(STORE_KEY) === '1';
+    } catch (e) {
+      // Private mode, blocked site data: fall back to asking every time.
+      return false;
+    }
+  }
+
+  function rememberAgreement() {
+    try {
+      window.localStorage.setItem(STORE_KEY, '1');
+    } catch (e) {
+      /* Nothing to do: they simply get asked again next visit. */
+    }
+  }
+
   function setup(root) {
     if (!root || root.dataset.legalBound) return;
     root.dataset.legalBound = '1';
@@ -25,6 +57,7 @@
 
     function openSheet() {
       if (sheet.parentElement !== document.body) {
+        if (fullPage) sheet.classList.add('tma-legal-consent__sheet--full');
         document.body.appendChild(sheet);
       }
       if (sheet.open) return;
@@ -69,6 +102,7 @@
       });
       root.classList.add('is-agreed');
       root.dataset.agreed = '1';
+      rememberAgreement();
       if (status) {
         status.textContent = 'You have agreed to the Terms of Service and Privacy Policy.';
       }
@@ -87,6 +121,9 @@
     // form, and the partial itself sits inside the hidden email form).
     var always = root.hasAttribute('data-legal-always');
 
+    // The shells show it as a full white page instead of a docked banner.
+    var fullPage = inApp();
+
     function syncVisibility() {
       if (root.dataset.agreed === '1' || dismissed) {
         closeSheet();
@@ -96,13 +133,13 @@
       else closeSheet();
     }
 
-    // Returning with old() ticks: treat as already agreed.
-    if (root.dataset.agreed === '1' || (box('terms') && box('terms').checked && box('privacy') && box('privacy').checked)) {
+    // Already agreed on this device, or returning with old() ticks. The ticks
+    // must be set here too: the form still validates them server-side, and
+    // skipping the sheet would otherwise submit an unticked form that fails.
+    if (root.dataset.agreed === '1' || storedAgreement() || (box('terms') && box('terms').checked && box('privacy') && box('privacy').checked)) {
       visited.terms = true;
       visited.privacy = true;
-      root.classList.add('is-agreed');
-      root.dataset.agreed = '1';
-      closeSheet();
+      applyAgreed();
       return;
     }
 

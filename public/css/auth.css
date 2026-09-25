@@ -625,6 +625,37 @@ body:has(.tma-auth__card--tall) {
  * gates. Dock it to that column instead. Below 960px the stage is hidden and
  * the panel is the whole page, so the centred default is already right.
  */
+/*
+ * Desktop and Android shells: a full white page rather than a docked banner.
+ * The content stays the same width and sits in the middle of the screen.
+ */
+.tma-legal-consent__sheet--full {
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: var(--space-24);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.tma-legal-consent__sheet--full[open] {
+  align-items: center;
+  justify-content: center;
+}
+
+.tma-legal-consent__sheet--full::backdrop {
+  background: var(--color-white);
+}
+
+.tma-legal-consent__sheet--full > * {
+  width: min(480px, 100%);
+  flex-shrink: 0;
+}
+
 .tma-legal-consent__sheet:not([open]) {
   display: none;
 }
