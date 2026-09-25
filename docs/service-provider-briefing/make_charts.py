@@ -248,14 +248,16 @@ def account_flow():
 
 def encryption():
     """Four rows matching User Guide callout / table treatment."""
-    fig, ax = plt.subplots(figsize=(7.2, 3.8))
+    import textwrap
+
+    fig, ax = plt.subplots(figsize=(7.2, 4.2))
     ax.set_xlim(0, 10)
-    ax.set_ylim(0, 4.8)
+    ax.set_ylim(0, 5.2)
     ax.axis("off")
     fig.patch.set_facecolor(WHITE)
 
-    _title(ax, "Encryption, in ordinary words", y=0.97)
-    _rule(ax, 4.4, 0.15, 9.85)
+    _title(ax, "Encryption, in ordinary words", y=0.975)
+    _rule(ax, 4.75, 0.15, 9.85)
 
     rows = [
         ("On the way", "TLS (https). The journey is sealed. A network sniffer cannot read the pages or files."),
@@ -263,23 +265,50 @@ def encryption():
         ("In the fields", "Passport numbers and dates of birth are encrypted in the database, not only in files."),
         ("In the app", "API keys and secrets live only on the server. The assistant cannot see them."),
     ]
-    row_h = 0.9
-    top = 4.15
+    row_h = 1.0
+    box_h = 0.88
+    top = 4.5
+    label_w = 2.0
+    body_w = 7.7
+    x0 = 0.15
     for i, (title, text) in enumerate(rows):
         y = top - i * row_h
-        ax.add_patch(Rectangle((0.15, y - 0.78), 2.0, 0.78, facecolor=GREY, edgecolor=RULE, linewidth=0.6))
+        ax.add_patch(
+            Rectangle((x0, y - box_h), label_w, box_h, facecolor=GREY, edgecolor=RULE, linewidth=0.6)
+        )
         ax.add_patch(
             Rectangle(
-                (2.15, y - 0.78),
-                7.7,
-                0.78,
+                (x0 + label_w, y - box_h),
+                body_w,
+                box_h,
                 facecolor=GREY if i % 2 == 0 else WHITE,
                 edgecolor=RULE,
                 linewidth=0.6,
             )
         )
-        ax.text(1.15, y - 0.39, title, ha="center", va="center", color=INK, fontsize=10, fontweight="bold")
-        ax.text(2.4, y - 0.39, text, ha="left", va="center", color=INK, fontsize=8.5)
+        ax.text(
+            x0 + label_w / 2,
+            y - box_h / 2,
+            title,
+            ha="center",
+            va="center",
+            color=INK,
+            fontsize=10,
+            fontweight="bold",
+            clip_on=True,
+        )
+        wrapped = "\n".join(textwrap.wrap(text, width=58))
+        ax.text(
+            x0 + label_w + 0.2,
+            y - box_h / 2,
+            wrapped,
+            ha="left",
+            va="center",
+            color=INK,
+            fontsize=8.5,
+            linespacing=1.35,
+            clip_on=True,
+        )
 
     _save(fig, "chart-encryption.png")
 
