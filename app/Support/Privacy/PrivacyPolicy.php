@@ -14,7 +14,7 @@ use App\Models\User;
  */
 final class PrivacyPolicy
 {
-    public const VERSION = '2026-09-24';
+    public const VERSION = '2026-09-25';
 
     public static function recordAcceptance(User $user): void
     {

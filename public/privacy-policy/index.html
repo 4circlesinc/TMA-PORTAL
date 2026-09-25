@@ -11,7 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/tokens.css">
   <link rel="stylesheet" href="/css/theme.css">
-  <link rel="stylesheet" href="/css/legal.css?v=note-plain-1">
+  <link rel="stylesheet" href="/css/legal.css?v=cookie-table-1">
   <!-- Light unless the reader explicitly chose Dark. Dark mode is unfinished, so the device colour scheme is ignored on purpose, see FOLLOW_SYSTEM_THEME in public/js/dashboard.js. -->
   <script>(function(){try{if((localStorage.getItem("tma.themeMode")||"")==="dark")document.documentElement.setAttribute("data-theme","dark");}catch(e){}})();</script>
   <script>
@@ -54,7 +54,7 @@
       <main class="tma-legal__doc">
       <p class="tma-legal__eyebrow">Legal</p>
       <h1 class="tma-legal__title">Privacy Policy</h1>
-      <p class="tma-legal__updated">Last updated: September 24, 2026</p>
+      <p class="tma-legal__updated">Last updated: September 25, 2026</p>
 
       <p class="tma-legal__lead">
         This Privacy Policy explains how TM ANTOINE Advisory (“we,” “us,” or “our”) collects,
@@ -242,9 +242,73 @@
       <section class="tma-legal__section" id="cookies">
         <h2>8. Cookies &amp; sessions</h2>
         <p>
-          The Portal uses strictly necessary cookies to keep you signed in, remember trusted
-          devices, and protect against cross-site request forgery. These are required for the
-          Portal to function and are not used for advertising or cross-site tracking.
+          The Portal uses <strong>strictly necessary</strong> cookies only. They keep you signed
+          in, remember a trusted browser when you ask us to, protect against cross-site request
+          forgery, and help our host block automated abuse. They are not used for advertising,
+          analytics, or cross-site tracking, so we do not show a consent banner for optional
+          cookie categories.
+        </p>
+        <div class="tma-legal__table-wrap" role="region" aria-label="Cookie list" tabindex="0">
+          <table class="tma-legal__table">
+            <thead>
+              <tr>
+                <th scope="col">Cookie</th>
+                <th scope="col">Purpose</th>
+                <th scope="col">Duration</th>
+                <th scope="col">Category</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>tma-portal-session</code></td>
+                <td>Keeps your signed-in session while you use the Portal.</td>
+                <td>Up to 7 days of idle time (or until you sign out)</td>
+                <td>Necessary</td>
+              </tr>
+              <tr>
+                <td><code>XSRF-TOKEN</code></td>
+                <td>Protects forms and API calls from cross-site request forgery.</td>
+                <td>Same as the session</td>
+                <td>Necessary</td>
+              </tr>
+              <tr>
+                <td><code>tma_device_trust</code></td>
+                <td>Remembers whether you chose “Stay signed in” on this browser.</td>
+                <td>Up to 7 days</td>
+                <td>Necessary</td>
+              </tr>
+              <tr>
+                <td><code>tma_trusted_device</code></td>
+                <td>Lets a browser you already verified skip a fresh security code for a short period.</td>
+                <td>Up to 7 days</td>
+                <td>Necessary</td>
+              </tr>
+              <tr>
+                <td><code>remember_web_*</code></td>
+                <td>Restores your session after the browser is closed when you asked to stay signed in.</td>
+                <td>Up to 7 days</td>
+                <td>Necessary</td>
+              </tr>
+              <tr>
+                <td><code>tma_social_retry</code></td>
+                <td>Bounds a single Google or Microsoft sign-in retry if the first handoff fails.</td>
+                <td>5 minutes</td>
+                <td>Necessary</td>
+              </tr>
+              <tr>
+                <td><code>__cf_bm</code></td>
+                <td>Set by Cloudflare to distinguish real visitors from bots. We do not use it for advertising.</td>
+                <td>About 30 minutes</td>
+                <td>Necessary</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          You can clear cookies in your browser settings at any time. Clearing them signs you out
+          and may ask you to verify the device again. Third-party sign-in (Google or Microsoft)
+          may set their own cookies on their domains under their policies; those are outside this
+          list.
         </p>
       </section>
 

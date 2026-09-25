@@ -261,6 +261,47 @@ html, body { margin: 0; min-height: 100%; }
   text-underline-offset: 2px;
 }
 
+.tma-legal__table-wrap {
+  margin: 0 0 var(--space-16);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-12);
+}
+
+.tma-legal__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-size-14);
+  line-height: 1.45;
+}
+
+.tma-legal__table th,
+.tma-legal__table td {
+  padding: var(--space-12) var(--space-16);
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.tma-legal__table th {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--color-bg-page) 70%, transparent);
+  white-space: nowrap;
+}
+
+.tma-legal__table tbody tr:last-child th,
+.tma-legal__table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.tma-legal__table code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.92em;
+  word-break: break-word;
+}
+
 .tma-legal__section a:hover { color: var(--color-primary-dark); }
 
 .tma-legal__section strong { font-weight: var(--font-weight-semibold); }
