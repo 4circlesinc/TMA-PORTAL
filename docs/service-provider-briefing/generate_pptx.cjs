@@ -561,37 +561,59 @@ function dataTable(s, headers, rows, y, colW, x) {
     ["Question", "Answer"],
     [
       ["Host", "Laravel Cloud on AWS, United States, plus Cloudflare."],
-      ["Encryption", "TLS in transit. Ciphertext at rest in the vault and R2."],
-      ["MFA", "Email code on a new device now. Authenticator required after this webinar."],
+      [
+        "Encryption",
+        "TLS in transit. Ciphertext at rest in the vault, R2, and call recordings. Passport numbers and dates of birth encrypted in the database.",
+      ],
+      [
+        "MFA / door",
+        "Email code on a new device now. Authenticator required after this webinar. Turnstile + five-tries-per-minute throttle. Sessions and trusted devices can be revoked.",
+      ],
+      ["Browser / edge", "Cloudflare edge filter. CSP, HSTS, framing headers. Uploads never executed by the web server."],
+      ["Monitoring", "Sign-in log. Detectors for impossible travel, address spikes, download bursts — human review, not auto-lock."],
+      ["Identity shares", "Public links to identity documents require a password."],
+      ["Call recordings", "Access logged. Legal hold. Retention prune. Encrypted at rest."],
       ["Company members", "See every application for the company, not only their own."],
       ["Testing / ISO / SOC 2", "Independent testing planned, not yet complete. No ISO 27001 or SOC 2 today."],
       ["Backup", "Portal store, SharePoint mirror, daily host backup."],
       ["Audit", "Who did what, when, including document activity."],
     ],
-    1.15,
-    [3.5, 8.7]
+    1.0,
+    [3.3, 8.9]
   );
   footer(s, 14);
 }
 
 {
   const s = page();
-  heading(s, "On your compliance file — data and operations");
+  heading(s, "On your compliance file — data and GDPR");
   dataTable(
     s,
     ["Question", "Answer"],
     [
+      [
+        "GDPR certified?",
+        "No certificate claimed. Where GDPR or a similar regime applies: DPA, SCCs where right, processors listed, retention/deletion, breach notice.",
+      ],
       ["DPA", "Yes — pending review by our legal team. Your paper or ours."],
       [
         "Transfers",
         "Only what CIU, NIC, and Immigration need. Same practice as before the portal.",
       ],
+      [
+        "Data-subject rights",
+        "Access, correction, and erasure after the case closes, on request.",
+      ],
       ["Retention", "We keep the file unless the applicant asks us to delete it after the case is closed."],
+      [
+        "Privacy / Terms",
+        "portal.tmantoinelaw.com/privacy-policy/ and /terms-of-service/. Accepted before work starts.",
+      ],
       ["Sub-processors", "AWS / Laravel Cloud (USA), Cloudflare including R2, Microsoft 365 / SharePoint."],
       ["Breach", "Playbook being finalised. Confirmed incidents: notify affected firms without delay."],
       ["Staff leaving", "Your admin removes them that day. TM ANTOINE is notified, and still approves every new account."],
     ],
-    1.15,
+    1.0,
     [3.2, 9.0]
   );
   footer(s, 15);

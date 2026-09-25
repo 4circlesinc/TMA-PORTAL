@@ -247,31 +247,39 @@ def account_flow():
 
 
 def encryption():
-    """Three rows matching User Guide callout / table treatment."""
-    fig, ax = plt.subplots(figsize=(7.2, 3.2))
+    """Four rows matching User Guide callout / table treatment."""
+    fig, ax = plt.subplots(figsize=(7.2, 3.8))
     ax.set_xlim(0, 10)
-    ax.set_ylim(0, 4.0)
+    ax.set_ylim(0, 4.8)
     ax.axis("off")
     fig.patch.set_facecolor(WHITE)
 
     _title(ax, "Encryption, in ordinary words", y=0.97)
-    _rule(ax, 3.65, 0.15, 9.85)
+    _rule(ax, 4.4, 0.15, 9.85)
 
     rows = [
         ("On the way", "TLS (https). The journey is sealed. A network sniffer cannot read the pages or files."),
-        ("At rest", "Files in the vault are stored in ciphertext. Opening them needs the portal's key."),
+        ("At rest", "Vault files and call recordings are stored as ciphertext. Opening them needs the portal's key."),
+        ("In the fields", "Passport numbers and dates of birth are encrypted in the database, not only in files."),
         ("In the app", "API keys and secrets live only on the server. The assistant cannot see them."),
     ]
-    row_h = 0.95
-    top = 3.4
+    row_h = 0.9
+    top = 4.15
     for i, (title, text) in enumerate(rows):
         y = top - i * row_h
-        # label cell
-        ax.add_patch(Rectangle((0.15, y - 0.82), 2.0, 0.82, facecolor=GREY, edgecolor=RULE, linewidth=0.6))
-        # body cell
-        ax.add_patch(Rectangle((2.15, y - 0.82), 7.7, 0.82, facecolor=GREY if i % 2 == 0 else WHITE, edgecolor=RULE, linewidth=0.6))
-        ax.text(1.15, y - 0.41, title, ha="center", va="center", color=INK, fontsize=10, fontweight="bold")
-        ax.text(2.4, y - 0.41, text, ha="left", va="center", color=INK, fontsize=9)
+        ax.add_patch(Rectangle((0.15, y - 0.78), 2.0, 0.78, facecolor=GREY, edgecolor=RULE, linewidth=0.6))
+        ax.add_patch(
+            Rectangle(
+                (2.15, y - 0.78),
+                7.7,
+                0.78,
+                facecolor=GREY if i % 2 == 0 else WHITE,
+                edgecolor=RULE,
+                linewidth=0.6,
+            )
+        )
+        ax.text(1.15, y - 0.39, title, ha="center", va="center", color=INK, fontsize=10, fontweight="bold")
+        ax.text(2.4, y - 0.39, text, ha="left", va="center", color=INK, fontsize=8.5)
 
     _save(fig, "chart-encryption.png")
 

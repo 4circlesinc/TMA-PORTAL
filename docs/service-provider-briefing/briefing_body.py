@@ -137,6 +137,20 @@ def write_briefing(doc, h):
         ],
         numbered=True,
     )
+    add_h2(doc, "What else sits on the sign-in door")
+    add_body(
+        doc,
+        "Before an account is created or a password is checked, Cloudflare Turnstile asks the visitor to prove they are a person. That stops the bulk of automated guessing before it reaches the application. Sign-in attempts are also rate-limited: roughly five tries a minute for a given email and network address. After that, the portal refuses further attempts for a short period.",
+    )
+    add_body(
+        doc,
+        "A device you have already completed a check on can be remembered as a trusted device. You can see those devices under Settings → Account Security, end any one of them, or sign out every other session from that same screen. Ending a session also invalidates the long-lived remember cookie on that device.",
+    )
+    add_callout(
+        doc,
+        "SECURITY",
+        "If a laptop is lost or a colleague leaves, revoke their account and, for the person still in the firm, end other sessions from Account Security. Do not wait for the next webinar.",
+    )
 
     add_title(doc, "Where the portal may be used")
     add_body(
@@ -164,7 +178,7 @@ def write_briefing(doc, h):
     add_image(
         doc,
         "chart-encryption.png",
-        "Figure 7. Three places encryption does work you can explain to a client.",
+        "Figure 7. Four places encryption does work you can explain to a client.",
         width=6.45,
     )
     add_body(
@@ -175,14 +189,27 @@ def write_briefing(doc, h):
         doc,
         "At rest means the file sitting in storage when nobody is looking at it. Vault files are stored as ciphertext, not as an open PDF on a disk. The portal holds the key so officers can still open, scan, e-sign, and sync a file. This is not a zero-knowledge vault: TM ANTOINE can open a file that you can open, because that is required to run the practice. What a stranger on the storage platform cannot do is read the bytes as a document.",
     )
-    add_h2(doc, "Intercepting tools and injection")
+    add_body(
+        doc,
+        "Field-level encryption goes one step further for the most sensitive typed values. Passport numbers and dates of birth are encrypted in the database itself. A stolen database dump does not hand those fields to an attacker in clear text. Call recordings use the same vault envelope encryption as other media files.",
+    )
+    add_h2(doc, "Intercepting tools, the browser, and injection")
     add_body(
         doc,
         "The portal sits behind Cloudflare. Automated scanners, known attack signatures, and many intercepting proxy tools are filtered at that edge before they reach the application. Requests that do get through still need a signed-in session. They are checked again on the server for every action — opening a file, changing a status, sending a message. The browser is not trusted to decide who may do what.",
     )
     add_body(
         doc,
+        "Every page also carries security headers the browser is expected to obey: a content security policy, HSTS so the connection stays on HTTPS, framing protections against clickjacking, and related permissions limits. Uploaded files are never executed by the web server; only the application itself is passed to PHP.",
+    )
+    add_body(
+        doc,
         "API keys, mail credentials, and cloud secrets are stored on the server only. They are not in the web page, not in Bespoke AI, and not in a file a service provider can download. The assistant is forbidden from repeating hosting details, keys, or internal infrastructure. If a document tries to instruct the assistant to ignore those rules, the portal treats that text as data, not as an order.",
+    )
+    add_h2(doc, "Watching for unusual activity")
+    add_body(
+        doc,
+        "Sign-in events record the account, the network address, the device, and the country when Cloudflare can see it. Separate detectors flag patterns that deserve a human look: a sign-in that would require impossible travel between two places, a sudden rise in distinct addresses against one account, one address trying many accounts, or a burst of downloads. Those flags are for review. They do not silently lock a working officer out of an active file.",
     )
     add_callout(
         doc,
@@ -203,6 +230,10 @@ def write_briefing(doc, h):
         doc,
         "Every uploaded file is queued for a malware scan. A file that fails the scan cannot be opened or downloaded. Colleagues on the same file are not used as a way to spread it.",
     )
+    add_body(
+        doc,
+        "Public share links to identity documents must carry a password. A forwarded link alone is not enough to open a passport scan or similar document. The person who receives the link still needs the password you agreed to share by a separate channel.",
+    )
     add_table(
         doc,
         ["Rule", "What it means for you"],
@@ -210,6 +241,7 @@ def write_briefing(doc, h):
             ["PDF or image for CIP", "Do not zip executables or office macros into an application folder and hope the name looks harmless."],
             ["5–10 MB on request links", "Split a very large scan, or compress a photograph, rather than sending a 200 MB archive."],
             ["Malware scan", "If a file is blocked, replace it with a clean original. Do not ask someone to 'just download it anyway'."],
+            ["Password on identity shares", "When you send a public link to a passport or ID page, set a password and send that password separately."],
         ],
         col_twips=[2700, 7740],
     )
@@ -237,7 +269,12 @@ def write_briefing(doc, h):
     )
     add_body(
         doc,
-        "There is an audit record of activity on the site: who did what, and when, including access to documents. That log is not a screen a user can edit.",
+        "There is an audit record of activity on the site: who did what, and when, including access to documents. That log is not a screen a user can edit. Sign-in history is kept for review and is pruned on a long retention cycle so the table does not grow without limit.",
+    )
+    add_h2(doc, "Call recordings")
+    add_body(
+        doc,
+        "Where the portal stores a call recording, access is logged. A recording can be placed on legal hold so routine retention does not delete it. When legal hold is off and the retention date has passed, a scheduled job removes the recording. The media itself is vault-encrypted at rest, the same way other sensitive files are.",
     )
 
     add_title(doc, "Bespoke AI — use it")
@@ -321,15 +358,35 @@ def write_briefing(doc, h):
             ],
             [
                 "Is data encrypted in transit (TLS) and at rest?",
-                "Yes. HTTPS/TLS on the path. Vault files stored as ciphertext. Cloudflare R2 for object storage.",
+                "Yes. HTTPS/TLS on the path. Vault files and call recordings stored as ciphertext. Passport numbers and dates of birth are also encrypted at field level in the database.",
             ],
             [
                 "Is multi-factor authentication available or enforced for service-provider accounts?",
-                "Available today: a six-digit code to the email on file when the device changes. After this webinar, an authenticator app will be required for every service-provider account.",
+                "Available today: a six-digit code to the email on file when the device changes. After this webinar, an authenticator app will be required for every service-provider account. Cloudflare Turnstile and a five-attempt-per-minute throttle also sit on the sign-in door.",
+            ],
+            [
+                "Can a person revoke devices and other sessions?",
+                "Yes. Settings → Account Security lists trusted devices and active sessions. You can end one device or sign out every other session from that screen.",
+            ],
+            [
+                "What browser and edge protections are in place?",
+                "Cloudflare filters hostile traffic. Pages send CSP, HSTS, framing, and related security headers. Uploaded files are never executed by the web server.",
+            ],
+            [
+                "Is unusual activity monitored?",
+                "Yes. Sign-in events are recorded. Detectors flag impossible travel, address spikes, one address against many accounts, and download bursts for human review — they do not auto-lock a working account.",
             ],
             [
                 "What can a company member see — every application for our company, or only ones they create?",
-                "Every application for the company. Membership is at firm level, not at 'my files only'.",
+                "Every application for the company. Membership is at firm level, not at 'my files only'. Access to each file and action is still checked on the server against the person's role.",
+            ],
+            [
+                "How are public links to identity documents protected?",
+                "Public share links to identity documents must carry a password. A forwarded URL alone is not enough.",
+            ],
+            [
+                "How are call recordings protected?",
+                "Access is logged. Legal hold can stop routine deletion. Past-retention recordings without hold are pruned. Media is vault-encrypted at rest.",
             ],
             [
                 "Independent testing (penetration test, vulnerability scan) or ISO 27001 / SOC 2?",
@@ -341,17 +398,25 @@ def write_briefing(doc, h):
             ],
             [
                 "Is there an audit log of who accessed or downloaded a document?",
-                "Yes. Activity on the site is recorded: who, what, when. Users cannot edit that record.",
+                "Yes. Activity on the site is recorded: who, what, when. Users cannot edit that record. Sign-in history is kept and pruned on a long cycle.",
             ],
         ],
         col_twips=[3600, 6840],
     )
 
-    add_h2(doc, "3. Data protection")
+    add_h2(doc, "3. Data protection and GDPR")
+    add_body(
+        doc,
+        "Where the GDPR (or a similar regime) applies to your clients' personal data, the questions below are the ones we expect on your compliance file. We do not claim a GDPR certificate or an ISO privacy seal. We describe what is built, what we will contract for, and what is still being written down.",
+    )
     add_table(
         doc,
         ["Question", "Answer"],
         [
+            [
+                "Are you GDPR compliant / certified?",
+                "We do not hold a GDPR certification, and we do not market one. Where GDPR (or a similar regime) applies to personal data you place in the portal, we support that work through a DPA, Standard Contractual Clauses where they are the right tool, documented sub-processors, retention and deletion on request, and breach notification. Your counsel decides whether that package is enough for your file.",
+            ],
             [
                 "Will TM ANTOINE sign a Data Processing Agreement covering data processed through the portal?",
                 "Yes, subject to review by our legal team. We will work from your paper or ours.",
@@ -361,8 +426,16 @@ def write_briefing(doc, h):
                 "We collect only what the various applications require. We transfer onwards only what the Citizenship by Investment Unit, the National Insurance Corporation, and the Immigration Department need, as we did before the portal. A DPA, and Standard Contractual Clauses where they are the right tool, remain a matter for legal review with your firm.",
             ],
             [
+                "What data-subject rights do you support (access, correction, erasure)?",
+                "An applicant (or your firm on their behalf) can ask us for a copy of what we hold, to correct it, or to delete it after the case is closed. We keep the file unless that deletion request is made. Operational logs needed for security and dispute handling may be retained for a limited period after deletion of the working file.",
+            ],
+            [
                 "Retention and deletion of applicant documents after a case closes?",
-                "We keep the file unless the applicant asks us to delete it after the case is closed. Documents sit in Cloudflare R2, with the Microsoft mirror described above.",
+                "We keep the file unless the applicant asks us to delete it after the case is closed. Documents sit in Cloudflare R2, with the Microsoft mirror described above. Call recordings follow their own retain-until / legal-hold rules.",
+            ],
+            [
+                "Where are the Privacy Policy and Terms of Service?",
+                "On the live portal: https://portal.tmantoinelaw.com/privacy-policy/ and https://portal.tmantoinelaw.com/terms-of-service/. New accounts accept both before they work the files.",
             ],
             [
                 "Sub-processors, and where they are?",
@@ -370,7 +443,7 @@ def write_briefing(doc, h):
             ],
             [
                 "Breach notification process and timeline?",
-                "The written playbook is being finalised. Detection is continuous (sign-in events, country, unusual download volume, malware). If a breach of personal data is confirmed, we will notify affected firms without delay and will not wait for a newsletter cycle.",
+                "The written playbook is being finalised. Detection is continuous (sign-in events, country, unusual download volume, malware, anomaly flags). If a breach of personal data is confirmed, we will notify affected firms without delay and will not wait for a newsletter cycle.",
             ],
         ],
         col_twips=[3600, 6840],
