@@ -605,7 +605,7 @@ body:has(.tma-auth__card--tall) {
 .tma-legal-consent__sheet {
   position: fixed;
   inset: 0;
-  width: min(420px, calc(100vw - 24px));
+  width: min(480px, calc(100vw - 24px));
   max-width: calc(100vw - 24px);
   height: fit-content;
   max-height: calc(100vh - 32px);
