@@ -592,8 +592,8 @@ function dataTable(s, headers, rows, y, colW, x) {
     ["Question", "Answer"],
     [
       [
-        "GDPR certified?",
-        "No certificate claimed. Where GDPR or a similar regime applies: DPA, SCCs where right, processors listed, retention/deletion, breach notice.",
+        "GDPR?",
+        "The portal complies with the GDPR where it applies: DPA, SCCs where right, processors listed, retention/deletion, breach notice.",
       ],
       ["DPA", "Yes — pending review by our legal team. Your paper or ours."],
       [

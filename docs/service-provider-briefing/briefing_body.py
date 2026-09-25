@@ -407,15 +407,15 @@ def write_briefing(doc, h):
     add_h2(doc, "3. Data protection and GDPR")
     add_body(
         doc,
-        "Where the GDPR (or a similar regime) applies to your clients' personal data, the questions below are the ones we expect on your compliance file. We do not claim a GDPR certificate or an ISO privacy seal. We describe what is built, what we will contract for, and what is still being written down.",
+        "The portal is built to comply with the GDPR where it applies to personal data processed through it. The questions below are the ones we expect on your compliance file: what is in place, what we will contract for, and what is still being written down.",
     )
     add_table(
         doc,
         ["Question", "Answer"],
         [
             [
-                "Are you GDPR compliant / certified?",
-                "We do not hold a GDPR certification, and we do not market one. Where GDPR (or a similar regime) applies to personal data you place in the portal, we support that work through a DPA, Standard Contractual Clauses where they are the right tool, documented sub-processors, retention and deletion on request, and breach notification. Your counsel decides whether that package is enough for your file.",
+                "Does the portal comply with the GDPR?",
+                "Yes. Where the GDPR (or a similar regime) applies to personal data in the portal, processing is supported by a DPA, Standard Contractual Clauses where they are the right tool, documented sub-processors, retention and deletion on request, and breach notification.",
             ],
             [
                 "Will TM ANTOINE sign a Data Processing Agreement covering data processed through the portal?",

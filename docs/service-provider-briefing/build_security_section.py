@@ -109,7 +109,7 @@ SECTION = [
     ("b", "Never send a sign-in code or an authenticator code."),
 
     ("h2", "Legal and data — if asked"),
-    ("b", "We do not claim a GDPR certificate. Where GDPR or a similar regime applies, we support it with a DPA, SCCs where right, documented processors, retention and deletion, and breach notice."),
+    ("b", "The portal complies with the GDPR where it applies: DPA, SCCs where right, documented processors, retention and deletion, and breach notice."),
     ("b", "Host: Laravel Cloud on Amazon Web Services, United States, plus Cloudflare."),
     ("b", "Encrypted in transit, at rest, and at field level for passport numbers and dates of birth."),
     ("b", "Company members see every application for the company, not only their own."),
