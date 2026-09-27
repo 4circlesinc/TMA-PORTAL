@@ -2152,6 +2152,7 @@
     var cachedMailboxEmail = null;
     var cachedCipUnread = 0;
     var cipUnreadAt = 0;
+    var cipUnreadGen = 0;
 
     function getEmailBadgeCount() {
       if (cachedEmailUnread !== null) return cachedEmailUnread;
@@ -2345,6 +2346,7 @@
       var now = Date.now();
       if (!force && now - cipUnreadAt < 20000) return;
       cipUnreadAt = now;
+      var gen = ++cipUnreadGen;
 
       fetch('/portal/cip/applications/unread', {
         credentials: 'same-origin',
@@ -2352,6 +2354,7 @@
       })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) {
+          if (gen !== cipUnreadGen) return;
           if (!j || j.count == null) return;
           cachedCipUnread = Math.max(0, parseInt(j.count, 10) || 0);
           syncTabBarBadges();

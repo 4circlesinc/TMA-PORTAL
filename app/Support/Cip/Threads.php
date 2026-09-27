@@ -239,6 +239,11 @@ class Threads
         if ($wrote) {
             CipThreadChanged::dispatch($application, 'read');
         }
+
+        // Unread belongs to this reader. The file's channel only reaches tabs
+        // that already have it open, so the menu badge and the other tabs
+        // hear it here. The early return above is a reopen that moved nothing.
+        Live::user(Live::CIP, $viewer->id);
     }
 
     /**

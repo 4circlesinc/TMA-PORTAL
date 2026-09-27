@@ -10341,11 +10341,16 @@
       if (!held || held.id !== appId) return;
       var input = document.querySelector('[data-cip-thread-body]');
       if (input) state.cipThreadDraft = input.value;
+      var reading = payload.action === 'read';
       // Opening the tab is what marks the thread read. A signal on Overview
-      // must not fetch (and clear) mail the reader has not seen.
+      // must not fetch (and clear) mail the reader has not seen. A read on
+      // the messages tab only refreshes faces, so it does not mark again.
       if (state.profileTab === 'messages') {
-        ensureCipThreadLoaded(state, render, { quiet: true, force: true });
+        ensureCipThreadLoaded(state, render, { quiet: true, force: true, peek: reading });
         return;
+      }
+      if (!reading) {
+        try { document.dispatchEvent(new CustomEvent('tma-cip-unread')); } catch (e) { /* ignore */ }
       }
       state.applicationFreshFor = null;
       ensureApplicationLoaded(state, render);
@@ -10364,15 +10369,36 @@
     }
     subscribeCipThread(app.id, state, render);
     if (state.profileTab === 'messages') {
-      ensureCipThreadLoaded(state, render, { quiet: true });
+      var refresh = !!state.cipThreadNeedsRefresh;
+      state.cipThreadNeedsRefresh = false;
+      ensureCipThreadLoaded(state, render, { quiet: true, force: refresh });
     }
   }
 
+  /*
+   * One thread fetch at a time. A read can land while the fetch it caused is
+   * still out, and the slower of the two answers is the stale one: faces
+   * would jump back. The later request waits, then runs, so the screen keeps
+   * the newest read.
+   */
   function ensureCipThreadLoaded(state, render, opts) {
     var app = applicationFor(state.selectedId);
     if (!app || !isApplicationProfile(app) || !app.id) return;
     subscribeCipThread(app.id, state, render);
-    if (state.cipThreadLoadedFor === app.id && !(opts && opts.force)) return;
+    opts = opts || {};
+    if (state.cipThreadLoadedFor === app.id && !opts.force) return;
+
+    if (ensureCipThreadLoaded._busy) {
+      var pending = ensureCipThreadLoaded._pending;
+      if (!pending) {
+        ensureCipThreadLoaded._pending = { force: true, quiet: !!opts.quiet, peek: !!opts.peek };
+      } else {
+        if (!opts.peek) pending.peek = false;
+        if (!opts.quiet) pending.quiet = false;
+      }
+      return;
+    }
+
     if (state.cipThreadLoadedFor !== app.id) {
       state.cipThread = null;
       state.cipReplyTo = null;
@@ -10380,27 +10406,50 @@
     }
     state.cipThreadLoading = !state.cipThread;
     state.cipThreadLoadedFor = app.id;
-    if (!(opts && opts.quiet)) {
+    var id = app.id;
+    var peek = !!opts.peek;
+    if (!opts.quiet) {
       if (usesPagedClientsFlow(state)) render();
       else render({ detailOnly: true });
     }
-    clientsFetch('/portal/cip/applications/' + encodeURIComponent(app.id) + '/messages')
+
+    ensureCipThreadLoaded._busy = true;
+    clientsFetch('/portal/cip/applications/' + encodeURIComponent(id) + '/messages' + (peek ? '?peek=1' : ''))
       .then(function (data) {
-        if (state.cipThreadLoadedFor !== app.id) return;
+        ensureCipThreadLoaded._busy = false;
+        if (state.cipThreadLoadedFor !== id) {
+          pumpCipThread();
+          return;
+        }
         state.cipThread = data;
         state.cipThreadLoading = false;
-        subscribeCipThread(app.id, state, render);
-        try { document.dispatchEvent(new CustomEvent('tma-cip-unread')); } catch (e) { /* ignore */ }
+        subscribeCipThread(id, state, render);
+        if (!peek) {
+          try { document.dispatchEvent(new CustomEvent('tma-cip-unread')); } catch (e) { /* ignore */ }
+        }
         if (usesPagedClientsFlow(state)) render();
         else render({ detailOnly: true });
+        pumpCipThread();
       })
       .catch(function (err) {
-        if (state.cipThreadLoadedFor !== app.id) return;
+        ensureCipThreadLoaded._busy = false;
+        if (state.cipThreadLoadedFor !== id) {
+          pumpCipThread();
+          return;
+        }
         state.cipThread = { error: (err && err.message) || 'Couldn’t load messages.' };
         state.cipThreadLoading = false;
         if (usesPagedClientsFlow(state)) render();
         else render({ detailOnly: true });
+        pumpCipThread();
       });
+
+    function pumpCipThread() {
+      var next = ensureCipThreadLoaded._pending;
+      if (!next) return;
+      ensureCipThreadLoaded._pending = null;
+      ensureCipThreadLoaded(state, render, next);
+    }
   }
 
   /*
@@ -15947,7 +15996,8 @@
         }
         if (state.profileTab === 'messages' && state.selectedId) {
           ensureConversationsLoaded(state, render);
-          ensureCipThreadLoaded(state, render);
+          state.cipThreadNeedsRefresh = false;
+          ensureCipThreadLoaded(state, render, { force: true, quiet: true });
         }
         if (usesPagedClientsFlow(state)) render();
         else render({ detailOnly: true });
@@ -17881,6 +17931,9 @@
     window.TMALive.register(window.TMALive.RESOURCES.CIP, function () {
       forgetApplicationTable();
       forgetBuckets();
+      if (clientsMountState && clientsMountState.profileTab === 'messages') {
+        clientsMountState.cipThreadNeedsRefresh = true;
+      }
 
       var route = parseClientsPath(window.location.pathname);
       var open = route.contactId || null;
@@ -17958,6 +18011,13 @@
    * is dropped and the screen re-derived, which is what takes the "saved on
    * this device" line off it.
    */
+  document.addEventListener('tma-cip-unread', function () {
+    forgetApplicationTable();
+    if (!clientsMountState || !onApplicationsTable(clientsMountState)) return;
+    if (!clientsMountRoot || !clientsMountRoot._clientsController) return;
+    clientsMountRoot._clientsController.render();
+  });
+
   document.addEventListener('tma:queue-applied', function (e) {
     if (!e.detail || e.detail.kind !== 'cip.application') return;
 

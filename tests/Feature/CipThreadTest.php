@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Events\CipThreadChanged;
+use App\Events\PortalDataChanged;
 use App\Mail\Postcard;
 use App\Models\CipApplication;
 use App\Models\CipProvider;
@@ -13,6 +14,7 @@ use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
 use App\Support\Cip\Assignments;
+use App\Support\Realtime\Live;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Event;
@@ -698,5 +700,47 @@ class CipThreadTest extends TestCase
         $this->actingAs($contact)->getJson('/portal/cip/applications/unread')
             ->assertOk()
             ->assertJsonPath('count', 0);
+    }
+
+    public function test_reading_a_thread_tells_the_readers_other_screens_and_a_reopen_does_not(): void
+    {
+        [$staff, $contact, $application] = $this->filed();
+        $path = '/portal/cip/applications/'.$application->uuid.'/messages';
+
+        $this->actingAs($staff)
+            ->postJson($path, ['body' => 'Please send the scan.', 'lane' => 'provider'])
+            ->assertCreated();
+
+        $signals = $this->signals(fn () => $this->actingAs($contact)->getJson($path)->assertOk());
+
+        $this->assertSame(
+            ['private-App.Models.User.'.$contact->id],
+            $signals[Live::CIP] ?? []
+        );
+        $this->assertNotContains('private-portal.staff', $signals[Live::CIP] ?? []);
+
+        $again = $this->signals(fn () => $this->actingAs($contact)->getJson($path)->assertOk());
+
+        $this->assertSame([], $again);
+    }
+
+    /** @return array<string, list<string>> */
+    private function signals(callable $work): array
+    {
+        Live::flush();
+
+        Event::fake([PortalDataChanged::class]);
+        $work();
+        Live::flush();
+
+        $out = [];
+
+        foreach (Event::dispatched(PortalDataChanged::class) as $dispatched) {
+            foreach ($dispatched[0]->broadcastOn() as $channel) {
+                $out[$dispatched[0]->resource][] = (string) $channel->name;
+            }
+        }
+
+        return $out;
     }
 }
