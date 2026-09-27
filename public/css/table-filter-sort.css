@@ -156,7 +156,61 @@
   background: transparent;
   font: 500 13px/1.2 inherit;
   color: var(--color-text-secondary, #6b6b6b);
+  white-space: nowrap;
   cursor: pointer;
+}
+
+/*
+ * Staff and Service provider are one menu.
+ *
+ * The idle panel is hidden, so a content-sized popover would collapse to
+ * "Nobody to assign" and wrap the other tab's names on the way back. The
+ * width is locked to the longest row across both lists; names stay on one
+ * line inside it.
+ */
+.tma-filter-popover--stable {
+  max-width: calc(100vw - 32px);
+}
+
+.tma-filter-popover--stable .tma-filter-popover__item-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+}
+
+.tma-filter-popover__probe {
+  position: fixed;
+  left: 0;
+  top: 0;
+  visibility: hidden;
+  display: flex !important;
+  width: max-content !important;
+  max-width: none !important;
+  max-height: none !important;
+  /* overflow makes a scroll container, which sizes to the 240px floor and
+     ignores the names. The probe has to see the full row. */
+  overflow: visible !important;
+  pointer-events: none;
+}
+
+.tma-filter-popover__probe [data-assignee-panel] {
+  display: block !important;
+}
+
+.tma-filter-popover__probe .tma-filter-popover__item,
+.tma-filter-popover__probe .tma-filter-popover__tab {
+  width: max-content;
+  flex: 0 0 auto;
+}
+
+.tma-filter-popover__probe .tma-filter-popover__item-label {
+  flex: 0 0 auto;
+  min-width: max-content;
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: normal;
 }
 
 .tma-filter-popover__tab[aria-selected="true"] {

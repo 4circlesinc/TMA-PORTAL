@@ -11422,18 +11422,48 @@
       // Reachable only in the beat before the first listing answers: the
       // button is not drawn where the field has nothing to offer, so this is
       // a wait rather than a dead end, and it says so.
+      clientsPop.fields.classList.remove('tma-filter-popover--stable');
+      clientsPop.fields.style.width = '';
       clientsPop.fields.innerHTML =
         '<div class="tma-filter-popover__note">Loading…</div>';
 
       return;
     }
 
+    clientsPop.fields.classList.toggle('tma-filter-popover--stable', field === 'assignee');
     clientsPop.fields.innerHTML = group +
       (filterValues(field).length
         ? '<div class="tma-filter-popover__divider"></div>' +
           '<button type="button" class="tma-filter-popover__item tma-filter-popover__item--clear"' +
           ' data-cip-filter-clear="' + esc(field) + '">Clear</button>'
         : '');
+    if (field === 'assignee') lockAssigneePopoverWidth(clientsPop.fields);
+    else clientsPop.fields.style.width = '';
+  }
+
+  /*
+   * Both assignee tabs share one width: the longest name in either list.
+   *
+   * Measuring the open panel alone is what made Service provider collapse
+   * the menu, and Staff grow it again. The probe shows both lists at once,
+   * off screen, and the menu keeps that width whichever tab is selected.
+   */
+  function lockAssigneePopoverWidth(pop) {
+    var probe = document.createElement('div');
+    probe.className = 'tma-filter-popover tma-filter-popover__probe';
+    probe.setAttribute('aria-hidden', 'true');
+    probe.innerHTML = pop.innerHTML;
+    document.body.appendChild(probe);
+    var width = 0;
+    try {
+      width = Math.ceil(probe.getBoundingClientRect().width);
+    } finally {
+      probe.remove();
+    }
+    if (width < 1) return;
+    var cap = Math.max(240, window.innerWidth - 32);
+    pop.style.width = Math.min(width, cap) + 'px';
+    if (pop.hasAttribute('data-open')) positionClientsPopover(pop, pop._anchorRect);
   }
 
 
