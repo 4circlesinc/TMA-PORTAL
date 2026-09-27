@@ -2467,9 +2467,9 @@
    * "Seen", under the bubble and outside it, the way iMessage and Teams both
    * place it.
    *
-   * Only the newest read message carries it. Everything above the last read
-   * message has necessarily been read too, so a column of "Seen" lines would
-   * repeat one fact once per bubble.
+   * A person appears once, under the newest message they have read. Everything
+   * above that has been read too, so repeating their face on each bubble would
+   * say the same thing once per message.
    */
   function receiptSeenTitle(person) {
     var when = '';
@@ -2517,11 +2517,12 @@
     );
   }
 
-  function renderBubbleReceipt(msg, show) {
-    var faces = renderReceiptFaces(msg.seenBy);
+  function renderBubbleReceipt(msg, opts) {
+    opts = opts || {};
+    var faces = renderReceiptFaces(opts.receiptPeople || []);
     if (faces) return faces;
 
-    if (!show || msg.direction !== 'out') return '';
+    if (!opts.showReceipt || msg.direction !== 'out') return '';
     if (messageDeliveryState(msg) !== 'read') return '';
 
     return (
@@ -3110,7 +3111,7 @@
       inner +
       '</div>' +
       renderReactions(msg) +
-      renderBubbleReceipt(msg, opts.showReceipt) +
+      renderBubbleReceipt(msg, opts) +
       '</div>';
 
     return (
@@ -3958,6 +3959,42 @@
     );
   }
 
+  /*
+   * One face per reader, on the furthest message they have opened.
+   *
+   * The payload still lists them on every message the cursor passed. Drawing
+   * that list as it arrives would put the same person under each bubble.
+   */
+  function latestReadReceipts(messages) {
+    var furthest = Object.create(null);
+
+    messages.forEach(function (msg, index) {
+      (msg.seenBy || []).forEach(function (person) {
+        if (!person || (!person.name && !person.avatar)) return;
+        var key = person.id != null ? 'id:' + person.id : 'name:' + (person.name || '');
+        var current = furthest[key];
+        if (!current || index >= current.index) {
+          furthest[key] = { index: index, person: person };
+        }
+      });
+    });
+
+    var byIndex = Object.create(null);
+    Object.keys(furthest).forEach(function (key) {
+      var entry = furthest[key];
+      if (!byIndex[entry.index]) byIndex[entry.index] = [];
+      byIndex[entry.index].push(entry.person);
+    });
+
+    Object.keys(byIndex).forEach(function (index) {
+      byIndex[index].sort(function (a, b) {
+        return String(a.seenAt || '').localeCompare(String(b.seenAt || ''));
+      });
+    });
+
+    return byIndex;
+  }
+
   function renderChatBody(state, row, render) {
     var bucket = threadBucket(state.selectedId);
     var messages = bucket.messages;
@@ -3994,16 +4031,25 @@
       : null;
 
     /*
-     * The word "Seen" is a fallback for a message the server marked read
-     * without naming anyone. The photos of who saw it travel on the message
-     * itself. Scanning backwards finds the newest fully-read bubble, which
-     * is the only place that fallback is drawn.
+     * Each reader is drawn once, on the newest message their cursor covers.
+     * The word "Seen" is only the fallback for a fully-read outgoing bubble
+     * that names nobody, and only when no later bubble already carries faces.
      */
+    var receiptByIndex = latestReadReceipts(messages);
     var seenIndex = -1;
     for (var i = messages.length - 1; i >= 0; i--) {
       if (messages[i].direction === 'out' && messageDeliveryState(messages[i]) === 'read') {
         seenIndex = i;
         break;
+      }
+    }
+    var seenHasLaterFaces = false;
+    if (seenIndex >= 0) {
+      for (var j = seenIndex + 1; j < messages.length; j++) {
+        if (receiptByIndex[j] && receiptByIndex[j].length) {
+          seenHasLaterFaces = true;
+          break;
+        }
       }
     }
 
@@ -4040,7 +4086,8 @@
         // Only label the first bubble of a run by the same sender.
         showSender: isGroup && msg.direction === 'in' && startsRun,
         showAvatar: msg.direction === 'in' && endsRun,
-        showReceipt: index === seenIndex,
+        showReceipt: index === seenIndex && !seenHasLaterFaces,
+        receiptPeople: receiptByIndex[index] || [],
       }, render);
     });
 

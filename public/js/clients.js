@@ -10518,6 +10518,36 @@
     return (person.name || 'Someone') + (when ? ' · Seen ' + when : ' · Seen');
   }
 
+  /*
+   * One face per reader, on the furthest message they have opened. Listing
+   * them on every message they passed would repeat the same read.
+   */
+  function latestCipSeen(messages) {
+    var furthest = Object.create(null);
+    (messages || []).forEach(function (msg, index) {
+      (msg.seenBy || []).forEach(function (person) {
+        if (!person || (!person.name && !person.avatar)) return;
+        var key = person.id != null ? 'id:' + person.id : 'name:' + (person.name || '');
+        var current = furthest[key];
+        if (!current || index >= current.index) {
+          furthest[key] = { index: index, person: person };
+        }
+      });
+    });
+    var byIndex = Object.create(null);
+    Object.keys(furthest).forEach(function (key) {
+      var entry = furthest[key];
+      if (!byIndex[entry.index]) byIndex[entry.index] = [];
+      byIndex[entry.index].push(entry.person);
+    });
+    Object.keys(byIndex).forEach(function (index) {
+      byIndex[index].sort(function (a, b) {
+        return String(a.seenAt || '').localeCompare(String(b.seenAt || ''));
+      });
+    });
+    return byIndex;
+  }
+
   function renderCipSeen(people) {
     var list = (people || []).filter(function (person) {
       return person && (person.name || person.avatar);
@@ -10539,7 +10569,7 @@
       '</div>';
   }
 
-  function renderCipBubble(m, previous, next) {
+  function renderCipBubble(m, previous, next, seenPeople) {
     var side = m.mine ? 'out' : 'in';
     var author = m.author || {};
     var name = author.name || 'Someone';
@@ -10589,7 +10619,7 @@
       esc(cipClockTime(m.createdAt)) +
       (m.edited ? ' <span class="tma-dash__messages-bubble-edited">edited</span>' : '') +
       '</time></p></div></div>' +
-      renderCipSeen(m.seenBy) +
+      renderCipSeen(seenPeople) +
       actions +
       '</div></div></div></div>';
   }
@@ -10610,13 +10640,14 @@
     var draft = state.cipThreadDraft || '';
     var reply = state.cipReplyTo && state.cipReplyTo.applicationId === app.id ? state.cipReplyTo : null;
     var editing = state.cipEditing && state.cipEditing.applicationId === app.id ? state.cipEditing : null;
+    var seenByIndex = latestCipSeen(messages);
     var rows = messages.length
       ? '<div class="tma-cip-thread">' + messages.map(function (m, index) {
         var previous = messages[index - 1];
         var day = (!previous || !cipSameDay(previous.createdAt, m.createdAt))
           ? '<div class="tma-dash__messages-divider">' + esc(cipDayLabel(m.createdAt)) + '</div>'
           : '';
-        return day + renderCipBubble(m, previous, messages[index + 1]);
+        return day + renderCipBubble(m, previous, messages[index + 1], seenByIndex[index] || []);
       }).join('') + '</div>'
       : '<div class="tma-dash__clients-assigned-empty">' +
         (canInternal
