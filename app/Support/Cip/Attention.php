@@ -72,6 +72,47 @@ final class Attention
     }
 
     /**
+     * How many applications this reader can see still have something unread.
+     *
+     * The same mark as the dot on the applicant's face: an unread comment
+     * thread or an unread message. Counted as applications, so the menu badge
+     * matches the number of rows that are waiting, not the number of lines
+     * inside them.
+     */
+    public static function unreadApplicationCount(User $viewer): int
+    {
+        $clientIds = ApplicationScope::visibleClientIds($viewer);
+
+        if ($clientIds === []) {
+            return 0;
+        }
+
+        $waiting = [];
+
+        // Kept in slices: a whole caseload is more ids than one query should
+        // bind, and the page indicator already measures clients this way.
+        foreach (array_chunk($clientIds, 500) as $chunk) {
+            $waiting += self::forClients($viewer, $chunk);
+        }
+
+        $ids = array_keys($waiting);
+
+        if ($ids === []) {
+            return 0;
+        }
+
+        $count = 0;
+
+        foreach (array_chunk($ids, 500) as $chunk) {
+            $count += ApplicationScope::query($viewer)
+                ->whereIn('cip_applications.client_id', $chunk)
+                ->count();
+        }
+
+        return $count;
+    }
+
+    /**
      * Which of those threads name this reader.
      *
      * Judged by the thread rather than the comment, the same way Hub::counts

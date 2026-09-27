@@ -10390,6 +10390,7 @@
         state.cipThread = data;
         state.cipThreadLoading = false;
         subscribeCipThread(app.id, state, render);
+        try { document.dispatchEvent(new CustomEvent('tma-cip-unread')); } catch (e) { /* ignore */ }
         if (usesPagedClientsFlow(state)) render();
         else render({ detailOnly: true });
       })

@@ -613,4 +613,42 @@ class CipThreadTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    public function test_the_menu_counts_applications_that_still_have_something_unread(): void
+    {
+        [$staff, $contact, $application] = $this->filed();
+        $path = '/portal/cip/applications/'.$application->uuid.'/messages';
+
+        $this->actingAs($contact)->getJson('/portal/cip/applications/unread')
+            ->assertOk()
+            ->assertJsonPath('count', 0);
+
+        $this->actingAs($staff)
+            ->postJson($path, ['body' => 'Keep this in the office.', 'lane' => 'internal'])
+            ->assertCreated();
+
+        // An internal note is not unread mail for the provider side.
+        $this->actingAs($contact)->getJson('/portal/cip/applications/unread')
+            ->assertOk()
+            ->assertJsonPath('count', 0);
+
+        $this->actingAs($staff)
+            ->postJson($path, ['body' => 'Please send the scan.', 'lane' => 'provider'])
+            ->assertCreated();
+
+        $this->actingAs($contact)->getJson('/portal/cip/applications/unread')
+            ->assertOk()
+            ->assertJsonPath('count', 1);
+
+        // The author has already read their own line.
+        $this->actingAs($staff)->getJson('/portal/cip/applications/unread')
+            ->assertOk()
+            ->assertJsonPath('count', 0);
+
+        $this->actingAs($contact)->getJson($path)->assertOk();
+
+        $this->actingAs($contact)->getJson('/portal/cip/applications/unread')
+            ->assertOk()
+            ->assertJsonPath('count', 0);
+    }
 }

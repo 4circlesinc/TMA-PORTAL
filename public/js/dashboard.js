@@ -2150,6 +2150,8 @@
 
     var cachedEmailUnread = null;
     var cachedMailboxEmail = null;
+    var cachedCipUnread = 0;
+    var cipUnreadAt = 0;
 
     function getEmailBadgeCount() {
       if (cachedEmailUnread !== null) return cachedEmailUnread;
@@ -2323,7 +2325,47 @@
 
     // Reading a file's comments marks them read on the server, so the badge
     // has to be re-asked rather than left claiming what was just read.
-    document.addEventListener('tma-comments-read', function () { syncWorkflowCounts(); });
+    document.addEventListener('tma-comments-read', function () {
+      syncWorkflowCounts();
+      syncCipUnread(true);
+    });
+
+    /*
+     * CIP Applications: how many filings still have something unread.
+     *
+     * The same mark as the dot on an applicant's face. Asked when the shell
+     * opens, when this tab reads a comment or a file message, and when
+     * another tab is told the caseload moved.
+     */
+    function syncCipUnread(force) {
+      if (!root.querySelector('.tma-dash__nav-item[data-nav="clients"], .tma-dash__mrow[data-nav="clients"]')) {
+        return;
+      }
+
+      var now = Date.now();
+      if (!force && now - cipUnreadAt < 20000) return;
+      cipUnreadAt = now;
+
+      fetch('/portal/cip/applications/unread', {
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          if (!j || j.count == null) return;
+          cachedCipUnread = Math.max(0, parseInt(j.count, 10) || 0);
+          syncTabBarBadges();
+        })
+        .catch(function () {});
+    }
+
+    document.addEventListener('tma-cip-unread', function () { syncCipUnread(true); });
+
+    if (window.TMALive) {
+      window.TMALive.register(window.TMALive.RESOURCES.CIP, function () {
+        syncCipUnread(true);
+      });
+    }
 
     // The Workflows page re-reads these on every load and after every answer,
     // so its figures are fresher than the one taken at boot.
@@ -2347,6 +2389,8 @@
       setNavCount(root.querySelector('.tma-dash__mrow[data-nav="so-messages"]'), getMessagesBadgeCount());
       setNavCount(root.querySelector('.tma-dash__mrow[data-nav="calendar"]'), getCalendarBadgeCount());
       setNavCount(root.querySelector('.tma-dash__mrow[data-nav="so-feed"]'), getSocialBadgeCount());
+      setNavCount(root.querySelector('.tma-dash__nav-item[data-nav="clients"]'), cachedCipUnread);
+      setNavCount(root.querySelector('.tma-dash__mrow[data-nav="clients"]'), cachedCipUnread);
       syncRailTitlesForSidebarState();
     }
 
@@ -2368,6 +2412,7 @@
     root._syncPendingUsersBadge = syncPendingUsersBadge;
     syncPendingUsersBadge();
     syncWorkflowCounts();
+    syncCipUnread(true);
 
     // Exact inbox unread for the Email nav badge, same source as home shortcuts.
     // Without this the badge stays at 0 until the mailbox view opens. Skipped
@@ -2537,7 +2582,9 @@
       // entry — portal-access.js prunes [data-nav="clients"] for the rest.
       var cipTab = root.querySelector('.tma-dash__tab-btn[data-tab="cip"]');
       if (cipTab) {
-        cipTab.hidden = !root.querySelector('.tma-dash__nav-item[data-nav="clients"]');
+        var showCip = !!root.querySelector('.tma-dash__nav-item[data-nav="clients"]');
+        cipTab.hidden = !showCip;
+        setTabBadge(cipTab, showCip ? cachedCipUnread : 0, 'cip', 'CIP Applications');
       }
       if (tabIndicator) {
         if (!isMobileSidebar()) {

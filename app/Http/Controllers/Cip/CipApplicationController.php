@@ -753,6 +753,17 @@ class CipApplicationController extends Controller
      * is `withCount`, because section 8 puts it on every line and `people()->count()`
      * would be one query per application to answer it.
      */
+    /** Applications with something this reader has not read yet. The menu badge. */
+    public function unread(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless(CipAccess::canReach($user), 404);
+
+        return response()->json([
+            'count' => Attention::unreadApplicationCount($user),
+        ]);
+    }
+
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();

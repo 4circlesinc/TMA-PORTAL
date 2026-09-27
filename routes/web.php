@@ -494,6 +494,9 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
          */
         Route::get('/applications/preview', [CipApplicationController::class, 'preview'])
             ->name('applications.preview');
+        // Above `{uuid}`: "unread" is the menu badge, not an application id.
+        Route::get('/applications/unread', [CipApplicationController::class, 'unread'])
+            ->name('applications.unread');
         Route::get('/applications', [CipApplicationController::class, 'index'])->name('applications.index');
         Route::post('/applications', [CipApplicationController::class, 'store'])->name('applications.store');
         Route::get('/applications/{uuid}', [CipApplicationController::class, 'show'])->name('applications.show');
