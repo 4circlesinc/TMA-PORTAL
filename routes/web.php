@@ -515,6 +515,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
             ->name('applications.messages.index');
         Route::post('/applications/{uuid}/messages', [CipThreadController::class, 'store'])
             ->name('applications.messages.store');
+        Route::post('/applications/{uuid}/messages/{message}/reactions', [CipThreadController::class, 'react'])
+            ->name('applications.messages.react');
         Route::post('/applications/{uuid}/messages/{message}/share', [CipThreadController::class, 'share'])
             ->name('applications.messages.share');
         Route::patch('/applications/{uuid}/messages/{message}', [CipThreadController::class, 'update'])

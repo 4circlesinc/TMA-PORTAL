@@ -10591,18 +10591,6 @@
     var laneHtml = side === 'out' && m.lane === 'internal' && startsRun
       ? '<span class="tma-portal-tag tma-cip-thread__lane">Internal</span>'
       : '';
-    var shareHtml = m.canShare
-      ? '<button type="button" class="tma-cip-thread__share" data-cip-thread-share="' + esc(m.id) + '">Send to service provider</button>'
-      : '';
-    var editHtml = m.canEdit
-      ? '<button type="button" class="tma-cip-thread__share" data-cip-thread-edit="' + esc(m.id) + '">Edit</button>'
-      : '';
-    var actions = '<div class="tma-cip-thread__actions">' +
-      '<button type="button" class="tma-cip-thread__share" data-cip-thread-reply="' + esc(m.id) + '">Reply</button>' +
-      editHtml +
-      shareHtml +
-      '</div>';
-
     return '<div class="tma-dash__messages-bubble-row tma-dash__messages-bubble-row--' + side + '" data-cip-message-id="' + esc(m.id) + '">' +
       '<div class="tma-dash__messages-bubble-swipe">' +
       '<div class="tma-dash__messages-bubble-track">' +
@@ -10620,9 +10608,59 @@
       esc(cipClockTime(m.createdAt)) +
       (m.edited ? ' <span class="tma-dash__messages-bubble-edited">edited</span>' : '') +
       '</time></p></div></div>' +
+      renderCipReactions(m) +
       renderCipSeen(seenPeople) +
-      actions +
-      '</div></div></div></div>';
+      '</div></div></div>' +
+      renderCipBubbleActions(m) +
+      '</div>';
+  }
+
+  function cipQuickEmoji() {
+    var data = window.TMAEmojiData || {};
+    var quick = data.quick && data.quick.length ? data.quick : ['👍', '❤️', '😂', '😮'];
+    return quick.slice(0, 4);
+  }
+
+  function renderCipBubbleActions(m) {
+    var mine = (m.reactions || []).filter(function (r) { return r.mine; }).map(function (r) { return r.emoji; });
+    var edit = m.canEdit
+      ? '<button type="button" class="tma-dash__messages-icon-btn tma-dash__messages-bubble-action" data-cip-thread-edit="' + esc(m.id) + '" aria-label="Edit message">' +
+        '<img src="' + ICON + 'PencilSimple.svg" alt="" width="16" height="16"></button>'
+      : '';
+
+    return '<div class="tma-dash__messages-bubble-actions" role="toolbar" aria-label="Message actions">' +
+      cipQuickEmoji().map(function (char) {
+        return '<button type="button" class="tma-dash__messages-icon-btn tma-dash__messages-bubble-action tma-dash__messages-bubble-action--emoji' +
+          (mine.indexOf(char) !== -1 ? ' is-mine' : '') +
+          '" data-cip-react="' + esc(m.id) + '" data-cip-react-emoji="' + esc(char) + '"' +
+          ' aria-label="React with ' + esc(char) + '">' + esc(char) + '</button>';
+      }).join('') +
+      '<button type="button" class="tma-dash__messages-icon-btn tma-dash__messages-bubble-action" data-cip-react-more="' + esc(m.id) + '" aria-label="More reactions">+</button>' +
+      '<span class="tma-dash__messages-bubble-action-sep" aria-hidden="true"></span>' +
+      edit +
+      '<button type="button" class="tma-dash__messages-icon-btn tma-dash__messages-bubble-action" data-cip-thread-reply="' + esc(m.id) + '" aria-label="Reply to message">' +
+      '<img src="' + ICON + 'ArrowBendUpLeft.svg" alt="" width="16" height="16"></button>' +
+      '<button type="button" class="tma-dash__messages-icon-btn tma-dash__messages-bubble-action" data-cip-thread-menu="' + esc(m.id) + '" aria-label="More actions" aria-haspopup="menu">' +
+      '<img src="' + ICON + 'DotsThree.svg" alt="" width="16" height="16"></button>' +
+      '</div>';
+  }
+
+  function renderCipReactions(m) {
+    if (!m.reactions || !m.reactions.length) return '';
+    return '<div class="tma-dash__messages-reactions">' +
+      m.reactions.map(function (reaction) {
+        var who = (reaction.users || []).map(function (u) { return u.name; }).filter(Boolean).join(', ');
+        return '<button type="button" class="tma-dash__messages-reaction' +
+          (reaction.mine ? ' tma-dash__messages-reaction--mine' : '') +
+          '" data-cip-react="' + esc(m.id) + '" data-cip-react-emoji="' + esc(reaction.emoji) + '"' +
+          ' title="' + esc(who) + '">' +
+          '<span class="tma-dash__messages-reaction-emoji">' + esc(reaction.emoji) + '</span>' +
+          (reaction.count > 1
+            ? '<span class="tma-dash__messages-reaction-count">' + reaction.count + '</span>'
+            : '') +
+          '</button>';
+      }).join('') +
+      '</div>';
   }
 
   function renderCipThread(state, app) {
@@ -16021,6 +16059,232 @@
       }
       return null;
     }
+
+    var cipFloating = null;
+
+    function closeCipFloating() {
+      if (!cipFloating) return;
+      if (cipFloating.el && cipFloating.el.parentNode) cipFloating.el.parentNode.removeChild(cipFloating.el);
+      if (cipFloating.onDoc) document.removeEventListener('mousedown', cipFloating.onDoc, true);
+      cipFloating = null;
+    }
+
+    function placeCipFloating(el, anchor) {
+      var box = anchor.getBoundingClientRect();
+      var width = el.offsetWidth || 280;
+      var height = el.offsetHeight || 40;
+      var left = Math.max(8, Math.min(box.left, window.innerWidth - width - 8));
+      var top = box.top - height - 8;
+      if (top < 8) top = box.bottom + 8;
+      el.style.position = 'fixed';
+      el.style.left = left + 'px';
+      el.style.top = top + 'px';
+      el.style.zIndex = '280';
+    }
+
+    function reactToCipMessage(messageId, emoji) {
+      var held = applicationFor(state.selectedId);
+      if (!held || !held.id || !messageId || !emoji) return;
+      closeCipFloating();
+      clientsFetch('/portal/cip/applications/' + encodeURIComponent(held.id) + '/messages/' + encodeURIComponent(messageId) + '/reactions', {
+        method: 'POST',
+        json: { emoji: emoji },
+      }).then(function (row) {
+        var messages = (state.cipThread && state.cipThread.messages) || [];
+        state.cipThread.messages = messages.map(function (m) {
+          if (m.id !== (row.id || messageId)) return m;
+          var next = {};
+          Object.keys(m).forEach(function (key) { next[key] = m[key]; });
+          next.reactions = row.reactions || [];
+          return next;
+        });
+        if (usesPagedClientsFlow(state)) render();
+        else render({ detailOnly: true });
+      }).catch(function (err) {
+        clientsToast((err && err.message) || 'Could not add that reaction.', 'negative');
+      });
+    }
+
+    function shareCipMessage(messageId) {
+      var held = applicationFor(state.selectedId);
+      if (!held || !held.id || !messageId) return;
+      if (!window.confirm('Send this to the service provider? They will be notified and can read it.')) return;
+      closeCipFloating();
+      clientsFetch('/portal/cip/applications/' + encodeURIComponent(held.id) + '/messages/' + encodeURIComponent(messageId) + '/share', {
+        method: 'POST',
+        json: {},
+      }).then(function (row) {
+        var messages = (state.cipThread && state.cipThread.messages) || [];
+        state.cipThread.messages = messages.map(function (m) {
+          return m.id === row.id ? row : m;
+        });
+        if (usesPagedClientsFlow(state)) render();
+        else render({ detailOnly: true });
+        clientsToast('Sent to the service provider.');
+      }).catch(function (err) {
+        clientsToast((err && err.message) || 'Could not send this to the service provider.', 'negative');
+      });
+    }
+
+    function openCipFloating(el, anchor) {
+      closeCipFloating();
+      document.body.appendChild(el);
+      placeCipFloating(el, anchor);
+      var onDoc = function (e) {
+        if (el.contains(e.target)) return;
+        closeCipFloating();
+      };
+      cipFloating = { el: el, onDoc: onDoc };
+      setTimeout(function () {
+        document.addEventListener('mousedown', onDoc, true);
+      }, 0);
+    }
+
+    function cipEmojiItems(term, category) {
+      var data = window.TMAEmojiData || { groups: [] };
+      var needle = String(term || '').trim().toLowerCase();
+      var items = [];
+      (data.groups || []).forEach(function (group) {
+        if (!needle && category && group.key !== category) return;
+        (group.items || []).forEach(function (item) {
+          if (!item || !item.c) return;
+          if (needle) {
+            var hay = ((item.n || '') + ' ' + (item.k || '')).toLowerCase();
+            if (hay.indexOf(needle) === -1) return;
+          }
+          items.push(item);
+        });
+      });
+      return items.slice(0, needle ? 80 : 200);
+    }
+
+    function paintCipEmojiPicker(panel, picker, messageId) {
+      var data = window.TMAEmojiData || { groups: [] };
+      var term = picker.term || '';
+      var category = picker.category || (data.groups[0] && data.groups[0].key) || '';
+      var items = cipEmojiItems(term, category);
+      var body = items.length
+        ? '<div class="tma-dash__messages-emoji-picker-grid">' + items.map(function (item) {
+          return '<button type="button" class="tma-dash__messages-emoji-picker-item" data-cip-emoji-char="' + esc(item.c) + '" title="' + esc(item.n || '') + '" aria-label="' + esc(item.n || 'Emoji') + '">' + esc(item.c) + '</button>';
+        }).join('') + '</div>'
+        : '<div class="tma-dash__messages-emoji-empty">No emoji match “' + esc(term) + '”</div>';
+      var tabs = term.trim() ? '' : '<div class="tma-dash__messages-emoji-tabs" role="tablist">' +
+        (data.groups || []).map(function (group) {
+          return '<button type="button" role="tab" class="tma-dash__messages-emoji-tab' +
+            (group.key === category ? ' is-active' : '') +
+            '" data-cip-emoji-category="' + esc(group.key) + '" title="' + esc(group.label) + '" aria-label="' + esc(group.label) + '">' +
+            esc(group.items && group.items[0] ? group.items[0].c : '·') + '</button>';
+        }).join('') + '</div>';
+
+      panel.innerHTML =
+        '<div class="tma-dash__messages-emoji-picker tma-dash__messages-emoji-picker--open" role="dialog" aria-label="Choose a reaction">' +
+        '<div class="tma-dash__messages-emoji-search">' +
+        '<input type="search" class="tma-dash__messages-emoji-search-input" data-cip-emoji-search placeholder="Search emoji" aria-label="Search emoji" value="' + esc(term) + '" autocomplete="off">' +
+        '</div><div class="tma-dash__messages-emoji-body">' + body + '</div>' + tabs + '</div>';
+
+      var search = panel.querySelector('[data-cip-emoji-search]');
+      if (search) {
+        search.addEventListener('input', function () {
+          picker.term = search.value;
+          var caret = search.selectionStart;
+          paintCipEmojiPicker(panel, picker, messageId);
+          var again = panel.querySelector('[data-cip-emoji-search]');
+          if (again) {
+            again.focus();
+            try { again.setSelectionRange(caret, caret); } catch (err) { /* ignore */ }
+          }
+        });
+      }
+      panel.querySelectorAll('[data-cip-emoji-category]').forEach(function (tab) {
+        tab.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          picker.category = tab.getAttribute('data-cip-emoji-category');
+          picker.term = '';
+          paintCipEmojiPicker(panel, picker, messageId);
+        });
+      });
+      panel.querySelectorAll('[data-cip-emoji-char]').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          reactToCipMessage(messageId, btn.getAttribute('data-cip-emoji-char'));
+        });
+      });
+    }
+
+    function openCipEmojiPicker(messageId, anchor) {
+      var panel = document.createElement('div');
+      panel.className = 'tma-dash__messages-message-menu tma-dash__messages-reaction-picker';
+      panel.setAttribute('role', 'dialog');
+      panel.setAttribute('aria-label', 'Choose a reaction');
+      openCipFloating(panel, anchor);
+      paintCipEmojiPicker(panel, { term: '', category: '' }, messageId);
+      placeCipFloating(panel, anchor);
+    }
+
+    MORPH.unwired(root, '[data-cip-react]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        reactToCipMessage(btn.getAttribute('data-cip-react'), btn.getAttribute('data-cip-react-emoji'));
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-react-more]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openCipEmojiPicker(btn.getAttribute('data-cip-react-more'), btn);
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-thread-menu]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var id = btn.getAttribute('data-cip-thread-menu');
+        var message = cipMessageById(id);
+        if (!message) return;
+        var menu = document.createElement('div');
+        menu.className = 'tma-dash__messages-message-menu';
+        menu.setAttribute('role', 'menu');
+        var items = '<button type="button" class="tma-dash__messages-message-menu-item" data-cip-menu="reply">Reply</button>';
+        if (message.canEdit) {
+          items += '<button type="button" class="tma-dash__messages-message-menu-item" data-cip-menu="edit">Edit</button>';
+        }
+        if (message.canShare) {
+          items += '<button type="button" class="tma-dash__messages-message-menu-item" data-cip-menu="share">Send to service provider</button>';
+        }
+        menu.innerHTML = items;
+        openCipFloating(menu, btn);
+        menu.querySelector('[data-cip-menu="reply"]').addEventListener('click', function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          closeCipFloating();
+          var replyBtn = root.querySelector('[data-cip-thread-reply="' + id + '"]');
+          if (replyBtn) replyBtn.click();
+        });
+        var editItem = menu.querySelector('[data-cip-menu="edit"]');
+        if (editItem) {
+          editItem.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            closeCipFloating();
+            var editBtn = root.querySelector('[data-cip-thread-edit="' + id + '"]');
+            if (editBtn) editBtn.click();
+          });
+        }
+        var shareItem = menu.querySelector('[data-cip-menu="share"]');
+        if (shareItem) {
+          shareItem.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            shareCipMessage(id);
+          });
+        }
+      });
+    });
 
     MORPH.unwired(root, '[data-cip-thread-reply]').forEach(function (btn) {
       MORPH.on(btn, 'click', function () {

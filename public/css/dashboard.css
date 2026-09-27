@@ -21833,7 +21833,7 @@ a.tma-dash__clients-edit-btn--accent:visited {
  */
 .tma-cip-thread {
   margin: 0 0 var(--space-16);
-  padding: var(--space-16);
+  padding: 36px var(--space-16) var(--space-16);
   display: flex;
   flex-direction: column;
   gap: var(--space-16);

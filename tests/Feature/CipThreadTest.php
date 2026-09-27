@@ -614,6 +614,54 @@ class CipThreadTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_a_reaction_on_an_application_message_toggles_and_stays_on_that_lane(): void
+    {
+        [$staff, $contact, $application] = $this->filed();
+        $path = '/portal/cip/applications/'.$application->uuid.'/messages';
+
+        $note = $this->actingAs($staff)
+            ->postJson($path, ['body' => 'Keep this in the office.', 'lane' => 'internal'])
+            ->assertCreated()
+            ->json('id');
+
+        $this->actingAs($contact)
+            ->postJson($path.'/'.$note.'/reactions', ['emoji' => '👍'])
+            ->assertNotFound();
+
+        $id = $this->actingAs($staff)
+            ->postJson($path, ['body' => 'Please send the scan.', 'lane' => 'provider'])
+            ->assertCreated()
+            ->json('id');
+
+        $this->actingAs($contact)
+            ->postJson($path.'/'.$id.'/reactions', ['emoji' => 'hello'])
+            ->assertStatus(422);
+
+        $this->actingAs($contact)
+            ->postJson($path.'/'.$id.'/reactions', ['emoji' => '👍'])
+            ->assertOk()
+            ->assertJsonPath('reactions.0.emoji', '👍')
+            ->assertJsonPath('reactions.0.count', 1)
+            ->assertJsonPath('reactions.0.mine', true);
+
+        $this->actingAs($contact)
+            ->postJson($path.'/'.$id.'/reactions', ['emoji' => '❤️'])
+            ->assertOk()
+            ->assertJsonPath('reactions.0.emoji', '❤️')
+            ->assertJsonCount(1, 'reactions');
+
+        $seen = collect($this->actingAs($staff)->getJson($path)->assertOk()->json('messages'))
+            ->firstWhere('id', $id);
+        $this->assertSame('❤️', $seen['reactions'][0]['emoji']);
+        $this->assertFalse($seen['reactions'][0]['mine']);
+        $this->assertSame('Gil Contact', $seen['reactions'][0]['users'][0]['name']);
+
+        $this->actingAs($contact)
+            ->postJson($path.'/'.$id.'/reactions', ['emoji' => '❤️'])
+            ->assertOk()
+            ->assertJsonPath('reactions', []);
+    }
+
     public function test_the_menu_counts_applications_that_still_have_something_unread(): void
     {
         [$staff, $contact, $application] = $this->filed();

@@ -5,6 +5,7 @@ namespace App\Support\Cip;
 use App\Events\CipThreadChanged;
 use App\Models\CipApplication;
 use App\Models\CipApplicationMessage;
+use App\Models\CipApplicationMessageReaction;
 use App\Models\CipApplicationMessageRead;
 use App\Models\CipApplicationMessageReceipt;
 use App\Models\User;
@@ -12,6 +13,7 @@ use App\Support\Access\Role;
 use App\Support\Companies\ContactIdentity;
 use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
+use App\Support\Messaging\Broadcaster;
 use App\Support\Messaging\ClientConversations;
 use App\Support\Notifications\Notifier;
 use App\Support\Realtime\Live;
@@ -196,7 +198,7 @@ class Threads
         $messages = CipApplicationMessage::query()
             ->where('application_id', $application->id)
             ->whereIn('lane', $lanes)
-            ->with(['author', 'companyMember', 'replyTo'])
+            ->with(['author', 'companyMember', 'replyTo', 'reactions.user'])
             ->orderBy('id')
             ->get();
 
@@ -335,6 +337,93 @@ class Threads
         return $message;
     }
 
+    /**
+     * Toggle one emoji on a message this reader can see.
+     *
+     * The same gesture as chat: a different emoji replaces the one they
+     * already hold, and the same emoji again clears it. Anyone who can read
+     * the lane may react. The signal carries no body, so an internal note
+     * never leaks onto a provider's screen.
+     *
+     * @return list<array{emoji: string, count: int, mine: bool, users: list<array{id: int, name: string}>}>
+     */
+    public static function react(CipApplication $application, CipApplicationMessage $message, User $viewer, string $emoji): array
+    {
+        if ((int) $message->application_id !== (int) $application->id) {
+            abort(404);
+        }
+
+        if (! in_array($message->lane, self::lanesFor($viewer), true)) {
+            abort(404);
+        }
+
+        $emoji = trim($emoji);
+
+        if ($emoji === '' || ! self::looksLikeEmoji($emoji)) {
+            throw ValidationException::withMessages([
+                'emoji' => 'That is not an emoji.',
+            ]);
+        }
+
+        $mine = $message->reactions()->where('user_id', $viewer->id)->get();
+        $hadSame = $mine->contains('emoji', $emoji);
+
+        if ($mine->isNotEmpty()) {
+            $message->reactions()->where('user_id', $viewer->id)->delete();
+        }
+
+        if (! $hadSame) {
+            $message->reactions()->create([
+                'user_id' => $viewer->id,
+                'emoji' => $emoji,
+            ]);
+        }
+
+        $message->unsetRelation('reactions');
+        $message->load('reactions.user');
+
+        Broadcaster::toOthers(new CipThreadChanged($application, 'reacted'));
+
+        return self::reactions($message, $viewer);
+    }
+
+    /**
+     * @return list<array{emoji: string, count: int, mine: bool, users: list<array{id: int, name: string}>}>
+     */
+    private static function reactions(CipApplicationMessage $message, User $viewer): array
+    {
+        $message->loadMissing('reactions.user');
+
+        return $message->reactions
+            ->groupBy('emoji')
+            ->map(fn ($group, $emoji) => [
+                'emoji' => $emoji,
+                'count' => $group->count(),
+                'mine' => $group->contains('user_id', $viewer->id),
+                'users' => $group->map(fn (CipApplicationMessageReaction $row) => [
+                    'id' => (int) $row->user_id,
+                    'name' => $row->user?->name ?? 'Someone',
+                ])->values()->all(),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Reactions are drawn as themselves, so the column cannot hold prose.
+     */
+    private static function looksLikeEmoji(string $value): bool
+    {
+        if (preg_match('/[\p{L}\p{N}\s]/u', $value)) {
+            return false;
+        }
+
+        return (bool) preg_match(
+            '/[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{FE00}-\x{FE0F}\x{1F1E6}-\x{1F1FF}]/u',
+            $value
+        );
+    }
+
     public static function canEdit(CipApplicationMessage $message, User $viewer): bool
     {
         return (int) $message->author_id === (int) $viewer->id
@@ -386,6 +475,7 @@ class Threads
             'canEdit' => self::canEdit($message, $viewer),
             'edited' => $message->edited_at !== null,
             'replyTo' => self::presentReply($message, $viewer),
+            'reactions' => self::reactions($message, $viewer),
             'seenBy' => $seenBy,
             'createdAt' => $message->created_at?->toIso8601String(),
         ];
