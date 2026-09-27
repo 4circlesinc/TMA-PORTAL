@@ -230,7 +230,33 @@ final class HomeBoard
 
         $unread = (clone $inbox)->where('is_read', false)->count();
 
-        $rows = (clone $inbox)
+        // The mailbox lists one row per conversation. Without the same cut,
+        // every pinned reply in a thread is its own row, so two pinned
+        // conversations fill the tile with four pin icons.
+        $listed = (clone $inbox);
+        if (self::conversationView($user)) {
+            $listed->where(function ($outer) use ($user) {
+                $outer->whereNull('mail_messages.thread_id')
+                    ->orWhere('mail_messages.thread_id', '')
+                    ->orWhereNotExists(function ($inner) use ($user) {
+                        $inner->selectRaw('1')
+                            ->from('mail_messages as newer')
+                            ->where('newer.user_id', $user->id)
+                            ->whereColumn('newer.thread_id', 'mail_messages.thread_id')
+                            ->where('newer.folder', 'inbox')
+                            ->whereNull('newer.snoozed_until')
+                            ->where(function ($later) {
+                                $later->whereColumn('newer.sent_at', '>', 'mail_messages.sent_at')
+                                    ->orWhere(function ($same) {
+                                        $same->whereColumn('newer.sent_at', '=', 'mail_messages.sent_at')
+                                            ->whereColumn('newer.id', '>', 'mail_messages.id');
+                                    });
+                            });
+                    });
+            });
+        }
+
+        $rows = $listed
             ->with('labels')
             ->orderByDesc('is_pinned')
             ->orderByDesc('sent_at')
@@ -242,6 +268,21 @@ final class HomeBoard
             'inboxUnread' => $unread,
             'messages' => self::mailRows($rows),
         ];
+    }
+
+    /**
+     * The mailbox groups a thread into one row unless the reader turned that
+     * off. Missing preference means on, which is the mailbox default.
+     */
+    private static function conversationView(User $user): bool
+    {
+        $mail = $user->preferences['mail'] ?? null;
+
+        if (! is_array($mail) || ! array_key_exists('conversationView', $mail)) {
+            return true;
+        }
+
+        return (bool) $mail['conversationView'];
     }
 
     /**
