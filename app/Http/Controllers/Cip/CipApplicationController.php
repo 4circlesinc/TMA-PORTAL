@@ -802,6 +802,14 @@ class CipApplicationController extends Controller
              */
             'sort' => ['nullable', 'string', 'max:32'],
             'dir' => ['nullable', 'string', 'max:4'],
+            /*
+             * Unread messages first, ahead of the column order.
+             *
+             * A checkbox on the table, not a filter: the other rows stay,
+             * under the ones that still have mail. Applied here so page two
+             * continues that order instead of re-sorting whichever fifty it holds.
+             */
+            'unread' => ['nullable', 'boolean'],
             'phase' => ['nullable', 'string', 'max:24'],
             /*
              * Add-On tab only: which of the five search options the box is
@@ -980,6 +988,10 @@ class CipApplicationController extends Controller
             $data['phase'] ?? null,
             $data['searchBy'] ?? null,
         );
+        if ($request->boolean('unread')) {
+            Attention::orderUnreadMessagesFirst($query, $user);
+        }
+
         $this->applyListSort($query, $data['sort'] ?? null, $data['dir'] ?? null);
 
         $page = $query->paginate($perPage, ['*'], 'page', $data['page'] ?? 1);

@@ -1436,6 +1436,7 @@
       listParams.push('sort=' + encodeURIComponent(APP_TABLE.sort));
       listParams.push('dir=' + encodeURIComponent(APP_TABLE.dir === 'desc' ? 'desc' : 'asc'));
     }
+    if (APP_TABLE.unreadFirst) listParams.push('unread=1');
 
     return CIP_APPLICATIONS_PATH + (listParams.length ? '?' + listParams.join('&') : '');
   }
@@ -1597,6 +1598,7 @@
       provider: params.get('provider') || null,
       sort: params.get('sort') || null,
       dir: params.get('dir') || null,
+      unread: params.get('unread') === '1',
       // A notice about an application whose client record has gone names the
       // application number instead. Without this the term was dropped and the
       // link landed on the unfiltered list.
@@ -2138,8 +2140,6 @@
     if (statusFilterApplies(state)) fields.push(['bucket', 'Status']);
     if (assigneeFilterApplies(state)) fields.push(['assignee', 'Assigned to']);
     if (providerFilterApplies(state)) fields.push(['provider', 'Service provider']);
-    if (!fields.length) return '';
-
     return '<div class="tma-dash__toolbar-filters">' +
       fields.map(function (pair) {
         var field = pair[0];
@@ -2159,7 +2159,35 @@
           '<img class="tma-dash__filter-drop-caret" src="' + ICONS.ArrowLineDown + '" alt="" aria-hidden="true">' +
           '</button>';
       }).join('') +
+      renderUnreadFirstToggle() +
       '</div>';
+  }
+
+  /*
+   * Bring files that still have unread messages to the top.
+   *
+   * A checkbox rather than a sort column: the reader wants those rows first
+   * and the rest left in whatever order the table already had. Comments do
+   * not count — the envelope is the mark this follows.
+   */
+  function renderUnreadFirstToggle() {
+    var on = !!APP_TABLE.unreadFirst;
+
+    return '<button type="button" class="tma-dash__filter-drop tma-dash__unread-first" data-cip-unread-first' +
+      ' role="checkbox" aria-checked="' + (on ? 'true' : 'false') + '">' +
+      '<span class="tma-filter-popover__check" aria-hidden="true"></span>' +
+      '<span>Unread messages</span></button>';
+  }
+
+  function setUnreadFirst(on) {
+    APP_TABLE.unreadFirst = !!on;
+    resetApplicationPages();
+    if (clientsMountState) {
+      clientsMountState.page = 1;
+      clientsMountState.selected = {};
+      syncClientsListUrl(clientsMountState);
+    }
+    repaintClients();
   }
 
   function renderTableToolbar(state) {
@@ -2259,6 +2287,9 @@
     }
     if (state.sort && state.sort !== 'name') {
       tags.push({ id: 'sort', label: 'Sorted by ' + clientSortLabel(state.sort), icon: ICONS.ArrowsDownUp });
+    }
+    if (onApplicationsTable(state) && APP_TABLE.unreadFirst) {
+      tags.push({ id: 'unread', label: 'Unread messages first', icon: ICONS.ArrowsDownUp });
     }
     if (!tags.length) return '';
 
@@ -3474,6 +3505,7 @@
       filterValues('provider').join(','),
       sort || '',
       dir || '',
+      APP_TABLE.unreadFirst ? 'unread' : '',
       page,
     ].join('|');
   }
@@ -3520,9 +3552,15 @@
 
     var key = APP_TABLE.sort;
     var desc = APP_TABLE.dir === 'desc';
+    var unreadFirst = !!APP_TABLE.unreadFirst;
 
     return rows.map(function (a, i) { return { a: a, i: i }; })
       .sort(function (x, y) {
+        if (unreadFirst) {
+          var ux = x.a.attention && x.a.attention.messages > 0 ? 0 : 1;
+          var uy = y.a.attention && y.a.attention.messages > 0 ? 0 : 1;
+          if (ux !== uy) return ux - uy;
+        }
         var kx = x.a.sortKeys ? x.a.sortKeys[key] : null;
         var ky = y.a.sortKeys ? y.a.sortKeys[key] : null;
         var nx = kx === null || kx === undefined;
@@ -3640,7 +3678,9 @@
       if (APP_TABLE.cache[key] || APP_TABLE.prefetching[key]) return;
 
       APP_TABLE.prefetching[key] = true;
-      clientsFetch('/portal/cip/applications?perPage=150&page=1' + (phase ? '&phase=' + encodeURIComponent(phase) : ''))
+      clientsFetch('/portal/cip/applications?perPage=150&page=1' +
+        (phase ? '&phase=' + encodeURIComponent(phase) : '') +
+        (APP_TABLE.unreadFirst ? '&unread=1' : ''))
         .then(function (json) {
           // A forget() while this was in flight means these rows are stale.
           if (APP_TABLE.fetchGen !== gen) return;
@@ -3740,6 +3780,7 @@
       params.push('sort=' + encodeURIComponent(APP_TABLE.sort));
       params.push('dir=' + encodeURIComponent(APP_TABLE.dir === 'desc' ? 'desc' : 'asc'));
     }
+    if (APP_TABLE.unreadFirst) params.push('unread=1');
 
     clientsFetch('/portal/cip/applications?' + params.join('&'))
       .then(function (json) {
@@ -14609,6 +14650,13 @@
       });
     });
 
+    var unreadFirst = MORPH.unwiredOne(root, '[data-cip-unread-first]');
+    if (unreadFirst) {
+      MORPH.on(unreadFirst, 'click', function () {
+        setUnreadFirst(!APP_TABLE.unreadFirst);
+      });
+    }
+
     var sortTrigger = MORPH.unwiredOne(root, '[data-clients-sort]');
     if (sortTrigger) {
       MORPH.on(sortTrigger, 'click', function (e) {
@@ -14634,6 +14682,10 @@
     MORPH.unwired(root, '[data-clients-remove-filter]').forEach(function (btn) {
       MORPH.on(btn, 'click', function () {
         var id = btn.getAttribute('data-clients-remove-filter');
+        if (id === 'unread') {
+          setUnreadFirst(false);
+          return;
+        }
         if (id === 'sort') {
           state.sort = 'name';
           state.page = 1;
@@ -14655,6 +14707,7 @@
         // leaving any of them applied would be a chip the button does not
         // clear.
         clearTableFilters();
+        APP_TABLE.unreadFirst = false;
         resetApplicationPages();
         syncClientsListUrl(state);
         render({ forceFull: true });
@@ -15255,6 +15308,7 @@
       /* An ordering carried in the address belongs to the tab the address
          opens, not to whichever tab is looked at next. */
       if (bootedSort || bootedDir) stashApplicationPosition(listTabOf(state));
+      if (takeBootPosition('unread')) APP_TABLE.unreadFirst = true;
 
       // The Dashboard's CIP card sets the filter from outside this view, and
       // cannot write an address for a screen that has not mounted yet, so

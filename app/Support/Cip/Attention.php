@@ -7,6 +7,7 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
 use App\Support\Files\CommentReads;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -220,5 +221,86 @@ final class Attention
         }
 
         return $out;
+    }
+
+    /**
+     * Unread correspondence first, then whatever order the table already asked for.
+     *
+     * The same messages the envelope on a row counts: the application thread
+     * (internal notes only for someone who can read them) and a direct message
+     * with that client's own account. A comment thread does not move a row.
+     * Existence, not the count — one unread line and twenty both belong at
+     * the top, and counting every one of them would sort the page twice.
+     */
+    public static function orderUnreadMessagesFirst(Builder $query, User $viewer): void
+    {
+        [$thread, $threadBindings] = self::unreadThreadExistsSql($viewer);
+        [$direct, $directBindings] = self::unreadDirectExistsSql($viewer);
+
+        $query->orderByRaw(
+            'CASE WHEN ('.$thread.' OR '.$direct.') THEN 0 ELSE 1 END',
+            array_merge($threadBindings, $directBindings),
+        );
+    }
+
+    /**
+     * @return array{0: string, 1: list<int|string>}
+     */
+    private static function unreadThreadExistsSql(User $viewer): array
+    {
+        $lanes = Threads::lanesFor($viewer);
+        $marks = implode(',', array_fill(0, count($lanes), '?'));
+
+        $sql = 'EXISTS (
+            SELECT 1 FROM cip_application_messages AS unread_msgs
+            INNER JOIN cip_applications AS unread_apps
+                ON unread_apps.id = unread_msgs.application_id
+                AND unread_apps.deleted_at IS NULL
+            LEFT JOIN cip_application_message_reads AS unread_reads
+                ON unread_reads.application_id = unread_msgs.application_id
+                AND unread_reads.user_id = ?
+            WHERE unread_apps.client_id = cip_applications.client_id
+                AND unread_msgs.lane IN ('.$marks.')
+                AND (unread_msgs.author_id IS NULL OR unread_msgs.author_id != ?)
+                AND unread_msgs.id > COALESCE(unread_reads.last_read_id, 0)
+        )';
+
+        return [$sql, array_merge([$viewer->id], $lanes, [$viewer->id])];
+    }
+
+    /**
+     * @return array{0: string, 1: list<int|string>}
+     */
+    private static function unreadDirectExistsSql(User $viewer): array
+    {
+        $sql = 'EXISTS (
+            SELECT 1 FROM clients AS unread_clients
+            INNER JOIN conversation_participants AS unread_theirs
+                ON unread_theirs.user_id = unread_clients.user_id
+            INNER JOIN conversation_participants AS unread_mine
+                ON unread_mine.conversation_id = unread_theirs.conversation_id
+                AND unread_mine.user_id = ?
+                AND unread_mine.user_id != unread_theirs.user_id
+            INNER JOIN conversations AS unread_conversations
+                ON unread_conversations.id = unread_mine.conversation_id
+                AND unread_conversations.type = ?
+                AND unread_conversations.deleted_at IS NULL
+            INNER JOIN messages AS unread_direct
+                ON unread_direct.conversation_id = unread_mine.conversation_id
+                AND unread_direct.deleted_at IS NULL
+                AND unread_direct.type != ?
+                AND unread_direct.id > COALESCE(unread_mine.last_read_message_id, 0)
+                AND unread_direct.id > COALESCE(unread_mine.cleared_before_message_id, 0)
+                AND (unread_direct.user_id IS NULL OR unread_direct.user_id != ?)
+            WHERE unread_clients.id = cip_applications.client_id
+                AND unread_clients.deleted_at IS NULL
+        )';
+
+        return [$sql, [
+            $viewer->id,
+            Conversation::TYPE_DIRECT,
+            Message::TYPE_SYSTEM,
+            $viewer->id,
+        ]];
     }
 }

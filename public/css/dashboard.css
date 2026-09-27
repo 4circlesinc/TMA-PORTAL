@@ -39541,6 +39541,34 @@ span.tma-dash__messages-profile-avatar {
 
 .tma-dash__filter-drop:hover { background: var(--color-hover); }
 
+/* Unread messages first. The same box the filter menus tick, sat in the
+   toolbar so it reads as a checkbox rather than another dropdown. */
+.tma-dash__unread-first .tma-filter-popover__check {
+  margin-top: 0;
+}
+
+.tma-dash__unread-first[aria-checked="true"] {
+  color: var(--color-text-primary);
+  border-color: var(--color-primary, #2563eb);
+}
+
+.tma-dash__unread-first[aria-checked="true"] .tma-filter-popover__check {
+  border-color: var(--color-primary, #2563eb);
+  background: var(--color-primary, #2563eb);
+}
+
+.tma-dash__unread-first[aria-checked="true"] .tma-filter-popover__check::after {
+  content: "";
+  position: absolute;
+  left: 4.5px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
 .tma-dash__filter-drop:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 1px;

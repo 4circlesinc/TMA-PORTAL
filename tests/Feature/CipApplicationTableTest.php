@@ -716,4 +716,35 @@ class CipApplicationTableTest extends TestCase
         $this->assertSame(1, $body['phaseCounts']['pre_approval']);
         $this->assertSame(1, $body['phaseCounts']['post_approval']);
     }
+
+    public function test_unread_messages_can_be_listed_first(): void
+    {
+        $staff = $this->staff();
+        $other = $this->staff('bo@example.com');
+        $provider = $this->provider($staff);
+        $older = $this->application($staff, $provider, 0, false);
+        $newer = $this->application($staff, $provider, 0, false);
+
+        $this->actingAs($other)
+            ->postJson('/portal/cip/applications/'.$older->uuid.'/messages', [
+                'body' => 'Please send the scan.',
+                'lane' => 'provider',
+            ])->assertCreated();
+
+        $plain = $this->actingAs($staff)->getJson('/portal/cip/applications')->assertOk()->json('applications');
+        $this->assertSame([$newer->uuid, $older->uuid], array_column($plain, 'id'));
+
+        $lifted = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications?unread=1')
+            ->assertOk()
+            ->json('applications');
+        $this->assertSame([$older->uuid, $newer->uuid], array_column($lifted, 'id'));
+
+        // The author has already read their own line, so nothing moves for them.
+        $own = $this->actingAs($other)
+            ->getJson('/portal/cip/applications?unread=1')
+            ->assertOk()
+            ->json('applications');
+        $this->assertSame([$newer->uuid, $older->uuid], array_column($own, 'id'));
+    }
 }
