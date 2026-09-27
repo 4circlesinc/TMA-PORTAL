@@ -3317,15 +3317,16 @@
  * Which leaves weight to carry the state on its own, and weight cannot: these
  * are 12px rows five deep, and half the comments people actually leave are one
  * word. "test" in bold and "test" in regular are the same four letters. The dot
- * is what you can scan a column for.
+ * is what you can scan a column for. Messages use the same red dot.
  */
-.tma-portal-comment-row__unread {
+.tma-portal-comment-row__unread,
+.tma-portal-chat-row__dot {
   flex: none;
   align-self: center;
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--color-accent);
+  background: var(--color-danger, #d92d20);
   /* The word is for screen readers; the circle is for everyone else. */
   overflow: hidden;
   text-indent: 100%;

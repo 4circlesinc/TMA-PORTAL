@@ -1015,6 +1015,9 @@
         '<span class="tma-portal-chat-row__meta">' +
         '<span class="tma-portal-chat-row__top">' +
         '<span class="tma-portal-chat-row__name">' + ui().esc(chatName(c)) + '</span>' +
+        (unread || c.markedUnread
+          ? '<span class="tma-portal-chat-row__dot">Unread</span>'
+          : '') +
         '<span class="tma-portal-chat-row__time">' + ui().esc(c.time || '') + '</span>' +
         '</span>' +
         '<span class="tma-portal-chat-row__preview">' + ui().esc(preview) + '</span>' +
