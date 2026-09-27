@@ -823,8 +823,12 @@
         '<span class="tma-portal-email-row__meta">' +
         '<span class="tma-portal-email-row__top">' +
         '<span class="tma-portal-email-row__sender">' + ui().esc(m.sender || m.email || 'Unknown') + '</span>' +
+        '<span class="tma-portal-email-row__aside">' +
+        (m.pinned
+          ? '<span class="tma-portal-email-row__pin" role="img" aria-label="Pinned" title="Pinned"></span>'
+          : '') +
         '<span class="tma-portal-email-row__time">' + ui().esc(emailTime(m)) + '</span>' +
-        '</span>' +
+        '</span></span>' +
         '<span class="tma-portal-email-row__subject">' + ui().esc(m.subject || '(no subject)') + '</span>' +
         (m.body ? '<span class="tma-portal-email-row__snippet">' + ui().esc(m.body) + '</span>' : '') +
         '</span></button>';
@@ -844,7 +848,7 @@
     if (payload.connected === false) return 'disconnected';
     var msgs = payload.messages || [];
     return msgs.map(function (m) {
-      return [m.id, m.unread ? 1 : 0, m.sentAt || m.time || '', m.subject || ''].join(':');
+      return [m.id, m.unread ? 1 : 0, m.pinned ? 1 : 0, m.sentAt || m.time || '', m.subject || ''].join(':');
     }).join('|');
   }
 

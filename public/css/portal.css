@@ -3263,6 +3263,24 @@
   color: var(--color-text-secondary);
 }
 
+/* Pin sits with the date, the same filled brand-blue marker the mailbox
+   list uses beside a pinned row's timestamp. */
+.tma-portal-email-row__aside {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.tma-portal-email-row__pin {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  background: var(--color-primary, #03a5e9);
+  -webkit-mask: url("../images/icons/phosphor/PushPinFilled.svg") center / contain no-repeat;
+  mask: url("../images/icons/phosphor/PushPinFilled.svg") center / contain no-repeat;
+}
+
 .tma-portal-email-row__subject,
 .tma-portal-email-row__snippet,
 .tma-portal-chat-row__preview,
