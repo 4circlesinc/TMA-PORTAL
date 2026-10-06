@@ -88,6 +88,7 @@ class Removal
         DB::transaction(function () use ($application, $actor) {
             Engine::record($application, CipEvent::ACTION_DELETED, $actor, [
                 'internalNumber' => $application->internal_number,
+                'cipNumber' => $application->cip_number,
                 'status' => $application->status,
             ]);
 
@@ -95,6 +96,16 @@ class Removal
 
             CipDocument::query()->where('application_id', $application->id)->delete();
             $application->people()->delete();
+
+            /*
+             * Free the Unit number for another filing.
+             *
+             * Soft-deleted rows stay in the unique index, so leaving
+             * cip_number set would block the same CIP number forever while
+             * the file sat invisible in the recycle bin. The number rides in
+             * the deleted event above and is put back on restore.
+             */
+            $application->forceFill(['cip_number' => null])->save();
             $application->delete();
         });
 
@@ -122,11 +133,20 @@ class Removal
 
         $providerIds = Contacts::providerUserIds($application);
         $number = $application->displayNumber();
+        $cipNumber = self::archivedCipNumber($application);
 
-        DB::transaction(function () use ($application, $actor) {
+        if ($cipNumber !== null && $cipNumber !== '') {
+            Submission::assertNumberFree($cipNumber, $application);
+        }
+
+        DB::transaction(function () use ($application, $actor, $cipNumber) {
             $application->restore();
             $application->people()->onlyTrashed()->restore();
             CipDocument::onlyTrashed()->where('application_id', $application->id)->restore();
+
+            if ($cipNumber !== null && $cipNumber !== '' && $application->cip_number === null) {
+                $application->forceFill(['cip_number' => $cipNumber])->save();
+            }
 
             foreach (self::trashedOwnedFolders($application) as $folder) {
                 FolderTree::restoreTree($folder);
@@ -134,6 +154,7 @@ class Removal
 
             Engine::record($application, CipEvent::ACTION_RESTORED, $actor, [
                 'internalNumber' => $application->internal_number,
+                'cipNumber' => $application->cip_number,
                 'status' => $application->status,
             ]);
         });
@@ -148,6 +169,35 @@ class Removal
         ]);
 
         Live::staffAnd(Live::CIP, $providerIds);
+    }
+
+    /**
+     * The Unit number this file held when it was archived.
+     *
+     * Cleared on the row so another filing can use it while this one sits in
+     * the bin; recovered here from the deleted event.
+     */
+    private static function archivedCipNumber(CipApplication $application): ?string
+    {
+        if ($application->cip_number !== null && $application->cip_number !== '') {
+            return $application->cip_number;
+        }
+
+        $event = CipEvent::query()
+            ->where('application_id', $application->id)
+            ->where('action', CipEvent::ACTION_DELETED)
+            ->orderByDesc('id')
+            ->first();
+
+        $meta = $event?->meta;
+
+        if (! is_array($meta)) {
+            return null;
+        }
+
+        $number = $meta['cipNumber'] ?? null;
+
+        return is_string($number) && $number !== '' ? $number : null;
     }
 
     /** Erase a numbered file that is already in the recycle bin. */

@@ -1291,7 +1291,7 @@ class Intake
             ]);
         }
 
-        $taken = CipApplication::withTrashed()
+        $taken = CipApplication::query()
             ->whereKeyNot($application->getKey())
             ->whereRaw('LOWER(cip_number) = ?', [mb_strtolower($given)])
             ->exists();

@@ -260,6 +260,77 @@ class CipApplicationDeleteTest extends TestCase
             ->assertJsonCount(1, 'applications');
     }
 
+    /**
+     * A deleted file must not keep its CIP number.
+     *
+     * Soft-deleted rows stay in the unique index. Leaving the Unit number on
+     * them made "Another application already has that CIP number" fire for a
+     * filing nobody could see on the caseload.
+     */
+    public function test_deleting_an_application_frees_its_cip_number_for_reuse(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider($staff);
+        $application = $this->filing($staff, $provider);
+        $application->forceFill(['cip_number' => '10T1E11303P'])->save();
+
+        $this->actingAs($staff)
+            ->deleteJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk();
+
+        $trashed = CipApplication::withTrashed()->find($application->id);
+        $this->assertNotNull($trashed);
+        $this->assertTrue($trashed->trashed());
+        $this->assertNull($trashed->cip_number);
+
+        $replacement = $this->filing($staff, $provider);
+        $replacement->forceFill(['cip_number' => '10T1E11303P'])->save();
+
+        $this->assertSame('10T1E11303P', $replacement->fresh()->cip_number);
+    }
+
+    public function test_restoring_puts_the_cip_number_back(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $application = $this->filing($staff, $this->provider($staff));
+        $application->forceFill(['cip_number' => '10T1E11303P'])->save();
+
+        $this->actingAs($staff)
+            ->deleteJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk();
+
+        $this->assertNull(CipApplication::withTrashed()->find($application->id)?->cip_number);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/restore')
+            ->assertOk();
+
+        $this->assertSame('10T1E11303P', $application->fresh()->cip_number);
+    }
+
+    public function test_restoring_is_refused_when_another_file_took_the_cip_number(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider($staff);
+        $application = $this->filing($staff, $provider);
+        $application->forceFill(['cip_number' => '10T1E11303P'])->save();
+
+        $this->actingAs($staff)
+            ->deleteJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk();
+
+        $replacement = $this->filing($staff, $provider);
+        $replacement->forceFill(['cip_number' => '10T1E11303P'])->save();
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/restore')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['cipNumber']);
+
+        $this->assertTrue(CipApplication::withTrashed()->find($application->id)->trashed());
+        $this->assertNull(CipApplication::withTrashed()->find($application->id)->cip_number);
+    }
+
     public function test_deleting_a_draft_from_the_table_removes_it_outright(): void
     {
         Storage::fake('local');

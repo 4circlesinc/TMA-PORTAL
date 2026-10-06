@@ -290,15 +290,17 @@ class Submission
     }
 
     /**
-     * One CIP number, one application.
+     * One CIP number, one live application.
      *
+     * Soft-deleted filings do not count: their cip_number is cleared when
+     * they go to the recycle bin so the Unit number can be used again.
      * Compared case-insensitively: two rows differing only in case are the
      * same number to everyone but the database, and a search for one would
      * return a stranger's application.
      */
-    private static function assertFree(string $number, CipApplication $application): void
+    public static function assertNumberFree(string $number, CipApplication $application): void
     {
-        $taken = CipApplication::withTrashed()
+        $taken = CipApplication::query()
             ->whereKeyNot($application->getKey())
             ->whereRaw('LOWER(cip_number) = ?', [mb_strtolower($number)])
             ->exists();
@@ -308,5 +310,17 @@ class Submission
                 'cipNumber' => 'Another application already has that CIP number.',
             ]);
         }
+    }
+
+    /**
+     * One CIP number, one application.
+     *
+     * Compared case-insensitively: two rows differing only in case are the
+     * same number to everyone but the database, and a search for one would
+     * return a stranger's application.
+     */
+    private static function assertFree(string $number, CipApplication $application): void
+    {
+        self::assertNumberFree($number, $application);
     }
 }
