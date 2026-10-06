@@ -136,15 +136,23 @@ class CipDocument extends Model
     /**
      * The status the checklist should show right now.
      *
-     * A slot with no live file is always Pending upload, even if the row still
-     * says Application review from before the file was removed.
+     * A slot with no live file is Pending upload when it was still in the
+     * upload/review cycle (Application review or Update required). Ready for
+     * submission is different: that is the reviewer's acceptance, and it must
+     * still read as accepted even if the library file later disappears.
      */
     public function displayStatus(): string
     {
+        $status = $this->status ?? DocumentStatus::PENDING_UPLOAD;
+
+        if ($status === DocumentStatus::READY_FOR_SUBMISSION) {
+            return DocumentStatus::READY_FOR_SUBMISSION;
+        }
+
         if (! $this->isFilled()) {
             return DocumentStatus::PENDING_UPLOAD;
         }
 
-        return $this->status ?? DocumentStatus::PENDING_UPLOAD;
+        return $status;
     }
 }

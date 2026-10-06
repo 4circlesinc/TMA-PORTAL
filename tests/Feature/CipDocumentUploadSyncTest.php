@@ -207,6 +207,55 @@ class CipDocumentUploadSyncTest extends TestCase
         $this->assertFalse($slot->isFilled());
     }
 
+    /**
+     * A reviewer's acceptance must survive the library file going away.
+     *
+     * Opening the application calls reconcile for every slot. That used to
+     * rewrite Ready for submission back to Pending upload whenever the linked
+     * file was soft-deleted, so accepted documents flipped the moment someone
+     * opened the file again.
+     */
+    public function test_reconcile_keeps_ready_for_submission_when_its_file_was_soft_deleted(): void
+    {
+        $staff = $this->staff();
+        $application = $this->application($staff);
+        $person = $application->people->first();
+
+        DocumentSlots::fill(
+            $person,
+            DocumentTypes::PASSPORT_BIO_PAGE,
+            UploadedFile::fake()->create('bio.pdf', 40, 'application/pdf'),
+            $staff,
+        );
+
+        $slot = CipDocument::where('person_id', $person->id)
+            ->where('type', DocumentTypes::PASSPORT_BIO_PAGE)
+            ->first();
+
+        $slot->forceFill(['status' => DocumentStatus::READY_FOR_SUBMISSION])->save();
+
+        $file = $slot->file;
+        $file->update(['deleted_by' => $staff->id]);
+        $file->delete();
+
+        $slot->refresh();
+        $this->assertSame(DocumentStatus::READY_FOR_SUBMISSION, $slot->status);
+        $this->assertFalse($slot->isFilled());
+        $this->assertSame(DocumentStatus::READY_FOR_SUBMISSION, $slot->displayStatus());
+
+        $this->assertTrue(DocumentSlots::reconcile($slot, $staff, false));
+
+        $slot->refresh();
+        $this->assertNull($slot->file_id);
+        $this->assertSame(DocumentStatus::READY_FOR_SUBMISSION, $slot->status);
+        $this->assertSame(DocumentStatus::READY_FOR_SUBMISSION, $slot->displayStatus());
+        $this->assertFalse($slot->isFilled());
+
+        // A second open must not touch an already-cleared accepted slot.
+        $this->assertFalse(DocumentSlots::reconcile($slot, $staff, false));
+        $this->assertSame(DocumentStatus::READY_FOR_SUBMISSION, $slot->fresh()->status);
+    }
+
     public function test_deleting_a_filed_file_resets_the_slot_to_pending_upload(): void
     {
         $staff = $this->staff();
@@ -234,6 +283,35 @@ class CipDocumentUploadSyncTest extends TestCase
         $slot->refresh();
         $this->assertNull($slot->file_id);
         $this->assertSame(DocumentStatus::PENDING_UPLOAD, $slot->status);
+        $this->assertFalse($slot->isFilled());
+    }
+
+    public function test_deleting_an_accepted_file_keeps_ready_for_submission(): void
+    {
+        $staff = $this->staff();
+        $application = $this->application($staff);
+        $person = $application->people->first();
+
+        DocumentSlots::fill(
+            $person,
+            DocumentTypes::PASSPORT_BIO_PAGE,
+            UploadedFile::fake()->create('bio.pdf', 40, 'application/pdf'),
+            $staff,
+        );
+
+        $slot = CipDocument::where('person_id', $person->id)
+            ->where('type', DocumentTypes::PASSPORT_BIO_PAGE)
+            ->first();
+
+        $slot->forceFill(['status' => DocumentStatus::READY_FOR_SUBMISSION])->save();
+        $this->assertNotNull($slot->file_id);
+
+        DocumentEngine::resetAfterFileDeletion($slot->fresh(), $staff);
+
+        $slot->refresh();
+        $this->assertNull($slot->file_id);
+        $this->assertSame(DocumentStatus::READY_FOR_SUBMISSION, $slot->status);
+        $this->assertSame(DocumentStatus::READY_FOR_SUBMISSION, $slot->displayStatus());
         $this->assertFalse($slot->isFilled());
     }
 

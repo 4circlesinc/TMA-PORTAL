@@ -209,6 +209,10 @@ class DocumentSlots
      *
      * Library deletes sometimes bypass model observers (folder-tree bulk delete),
      * so this is called on read as well as from {@see CipFileObserver}.
+     *
+     * Ready for submission is not reset. Opening a file must not undo a
+     * reviewer's acceptance; {@see DocumentEngine::resetAfterFileDeletion}
+     * clears the dangling link and keeps that verdict.
      */
     public static function reconcile(CipDocument $slot, ?User $actor = null, bool $broadcast = true): bool
     {
@@ -218,7 +222,9 @@ class DocumentSlots
 
         $status = $slot->status ?? DocumentStatus::PENDING_UPLOAD;
 
-        if ($slot->file_id === null && $status === DocumentStatus::PENDING_UPLOAD) {
+        if ($slot->file_id === null
+            && ($status === DocumentStatus::PENDING_UPLOAD
+                || $status === DocumentStatus::READY_FOR_SUBMISSION)) {
             return false;
         }
 

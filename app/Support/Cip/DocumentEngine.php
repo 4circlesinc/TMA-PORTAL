@@ -290,20 +290,22 @@ class DocumentEngine
      * deleted file is simply gone, and a checklist that says "Application review"
      * with nothing behind it is wrong.
      *
-     * Only statuses that still live in the upload/review cycle are reset (i.e.
-     * not READY_FOR_SUBMISSION, a document the reviewer accepted stays accepted
-     * even if someone later deletes it from the library, so the history is clear).
+     * Ready for submission is the exception: a document the reviewer accepted
+     * stays accepted even if someone later deletes it from the library, so the
+     * history is clear. The dangling file link is cleared; the verdict is not.
      */
     public static function resetAfterFileDeletion(CipDocument $slot, ?User $actor, bool $broadcast = true): void
     {
         $from = $slot->status ?? DocumentStatus::PENDING_UPLOAD;
+        $keepAccepted = $from === DocumentStatus::READY_FOR_SUBMISSION;
+        $to = $keepAccepted ? DocumentStatus::READY_FOR_SUBMISSION : DocumentStatus::PENDING_UPLOAD;
 
-        DB::transaction(function () use ($slot, $from, $actor, $broadcast) {
+        DB::transaction(function () use ($slot, $from, $to, $keepAccepted, $actor, $broadcast) {
             $slot->forceFill([
                 'file_id' => null,
                 'uploaded_by' => null,
                 'uploaded_at' => null,
-                'status' => DocumentStatus::PENDING_UPLOAD,
+                'status' => $to,
             ])->save();
 
             $application = $slot->loadMissing('application')->application;
@@ -311,17 +313,19 @@ class DocumentEngine
             Engine::record($application, self::ACTION_FILE_DELETED, $actor, [
                 'document' => $slot->uuid,
                 'fromStatus' => $from,
-                'toStatus' => DocumentStatus::PENDING_UPLOAD,
+                'toStatus' => $to,
             ]);
 
             ActivityLogger::log([
                 'actor' => $actor,
                 'type' => 'cip.document_file_deleted',
                 'module' => 'cip',
-                'description' => $slot->label.' file deleted on '.$application->displayNumber().', reset to Pending upload',
+                'description' => $keepAccepted
+                    ? $slot->label.' file deleted on '.$application->displayNumber().', Ready for submission kept'
+                    : $slot->label.' file deleted on '.$application->displayNumber().', reset to Pending upload',
                 'subject' => $slot,
                 'old' => ['status' => $from],
-                'new' => ['status' => DocumentStatus::PENDING_UPLOAD],
+                'new' => ['status' => $to],
             ]);
 
             if ($broadcast) {
