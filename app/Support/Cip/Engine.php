@@ -363,17 +363,22 @@ class Engine
     }
 
     /**
-     * Submitting and approving are claims about the checklist.
+     * Submitting is a claim about the checklist. Approving is not.
      *
-     * Ready to Submit, the Unit submission (Pending Review), Approved, and
-     * Apply for COR all require every required document, and every document
-     * that has been uploaded, to be Ready for submission. A file still in
-     * Application review has not been accepted. Denied is not on this list:
-     * a refusal does not wait on a finished checklist.
+     * Ready to Submit, the Unit submission (Pending Review), and Apply for
+     * COR all require every required document, and every document that has
+     * been uploaded, to be Ready for submission. A file still in Application
+     * review has not been accepted.
      *
-     * An override does not ask this. {@see set()} is how an administrator or
-     * a CRO / Reviewing officer still moves the file, with a reason, when the
-     * checklist has not been finished. The next-step list is what stays shut.
+     * Approved and Denied are the Unit's decision at Background Check, DD
+     * Query or Delayed: both stay on offer once the file is there, whether
+     * or not every portal slot is Ready for submission. The decision letter
+     * is what that verb asks for, not a finished checklist.
+     *
+     * An override does not ask this. {@see set()} is how an administrator
+     * still moves the file, with a reason, when the checklist has not been
+     * finished. The next-step list is what stays shut for Ready to Submit
+     * and the other submit claims.
      *
      * Listings that have not loaded checklists skip the document count — the
      * write still enforces it. Asking here would be one COUNT per row of the
@@ -388,7 +393,6 @@ class Engine
         if (! in_array($to, [
             Status::READY_TO_SUBMIT,
             Status::PENDING_REVIEW,
-            Status::GRANTED,
             Status::APPLY_FOR_COR,
         ], true)) {
             return true;

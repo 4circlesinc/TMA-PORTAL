@@ -127,11 +127,10 @@ class Decision
 
             if (! $already) {
                 /*
-                 * The next step still refuses an approval while a document
-                 * is not Ready for submission. An override, which an
-                 * administrator holds, records the same decision with a
-                 * reason and does not wait on that. A reviewing officer
-                 * sees that status grey and cannot set it.
+                 * A mapped next step goes through apply(). An administrator
+                 * overriding from elsewhere (for example recording a grant
+                 * off the usual Background Check / DD Query / Delayed
+                 * statuses) goes through set() with a reason.
                  */
                 $ordinary = in_array($decision, Engine::availableTransitions($application, $actor), true);
                 if ($ordinary || ! $override) {
