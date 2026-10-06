@@ -14,6 +14,7 @@ use App\Support\Cip\Phase;
 use App\Support\Cip\Removal;
 use App\Support\Cip\Status;
 use App\Support\Realtime\Live;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -136,9 +137,38 @@ class CipApplicationDraftController extends Controller
             ], 422);
         }
 
-        $draft = $draft
-            ? Intake::updateDraft($draft, $user, $data)
-            : Intake::createDraft($provider, $user, $data);
+        try {
+            $draft = $draft
+                ? Intake::updateDraft($draft, $user, $data)
+                : Intake::createDraft($provider, $user, $data);
+        } catch (UniqueConstraintViolationException $e) {
+            /*
+             * Two autosaves of the same form racing mint. Filing already
+             * catches this and hands back the winner; draft create used to
+             * answer 500 "Server Error", which flipped the form's draftOff
+             * flag so Save as draft then said the form was not a draft.
+             */
+            $key = trim((string) ($data['submissionId'] ?? ''));
+            $existing = $key !== ''
+                ? CipApplication::query()
+                    ->where('submission_key', $key)
+                    ->where('status', Status::DRAFT)
+                    ->where('created_by', $user->id)
+                    ->with('people')
+                    ->first()
+                : null;
+            if ($existing === null) {
+                throw $e;
+            }
+            $draft = Intake::updateDraft($existing, $user, $data);
+        } catch (\InvalidArgumentException $e) {
+            $message = $e->getMessage();
+
+            return response()->json([
+                'message' => $message,
+                'errors' => ['documents' => [$message]],
+            ], 422);
+        }
 
         // The table shows drafts, so it has to hear about them.
         Live::staff(Live::CIP);

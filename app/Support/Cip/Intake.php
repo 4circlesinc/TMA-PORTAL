@@ -1291,7 +1291,7 @@ class Intake
             ]);
         }
 
-        $taken = CipApplication::query()
+        $taken = CipApplication::withTrashed()
             ->whereKeyNot($application->getKey())
             ->whereRaw('LOWER(cip_number) = ?', [mb_strtolower($given)])
             ->exists();
@@ -1302,7 +1302,13 @@ class Intake
             ]);
         }
 
-        $application->forceFill(['cip_number' => $given])->save();
+        try {
+            $application->forceFill(['cip_number' => $given])->save();
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            throw ValidationException::withMessages([
+                'cipNumber' => 'Another application already has that CIP number.',
+            ]);
+        }
     }
 
     /**

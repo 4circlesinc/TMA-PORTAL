@@ -2664,6 +2664,13 @@
       form.append(key, value);
     });
 
+    // Name this form up front. parts() also sends it when filing, but a
+    // draft save must never land on "whichever draft is newest" because the
+    // key was omitted.
+    if (state.submissionKey) {
+      form.append('submissionId', state.submissionKey);
+    }
+
     parts().forEach(function (part) {
       if (part.file) form.append(part.name, part.file, part.filename || 'upload');
       else form.append(part.name, part.value);
@@ -2743,6 +2750,12 @@
   function saveDraft(opts) {
     opts = opts || {};
     var announce = !!opts.announce;
+    /*
+     * A silent failure switches the autosave off so it does not keep
+     * failing. Pressing Save as draft is asking again — clear that latch
+     * so the button can retry instead of saying the form is not a draft.
+     */
+    if (announce) state.draftOff = false;
     if (!draftable()) {
       // Pressed on a form that cannot be drafted at all. Only reachable if
       // the button outlives the state that drew it; say so rather than
@@ -2858,7 +2871,12 @@
           state.draftOff = true;
           state.draftSavedAt = null;
           paintDraftStatus();
-          if (announce || state.draftAnnounce) ui().toastError('Could not save this draft');
+          if (announce || state.draftAnnounce) {
+            var refused = (json && json.message && json.message !== 'Server Error')
+              ? json.message
+              : 'Could not save this draft';
+            ui().toastError(refused);
+          }
           state.draftAnnounce = false;
 
           return;

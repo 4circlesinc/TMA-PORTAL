@@ -298,7 +298,7 @@ class Submission
      */
     private static function assertFree(string $number, CipApplication $application): void
     {
-        $taken = CipApplication::query()
+        $taken = CipApplication::withTrashed()
             ->whereKeyNot($application->getKey())
             ->whereRaw('LOWER(cip_number) = ?', [mb_strtolower($number)])
             ->exists();

@@ -1505,6 +1505,42 @@ class CipApplicationDraftTest extends TestCase
     }
 
     /**
+     * Two draft creates racing on one submission key must not 500.
+     *
+     * Filing already catches the unique index and returns the winner. Draft
+     * create used to let the loser explode as "Server Error", which turned
+     * the form's autosave off so Save as draft then said the form was not a
+     * draft at all.
+     */
+    public function test_a_racing_draft_create_updates_the_existing_row(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->save($staff, $this->answers($provider, [
+            'submissionId' => 'race-key',
+            'firstName' => 'First',
+            'lastName' => 'Save',
+        ]))->assertOk();
+
+        $this->assertSame(1, CipApplication::query()->where('status', Status::DRAFT)->count());
+
+        // Name a uuid that is not this draft, so mine() misses and create
+        // hits the unique index — the same shape as two creates racing.
+        $this->save($staff, $this->answers($provider, [
+            'application' => (string) \Illuminate\Support\Str::uuid(),
+            'submissionId' => 'race-key',
+            'firstName' => 'Second',
+            'lastName' => 'Save',
+        ]))->assertOk();
+
+        $this->assertSame(1, CipApplication::query()->where('status', Status::DRAFT)->count());
+        $draft = CipApplication::query()->where('submission_key', 'race-key')->firstOrFail();
+        $main = $draft->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $this->assertSame('SECOND', $main->first_name);
+    }
+
+    /**
      * A new application must not be written onto a draft that is already saved.
      *
      * Create New Application leaves the saved draft off the screen, then the
