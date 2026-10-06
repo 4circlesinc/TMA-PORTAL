@@ -128,9 +128,10 @@ class Decision
             if (! $already) {
                 /*
                  * The next step still refuses an approval while a document
-                 * is not Ready for submission. An override, which every
-                 * administrator and CRO / Reviewing officer holds, records
-                 * the same decision with a reason and does not wait on that.
+                 * is not Ready for submission. An override, which an
+                 * administrator holds, records the same decision with a
+                 * reason and does not wait on that. A reviewing officer
+                 * sees that status grey and cannot set it.
                  */
                 $ordinary = in_array($decision, Engine::availableTransitions($application, $actor), true);
                 if ($ordinary || ! $override) {

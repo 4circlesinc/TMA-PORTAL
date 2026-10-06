@@ -166,7 +166,7 @@ class CipDecisionTest extends TestCase
             ->assertJsonPath('application.status', Status::GRANTED);
     }
 
-    public function test_an_officer_may_override_an_approval_while_a_document_is_still_in_review(): void
+    public function test_an_officer_cannot_override_an_approval_while_a_document_is_still_in_review(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $officer = $this->user(Role::REVIEWING_OFFICER, 'off@example.com', 'Otto Officer');
@@ -184,16 +184,17 @@ class CipDecisionTest extends TestCase
 
         $fresh = $application->fresh();
         $this->assertNotContains(Status::GRANTED, \App\Support\Cip\Engine::availableTransitions($fresh, $officer));
-        $this->assertContains(Status::GRANTED, \App\Support\Cip\Engine::availableOverrides($fresh, $officer));
+        $this->assertSame([], \App\Support\Cip\Engine::availableOverrides($fresh, $officer));
+        $this->assertContains(Status::GRANTED, \App\Support\Cip\Engine::lockedStatuses($fresh, $officer));
 
         $this->postCipDecision($officer, $application->uuid, [
             'decision' => Status::GRANTED,
             'decidedAt' => '2026-08-18',
             'override' => true,
             'note' => 'The Unit approved this before the checklist was finished here.',
-        ])
-            ->assertOk()
-            ->assertJsonPath('application.status', Status::GRANTED);
+        ])->assertForbidden();
+
+        $this->assertNotSame(Status::GRANTED, $application->fresh()->status);
     }
 
     public function test_recording_denied_moves_the_file_to_denied(): void

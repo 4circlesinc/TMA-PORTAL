@@ -262,11 +262,10 @@ class CipAccess
     /**
      * May this account pull a status backwards, or jump off the lifecycle map?
      *
-     * Administrators and CRO / Reviewing officers. Updating a status is the
-     * officer's work, the same as driving the next mapped step; the jump is
-     * still logged as an override and still requires a reason. Assigning who
-     * holds the file stays with administrators. Everyone else may only drive
-     * the next mapped step.
+     * Administrators only. A reviewing officer drives the next mapped step;
+     * every other status is listed for them in grey and is not a choice.
+     * The jump is still logged as an override and still requires a reason.
+     * Assigning who holds the file stays with administrators.
      */
     public static function canOverrideStatus(?User $user): bool
     {
@@ -274,7 +273,7 @@ class CipAccess
             return false;
         }
 
-        return Role::isAdmin($user) || self::isOfficer($user);
+        return Role::isAdmin($user);
     }
 
     /**

@@ -12481,9 +12481,9 @@
       }),
       order: order,
       lane: lane,
-      // Whoever the server gave an override list — administrators and
-      // CRO / Reviewing officers — can pick from it. A reason is asked
-      // for before the write.
+      // Whoever the server gave an override list — administrators — can
+      // pick from it. A reviewing officer is sent the same rows locked,
+      // drawn grey. A reason is asked for before an override.
       canOverride: overrides.length > 0,
       current: source && source.status,
     };
@@ -12518,7 +12518,7 @@
       var on = status.value === current;
       var tone = status.tone || 'neutral';
 
-      return '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--static"' +
+      return '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--static tma-portal-context-menu__item--muted"' +
         ' role="presentation"' + (on ? ' aria-current="true"' : '') + '>' +
         '<i class="tma-portal-cip__dot tma-portal-cip__dot--' + esc(tone) + '" aria-hidden="true"></i>' +
         '<span class="tma-portal-context-menu__label">' + esc(status.label) + '</span></div>';

@@ -857,6 +857,16 @@
 
 .tma-portal-context-menu__item--static:hover { background: transparent; }
 
+/* A status that is not the next step, for a reviewing officer. Listed so
+   the lifecycle still reads in order, but grey and not a choice. */
+.tma-portal-context-menu__item--muted {
+  color: var(--color-text-muted, #9ca3af);
+}
+
+.tma-portal-context-menu__item--muted .tma-portal-cip__dot {
+  background: var(--color-text-muted, #9ca3af);
+}
+
 .tma-portal-context-menu__sep {
   height: 1px;
   margin: var(--space-4) 0;
