@@ -370,7 +370,7 @@ class CipReviewTest extends TestCase
         $this->assertSame(1, $body['progress']['counts'][DocumentStatus::PENDING_UPLOAD]);
     }
 
-    public function test_ready_to_submit_can_be_picked_while_documents_are_still_in_review(): void
+    public function test_ready_to_submit_is_refused_while_an_uploaded_document_is_still_in_review(): void
     {
         Mail::fake();
 
@@ -384,7 +384,7 @@ class CipReviewTest extends TestCase
             ->assertOk();
 
         $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
-        $this->assertContains(
+        $this->assertNotContains(
             Status::READY_TO_SUBMIT,
             Engine::availableTransitions($application->fresh(), $staff),
         );
@@ -393,12 +393,11 @@ class CipReviewTest extends TestCase
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::READY_TO_SUBMIT,
             ])
-            ->assertOk()
-            ->assertJsonPath('application.status', Status::READY_TO_SUBMIT);
+            ->assertStatus(422);
 
-        $this->assertSame(Status::READY_TO_SUBMIT, $application->fresh()->status);
+        $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
 
-        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => str_contains((string) $mail->subjectLine, 'READY TO SUBMIT'));
+        Mail::assertNothingQueued();
     }
 
     public function test_moving_a_file_back_to_application_review_leaves_ready_to_submit(): void

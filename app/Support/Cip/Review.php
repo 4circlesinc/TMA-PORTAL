@@ -327,8 +327,8 @@ class Review
             /*
              * The checklist must not auto-advance to Ready to Submit or Apply
              * for COR while a slot sits in Application review or Update
-             * required. Officers may still type Ready to Submit themselves to
-             * ask the provider to confirm. Skip the hop — do not throw.
+             * required. Typing those statuses by hand is refused the same
+             * way, in {@see Engine}. Skip the hop here — do not throw.
              * Throwing here used to 422 the document PATCH after the slot had
              * already been written, which rolled the chip back on screen.
              */
@@ -376,6 +376,31 @@ class Review
 
         return $tally[DocumentStatus::UPDATE_REQUIRED]['total'] === 0
             && $tally[DocumentStatus::APPLICATION_REVIEW]['total'] === 0;
+    }
+
+    /**
+     * Whether this file may be submitted or approved.
+     *
+     * Every required slot has to stand at Ready for submission. Every uploaded
+     * file does too, required or not: a scan still in Application review or
+     * Update required has not been accepted. An optional slot nobody filled
+     * does not hold the file. A checklist with no required slots owes nothing
+     * and may move, unless something uploaded is still unread or refused.
+     */
+    public static function packageReady(CipApplication $application): bool
+    {
+        if (! self::documentsAllowReadyToSubmit($application)) {
+            return false;
+        }
+
+        $tally = self::tally($application);
+        $required = array_sum(array_column($tally, 'required'));
+
+        if ($required === 0) {
+            return true;
+        }
+
+        return $tally[DocumentStatus::READY_FOR_SUBMISSION]['required'] === $required;
     }
 
     /**

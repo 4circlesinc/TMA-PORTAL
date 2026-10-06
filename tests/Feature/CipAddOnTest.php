@@ -483,6 +483,7 @@ class CipAddOnTest extends TestCase
             'submitted_at' => '2026-08-18',
             'locked_at' => now(),
         ])->save();
+        $this->markChecklistReady($application);
 
         $this->postCipDecision($staff, $application->uuid, [
             'decision' => Status::GRANTED,
@@ -1974,6 +1975,8 @@ class CipAddOnTest extends TestCase
             'locked_at' => now(),
         ])->save();
 
+        $this->markChecklistReady($application);
+
         $this->assertFalse(\App\Support\Cip\Engine::canTransition($application->fresh(), Status::BACKGROUND_CHECK));
         $this->assertTrue(\App\Support\Cip\Engine::canTransition($application->fresh(), Status::GRANTED));
         $this->assertTrue(\App\Support\Cip\Engine::canTransition($application->fresh(), Status::DENIED));
@@ -2275,6 +2278,14 @@ class CipAddOnTest extends TestCase
             'country_of_residence' => 'China',
             'passport_number' => 'P1111111',
         ]);
+    }
+
+    /** The checklist has been accepted, so a later approval is about the decision. */
+    private function markChecklistReady(CipApplication $application): void
+    {
+        CipDocument::query()
+            ->where('application_id', $application->id)
+            ->update(['status' => DocumentStatus::READY_FOR_SUBMISSION]);
     }
 
     /** @param  array<string, mixed>  $overrides */

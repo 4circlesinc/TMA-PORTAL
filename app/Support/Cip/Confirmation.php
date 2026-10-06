@@ -144,9 +144,9 @@ class Confirmation
             throw new AuthorizationException('Only the service provider can confirm this submission.');
         }
 
-        if (! Review::progress($application)['complete']) {
+        if (! Review::packageReady($application)) {
             throw new \InvalidArgumentException(
-                'Every required document must be ready for submission before the package can be confirmed.',
+                'Every required document, and every document that has been uploaded, must be Ready for submission before the package can be confirmed.',
             );
         }
 
@@ -209,9 +209,9 @@ class Confirmation
             throw new AuthorizationException('Only the service provider can confirm this submission.');
         }
 
-        if (! Review::progress($application)['complete']) {
+        if (! Review::packageReady($application)) {
             throw new \InvalidArgumentException(
-                'Every required document must be ready for submission before the package can be confirmed.',
+                'Every required document, and every document that has been uploaded, must be Ready for submission before the package can be confirmed.',
             );
         }
 

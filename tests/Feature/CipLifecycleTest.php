@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\CipDocument;
 use App\Models\CipEvent;
 use App\Models\CipPerson;
+use App\Models\FileItem;
 use App\Models\CipProvider;
 use App\Models\Company;
 use App\Models\CompanyMember;
@@ -17,6 +18,7 @@ use App\Support\Cip\Status;
 use App\Support\Cip\Timeline;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -115,12 +117,24 @@ class CipLifecycleTest extends TestCase
 
         $slots = [];
         foreach ([$chen, $li, $mei] as $person) {
+            $file = FileItem::create([
+                'uuid' => (string) Str::uuid(),
+                'name' => $person->first_name.' '.$person->last_name.' - Passport bio page.pdf',
+                'extension' => 'pdf',
+                'mime_type' => 'application/pdf',
+                'size' => 1024,
+                'disk' => 'local',
+                'storage_path' => 'vault/'.$person->id.'-bio.pdf',
+                'owner_id' => $ada->id,
+                'uploaded_by' => $ada->id,
+            ]);
             $slot = CipDocument::create([
                 'application_id' => $application->id,
                 'person_id' => $person->id,
                 'type' => 'passport_bio_page',
                 'label' => 'Passport bio page',
                 'required' => true,
+                'file_id' => $file->id,
             ]);
             $slot->forceFill(['status' => DocumentStatus::APPLICATION_REVIEW])->save();
             $slots[] = $slot;

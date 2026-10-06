@@ -365,14 +365,13 @@ class Engine
     }
 
     /**
-     * Apply for COR is a claim about the COR checklist, not a label somebody
-     * may type while those files are still in Application review or Update
-     * required.
+     * Submitting and approving are claims about the checklist.
      *
-     * Ready to Submit is the officer asking the provider to confirm. It is
-     * pickable from Review Applications even while documents are still being
-     * read; locking the package still requires every required document to be
-     * ready (see {@see Confirmation::confirm}).
+     * Ready to Submit, the Unit submission (Pending Review), Approved, and
+     * Apply for COR all require every required document, and every document
+     * that has been uploaded, to be Ready for submission. A file still in
+     * Application review has not been accepted. Denied is not on this list:
+     * a refusal does not wait on a finished checklist.
      *
      * Listings that have not loaded checklists skip the document count — the
      * write still enforces it. Asking here would be one COUNT per row of the
@@ -384,7 +383,12 @@ class Engine
      */
     private static function checklistAllows(CipApplication $application, string $to, bool $forListing = false): bool
     {
-        if ($to !== Status::APPLY_FOR_COR) {
+        if (! in_array($to, [
+            Status::READY_TO_SUBMIT,
+            Status::PENDING_REVIEW,
+            Status::GRANTED,
+            Status::APPLY_FOR_COR,
+        ], true)) {
             return true;
         }
 
@@ -398,7 +402,7 @@ class Engine
             }
         }
 
-        return Review::documentsAllowReadyToSubmit($application);
+        return Review::packageReady($application);
     }
 
     /**
@@ -698,7 +702,7 @@ class Engine
 
     private static function checklistRefusal(string $to): string
     {
-        return 'This application cannot be '.Status::label($to).' while documents are still in Application review or Update required.';
+        return 'Every required document, and every document that has been uploaded, must be Ready for submission before this application can be '.Status::label($to).'.';
     }
 
     /**

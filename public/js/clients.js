@@ -5639,6 +5639,35 @@
     });
   }
 
+  /*
+   * Approved and Ready to Submit both wait on the checklist.
+   *
+   * A required slot that is not Ready for submission holds the file, and so
+   * does any uploaded file still in Application review or Update required.
+   * An optional slot nobody filled does not. No documents on the record means
+   * this screen cannot judge it; the server still refuses the write.
+   */
+  function cipPackageReady(app) {
+    var people = cipFamily(app);
+    var i;
+    var j;
+    var docs;
+    var doc;
+    if (!people.length) return true;
+
+    for (i = 0; i < people.length; i++) {
+      docs = (people[i] && people[i].documents) || [];
+      for (j = 0; j < docs.length; j++) {
+        doc = docs[j];
+        if (!doc) continue;
+        if (doc.status === 'application_review' || doc.status === 'update_required') return false;
+        if (doc.required && doc.status !== 'ready_for_submission') return false;
+      }
+    }
+
+    return true;
+  }
+
   function cipAnyDocStatus(app, status) {
     if (!app) return false;
     var people = cipFamily(app);
@@ -14083,6 +14112,11 @@
           }
           if (picked !== 'granted' && picked !== 'denied') {
             clientsToast('Choose Approved or Denied.', 'negative');
+            return;
+          }
+
+          if (picked === 'granted' && held && held.phase !== 'post_approval' && !cipPackageReady(held)) {
+            clientsToast('Every required document, and every document that has been uploaded, must be Ready for submission before this application can be Approved.', 'negative');
             return;
           }
 
