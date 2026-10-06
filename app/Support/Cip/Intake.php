@@ -23,6 +23,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Creating an application from the intake form (section 2–section 6).
@@ -278,14 +279,19 @@ class Intake
                 /*
                  * A post-approval filing arrives with the Unit's number
                  * already on it: the file was approved before the portal saw
-                 * it, so there is a letter to read it off and no submission
-                 * step left that would ask for it. A pre-approval filing has
-                 * no such number yet — {@see Submission::record} is where
-                 * that one is entered — so the field is not offered there and
-                 * is not accepted if sent.
+                 * it. Autosave keeps the number on the draft, so a submit
+                 * that does not repeat the field still has one to adopt.
+                 * A pre-approval filing has no such number yet —
+                 * {@see Submission::record} is where that one is entered —
+                 * so the field is not offered there and is not accepted if sent.
                  */
                 'cipNumber' => self::filingPhase() === Phase::POST_APPROVAL
-                    ? ['required', 'string', 'max:'.Submission::MAX_LENGTH]
+                    ? [
+                        Rule::requiredIf(fn () => ! filled($draft?->cip_number)),
+                        'nullable',
+                        'string',
+                        'max:'.Submission::MAX_LENGTH,
+                    ]
                     : ['prohibited'],
                 // Minted once when the wizard opens, so a retry after a
                 // timeout names the submission it repeats — see store().
@@ -1068,6 +1074,11 @@ class Intake
                 throw new \RuntimeException('This application has been filed and is no longer a draft.');
             }
 
+            $key = trim((string) ($data['submissionId'] ?? ''));
+            if ($key !== '' && ! filled($application->submission_key)) {
+                $application->forceFill(['submission_key' => $key])->save();
+            }
+
             self::saveDraftAnswers($application, $actor, $data);
 
             return $application->fresh();
@@ -1211,22 +1222,29 @@ class Intake
     /**
      * The post-approval half of {@see create}, for a row that already exists.
      *
-     * The Unit's number is adopted rather than corrected: a draft never
-     * held one, and {@see Submission::correct} is a compliance edit of a
-     * number already on file.
+     * The Unit's number is adopted rather than corrected. A draft may
+     * already hold it — autosave writes the number as it is typed — and
+     * {@see Submission::correct} is a compliance edit of a number already
+     * on a filed application. The number is written before the status
+     * moves, so a number the Unit has already issued leaves this row a draft.
      *
      * @param  array<string, mixed>  $data
      */
     private static function filePostApprovalDraft(CipApplication $application, User $creator, array $data): CipApplication
     {
+        $number = trim((string) ($data['cipNumber'] ?? ''));
+        if ($number === '') {
+            $number = (string) ($application->cip_number ?? '');
+        }
+
+        Submission::adopt($application, $creator, $number);
+
         $from = $application->status;
         $application->forceFill([
             'phase' => Phase::POST_APPROVAL,
             'status' => Status::POST_APPROVAL,
             'post_approval_at' => $application->post_approval_at ?? now(),
         ])->save();
-
-        Submission::adopt($application, $creator, (string) ($data['cipNumber'] ?? ''));
         Engine::record($application, CipEvent::ACTION_STATUS_CHANGED, $creator, [], $from, Status::POST_APPROVAL);
         Engine::record($application, CipEvent::ACTION_POST_APPROVAL_ENTERED, $creator, []);
 
@@ -1241,6 +1259,50 @@ class Intake
         }
 
         return $application;
+    }
+
+    /**
+     * The Unit's number, kept on a post-approval draft as it is typed.
+     *
+     * Filing adopts it. Leaving it only in the browser meant a submit that
+     * completed the wrong row, or a form that did not repeat the field,
+     * filed an application with no number on it.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private static function keepDraftCipNumber(CipApplication $application, array $data): void
+    {
+        if (($application->phase ?? '') !== Phase::POST_APPROVAL) {
+            return;
+        }
+
+        if (! array_key_exists('cipNumber', $data)) {
+            return;
+        }
+
+        $given = preg_replace('/\s+/u', '', trim((string) ($data['cipNumber'] ?? ''))) ?? '';
+        if ($given === '' || $given === (string) $application->cip_number) {
+            return;
+        }
+
+        if (mb_strlen($given) > Submission::MAX_LENGTH) {
+            throw ValidationException::withMessages([
+                'cipNumber' => 'That CIP number is too long, check it against the letter.',
+            ]);
+        }
+
+        $taken = CipApplication::query()
+            ->whereKeyNot($application->getKey())
+            ->whereRaw('LOWER(cip_number) = ?', [mb_strtolower($given)])
+            ->exists();
+
+        if ($taken) {
+            throw ValidationException::withMessages([
+                'cipNumber' => 'Another application already has that CIP number.',
+            ]);
+        }
+
+        $application->forceFill(['cip_number' => $given])->save();
     }
 
     /**
@@ -1267,6 +1329,8 @@ class Intake
             ),
             'sponsored' => (bool) ($data['sponsored'] ?? false),
         ])->save();
+
+        self::keepDraftCipNumber($application, $data);
 
         $application->load('people');
 
@@ -2143,7 +2207,17 @@ class Intake
         if (! $replace
             && $slot?->file_id
             && ($slot->status ?? DocumentStatus::PENDING_UPLOAD) !== DocumentStatus::UPDATE_REQUIRED) {
-            return;
+            /*
+             * The same photo, posted again by autosave, is already the answer.
+             * A different photo is the reader choosing a new face — including
+             * on a draft that already had somebody else's — and has to replace
+             * the one on file rather than leave it in the slot.
+             */
+            if (self::uploadAlreadyStored($person, DocumentTypes::PASSPORT_PHOTO, $upload, null)) {
+                return;
+            }
+
+            $replace = true;
         }
 
         // The slot first: Vault::store consumes the temp file, so the bytes

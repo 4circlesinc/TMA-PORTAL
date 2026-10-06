@@ -1504,6 +1504,218 @@ class CipApplicationDraftTest extends TestCase
         return new UploadedFile($path, 'photo.jpg', 'image/jpeg', null, true);
     }
 
+    /**
+     * A new application must not be written onto a draft that is already saved.
+     *
+     * Create New Application leaves the saved draft off the screen, then the
+     * first autosave used to land on that row anyway. The names changed. The
+     * photo and the documents did not, because those slots were already
+     * filled, so the person just entered wore the draft person's face and scans.
+     */
+    public function test_a_new_submission_keeps_its_own_photo_and_documents(): void
+    {
+        Storage::fake('local');
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $principalDocs = fn (string $bio) => array_merge(
+            $this->cipRequiredDocumentFiles(
+                \App\Support\Cip\ApplicantType::PRINCIPAL_APPLICANT,
+                Phase::PRE_APPROVAL,
+                'Male',
+                InvestmentType::REAL_ESTATE,
+            ),
+            ['passportBioPage' => [UploadedFile::fake()->create($bio, 40, 'application/pdf')]],
+        );
+        $childDocs = fn (string $bio) => array_merge(
+            $this->cipRequiredDocumentFiles(
+                \App\Support\Cip\ApplicantType::DEPENDENT_UNDER_16,
+                Phase::PRE_APPROVAL,
+            ),
+            ['passportBioPage' => [UploadedFile::fake()->create($bio, 30, 'application/pdf')]],
+        );
+
+        $this->actingAs($staff)->post('/portal/cip/applications/draft', array_merge($this->answers($provider, [
+            'submissionId' => 'draft-person',
+            'firstName' => 'Draft',
+            'lastName' => 'Person',
+            'gender' => 'Male',
+            'dateOfBirth' => '1980-01-01',
+            'countryOfBirth' => 'Lebanon',
+            'occupation' => 'Engineer',
+            'passportNumber' => 'D1111111',
+            'investmentType' => InvestmentType::REAL_ESTATE,
+            'sponsored' => '0',
+            'passportPhoto' => $this->photo(600),
+            'dependents' => [[
+                'firstName' => 'Draft',
+                'lastName' => 'Child',
+                'dateOfBirth' => '2014-01-02',
+                'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                'passportPhoto' => $this->photo(610),
+            ] + $childDocs('draft-child.pdf')],
+        ]), $principalDocs('draft-bio.pdf')), ['Accept' => 'application/json'])->assertOk();
+
+        $saved = CipApplication::query()->where('submission_key', 'draft-person')->firstOrFail();
+        $savedMain = $saved->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $savedChild = $saved->people->firstWhere('role', CipPerson::ROLE_DEPENDENT);
+        $savedPhoto = $savedMain->photo_path;
+        $savedBioId = $savedMain->documents()->where('type', 'passport_bio_page')->value('file_id');
+        $savedChildPhoto = $savedChild->photo_path;
+
+        $this->actingAs($staff)->post('/portal/cip/applications/draft', array_merge($this->answers($provider, [
+            'submissionId' => 'new-person',
+            'firstName' => 'Fesa',
+            'lastName' => 'Butbouten',
+            'gender' => 'Male',
+            'dateOfBirth' => '1985-04-12',
+            'countryOfBirth' => 'Lebanon',
+            'occupation' => 'Engineer',
+            'passportNumber' => 'X1234567',
+            'investmentType' => InvestmentType::REAL_ESTATE,
+            'sponsored' => '0',
+            'passportPhoto' => $this->photo(640),
+            'dependents' => [[
+                'firstName' => 'Fesa',
+                'lastName' => 'Child',
+                'dateOfBirth' => '2016-03-03',
+                'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                'passportPhoto' => $this->photo(650),
+            ] + $childDocs('fesa-child.pdf')],
+        ]), $principalDocs('fesa-bio.pdf')), ['Accept' => 'application/json'])->assertOk();
+
+        $this->assertSame(2, CipApplication::query()->where('status', Status::DRAFT)->count());
+
+        $savedMain = $saved->fresh()->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $savedChild = $saved->fresh()->people->firstWhere('role', CipPerson::ROLE_DEPENDENT);
+        $this->assertSame('DRAFT', $savedMain->first_name);
+        $this->assertSame($savedPhoto, $savedMain->photo_path);
+        $this->assertSame($savedBioId, $savedMain->documents()->where('type', 'passport_bio_page')->value('file_id'));
+        $this->assertSame($savedChildPhoto, $savedChild->photo_path);
+
+        $entered = CipApplication::query()->where('submission_key', 'new-person')->firstOrFail();
+        $enteredMain = $entered->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $enteredChild = $entered->people->firstWhere('role', CipPerson::ROLE_DEPENDENT);
+        $this->assertSame('FESA', $enteredMain->first_name);
+        $this->assertNotSame($savedPhoto, $enteredMain->photo_path);
+        $this->assertNotSame($savedBioId, $enteredMain->documents()->where('type', 'passport_bio_page')->value('file_id'));
+        $this->assertNotSame($savedChildPhoto, $enteredChild->photo_path);
+        $this->assertNotNull($enteredChild->documents()->where('type', 'passport_bio_page')->value('file_id'));
+
+        $filing = $this->cipWithoutUploads($this->filing($provider));
+        $filing['submissionId'] = 'new-person';
+        $filing['firstName'] = 'Fesa';
+        $filing['lastName'] = 'Butbouten';
+        $filing['dependents'] = [[
+            'id' => $enteredChild->uuid,
+            'firstName' => 'Fesa',
+            'lastName' => 'Child',
+            'dateOfBirth' => '2016-03-03',
+            'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+        ]];
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications', $filing, ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        $this->assertSame(Status::NEW, $entered->fresh()->status);
+        $this->assertSame(Status::DRAFT, $saved->fresh()->status);
+        $filedMain = $entered->fresh()->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $this->assertNotSame($savedPhoto, $filedMain->photo_path);
+        $this->assertSame(
+            $enteredMain->documents()->where('type', 'passport_bio_page')->value('file_id'),
+            $filedMain->documents()->where('type', 'passport_bio_page')->value('file_id'),
+        );
+        $this->assertSame($savedPhoto, $saved->fresh()->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->photo_path);
+    }
+
+    /**
+     * The Unit's number is part of the draft, and filing keeps it on that row.
+     */
+    public function test_a_post_approval_draft_keeps_the_cip_number_that_was_typed(): void
+    {
+        Storage::fake('local');
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+        $docs = fn () => $this->cipRequiredDocumentFiles(
+            \App\Support\Cip\ApplicantType::PRINCIPAL_APPLICANT,
+            Phase::POST_APPROVAL,
+            'Male',
+            InvestmentType::REAL_ESTATE,
+        );
+
+        $this->actingAs($staff)->post('/portal/cip/applications/draft', array_merge($this->answers($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'submissionId' => 'draft-person',
+            'cipNumber' => '10T1G10000P',
+            'firstName' => 'Draft',
+            'lastName' => 'Person',
+            'gender' => 'Male',
+            'dateOfBirth' => '1980-01-01',
+            'countryOfBirth' => 'Lebanon',
+            'occupation' => 'Engineer',
+            'passportNumber' => 'D1111111',
+            'investmentType' => InvestmentType::REAL_ESTATE,
+            'sponsored' => '0',
+            'passportPhoto' => $this->photo(600),
+        ]), $docs()), ['Accept' => 'application/json'])->assertOk();
+
+        $this->actingAs($staff)->post('/portal/cip/applications/draft', array_merge($this->answers($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'submissionId' => 'new-person',
+            'cipNumber' => '10T1G12680P',
+            'firstName' => 'Fesa',
+            'lastName' => 'Butbouten',
+            'gender' => 'Male',
+            'dateOfBirth' => '1985-04-12',
+            'countryOfBirth' => 'Lebanon',
+            'occupation' => 'Engineer',
+            'passportNumber' => 'X1234567',
+            'investmentType' => InvestmentType::REAL_ESTATE,
+            'sponsored' => '0',
+            'passportPhoto' => $this->photo(640),
+        ]), $docs()), ['Accept' => 'application/json'])->assertOk();
+
+        $saved = CipApplication::query()->where('submission_key', 'draft-person')->firstOrFail();
+        $entered = CipApplication::query()->where('submission_key', 'new-person')->firstOrFail();
+        $this->assertSame('10T1G10000P', $saved->cip_number);
+        $this->assertSame('10T1G12680P', $entered->cip_number);
+        $this->assertSame('10T1G12680P', $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/draft?application='.$entered->uuid)
+            ->json('draft.answers.cipNumber'));
+
+        $savedPhoto = $saved->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->photo_path;
+
+        $filing = $this->cipWithoutUploads($this->filing($provider));
+        $filing['phase'] = Phase::POST_APPROVAL;
+        $filing['submissionId'] = 'new-person';
+        $filing['firstName'] = 'Fesa';
+        $filing['lastName'] = 'Butbouten';
+        unset($filing['cipNumber']);
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications', $filing, ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        $filed = $entered->fresh();
+        $this->assertSame(Status::POST_APPROVAL, $filed->status);
+        $this->assertSame('10T1G12680P', $filed->cip_number);
+        $this->assertSame(Status::DRAFT, $saved->fresh()->status);
+        $this->assertSame('10T1G10000P', $saved->fresh()->cip_number);
+        $this->assertSame(
+            $savedPhoto,
+            $saved->fresh()->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->photo_path,
+        );
+        $this->assertNotSame(
+            $savedPhoto,
+            $filed->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->photo_path,
+        );
+    }
+
     public function test_an_account_without_cip_access_is_refused(): void
     {
         $stranger = $this->user(Role::CLIENT);

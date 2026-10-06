@@ -433,15 +433,18 @@ class CipApplicationController extends Controller
          */
         $key = trim((string) ($data['submissionId'] ?? ''));
         if ($key !== '') {
-            $named = CipApplication::query()
+            /*
+             * No match is a new filing. Falling through to the newest draft
+             * of the phase filed this form onto somebody else's unfinished
+             * application: their photo and documents stayed, and the Unit
+             * number typed here never became this application's.
+             */
+            return CipApplication::query()
                 ->where('submission_key', $key)
                 ->where('status', Status::DRAFT)
                 ->where('created_by', $user->id)
                 ->with(['people.documents'])
                 ->first();
-            if ($named) {
-                return $named;
-            }
         }
 
         $phase = ! empty($data['phase']) && Phase::isValid($data['phase'])

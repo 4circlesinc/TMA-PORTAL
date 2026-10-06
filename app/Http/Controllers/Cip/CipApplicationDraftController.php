@@ -78,11 +78,14 @@ class CipApplicationDraftController extends Controller
     /**
      * Keep what has been typed so far.
      *
-     * One draft per reader per phase, so a reader who opens the wizard twice
-     * carries on with the same unfinished application rather than numbering a
-     * second one. The wizard sends the whole form each time, so this is a
-     * replace rather than a merge — a dependant removed on the screen has to
-     * be removed here too.
+     * A form names the draft it is typing into. The wizard mints a submission
+     * key when it opens, and a second application — somebody else, still
+     * saved as a draft — must not receive this form's answers, photo or
+     * scans. A save that names no submission still updates this reader's
+     * latest draft of the phase, which is how a form saved twice stays one
+     * row. The wizard sends the whole form each time, so this is a replace
+     * rather than a merge — a dependant removed on the screen has to be
+     * removed here too.
      */
     public function store(Request $request): JsonResponse
     {
@@ -212,6 +215,26 @@ class CipApplicationDraftController extends Controller
         if ($uuid !== '') {
             return CipApplication::query()
                 ->where('uuid', $uuid)
+                ->where('status', Status::DRAFT)
+                ->where('created_by', $user->id)
+                ->with('people')
+                ->first();
+        }
+
+        /*
+         * A submission key is a particular form, not "whichever draft is newest".
+         *
+         * Create New Application does not resume a draft onto the screen, but
+         * the first autosave used to land here with no uuid and be written
+         * onto the latest draft of the phase. The names changed. The photo
+         * and the documents did not: those slots were already filled, so the
+         * files the reader had just chosen were dropped and the draft
+         * person's scans stayed. A key that matches nothing is a new draft.
+         */
+        $key = trim((string) ($request->input('submissionId') ?? ''));
+        if ($key !== '') {
+            return CipApplication::query()
+                ->where('submission_key', $key)
                 ->where('status', Status::DRAFT)
                 ->where('created_by', $user->id)
                 ->with('people')
@@ -415,6 +438,9 @@ class CipApplicationDraftController extends Controller
         }
         if ($draft->investment_type_other) {
             $answers['investmentTypeOther'] = $draft->investment_type_other;
+        }
+        if (filled($draft->cip_number)) {
+            $answers['cipNumber'] = $draft->cip_number;
         }
         $answers['providerId'] = $draft->provider?->uuid ?? '';
 

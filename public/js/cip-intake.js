@@ -2929,18 +2929,16 @@
    */
   function clearDraft() {
     if (state.draftTimer) { clearTimeout(state.draftTimer); state.draftTimer = null; }
-    var phase = state.phase || 'pre_approval';
-    var draftId = editingDraft() ? state.applicationId : null;
+    var named = (editingDraft() && state.applicationId) ? state.applicationId : state.draftId;
     state.draftSent = '';
     state.draftSavedAt = null;
     state.draftResumed = false;
-    // A filed application has no draft to discard; a draft discards itself
-    // by name, whichever way the form was opened.
-    if (state.applicationId && !draftId) return;
+    // A filed application has no draft to discard. A draft discards itself
+    // by name. Deleting "the latest draft of this phase" threw away a
+    // different person's unfinished application.
+    if (!named || (state.applicationId && !editingDraft())) return;
 
-    fetch(draftId
-      ? DRAFT_URL + '?application=' + encodeURIComponent(draftId)
-      : DRAFT_URL + '?phase=' + encodeURIComponent(phase), {
+    fetch(DRAFT_URL + '?application=' + encodeURIComponent(named), {
       method: 'DELETE',
       credentials: 'same-origin',
       headers: headers({ 'Content-Type': 'application/json' }),
