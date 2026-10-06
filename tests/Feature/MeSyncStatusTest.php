@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Calendar;
 use App\Models\ConnectedAccount;
 use App\Models\Folder;
+use App\Models\MailSyncProgress;
 use App\Models\SharePointConnection;
 use App\Models\User;
 use App\Support\SharePoint\Synchroniser;
@@ -122,6 +123,90 @@ class MeSyncStatusTest extends TestCase
         $this->actingAs($user)->getJson('/me/sync-status')
             ->assertOk()
             ->assertJsonPath('email.state', 'done');
+    }
+
+    public function test_a_failed_first_import_reports_error_instead_of_syncing_forever(): void
+    {
+        $user = $this->user();
+        $this->oneDrive($user);
+        $account = ConnectedAccount::where('user_id', $user->id)->first();
+        $account->forceFill([
+            'mail_backfilled_at' => null,
+            'mail_status' => 'idle',
+            'mail_backfill' => ['_totals' => ['inbox' => 100]],
+        ])->save();
+
+        MailSyncProgress::for($account)->fail('auth', 'Reconnect the mailbox.');
+
+        $this->actingAs($user)->getJson('/me/sync-status')
+            ->assertOk()
+            ->assertJsonPath('email.state', 'error')
+            ->assertJsonPath('email.synced', 0);
+    }
+
+    public function test_a_stalled_first_import_reports_error_instead_of_syncing_forever(): void
+    {
+        $user = $this->user();
+        $this->oneDrive($user);
+        $account = ConnectedAccount::where('user_id', $user->id)->first();
+        $account->forceFill([
+            'mail_backfilled_at' => null,
+            'mail_status' => 'syncing',
+            'mail_backfill' => ['_totals' => ['inbox' => 50]],
+        ])->save();
+
+        MailSyncProgress::for($account)->forceFill([
+            'status' => 'running',
+            'current_stage' => 'importing',
+            'started_at' => now()->subMinutes(10),
+            'last_progress_at' => now()->subMinutes(5),
+        ])->save();
+
+        $this->actingAs($user)->getJson('/me/sync-status')
+            ->assertOk()
+            ->assertJsonPath('email.state', 'error');
+    }
+
+    public function test_a_live_first_import_still_reports_syncing(): void
+    {
+        $user = $this->user();
+        $this->oneDrive($user);
+        $account = ConnectedAccount::where('user_id', $user->id)->first();
+        $account->forceFill([
+            'mail_backfilled_at' => null,
+            'mail_status' => 'syncing',
+            'mail_backfill' => ['_totals' => ['inbox' => 80]],
+        ])->save();
+
+        MailSyncProgress::for($account)->forceFill([
+            'status' => 'running',
+            'current_stage' => 'importing',
+            'started_at' => now()->subMinute(),
+            'last_progress_at' => now()->subSeconds(5),
+        ])->save();
+
+        $this->actingAs($user)->getJson('/me/sync-status')
+            ->assertOk()
+            ->assertJsonPath('email.state', 'syncing')
+            ->assertJsonPath('email.total', 80);
+    }
+
+    public function test_an_abandoned_first_import_without_progress_goes_quiet(): void
+    {
+        $user = $this->user();
+        $this->oneDrive($user);
+        $account = ConnectedAccount::where('user_id', $user->id)->first();
+        $account->forceFill([
+            'mail_backfilled_at' => null,
+            'mail_status' => 'idle',
+        ])->save();
+
+        DB::table('connected_accounts')->where('id', $account->id)
+            ->update(['updated_at' => now()->subMinutes(ConnectedAccount::MAIL_STALE_MINUTES + 1)]);
+
+        $this->actingAs($user)->getJson('/me/sync-status')
+            ->assertOk()
+            ->assertJsonPath('email.state', 'error');
     }
 
     public function test_a_stale_mailbox_syncing_flag_does_not_pin_the_toast(): void

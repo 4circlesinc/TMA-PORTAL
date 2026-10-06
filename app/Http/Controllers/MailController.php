@@ -21,6 +21,7 @@ use App\Support\Mail\MailAuthException;
 use App\Support\Mail\Mailbox;
 use App\Support\Mail\MailCorrespondents;
 use App\Support\Mail\MailSynchronizer;
+use App\Support\Mail\MailTokens;
 use App\Support\Mail\OutboundFiles;
 use App\Support\Mail\OutboundImages;
 use App\Support\Mail\RecipientSuggester;
@@ -2092,7 +2093,13 @@ class MailController extends Controller
         return preg_replace('#(?:@import|expression\s*\(|url\s*\(\s*["\']?\s*(?:https?:|//|javascript:))#is', '', $svg) ?? '';
     }
 
-    /** Manual "sync now" from the settings panel. Runs inline so the UI can report the result. */
+    /**
+     * Manual "Sync now" from the settings panel (and the email page refresh).
+     *
+     * Queues the full folder walk so a large mailbox cannot 504 the request.
+     * Probes the grant first so a dead token still surfaces as the reconnect
+     * prompt immediately — waiting for the worker would only show "Synced 0".
+     */
     public function sync(Request $request): JsonResponse
     {
         $account = Mailbox::requireAccountFor($request->user());
@@ -2105,15 +2112,17 @@ class MailController extends Controller
             return $this->quickSync($request, $account);
         }
 
-        // The full folder walk can outlast a web request: on a large mailbox it
-        // makes enough provider round trips to blow past the gateway timeout,
-        // which surfaced as a 504 on every poll. Hand it to the queue instead
-        // and answer immediately with the current mirror. SyncMailbox is
-        // unique per mailbox, so the ~1-minute poll, the mail:sync-all
-        // scheduler and the "Sync now" button all collapse into one queued run.
-        // The fast path above still pulls new inbox mail in live on every tick
-        // (and still surfaces a dead grant as the 409 reconnect prompt), so the
-        // page stays current without blocking on the heavy pass.
+        // Minting an access token is the whole check — a revoked grant throws
+        // MailAuthException here (rendered as 409 reconnect) before anything
+        // is queued. Without this, an async worker would swallow the failure
+        // and the settings button would report "Synced 0 messages".
+        MailTokens::accessToken($account);
+
+        // SyncMailbox is unique per mailbox, so the ~1-minute poll, the
+        // mail:sync-all scheduler and the "Sync now" button all collapse into
+        // one queued run. The fast path above still pulls new inbox mail in
+        // live on every tick, so the page stays current without blocking on
+        // the heavy pass.
         SyncMailbox::dispatch($account);
 
         return response()->json([

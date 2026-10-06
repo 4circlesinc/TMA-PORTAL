@@ -312,6 +312,28 @@ class MailboxTest extends TestCase
             ->assertJsonPath('reconnect', true);
     }
 
+    public function test_sync_now_queues_the_full_pass_after_checking_the_grant(): void
+    {
+        $user = $this->user();
+        $this->account($user);
+
+        Http::fake([
+            'oauth2.googleapis.com/*' => Http::response([
+                'access_token' => 'access-token',
+                'expires_in' => 3600,
+            ]),
+        ]);
+        \Illuminate\Support\Facades\Queue::fake([\App\Jobs\SyncMailbox::class]);
+
+        $this->actingAs($user)
+            ->postJson('/portal/mail/sync')
+            ->assertOk()
+            ->assertJsonPath('queued', true)
+            ->assertJsonPath('synced', 0);
+
+        \Illuminate\Support\Facades\Queue::assertPushed(\App\Jobs\SyncMailbox::class);
+    }
+
     public function test_the_sync_maps_gmail_labels_onto_portal_folders_and_flags(): void
     {
         $user = $this->user();

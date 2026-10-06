@@ -168,6 +168,21 @@ class MailSyncProgressTest extends TestCase
         $this->assertNotSame('', (string) $progress->error_message);
     }
 
+    public function test_analysis_cancels_progress_when_mail_sync_is_no_longer_available(): void
+    {
+        $user = $this->mailUser();
+        $account = $this->account($user);
+        MailSyncProgress::for($account)->begin();
+
+        $account->forceFill(['sync_email' => false])->save();
+
+        new AnalyzeMailbox($account)->handle();
+
+        $progress = MailSyncProgress::where('connected_account_id', $account->id)->firstOrFail();
+        $this->assertSame('failed', $progress->status);
+        $this->assertSame('cancelled', $progress->error_code);
+    }
+
     public function test_sync_status_reports_the_stage_counts_and_timing(): void
     {
         $user = $this->mailUser();

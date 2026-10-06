@@ -58,6 +58,16 @@ class AnalyzeMailbox implements ShouldBeUnique, ShouldQueue
         $account = $this->account->fresh();
 
         if (! $account || ! $account->sync_email || ! $account->token) {
+            // start() already opened a running progress row. Leaving it there
+            // made /me/sync-status report "syncing" forever for an account that
+            // will never import (sync turned off, token gone).
+            if ($account) {
+                MailSyncProgress::for($account)->fail(
+                    'cancelled',
+                    'Mail sync is not available for this account.',
+                );
+            }
+
             return;
         }
 

@@ -10521,7 +10521,13 @@
 
         api().sync().then(function (data) {
           if (data && data.folders) state.folderCounts = data.folders;
-          showEmailToast(root, 'Synced ' + (data && data.synced ? data.synced : 0) + ' messages');
+          // Full sync is queued, not run inline — claiming "Synced 0" made
+          // Sync now look broken even when the worker was about to run.
+          if (data && data.queued) {
+            showEmailToast(root, 'Sync started — checking for new mail…');
+          } else {
+            showEmailToast(root, 'Synced ' + (data && data.synced ? data.synced : 0) + ' messages');
+          }
           reloadMessages(root, state, render);
           return api().getSettings();
         }).then(function (data) {

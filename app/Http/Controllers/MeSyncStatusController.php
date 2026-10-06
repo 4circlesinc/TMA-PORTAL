@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Calendar;
+use App\Models\ConnectedAccount;
 use App\Models\MailMessage;
+use App\Models\MailSyncProgress;
 use App\Models\SharePointConnection;
 use App\Models\SmartsheetAttachment;
 use App\Support\Access\Role;
@@ -90,9 +92,12 @@ class MeSyncStatusController extends Controller
         }
 
         // The first import is the only pass with a knowable total, it walks a
-        // measured mailbox, so the card can show a real percentage.
+        // measured mailbox, so the card can show a real percentage. An unfinished
+        // stamp alone used to mean "syncing forever": a failed analysis, a
+        // stalled worker, or AnalyzeMailbox abandoning after begin() all left
+        // mail_backfilled_at null and pinned the toast until its 15-minute cap.
         if ($account->mail_backfilled_at === null) {
-            return ['state' => 'syncing', 'synced' => $synced, 'total' => $total];
+            return $this->firstMailImportStatus($account, $synced, $total);
         }
 
         /*
@@ -108,6 +113,44 @@ class MeSyncStatusController extends Controller
         }
 
         return ['state' => 'done', 'synced' => $synced];
+    }
+
+    /**
+     * First-import toast state from the progress row, not only the missing stamp.
+     *
+     * @return array{state: string, synced: int, total?: int|null}
+     */
+    private function firstMailImportStatus(ConnectedAccount $account, int $synced, ?int $total): array
+    {
+        $progress = MailSyncProgress::query()
+            ->where('connected_account_id', $account->id)
+            ->first();
+
+        if ($progress) {
+            if ($progress->status === 'failed' || $progress->isStalled()) {
+                return ['state' => 'error', 'synced' => $synced];
+            }
+
+            // Analysis finished without a history walk (reconnect of an already
+            // imported mailbox), or the stamp races the last beat — stop saying
+            // syncing once the progress row itself has closed.
+            if ($progress->status === 'completed') {
+                return ['state' => 'done', 'synced' => $synced];
+            }
+
+            if ($progress->isRunning()) {
+                return ['state' => 'syncing', 'synced' => $synced, 'total' => $total];
+            }
+        }
+
+        // No live progress: a recent connect may still be waiting on a worker;
+        // anything older is abandoned and must not pin the card.
+        if ($account->updated_at
+            && $account->updated_at->gt(now()->subMinutes(ConnectedAccount::MAIL_STALE_MINUTES))) {
+            return ['state' => 'syncing', 'synced' => $synced, 'total' => $total];
+        }
+
+        return ['state' => $synced > 0 ? 'done' : 'error', 'synced' => $synced];
     }
 
     private function calendar($user): array
