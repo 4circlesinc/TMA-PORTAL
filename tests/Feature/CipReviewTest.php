@@ -400,6 +400,34 @@ class CipReviewTest extends TestCase
         Mail::assertNothingQueued();
     }
 
+    /**
+     * The next step stays shut. The override does not.
+     *
+     * Every administrator and CRO / Reviewing officer can still move the
+     * file, with a reason, while a document is in Application review.
+     */
+    public function test_an_officer_may_override_to_ready_to_submit_while_a_document_is_still_in_review(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'off@example.com', 'Otto Officer');
+        $application = $this->application($admin, Status::REVIEW_APPLICATION);
+        $this->slot($application, 'passport_bio_page', 'Passport bio page', true, DocumentStatus::READY_FOR_SUBMISSION);
+        $this->slot($application, 'translation', 'Certified translation', false, DocumentStatus::APPLICATION_REVIEW);
+
+        $fresh = $application->fresh();
+        $this->assertNotContains(Status::READY_TO_SUBMIT, Engine::availableTransitions($fresh, $officer));
+        $this->assertContains(Status::READY_TO_SUBMIT, Engine::availableOverrides($fresh, $officer));
+        $this->assertContains(Status::READY_TO_SUBMIT, Engine::availableOverrides($fresh, $admin));
+
+        $this->actingAs($officer)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::READY_TO_SUBMIT,
+                'note' => 'The Unit already has this file.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::READY_TO_SUBMIT);
+    }
+
     public function test_moving_a_file_back_to_application_review_leaves_ready_to_submit(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');

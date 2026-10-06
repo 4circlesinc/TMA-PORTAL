@@ -286,6 +286,7 @@ class CipTransitionController extends Controller
             // enter it after the fact as often as on the day.
             'decidedAt' => ['required', 'date'],
             'note' => ['nullable', 'string', 'max:2000'],
+            'override' => ['nullable', 'boolean'],
             'decisionLetter' => DecisionLetter::rules($firstDecision),
         ], [
             'decidedAt.required' => 'Enter the decision date.',
@@ -306,6 +307,7 @@ class CipTransitionController extends Controller
                 Carbon::parse($data['decidedAt']),
                 trim($data['note'] ?? ''),
                 $request->file('decisionLetter'),
+                $request->boolean('override'),
             );
         } catch (\InvalidArgumentException $e) {
             abort(422, $e->getMessage());
@@ -653,7 +655,21 @@ class CipTransitionController extends Controller
     private function drive(CipApplication $application, string $to, ?User $actor, array $meta): CipApplication
     {
         try {
-            $application = Engine::canTransition($application, $to)
+            /*
+             * A mapped next step goes through apply(), which still refuses
+             * Ready to Submit, the Unit submission, Approved and Apply for
+             * COR while a document is not Ready for submission.
+             *
+             * That same destination stays on the override list. Picking it
+             * sends a reason, and that is {@see Engine::set()}: every officer
+             * and administrator, logged as an override, checklist or not.
+             * A click that did not bring a reason still hits apply(), so the
+             * refusal names the documents rather than asking for a reason
+             * the reader was never shown.
+             */
+            $ordinary = in_array($to, Engine::availableTransitions($application, $actor), true);
+            $stated = trim((string) ($meta['note'] ?? '')) !== '';
+            $application = ($ordinary || (Engine::canTransition($application, $to) && ! $stated))
                 ? Engine::apply($application, $to, $actor, $meta)
                 : Engine::set($application, $to, $actor, $meta);
         } catch (\InvalidArgumentException $e) {

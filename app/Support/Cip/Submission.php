@@ -66,12 +66,14 @@ class Submission
         User $actor,
         ?string $cipNumber = null,
         ?Carbon $submittedAt = null,
+        bool $override = false,
+        string $note = '',
     ): CipApplication {
         $number = self::clean((string) $cipNumber);
         self::assertFree($number, $application);
 
         if ($application->isAddOn()) {
-            return self::recordAddOn($application, $actor, $number, $submittedAt);
+            return self::recordAddOn($application, $actor, $number, $submittedAt, $override, $note);
         }
 
         if (! $application->isLocked()) {
@@ -82,7 +84,7 @@ class Submission
 
         $submittedAt ??= Carbon::now();
 
-        return DB::transaction(function () use ($application, $actor, $number, $submittedAt) {
+        return DB::transaction(function () use ($application, $actor, $number, $submittedAt, $override, $note) {
             /*
              * Written before the transition, so the trail names the
              * application by what it is called from now on. The internal
@@ -95,12 +97,16 @@ class Submission
                 'submitted_by' => $actor->name,
             ])->save();
 
-            Engine::apply($application, Status::PENDING_REVIEW, $actor, [
+            $meta = [
                 'cipNumber' => $number,
                 'internalNumber' => $application->internal_number,
                 'submittedAt' => $submittedAt->toDateString(),
                 'submittedBy' => $actor->name,
-            ]);
+            ];
+            if (trim($note) !== '') {
+                $meta['note'] = trim($note);
+            }
+            self::moveToPendingReview($application, $actor, $meta, $override);
 
             Engine::record($application, CipEvent::ACTION_NUMBER_ASSIGNED, $actor, [
                 'cipNumber' => $number,
@@ -109,6 +115,29 @@ class Submission
 
             return $application->refresh();
         });
+    }
+
+    /**
+     * Pending Review is the Unit submission.
+     *
+     * The ordinary step waits until every required document, and every
+     * document that has been uploaded, is Ready for submission. An override
+     * is the same move with a reason, for every administrator and CRO /
+     * Reviewing officer, and it does not wait on that checklist.
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    private static function moveToPendingReview(CipApplication $application, User $actor, array $meta, bool $override): void
+    {
+        $ordinary = in_array(Status::PENDING_REVIEW, Engine::availableTransitions($application, $actor), true);
+
+        if ($ordinary || ! $override) {
+            Engine::apply($application, Status::PENDING_REVIEW, $actor, $meta);
+
+            return;
+        }
+
+        Engine::set($application, Status::PENDING_REVIEW, $actor, $meta);
     }
 
     /**
@@ -130,6 +159,8 @@ class Submission
         User $actor,
         string $number,
         ?Carbon $submittedAt = null,
+        bool $override = false,
+        string $note = '',
     ): CipApplication {
         if (! $application->isLocked()) {
             throw ValidationException::withMessages([
@@ -140,21 +171,25 @@ class Submission
         $submittedAt ??= Carbon::now();
         $submittedBy = trim((string) $actor->name) !== '' ? (string) $actor->name : $actor->email;
 
-        return DB::transaction(function () use ($application, $actor, $number, $submittedAt, $submittedBy) {
+        return DB::transaction(function () use ($application, $actor, $number, $submittedAt, $submittedBy, $override, $note) {
             $application->forceFill([
                 'cip_number' => $number,
                 'submitted_at' => $submittedAt,
                 'submitted_by' => $submittedBy,
             ])->save();
 
-            Engine::apply($application, Status::PENDING_REVIEW, $actor, [
+            $meta = [
                 'cipNumber' => $number,
                 'internalNumber' => $application->internal_number,
                 'submittedAt' => $submittedAt->toDateString(),
                 'submittedBy' => $submittedBy,
                 'addonType' => $application->addon_type,
                 'addonTypeLabel' => AddOn::typeLabel($application->addon_type),
-            ]);
+            ];
+            if (trim($note) !== '') {
+                $meta['note'] = trim($note);
+            }
+            self::moveToPendingReview($application, $actor, $meta, $override);
 
             Engine::record($application, CipEvent::ACTION_NUMBER_ASSIGNED, $actor, [
                 'cipNumber' => $number,

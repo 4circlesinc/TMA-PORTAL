@@ -166,6 +166,36 @@ class CipDecisionTest extends TestCase
             ->assertJsonPath('application.status', Status::GRANTED);
     }
 
+    public function test_an_officer_may_override_an_approval_while_a_document_is_still_in_review(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'off@example.com', 'Otto Officer');
+        $application = $this->inBackgroundCheck($admin);
+        $person = $application->people()->first();
+
+        $slot = CipDocument::create([
+            'application_id' => $application->id,
+            'person_id' => $person->id,
+            'type' => 'passport_bio_page',
+            'label' => 'Passport bio page',
+            'required' => true,
+        ]);
+        $slot->forceFill(['status' => DocumentStatus::APPLICATION_REVIEW])->save();
+
+        $fresh = $application->fresh();
+        $this->assertNotContains(Status::GRANTED, \App\Support\Cip\Engine::availableTransitions($fresh, $officer));
+        $this->assertContains(Status::GRANTED, \App\Support\Cip\Engine::availableOverrides($fresh, $officer));
+
+        $this->postCipDecision($officer, $application->uuid, [
+            'decision' => Status::GRANTED,
+            'decidedAt' => '2026-08-18',
+            'override' => true,
+            'note' => 'The Unit approved this before the checklist was finished here.',
+        ])
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::GRANTED);
+    }
+
     public function test_recording_denied_moves_the_file_to_denied(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);

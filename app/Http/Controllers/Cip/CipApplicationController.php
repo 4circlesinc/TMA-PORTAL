@@ -2079,6 +2079,8 @@ class CipApplicationController extends Controller
             // as often as on the day, and defaulting silently to today would
             // put the wrong date on an audit trail.
             'submittedAt' => ['required', 'date'],
+            'override' => ['nullable', 'boolean'],
+            'note' => ['nullable', 'string', 'max:2000'],
         ], [
             'cipNumber.required' => $application->isAddOn()
                 ? 'Enter the CIP application number the Unit issued this Add-On.'
@@ -2092,6 +2094,8 @@ class CipApplicationController extends Controller
                 $user,
                 $data['cipNumber'],
                 Carbon::parse($data['submittedAt']),
+                $request->boolean('override'),
+                trim($data['note'] ?? ''),
             );
         } catch (\InvalidArgumentException $e) {
             abort(422, $e->getMessage());

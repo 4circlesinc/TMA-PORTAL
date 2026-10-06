@@ -48,6 +48,7 @@ class Decision
         ?Carbon $decidedAt = null,
         string $note = '',
         ?UploadedFile $letter = null,
+        bool $override = false,
     ): CipApplication {
         if (! Status::isOutcome($decision)) {
             throw ValidationException::withMessages([
@@ -85,7 +86,7 @@ class Decision
             throw new \InvalidArgumentException(
                 'This application has already been decided.',
             );
-        } elseif (! Engine::canTransition($application, $decision)) {
+        } elseif (! Engine::canTransition($application, $decision) && ! $override) {
             throw new \InvalidArgumentException(
                 match ($phase) {
                     Phase::POST_APPROVAL => 'A post-approval decision is recorded when the file enters the lane, before the COR stage begins.',
@@ -95,7 +96,7 @@ class Decision
             );
         }
 
-        $application = DB::transaction(function () use ($application, $actor, $decision, $decidedAt, $note, $already, $letter) {
+        $application = DB::transaction(function () use ($application, $actor, $decision, $decidedAt, $note, $already, $letter, $override) {
             if ($letter !== null) {
                 DecisionLetter::store($application, $letter, $actor, $decision);
                 $application->refresh();
@@ -125,7 +126,18 @@ class Decision
             }
 
             if (! $already) {
-                Engine::apply($application, $decision, $actor, $meta);
+                /*
+                 * The next step still refuses an approval while a document
+                 * is not Ready for submission. An override, which every
+                 * administrator and CRO / Reviewing officer holds, records
+                 * the same decision with a reason and does not wait on that.
+                 */
+                $ordinary = in_array($decision, Engine::availableTransitions($application, $actor), true);
+                if ($ordinary || ! $override) {
+                    Engine::apply($application, $decision, $actor, $meta);
+                } else {
+                    Engine::set($application, $decision, $actor, $meta);
+                }
             }
 
             Engine::record($application, CipEvent::ACTION_DECISION_RECORDED, $actor, $meta);

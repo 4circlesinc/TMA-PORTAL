@@ -4004,7 +4004,8 @@
      * closes the menu.
      */
     if (person && Array.isArray(person.availableStatuses) && !person.availableStatuses.length
-      && !(person.lockedStatuses && person.lockedStatuses.length)) {
+      && !(person.lockedStatuses && person.lockedStatuses.length)
+      && !(person.availableStatusOverrides && person.availableStatusOverrides.length)) {
       return false;
     }
 
@@ -5581,7 +5582,8 @@
     // As above: a file with no mapped next step still shows the officer
     // where it could go, locked.
     if (app && Array.isArray(app.availableTransitions) && !app.availableTransitions.length
-      && !(app.lockedStatuses && app.lockedStatuses.length)) {
+      && !(app.lockedStatuses && app.lockedStatuses.length)
+      && !(app.availableOverrides && app.availableOverrides.length)) {
       return false;
     }
 
@@ -5851,7 +5853,8 @@
      * closes the menu.
      */
     if (person && Array.isArray(person.availableStatuses) && !person.availableStatuses.length
-      && !(person.lockedStatuses && person.lockedStatuses.length)) {
+      && !(person.lockedStatuses && person.lockedStatuses.length)
+      && !(person.availableStatusOverrides && person.availableStatusOverrides.length)) {
       return false;
     }
 
@@ -11977,7 +11980,8 @@
    * the fact as often as on the day, and quietly stamping today would put the
    * wrong date on an audit trail nobody would think to check.
    */
-  function openSubmissionDialog(state, render, correcting, fromApp) {
+  function openSubmissionDialog(state, render, correcting, fromApp, opts) {
+    opts = opts || {};
     var ui = window.TMAPortalUI;
     var app = fromApp || applicationFor(state.selectedId);
     if (!app || !ui || !ui.openModal) return;
@@ -12024,6 +12028,7 @@
       hint +
       '</p>' +
       (correcting ? '' : cipStatusAttachmentHtml(cipAttachmentPlace(app))) +
+      (!correcting && opts.override ? cipOverrideFieldsHtml() : '') +
       '<div class="tma-portal-modal__foot">' +
       '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-number>Cancel</button>' +
       '<button type="button" class="tma-no-data__btn" data-cip-save-number>' +
@@ -12063,11 +12068,18 @@
             return;
           }
 
+          var extra = null;
+          if (!correcting && opts.override) {
+            var reason = cipOverrideFieldsRead(el);
+            if (reason === null) return;
+            extra = { override: true, note: reason };
+          }
+
           save.disabled = true;
           save.textContent = 'Saving…';
 
           cipPendingStatusFile = correcting ? null : cipStatusFile(el);
-          submitCipNumber(app.id, number, correcting, dateEl ? dateEl.value : null)
+          submitCipNumber(app.id, number, correcting, dateEl ? dateEl.value : null, extra)
             .then(function (json) {
               ui.closeModal();
               var record = json && json.application;
@@ -12094,7 +12106,7 @@
     });
   }
 
-  function submitCipNumber(applicationId, number, correcting, submittedAt) {
+  function submitCipNumber(applicationId, number, correcting, submittedAt, extra) {
     var base = '/portal/cip/applications/' + encodeURIComponent(applicationId);
 
     if (correcting) {
@@ -12106,6 +12118,10 @@
 
     var payload = { submittedAt: submittedAt || null };
     if (number) payload.cipNumber = number;
+    if (extra && extra.override) {
+      payload.override = true;
+      payload.note = extra.note;
+    }
 
     return cipPostWithAttachment(base + '/submission', payload);
   }
@@ -12435,6 +12451,18 @@
       return status.lane === lane || !status.lane;
     };
 
+    /*
+     * Lifecycle order, not "next step, then everything else".
+     *
+     * Concatenating the mapped next step in front of the overrides pulled
+     * Updates Required above New Applications on a file standing at
+     * Assessment Feedback. The lists are already drawn from Status::listed(),
+     * so sorting back onto that index puts each lane in the order the
+     * lifecycle actually runs.
+     */
+    var order = {};
+    all.forEach(function (status, index) { order[status.value] = index; });
+
     return {
       next: next,
       overrides: overrides,
@@ -12451,6 +12479,7 @@
       otherLocked: locked.filter(function (status) {
         return status.lane && status.lane !== lane;
       }),
+      order: order,
       lane: lane,
       // Whoever the server gave an override list — administrators and
       // CRO / Reviewing officers — can pick from it. A reason is asked
@@ -12509,6 +12538,39 @@
   }
 
   /*
+   * One lane, in lifecycle order.
+   *
+   * Clickable rows and locked rows used to be two blocks, next steps first,
+   * so a mapped step such as Updates Required sat above statuses that come
+   * earlier in the lifecycle. Both kinds of row belong in the same sequence.
+   */
+  function renderCipStatusLaneBody(clickable, locked, current, order) {
+    var rows = {};
+    (clickable || []).forEach(function (status) {
+      rows[status.value] = { status: status, locked: false };
+    });
+    (locked || []).forEach(function (status) {
+      if (!rows[status.value]) rows[status.value] = { status: status, locked: true };
+    });
+
+    var values = Object.keys(rows);
+    if (order) {
+      values.sort(function (a, b) {
+        var ai = Object.prototype.hasOwnProperty.call(order, a) ? order[a] : 1000;
+        var bi = Object.prototype.hasOwnProperty.call(order, b) ? order[b] : 1000;
+        return ai - bi;
+      });
+    }
+
+    return values.map(function (value) {
+      var row = rows[value];
+      return row.locked
+        ? renderCipStatusLocked([row.status], current)
+        : renderCipStatusSub([row.status], current);
+    }).join('');
+  }
+
+  /*
    * The status picker, read as one lifecycle at a time.
    *
    * The file's own lane is the list — every status of it this reader can
@@ -12535,9 +12597,9 @@
     var ownLocked = menu.ownLocked || [];
     var other = menu.other || [];
     var otherLocked = menu.otherLocked || [];
+    var order = menu.order || null;
 
-    var body = renderCipStatusSub(own, menu.current) +
-      (ownLocked.length ? renderCipStatusLocked(ownLocked, menu.current) : '');
+    var body = renderCipStatusLaneBody(own, ownLocked, menu.current, order);
 
     var otherAll = other.concat(otherLocked);
     if (!otherAll.length) return body || renderCipStatusSub([], menu.current);
@@ -12556,8 +12618,7 @@
       '<img class="tma-portal-context-menu__chevron" src="' + ICON + 'CaretRight.svg" alt="" width="16" height="16">' +
       '</button>' +
       '<div class="tma-portal-context-menu__lane" data-cip-status-lane-list hidden>' +
-      renderCipStatusSub(other, menu.current) +
-      (otherLocked.length ? renderCipStatusLocked(otherLocked, menu.current) : '') +
+      renderCipStatusLaneBody(other, otherLocked, menu.current, order) +
       '</div>';
   }
 
@@ -13121,13 +13182,18 @@
      * answered was submitted long ago and keeps the number and the day it
      * went, so the dialog opens only for a file that has never been submitted.
      */
+    var transitionValues = statusValues(source && source.availableTransitions);
+    var earlyOverride = statusValues(source && source.availableOverrides).indexOf(to) !== -1
+      && transitionValues.indexOf(to) === -1;
+
     if (to === 'pending_review' && !(source && source.submittedAt)) {
       if (!state) return;
       openSubmissionDialog(
         state,
         render,
         false,
-        source || { id: applicationId, clientUid: clientUid }
+        source || { id: applicationId, clientUid: clientUid },
+        { override: earlyOverride }
       );
 
       return;
@@ -13143,7 +13209,8 @@
       openDecisionDialog(
         applicationId,
         clientUid,
-        (to === 'granted' || to === 'post_approved') ? 'granted' : 'denied'
+        (to === 'granted' || to === 'post_approved') ? 'granted' : 'denied',
+        { override: earlyOverride }
       );
 
       return;
@@ -14076,6 +14143,7 @@
         '</div>' +
         letterField +
         cipStatusAttachmentHtml(cipAttachmentPlace(held)) +
+        (opts.override ? cipOverrideFieldsHtml() : '') +
         '<p class="tma-portal-modal__text">' +
         (picking
           ? 'The application will move to Approved or Denied.' + letterLine + ' This cannot be undone from here.'
@@ -14115,9 +14183,15 @@
             return;
           }
 
-          if (picked === 'granted' && held && held.phase !== 'post_approval' && !cipPackageReady(held)) {
+          if (!opts.override && picked === 'granted' && held && held.phase !== 'post_approval' && !cipPackageReady(held)) {
             clientsToast('Every required document, and every document that has been uploaded, must be Ready for submission before this application can be Approved.', 'negative');
             return;
+          }
+
+          var overrideReason = '';
+          if (opts.override) {
+            overrideReason = cipOverrideFieldsRead(el);
+            if (overrideReason === null) return;
           }
 
           var letterEl = el.querySelector('[data-cip-decision-letter]');
@@ -14132,7 +14206,7 @@
           }
 
           var noteEl = el.querySelector('[data-cip-decision-note]');
-          var note = noteEl && noteEl.value ? noteEl.value.trim() : '';
+          var note = overrideReason || (noteEl && noteEl.value ? noteEl.value.trim() : '');
 
           save.disabled = true;
           save.textContent = 'Recording…';
@@ -14140,6 +14214,7 @@
           var form = new FormData();
           form.append('decision', picked);
           form.append('decidedAt', date);
+          if (opts.override) form.append('override', '1');
           if (note) form.append('note', note);
           if (letterFile) form.append('decisionLetter', letterFile);
           var attached = cipStatusFile(el);

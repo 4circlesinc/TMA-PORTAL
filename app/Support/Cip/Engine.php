@@ -357,7 +357,6 @@ class Engine
             Status::listed(),
             fn (string $to) => $to !== $application->status
                 && ! in_array($to, $next, true)
-                && self::checklistAllows($application, $to, $forListing)
                 && self::overrideFits($application, $to)
                 && (! Stages::owns($to) || $strandedStage($to))
                 && ! Delay::owns($to),
@@ -372,6 +371,10 @@ class Engine
      * that has been uploaded, to be Ready for submission. A file still in
      * Application review has not been accepted. Denied is not on this list:
      * a refusal does not wait on a finished checklist.
+     *
+     * An override does not ask this. {@see set()} is how an administrator or
+     * a CRO / Reviewing officer still moves the file, with a reason, when the
+     * checklist has not been finished. The next-step list is what stays shut.
      *
      * Listings that have not loaded checklists skip the document count — the
      * write still enforces it. Asking here would be one COUNT per row of the
@@ -588,14 +591,14 @@ class Engine
             throw new AuthorizationException('You cannot move this application to '.Status::label($to).'.');
         }
 
-        if (! self::checklistAllows($application, $to)) {
-            throw new \InvalidArgumentException(self::checklistRefusal($to));
-        }
-
         /*
          * The picker draws what an override may reach; the write agrees with
          * it, so an option the menu never shows is not one the endpoint
          * quietly accepts.
+         *
+         * The document checklist is not one of those gates. An override is
+         * the way past an unfinished checklist, and the reason above is what
+         * the audit keeps.
          */
         if ($actor !== null && ! self::overrideFits($application, $to)) {
             throw new \InvalidArgumentException(sprintf(
