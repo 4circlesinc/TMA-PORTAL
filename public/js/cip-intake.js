@@ -38,6 +38,10 @@
      The Additional documents box is exempt on both sides: it takes as many
      files as there are (isOpenDocumentsPath). */
   var MAX_DOCUMENTS_PER_SLOT = 10;
+  /* Matches Intake::UPLOADS_PER_REQUEST. PHP's max_file_uploads defaults to
+     twenty and drops the rest of a request without a word, so scans go up
+     this many at a time; the server refuses a request it did not get whole. */
+  var MAX_UPLOADS_PER_REQUEST = 10;
   var MAX_DEPENDENTS = 20;
   /*
    * The document sections come from the requirement templates the admin
@@ -2433,12 +2437,48 @@
     return out;
   }
 
-  function body() {
+  /*
+   * The first `cap` scans of a request, and how many had to wait.
+   *
+   * Everything that is not a file still goes. The scans past the cap are
+   * sent by the next request, once these are marked saved — see saveDraft()
+   * and submit().
+   */
+  function limitFiles(list, cap) {
+    var kept = [];
+    var files = 0;
+    var heldBack = 0;
+
+    list.forEach(function (part) {
+      if (!part.file) {
+        kept.push(part);
+      } else if (files < cap) {
+        files++;
+        kept.push(part);
+      } else {
+        heldBack++;
+      }
+    });
+
+    return { parts: kept, files: files, heldBack: heldBack };
+  }
+
+  /* The scans in a parts list, as the saved-file record describes them. */
+  function fileSigs(list) {
+    return list.filter(function (part) { return part.file; }).map(function (part) {
+      return { path: part.path, sig: oneFileSig(part.file) };
+    });
+  }
+
+  function body(list) {
     var form = new FormData();
-    parts().forEach(function (part) {
-      if (part.file) form.append(part.name, part.file, part.filename || 'upload');
+    var files = 0;
+    list.forEach(function (part) {
+      if (part.file) { files++; form.append(part.name, part.file, part.filename || 'upload'); }
       else form.append(part.name, part.value);
     });
+    // What the server should find. Fewer means the host trimmed the request.
+    form.append('uploadCount', String(files));
 
     return form;
   }
@@ -2653,9 +2693,10 @@
    * of the two — and the folder question is answered by the draft being
    * deletable, which recycles the folder with it.
    */
-  function draftForm() {
+  function draftForm(list) {
     var form = new FormData();
     var body = draftBody();
+    var files = 0;
 
     Object.keys(body).forEach(function (key) {
       var value = body[key];
@@ -2673,10 +2714,11 @@
       form.append('submissionId', state.submissionKey);
     }
 
-    parts().forEach(function (part) {
-      if (part.file) form.append(part.name, part.file, part.filename || 'upload');
+    list.forEach(function (part) {
+      if (part.file) { files++; form.append(part.name, part.file, part.filename || 'upload'); }
       else form.append(part.name, part.value);
     });
+    form.append('uploadCount', String(files));
 
     return form;
   }
@@ -2752,6 +2794,9 @@
   function saveDraft(opts) {
     opts = opts || {};
     var announce = !!opts.announce;
+    // A caller waiting on this save (submit() flushing scans first) is told
+    // how it ended; the timer passes nothing and is told nothing.
+    var settle = typeof opts.onSettled === 'function' ? opts.onSettled : function () {};
     /*
      * A silent failure switches the autosave off so it does not keep
      * failing. Pressing Save as draft is asking again — clear that latch
@@ -2770,6 +2815,7 @@
             : 'This form isn’t saved as a draft.',
         );
       }
+      settle(false);
 
       return;
     }
@@ -2778,6 +2824,8 @@
     if (state.draftSaving) {
       state.draftDirty = true;
       if (announce) state.draftAnnounce = true;
+      // The waiting caller asks again once that one lands.
+      if (opts.onSettled) setTimeout(function () { saveDraft(opts); }, 250);
 
       return;
     }
@@ -2798,6 +2846,7 @@
      */
     if (announce && !typedAnything(answers)) {
       ui().toastError('Fill in something to save first.');
+      settle(false);
 
       return;
     }
@@ -2813,6 +2862,7 @@
         paintDraftStatus();
         ui().toast('Draft saved');
       }
+      settle(true);
 
       return;
     }
@@ -2821,11 +2871,14 @@
     state.draftDirty = false;
     if (announce) setDraftButtonBusy(opts.button, true);
 
-    // The files this request actually carries. A scan dropped while it is in
-    // flight is not in the list, so the reply must not mark that one saved.
-    var pendingFiles = parts().filter(function (part) { return part.file; }).map(function (part) {
-      return { path: part.path, sig: oneFileSig(part.file) };
-    });
+    /*
+     * The files this request actually carries: the first batch of the
+     * unsaved ones. A scan dropped while it is in flight is not in the list,
+     * so the reply must not mark that one saved; nor may a scan held back
+     * for the next batch be.
+     */
+    var batch = limitFiles(parts(), MAX_UPLOADS_PER_REQUEST);
+    var pendingFiles = fileSigs(batch.parts);
 
     // Multipart, not JSON: the scans go with the answers. FormData sets its
     // own Content-Type boundary, so none is passed here.
@@ -2833,7 +2886,7 @@
       method: 'POST',
       credentials: 'same-origin',
       headers: headers(),
-      body: draftForm(),
+      body: draftForm(batch.parts),
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (json) {
         state.draftSaving = false;
@@ -2860,6 +2913,7 @@
             ui().toastError(firstError(json.errors) || 'Could not save this draft');
           }
           state.draftAnnounce = false;
+          settle(false);
 
           return;
         }
@@ -2880,6 +2934,7 @@
             ui().toastError(refused);
           }
           state.draftAnnounce = false;
+          settle(false);
 
           return;
         }
@@ -2897,14 +2952,20 @@
         if (json.draft && json.draft.id && !state.applicationId) {
           state.draftId = json.draft.id;
         }
-        // Recompute after ids landed so the next "unchanged" check includes them.
-        state.draftSent = JSON.stringify([draftBody(), fileSignature()]);
+        /*
+         * Recompute after ids landed so the next "unchanged" check includes
+         * them. Not when scans were held back: that signature would say the
+         * draft is whole and the next save would stop before sending them.
+         */
+        if (batch.heldBack) state.draftDirty = true;
+        else state.draftSent = JSON.stringify([draftBody(), fileSignature()]);
         state.draftSavedAt = new Date();
         paintDraftStatus();
         if (announce || state.draftAnnounce) ui().toast('Draft saved');
         state.draftAnnounce = false;
-        // Answers changed while that was in the air.
-        if (state.draftDirty) saveDraft();
+        settle(true);
+        // Answers changed while that was in the air, or scans are waiting.
+        if (state.draftDirty && !opts.onSettled) saveDraft();
       });
     }).catch(function () {
       /*
@@ -2925,6 +2986,35 @@
         ui().toastError('Could not reach the server. This draft isn’t saved yet.');
       }
       state.draftAnnounce = false;
+      settle(false);
+    });
+  }
+
+  /*
+   * Put the scans on the draft, a batch at a time, until no more than one
+   * request's worth is left for the filing itself.
+   *
+   * A filing goes up as one request, and a request carries at most
+   * MAX_UPLOADS_PER_REQUEST scans. The draft is where the rest go first: it
+   * is the same row the filing completes, so a scan saved here is a scan
+   * the filing does not send. `done(true)` when the filing may go.
+   */
+  function flushScans(done) {
+    if (limitFiles(parts(), MAX_UPLOADS_PER_REQUEST).heldBack === 0) {
+      done(true);
+
+      return;
+    }
+    if (!draftable()) {
+      done(false);
+
+      return;
+    }
+    saveDraft({
+      onSettled: function (ok) {
+        if (ok) flushScans(done);
+        else done(false);
+      },
     });
   }
 
@@ -3145,6 +3235,29 @@
     state.saving = true;
     if (state.onSaving) state.onSaving(true);
 
+    /*
+     * More scans than one request may carry.
+     *
+     * A filing sends them through the draft first (flushScans), because a
+     * second request to the create endpoint would be a second application.
+     * An edit of a filed application has no draft, so it posts to its own
+     * URL as many times as it takes, the answers each time and the next
+     * batch of scans with them: see the success branch below.
+     */
+    var batch = limitFiles(parts(), MAX_UPLOADS_PER_REQUEST);
+    if (batch.heldBack && isFiling()) {
+      // A silent autosave failure switched the timer off; filing is asking.
+      state.draftOff = false;
+      flushScans(function (ok) {
+        state.saving = false;
+        if (state.onSaving) state.onSaving(false);
+        if (ok) submit();
+        else ui().toastError('Could not upload the files. Try again.');
+      });
+
+      return;
+    }
+
     // Editing posts to the application's own URL. Still POST, not PUT: PHP
     // parses a multipart body for POST only, and these carry files.
     /*
@@ -3165,7 +3278,7 @@
       credentials: 'same-origin',
       // No Content-Type: the browser sets the multipart boundary itself.
       headers: headers(),
-      body: body(),
+      body: body(batch.parts),
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (json) {
         state.saving = false;
@@ -3198,6 +3311,14 @@
 
         if (!res.ok) {
           ui().toastError(httpFailure(res, json));
+
+          return;
+        }
+
+        // The next batch of scans, on the same application.
+        if (batch.heldBack) {
+          rememberSavedFiles(fileSigs(batch.parts));
+          submit();
 
           return;
         }
