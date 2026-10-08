@@ -17,6 +17,7 @@ use App\Models\FileVersion;
 use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\AdditionalDocuments;
 use App\Support\Cip\ApplicantType;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Confirmation;
@@ -264,6 +265,44 @@ class CipIntakeTest extends TestCase
             $payload,
             ['Accept' => 'application/json'],
         );
+    }
+
+    public function test_the_additional_documents_box_takes_more_files_than_any_named_slot(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+        $many = Intake::MAX_DOCUMENTS_PER_SLOT + 2;
+
+        // Distinct bytes each: the filing drops a scan whose checksum is
+        // already on the person, and that is a different rule from this one.
+        $box = [];
+        for ($i = 1; $i <= $many; $i++) {
+            $box[] = UploadedFile::fake()->create("extra-{$i}.pdf", 40 + $i, 'application/pdf');
+        }
+
+        // The open box carries no cap: every paper nobody wrote a rule for
+        // belongs here, and there are as many of those as there are.
+        $application = $this->file($staff, $this->payload($provider, [
+            'additionalDocuments' => $box,
+        ]))->assertCreated()->json('application');
+
+        $person = CipApplication::where('uuid', $application['id'])->firstOrFail()
+            ->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $slot = CipDocument::where('person_id', $person->id)
+            ->where('type', AdditionalDocuments::KEY)
+            ->firstOrFail();
+
+        $this->assertSame($many, FileItem::where('folder_id', $slot->file->folder_id)->count());
+
+        // A named requirement is still a slot: the usual ceiling holds there.
+        $bio = [];
+        for ($i = 1; $i <= Intake::MAX_DOCUMENTS_PER_SLOT + 1; $i++) {
+            $bio[] = UploadedFile::fake()->create("bio-{$i}.pdf", 40 + $i, 'application/pdf');
+        }
+
+        $this->file($staff, $this->payload($this->provider('ORB'), ['passportBioPage' => $bio]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('passportBioPage');
     }
 
     public function test_a_complete_application_is_filed_as_a_numbered_draft(): void

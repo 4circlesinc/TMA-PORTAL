@@ -50,7 +50,14 @@ class Intake
     /** A scanned document: generous, but not a photo library. */
     public const MAX_DOCUMENT_KB = 10240;
 
-    /** How many files one requirement may be answered with in a single filing. */
+    /**
+     * How many files one requirement may be answered with in a single filing.
+     *
+     * Not the Additional documents box: that drawer takes the papers no
+     * checklist predicted, as many as there are, so it carries no cap at all
+     * ({@see slotCap}). What bounds it then is PHP's own `max_file_uploads`
+     * on the one multipart request the wizard sends.
+     */
     public const MAX_DOCUMENTS_PER_SLOT = 10;
 
     /** The wizard offers twenty dependent rows; a draft may hold that many. */
@@ -224,13 +231,31 @@ class Intake
     }
 
     /** @return array<string, mixed> */
-    private static function scanFieldRules(bool $demanded): array
+    private static function scanFieldRules(bool $demanded, string $field): array
     {
         return array_merge(
             [$demanded ? 'required' : 'nullable', 'array'],
             $demanded ? ['min:1'] : [],
-            ['max:'.self::MAX_DOCUMENTS_PER_SLOT],
+            self::slotCap($field),
         );
+    }
+
+    /**
+     * The per-slot ceiling for one upload field, by its (possibly prefixed)
+     * form name: nothing for the open Additional documents box, the usual
+     * cap for every named requirement.
+     *
+     * @return list<string>
+     */
+    private static function slotCap(string $field): array
+    {
+        $tail = Str::afterLast($field, '.');
+
+        if ($tail === Str::camel(AdditionalDocuments::KEY)) {
+            return [];
+        }
+
+        return ['max:'.self::MAX_DOCUMENTS_PER_SLOT];
     }
 
     /** The shared person field set. Section 2's list, which section 4 says a sponsor repeats. */
@@ -367,7 +392,7 @@ class Intake
 
         foreach (self::allDocumentFieldNames() as $field) {
             foreach (['', 'sponsor.', 'dependents.*.'] as $prefix) {
-                $rules[$prefix.$field] = ['nullable', 'array', 'max:'.self::MAX_DOCUMENTS_PER_SLOT];
+                $rules[$prefix.$field] = array_merge(['nullable', 'array'], self::slotCap($field));
                 $rules[$prefix.$field.'.*'] = self::documentRule();
             }
         }
@@ -448,7 +473,7 @@ class Intake
         foreach (self::documentFields(ApplicantType::PRINCIPAL_APPLICANT, $phase, $existing) as $doc) {
             $kept = self::draftHolds($existing, $doc['key']);
             $demanded = $demand && ! $kept && $doc['required'] && self::documentAppliesToGender($doc, $gender);
-            $rules[$doc['field']] = self::scanFieldRules($demanded);
+            $rules[$doc['field']] = self::scanFieldRules($demanded, $doc['field']);
             $rules[$doc['field'].'.*'] = self::documentRule();
         }
 
@@ -594,7 +619,7 @@ class Intake
             $rules['sponsor.'.$doc['field']] = array_merge(
                 [$demanded ? Rule::requiredIf($sponsored) : 'nullable', 'array'],
                 $demanded ? ['min:1'] : [],
-                ['max:'.self::MAX_DOCUMENTS_PER_SLOT],
+                self::slotCap($doc['field']),
             );
             $rules['sponsor.'.$doc['field'].'.*'] = self::documentRule();
         }
@@ -623,7 +648,7 @@ class Intake
         ];
 
         foreach (self::allDocumentFieldNames() as $field) {
-            $rules['dependents.*.'.$field] = ['nullable', 'array', 'max:'.self::MAX_DOCUMENTS_PER_SLOT];
+            $rules['dependents.*.'.$field] = array_merge(['nullable', 'array'], self::slotCap($field));
             $rules['dependents.*.'.$field.'.*'] = self::documentRule();
         }
 
@@ -654,7 +679,7 @@ class Intake
                     continue;
                 }
 
-                $rules['dependents.'.$index.'.'.$doc['field']] = self::scanFieldRules(true);
+                $rules['dependents.'.$index.'.'.$doc['field']] = self::scanFieldRules(true, $doc['field']);
                 $rules['dependents.'.$index.'.'.$doc['field'].'.*'] = self::documentRule();
             }
         }
@@ -2094,7 +2119,10 @@ class Intake
             ->where('type', $type)
             ->first();
 
-        if ($slot?->file_id) {
+        // The open box answers this below, by name as well as bytes: its
+        // first file is one paper among many, not "the answer" a repeat of
+        // which can be refused on the checksum alone.
+        if ($slot?->file_id && ! AdditionalDocuments::is($type)) {
             $filed = FileItem::query()->find($slot->file_id);
             if ($filed && $filed->checksum === $hash) {
                 return true;
@@ -2137,6 +2165,12 @@ class Intake
     /** The next "(2)", "(3)", … that is not already used for this requirement. */
     private static function nextAttachmentNumber(CipPerson $person, string $type, ?string $givenName): int
     {
+        // The box numbers nothing, so there is no "(n)" to find and no
+        // reason to pay a query per file already in it.
+        if (AdditionalDocuments::is($type)) {
+            return 0;
+        }
+
         $folderIds = self::personFolderIds($person);
         $stem = self::attachmentStem($person, $type, $givenName);
         $n = 2;
@@ -2710,7 +2744,7 @@ class Intake
         $rules['passportPhoto'] = ['nullable', 'file', self::photoRule()];
 
         foreach (self::allDocumentFieldNames() as $field) {
-            $rules[$field] = ['nullable', 'array', 'max:'.self::MAX_DOCUMENTS_PER_SLOT];
+            $rules[$field] = array_merge(['nullable', 'array'], self::slotCap($field));
             $rules[$field.'.*'] = self::documentRule();
         }
 
@@ -2740,7 +2774,7 @@ class Intake
         foreach (self::documentFields($type, $phase, $existing) as $doc) {
             $kept = self::draftHolds($existing, $doc['key']);
             $demanded = $demand && ! $kept && $doc['required'] && self::documentAppliesToGender($doc, $gender);
-            $rules[$doc['field']] = self::scanFieldRules($demanded);
+            $rules[$doc['field']] = self::scanFieldRules($demanded, $doc['field']);
             $rules[$doc['field'].'.*'] = self::documentRule();
             if (AddOnRequirements::isAdditional($doc['key'])) {
                 $rules[$doc['field'].'Name'] = ['nullable', 'string', 'max:120'];

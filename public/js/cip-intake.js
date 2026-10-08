@@ -34,7 +34,9 @@
   /* Matches App\Support\Cip\PassportPhoto::MAX_BYTES. */
   var PHOTO_MAX_BYTES = 8 * 1024 * 1024;
   var MAX_DOCUMENT_MB = 10;
-  /* Matches Intake::MAX_DOCUMENTS_PER_SLOT, the server is the authority. */
+  /* Matches Intake::MAX_DOCUMENTS_PER_SLOT, the server is the authority.
+     The Additional documents box is exempt on both sides: it takes as many
+     files as there are (isOpenDocumentsPath). */
   var MAX_DOCUMENTS_PER_SLOT = 10;
   var MAX_DEPENDENTS = 20;
   /*
@@ -2194,7 +2196,7 @@
       if (!seen) list.push(keepFile(file) || file);
     });
 
-    if (list.length > MAX_DOCUMENTS_PER_SLOT) {
+    if (!isOpenDocumentsPath(path) && list.length > MAX_DOCUMENTS_PER_SLOT) {
       list = list.slice(0, MAX_DOCUMENTS_PER_SLOT);
       state.errors[path] = 'Up to ' + MAX_DOCUMENTS_PER_SLOT + ' files here.';
     } else if (tooBig.length) {
