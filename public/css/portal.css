@@ -857,8 +857,9 @@
 
 .tma-portal-context-menu__item--static:hover { background: transparent; }
 
-/* A status that is not the next step, for a reviewing officer. Listed so
-   the lifecycle still reads in order, but grey and not a choice. */
+/* A status the reader can see but not set: a date-driven step, or an
+   off-map status for someone without the override. Listed so the
+   lifecycle still reads in order, but grey and not a choice. */
 .tma-portal-context-menu__item--muted {
   color: var(--color-text-muted, #9ca3af);
 }

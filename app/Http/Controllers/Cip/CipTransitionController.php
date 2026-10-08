@@ -660,10 +660,9 @@ class CipTransitionController extends Controller
              * Ready to Submit, the Unit submission, Approved and Apply for
              * COR while a document is not Ready for submission.
              *
-             * That same destination stays on the administrator's override
-             * list. Picking it sends a reason, and that is {@see Engine::set()}:
-             * an administrator, logged as an override, checklist or not.
-             * A reviewing officer is shown the row in grey and is refused.
+             * That same destination stays on the override list. Picking it
+             * sends a reason, and that is {@see Engine::set()}: every officer
+             * and administrator, logged as an override, checklist or not.
              * A click that did not bring a reason still hits apply(), so the
              * refusal names the documents rather than asking for a reason
              * the reader was never shown.

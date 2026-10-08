@@ -401,12 +401,12 @@ class CipReviewTest extends TestCase
     }
 
     /**
-     * The next step stays shut while a document is in Application review.
+     * The next step stays shut. The override does not.
      *
-     * An administrator can still move the file, with a reason. A reviewing
-     * officer sees Ready to Submit grey and cannot set it.
+     * Every administrator and CRO / Reviewing officer can still move the
+     * file, with a reason, while a document is in Application review.
      */
-    public function test_an_officer_cannot_override_to_ready_to_submit_while_a_document_is_still_in_review(): void
+    public function test_an_officer_may_override_to_ready_to_submit_while_a_document_is_still_in_review(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
         $officer = $this->user(Role::REVIEWING_OFFICER, 'off@example.com', 'Otto Officer');
@@ -416,20 +416,10 @@ class CipReviewTest extends TestCase
 
         $fresh = $application->fresh();
         $this->assertNotContains(Status::READY_TO_SUBMIT, Engine::availableTransitions($fresh, $officer));
-        $this->assertSame([], Engine::availableOverrides($fresh, $officer));
-        $this->assertContains(Status::READY_TO_SUBMIT, Engine::lockedStatuses($fresh, $officer));
+        $this->assertContains(Status::READY_TO_SUBMIT, Engine::availableOverrides($fresh, $officer));
         $this->assertContains(Status::READY_TO_SUBMIT, Engine::availableOverrides($fresh, $admin));
 
         $this->actingAs($officer)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
-                'status' => Status::READY_TO_SUBMIT,
-                'note' => 'The Unit already has this file.',
-            ])
-            ->assertForbidden();
-
-        $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
-
-        $this->actingAs($admin)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::READY_TO_SUBMIT,
                 'note' => 'The Unit already has this file.',

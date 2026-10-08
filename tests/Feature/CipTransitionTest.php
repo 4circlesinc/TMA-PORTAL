@@ -403,8 +403,7 @@ class CipTransitionTest extends TestCase
             Engine::availableTransitions($granted, $officer),
         );
         $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::availableOverrides($granted, $admin));
-        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::lockedStatuses($granted, $officer));
-        $this->assertSame([], Engine::availableOverrides($granted, $officer));
+        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::availableOverrides($granted, $officer));
 
         $post = $this->at($this->application($admin), Status::POST_APPROVAL);
         $post->forceFill(['phase' => Phase::POST_APPROVAL])->save();
@@ -469,25 +468,24 @@ class CipTransitionTest extends TestCase
         );
     }
 
-    public function test_an_officer_sees_off_map_statuses_locked_while_an_administrator_may_set_them(): void
+    public function test_an_officer_may_set_the_same_statuses_an_administrator_may(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $officer = $this->user(Role::REVIEWING_OFFICER);
         $employee = $this->user(Role::EMPLOYEE);
 
-        $this->assertFalse(CipAccess::canOverrideStatus($officer));
-        $this->assertTrue(CipAccess::canOverrideStatus($admin));
+        $this->assertTrue(CipAccess::canOverrideStatus($officer));
 
-        // The officer's locked list is the administrator's override list.
-        // It is shown grey, so it is not also sent as something they can set.
+        // The officer's override list is the administrator's, and it is
+        // actionable, so it is not also sent as a locked copy.
         $granted = $this->at($this->application($admin), Status::GRANTED);
 
-        $this->assertSame([], Engine::availableOverrides($granted, $officer));
         $this->assertSame(
             Engine::availableOverrides($granted, $admin),
-            Engine::lockedStatuses($granted, $officer),
+            Engine::availableOverrides($granted, $officer),
         );
-        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::lockedStatuses($granted, $officer));
+        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::availableOverrides($granted, $officer));
+        $this->assertSame([], Engine::lockedStatuses($granted, $officer));
         $this->assertSame([], Engine::lockedStatuses($granted, $admin));
 
         // A new file's only next step is Review Applications. That is a
@@ -502,18 +500,17 @@ class CipTransitionTest extends TestCase
         $post = $this->at($this->application($admin), Status::POST_APPROVAL);
         $post->forceFill(['phase' => Phase::POST_APPROVAL])->save();
 
-        $this->assertSame([], Engine::availableOverrides($post, $officer));
         $this->assertSame(
             Engine::availableOverrides($post, $admin),
-            Engine::lockedStatuses($post, $officer),
+            Engine::availableOverrides($post, $officer),
         );
         /*
          * A file at Post-Approval has only just crossed over and assessed
-         * nothing, so undoing the grant is still on offer to an administrator.
-         * An officer sees that status grey.
+         * nothing, so undoing the grant is still on offer — an officer can
+         * set it, the same list the administrator can act on.
          */
-        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::lockedStatuses($post, $officer));
-        $this->assertNotContains(Status::READY_TO_SUBMIT, Engine::lockedStatuses($post, $officer));
+        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::availableOverrides($post, $officer));
+        $this->assertNotContains(Status::READY_TO_SUBMIT, Engine::availableOverrides($post, $officer));
 
         /*
          * The other lane stays reachable as an override, which the picker
@@ -530,13 +527,13 @@ class CipTransitionTest extends TestCase
         }
         $this->assertNotContains(Status::PENDING_COR, Engine::availableOverrides($working, $admin));
 
-        // A locked row is never one the officer could already drive, so
+        // An override is never one the officer could already drive, so
         // the picker cannot list the same status twice.
         $this->assertSame(
             [],
             array_intersect(
                 Engine::availableTransitions($post, $officer),
-                Engine::lockedStatuses($post, $officer),
+                Engine::availableOverrides($post, $officer),
             ),
         );
 

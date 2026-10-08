@@ -12481,9 +12481,10 @@
       }),
       order: order,
       lane: lane,
-      // Whoever the server gave an override list — administrators — can
-      // pick from it. A reviewing officer is sent the same rows locked,
-      // drawn grey. A reason is asked for before an override.
+      // Whoever the server gave an override list — administrators and
+      // CRO / Reviewing officers — can pick from it. Only the date-driven
+      // steps arrive locked, drawn grey. A reason is asked for before an
+      // override.
       canOverride: overrides.length > 0,
       current: source && source.status,
     };
@@ -12509,9 +12510,10 @@
   }
 
   /*
-   * The statuses an officer can see but not set. Same rows, same dots, same
-   * order — a span rather than a button, so the whole lifecycle reads the
-   * same for everyone while only an administrator can pick from this part.
+   * The statuses this reader can see but not set: the date-driven steps,
+   * and every off-map status for someone without the override. Same rows,
+   * same dots, same order — a span rather than a button, so the whole
+   * lifecycle reads the same for everyone.
    */
   function renderCipStatusLocked(list, current) {
     return list.map(function (status) {

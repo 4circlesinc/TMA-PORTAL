@@ -128,9 +128,10 @@ class Decision
             if (! $already) {
                 /*
                  * A mapped next step goes through apply(). An administrator
-                 * overriding from elsewhere (for example recording a grant
-                 * off the usual Background Check / DD Query / Delayed
-                 * statuses) goes through set() with a reason.
+                 * or CRO / Reviewing officer overriding from elsewhere (for
+                 * example recording a grant off the usual Background Check /
+                 * DD Query / Delayed statuses) goes through set() with a
+                 * reason.
                  */
                 $ordinary = in_array($decision, Engine::availableTransitions($application, $actor), true);
                 if ($ordinary || ! $override) {

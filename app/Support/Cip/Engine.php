@@ -220,10 +220,10 @@ class Engine
      * order is the lifecycle's own, which is the order a reader expects to
      * see the choices in.
      *
-     * These are the mapped next steps. Administrators also receive
-     * {@see availableOverrides()} for a jump off the map. A reviewing officer
-     * sees that same list locked, from {@see lockedStatuses()}: grey in the
-     * menu, and not a status they can set.
+     * These are the mapped next steps. Administrators and CRO / Reviewing
+     * officers also receive {@see availableOverrides()} for a jump off the
+     * map. Everyone else who may change status sees that list locked, from
+     * {@see lockedStatuses()}.
      *
      * @return list<string>
      */
@@ -242,9 +242,10 @@ class Engine
     /**
      * Statuses this reader may set that are not the next mapped step.
      *
-     * Administrators only. Pulling Approved back to Assessment Feedback is an
-     * override and is logged as one. A reviewing officer gets an empty list;
-     * the same rows arrive locked, so the menu can show them in grey.
+     * Administrators and CRO / Reviewing officers. Pulling Approved back to
+     * Assessment Feedback is an override and is logged as one. Everyone else
+     * gets an empty list; officers used to see the same rows locked, and
+     * that read as though they could not change a status at all.
      *
      * @return list<string>
      */
@@ -261,10 +262,10 @@ class Engine
      * The same off-map statuses, shown locked, for a reader who may see the
      * lifecycle but may not set those statuses.
      *
-     * Empty for an administrator, whose copy of this list is actionable and
-     * arrives through {@see availableOverrides()}, and for anyone who may
-     * not change status at all. A reviewing officer receives it: the rows
-     * are the lifecycle they can see but not set.
+     * Empty for an administrator and for a CRO / Reviewing officer, whose
+     * copy of this list is actionable and arrives through
+     * {@see availableOverrides()}, and for anyone who may not change status
+     * at all.
      *
      * @return list<string>
      */
@@ -566,10 +567,10 @@ class Engine
      * Put the application on this status, whether or not the lifecycle has
      * an edge there from here.
      *
-     * Administrators. Mapped next steps go through {@see apply()}; jumping
-     * from Approved back to Assessment Feedback is an override and is logged
-     * as one. A reviewing officer is refused here: that status is grey in
-     * their menu. DRAFT is not a destination.
+     * Administrators and CRO / Reviewing officers. Mapped next steps go
+     * through {@see apply()}; jumping from Approved back to Assessment
+     * Feedback is an override and is logged as one. DRAFT is not a
+     * destination.
      */
     public static function set(CipApplication $application, string $to, ?User $actor, array $meta = []): CipApplication
     {
