@@ -2569,7 +2569,14 @@ class CipApplicationController extends Controller
                     // so an unconditional one here threw away the eager-loaded
                     // file and requirement of all seventy-odd rows on a
                     // six-person file and bought them back one at a time.
-                    if (DocumentSlots::reconcile($slot, null, false)) {
+                    $rewritten = DocumentSlots::reconcile($slot, null, false);
+                    // A photo row whose file went missing while the face
+                    // stayed is answered again from the likeness, so the
+                    // tick and the picture above it cannot disagree.
+                    if (DocumentSlots::refileFromLikeness($slot, $presenter->viewer())) {
+                        $rewritten = true;
+                    }
+                    if ($rewritten) {
                         $slot->refresh();
                         $slot->loadMissing(['file', 'requirement']);
                     }

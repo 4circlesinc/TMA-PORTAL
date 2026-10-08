@@ -1705,6 +1705,56 @@ class CipIntakeTest extends TestCase
         $this->assertSame(5, $body['familySize']);
     }
 
+    public function test_a_photo_row_whose_file_went_missing_is_answered_again_from_the_face(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($staff, $this->payload($provider, [
+            'dependents' => [
+                [
+                    'firstName' => 'Lina',
+                    'lastName' => 'Smith',
+                    'dateOfBirth' => '2016-09-09',
+                    'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                    'passportPhoto' => $this->photo(),
+                    'passportBioPage' => $this->scan('lina-bio.pdf'),
+                    'birthCertificate' => $this->scan('lina-birth.pdf'),
+                ],
+            ],
+        ]))->assertCreated()->json('application');
+
+        $lina = collect($body['dependents'])->firstWhere('name', 'LINA SMITH');
+        $person = CipPerson::query()->where('uuid', $lina['id'])->firstOrFail();
+        $slot = CipDocument::query()
+            ->where('person_id', $person->id)
+            ->where('type', DocumentTypes::PASSPORT_PHOTO)
+            ->firstOrFail();
+        $this->assertTrue($slot->isFilled());
+        $filedId = $slot->file_id;
+
+        // The library file goes to the bin; the likeness stays on the person.
+        FileItem::query()->findOrFail($filedId)->delete();
+        $this->assertFalse($slot->fresh()->isFilled());
+        $this->assertNotEmpty($person->fresh()->photo_path);
+
+        $shown = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$body['id'])
+            ->assertOk()
+            ->json('application');
+        $row = collect(collect($shown['dependents'])->firstWhere('name', 'LINA SMITH')['documents'])
+            ->firstWhere('type', DocumentTypes::PASSPORT_PHOTO);
+
+        $this->assertTrue($row['uploaded'], 'the row agrees with the face above it');
+        $this->assertNotEmpty($row['fileId']);
+
+        $slot = $slot->fresh();
+        $this->assertTrue($slot->isFilled());
+        $this->assertNotSame($filedId, $slot->file_id, 'a new answer, not the binned file');
+        $this->assertSame($person->folder_id, FileItem::query()->findOrFail($slot->file_id)->folder_id);
+    }
+
     public function test_a_dependents_uploads_are_filed_into_their_own_folder(): void
     {
         Storage::fake(config('filesystems.avatar_disk', 'public'));

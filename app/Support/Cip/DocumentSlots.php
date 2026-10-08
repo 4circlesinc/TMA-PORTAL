@@ -156,6 +156,74 @@ class DocumentSlots
     }
 
     /**
+     * Re-file a passport photo whose library file has gone while the
+     * likeness remains.
+     *
+     * The photo is kept twice: the library file the checklist row points at,
+     * and the archival likeness every avatar draws. When the file is binned
+     * or lost the row goes back to Pending upload, but the person's face
+     * stays on screen and the wizard goes on treating the photo as held
+     * ({@see Intake::personHolds}), so a reader sees the photo "uploaded" on
+     * a row that says it is not. The likeness is the same bytes that were
+     * filed, so the row is answered again from it rather than left to
+     * contradict the picture above it.
+     *
+     * @return bool whether the slot was rewritten
+     */
+    public static function refileFromLikeness(CipDocument $slot, User $actor): bool
+    {
+        if ($slot->type !== DocumentTypes::PASSPORT_PHOTO || $slot->isFilled()) {
+            return false;
+        }
+
+        $person = $slot->person;
+        if (! $person || ! $person->photo_path) {
+            return false;
+        }
+
+        $read = PassportPhoto::read($person);
+        if ($read === null || $read['body'] === '') {
+            return false;
+        }
+
+        // A pointer at a binned file is cleared first, or fill() would add a
+        // version to the file in the bin instead of filing a new answer.
+        if ($slot->file_id !== null) {
+            DocumentEngine::resetAfterFileDeletion($slot, $actor, false);
+        }
+
+        $extension = match ($read['mime']) {
+            'image/png' => 'png',
+            'image/webp' => 'webp',
+            default => 'jpg',
+        };
+        $tmp = tempnam(sys_get_temp_dir(), 'cip-face');
+        file_put_contents($tmp, $read['body']);
+
+        try {
+            self::fill(
+                $person,
+                DocumentTypes::PASSPORT_PHOTO,
+                new UploadedFile($tmp, 'passport-photo.'.$extension, $read['mime'], null, true),
+                $actor,
+                null,
+                true,
+            );
+        } catch (\Throwable) {
+            // A confirmed package or a locked slot refuses the write; the
+            // row then says what it said, and nobody is shown an error for
+            // a repair they did not ask for.
+            return false;
+        } finally {
+            if (is_file($tmp)) {
+                @unlink($tmp);
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * A library upload that names a checklist row lands in the slot, not
      * beside it as a second file wearing the slot's review chip.
      *
