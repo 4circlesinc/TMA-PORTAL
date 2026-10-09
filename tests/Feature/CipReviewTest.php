@@ -14,6 +14,7 @@ use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
+use App\Support\Cip\Confirmation;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\Engine;
@@ -809,5 +810,54 @@ class CipReviewTest extends TestCase
         $this->assertDatabaseHas('portal_notifications', [
             'user_id' => $contact->id, 'type' => 'cip.ready-to-submit',
         ]);
+    }
+
+    /**
+     * A dependant taken off the application takes their checklist with them.
+     *
+     * The person is soft-deleted and their slots stay on the row, out of
+     * every screen. The package check counted them anyway, so a file whose
+     * every visible document was Ready for submission was refused for a
+     * document nobody could see.
+     */
+    public function test_a_removed_dependants_slots_do_not_hold_the_package(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $application = $this->application($staff, Status::READY_TO_SUBMIT);
+        $this->slot($application, 'passport_bio_page', 'Passport bio page', true, DocumentStatus::READY_FOR_SUBMISSION);
+
+        $dependant = CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_DEPENDENT,
+            'first_name' => 'Mei', 'last_name' => 'Wei',
+        ]);
+        $owed = CipDocument::create([
+            'application_id' => $application->id,
+            'person_id' => $dependant->id,
+            'type' => 'birth_certificate',
+            'label' => 'Birth certificate',
+            'required' => true,
+        ]);
+        $owed->forceFill(['status' => DocumentStatus::PENDING_UPLOAD])->save();
+
+        $this->assertFalse(Review::packageReady($application));
+        $this->assertSame(['MEI WEI: Birth certificate (Pending upload)'], Review::blockers($application));
+
+        try {
+            Confirmation::confirm($application, $staff);
+            $this->fail('An unfinished package was confirmed.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertSame('Not yet Ready for submission: MEI WEI: Birth certificate (Pending upload).', $e->getMessage());
+        }
+
+        $dependant->delete();
+        app('request')->attributes->remove('cip.tally');
+
+        $this->assertTrue(Review::packageReady($application->fresh()));
+        $this->assertSame([], Review::blockers($application->fresh()));
+        $this->assertSame(0, Review::progress($application->fresh())['outstanding']);
+
+        $confirmed = Confirmation::confirm($application->fresh(), $staff);
+        $this->assertNotNull($confirmed->locked_at);
     }
 }

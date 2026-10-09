@@ -145,9 +145,7 @@ class Confirmation
         }
 
         if (! Review::packageReady($application)) {
-            throw new \InvalidArgumentException(
-                'Every required document, and every document that has been uploaded, must be Ready for submission before the package can be confirmed.',
-            );
+            throw new \InvalidArgumentException(self::notReadyMessage($application));
         }
 
         $lockedAt = ($lockedAt ?? Carbon::now())->startOfDay();
@@ -189,6 +187,24 @@ class Confirmation
     }
 
     /**
+     * The refusal, naming the documents that hold the package.
+     *
+     * "Everything must be Ready for submission" sent the reader back to a
+     * checklist that looked finished. The slots the check counted are the
+     * ones to name.
+     */
+    private static function notReadyMessage(CipApplication $application): string
+    {
+        $blockers = Review::blockers($application);
+
+        if ($blockers === []) {
+            return 'Every required document, and every document that has been uploaded, must be Ready for submission before the package can be confirmed.';
+        }
+
+        return 'Not yet Ready for submission: '.implode('; ', $blockers).'.';
+    }
+
+    /**
      * Freeze the Certificate of Registration package. The original
      * pre-approval lock is a different column and is left alone.
      */
@@ -210,9 +226,7 @@ class Confirmation
         }
 
         if (! Review::packageReady($application)) {
-            throw new \InvalidArgumentException(
-                'Every required document, and every document that has been uploaded, must be Ready for submission before the package can be confirmed.',
-            );
+            throw new \InvalidArgumentException(self::notReadyMessage($application));
         }
 
         $lockedAt = ($lockedAt ?? Carbon::now())->startOfDay();

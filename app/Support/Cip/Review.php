@@ -103,7 +103,7 @@ class Review
 
         if ($preIds !== []) {
             $grouped = $grouped->merge(
-                CipDocument::query()
+                self::ofLivePeople(CipDocument::query())
                     ->whereIn('application_id', $preIds)
                     ->selectRaw('application_id, status, required, COUNT(*) as total')
                     ->groupBy('application_id', 'status', 'required')
@@ -114,7 +114,7 @@ class Review
         if ($corIds !== []) {
             $grouped = $grouped->merge(
                 self::constrainToPack(
-                    CipDocument::query()->whereIn('application_id', $corIds),
+                    self::ofLivePeople(CipDocument::query())->whereIn('application_id', $corIds),
                     Pack::COR,
                 )
                     ->selectRaw('application_id, status, required, COUNT(*) as total')
@@ -126,7 +126,7 @@ class Review
         if ($nicIds !== []) {
             $grouped = $grouped->merge(
                 self::constrainToPack(
-                    CipDocument::query()->whereIn('application_id', $nicIds),
+                    self::ofLivePeople(CipDocument::query())->whereIn('application_id', $nicIds),
                     Pack::NIC,
                 )
                     ->selectRaw('application_id, status, required, COUNT(*) as total')
@@ -138,7 +138,7 @@ class Review
         if ($passportIds !== []) {
             $grouped = $grouped->merge(
                 self::constrainToPack(
-                    CipDocument::query()->whereIn('application_id', $passportIds),
+                    self::ofLivePeople(CipDocument::query())->whereIn('application_id', $passportIds),
                     Pack::PASSPORT,
                 )
                     ->selectRaw('application_id, status, required, COUNT(*) as total')
@@ -604,7 +604,7 @@ class Review
         }
 
         $rows = self::constrainToCurrentChecklist(
-            CipDocument::query()->where('application_id', $application->getKey()),
+            self::ofLivePeople(CipDocument::query())->where('application_id', $application->getKey()),
             $application->phase ?? Phase::PRE_APPROVAL,
             $application,
         )
@@ -616,6 +616,53 @@ class Review
         request()->attributes->set('cip.tally', $store);
 
         return $store[$id];
+    }
+
+    /**
+     * Only the people still on the application.
+     *
+     * A dependant taken off the form is soft-deleted and their slots stay
+     * with them, out of every checklist a screen draws. Counting those slots
+     * here held a package at "not ready" for a document nobody could see.
+     *
+     * @param  Builder<CipDocument>  $query
+     * @return Builder<CipDocument>
+     */
+    private static function ofLivePeople(Builder $query): Builder
+    {
+        return $query->whereHas('person');
+    }
+
+    /**
+     * What is holding the package, by name: the slots the tally counts that
+     * are not Ready for submission, so a refusal can say which they are.
+     *
+     * @return list<string>  "CHEN WEI: Birth certificate (Application review)"
+     */
+    public static function blockers(CipApplication $application): array
+    {
+        return self::constrainToCurrentChecklist(
+            self::ofLivePeople(CipDocument::query())->where('application_id', $application->getKey()),
+            $application->phase ?? Phase::PRE_APPROVAL,
+            $application,
+        )
+            ->with('person')
+            ->orderBy('person_id')
+            ->orderBy('id')
+            ->get()
+            ->filter(function (CipDocument $slot) {
+                $status = $slot->displayStatus();
+                if ($status === DocumentStatus::READY_FOR_SUBMISSION) {
+                    return false;
+                }
+
+                // An optional slot nobody filled owes nothing.
+                return $slot->required || $slot->isFilled();
+            })
+            ->map(fn (CipDocument $slot) => trim(($slot->person?->fullName() ?? '').': '.$slot->label, ': ')
+                .' ('.DocumentStatus::label($slot->displayStatus()).')')
+            ->values()
+            ->all();
     }
 
     /**
