@@ -40,6 +40,7 @@
     { id: 'cip-documents', label: 'Document Requirements', group: 'CIP Console', keywords: ['description', 'help', 'checklist', 'add-on'] },
     { id: 'cip-letters', label: 'Granted And Denied Letters', group: 'CIP Console' },
     { id: 'cip-distribution', label: 'Distribution Group', group: 'CIP Console' },
+    { id: 'cip-investment-copies', label: 'Investment Copies', group: 'CIP Console', keywords: ['real estate', 'enterprise', 'developer', 'notifications'] },
     { id: 'account-security', label: 'Account Security', group: 'Security' },
     { id: 'security-insights', label: 'Security Insights', group: 'Security' },
     { id: 'signin-policy', label: 'Sign In Policy', group: 'Security' },

@@ -7,6 +7,7 @@ use App\Models\CipEvent;
 use App\Models\CipProvider;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Creating applications. One method so the invariant cannot be skipped: an
@@ -55,6 +56,64 @@ class Applications
 
             Engine::record($application, CipEvent::ACTION_CREATED, $creator, [
                 'internalNumber' => $application->internal_number,
+            ]);
+
+            return $application;
+        });
+    }
+
+    /**
+     * Change the firm's own application number by hand.
+     *
+     * The number is minted at creation and ordinarily never moves; a
+     * transfer to another firm deliberately keeps it. An administrator may
+     * still correct one, a filing minted under the wrong firm being the
+     * usual reason. The new number has to be free, and when it fits the
+     * provider's own format the counter is advanced past it so the next
+     * filing cannot be minted onto the same number.
+     *
+     * @throws ValidationException the number is empty, too long, or taken
+     */
+    public static function renumber(CipApplication $application, User $actor, string $number): CipApplication
+    {
+        $number = strtoupper(preg_replace('/\s+/u', '', trim($number)) ?? '');
+
+        if ($number === '') {
+            throw ValidationException::withMessages(['internalNumber' => 'Enter the application number.']);
+        }
+
+        if (mb_strlen($number) > 20) {
+            throw ValidationException::withMessages(['internalNumber' => 'That application number is too long.']);
+        }
+
+        if ($number === (string) $application->internal_number) {
+            return $application;
+        }
+
+        $taken = CipApplication::query()
+            ->withTrashed()
+            ->whereRaw('UPPER(internal_number) = ?', [$number])
+            ->where('id', '!=', $application->id)
+            ->exists();
+
+        if ($taken) {
+            throw ValidationException::withMessages(['internalNumber' => 'That application number is already in use.']);
+        }
+
+        return DB::transaction(function () use ($application, $actor, $number) {
+            $application = CipApplication::query()->whereKey($application->id)->lockForUpdate()->firstOrFail();
+            $previous = $application->internal_number;
+
+            $application->forceFill(['internal_number' => $number])->save();
+
+            $application->loadMissing('provider');
+            if ($application->provider && Numbering::matches($application->provider, $number)) {
+                Numbering::reserve($application->provider, $number);
+            }
+
+            Engine::record($application, CipEvent::ACTION_RENUMBERED, $actor, [
+                'internalNumber' => $number,
+                'previousInternalNumber' => $previous,
             ]);
 
             return $application;

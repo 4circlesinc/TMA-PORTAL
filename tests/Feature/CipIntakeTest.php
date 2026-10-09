@@ -2175,6 +2175,165 @@ class CipIntakeTest extends TestCase
         )->name);
     }
 
+    /**
+     * The edit form's Service provider field is honoured.
+     *
+     * The form has always sent the provider back with every save; the server
+     * dropped it, so the page said Saved and the firm never changed. An
+     * administrator's choice is now a transfer, the same move the Transfer
+     * dialog makes, folder and all.
+     */
+    public function test_an_administrator_changes_the_service_provider_on_the_edit_form(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $galaxy = $this->provider('GAL');
+        $bluemina = $this->provider('BLU');
+
+        $created = $this->file($admin, $this->payload($galaxy))->assertCreated()->json('application');
+        $application = CipApplication::where('uuid', $created['id'])->first();
+
+        $body = $this->edit($admin, $application, $this->edits($bluemina))
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame($bluemina->uuid, $body['providerId']);
+        $this->assertSame('BLU Provider', $body['provider']);
+        // The number is the file's history and stays.
+        $this->assertSame($created['internalNumber'], $body['internalNumber']);
+        $this->assertSame((int) $bluemina->id, (int) $application->fresh()->provider_id);
+        $this->assertTrue(
+            $application->events()->where('action', CipEvent::ACTION_PROVIDER_TRANSFERRED)->exists(),
+            'a provider change from the form is audited like one from the dialog',
+        );
+    }
+
+    public function test_only_an_administrator_changes_the_service_provider_on_the_edit_form(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $galaxy = $this->provider('GAL');
+        $bluemina = $this->provider('BLU');
+
+        $created = $this->file($admin, $this->payload($galaxy))->assertCreated()->json('application');
+        $application = CipApplication::where('uuid', $created['id'])->first();
+
+        $this->edit($this->user(Role::REVIEWING_OFFICER), $application, $this->edits($bluemina))
+            ->assertStatus(422);
+        $this->assertSame((int) $galaxy->id, (int) $application->fresh()->provider_id);
+
+        // Sending the firm it already has is not a change and needs no right.
+        $this->edit($this->user(Role::REVIEWING_OFFICER), $application, $this->edits($galaxy))
+            ->assertOk();
+    }
+
+    public function test_an_administrator_changes_the_application_number_on_the_edit_form(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $galaxy = $this->provider('GAL');
+
+        $created = $this->file($admin, $this->payload($galaxy))->assertCreated()->json('application');
+        $application = CipApplication::where('uuid', $created['id'])->first();
+        $this->assertSame('GAL26-00001', $created['internalNumber']);
+
+        $body = $this->edit($admin, $application, $this->edits($galaxy, ['internalNumber' => ' gal26-00007 ']))
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame('GAL26-00007', $body['internalNumber']);
+        $this->assertSame('GAL26-00007', $body['number']);
+        $this->assertTrue(
+            $application->events()->where('action', CipEvent::ACTION_RENUMBERED)->exists(),
+        );
+
+        // The counter moved past it: the next filing is not minted onto 00007.
+        $next = $this->file($admin, $this->payload($galaxy, ['firstName' => 'Nadia', 'passportNumber' => 'N1']))
+            ->assertCreated()->json('application');
+        $this->assertSame('GAL26-00008', $next['internalNumber']);
+
+        // A number another file wears is refused, and an officer may not change it.
+        $this->edit($admin, $application, $this->edits($galaxy, ['internalNumber' => 'GAL26-00008']))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['internalNumber']);
+        $this->edit($this->user(Role::REVIEWING_OFFICER), $application, $this->edits($galaxy, ['internalNumber' => 'GAL26-00009']))
+            ->assertStatus(422);
+        $this->assertSame('GAL26-00007', $application->fresh()->internal_number);
+    }
+
+    /**
+     * A post-approval filing that the Unit already denied.
+     *
+     * The form asks on Save whether the file is a post-approval application
+     * or a denied one. Denied lands straight on Denied with the decision
+     * recorded and sends the denial notice; the ordinary answer still sends
+     * the Post-Approval notice, and nothing sends both.
+     */
+    public function test_a_post_approval_filing_can_be_denied_at_intake(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($staff, $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12661P',
+            'outcome' => Intake::OUTCOME_DENIED,
+            'oathOfAllegiance' => $this->scan('oath.pdf'),
+            'proofOfPayment' => $this->scan('payment.pdf'),
+        ]))
+            ->assertCreated()
+            ->json('application');
+
+        $this->assertSame(Phase::POST_APPROVAL, $body['phase']);
+        $this->assertSame(Status::POST_DENIED, $body['status']);
+        $this->assertSame(Status::POST_DENIED, $body['decision']);
+        $this->assertNotNull($body['decidedAt']);
+        $this->assertNotNull($body['postApprovalAt']);
+
+        $application = CipApplication::where('uuid', $body['id'])->first();
+        $this->assertTrue($application->events()->where('action', CipEvent::ACTION_DECISION_RECORDED)->exists());
+        $this->assertTrue($application->events()
+            ->where('action', CipEvent::ACTION_STATUS_CHANGED)
+            ->where('to_status', Status::POST_DENIED)
+            ->exists());
+
+        $this->assertDatabaseHas('email_deliveries', [
+            'template' => 'cip-denied',
+            'related_id' => $application->id,
+        ]);
+        $this->assertDatabaseMissing('email_deliveries', [
+            'template' => 'cip-status-post-approval',
+            'related_id' => $application->id,
+        ]);
+    }
+
+    public function test_a_post_approval_filing_defaults_to_the_post_approval_notice(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($staff, $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12661P',
+            'outcome' => Intake::OUTCOME_POST_APPROVAL,
+            'oathOfAllegiance' => $this->scan('oath.pdf'),
+            'proofOfPayment' => $this->scan('payment.pdf'),
+        ]))->assertCreated()->json('application');
+
+        $this->assertSame(Status::POST_APPROVAL, $body['status']);
+        $application = CipApplication::where('uuid', $body['id'])->first();
+        $this->assertDatabaseMissing('email_deliveries', [
+            'template' => 'cip-denied',
+            'related_id' => $application->id,
+        ]);
+        $this->assertDatabaseHas('email_deliveries', [
+            'template' => 'cip-status-post-approval',
+            'related_id' => $application->id,
+        ]);
+    }
+
     public function test_turning_the_sponsor_off_and_on_keeps_the_same_person(): void
     {
         Storage::fake(config('filesystems.avatar_disk', 'public'));

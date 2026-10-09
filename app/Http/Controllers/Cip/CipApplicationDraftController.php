@@ -8,6 +8,7 @@ use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\User;
 use App\Support\Cip\AddOn;
+use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Intake;
 use App\Support\Cip\Phase;
@@ -243,12 +244,21 @@ class CipApplicationDraftController extends Controller
          */
         $uuid = (string) ($request->input('application') ?? $request->query('application', ''));
         if ($uuid !== '') {
-            return CipApplication::query()
+            /*
+             * Named by uuid, the draft is whoever may edit it, not only
+             * whoever typed its first line. A colleague opening a draft from
+             * the table used to have their autosave land on a private copy
+             * with none of the scans, and their Add refused as not theirs.
+             * ApplicationScope is the reach; CipAccess::canEditApplication
+             * is the same question Save asks of a filed row.
+             */
+            $draft = ApplicationScope::query($user)
                 ->where('uuid', $uuid)
                 ->where('status', Status::DRAFT)
-                ->where('created_by', $user->id)
                 ->with('people')
                 ->first();
+
+            return $draft && CipAccess::canEditApplication($user, $draft) ? $draft : null;
         }
 
         /*

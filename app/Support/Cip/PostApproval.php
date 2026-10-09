@@ -3,6 +3,7 @@
 namespace App\Support\Cip;
 
 use App\Models\CipApplication;
+use App\Models\CipEvent;
 use App\Models\User;
 
 /**
@@ -38,6 +39,38 @@ class PostApproval
                 ])->save();
             }
         }
+
+        return $application->refresh();
+    }
+
+    /**
+     * A post-approval filing the Unit had already denied.
+     *
+     * The file enters the lane the way every post-approval filing does, so
+     * its folders and checklist exist, then lands on Denied with the
+     * decision and the day recorded, in one write. Not through the engine:
+     * the provider side files these too and holds no cip.decide, and the
+     * engine's own announce would send a Post-Approval notice the denial
+     * then contradicts. The caller announces Denied once, after the commit.
+     */
+    public static function denyAtIntake(CipApplication $application, User $actor): CipApplication
+    {
+        $from = $application->status;
+        $decidedAt = now();
+
+        $application->forceFill([
+            'status' => Status::POST_DENIED,
+            'decision' => Status::POST_DENIED,
+            'decided_at' => $decidedAt,
+        ])->save();
+
+        $meta = [
+            'decision' => Status::POST_DENIED,
+            'decidedAt' => $decidedAt->toDateString(),
+            'atIntake' => true,
+        ];
+        Engine::record($application, CipEvent::ACTION_STATUS_CHANGED, $actor, $meta, $from, Status::POST_DENIED);
+        Engine::record($application, CipEvent::ACTION_DECISION_RECORDED, $actor, $meta);
 
         return $application->refresh();
     }

@@ -4,6 +4,7 @@ namespace App\Support\Cip;
 
 use App\Models\CipApplication;
 use App\Models\CipPerson;
+use App\Models\CipProvider;
 use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Access\Role;
@@ -62,6 +63,9 @@ class Contacts
             ...self::assignedOfficers($application),
             ...self::administrators(),
             ...self::providerSide($application),
+            // The developer or promoter behind the investment, whichever
+            // firm filed: Settings › CIP Console › Investment Copies.
+            ...InvestmentCopies::recipients($application),
         ] as $recipient) {
             $recipients[mb_strtolower($recipient['email'])] = $recipient;
         }
@@ -190,7 +194,43 @@ class Contacts
 
         $recipients = [];
 
-        $company = $application->provider?->company;
+        if ($application->provider) {
+            foreach (self::providerContacts($application->provider) as $recipient) {
+                $recipients[mb_strtolower($recipient['email'])] = $recipient;
+            }
+        }
+
+        // A private client is their own provider side.
+        if ($recipients === [] && $application->client) {
+            $email = $application->client->user?->email ?: $application->client->email;
+
+            if ($email) {
+                $recipients[mb_strtolower($email)] = [
+                    'email' => $email,
+                    'name' => $application->client->name,
+                    'userId' => $application->client->user_id,
+                ];
+            }
+        }
+
+        return array_values($recipients);
+    }
+
+    /**
+     * One firm's contacts: its active members, the registry's own contact
+     * address, and the company mailbox, unique by email.
+     *
+     * The filing firm's provider side, and also what a firm copied because
+     * of the investment ({@see InvestmentCopies}) receives, so a developer
+     * on the register hears exactly what it would hear as the filing firm.
+     *
+     * @return list<array{email:string, name:?string, userId:?int}>
+     */
+    public static function providerContacts(CipProvider $provider): array
+    {
+        $provider->loadMissing('company');
+        $recipients = [];
+        $company = $provider->company;
 
         if ($company) {
             foreach ($company->members()->where('status', CompanyMember::STATUS_ACTIVE)->get() as $member) {
@@ -208,12 +248,12 @@ class Contacts
 
         // The registry's own contact address, where it is nobody already on
         // the list, a firm may route notices to a mailbox no member owns.
-        $contact = $application->provider?->contact_email;
+        $contact = $provider->contact_email;
 
         if ($contact && ! isset($recipients[mb_strtolower($contact)])) {
             $recipients[mb_strtolower($contact)] = [
                 'email' => $contact,
-                'name' => $application->provider->contact_name,
+                'name' => $provider->contact_name,
                 'userId' => null,
             ];
         }
@@ -229,19 +269,6 @@ class Contacts
                 'name' => $company->name,
                 'userId' => null,
             ];
-        }
-
-        // A private client is their own provider side.
-        if ($recipients === [] && $application->client) {
-            $email = $application->client->user?->email ?: $application->client->email;
-
-            if ($email) {
-                $recipients[mb_strtolower($email)] = [
-                    'email' => $email,
-                    'name' => $application->client->name,
-                    'userId' => $application->client->user_id,
-                ];
-            }
         }
 
         return array_values($recipients);

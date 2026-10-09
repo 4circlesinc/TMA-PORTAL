@@ -1954,6 +1954,7 @@
           '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:cip-documents">Manage documents</button>' +
           '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:cip-letters">Manage decision letters</button>' +
           '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:cip-distribution">Manage distribution group</button>' +
+          '<button type="button" class="tma-dash__menu-item" role="menuitem" data-head-dropdown-item="admin:cip-investment-copies">Manage investment copies</button>' +
           '</div></div>'
         : '') +
       /*
@@ -15261,6 +15262,7 @@
     'cip-documents': { title: 'Document Requirements' },
     'cip-letters': { title: 'Granted And Denied Letters' },
     'cip-distribution': { title: 'Distribution Group' },
+    'cip-investment-copies': { title: 'Investment Copies' },
   };
 
   function navigateToClientsAdminPage(adminPage) {
@@ -15447,7 +15449,17 @@
         intakeMount.innerHTML = '';
       }
     }
-    if (intakeMount && !intakeMount._cipMounted && window.TMACipIntake) {
+    /*
+     * An edit with no application to edit is not a new form.
+     *
+     * Opening the wizard with a null id draws the blank create form under an
+     * Edit application head, and its Save then files a second application.
+     * Say what happened instead; the route handoff is what should have
+     * carried the id (see dashboard.js), and this is the backstop.
+     */
+    if (intakeMount && !intakeMount._cipMounted && state.screen === 'edit-application' && !state.applicationId) {
+      intakeMount.innerHTML = '<p class="tma-portal-note">Couldn’t find this application. Open it from the list.</p>';
+    } else if (intakeMount && !intakeMount._cipMounted && window.TMACipIntake) {
       intakeMount._cipMounted = true;
       var editing = state.screen === 'edit-application';
       var openPhase = editing

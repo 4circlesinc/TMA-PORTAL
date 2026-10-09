@@ -16,6 +16,7 @@ use App\Support\Cip\AddOn;
 use App\Support\Cip\AddOnRequirements;
 use App\Support\Cip\Appeal;
 use App\Support\Cip\ApplicantType;
+use App\Support\Cip\Applications;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\Attention;
 use App\Support\Cip\Buckets;
@@ -36,6 +37,7 @@ use App\Support\Cip\PassportPhoto;
 use App\Support\Cip\PersonStatus;
 use App\Support\Cip\Phase;
 use App\Support\Cip\PostApproval;
+use App\Support\Cip\ProviderTransfer;
 use App\Support\Cip\Removal;
 use App\Support\Cip\Requirements;
 use App\Support\Cip\Review;
@@ -416,10 +418,12 @@ class CipApplicationController extends Controller
         // that row rather than on this reader's newest draft of the phase.
         $uuid = trim((string) ($data['draftId'] ?? ''));
         if ($uuid !== '') {
-            return CipApplication::query()
+            // Within reach, not only the reader's own: a colleague may
+            // complete a draft somebody else started (see the draft
+            // controller's mine()).
+            return ApplicationScope::query($user)
                 ->where('uuid', $uuid)
                 ->where('status', Status::DRAFT)
-                ->where('created_by', $user->id)
                 ->with(['people.documents'])
                 ->first();
         }
@@ -1445,6 +1449,7 @@ class CipApplicationController extends Controller
             'lockedStatuses' => $this->lockedStatuses($application, $viewer, forListing: true),
             'canDelete' => CipAccess::canDelete($viewer, $application),
             'canTransferProvider' => CipAccess::canTransferProvider($viewer),
+            'canRenumber' => CipAccess::canRenumber($viewer),
             'providerId' => $application->provider?->uuid,
             'providerCode' => $application->provider?->code,
             'stageStatuses' => $this->statusChoices(Engine::stageStatuses($application, $viewer)),
@@ -1981,15 +1986,81 @@ class CipApplicationController extends Controller
         $application->loadMissing('people.documents');
         $data = $request->validate(Intake::rules(editing: true, draft: $application), Intake::messages());
 
+        /*
+         * The firm and the firm's own number, judged before anything is
+         * written: a form that names a provider this reader may not move
+         * the file to is refused whole, not saved and then refused.
+         */
+        $application->loadMissing('provider');
+        $toProvider = $this->providerChange($user, $application, $data);
+        $newNumber = $this->numberChange($user, $application, $data);
+
         try {
             $application = Intake::update($application, $user, $data);
         } catch (\InvalidArgumentException $e) {
             abort(422, $e->getMessage());
         }
 
+        if ($newNumber !== null) {
+            $application = Applications::renumber($application, $user, $newNumber);
+        }
+
+        if ($toProvider !== null) {
+            $moved = ProviderTransfer::transfer($application, $toProvider, $user, confirmed: true);
+            $application = collect($moved)->firstWhere('id', $application->id) ?? $application->fresh();
+        }
+
         Live::staff(Live::CIP);
 
-        return response()->json(['application' => $this->record($application, $user)]);
+        return response()->json(['application' => $this->record($application->fresh(), $user)]);
+    }
+
+    /**
+     * The service provider the edit form asks to move this file to, or
+     * nothing when it names the firm already holding it.
+     *
+     * Administrators only, the same rule as the Transfer dialog. Judged
+     * here rather than in Intake so a reader without the right is told so
+     * before their other corrections are written.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function providerChange(User $user, CipApplication $application, array $data): ?CipProvider
+    {
+        $uuid = trim((string) ($data['providerId'] ?? ''));
+        if ($uuid === '' || $uuid === (string) $application->provider?->uuid) {
+            return null;
+        }
+
+        abort_unless(
+            CipAccess::canTransferProvider($user),
+            422,
+            'Only an administrator can change the service provider.',
+        );
+
+        $provider = CipProvider::query()->where('uuid', $uuid)->first();
+        abort_unless($provider, 422, 'Choose a service provider on the register.');
+
+        return $provider;
+    }
+
+    /**
+     * The application number the edit form asks for, or nothing when it is
+     * the number already on the file.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function numberChange(User $user, CipApplication $application, array $data): ?string
+    {
+        $number = strtoupper(preg_replace('/\s+/u', '', trim((string) ($data['internalNumber'] ?? ''))) ?? '');
+        if ($number === '' || $number === strtoupper((string) $application->internal_number)) {
+            return null;
+        }
+
+        abort_unless(CipAccess::canRenumber($user), 422, 'Only an administrator can change the application number.');
+        abort_if($application->status === Status::DRAFT, 422, 'A draft is numbered when it is filed.');
+
+        return $number;
     }
 
     /**
@@ -2001,8 +2072,9 @@ class CipApplicationController extends Controller
     private function fileDraftRequest(Request $request, CipApplication $draft): JsonResponse
     {
         $user = $request->user();
+        // Anyone who may file and may reach the row completes it: a draft is
+        // the firm's, not a private note of whoever opened the form first.
         abort_unless(CipAccess::canCreate($user), 404);
-        abort_unless((int) $draft->created_by === (int) $user->id, 404);
 
         Intake::normaliseDocuments($request);
         $draft->loadMissing('people.documents');
@@ -2338,6 +2410,7 @@ class CipApplicationController extends Controller
             'lockedStatuses' => $this->lockedStatuses($application, $viewer),
             'canDelete' => CipAccess::canDelete($viewer, $application),
             'canTransferProvider' => CipAccess::canTransferProvider($viewer),
+            'canRenumber' => CipAccess::canRenumber($viewer),
             'stageStatuses' => $this->statusChoices(Engine::stageStatuses($application, $viewer)),
             'provider' => $application->provider?->name,
             'providerId' => $application->provider?->uuid,

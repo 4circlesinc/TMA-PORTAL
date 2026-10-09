@@ -22,6 +22,7 @@ use App\Http\Controllers\Cip\CipApplicationDraftController;
 use App\Http\Controllers\Cip\CipAssignmentController;
 use App\Http\Controllers\Cip\CipDashboardController;
 use App\Http\Controllers\Cip\CipDistributionController;
+use App\Http\Controllers\Cip\CipInvestmentCopiesController;
 use App\Http\Controllers\Cip\CipDocumentCommentController;
 use App\Http\Controllers\Cip\CipDocumentUploadController;
 use App\Http\Controllers\Cip\CipEventController;
@@ -720,6 +721,16 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
             ->name('distribution.show');
         Route::patch('/distribution', [CipDistributionController::class, 'update'])
             ->name('distribution.update');
+
+        /*
+         * Who is copied because of the investment: per investment type, the
+         * providers (a Real Estate developer, an Enterprise promoter) and
+         * mailboxes that hear every notice whichever firm filed.
+         */
+        Route::get('/investment-copies', [CipInvestmentCopiesController::class, 'show'])
+            ->name('investment-copies.show');
+        Route::patch('/investment-copies', [CipInvestmentCopiesController::class, 'update'])
+            ->name('investment-copies.update');
 
         /*
          * Section 13: the conversation on one checklist document.

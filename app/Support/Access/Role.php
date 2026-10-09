@@ -424,6 +424,7 @@ class Role
         'cip-letters' => 'settings.clientHub',
         // Same as the letters: an unlisted rail id is treated as personal.
         'cip-distribution' => 'settings.clientHub',
+        'cip-investment-copies' => 'settings.clientHub',
         'cip-admin' => 'settings.clientHub',
         // "Account security" is the reader's own password and 2FA and stays
         // open; everything else under Security is firm-wide policy.

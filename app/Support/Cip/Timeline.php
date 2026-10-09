@@ -150,6 +150,8 @@ class Timeline
             CipEvent::ACTION_UNASSIGNED => "{$who} ended ".($meta['officer'] ?? 'an officer').'’s assignment',
             CipEvent::ACTION_PROVIDER_TRANSFERRED => self::providerTransferSentence($meta, $who),
             CipEvent::ACTION_NUMBER_ASSIGNED => self::numberSentence($meta, $who),
+            CipEvent::ACTION_RENUMBERED => "{$who} changed the application number from "
+                .($meta['previousInternalNumber'] ?? '?').' to '.($meta['internalNumber'] ?? '?'),
             CipEvent::ACTION_DECISION_RECORDED => self::decisionSentence($meta, $who),
             CipEvent::ACTION_PACKAGE_CONFIRMED => "{$who} confirmed the submission package",
             CipEvent::ACTION_COR_PACKAGE_CONFIRMED => "{$who} confirmed the Certificate of Registration package",

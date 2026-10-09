@@ -334,6 +334,28 @@ field placement and drawing, and computed CSS only exist in a browser.
     php artisan serve --host=127.0.0.1 --port=8933 --no-reload &
   TMA_BASE_URL=http://127.0.0.1:8933 node tests/Browser/cip-draft-autosave.mjs
   ```
+
+- **`cip-edit-reload.mjs`** — Edit application opened by its address, as a
+  Reviewing Officer who did not file it. The in-app Edit button always
+  loaded the record; a reload of `/citizenship-applications/applications/{id}/edit`
+  (or a shared link) used to mount a blank new form under the Edit head whose
+  Save filed a second application, because dashboard.js handed the hub only
+  `screen` and `contactId` of the parsed route and normalised the address to
+  the list, which the hub then read back once the directory arrived. Pins
+  that the address holds, the answers and filed documents are on the form,
+  nothing autosaves and nothing is posted. Same serve as
+  `cip-draft-autosave.mjs`; seed an officer and a filed application, then
+  pass its uuid:
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FEATURE_CIP=true php artisan tinker --execute="
+    \$o = App\Models\User::create(['name' => 'Rita Officer', 'email' => 'rita@example.com', 'password' => Hash::make('password12345')]);
+    \$o->forceFill(['email_verified_at' => now(), 'profile_completed_at' => now(), 'onboarding_completed_at' => now(),
+      'status' => 'approved', 'account_type' => 'Reviewing Officer'])->save();
+  "
+  # File one application as the admin through the wizard (cip-application-full.mjs does), then:
+  TMA_BASE_URL=http://127.0.0.1:8933 TMA_STAFF_EMAIL=rita@example.com TMA_APP=<uuid> node tests/Browser/cip-edit-reload.mjs
+  ```
 - **`cip-application-full.mjs`** — a whole family, filed and read back.
   `cip-intake.mjs` pins that the form is wired to the endpoint; this pins what
   the endpoint *leaves behind*, which is where the parts that only exist after

@@ -1420,9 +1420,10 @@
       if (viewName === 'clients' && window.TMAClients) {
         var clientsScreen = opts.clientsScreen;
         var contactId = opts.contactId;
+        var clientsRoute = null;
         if (!clientsScreen) {
           if (opts.skipUrl) {
-            var clientsRoute = window.TMAClients.routeFromPath(normalizePath(window.location.pathname));
+            clientsRoute = window.TMAClients.routeFromPath(normalizePath(window.location.pathname));
             if (clientsRoute) {
               clientsScreen = clientsRoute.screen;
               contactId = clientsRoute.contactId;
@@ -1435,9 +1436,18 @@
             contactId = null;
           }
         }
-        window.TMAClients.syncRoute({
+        /*
+         * The whole parsed route, not only screen and contact. An edit is
+         * addressed by the application and a company page by the company;
+         * handing over two fields of the route opened a reload of
+         * /applications/{id}/edit as a brand-new blank form that said Save.
+         */
+        window.TMAClients.syncRoute(clientsRoute || {
           screen: clientsScreen || 'list',
           contactId: contactId || null,
+          companyId: opts.companyId || null,
+          applicationId: opts.applicationId || null,
+          applicationPhase: opts.applicationPhase || null,
         });
       }
       syncUrl({
@@ -3500,6 +3510,21 @@
           var bootPath = pathForRoute(bootRoute.navId, bootRoute.view, bootRoute);
           var bootSearch = window.location.search || '';
           if (bootRoute.view === 'clients') {
+            /*
+             * A CIP address this shell does not model but the hub does: an
+             * application edit, a company page, a new filing in a lane.
+             * pathForRoute knows only list, detail, edit and add, so it
+             * collapsed /applications/{id}/edit to the list path, and the
+             * hub's own re-sync after the directory loaded then read the
+             * list back off the address. Keep the path the reader opened.
+             */
+            try {
+              var currentPath = normalizePath(window.location.pathname);
+              var hubRoute = window.TMAClients && window.TMAClients.routeFromPath
+                ? window.TMAClients.routeFromPath(currentPath)
+                : null;
+              if (hubRoute && !hubRoute.legacyRedirect) bootPath = currentPath;
+            } catch (e) { /* fall back to the normalised path */ }
             try {
               var sp = new URLSearchParams(bootSearch);
               // Client info is the old hub contact. An application URL should

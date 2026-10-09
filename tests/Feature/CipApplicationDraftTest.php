@@ -1290,7 +1290,15 @@ class CipApplicationDraftTest extends TestCase
     }
 
     /** Somebody else's draft is not addressable, however it is named. */
-    public function test_a_named_draft_belonging_to_someone_else_is_not_written_to(): void
+    /**
+     * A draft is the firm's, not a private note of whoever opened the form.
+     *
+     * A colleague who opens a draft from the table types into THAT row. Their
+     * autosave used to start a private copy with none of the scans, and
+     * their Add was refused as not theirs; the form looked empty to anyone
+     * but the person who started it.
+     */
+    public function test_a_named_draft_is_edited_by_a_colleague_who_may_file(): void
     {
         $mine = $this->user(Role::ADMINISTRATOR);
         $theirs = $this->user(Role::ADMINISTRATOR);
@@ -1302,12 +1310,56 @@ class CipApplicationDraftTest extends TestCase
         $this->actingAs($mine)->postJson(
             '/portal/cip/applications/draft?application='.$hers->uuid,
             $this->answers($provider, ['firstName' => 'Mine']),
+        )->assertOk()->assertJsonPath('draft.id', $hers->uuid);
+
+        $this->assertSame('MINE', $hers->fresh()
+            ->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->first_name);
+        $this->assertSame(1, CipApplication::query()->where('status', Status::DRAFT)->count());
+    }
+
+    public function test_a_named_draft_out_of_reach_is_not_written_to(): void
+    {
+        $theirs = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+        $this->save($theirs, $this->answers($provider, ['firstName' => 'Theirs']))->assertOk();
+        $hers = CipApplication::query()->first();
+
+        // A contact of a different firm cannot see the draft at all, so a
+        // save naming it starts a draft of their own under their own firm.
+        $other = $this->provider('BLU');
+        $stranger = $this->user(Role::CLIENT);
+        \App\Models\CompanyMember::create([
+            'company_id' => $other->company_id, 'user_id' => $stranger->id,
+            'name' => $stranger->name, 'email' => $stranger->email,
+            'role' => 'member', 'status' => \App\Models\CompanyMember::STATUS_ACTIVE,
+        ]);
+
+        $this->actingAs($stranger)->postJson(
+            '/portal/cip/applications/draft?application='.$hers->uuid,
+            $this->answers($other, ['firstName' => 'Mine']),
         )->assertOk();
 
-        // Untouched, and my save started a draft of my own instead.
         $this->assertSame('THEIRS', $hers->fresh()
             ->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)->first_name);
         $this->assertSame(2, CipApplication::query()->where('status', Status::DRAFT)->count());
+    }
+
+    public function test_a_colleague_can_file_a_draft_somebody_else_started(): void
+    {
+        $theirs = $this->user(Role::REVIEWING_OFFICER);
+        $mine = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->save($theirs, $this->answers($provider))->assertOk();
+        $draft = CipApplication::query()->first();
+
+        $this->actingAs($mine)
+            ->post('/portal/cip/applications/'.$draft->uuid, $this->filing($provider), ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->assertJsonPath('application.id', $draft->uuid)
+            ->assertJsonPath('application.status', Status::NEW);
+
+        $this->assertSame(1, CipApplication::count());
     }
 
     /** Filing a reopened draft completes that row, not the newest one. */

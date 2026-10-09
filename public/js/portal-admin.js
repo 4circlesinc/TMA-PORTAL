@@ -60,6 +60,7 @@
       { id: 'cip-documents', label: 'Document Requirements' },
       { id: 'cip-letters', label: 'Granted And Denied Letters' },
       { id: 'cip-distribution', label: 'Distribution Group' },
+      { id: 'cip-investment-copies', label: 'Investment Copies' },
     ] },
     { group: 'security-group', label: 'Security', icon: 'ShieldCheck', items: [
       { id: 'account-security', label: 'Account Security' },
@@ -1107,6 +1108,11 @@
             label: 'Distribution Group',
             help: 'Who receives every CIP status email, including extra mailboxes.',
             attrs: 'data-cip-admin-page="cip-distribution"',
+          }) +
+          adminVerbRow({
+            label: 'Investment Copies',
+            help: 'Service providers copied on every notice for an investment type, whichever firm filed.',
+            attrs: 'data-cip-admin-page="cip-investment-copies"',
           }) +
           adminVerbRow({
             label: 'Permissions',
@@ -2558,6 +2564,86 @@
           .then(function (d) {
             CIPDIST.data = d;
             ui().toast('Distribution list saved');
+            render();
+          })
+          .catch(function (e) { ui().toastError(e.message); });
+      });
+    },
+  };
+
+  /*
+   * Settings › CIP Console › Investment Copies.
+   *
+   * Per investment type, the providers on the register (a Real Estate
+   * developer, an Enterprise promoter) and extra mailboxes copied on every
+   * notice, whichever service provider filed the application.
+   */
+  var CIPCOPIES = { loaded: false, loading: false, error: '', data: null };
+
+  function loadCipInvestmentCopies() {
+    if (CIPCOPIES.loading) return;
+    CIPCOPIES.loading = true;
+    filelibJson('GET', '/portal/cip/investment-copies')
+      .then(function (d) { CIPCOPIES.data = d; CIPCOPIES.error = ''; })
+      .catch(function (e) { CIPCOPIES.error = e.message; })
+      .then(function () { CIPCOPIES.loaded = true; CIPCOPIES.loading = false; render(); });
+  }
+
+  PAGES['cip-investment-copies'] = {
+    render: function () {
+      if (CIPCOPIES.error) return '<p class="tma-portal-note">Couldn’t load investment copies: ' + ui().esc(CIPCOPIES.error) + '</p>';
+      if (!CIPCOPIES.loaded) return ui().loading();
+
+      var data = CIPCOPIES.data || {};
+      var canEdit = !!data.canEdit;
+      var providers = data.providers || [];
+      var copies = data.copies || {};
+      var dis = canEdit ? '' : ' disabled';
+
+      return '<p class="tma-portal-subtitle">Copied on every notice for applications of that investment type, whichever service provider filed.</p>' +
+        (data.investmentTypes || []).map(function (t) {
+          var row = copies[t.value] || {};
+          var chosen = row.providerIds || [];
+          var boxes = providers.length
+            ? providers.map(function (p) {
+              return '<label class="tma-portal-checkbox"><input type="checkbox" data-cipcopies-provider="' +
+                ui().esc(t.value) + '" value="' + ui().esc(p.id) + '"' +
+                (chosen.indexOf(p.id) !== -1 ? ' checked' : '') + dis + '><span>' +
+                ui().esc(p.name + ' (' + p.code + ')') + '</span></label>';
+            }).join('')
+            : '<p class="tma-portal-note">No service providers on the register yet.</p>';
+          return ui().section(t.label,
+            ui().field('Service providers', '<div class="tma-portal-checkbox-list">' + boxes + '</div>') +
+            ui().field('Extra mailboxes', '<textarea class="tma-portal-textarea" data-cipcopies-emails="' +
+              ui().esc(t.value) + '" rows="2" maxlength="4000"' + dis + '>' +
+              ui().esc((row.emails || []).join('\n')) + '</textarea>'));
+        }).join('') +
+        (canEdit
+          ? '<div class="tma-portal-form-actions">' + ui().btn({ label: 'Save', attrs: 'data-cipcopies-save' }) + '</div>'
+          : '<p class="tma-portal-note">Only an administrator can change who is copied.</p>');
+    },
+    wire: function (el) {
+      if (!CIPCOPIES.loaded) { loadCipInvestmentCopies(); return; }
+
+      var save = el.querySelector('[data-cipcopies-save]');
+      if (!save) return;
+      save.addEventListener('click', function () {
+        var copies = {};
+        ((CIPCOPIES.data || {}).investmentTypes || []).forEach(function (t) {
+          var ids = [];
+          el.querySelectorAll('[data-cipcopies-provider="' + t.value + '"]').forEach(function (box) {
+            if (box.checked) ids.push(box.value);
+          });
+          var raw = (el.querySelector('[data-cipcopies-emails="' + t.value + '"]') || {}).value || '';
+          copies[t.value] = {
+            providerIds: ids,
+            emails: raw.split(/[\n,;]+/).map(function (s) { return s.trim(); }).filter(Boolean),
+          };
+        });
+        filelibJson('PATCH', '/portal/cip/investment-copies', { copies: copies })
+          .then(function (d) {
+            CIPCOPIES.data = d;
+            ui().toast('Investment copies saved');
             render();
           })
           .catch(function (e) { ui().toastError(e.message); });

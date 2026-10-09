@@ -293,6 +293,18 @@ class CipAccess
     }
 
     /**
+     * May this account change the firm's own application number?
+     *
+     * Administrators only, the same hands that move a file between firms:
+     * letters and audit rows already cite the number, so changing it is a
+     * correction somebody has to answer for, not a field anyone tidies.
+     */
+    public static function canRenumber(?User $user): bool
+    {
+        return self::canTransferProvider($user);
+    }
+
+    /**
      * The officer roles this user holds.
      *
      * @return list<string>

@@ -91,6 +91,11 @@ class Intake
      *
      * @return Collection<int, array{key:string, field:string, label:string, help:?string, required:bool, realEstateOnly:bool, femaleOnly:bool, atFiling:bool}>
      */
+    /** What a post-approval filing says it is: the ordinary lane, or a denied file. */
+    public const OUTCOME_POST_APPROVAL = 'post_approval';
+
+    public const OUTCOME_DENIED = 'denied';
+
     public static function documentFields(
         string $applicantType,
         string $phase = Phase::PRE_APPROVAL,
@@ -311,9 +316,25 @@ class Intake
                  * else rather than trusting that.
                  */
                 'cipNumber' => ['nullable', 'string', 'max:'.Submission::MAX_LENGTH],
+                /*
+                 * The firm and the firm's own number, both an administrator's
+                 * to change on a filed application. Optional and judged in
+                 * the controller: the form sends the provider back whether
+                 * or not it moved, and only a different one is a transfer.
+                 */
+                'providerId' => ['nullable', 'string'],
+                'internalNumber' => ['nullable', 'string', 'max:40'],
             ] : [
                 'providerId' => ['required', 'string'],
                 'phase' => ['nullable', 'string', Rule::in(Phase::ALL)],
+                /*
+                 * A post-approval filing can be a file the Unit already
+                 * denied. Saying so at filing puts the file straight on
+                 * Denied and sends the denial notice, instead of a
+                 * Post-Approval notice that a status change then
+                 * contradicts a minute later.
+                 */
+                'outcome' => ['nullable', 'string', Rule::in([self::OUTCOME_POST_APPROVAL, self::OUTCOME_DENIED])],
                 /*
                  * A post-approval filing arrives with the Unit's number
                  * already on it: the file was approved before the portal saw
@@ -996,11 +1017,19 @@ class Intake
 
             self::fileUploads($application, $data, $creator, $dependentUuids);
 
+            if ($phase === Phase::POST_APPROVAL && self::deniedAtIntake($data)) {
+                PostApproval::denyAtIntake($application, $creator);
+            }
+
             return $application->fresh();
         });
 
         if ($announcePostApproval) {
-            Notices::announce($application, Status::POST_APPROVAL, $creator);
+            Notices::announce(
+                $application,
+                self::deniedAtIntake($data) ? Status::POST_DENIED : Status::POST_APPROVAL,
+                $creator,
+            );
         }
 
         /*
@@ -1323,7 +1352,12 @@ class Intake
         Engine::record($application, CipEvent::ACTION_POST_APPROVAL_ENTERED, $creator, []);
 
         $application = PostApproval::prepare($application->fresh(), $creator);
-        Notices::announce($application, Status::POST_APPROVAL, $creator);
+        if (self::deniedAtIntake($data)) {
+            $application = PostApproval::denyAtIntake($application, $creator);
+            Notices::announce($application, Status::POST_DENIED, $creator);
+        } else {
+            Notices::announce($application, Status::POST_APPROVAL, $creator);
+        }
 
         if (Assignments::claimFilingOfficer($application, $creator)) {
             $application = $application->fresh();
@@ -1344,6 +1378,12 @@ class Intake
      *
      * @param  array<string, mixed>  $data
      */
+    /** Did the form say this post-approval filing is a file the Unit denied? */
+    private static function deniedAtIntake(array $data): bool
+    {
+        return ($data['outcome'] ?? '') === self::OUTCOME_DENIED;
+    }
+
     private static function keepDraftCipNumber(CipApplication $application, array $data): void
     {
         if (($application->phase ?? '') !== Phase::POST_APPROVAL) {

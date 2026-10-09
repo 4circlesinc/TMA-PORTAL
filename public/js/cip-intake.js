@@ -189,7 +189,7 @@
       nationality: '', occupation: '', passportNumber: '',
       investmentType: '', investmentTypeOther: '', sponsored: '',
       parentCipNumber: '', parentCorNumber: '', parentApplicantName: '',
-      addonType: '', relationship: '',
+      addonType: '', relationship: '', internalNumber: '',
     };
   }
 
@@ -298,6 +298,7 @@
     enterpriseCategory: 'Enterprise category',
     sponsored: 'Sponsored', relationship: 'Relationship',
     cipNumber: 'CIP application number',
+    internalNumber: 'Application number',
     parentCipNumber: 'Main application CIP number',
     parentCorNumber: 'Certificate of Registration (COR) number',
     parentApplicantName: 'Main applicant name',
@@ -1151,12 +1152,35 @@
     var providers = ((state.options && state.options.providers) || []).map(function (p) {
       return { value: p.id, label: p.name + ' (' + p.code + ')' };
     });
-    if (state.options && state.options.providerFixed) {
+    /*
+     * On a filed application the firm is an administrator's to change: the
+     * select is the Transfer dialog in another place, folder move and all.
+     * Everyone else sees the firm as a fact rather than a control the
+     * server would turn away.
+     */
+    var fixed = (state.options && state.options.providerFixed)
+      || (editingFiled() && !(state.record && state.record.canTransferProvider));
+    if (fixed) {
+      var shown = providerName(state.draft.providerId)
+        || (state.record && state.record.provider) || '';
       return '<div class="tma-portal-field"><span class="tma-portal-field__label">' + esc(LABELS.providerId) + '</span>' +
-        '<p class="tma-portal-field__static">' + esc(providerName(state.draft.providerId)) + '</p></div>';
+        '<p class="tma-portal-field__static">' + esc(shown || '—') + '</p></div>';
     }
 
     return selectField('providerId', providers, 'Select a service provider');
+  }
+
+  /* Save on an application somebody has filed: not a new form, not a draft. */
+  function editingFiled() {
+    return !!(state.applicationId && state.record && state.record.status !== 'draft');
+  }
+
+  /*
+   * The firm's own number, offered to an administrator on a filed
+   * application. Minted at filing, so a new form and a draft never ask.
+   */
+  function showsInternalNumber() {
+    return editingFiled() && !!(state.record && state.record.canRenumber);
   }
 
   function investmentCard() {
@@ -1172,6 +1196,7 @@
       // answers, so it fits what it has rather than stranding the last one.
       '<div class="tma-portal-form-grid tma-portal-form-grid--investment">' +
       providerField() +
+      (showsInternalNumber() ? textField('internalNumber') : '') +
       selectField('investmentType', types, 'Select an investment type') +
       (state.draft.investmentType === 'other' ? textField('investmentTypeOther') : '') +
       (state.draft.investmentType === 'enterprise_project'
@@ -2372,6 +2397,7 @@
       // server refuses one on a pre-approval file, and a reader who was never
       // offered the field must not post the value the record came with.
       if (path === 'cipNumber' && !showsCipNumber()) return;
+      if (path === 'internalNumber' && !showsInternalNumber()) return;
       out.push({ name: bracketed(path), value: value });
     });
 
@@ -2419,6 +2445,11 @@
 
     if (filing && state.submissionKey) {
       out.push({ name: 'submissionId', value: state.submissionKey });
+    }
+
+    // What the reader said this post-approval filing is: see askOutcome().
+    if (filing && isPostApprovalIntake() && !isAddOnIntake() && state.outcome) {
+      out.push({ name: 'outcome', value: state.outcome });
     }
 
     if (filing && state.allowDuplicate) {
@@ -3232,6 +3263,19 @@
       return;
     }
 
+    /*
+     * A post-approval filing is one of two things: a file the Unit approved,
+     * which enters the lane and sends the Post-Approval notice, or one it
+     * denied, which lands on Denied and sends the denial. Asked once, on
+     * Add, rather than filed and then re-labelled by hand a minute later
+     * with a second email behind it.
+     */
+    if (isFiling() && isPostApprovalIntake() && !isAddOnIntake() && !state.outcome) {
+      askOutcome();
+
+      return;
+    }
+
     state.saving = true;
     if (state.onSaving) state.onSaving(true);
 
@@ -3340,6 +3384,31 @@
        * so parking it is a reasonable bet rather than a hope.
        */
       park(url);
+    });
+  }
+
+  /** Post-approval or denied: the question Add asks before it files. */
+  function askOutcome() {
+    ui().openModal({
+      title: 'Post-approval application',
+      body: '<p class="tma-portal-modal__text">Is this a post-approval application, or one the Unit denied?</p>' +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-outcome-cancel>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-outcome="denied">Denied</button>' +
+        '<button type="button" class="tma-no-data__btn" data-outcome="post_approval">Post-approval</button>' +
+        '</div>',
+      onMount: function (host) {
+        host.querySelector('[data-outcome-cancel]').addEventListener('click', function () {
+          ui().closeModal();
+        });
+        Array.prototype.forEach.call(host.querySelectorAll('[data-outcome]'), function (btn) {
+          btn.addEventListener('click', function () {
+            ui().closeModal();
+            state.outcome = btn.getAttribute('data-outcome');
+            submit();
+          });
+        });
+      },
     });
   }
 
@@ -3496,6 +3565,9 @@
     };
 
     record.providerId = state.draft.providerId || record.providerId;
+    if (showsInternalNumber() && state.draft.internalNumber) {
+      record.internalNumber = state.draft.internalNumber;
+    }
     record.investmentTypeValue = state.draft.investmentType || '';
     record.investmentTypeOther = state.draft.investmentTypeOther || '';
     record.investmentType = investmentLabel();
@@ -3612,6 +3684,7 @@
 
     state.draft.providerId = app.providerId || '';
     state.draft.cipNumber = app.cipNumber || '';
+    state.draft.internalNumber = app.internalNumber || '';
     state.draft.investmentType = app.investmentTypeValue || '';
     state.draft.investmentTypeOther = app.investmentTypeOther || '';
     state.draft.sponsored = app.sponsored ? '1' : '0';
@@ -3687,6 +3760,7 @@
     state.submissionKey = state.applicationId ? null : mintKey();
     state.allowDuplicate = false;
     state.allowUnmatchedParent = false;
+    state.outcome = null;
     if (state.draftTimer) { clearTimeout(state.draftTimer); state.draftTimer = null; }
     state.draftSaving = false;
     state.draftDirty = false;

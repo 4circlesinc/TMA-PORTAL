@@ -49,6 +49,13 @@ class CipEvent extends Model
     public const ACTION_NUMBER_ASSIGNED = 'number_assigned';
 
     /**
+     * The firm's own application number was changed by hand. Rare and
+     * administrator-only: letters and audit rows already cite the old one,
+     * so the trail has to say what it was.
+     */
+    public const ACTION_RENUMBERED = 'renumbered';
+
+    /**
      * The Unit decided — Approved or Denied.
      *
      * Its own action rather than a detail of the status change: the outcome

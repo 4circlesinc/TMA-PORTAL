@@ -1670,6 +1670,13 @@
   align-self: flex-end;
 }
 
+/* A stack of checkboxes under one field label (Settings › Investment Copies). */
+.tma-portal-checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
 .tma-portal-toggle-row {
   display: flex;
   align-items: center;

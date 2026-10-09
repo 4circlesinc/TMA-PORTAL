@@ -167,7 +167,7 @@ class PortalAccessTest extends TestCase
             'background-ops', 'notification-history',
             'branding', 'clienthub-access',
             'service-teams', 'custom-fields', 'cip-admin', 'cip-documents', 'cip-letters',
-            'cip-distribution',
+            'cip-distribution', 'cip-investment-copies',
             'security-policy', 'signin-policy',
             'alert-settings', 'storage-usage',
             'permissions', 'default-folders', 'folder-templates',
