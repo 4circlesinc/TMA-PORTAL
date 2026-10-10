@@ -3750,6 +3750,34 @@
   }
 
   /*
+   * The first listing, which the shell may already have asked for.
+   *
+   * PortalShell starts this request from <head> on a plain open of the
+   * applications page, so it is under way while the bundle is still loading
+   * instead of leaving last, behind everything else the shell fires at start.
+   * It is taken only when it is exactly the address about to be asked for
+   * (another tab, a search or a filter is a different listing), and only
+   * once. An early answer that failed is asked for again in the ordinary way,
+   * so a refusal reads the way it always has.
+   */
+  function applicationListingRequest(url) {
+    var early = window.TMABootCipList;
+    var earlyUrl = window.TMABootCipListUrl;
+    window.TMABootCipList = null;
+    window.TMABootCipListUrl = null;
+
+    if (!early || !early.then || earlyUrl !== url) return clientsFetch(url);
+
+    return early.then(function (res) {
+      if (!res || !res.ok) throw new Error('head start refused');
+
+      return res.json();
+    }).catch(function () {
+      return clientsFetch(url);
+    });
+  }
+
+  /*
    * The last answer for a tab, kept in the portal's store.
    *
    * Only each tab as it opens - no search, no filters, first page - which is
@@ -3927,7 +3955,7 @@
     var storeKey = applicationStoreKey(state, key);
     paintStoredApplicationPage(storeKey, key, lane, gen, state, render);
 
-    clientsFetch('/portal/cip/applications?' + params.join('&'))
+    applicationListingRequest('/portal/cip/applications?' + params.join('&'))
       .then(function (json) {
         // A forget() while this was in flight means these rows are stale.
         if (APP_TABLE.fetchGen !== gen) return;

@@ -139,6 +139,7 @@ final class PortalShell
             .'window.TMABootBespoke='.$bespoke.';'
             .'window.TMACsrfToken='.$token.';'
             .($dashboard ? self::homeHeadStart($user, $flags) : '')
+            .(self::bootsApplications($user) ? self::applicationsHeadStart() : '')
             .'</script>'."\n  "
             .self::lockdownTag($user);
     }
@@ -186,6 +187,54 @@ final class PortalShell
      * HomeBoard). Nothing here is the authority: the board's timer and live
      * signals refetch exactly as before.
      */
+    /**
+     * Whether this load opens straight onto the applications table.
+     *
+     * The bare address only: a link carrying a search, a filter or a tab asks
+     * for a different listing, and the view works that out for itself.
+     */
+    private static function bootsApplications(User $user): bool
+    {
+        $path = rtrim((string) request()->getPathInfo(), '/');
+
+        return $path === '/citizenship-applications'
+            && (string) request()->getQueryString() === ''
+            && CipAccess::canReach($user);
+    }
+
+    /**
+     * The applications table's first page, started from <head>.
+     *
+     * That request used to leave last. It was sent once the bundle had
+     * downloaded, parsed and mounted the view, in the same instant as some
+     * twenty others the shell fires at start (notifications, mail, calendar,
+     * the client directory), so the one answer the page was waiting on queued
+     * for a worker behind all of them, and every query in it is a round trip
+     * to the database. The reader watched a skeleton for all of that.
+     *
+     * Sent from here it has the server to itself and runs while the bundle is
+     * still on its way. Which tab the table opens on is the reader's own
+     * (kept in localStorage by clients.js under the same key), so the address
+     * is worked out in the browser; ensureApplicationTable() takes the answer
+     * only when it is the address it was about to ask for itself, and asks in
+     * the ordinary way when it is not. Nothing here is the authority.
+     */
+    private static function applicationsHeadStart(): string
+    {
+        return '(function(){'
+            .'var tab="all_applications";'
+            .'try{tab=localStorage.getItem("tma.cipListTab.v1")||tab}catch(e){}'
+            .'if(tab==="applications")tab="all_applications";'
+            .'var lanes={all_applications:"",pre_approval:"pre_approval",post_approval:"post_approval",add_on:"add_on",appeal:"appeal",closed:"closed"};'
+            // Service providers and Provider contacts are tabs with no application table.
+            .'if(!Object.prototype.hasOwnProperty.call(lanes,tab))return;'
+            .'var url="/portal/cip/applications?perPage=150&page=1&facets=1"+(lanes[tab]?"&phase="+lanes[tab]:"");'
+            .'window.TMABootCipListUrl=url;'
+            .'window.TMABootCipList=fetch(url,{credentials:"same-origin",headers:{Accept:"application/json","X-Requested-With":"XMLHttpRequest"}});'
+            .'window.TMABootCipList.catch(function(){});'
+            .'})();';
+    }
+
     private static function homeHeadStart(User $user, int $flags): string
     {
         $board = json_encode(HomeBoard::bootUrl($user), $flags);

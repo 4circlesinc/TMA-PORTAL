@@ -462,6 +462,56 @@ class CipListingScaleTest extends TestCase
         }
     }
 
+    /*
+     * The first page is asked for from <head>.
+     *
+     * Every query here is a round trip to a database that is not next door,
+     * and the listing used to be sent last: after the bundle had loaded, in
+     * the same instant as the twenty other requests the shell makes at start,
+     * so it queued for a worker behind all of them while the reader watched a
+     * skeleton. The shell now starts it at parse. The address is written
+     * out in the page because clients.js takes the answer only when it is the
+     * one it was about to ask for; if the two ever drift, the head start is
+     * silently wasted and the table is slow again, which is what this pins.
+     */
+    public function test_the_applications_page_starts_its_first_listing_from_the_head(): void
+    {
+        $staff = $this->staff();
+
+        $this->actingAs($staff)
+            ->get('/citizenship-applications')
+            ->assertOk()
+            ->assertSee('window.TMABootCipList=fetch(url', escape: false)
+            // The address ensureApplicationTable() builds for a first draw.
+            ->assertSee('"/portal/cip/applications?perPage=150&page=1&facets=1"', escape: false)
+            // And the key clients.js keeps the reader's tab under.
+            ->assertSee('localStorage.getItem("tma.cipListTab.v1")', escape: false);
+    }
+
+    public function test_only_a_plain_open_of_the_table_gets_the_head_start(): void
+    {
+        $staff = $this->staff();
+
+        // A link that carries a search asks for a different listing.
+        $this->actingAs($staff)
+            ->get('/citizenship-applications?search=smith')
+            ->assertOk()
+            ->assertDontSee('TMABootCipList', escape: false);
+
+        // Another page has no table to fill.
+        $this->actingAs($staff)
+            ->get('/email')
+            ->assertOk()
+            ->assertDontSee('TMABootCipList', escape: false);
+
+        // And a reader the listing would refuse is not sent to ask it.
+        config(['services.cip.enabled' => false]);
+
+        $this->actingAs($staff)
+            ->get('/citizenship-applications')
+            ->assertDontSee('TMABootCipList', escape: false);
+    }
+
     public function test_a_sort_or_page_change_does_not_recount_the_whole_table(): void
     {
         $staff = $this->staff();

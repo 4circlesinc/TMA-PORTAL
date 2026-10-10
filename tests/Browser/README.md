@@ -397,7 +397,10 @@ field placement and drawing, and computed CSS only exist in a browser.
   filed while the app was closed, a second tab painted from the store, and a
   plain browser as the control, where the wait is the real one and nothing is
   written to disk. The desktop is stood in for by the one flag the store
-  reads, `window.TMADesktop.isDesktop`.
+  reads, `window.TMADesktop.isDesktop`. Its last step pins where the request
+  starts: PortalShell sends the first listing from `<head>`, so no more than
+  `/me` may leave before it, it must be for the tab the reader left the table
+  on, and the table must take that answer rather than ask a second time.
 
   Same server and seed as `cip-table-quiet.mjs`:
 

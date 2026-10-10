@@ -17,6 +17,11 @@ import { readFileSync } from 'node:fs';
  * store reads (window.TMADesktop.isDesktop); a second, ordinary browser is the
  * control, because there nothing is kept on disk and the wait is real.
  *
+ * It also pins where the request starts. PortalShell sends the first listing
+ * from <head>, so it is under way while the bundle loads rather than leaving
+ * last, behind the twenty other requests the shell makes at start; that is
+ * what a browser, with no disk copy, gains.
+ *
  * Same server and seed as `cip-table-quiet.mjs`.
  */
 const BASE = process.env.TMA_BASE_URL || 'http://127.0.0.1:8899';
@@ -211,6 +216,27 @@ try {
     req.onerror = () => resolve(-1);
   }));
   check(onDisk === 0, `and nothing about a client was written to the browser's disk (${onDisk} entries)`);
+
+  // ── Either way: the request itself leaves first. ──────────────────────
+  step(6, 'The first listing leaves from the page head, ahead of everything else');
+  await tab.unroute('**/portal/cip/applications?**').catch(() => {});
+  const sent = [];
+  tab.on('request', r => {
+    if (['xhr', 'fetch'].includes(r.resourceType())) sent.push(r.url().replace(BASE, ''));
+  });
+  await tab.goto(`${BASE}/citizenship-applications`, { waitUntil: 'domcontentloaded' });
+  await tab.waitForSelector('.tma-cip-table tbody tr[data-cip-open]', { timeout: 30000 });
+  await tab.waitForTimeout(2500);
+  const at = sent.findIndex(u => u.startsWith('/portal/cip/applications?'));
+  // /me is fired from the head too; nothing the bundle sends may be ahead of it.
+  check(at >= 0 && at <= 1, `${at} request(s) were sent before it, of ${sent.length} the page made`);
+  // Whichever tab this reader left the table on, which the earlier step
+  // changed: the head start asks for that one, not always for the first.
+  const saved = await tab.evaluate(() => localStorage.getItem('tma.cipListTab.v1') || 'all_applications');
+  const wanted = '/portal/cip/applications?perPage=150&page=1&facets=1'
+    + (saved === 'all_applications' ? '' : '&phase=' + saved);
+  check(sent[at] === wanted, `for the tab the reader left it on (${saved}: ${sent[at]})`);
+  check(sent.filter(u => u === sent[at]).length === 1, 'and the table took that answer instead of asking again');
 } catch (e) {
   failures.push(String(e).slice(0, 300));
 } finally {
