@@ -14738,27 +14738,38 @@
    * them off without anyone having said so.
    */
   /*
-   * Applications that have just changed firm, as the server describes them.
+   * Applications a save has just changed, as the server describes them.
    *
-   * The number follows the firm, so a move changes two things every list
-   * draws. `internalNumber` is the one that changed; `number` is what is
-   * displayed, which is the Unit's CIP number once there is one. Both are
-   * taken from the answer rather than worked out here.
+   * The table is brought up to date from the save's own answer, at once,
+   * rather than waiting to ask the list again. A list read can take seconds
+   * on a slow line, and for all of that time the row went on showing the
+   * firm and the number from before: the reader changed the service
+   * provider, saw "saved", and looked at a table that said they had not.
+   *
+   * Each entry is an application id and whatever of a row it now knows:
+   * after a change of firm that is the firm and the number that follows it
+   * (`internalNumber` is the one that changed; `number` is what is drawn,
+   * the Unit's CIP number once there is one). Taken from the answer, never
+   * worked out here. Answers whether a row on screen was touched.
    */
   function applyMovedApplications(moved) {
+    var touched = false;
+
     (moved || []).forEach(function (m) {
       if (!m || !m.id) return;
       var patch = function (rec) {
         if (!rec) return;
-        rec.provider = m.provider;
-        rec.providerId = m.providerId;
-        rec.providerCode = m.providerCode;
-        if (m.internalNumber) rec.internalNumber = m.internalNumber;
-        if (m.number) rec.number = m.number;
+        Object.keys(m).forEach(function (key) {
+          if (key === 'id' || key === 'clientUid') return;
+          if (m[key] !== undefined && m[key] !== null) rec[key] = m[key];
+        });
       };
 
       (APP_TABLE.rows || []).forEach(function (row) {
-        if (row && row.id === m.id) patch(row);
+        if (row && row.id === m.id) {
+          patch(row);
+          touched = true;
+        }
       });
 
       var uid = m.clientUid || APPLICATION_OWNERS[m.id];
@@ -14768,6 +14779,86 @@
         rememberApplication(uid, held);
         delete TIMELINE[uid];
       }
+    });
+
+    return touched;
+  }
+
+  /* What a table row draws, read off a full application record. The two are
+     different shapes; these are the fields that mean the same in both. */
+  var ROW_FIELDS_ON_RECORD = [
+    'number', 'internalNumber', 'cipNumber', 'provider', 'providerId', 'providerCode',
+    'investmentType', 'familySize', 'familyLabel', 'status', 'statusLabel', 'statusTone',
+    'phase', 'phaseLabel', 'corNumber', 'submittedAt', 'submittedBy',
+  ];
+
+  function rowPatchFromRecord(record) {
+    if (!record || !record.id) return null;
+    var patch = { id: record.id, clientUid: record.clientUid || null };
+    ROW_FIELDS_ON_RECORD.forEach(function (key) {
+      if (record[key] !== undefined) patch[key] = record[key];
+    });
+    if (record.applicant && record.applicant.name) patch.applicantName = cipUpperName(record.applicant.name);
+
+    return patch;
+  }
+
+  /*
+   * The intake form saved something while the table was not on screen.
+   *
+   * Every copy of the table this tab holds is corrected from the save's own
+   * answer, and only then is the list asked again:
+   *
+   *  - the rows on screen when the reader left, which stay up on the way
+   *    back. Asking again from here would ordinarily blank the table to its
+   *    skeleton (rows known to be out of date are worse than a moment of
+   *    nothing), but these have just been put right by the very change that
+   *    dated them;
+   *  - the other tabs' pages held in memory, which are handed to the device
+   *    store corrected, so the tab the reader lands on (a draft goes back to
+   *    its own lane, not the tab it was opened from) paints the row as it
+   *    now is while its fresh page is fetched;
+   *  - the pages already in the store from before, which are dropped: the
+   *    store paints first, this form's writes never pass through the seam
+   *    that drops them, and a table that came back showing the firm and the
+   *    number from before the save for as long as the list took to answer
+   *    is what "it says saved but it did not change" looked like.
+   */
+  function applicationsChangedByForm(changes) {
+    changes = (changes || []).filter(Boolean);
+    var slice = APP_TABLE.shownSlice;
+    var touched = applyMovedApplications(changes);
+
+    var corrected = [];
+    Object.keys(APP_TABLE.cache || {}).forEach(function (key) {
+      var page = APP_TABLE.cache[key];
+      if (!page || !page.rows) return;
+      page.rows.forEach(function (row) {
+        changes.forEach(function (m) {
+          if (!row || row.id !== m.id) return;
+          Object.keys(m).forEach(function (field) {
+            if (field === 'id' || field === 'clientUid') return;
+            if (m[field] !== undefined && m[field] !== null) row[field] = m[field];
+          });
+        });
+      });
+      // Only a tab as it opens is ever stored: no search, no filter, page one.
+      var parts = key.split('|');
+      var plain = parts[0] === '' && parts[2] === '' && parts[3] === '' && parts[4] === '' &&
+        parts[5] === '' && parts[8] === '' && parts[parts.length - 1] === '1';
+      if (plain) corrected.push({ storeKey: 'cip:applications:v1:' + key, page: page });
+    });
+
+    forgetApplicationTable();
+    forgetBuckets();
+    if (slice && touched) APP_TABLE.shownSlice = slice;
+
+    if (!window.TMAStore || !window.TMAStore.invalidate) return;
+    var dropped;
+    try { dropped = window.TMAStore.invalidate('cip:applications:'); } catch (e) { return; }
+    // After the drop has finished, so it cannot take the corrected pages too.
+    Promise.resolve(dropped).catch(function () {}).then(function () {
+      corrected.forEach(function (entry) { storeApplicationPage(entry.storeKey, entry.page); });
     });
   }
 
@@ -15739,6 +15830,14 @@
           }
           syncClientsDetailHead(state);
         },
+        /*
+         * A draft's autosave landed: its row draws the firm, the number
+         * and the name that save just decided, so the table behind the
+         * form is told now and is right when the reader goes back to it.
+         */
+        onChanged: function (changes) {
+          applicationsChangedByForm(changes);
+        },
         onSaving: function (saving) {
           var btn = document.querySelector('[data-cip-save]');
           if (!btn) return;
@@ -15777,14 +15876,15 @@
             // what is already in hand.
             rememberApplication(state.selectedId, application);
             /*
-             * The table is asked again, here. A live signal follows every
-             * write, but the tab that made the write is the one tab it does
-             * not reach, so a save that changed what a row draws (the firm,
-             * the number that follows the firm, a name) came back to a
-             * table still showing the answer from before.
+             * The table is corrected and asked again, here. A live signal
+             * follows every write, but the tab that made the write is the
+             * one tab it does not reach, so a save that changed what a row
+             * draws (the firm, the number that follows the firm, a name)
+             * came back to a table still showing the answer from before.
+             * The row edited, and every Add-On a change of firm took with
+             * it, is right the instant the table is back on screen.
              */
-            forgetApplicationTable();
-            forgetBuckets();
+            applicationsChangedByForm([rowPatchFromRecord(application)].concat((meta && meta.moved) || []));
             if (state.selectedId) delete TIMELINE[state.selectedId];
             var renumbered = !filingNew && before.internalNumber && application.internalNumber &&
               before.internalNumber !== application.internalNumber;

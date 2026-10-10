@@ -2206,6 +2206,13 @@ class CipIntakeTest extends TestCase
             'occupation' => 'Retired Engineer',
         ]))
             ->assertOk()
+            // What the table behind the form is corrected from, at once:
+            // every file the change moved, with its firm and number now.
+            ->assertJsonCount(1, 'moved')
+            ->assertJsonPath('moved.0.id', $created['id'])
+            ->assertJsonPath('moved.0.provider', 'BLU Provider')
+            ->assertJsonPath('moved.0.providerId', $bluemina->uuid)
+            ->assertJsonPath('moved.0.internalNumber', "BLU{$yy}-00001")
             ->json('application');
 
         $this->assertSame($bluemina->uuid, $body['providerId']);
@@ -2221,7 +2228,9 @@ class CipIntakeTest extends TestCase
         $this->assertSame("BLU{$yy}-00001", $event->meta['internalNumber']);
 
         // Saving again with the firm it now has is not another move.
-        $this->edit($admin, $application->fresh(), $this->edits($bluemina))->assertOk();
+        $this->edit($admin, $application->fresh(), $this->edits($bluemina))
+            ->assertOk()
+            ->assertJsonCount(0, 'moved');
         $this->assertSame("BLU{$yy}-00001", $application->fresh()->internal_number);
         $this->assertSame(1, $application->events()->where('action', CipEvent::ACTION_PROVIDER_TRANSFERRED)->count());
         // And Bluemina's own next filing follows on.

@@ -2111,6 +2111,7 @@ class CipApplicationController extends Controller
             abort(422, $e->getMessage());
         }
 
+        $moved = [];
         if ($toProvider !== null) {
             $moved = ProviderTransfer::transfer($application, $toProvider, $user, confirmed: true);
             $application = collect($moved)->firstWhere('id', $application->id) ?? $application->fresh();
@@ -2118,7 +2119,24 @@ class CipApplicationController extends Controller
 
         Live::staff(Live::CIP);
 
-        return response()->json(['application' => $this->record($application->fresh(), $user)]);
+        return response()->json([
+            'application' => $this->record($application->fresh(), $user),
+            /*
+             * Every file the change of firm moved, the Add-Ons that went
+             * with it included, each with the firm and number it has now.
+             * The table the reader returns to is corrected from this at
+             * once; the application above only describes the one edited.
+             */
+            'moved' => collect($moved)->map(fn (CipApplication $app) => [
+                'id' => $app->uuid,
+                'clientUid' => $app->client?->uid,
+                'number' => $app->displayNumber(),
+                'internalNumber' => $app->internal_number,
+                'provider' => $app->provider?->name,
+                'providerId' => $app->provider?->uuid,
+                'providerCode' => $app->provider?->code,
+            ])->values()->all(),
+        ]);
     }
 
     /**

@@ -498,6 +498,16 @@ class CipApplicationDraftController extends Controller
         return [
             'id' => $draft->uuid,
             'number' => $draft->internal_number,
+            /*
+             * What the applications table draws for this row, as it stands
+             * after this save: the firm, and the number that follows the
+             * firm. The table behind the form is brought up to date from
+             * these the moment the save lands, rather than waiting to ask.
+             */
+            'displayNumber' => $draft->displayNumber(),
+            'provider' => $draft->provider?->name,
+            'providerCode' => $draft->provider?->code,
+            'clientUid' => $draft->client?->uid,
             'phase' => $draft->phase,
             'answers' => $answers,
             'dependents' => $dependents->count(),

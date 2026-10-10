@@ -1354,6 +1354,12 @@ class CipApplicationDraftTest extends TestCase
         $this->assertSame($first['id'], $second['id']);
         $this->assertSame($bluemina->uuid, $second['answers']['providerId']);
         $this->assertSame("BLU{$yy}-00001", $second['number']);
+        // The save says what the table row draws now, so the table behind
+        // the form is right the moment the reader goes back to it.
+        $this->assertSame('BLU Provider', $second['provider']);
+        $this->assertSame('BLU', $second['providerCode']);
+        $this->assertSame("BLU{$yy}-00001", $second['displayNumber']);
+        $this->assertNotNull($second['clientUid']);
         $this->assertSame(1, CipApplication::count());
 
         $draft->refresh();

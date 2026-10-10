@@ -1232,6 +1232,24 @@
     return 'Assigned on save';
   }
 
+  /*
+   * Drop the table pages the hub keeps for a fast first paint.
+   *
+   * The hub holds each tab's last page in the device store and paints it
+   * while the list is asked again. Its own writes pass through a seam that
+   * drops those pages; this form's writes do not, so after a save here the
+   * table came back showing the firm and the number from before the save
+   * for as long as the list took to answer. Every write this form lands
+   * drops them, the same rule from the other side.
+   */
+  function dropStoredListings() {
+    if (!window.TMAStore || !window.TMAStore.invalidate) return;
+    try {
+      var gone = window.TMAStore.invalidate('cip:applications:');
+      if (gone && gone.catch) gone.catch(function () {});
+    } catch (e) { /* a page that could not be dropped is only a slower table */ }
+  }
+
   /* Rewrite the one node, not the form: this lands while somebody is typing. */
   function paintNumber() {
     var node = state.root && state.root.querySelector('[data-cip-number]');
@@ -3099,6 +3117,30 @@
           paintNumber();
         }
         /*
+         * And the table behind this form hears it now. A draft's row draws
+         * its firm, its number and the applicant's name, and all three are
+         * decided by saves like this one; the reader who goes back to the
+         * table should find what they just did, not the row from before.
+         */
+        // The hub corrects its own copies when it is listening; with
+        // nobody listening the stored pages are simply dropped.
+        if (!state.onChanged) dropStoredListings();
+        if (json.draft && state.onChanged) {
+          var answers = json.draft.answers || {};
+          var named = [answers.firstName, answers.lastName].filter(Boolean).join(' ');
+          var patch = {
+            id: json.draft.id,
+            clientUid: json.draft.clientUid || null,
+            number: json.draft.displayNumber || json.draft.number,
+            internalNumber: json.draft.number,
+            provider: json.draft.provider,
+            providerId: answers.providerId,
+            providerCode: json.draft.providerCode,
+          };
+          if (named) patch.applicantName = upperName(named);
+          state.onChanged([patch]);
+        }
+        /*
          * Recompute after ids landed so the next "unchanged" check includes
          * them. Not when scans were held back: that signature would say the
          * draft is whole and the next save would stop before sending them.
@@ -3474,9 +3516,15 @@
           return;
         }
 
+        // Landed: the table pages kept on this device are out of date.
+        dropStoredListings();
+
         // The next batch of scans, on the same application.
         if (batch.heldBack) {
           rememberSavedFiles(fileSigs(batch.parts));
+          // The first request is the one that changed the firm; what it
+          // moved is kept for the caller, who hears only from the last.
+          if (json.moved && json.moved.length) state.moved = json.moved;
           submit();
 
           return;
@@ -3489,7 +3537,9 @@
          */
         clearDraft();
         // The caller announces this, it knows where the reader lands next.
-        if (state.onDone) state.onDone(json.application);
+        var moved = (json.moved && json.moved.length) ? json.moved : (state.moved || null);
+        state.moved = null;
+        if (state.onDone) state.onDone(json.application, { moved: moved });
       });
     }).catch(function () {
       /*
@@ -3875,6 +3925,7 @@
     state.numbered = null;
     state.numberPreview = null;
     state.numberAsk = null;
+    state.moved = null;
     if (state.draftTimer) { clearTimeout(state.draftTimer); state.draftTimer = null; }
     state.draftSaving = false;
     state.draftDirty = false;
@@ -3887,6 +3938,7 @@
     state.onDone = opts.onDone || null;
     state.onSaving = opts.onSaving || null;
     state.onReady = opts.onReady || null;
+    state.onChanged = opts.onChanged || null;
     state.loading = true;
     render(root);
 
