@@ -25,7 +25,8 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Mime\MimeTypes;
 
 /**
  * Channels: creating them, editing them, and who belongs to them (section 2, section 3, section 20).
@@ -347,7 +348,7 @@ class FeedChannelController extends Controller
      * Bytes are never public: access is re-checked here on every request, and
      * the disk the file lives on stays invisible to the client.
      */
-    public function image(Request $request, string $uuid, string $which): StreamedResponse
+    public function image(Request $request, string $uuid, string $which): Response
     {
         $channel = $this->channelFor($request, $uuid);
 
@@ -358,12 +359,12 @@ class FeedChannelController extends Controller
 
         abort_unless($path, 404);
 
-        $filesystem = Storage::disk($disk ?: Vault::diskName());
-        abort_unless($filesystem->exists($path), 404);
+        // Through the Vault, which wrote it encrypted. No type is kept for a
+        // channel image, so the extension it was stored under names it.
+        $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+        $mime = MimeTypes::getDefault()->getMimeTypes($extension)[0] ?? null;
 
-        return $filesystem->response($path, null, [
-            'Cache-Control' => 'private, max-age=86400',
-        ]);
+        return Vault::serve($disk, $path, $which.($extension !== '' ? '.'.$extension : ''), $mime);
     }
 
     /* ── Membership ───────────────────────────────────────────────── */

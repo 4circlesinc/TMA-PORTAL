@@ -14,7 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Uploading and serving post/comment attachments (section 18).
@@ -82,45 +82,34 @@ class FeedAttachmentController extends Controller
     }
 
     /** Download or preview an attachment. */
-    public function show(Request $request, string $uuid): StreamedResponse
+    public function show(Request $request, string $uuid): Response
     {
         $attachment = $this->attachmentFor($request, $uuid);
-
-        $disk = Storage::disk($attachment->disk ?: Vault::diskName());
-        abort_unless($disk->exists($attachment->path), 404);
 
         // Images and video are shown in place; everything else downloads.
         // A document is never rendered inline, an HTML file served inline
         // from the portal's own origin would run as the portal.
         $inline = $attachment->isImage() || $attachment->isVideo() || $attachment->isAudio();
 
-        return $disk->response(
+        // Through the Vault, which wrote the bytes and is the one that can
+        // open them: a new upload is envelope-encrypted at rest.
+        return Vault::serve(
+            $attachment->disk,
             $attachment->path,
             $attachment->name,
-            [
-                'Content-Type' => $attachment->mime ?: 'application/octet-stream',
-                'Content-Disposition' => ($inline ? 'inline' : 'attachment')
-                    .'; filename="'.addslashes($attachment->name).'"',
-                'Cache-Control' => 'private, max-age=3600',
-                'X-Content-Type-Options' => 'nosniff',
-            ],
+            $attachment->mime,
+            $inline ? 'inline' : 'attachment',
         );
     }
 
     /** The generated poster for an image or video attachment. */
-    public function thumb(Request $request, string $uuid): StreamedResponse
+    public function thumb(Request $request, string $uuid): Response
     {
         $attachment = $this->attachmentFor($request, $uuid);
 
         abort_unless($attachment->thumb_path, 404);
 
-        $disk = Storage::disk($attachment->disk ?: Vault::diskName());
-        abort_unless($disk->exists($attachment->thumb_path), 404);
-
-        return $disk->response($attachment->thumb_path, null, [
-            'Content-Type' => 'image/jpeg',
-            'Cache-Control' => 'private, max-age=86400',
-        ]);
+        return Vault::serve($attachment->disk, $attachment->thumb_path, 'thumb.jpg', 'image/jpeg');
     }
 
     /**

@@ -276,6 +276,49 @@ class Vault
         return self::stream($file, 'inline');
     }
 
+    /**
+     * Serve bytes the vault keeps for something that is not a library file: a
+     * message or Feed attachment, a group photo, a channel cover.
+     *
+     * They are written by store() like everything else, so they are ciphertext
+     * at rest. Their routes used to read the disk on their own and hand the
+     * reader the envelope, which is a broken image and a PDF that will not
+     * open. Coming through here they get the same decryption, Range and reopen
+     * handling a library file has.
+     *
+     * Never a signed redirect: the players and pdf.js read these with `fetch`,
+     * and the bytes may be an envelope the object store cannot open.
+     */
+    public static function serve(
+        ?string $diskName,
+        string $path,
+        string $name,
+        ?string $mime,
+        string $disposition = 'inline',
+    ): SymfonyResponse {
+        $diskName = $diskName ?: self::diskName();
+
+        // These rows have several writers, and the header refuses a slash.
+        $name = str_replace(['/', '\\'], '-', $name);
+
+        try {
+            return self::deliver(
+                Storage::disk($diskName),
+                $diskName,
+                $path,
+                $name,
+                $mime ?: 'application/octet-stream',
+                $disposition,
+                // Every write lands on a fresh uuid, so the path names the bytes.
+                '"'.substr(hash('sha256', $diskName.'|'.$path), 0, 32).'"',
+                false,
+            );
+        } catch (FileValidationException) {
+            // A missing attachment is a missing page, not an upload to correct.
+            abort(404);
+        }
+    }
+
     private static function stream(FileItem $file, string $disposition): SymfonyResponse
     {
         /*
