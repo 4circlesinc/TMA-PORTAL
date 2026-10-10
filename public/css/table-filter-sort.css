@@ -725,9 +725,59 @@
   color: var(--color-primary, #2563eb);
 }
 
-/* Dark. This file's popover is drawn on a light surface throughout — see the
-   rules above, which set explicit black text — so the dark treatment mirrors
-   them rather than relying on tokens the panel does not use. */
+/* Dark. The rules above paint a white panel and set black text by hand rather
+   than through tokens, so nothing here flips on its own: the panel, the tab
+   strip and every ink colour are restated. The panel is mounted on <body>,
+   outside .tma-dash, which is why each rule carries the :root twin. */
+.tma-dash[data-theme="dark"] .tma-filter-popover,
+:root[data-theme="dark"] .tma-filter-popover {
+  background: var(--color-bg-popup);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45), 0 0 0 0.5px var(--color-border-soft);
+  color: var(--color-text-primary);
+}
+
+/* Opaque enough that the rows scrolling under the strip do not read through
+   it, and the panel's own colour so the strip is not a band across it. */
+.tma-dash[data-theme="dark"] .tma-filter-popover__tabs,
+:root[data-theme="dark"] .tma-filter-popover__tabs {
+  background: rgba(40, 40, 42, 0.96);
+}
+
+.tma-dash[data-theme="dark"] .tma-filter-popover__tab[aria-selected="true"],
+:root[data-theme="dark"] .tma-filter-popover__tab[aria-selected="true"] {
+  background: var(--color-hover-deep);
+}
+
+.tma-dash[data-theme="dark"] .tma-filter-popover__item,
+:root[data-theme="dark"] .tma-filter-popover__item,
+.tma-dash[data-theme="dark"] .tma-filter-popover__search-input,
+:root[data-theme="dark"] .tma-filter-popover__search-input,
+.tma-dash[data-theme="dark"] .tma-filter-popover__value-input input,
+:root[data-theme="dark"] .tma-filter-popover__value-input input {
+  color: var(--color-text-primary);
+}
+
+.tma-dash[data-theme="dark"] .tma-filter-popover__item:hover,
+:root[data-theme="dark"] .tma-filter-popover__item:hover,
+.tma-dash[data-theme="dark"] .tma-filter-popover__item[data-hover],
+:root[data-theme="dark"] .tma-filter-popover__item[data-hover],
+.tma-dash[data-theme="dark"] .tma-filter-popover__item[data-selected],
+:root[data-theme="dark"] .tma-filter-popover__item[data-selected] {
+  background: var(--color-hover);
+}
+
+.tma-dash[data-theme="dark"] .tma-filter-popover__item--clear,
+:root[data-theme="dark"] .tma-filter-popover__item--clear {
+  color: var(--color-primary, #2563eb);
+}
+
+.tma-dash[data-theme="dark"] .tma-filter-popover__item-meta,
+:root[data-theme="dark"] .tma-filter-popover__item-meta {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.tma-dash[data-theme="dark"] .tma-filter-popover__group-label,
+:root[data-theme="dark"] .tma-filter-popover__group-label,
 .tma-dash[data-theme="dark"] .tma-filter-popover__title,
 :root[data-theme="dark"] .tma-filter-popover__title,
 .tma-dash[data-theme="dark"] .tma-filter-popover__note,
@@ -735,14 +785,64 @@
   color: rgba(255, 255, 255, 0.55);
 }
 
+.tma-dash[data-theme="dark"] .tma-filter-popover__divider,
+:root[data-theme="dark"] .tma-filter-popover__divider {
+  background: var(--color-border-soft);
+}
+
+.tma-dash[data-theme="dark"] .tma-filter-popover__search,
+:root[data-theme="dark"] .tma-filter-popover__search,
+.tma-dash[data-theme="dark"] .tma-filter-popover__value-input,
+:root[data-theme="dark"] .tma-filter-popover__value-input {
+  border-color: var(--color-border-medium);
+  background: var(--color-bg-input);
+}
+
+.tma-dash[data-theme="dark"] .tma-filter-popover__search-input::placeholder,
+:root[data-theme="dark"] .tma-filter-popover__search-input::placeholder,
+.tma-dash[data-theme="dark"] .tma-filter-popover__value-input input::placeholder,
+:root[data-theme="dark"] .tma-filter-popover__value-input input::placeholder {
+  color: var(--color-text-placeholder);
+}
+
+.tma-dash[data-theme="dark"] .tma-filter-popover__search-kbd,
+:root[data-theme="dark"] .tma-filter-popover__search-kbd {
+  border-color: var(--color-border-medium);
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Black line art: the field and sort glyphs, the chevron, the search lens. */
+.tma-dash[data-theme="dark"] .tma-filter-popover__item-icon,
+:root[data-theme="dark"] .tma-filter-popover__item-icon,
+.tma-dash[data-theme="dark"] .tma-filter-popover__item-chevron,
+:root[data-theme="dark"] .tma-filter-popover__item-chevron,
+.tma-dash[data-theme="dark"] .tma-filter-popover__search-icon,
+:root[data-theme="dark"] .tma-filter-popover__search-icon {
+  filter: invert(1) brightness(1.6);
+}
+
 .tma-dash[data-theme="dark"] .tma-filter-popover__check,
 :root[data-theme="dark"] .tma-filter-popover__check {
   border-color: rgba(255, 255, 255, 0.35);
 }
 
+/* The rule above outranks the ticked state by coming later, which left a
+   pale ring round a filled box, in the menus and on the toolbar's own. */
+.tma-dash[data-theme="dark"] [aria-checked="true"] > .tma-filter-popover__check,
+:root[data-theme="dark"] [aria-checked="true"] > .tma-filter-popover__check {
+  border-color: var(--color-primary, #2563eb);
+}
+
+/* Same order as the light rules: a ticked row stays unwashed, and the
+   pointer still marks whichever row it is on. */
+.tma-dash[data-theme="dark"] .tma-filter-popover__item--check[data-selected],
+:root[data-theme="dark"] .tma-filter-popover__item--check[data-selected] {
+  background: transparent;
+}
+
 .tma-dash[data-theme="dark"] .tma-filter-popover__item--check:hover,
 :root[data-theme="dark"] .tma-filter-popover__item--check:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--color-hover);
 }
 
 .tma-dash[data-theme="dark"] .tma-filter-popover__dot--neutral,
