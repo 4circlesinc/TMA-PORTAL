@@ -1449,7 +1449,6 @@ class CipApplicationController extends Controller
             'lockedStatuses' => $this->lockedStatuses($application, $viewer, forListing: true),
             'canDelete' => CipAccess::canDelete($viewer, $application),
             'canTransferProvider' => CipAccess::canTransferProvider($viewer),
-            'canRenumber' => CipAccess::canRenumber($viewer),
             'providerId' => $application->provider?->uuid,
             'providerCode' => $application->provider?->code,
             'stageStatuses' => $this->statusChoices(Engine::stageStatuses($application, $viewer)),
@@ -1987,22 +1986,18 @@ class CipApplicationController extends Controller
         $data = $request->validate(Intake::rules(editing: true, draft: $application), Intake::messages());
 
         /*
-         * The firm and the firm's own number, judged before anything is
-         * written: a form that names a provider this reader may not move
-         * the file to is refused whole, not saved and then refused.
+         * The firm, judged before anything is written: a form that names a
+         * provider this reader may not move the file to is refused whole,
+         * not saved and then refused. The firm's own application number is
+         * not a field at all; it is generated, never typed.
          */
         $application->loadMissing('provider');
         $toProvider = $this->providerChange($user, $application, $data);
-        $newNumber = $this->numberChange($user, $application, $data);
 
         try {
             $application = Intake::update($application, $user, $data);
         } catch (\InvalidArgumentException $e) {
             abort(422, $e->getMessage());
-        }
-
-        if ($newNumber !== null) {
-            $application = Applications::renumber($application, $user, $newNumber);
         }
 
         if ($toProvider !== null) {
@@ -2042,25 +2037,6 @@ class CipApplicationController extends Controller
         abort_unless($provider, 422, 'Choose a service provider on the register.');
 
         return $provider;
-    }
-
-    /**
-     * The application number the edit form asks for, or nothing when it is
-     * the number already on the file.
-     *
-     * @param  array<string, mixed>  $data
-     */
-    private function numberChange(User $user, CipApplication $application, array $data): ?string
-    {
-        $number = strtoupper(preg_replace('/\s+/u', '', trim((string) ($data['internalNumber'] ?? ''))) ?? '');
-        if ($number === '' || $number === strtoupper((string) $application->internal_number)) {
-            return null;
-        }
-
-        abort_unless(CipAccess::canRenumber($user), 422, 'Only an administrator can change the application number.');
-        abort_if($application->status === Status::DRAFT, 422, 'A draft is numbered when it is filed.');
-
-        return $number;
     }
 
     /**
@@ -2410,7 +2386,6 @@ class CipApplicationController extends Controller
             'lockedStatuses' => $this->lockedStatuses($application, $viewer),
             'canDelete' => CipAccess::canDelete($viewer, $application),
             'canTransferProvider' => CipAccess::canTransferProvider($viewer),
-            'canRenumber' => CipAccess::canRenumber($viewer),
             'stageStatuses' => $this->statusChoices(Engine::stageStatuses($application, $viewer)),
             'provider' => $application->provider?->name,
             'providerId' => $application->provider?->uuid,

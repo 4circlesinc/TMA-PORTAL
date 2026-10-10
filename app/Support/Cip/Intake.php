@@ -317,13 +317,14 @@ class Intake
                  */
                 'cipNumber' => ['nullable', 'string', 'max:'.Submission::MAX_LENGTH],
                 /*
-                 * The firm and the firm's own number, both an administrator's
-                 * to change on a filed application. Optional and judged in
-                 * the controller: the form sends the provider back whether
-                 * or not it moved, and only a different one is a transfer.
+                 * The firm, an administrator's to change on a filed
+                 * application. Optional and judged in the controller: the
+                 * form sends the provider back whether or not it moved, and
+                 * only a different one is a transfer. The firm's own
+                 * application number is deliberately absent: it is
+                 * generated, so one posted here is not read at all.
                  */
                 'providerId' => ['nullable', 'string'],
-                'internalNumber' => ['nullable', 'string', 'max:40'],
             ] : [
                 'providerId' => ['required', 'string'],
                 'phase' => ['nullable', 'string', Rule::in(Phase::ALL)],

@@ -2227,7 +2227,15 @@ class CipIntakeTest extends TestCase
             ->assertOk();
     }
 
-    public function test_an_administrator_changes_the_application_number_on_the_edit_form(): void
+    /**
+     * The firm's own application number is generated, never typed.
+     *
+     * The edit form shows it as a fact. A number posted anyway, by a stale
+     * tab or by hand, is not a field the server reads: the save succeeds
+     * and the number stays what the portal minted. The Unit's CIP number
+     * is the one a reader corrects, and that has its own tests above.
+     */
+    public function test_the_application_number_cannot_be_typed_on_the_edit_form(): void
     {
         Storage::fake(config('filesystems.avatar_disk', 'public'));
         $admin = $this->user(Role::ADMINISTRATOR);
@@ -2237,28 +2245,16 @@ class CipIntakeTest extends TestCase
         $application = CipApplication::where('uuid', $created['id'])->first();
         $this->assertSame('GAL26-00001', $created['internalNumber']);
 
-        $body = $this->edit($admin, $application, $this->edits($galaxy, ['internalNumber' => ' gal26-00007 ']))
-            ->assertOk()
-            ->json('application');
+        $body = $this->edit($admin, $application, $this->edits($galaxy, [
+            'internalNumber' => 'GAL26-00007',
+            'occupation' => 'Retired Engineer',
+        ]))->assertOk()->json('application');
 
-        $this->assertSame('GAL26-00007', $body['internalNumber']);
-        $this->assertSame('GAL26-00007', $body['number']);
-        $this->assertTrue(
-            $application->events()->where('action', CipEvent::ACTION_RENUMBERED)->exists(),
-        );
-
-        // The counter moved past it: the next filing is not minted onto 00007.
-        $next = $this->file($admin, $this->payload($galaxy, ['firstName' => 'Nadia', 'passportNumber' => 'N1']))
-            ->assertCreated()->json('application');
-        $this->assertSame('GAL26-00008', $next['internalNumber']);
-
-        // A number another file wears is refused, and an officer may not change it.
-        $this->edit($admin, $application, $this->edits($galaxy, ['internalNumber' => 'GAL26-00008']))
-            ->assertStatus(422)
-            ->assertJsonValidationErrors(['internalNumber']);
-        $this->edit($this->user(Role::REVIEWING_OFFICER), $application, $this->edits($galaxy, ['internalNumber' => 'GAL26-00009']))
-            ->assertStatus(422);
-        $this->assertSame('GAL26-00007', $application->fresh()->internal_number);
+        // The rest of the save landed; the number did not move.
+        $this->assertSame('Retired Engineer', $body['applicant']['occupation']);
+        $this->assertSame('GAL26-00001', $body['internalNumber']);
+        $this->assertSame('GAL26-00001', $application->fresh()->internal_number);
+        $this->assertArrayNotHasKey('canRenumber', $body);
     }
 
     /**

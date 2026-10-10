@@ -189,7 +189,7 @@
       nationality: '', occupation: '', passportNumber: '',
       investmentType: '', investmentTypeOther: '', sponsored: '',
       parentCipNumber: '', parentCorNumber: '', parentApplicantName: '',
-      addonType: '', relationship: '', internalNumber: '',
+      addonType: '', relationship: '',
     };
   }
 
@@ -1176,11 +1176,19 @@
   }
 
   /*
-   * The firm's own number, offered to an administrator on a filed
-   * application. Minted at filing, so a new form and a draft never ask.
+   * The firm's own number, shown and never asked for.
+   *
+   * It is generated: minted when the application is filed, and minted again
+   * under the new firm's code when the service provider changes. Nobody
+   * types it, so this is a fact on the form rather than a control. The
+   * Unit's CIP number is the one a reader corrects, in its own field.
    */
-  function showsInternalNumber() {
-    return editingFiled() && !!(state.record && state.record.canRenumber);
+  function internalNumberField() {
+    var number = editingFiled() && state.record ? (state.record.internalNumber || '') : '';
+    if (!number) return '';
+
+    return '<div class="tma-portal-field"><span class="tma-portal-field__label">' + esc(LABELS.internalNumber) + '</span>' +
+      '<p class="tma-portal-field__static">' + esc(number) + '</p></div>';
   }
 
   function investmentCard() {
@@ -1196,7 +1204,7 @@
       // answers, so it fits what it has rather than stranding the last one.
       '<div class="tma-portal-form-grid tma-portal-form-grid--investment">' +
       providerField() +
-      (showsInternalNumber() ? textField('internalNumber') : '') +
+      internalNumberField() +
       selectField('investmentType', types, 'Select an investment type') +
       (state.draft.investmentType === 'other' ? textField('investmentTypeOther') : '') +
       (state.draft.investmentType === 'enterprise_project'
@@ -2397,7 +2405,6 @@
       // server refuses one on a pre-approval file, and a reader who was never
       // offered the field must not post the value the record came with.
       if (path === 'cipNumber' && !showsCipNumber()) return;
-      if (path === 'internalNumber' && !showsInternalNumber()) return;
       out.push({ name: bracketed(path), value: value });
     });
 
@@ -3565,9 +3572,6 @@
     };
 
     record.providerId = state.draft.providerId || record.providerId;
-    if (showsInternalNumber() && state.draft.internalNumber) {
-      record.internalNumber = state.draft.internalNumber;
-    }
     record.investmentTypeValue = state.draft.investmentType || '';
     record.investmentTypeOther = state.draft.investmentTypeOther || '';
     record.investmentType = investmentLabel();
@@ -3684,7 +3688,6 @@
 
     state.draft.providerId = app.providerId || '';
     state.draft.cipNumber = app.cipNumber || '';
-    state.draft.internalNumber = app.internalNumber || '';
     state.draft.investmentType = app.investmentTypeValue || '';
     state.draft.investmentTypeOther = app.investmentTypeOther || '';
     state.draft.sponsored = app.sponsored ? '1' : '0';
