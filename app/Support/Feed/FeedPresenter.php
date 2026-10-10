@@ -9,6 +9,7 @@ use App\Models\FeedComment;
 use App\Models\FeedPoll;
 use App\Models\FeedPost;
 use App\Models\User;
+use App\Support\Files\Vault;
 use Illuminate\Support\Collection;
 
 /**
@@ -310,7 +311,10 @@ final class FeedPresenter
                 default => 'file',
             },
             // Bytes are never public: both routes re-check channel access.
-            'url' => route('feed.attachments.show', ['uuid' => $attachment->uuid]),
+            'url' => route('feed.attachments.show', [
+                'uuid' => $attachment->uuid,
+                'v' => Vault::addressVersion((string) $attachment->path),
+            ]),
             'thumbUrl' => $attachment->thumb_path
                 ? route('feed.attachments.thumb', ['uuid' => $attachment->uuid])
                 : null,
@@ -405,7 +409,7 @@ final class FeedPresenter
             'which' => $which,
             // Cache-buster: the URL is stable per channel, so without this a
             // replaced picture keeps showing the old bytes.
-            'v' => substr(md5($path), 0, 8),
+            'v' => Vault::addressVersion($path),
         ]);
     }
 }

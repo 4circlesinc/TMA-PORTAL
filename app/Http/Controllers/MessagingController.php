@@ -512,7 +512,7 @@ class MessagingController extends Controller
             'profile' => [
                 'name' => MessagingPresenter::title($conversation, $user),
                 'photo' => $conversation->isGroup()
-                    ? ($conversation->photo_path ? route('messaging.conversations.photo', $conversation->uuid) : null)
+                    ? MessagingPresenter::groupPhotoUrl($conversation)
                     : $counterpart?->avatar_url,
                 // A group has members rather than an email address.
                 'email' => $conversation->isGroup() ? null : $counterpart?->email,

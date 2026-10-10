@@ -276,6 +276,28 @@ class Vault
         return self::stream($file, 'inline');
     }
 
+    /*
+     * Raised when what serve() sends for the same stored bytes has to change.
+     *
+     * Until 10 Oct 2026 these addresses answered with the envelope instead of
+     * the file, marked cacheable for an hour (a day, for a channel picture). A
+     * browser holding that copy shows a broken image without asking again, and
+     * no reload reaches it, so the corrected bytes need an address of their
+     * own. That is all this number is for.
+     */
+    private const SERVE_VERSION = 2;
+
+    /**
+     * The `v` for an address serve() answers.
+     *
+     * It moves when the stored path does, so a replaced group photo or channel
+     * cover is not hidden behind the old one, and with SERVE_VERSION.
+     */
+    public static function addressVersion(string $path): string
+    {
+        return substr(md5(self::SERVE_VERSION.'|'.$path), 0, 8);
+    }
+
     /**
      * Serve bytes the vault keeps for something that is not a library file: a
      * message or Feed attachment, a group photo, a channel cover.

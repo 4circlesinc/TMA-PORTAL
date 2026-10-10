@@ -127,6 +127,29 @@ class AttachmentBytesTest extends TestCase
         $this->assertSame('nosniff', $response->headers->get('X-Content-Type-Options'));
     }
 
+    public function test_an_attachment_is_handed_out_at_an_address_no_browser_has_cached(): void
+    {
+        $sender = $this->user('sender@example.com');
+        $reader = $this->user('reader@example.com');
+        $c = $this->conversation($sender, $reader);
+        $bytes = $this->png();
+
+        // The bare address answered with ciphertext for a month, cacheable for
+        // an hour, and a browser holding that copy never asks again.
+        $url = $this->actingAs($sender)
+            ->post('/portal/messaging/conversations/'.$c->uuid.'/attachments', [
+                'file' => UploadedFile::fake()->createWithContent('receipt.png', $bytes),
+            ], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->json('attachment.url');
+
+        $this->assertMatchesRegularExpression('#/portal/messaging/attachments/[0-9a-f-]{36}\?v=[0-9a-f]{8}$#', $url);
+
+        $response = $this->actingAs($sender)->get($url);
+        $response->assertOk();
+        $this->assertSame($bytes, $this->fileBody($response));
+    }
+
     public function test_a_message_document_downloads_as_itself(): void
     {
         $sender = $this->user('sender@example.com');

@@ -11,6 +11,7 @@ use App\Models\MessageReaction;
 use App\Models\User;
 use App\Models\UserBlock;
 use App\Models\WorkDay;
+use App\Support\Files\Vault;
 use App\Support\Presence\AvailabilityService;
 use App\Support\UserTime;
 use Illuminate\Support\Carbon;
@@ -410,7 +411,7 @@ class MessagingPresenter
             'type' => $message->type,
             'attachmentName' => $attachment?->name,
             'thumbUrl' => $attachment && $attachment->isImage()
-                ? route('messaging.attachments.show', $attachment->uuid)
+                ? self::attachmentUrl($attachment)
                 : null,
         ];
     }
@@ -438,7 +439,7 @@ class MessagingPresenter
             },
             // Both go through the membership-checked download route; there is
             // no public URL to an attachment anywhere in the payload.
-            'url' => route('messaging.attachments.show', $attachment->uuid),
+            'url' => self::attachmentUrl($attachment),
             'thumbUrl' => $attachment->thumb_path
                 ? route('messaging.attachments.thumb', $attachment->uuid)
                 : null,
@@ -690,7 +691,21 @@ class MessagingPresenter
     public static function groupPhotoUrl(Conversation $conversation): ?string
     {
         return $conversation->photo_path
-            ? route('messaging.conversations.photo', $conversation->uuid)
+            ? route('messaging.conversations.photo', [
+                'uuid' => $conversation->uuid,
+                // The address is the group's, not the photo's, so without
+                // this a replaced photo keeps showing the old one.
+                'v' => Vault::addressVersion($conversation->photo_path),
+            ])
             : null;
+    }
+
+    /** Where an attachment's own bytes are read from. */
+    private static function attachmentUrl(MessageAttachment $attachment): string
+    {
+        return route('messaging.attachments.show', [
+            'uuid' => $attachment->uuid,
+            'v' => Vault::addressVersion((string) $attachment->path),
+        ]);
     }
 }
