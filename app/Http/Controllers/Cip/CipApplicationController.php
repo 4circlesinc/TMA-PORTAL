@@ -56,6 +56,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
@@ -178,6 +179,45 @@ class CipApplicationController extends Controller
                     ?? in_array($key, ['principal', 'sponsor'], true)),
             ])->all(),
             'dependentAgeCutoff' => ApplicantType::cutoff(),
+        ]);
+    }
+
+    /**
+     * The number an application would wear under a firm, before it is saved.
+     *
+     * The number follows the firm, and the form shows that as it happens:
+     * picking another service provider asks here and draws the answer in
+     * place of the old number at once. Read-only; nothing is reserved, and
+     * the save is what mints ({@see Applications::preview}).
+     *
+     * Only for a firm this reader may file under, the same list the select
+     * was drawn from, and only for an application within their reach.
+     */
+    public function numberPreview(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless(CipAccess::canCreate($user), 404);
+
+        $data = $request->validate([
+            'providerId' => ['required', 'string', 'max:64'],
+            'application' => ['nullable', 'string', 'max:64'],
+            'phase' => ['nullable', 'string', Rule::in(Phase::ALL)],
+        ]);
+
+        $provider = Intake::providersFor($user)->firstWhere('uuid', $data['providerId']);
+        abort_unless($provider, 404);
+
+        $application = filled($data['application'] ?? null)
+            ? ApplicationScope::findOrFail($user, $data['application'])
+            : null;
+
+        return response()->json([
+            'providerId' => $provider->uuid,
+            'number' => Applications::preview(
+                $provider,
+                $application,
+                ($data['phase'] ?? null) === Phase::ADD_ON,
+            ),
         ]);
     }
 
@@ -364,7 +404,9 @@ class CipApplicationController extends Controller
          */
         if ($draft) {
             try {
-                $application = Intake::fileDraft($draft, $user, $data);
+                // Under the firm this form names, not whichever one the
+                // first autosave happened to open the draft under.
+                $application = Intake::fileDraft($draft, $user, $data, $provider);
             } catch (\InvalidArgumentException $e) {
                 abort(422, $e->getMessage());
             }
@@ -1144,15 +1186,18 @@ class CipApplicationController extends Controller
         $addon = $phase === Phase::ADD_ON;
         $field = $addon && in_array($searchBy, self::ADDON_SEARCH, true) ? $searchBy : null;
 
-        $query->where(function (Builder $q) use ($prefix, $anywhere, $code, $addon, $field) {
+        $query->where(function (Builder $q) use ($prefix, $anywhere, $code, $addon, $field, $term) {
             if ($addon) {
-                $this->applyAddOnListSearch($q, $field, $prefix, $anywhere);
+                $this->applyAddOnListSearch($q, $field, $prefix, $anywhere, $term);
 
                 return;
             }
 
             $q->whereRaw('LOWER(cip_applications.internal_number) LIKE ?', [$prefix])
                 ->orWhereRaw('LOWER(cip_applications.cip_number) LIKE ?', [$prefix])
+                // A number the file wore before it changed firm: still what
+                // every letter and invoice sent before the move calls it.
+                ->orWhereIn('cip_applications.id', Applications::previouslyNumbered($term))
                 ->orWhereHas('client', fn (Builder $c) => $c
                     ->whereRaw('LOWER(clients.name) LIKE ?', [$anywhere]))
                 ->orWhereHas('people', fn (Builder $p) => $p
@@ -1169,24 +1214,27 @@ class CipApplicationController extends Controller
      * Parent CIP, COR and main-applicant name are the granted file this
      * Add-On hangs off, not columns on the Add-On row itself.
      */
-    private function applyAddOnListSearch(Builder $query, ?string $field, string $prefix, string $anywhere): void
+    private function applyAddOnListSearch(Builder $query, ?string $field, string $prefix, string $anywhere, string $term = ''): void
     {
         foreach ($field ? [$field] : self::ADDON_SEARCH as $which) {
-            $query->orWhere(function (Builder $q) use ($which, $prefix, $anywhere) {
-                $this->constrainAddOnSearchField($q, $which, $prefix, $anywhere);
+            $query->orWhere(function (Builder $q) use ($which, $prefix, $anywhere, $term) {
+                $this->constrainAddOnSearchField($q, $which, $prefix, $anywhere, $term);
             });
         }
     }
 
-    private function constrainAddOnSearchField(Builder $query, string $field, string $prefix, string $anywhere): void
+    private function constrainAddOnSearchField(Builder $query, string $field, string $prefix, string $anywhere, string $term = ''): void
     {
         $role = CipPerson::ROLE_MAIN_APPLICANT;
 
         match ($field) {
-            'addon_number' => $query->whereRaw(
-                'LOWER(cip_applications.internal_number) LIKE ?',
-                [$prefix]
-            ),
+            // Its reference now, or the one it wore before it changed firm.
+            'addon_number' => $query->where(fn (Builder $q) => $q
+                ->whereRaw('LOWER(cip_applications.internal_number) LIKE ?', [$prefix])
+                ->when(trim($term) !== '', fn (Builder $w) => $w->orWhereIn(
+                    'cip_applications.id',
+                    Applications::previouslyNumbered($term),
+                ))),
             'cip_number' => $query->whereRaw(
                 'EXISTS (SELECT 1 FROM cip_applications AS parents WHERE parents.id = cip_applications.parent_application_id AND parents.deleted_at IS NULL AND LOWER(parents.cip_number) LIKE ?)',
                 [$prefix]
@@ -2051,7 +2099,8 @@ class CipApplicationController extends Controller
          * The firm, judged before anything is written: a form that names a
          * provider this reader may not move the file to is refused whole,
          * not saved and then refused. The firm's own application number is
-         * not a field at all; it is generated, never typed.
+         * not a field at all; it is generated, and the transfer below mints
+         * it again under the new firm's code.
          */
         $application->loadMissing('provider');
         $toProvider = $this->providerChange($user, $application, $data);
@@ -2097,6 +2146,9 @@ class CipApplicationController extends Controller
 
         $provider = CipProvider::query()->where('uuid', $uuid)->first();
         abort_unless($provider, 422, 'Choose a service provider on the register.');
+        // Refused here, before the other corrections are written, rather
+        // than by the transfer after they have been.
+        abort_unless($provider->active, 422, 'That service provider is not active.');
 
         return $provider;
     }
@@ -2128,8 +2180,12 @@ class CipApplicationController extends Controller
             }
         }
 
+        // The firm the form names, when it is one this reader may file
+        // under. Anything else leaves the draft where it is.
+        $provider = Intake::providersFor($user)->firstWhere('uuid', $data['providerId'] ?? '');
+
         try {
-            $application = Intake::fileDraft($draft, $user, $data);
+            $application = Intake::fileDraft($draft, $user, $data, $provider);
         } catch (\InvalidArgumentException $e) {
             abort(422, $e->getMessage());
         }

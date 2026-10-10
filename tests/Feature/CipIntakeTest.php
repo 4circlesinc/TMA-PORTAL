@@ -2176,12 +2176,15 @@ class CipIntakeTest extends TestCase
     }
 
     /**
-     * The edit form's Service provider field is honoured.
+     * The edit form's Service provider field is honoured, and the number
+     * follows the firm.
      *
      * The form has always sent the provider back with every save; the server
      * dropped it, so the page said Saved and the firm never changed. An
-     * administrator's choice is now a transfer, the same move the Transfer
-     * dialog makes, folder and all.
+     * administrator's choice is a transfer, the same move the Transfer
+     * dialog makes: the folder goes with it and the application is numbered
+     * again under the new firm's code. Keeping the old number left a file
+     * listed under Bluemina wearing GAL26-00001.
      */
     public function test_an_administrator_changes_the_service_provider_on_the_edit_form(): void
     {
@@ -2189,23 +2192,42 @@ class CipIntakeTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR);
         $galaxy = $this->provider('GAL');
         $bluemina = $this->provider('BLU');
+        $yy = now()->format('y');
 
         $created = $this->file($admin, $this->payload($galaxy))->assertCreated()->json('application');
         $application = CipApplication::where('uuid', $created['id'])->first();
+        $this->assertSame("GAL{$yy}-00001", $created['internalNumber']);
 
-        $body = $this->edit($admin, $application, $this->edits($bluemina))
+        // What the real form posts: the new firm, and (from a bundle cached
+        // before the number stopped being a field) the number it was
+        // opened with. The number is not read; the move decides it.
+        $body = $this->edit($admin, $application, $this->edits($bluemina, [
+            'internalNumber' => $created['internalNumber'],
+            'occupation' => 'Retired Engineer',
+        ]))
             ->assertOk()
             ->json('application');
 
         $this->assertSame($bluemina->uuid, $body['providerId']);
         $this->assertSame('BLU Provider', $body['provider']);
-        // The number is the file's history and stays.
-        $this->assertSame($created['internalNumber'], $body['internalNumber']);
+        $this->assertSame("BLU{$yy}-00001", $body['internalNumber']);
+        $this->assertSame("BLU{$yy}-00001", $body['number']);
+        // The rest of the save landed with it.
+        $this->assertSame('Retired Engineer', $body['applicant']['occupation']);
         $this->assertSame((int) $bluemina->id, (int) $application->fresh()->provider_id);
-        $this->assertTrue(
-            $application->events()->where('action', CipEvent::ACTION_PROVIDER_TRANSFERRED)->exists(),
-            'a provider change from the form is audited like one from the dialog',
-        );
+
+        $event = $application->events()->where('action', CipEvent::ACTION_PROVIDER_TRANSFERRED)->sole();
+        $this->assertSame("GAL{$yy}-00001", $event->meta['previousInternalNumber']);
+        $this->assertSame("BLU{$yy}-00001", $event->meta['internalNumber']);
+
+        // Saving again with the firm it now has is not another move.
+        $this->edit($admin, $application->fresh(), $this->edits($bluemina))->assertOk();
+        $this->assertSame("BLU{$yy}-00001", $application->fresh()->internal_number);
+        $this->assertSame(1, $application->events()->where('action', CipEvent::ACTION_PROVIDER_TRANSFERRED)->count());
+        // And Bluemina's own next filing follows on.
+        $next = $this->file($admin, $this->payload($bluemina, ['firstName' => 'Nadia', 'passportNumber' => 'N1']))
+            ->assertCreated()->json('application');
+        $this->assertSame("BLU{$yy}-00002", $next['internalNumber']);
     }
 
     public function test_only_an_administrator_changes_the_service_provider_on_the_edit_form(): void
@@ -2214,17 +2236,30 @@ class CipIntakeTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR);
         $galaxy = $this->provider('GAL');
         $bluemina = $this->provider('BLU');
+        $yy = now()->format('y');
 
         $created = $this->file($admin, $this->payload($galaxy))->assertCreated()->json('application');
         $application = CipApplication::where('uuid', $created['id'])->first();
 
-        $this->edit($this->user(Role::REVIEWING_OFFICER), $application, $this->edits($bluemina))
-            ->assertStatus(422);
+        // Refused whole: the correction posted with it is not half-saved.
+        $this->edit($this->user(Role::REVIEWING_OFFICER), $application, $this->edits($bluemina, [
+            'occupation' => 'Retired Engineer',
+        ]))->assertStatus(422);
         $this->assertSame((int) $galaxy->id, (int) $application->fresh()->provider_id);
+        $this->assertSame("GAL{$yy}-00001", $application->fresh()->internal_number);
+        $this->assertSame('Engineer', $application->fresh()->people()->first()->occupation);
 
         // Sending the firm it already has is not a change and needs no right.
         $this->edit($this->user(Role::REVIEWING_OFFICER), $application, $this->edits($galaxy))
             ->assertOk();
+        $this->assertSame("GAL{$yy}-00001", $application->fresh()->internal_number);
+
+        // A firm taken off the register is refused before anything is written.
+        $bluemina->forceFill(['active' => false])->save();
+        $this->edit($admin, $application, $this->edits($bluemina, ['occupation' => 'Retired Engineer']))
+            ->assertStatus(422);
+        $this->assertSame((int) $galaxy->id, (int) $application->fresh()->provider_id);
+        $this->assertSame('Engineer', $application->fresh()->people()->first()->occupation);
     }
 
     /**
@@ -2243,17 +2278,18 @@ class CipIntakeTest extends TestCase
 
         $created = $this->file($admin, $this->payload($galaxy))->assertCreated()->json('application');
         $application = CipApplication::where('uuid', $created['id'])->first();
-        $this->assertSame('GAL26-00001', $created['internalNumber']);
+        $yy = now()->format('y');
+        $this->assertSame("GAL{$yy}-00001", $created['internalNumber']);
 
         $body = $this->edit($admin, $application, $this->edits($galaxy, [
-            'internalNumber' => 'GAL26-00007',
+            'internalNumber' => "GAL{$yy}-00007",
             'occupation' => 'Retired Engineer',
         ]))->assertOk()->json('application');
 
         // The rest of the save landed; the number did not move.
         $this->assertSame('Retired Engineer', $body['applicant']['occupation']);
-        $this->assertSame('GAL26-00001', $body['internalNumber']);
-        $this->assertSame('GAL26-00001', $application->fresh()->internal_number);
+        $this->assertSame("GAL{$yy}-00001", $body['internalNumber']);
+        $this->assertSame("GAL{$yy}-00001", $application->fresh()->internal_number);
         $this->assertArrayNotHasKey('canRenumber', $body);
     }
 

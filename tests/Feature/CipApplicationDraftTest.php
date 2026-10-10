@@ -1317,6 +1317,109 @@ class CipApplicationDraftTest extends TestCase
         $this->assertSame(1, CipApplication::query()->where('status', Status::DRAFT)->count());
     }
 
+    /**
+     * A draft is filed under the firm its form names.
+     *
+     * The wizard has always offered the Service provider select on a draft
+     * and the first autosave has always honoured it. Every save after that
+     * dropped the answer: the reader went on seeing the firm they had
+     * switched to while the row, its number and its folder stayed with the
+     * first one, and filing filed it there.
+     */
+    public function test_a_draft_follows_the_firm_its_form_names_and_is_numbered_under_it(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $galaxy = $this->provider('GAL');
+        $bluemina = $this->provider('BLU');
+        $yy = now()->format('y');
+
+        // No name yet, so the hub client is called after the file.
+        $first = $this->save($staff, [
+            'providerId' => $galaxy->uuid,
+            'phase' => Phase::PRE_APPROVAL,
+            'countryOfResidence' => 'United Arab Emirates',
+        ])->assertOk()->json('draft');
+        $this->assertSame("GAL{$yy}-00001", $first['number']);
+
+        $draft = CipApplication::query()->where('uuid', $first['id'])->firstOrFail();
+        $standIn = $draft->client?->name;
+        $uid = $draft->client?->uid;
+
+        $second = $this->actingAs($staff)->postJson('/portal/cip/applications/draft?application='.$first['id'], [
+            'providerId' => $bluemina->uuid,
+            'phase' => Phase::PRE_APPROVAL,
+            'countryOfResidence' => 'United Arab Emirates',
+        ])->assertOk()->json('draft');
+
+        $this->assertSame($first['id'], $second['id']);
+        $this->assertSame($bluemina->uuid, $second['answers']['providerId']);
+        $this->assertSame("BLU{$yy}-00001", $second['number']);
+        $this->assertSame(1, CipApplication::count());
+
+        $draft->refresh();
+        $this->assertSame($bluemina->id, $draft->provider_id);
+        $this->assertSame(Status::DRAFT, $draft->status);
+        $this->assertSame($bluemina->company_id, $draft->client?->referred_by_company_id);
+
+        // The stand-in name follows the number; the address does not.
+        $this->assertSame("Application GAL{$yy}-00001", $standIn);
+        $this->assertSame("Application BLU{$yy}-00001", $draft->client->fresh()->name);
+        $this->assertSame($uid, $draft->client->fresh()->uid);
+
+        // Galaxy's next file is its next number, not the one that left.
+        $this->assertSame("GAL{$yy}-00002", Applications::create($galaxy, $staff)->internal_number);
+    }
+
+    public function test_filing_a_draft_files_it_under_the_firm_the_form_names(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $galaxy = $this->provider('GAL');
+        $bluemina = $this->provider('BLU');
+        $yy = now()->format('y');
+
+        $this->save($staff, $this->answers($galaxy))->assertOk();
+        $draft = CipApplication::query()->firstOrFail();
+        $this->assertSame("GAL{$yy}-00001", $draft->internal_number);
+
+        // Add pressed before the autosave caught the change of firm.
+        $filing = $this->filing($bluemina);
+        $filing['draftId'] = $draft->uuid;
+
+        $filed = $this->actingAs($staff)
+            ->post('/portal/cip/applications', $filing, ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->json('application');
+
+        $this->assertSame($draft->uuid, $filed['id']);
+        $this->assertSame($bluemina->uuid, $filed['providerId']);
+        $this->assertSame("BLU{$yy}-00001", $filed['internalNumber']);
+        $this->assertSame(1, CipApplication::count());
+    }
+
+    /** A firm the reader may not file under moves nothing. */
+    public function test_a_provider_contact_cannot_move_a_draft_to_a_firm_that_is_not_theirs(): void
+    {
+        $galaxy = $this->provider('GAL');
+        $bluemina = $this->provider('BLU');
+        $contact = $this->user(Role::CLIENT);
+        \App\Models\CompanyMember::create([
+            'company_id' => $galaxy->company_id, 'user_id' => $contact->id,
+            'name' => $contact->name, 'email' => $contact->email,
+            'role' => 'member', 'status' => \App\Models\CompanyMember::STATUS_ACTIVE,
+        ]);
+
+        $first = $this->save($contact, $this->answers($galaxy))->assertOk()->json('draft');
+
+        $this->actingAs($contact)->postJson(
+            '/portal/cip/applications/draft?application='.$first['id'],
+            $this->answers($bluemina),
+        )->assertStatus(422);
+
+        $draft = CipApplication::query()->where('uuid', $first['id'])->firstOrFail();
+        $this->assertSame($galaxy->id, $draft->provider_id);
+        $this->assertSame($first['number'], $draft->internal_number);
+    }
+
     public function test_a_named_draft_out_of_reach_is_not_written_to(): void
     {
         $theirs = $this->user(Role::ADMINISTRATOR);

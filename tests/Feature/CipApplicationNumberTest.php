@@ -20,8 +20,9 @@ use Tests\TestCase;
 /**
  * Section 7 — the two application numbers, and the rule that switches between them.
  *
- * The internal number is ours and permanent; the CIP number is the Unit's and
- * arrives at submission. What is pinned here is the switching rule itself: one
+ * The internal number is ours, generated and never typed, and changes only
+ * when the file changes service provider (CipProviderTransferTest); the CIP
+ * number is the Unit's and arrives at submission. What is pinned here is the switching rule itself: one
  * write, and every surface that renders `displayNumber()` moves with it, while
  * the internal number stays stored and findable for audit and invoicing.
  */

@@ -126,8 +126,17 @@ class CipApplicationDraftController extends Controller
         }
 
         $provider = Intake::providersFor($user)->firstWhere('uuid', $data['providerId'] ?? '');
-        if ($provider === null && Intake::filingPhase() === Phase::ADD_ON) {
-            $provider = $this->addOnDraftProvider($user, $data);
+        /*
+         * An Add-On belongs to its main application's firm, and a new one is
+         * numbered under that firm from the start. The select used to win
+         * here while the filing step gave the parent the last word, so a
+         * draft was minted under one firm, moved to the other by the link a
+         * moment later, and left wearing a number the first firm could
+         * never issue again. An existing draft keeps the cheap path: the
+         * link moves it if its parent turns out to sit elsewhere.
+         */
+        if (Intake::filingPhase() === Phase::ADD_ON && ($draft === null || $provider === null)) {
+            $provider = $this->addOnDraftProvider($user, $data) ?? $provider;
         }
         if ($provider === null) {
             $message = 'Choose a service provider you can file under.';
@@ -139,8 +148,10 @@ class CipApplicationDraftController extends Controller
         }
 
         try {
+            // An existing draft follows the firm the form names: the
+            // select is the reader's answer until the application is filed.
             $draft = $draft
-                ? Intake::updateDraft($draft, $user, $data)
+                ? Intake::updateDraft($draft, $user, $data, $provider)
                 : Intake::createDraft($provider, $user, $data);
         } catch (UniqueConstraintViolationException $e) {
             /*
@@ -161,7 +172,7 @@ class CipApplicationDraftController extends Controller
             if ($existing === null) {
                 throw $e;
             }
-            $draft = Intake::updateDraft($existing, $user, $data);
+            $draft = Intake::updateDraft($existing, $user, $data, $provider);
         } catch (\InvalidArgumentException $e) {
             $message = $e->getMessage();
 

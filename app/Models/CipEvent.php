@@ -32,8 +32,11 @@ class CipEvent extends Model
      * The file was handed to a different service provider.
      *
      * Its own action rather than a detail of a status change: the firm, the
-     * folder parent, and who may open the papers all move together, and which
-     * day that happened is an audit question no status event answers.
+     * application number, the folder parent, and who may open the papers all
+     * move together, and which day that happened is an audit question no
+     * status event answers. The number follows the firm, so the same row
+     * carries `previousInternalNumber` and `internalNumber` when it changed;
+     * rows written before it did carry neither.
      */
     public const ACTION_PROVIDER_TRANSFERRED = 'provider_transferred';
 
@@ -49,9 +52,15 @@ class CipEvent extends Model
     public const ACTION_NUMBER_ASSIGNED = 'number_assigned';
 
     /**
-     * The firm's own application number was changed by hand. Rare and
-     * administrator-only: letters and audit rows already cite the old one,
-     * so the trail has to say what it was.
+     * The firm's own application number changed without the firm changing.
+     *
+     * Not something a reader can do: the number is generated. For one day
+     * in October 2026 an administrator could type one, and those rows read
+     * through this action; today it is written only by the repair that
+     * numbers a file again under the firm it was already moved to
+     * (`cip:remint-transferred`). A number that changes because the firm
+     * did rides on {@see ACTION_PROVIDER_TRANSFERRED} instead. Both carry
+     * `previousInternalNumber`, which is what keeps the old number findable.
      */
     public const ACTION_RENUMBERED = 'renumbered';
 

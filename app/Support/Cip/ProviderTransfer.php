@@ -25,12 +25,30 @@ use Illuminate\Validation\ValidationException;
  * otherwise the old firm keeps seeing the papers in the File Library while
  * ApplicationScope has already cut them off the caseload.
  *
- * The application number itself is left alone: GAL26-00001 stays GAL even
- * after a move to IGA. Renaming a filed number would break every letter and
- * audit row that already cites it.
+ * THE NUMBER FOLLOWS THE FIRM
+ *
+ * The application number is the firm's code and that firm's sequence, so a
+ * file that changes firm is numbered again under the new one: GAL26-00001
+ * moved to IGA becomes IGA's next number. It used to keep the old number,
+ * which left a file listed under one firm wearing another's code. The number
+ * it leaves behind is not reissued, stays in the audit row that records the
+ * move, and stays searchable ({@see Applications::previouslyNumbered}); what
+ * was already sent citing it is history and is not rewritten. The Unit's CIP
+ * number is a different thing and never moves with the firm.
+ *
+ * {@see rehome} is the one writer of an application's firm after creation.
+ * The administrator's transfer, a draft whose form names another firm, and
+ * an Add-On adopting its parent's firm all come through it, so the firm, the
+ * number, the hub referral, the folder and the audit row cannot drift apart.
  */
 final class ProviderTransfer
 {
+    /** Audit `reason`: an Add-On took its main application's firm. */
+    public const REASON_PARENT_LINKED = 'parent_linked';
+
+    /** Audit `reason`: an unfiled draft's form named another firm. */
+    public const REASON_DRAFT_FORM = 'draft_form';
+
     /**
      * Hand this application (and every Add-On that hangs off the same parent)
      * to another service provider.
@@ -67,7 +85,6 @@ final class ProviderTransfer
             ]);
         }
 
-        $from = $application->provider;
         $family = self::family($application);
 
         // Notify both firms' contacts: the leavers lose the file, the arrivals
@@ -84,34 +101,13 @@ final class ProviderTransfer
         Providers::ensureFolder($to);
         $to->refresh();
 
-        $moved = DB::transaction(function () use ($family, $from, $to, $actor) {
+        $moved = DB::transaction(function () use ($family, $to, $actor) {
             $out = [];
 
             foreach ($family as $member) {
-                $member->loadMissing(['provider', 'client.folder']);
-
-                if ((int) $member->provider_id === (int) $to->id) {
-                    continue;
+                if ($rehomed = self::rehome($member, $to, $actor)) {
+                    $out[] = $rehomed;
                 }
-
-                $previous = $member->provider?->name ?: ($from?->name ?: 'the previous firm');
-                $previousFirmId = $member->provider?->company_id ?? $from?->company_id;
-
-                $member->forceFill(['provider_id' => $to->id])->save();
-                $member->setRelation('provider', $to);
-
-                self::syncClient($member, $to, $previousFirmId);
-                self::reparentClientFolder($member, $to);
-
-                Engine::record($member, CipEvent::ACTION_PROVIDER_TRANSFERRED, $actor, [
-                    'fromProvider' => $previous,
-                    'fromProviderId' => $from?->uuid,
-                    'toProvider' => $to->name,
-                    'toProviderId' => $to->uuid,
-                    'folderMoved' => (bool) ($member->client?->folder_id),
-                ]);
-
-                $out[] = $member->fresh(['provider', 'client']);
             }
 
             return $out;
@@ -131,6 +127,80 @@ final class ProviderTransfer
         Live::staff(Live::FILES);
 
         return $moved;
+    }
+
+    /**
+     * Put one application under another firm.
+     *
+     * Five things that are one fact, written together under the row's lock:
+     * the firm, a number under that firm's code, the hub referral, the
+     * client folder's place in the library, and the audit row naming both
+     * firms and both numbers. Answers null when the application is already
+     * there, so a double submit or two doors racing mint nothing twice.
+     *
+     * No permission is asked here: who may move a filed application is
+     * {@see transfer}'s question, and the other callers are moving a file
+     * that is still being typed. `$meta` is added to the audit row, for a
+     * caller that has a reason worth keeping.
+     *
+     * Opens its own transaction, so it is safe alone and nests inside a
+     * caller's. A refused folder move rolls the firm, the number and the
+     * counter back with it.
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    public static function rehome(
+        CipApplication $application,
+        CipProvider $to,
+        ?User $actor,
+        array $meta = [],
+    ): ?CipApplication {
+        return DB::transaction(function () use ($application, $to, $actor, $meta) {
+            $member = CipApplication::query()
+                ->whereKey($application->id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($member === null || (int) $member->provider_id === (int) $to->id) {
+                return null;
+            }
+
+            $member->loadMissing(['provider', 'client.folder']);
+
+            $from = $member->provider;
+            $previousNumber = (string) $member->internal_number;
+            $number = Applications::numberUnder($member, $to);
+
+            // One write for both, through the model: the sync cursor reads
+            // updated_at, and a row is never seen under one firm wearing
+            // the other's number.
+            $member->forceFill([
+                'provider_id' => $to->id,
+                'internal_number' => $number,
+            ])->save();
+            $member->setRelation('provider', $to);
+
+            self::syncClient($member, $to, $from?->company_id);
+            self::reparentClientFolder($member, $to);
+            // After the move, so a renamed folder is made unique among the
+            // siblings it will actually sit beside.
+            Tree::followNumber($member, $previousNumber);
+
+            Engine::record($member, CipEvent::ACTION_PROVIDER_TRANSFERRED, $actor, array_merge([
+                'fromProvider' => $from?->name ?: 'the previous firm',
+                'fromProviderId' => $from?->uuid,
+                'toProvider' => $to->name,
+                'toProviderId' => $to->uuid,
+                'folderMoved' => (bool) ($member->client?->folder_id),
+            ], $number !== $previousNumber ? [
+                // The same two keys every number change writes, so one key
+                // answers "what did this file used to be called".
+                'previousInternalNumber' => $previousNumber,
+                'internalNumber' => $number,
+            ] : [], $meta));
+
+            return $member->fresh(['provider', 'client']);
+        });
     }
 
     /**

@@ -287,6 +287,85 @@ class CipTimelineTest extends TestCase
         $this->assertSame('The system marked it delayed after 181 days with no decision', $entry['what']);
     }
 
+    /**
+     * A change of firm carries the number with it, and says so in one line.
+     *
+     * Rows written before the number followed the firm carry no number, and
+     * must go on reading exactly as they did: the trail is append-only, so
+     * a sentence that assumed the new keys would turn every old transfer
+     * into "changed from ? to ?".
+     */
+    public function test_a_transfer_reads_as_the_firms_and_the_numbers_that_moved(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $application = $this->application($admin);
+
+        Engine::record($application, CipEvent::ACTION_PROVIDER_TRANSFERRED, $admin, [
+            'fromProvider' => 'Galaxy', 'toProvider' => 'Bluemina',
+            'previousInternalNumber' => 'GAL26-00001', 'internalNumber' => 'BLU26-00003',
+        ]);
+        $this->assertContains(
+            'Ada Admin transferred the application from Galaxy to Bluemina; '
+                .'the application number changed from GAL26-00001 to BLU26-00003',
+            $this->lines($application, $admin),
+        );
+    }
+
+    public function test_a_transfer_from_before_the_number_moved_reads_as_it_always_did(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $application = $this->application($admin);
+
+        Engine::record($application, CipEvent::ACTION_PROVIDER_TRANSFERRED, $admin, [
+            'fromProvider' => 'Galaxy', 'toProvider' => 'Bluemina', 'folderMoved' => true,
+        ]);
+        Engine::record($application, CipEvent::ACTION_PROVIDER_TRANSFERRED, $admin, ['toProvider' => 'Arton']);
+        Engine::record($application, CipEvent::ACTION_PROVIDER_TRANSFERRED, $admin, []);
+
+        $lines = $this->lines($application, $admin);
+        $this->assertContains('Ada Admin transferred the application from Galaxy to Bluemina', $lines);
+        $this->assertContains('Ada Admin transferred the application to Arton', $lines);
+        $this->assertContains('Ada Admin transferred the application to another service provider', $lines);
+        foreach ($lines as $line) {
+            $this->assertStringNotContainsString('?', $line);
+        }
+    }
+
+    /** An Add-On following its main application was not handed over by anybody. */
+    public function test_an_add_on_following_its_parent_reads_as_a_link_not_a_transfer(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $application = $this->application($admin);
+
+        Engine::record($application, CipEvent::ACTION_PROVIDER_TRANSFERRED, $admin, [
+            'fromProvider' => 'Bluemina', 'toProvider' => 'Galaxy',
+            'previousInternalNumber' => 'BLU-AO-26-00001', 'internalNumber' => 'GAL-AO-26-00004',
+            'reason' => \App\Support\Cip\ProviderTransfer::REASON_PARENT_LINKED,
+        ]);
+
+        $this->assertContains(
+            'Ada Admin linked the main application, which moved this Add-On from Bluemina to Galaxy; '
+                .'the application number changed from BLU-AO-26-00001 to GAL-AO-26-00004',
+            $this->lines($application, $admin),
+        );
+    }
+
+    /** A number that changed with no change of firm: the repair, or a row from the day one could be typed. */
+    public function test_a_number_changed_on_its_own_names_both(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $application = $this->application($admin);
+
+        Engine::record($application, CipEvent::ACTION_RENUMBERED, null, [
+            'previousInternalNumber' => 'GAL26-00001', 'internalNumber' => 'BLU26-00003',
+        ]);
+
+        $this->assertContains(
+            'The system changed the application number from GAL26-00001 to BLU26-00003',
+            $this->lines($application, $admin),
+        );
+    }
+
     public function test_a_null_actor_reads_as_the_system(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');

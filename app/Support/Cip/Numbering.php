@@ -8,7 +8,11 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Internal application numbers, minted the moment a row is created and
- * never reused, never changed.
+ * never reused.
+ *
+ * A number changes in one circumstance only: the application moves to
+ * another service provider, and is minted again under that firm's code
+ * ({@see Applications::numberUnder}). Nobody types one.
  *
  * Family files: [Provider Code][YY]-[Sequence], GAL26-00001.
  * Add-On files: [Provider Code]-AO-[YY]-[Sequence], GAL-AO-26-00001.
@@ -42,6 +46,33 @@ class Numbering
             ->update(['last_sequence' => $sequence, 'updated_at' => now()]);
 
         return self::format($provider->code, $year, $sequence, $lane);
+    }
+
+    /**
+     * The number `$ahead` places beyond the counter, without moving it.
+     *
+     * For showing a reader what a firm's next number would be before they
+     * save. Nothing is reserved and nothing is written: the real number is
+     * minted by {@see next} inside the write, under the counter's lock,
+     * which is what makes it unique. Two readers shown the same preview get
+     * two different numbers when they save.
+     */
+    public static function peek(
+        CipProvider $provider,
+        ?CarbonInterface $when = null,
+        string $lane = self::LANE_APPLICATION,
+        int $ahead = 1,
+    ): string {
+        $lane = self::assertLane($lane);
+        $year = (int) ($when ?? now())->format('y');
+
+        $last = (int) (DB::table('cip_counters')
+            ->where('provider_id', $provider->id)
+            ->where('year', $year)
+            ->where('lane', $lane)
+            ->value('last_sequence') ?? 0);
+
+        return self::format($provider->code, $year, $last + max(1, $ahead), $lane);
     }
 
     /**

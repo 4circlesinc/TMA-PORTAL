@@ -43,23 +43,30 @@ class CipProviderTransferController extends Controller
         );
 
         $primary = collect($moved)->firstWhere('id', $application->id) ?? $moved[0] ?? $application->fresh();
+        $primary->loadMissing(['provider', 'client']);
+
+        /*
+         * Every moved file, with the number it wears now. `internalNumber`
+         * is the one that changed with the firm; `number` is what the screen
+         * displays, which is the Unit's CIP number once there is one and
+         * does not move. A browser patching its rows needs both, and needs
+         * the client the row belongs under to find what it is holding.
+         */
+        $describe = fn (CipApplication $app) => [
+            'id' => $app->uuid,
+            'clientUid' => $app->client?->uid,
+            'number' => $app->displayNumber(),
+            'internalNumber' => $app->internal_number,
+            'provider' => $app->provider?->name,
+            'providerId' => $app->provider?->uuid,
+            'providerCode' => $app->provider?->code,
+        ];
 
         return response()->json([
             'ok' => true,
-            'application' => [
-                'id' => $primary->uuid,
-                'provider' => $primary->provider?->name,
-                'providerId' => $primary->provider?->uuid,
-                'providerCode' => $primary->provider?->code,
-            ],
-            'moved' => collect($moved)->map(fn (CipApplication $app) => [
-                'id' => $app->uuid,
-                'number' => $app->displayNumber(),
-                'provider' => $app->provider?->name,
-                'providerId' => $app->provider?->uuid,
-            ])->values()->all(),
-            'message' => 'Application transferred to '.$to->name
-                .'. The folder moved with it; the previous service provider no longer has access.',
+            'application' => $describe($primary),
+            'moved' => collect($moved)->map($describe)->values()->all(),
+            'message' => 'Transferred to '.$to->name.'; the application number is now '.$primary->internal_number.'.',
         ]);
     }
 

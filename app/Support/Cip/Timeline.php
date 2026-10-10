@@ -216,15 +216,36 @@ class Timeline
         $from = trim((string) ($meta['fromProvider'] ?? ''));
         $to = trim((string) ($meta['toProvider'] ?? ''));
 
+        /*
+         * An Add-On that follows its main application to that file's firm
+         * was not handed over by anybody. Saying "transferred" would credit
+         * whoever typed the main application's number with a decision that
+         * belongs to the link.
+         */
+        $verb = ($meta['reason'] ?? null) === ProviderTransfer::REASON_PARENT_LINKED
+            ? 'linked the main application, which moved this Add-On'
+            : 'transferred the application';
+
         if ($from !== '' && $to !== '') {
-            return "{$who} transferred the application from {$from} to {$to}";
+            $move = "{$who} {$verb} from {$from} to {$to}";
+        } elseif ($to !== '') {
+            $move = "{$who} {$verb} to {$to}";
+        } else {
+            $move = "{$who} {$verb} to another service provider";
         }
 
-        if ($to !== '') {
-            return "{$who} transferred the application to {$to}";
-        }
+        /*
+         * The number follows the firm, and the row that records the move
+         * records both. Only when it has both: a transfer written before the
+         * number moved carries neither key, and must go on reading exactly
+         * as it did rather than "changed from ? to ?".
+         */
+        $previous = trim((string) ($meta['previousInternalNumber'] ?? ''));
+        $number = trim((string) ($meta['internalNumber'] ?? ''));
 
-        return "{$who} transferred the application to another service provider";
+        return $previous !== '' && $number !== '' && $previous !== $number
+            ? "{$move}; the application number changed from {$previous} to {$number}"
+            : $move;
     }
 
     /** "moved it from Draft to New", the codes read through {@see Status}. */

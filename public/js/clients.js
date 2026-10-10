@@ -6500,7 +6500,15 @@
   /* One control for all three answers. Splitting "who referred them" across a
      source picker and a company picker asks the reader to keep two fields
      consistent; a single list cannot be left half-set. */
-  function renderReferralSelect(draft) {
+  /*
+   * `locked` is a client who holds a CIP application. Who referred them is
+   * then the firm that holds the application, which is changed on the
+   * application (and takes its folder and its number with it), so this
+   * control shows the answer without offering to change half of it. Still a
+   * select, disabled: the save reads its value like any other, so nothing
+   * about the referral is posted differently.
+   */
+  function renderReferralSelect(draft, locked) {
     var selected = draft.referralType === 'company' && draft.referredByCompanyId
       ? 'company:' + draft.referredByCompanyId
       : (draft.referralType || 'none');
@@ -6514,7 +6522,8 @@
     return (
       '<label class="tma-dash__clients-form-field">' +
       '<span class="tma-dash__clients-form-label">Referred by</span>' +
-      '<select class="tma-dash__clients-field-select tma-dash__clients-field-select--full" data-clients-referral>' +
+      '<select class="tma-dash__clients-field-select tma-dash__clients-field-select--full" data-clients-referral' +
+      (locked ? ' disabled' : '') + '>' +
       '<option value="none"' + (selected === 'none' ? ' selected' : '') + '>No referral</option>' +
       '<option value="private"' + (selected === 'private' ? ' selected' : '') + '>Private</option>' +
       (companyOpts ? '<optgroup label="Service providers">' + companyOpts + '</optgroup>' : '') +
@@ -6647,7 +6656,8 @@
     );
   }
 
-  function renderContactForm(draft) {
+  function renderContactForm(draft, opts) {
+    opts = opts || {};
     return (
       '<form class="tma-dash__clients-form" data-clients-form novalidate>' +
       renderFormSection('Photo', renderPhotoField(draft)) +
@@ -6664,7 +6674,7 @@
         'Classification',
         '<div class="tma-dash__clients-form-grid">' +
         renderClientTypeSelect(draft) +
-        renderReferralSelect(draft) +
+        renderReferralSelect(draft, !!opts.referralLocked) +
         '</div>'
       ) +
       renderFormSection(
@@ -6737,7 +6747,9 @@
       '<div class="tma-dash__clients-profile tma-dash__clients-profile--form' +
       (opts.elevateToolbar ? ' tma-dash__clients-profile--elevated' : '') + '">' +
       toolbar +
-      renderContactForm(draft) +
+      renderContactForm(draft, {
+        referralLocked: !!(state.editing && state.selectedId && isCipApplicant(state.selectedId)),
+      }) +
       '</div></div>'
     );
   }
@@ -14725,6 +14737,40 @@
    * change while leaving the old firm able to open the drawer — or cutting
    * them off without anyone having said so.
    */
+  /*
+   * Applications that have just changed firm, as the server describes them.
+   *
+   * The number follows the firm, so a move changes two things every list
+   * draws. `internalNumber` is the one that changed; `number` is what is
+   * displayed, which is the Unit's CIP number once there is one. Both are
+   * taken from the answer rather than worked out here.
+   */
+  function applyMovedApplications(moved) {
+    (moved || []).forEach(function (m) {
+      if (!m || !m.id) return;
+      var patch = function (rec) {
+        if (!rec) return;
+        rec.provider = m.provider;
+        rec.providerId = m.providerId;
+        rec.providerCode = m.providerCode;
+        if (m.internalNumber) rec.internalNumber = m.internalNumber;
+        if (m.number) rec.number = m.number;
+      };
+
+      (APP_TABLE.rows || []).forEach(function (row) {
+        if (row && row.id === m.id) patch(row);
+      });
+
+      var uid = m.clientUid || APPLICATION_OWNERS[m.id];
+      var held = uid ? applicationFor(uid) : null;
+      if (held && held.id === m.id) {
+        patch(held);
+        rememberApplication(uid, held);
+        delete TIMELINE[uid];
+      }
+    });
+  }
+
   function openProviderTransferPicker(clientUid, applicationId) {
     var app = applicationRowById(applicationId) || applicationHeldById(applicationId)
       || (clientUid ? applicationFor(clientUid) : null);
@@ -14753,8 +14799,8 @@
       '<p class="tma-dash__settings-change-text">Move this application from <strong>' +
       esc(fromName) + '</strong> to another firm.</p>' +
       '<p class="tma-dash__settings-change-text" style="color: var(--color-red);">' +
-      'Are you sure you want to continue? The application folder will be transferred to the new service provider’s folder. ' +
-      esc(fromName) + ' will lose all access to the files and the application.</p>' +
+      'The folder moves with it, the application gets a new number and ' +
+      esc(fromName) + ' loses access.</p>' +
       '<input type="search" class="tma-users-picker-search" data-sp-search placeholder="Search service providers" autocomplete="off">' +
       '<div class="tma-users-picker-list" data-sp-list>' +
         (window.TMASkeleton ? window.TMASkeleton.rows(3, { leading: false }) : '<p class="tma-user-info-panel__field-label">Loading…</p>') +
@@ -14821,10 +14867,7 @@
       if (!selectedId) return;
       var chosen = providers.filter(function (p) { return p.id === selectedId; })[0];
       var toName = (chosen && chosen.name) || 'the new service provider';
-      var warn =
-        'Transfer this application to ' + toName + '?\n\n' +
-        'The application folder will move into ' + toName + '’s folder. ' +
-        fromName + ' will lose all access to the files and the application.';
+      var warn = 'Transfer to ' + toName + ' and give the application a new number?';
       if (!window.confirm(warn)) return;
 
       this.disabled = true;
@@ -14833,6 +14876,10 @@
         json: { providerId: selectedId, confirm: true },
       }).then(function (json) {
         close();
+        // Before the refetch, not instead of it: the rows on screen and the
+        // records already held wear the new firm and number at once, and go
+        // on wearing them if the quiet refetch behind this fails.
+        applyMovedApplications((json && json.moved) || (json && json.application ? [json.application] : []));
         forgetApplicationTable();
         forgetBuckets();
         if (clientUid) refreshAfterCipMove(clientUid);
@@ -15724,13 +15771,27 @@
           }
 
           if (application) {
+            var before = applicationRecord(state) || {};
             // Held as well as announced: the record the server just returned
             // is the newest there is, and refetching it would be asking for
             // what is already in hand.
             rememberApplication(state.selectedId, application);
-            // The list refetches itself from the live signal the write raised.
-            clientsToast('Application ' + application.number +
-              (filingNew ? ' created' : ' saved'), 'positive');
+            /*
+             * The table is asked again, here. A live signal follows every
+             * write, but the tab that made the write is the one tab it does
+             * not reach, so a save that changed what a row draws (the firm,
+             * the number that follows the firm, a name) came back to a
+             * table still showing the answer from before.
+             */
+            forgetApplicationTable();
+            forgetBuckets();
+            if (state.selectedId) delete TIMELINE[state.selectedId];
+            var renumbered = !filingNew && before.internalNumber && application.internalNumber &&
+              before.internalNumber !== application.internalNumber;
+            clientsToast(renumbered
+              ? 'Application number is now ' + application.internalNumber
+              : 'Application ' + application.number + (filingNew ? ' created' : ' saved'),
+            'positive');
           }
           navigate('list');
         },

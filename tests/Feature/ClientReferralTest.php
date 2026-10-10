@@ -166,6 +166,58 @@ class ClientReferralTest extends TestCase
             ->assertJsonPath('client.referredByCompanyId', null);
     }
 
+    /**
+     * A CIP applicant's referrer is the firm that holds their application.
+     *
+     * "Referred by" on this form and on the application are the same words,
+     * but only the application's is the fact. Changing it here used to be
+     * accepted: the new firm's contacts gained the client's folder, the
+     * application and its number stayed where they were, and the next save
+     * of the application quietly put the old firm back. It is refused now,
+     * with where the change belongs, and nothing else about the client is
+     * harder to edit.
+     */
+    public function test_referred_by_is_changed_on_the_application_for_a_client_who_has_one(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $staff = $this->staff();
+        $galaxy = $this->company($staff, 'Galaxy');
+        $this->company($staff, 'Blue Media');
+        $provider = \App\Models\CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL', 'company_id' => $galaxy->id]);
+
+        $this->actingAs($staff)->postJson('/portal/clients', $this->payload('mary-brown', 'Mary Brown', [
+            'referralType' => 'company',
+            'referredByCompanyId' => 'galaxy',
+        ]))->assertOk();
+        $client = Client::where('uid', 'mary-brown')->firstOrFail();
+        \App\Support\Cip\Applications::create($provider, $staff, ['client_id' => $client->id]);
+
+        $this->actingAs($staff)
+            ->patchJson('/portal/clients/mary-brown', $this->payload('mary-brown', 'Mary Brown', [
+                'referralType' => 'company',
+                'referredByCompanyId' => 'blue-media',
+            ]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['referralType']);
+        $this->actingAs($staff)
+            ->patchJson('/portal/clients/mary-brown', $this->payload('mary-brown', 'Mary Brown', [
+                'referralType' => 'none',
+            ]))
+            ->assertStatus(422);
+        $this->assertSame($galaxy->id, $client->fresh()->referred_by_company_id);
+
+        // The same referral posted back, as the form does on every save, is
+        // not a change: a new name goes through.
+        $this->actingAs($staff)
+            ->patchJson('/portal/clients/mary-brown', $this->payload('mary-brown', 'Mary Browne', [
+                'referralType' => 'company',
+                'referredByCompanyId' => 'galaxy',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('client.name', 'Mary Browne')
+            ->assertJsonPath('client.referredByLabel', 'Galaxy');
+    }
+
     public function test_deleting_a_referrer_leaves_its_referrals_unrecorded_rather_than_dangling(): void
     {
         $staff = $this->staff();

@@ -6,6 +6,7 @@ use App\Models\CipApplication;
 use App\Models\Client;
 use App\Models\User;
 use App\Support\Access\ClientScope;
+use App\Support\Cip\Applications;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -213,9 +214,13 @@ final class ClientDirectory
 
         $query->orWhereIn('id', CipApplication::query()
             ->whereNotNull('client_id')
-            ->where(function ($q) use ($prefix) {
+            ->where(function ($q) use ($prefix, $term) {
                 $q->whereRaw('LOWER(internal_number) LIKE ?', [$prefix])
-                    ->orWhereRaw('LOWER(cip_number) LIKE ?', [$prefix]);
+                    ->orWhereRaw('LOWER(cip_number) LIKE ?', [$prefix])
+                    // The invoice may be older than the file's present firm:
+                    // the number changes with the firm, and the one it wore
+                    // before is still the one printed on the page in hand.
+                    ->orWhereIn('id', Applications::previouslyNumbered($term));
             })
             ->select('client_id'));
     }

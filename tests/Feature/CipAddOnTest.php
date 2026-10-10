@@ -28,8 +28,10 @@ use App\Support\Cip\Intake;
 use App\Support\Cip\Notices;
 use App\Support\Cip\Package;
 use App\Support\Cip\Phase;
+use App\Support\Cip\ProviderTransfer;
 use App\Support\Cip\Review;
 use App\Support\Cip\Status;
+use App\Support\Cip\Timeline;
 use App\Support\Cip\Tree;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -628,6 +630,164 @@ class CipAddOnTest extends TestCase
         $this->assertNotNull($body);
         $this->assertSame($parent->provider->uuid, $body['answers']['providerId']);
         $this->assertSame($parent->cip_number, $body['answers']['parentCipNumber'] ?? null);
+    }
+
+    /** A second firm on the register, for the Add-On opened under the wrong one. */
+    private function secondProvider(): CipProvider
+    {
+        $company = Company::create(['uid' => 'bluemina-addon', 'name' => 'Bluemina']);
+
+        return CipProvider::create(['name' => 'Bluemina', 'code' => 'BLU', 'company_id' => $company->id]);
+    }
+
+    /**
+     * An Add-On belongs to its main application's firm, number and all.
+     *
+     * A draft is opened under whichever firm the form had selected, before
+     * anybody has said which granted file it hangs off. Linking that file
+     * used to move the firm and leave the number: the Add-On sat under
+     * Galaxy wearing BLU-AO-…, a number Bluemina could never issue again.
+     */
+    public function test_an_add_on_draft_takes_its_parents_firm_and_number_when_the_parent_is_named(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+        $bluemina = $this->secondProvider();
+        $yy = now()->format('y');
+
+        $opened = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/draft', [
+                'phase' => Phase::ADD_ON,
+                'providerId' => $bluemina->uuid,
+                'addonType' => AddOn::TYPE_SPOUSE,
+                'firstName' => 'Mei',
+            ])
+            ->assertOk()
+            ->json('draft');
+
+        $this->assertSame("BLU-AO-{$yy}-00001", $opened['number']);
+
+        $linked = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/draft?application='.$opened['id'], [
+                'phase' => Phase::ADD_ON,
+                'providerId' => $bluemina->uuid,
+                'parentCipNumber' => $parent->cip_number,
+                'parentCorNumber' => $parent->cor_number,
+                'addonType' => AddOn::TYPE_SPOUSE,
+                'firstName' => 'Mei',
+            ])
+            ->assertOk()
+            ->json('draft');
+
+        $this->assertSame($opened['id'], $linked['id']);
+        $this->assertSame($parent->provider->uuid, $linked['answers']['providerId']);
+        $this->assertSame("GAL-AO-{$yy}-00001", $linked['number']);
+
+        $row = CipApplication::query()->where('uuid', $opened['id'])->firstOrFail();
+        $this->assertSame($parent->provider_id, $row->provider_id);
+        $this->assertSame($parent->id, $row->parent_application_id);
+
+        // Audited, as the link it was rather than as somebody's transfer.
+        $event = $row->events()->where('action', CipEvent::ACTION_PROVIDER_TRANSFERRED)->sole();
+        $this->assertSame(ProviderTransfer::REASON_PARENT_LINKED, $event->meta['reason']);
+        $this->assertSame("BLU-AO-{$yy}-00001", $event->meta['previousInternalNumber']);
+        $this->assertSame("GAL-AO-{$yy}-00001", $event->meta['internalNumber']);
+        $this->assertContains(
+            $staff->name.' linked the main application, which moved this Add-On from Bluemina to Galaxy; '
+                ."the application number changed from BLU-AO-{$yy}-00001 to GAL-AO-{$yy}-00001",
+            array_column(Timeline::for($row, $staff), 'what'),
+        );
+
+        // Saving again changes nothing more: the select still says Bluemina,
+        // and a linked Add-On follows its parent, not the select.
+        $again = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/draft?application='.$opened['id'], [
+                'phase' => Phase::ADD_ON,
+                'providerId' => $bluemina->uuid,
+                'parentCipNumber' => $parent->cip_number,
+                'parentCorNumber' => $parent->cor_number,
+                'addonType' => AddOn::TYPE_SPOUSE,
+                'firstName' => 'Mei',
+            ])
+            ->assertOk()
+            ->json('draft');
+        $this->assertSame("GAL-AO-{$yy}-00001", $again['number']);
+        $this->assertSame(1, $row->events()->where('action', CipEvent::ACTION_PROVIDER_TRANSFERRED)->count());
+    }
+
+    /**
+     * Named in the first save, the parent decides the firm before a number
+     * is minted at all, so nothing is spent at the firm the select showed.
+     */
+    public function test_a_new_add_on_draft_naming_its_parent_is_numbered_under_the_parents_firm_at_once(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+        $bluemina = $this->secondProvider();
+        $yy = now()->format('y');
+
+        $body = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/draft', [
+                'phase' => Phase::ADD_ON,
+                'providerId' => $bluemina->uuid,
+                'parentCipNumber' => $parent->cip_number,
+                'parentCorNumber' => $parent->cor_number,
+                'addonType' => AddOn::TYPE_SPOUSE,
+                'firstName' => 'Mei',
+            ])
+            ->assertOk()
+            ->json('draft');
+
+        $this->assertSame("GAL-AO-{$yy}-00001", $body['number']);
+        $this->assertSame($parent->provider->uuid, $body['answers']['providerId']);
+        $this->assertSame(
+            "BLU-AO-{$yy}-00001",
+            Applications::create($bluemina, $staff, ['phase' => Phase::ADD_ON])->internal_number,
+            'Bluemina spent no number on an Add-On that was never its own',
+        );
+    }
+
+    /**
+     * Filing is the other door onto the same link. It wrote the parent's
+     * firm a line before the link ran, so the link saw nothing to do: the
+     * Add-On was filed under Galaxy with Bluemina's number, its folder still
+     * in Bluemina's drawer.
+     */
+    public function test_filing_an_add_on_draft_opened_under_another_firm_moves_it_to_its_parents(): void
+    {
+        $staff = $this->staff();
+        $parent = $this->grantedParent($staff);
+        $bluemina = $this->secondProvider();
+        $yy = now()->format('y');
+
+        $draft = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/draft', [
+                'phase' => Phase::ADD_ON,
+                'providerId' => $bluemina->uuid,
+                'addonType' => AddOn::TYPE_SPOUSE,
+                'firstName' => 'Mei',
+                'lastName' => 'Wei',
+            ])
+            ->assertOk()
+            ->json('draft');
+        $this->assertSame("BLU-AO-{$yy}-00001", $draft['number']);
+
+        $filed = $this->file($staff, $this->addOnPayload($parent, [
+            'draftId' => $draft['id'],
+            'providerId' => $bluemina->uuid,
+        ]))
+            ->assertCreated()
+            ->json('application');
+
+        $this->assertSame($draft['id'], $filed['id']);
+        $this->assertSame($parent->provider->uuid, $filed['providerId']);
+        $this->assertSame("GAL-AO-{$yy}-00001", $filed['internalNumber']);
+
+        $row = CipApplication::query()->where('uuid', $draft['id'])->firstOrFail();
+        $this->assertSame($parent->provider_id, $row->provider_id);
+        $this->assertNotSame(Status::DRAFT, $row->status);
+        // Its client is referred by the firm that now holds it.
+        $this->assertSame($parent->provider->company_id, $row->client->referred_by_company_id);
     }
 
     public function test_an_add_on_draft_saves_from_parent_cip_alone_when_cor_is_not_on_file(): void

@@ -1184,11 +1184,95 @@
    * Unit's CIP number is the one a reader corrects, in its own field.
    */
   function internalNumberField() {
-    var number = editingFiled() && state.record ? (state.record.internalNumber || '') : '';
-    if (!number) return '';
+    // Only on a form opened on an application: a brand-new form has no
+    // number until its first save, and a field that pops in under somebody
+    // typing is worse than one that is not there.
+    if (!state.applicationId || !state.record) return '';
 
-    return '<div class="tma-portal-field"><span class="tma-portal-field__label">' + esc(LABELS.internalNumber) + '</span>' +
-      '<p class="tma-portal-field__static">' + esc(number) + '</p></div>';
+    var shown = shownNumber();
+    if (!shown) return '';
+
+    return '<div class="tma-portal-field" data-key="field:internalNumber">' +
+      '<span class="tma-portal-field__label">' + esc(LABELS.internalNumber) + '</span>' +
+      '<p class="tma-portal-field__static" data-cip-number>' + esc(shown) + '</p></div>';
+  }
+
+  /*
+   * The number the application wears, and the firm it was minted under.
+   *
+   * What the server last said: the record the form opened on, or the latest
+   * draft save, which is where a draft's number changes when its firm does.
+   */
+  function numberBasis() {
+    if (state.numbered) return state.numbered;
+    if (state.record && state.record.internalNumber) {
+      return { number: state.record.internalNumber, providerId: state.record.providerId || '' };
+    }
+
+    return null;
+  }
+
+  /*
+   * What the Application number field says right now.
+   *
+   * The number follows the firm, so the moment the select names a firm other
+   * than the one the number was minted under, the old number is no longer
+   * the answer. The next one under the picked firm is asked for and drawn
+   * in its place (see previewNumber); "Assigned on save" stands in only for
+   * the instant before that answer arrives, or when it cannot be had.
+   */
+  function shownNumber() {
+    var basis = numberBasis();
+    if (!basis) return '';
+
+    var picked = state.draft.providerId || '';
+    if (!picked || picked === basis.providerId) return basis.number;
+    if (state.numberPreview && state.numberPreview.providerId === picked) return state.numberPreview.number;
+
+    return 'Assigned on save';
+  }
+
+  /* Rewrite the one node, not the form: this lands while somebody is typing. */
+  function paintNumber() {
+    var node = state.root && state.root.querySelector('[data-cip-number]');
+    if (node) node.textContent = shownNumber();
+  }
+
+  /*
+   * Ask what number the picked firm would give this application, and show it.
+   *
+   * Asked on every change of firm rather than remembered: the answer is the
+   * firm's next free number as of now. It is a preview and reserves nothing;
+   * the save mints the real one, and says so if it came out different.
+   */
+  function previewNumber() {
+    var basis = numberBasis();
+    var picked = state.draft.providerId || '';
+    state.numberPreview = null;
+
+    if (!basis || !state.applicationId || !picked || picked === basis.providerId) {
+      paintNumber();
+
+      return;
+    }
+
+    state.numberAsk = picked;
+    api('GET', '/portal/cip/applications/number-preview?providerId=' + encodeURIComponent(picked) +
+      '&application=' + encodeURIComponent(state.applicationId))
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (json) {
+        // Answered late: the reader has picked again, or left the form.
+        if (!json || !json.number || state.numberAsk !== picked || state.draft.providerId !== picked) return;
+        state.numberPreview = { providerId: picked, number: json.number };
+        paintNumber();
+      })
+      .catch(function () { /* "Assigned on save" stays, and is true. */ });
+  }
+
+  /* On a filed application: has the reader picked a firm other than its own? */
+  function providerChanged() {
+    return editingFiled() && !!state.draft.providerId && !!state.record.providerId &&
+      state.draft.providerId !== state.record.providerId;
   }
 
   function investmentCard() {
@@ -1647,8 +1731,11 @@
         // finished date (type 2 → 0002-09-10). Re-rendering there wipes the
         // year buffer, so 2004 lands as 0004. Wait until the year looks like
         // a birth year, or until they leave the field.
-        if (/countryOfResidence$|investmentType$|sponsored$|relationship$|gender$|addonType$|nationality$/.test(path)) {
+        if (/countryOfResidence$|investmentType$|sponsored$|relationship$|gender$|addonType$|nationality$|^providerId$/.test(path)) {
           if (path === 'investmentType') state.draft.investmentTypeOther = '';
+          // The number follows the firm: ask for the picked firm's next one
+          // now, so it is on screen before the reader has moved on.
+          if (path === 'providerId') previewNumber();
           if (path === 'addonType') {
             if (el.value === 'spouse') state.draft.relationship = 'spouse';
             else if (state.draft.relationship === 'spouse') state.draft.relationship = '';
@@ -2405,6 +2492,14 @@
       // server refuses one on a pre-approval file, and a reader who was never
       // offered the field must not post the value the record came with.
       if (path === 'cipNumber' && !showsCipNumber()) return;
+      /*
+       * On a filed application the firm goes up only when the reader
+       * changed it. The form used to post the firm it was opened with on
+       * every save, and to the server a firm that differs from the file's
+       * is a transfer: a form left open while a colleague moved the file
+       * would move it straight back, and burn a number doing it.
+       */
+      if (path === 'providerId' && editingFiled() && !providerChanged()) return;
       out.push({ name: bracketed(path), value: value });
     });
 
@@ -2989,6 +3084,19 @@
         rememberPersonIds(json.draft);
         if (json.draft && json.draft.id && !state.applicationId) {
           state.draftId = json.draft.id;
+        }
+        /*
+         * A draft's number is the server's to say, and it changes with the
+         * firm: this save is where a draft that named another firm was
+         * numbered under it. Kept, and drawn into the one node that shows
+         * it, so the preview the reader was looking at becomes the fact.
+         */
+        if (json.draft && json.draft.number) {
+          state.numbered = {
+            number: json.draft.number,
+            providerId: (json.draft.answers && json.draft.answers.providerId) || state.draft.providerId || '',
+          };
+          paintNumber();
         }
         /*
          * Recompute after ids landed so the next "unchanged" check includes
@@ -3764,6 +3872,9 @@
     state.allowDuplicate = false;
     state.allowUnmatchedParent = false;
     state.outcome = null;
+    state.numbered = null;
+    state.numberPreview = null;
+    state.numberAsk = null;
     if (state.draftTimer) { clearTimeout(state.draftTimer); state.draftTimer = null; }
     state.draftSaving = false;
     state.draftDirty = false;

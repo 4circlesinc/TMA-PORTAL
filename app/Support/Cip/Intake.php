@@ -1161,9 +1161,13 @@ class Intake
      * contain. Without this an autosave still running in a stale tab could
      * quietly overwrite a live application with a half-typed form.
      */
-    public static function updateDraft(CipApplication $application, User $actor, array $data): CipApplication
-    {
-        return DB::transaction(function () use ($application, $actor, $data) {
+    public static function updateDraft(
+        CipApplication $application,
+        User $actor,
+        array $data,
+        ?CipProvider $provider = null,
+    ): CipApplication {
+        return DB::transaction(function () use ($application, $actor, $data, $provider) {
             /*
              * Two autosaves in flight used to both read the same people list,
              * both mint new dependents, and leave Suha with two Ahmeds. Lock
@@ -1184,9 +1188,98 @@ class Intake
             }
 
             self::saveDraftAnswers($application, $actor, $data);
+            // After the answers: an Add-On's parent is linked by them, and
+            // a linked Add-On follows its parent rather than the select.
+            self::followFormProvider($application, $actor, $provider);
 
             return $application->fresh();
         });
+    }
+
+    /**
+     * A draft is filed under the firm its form names.
+     *
+     * The wizard has always offered the Service provider select on a draft,
+     * and the first autosave has always honoured it. Every save after that
+     * dropped the answer: a reader who changed their mind went on being
+     * shown the firm they had picked while the row, its number and its
+     * folder stayed with the first one, and filing filed it there. The
+     * select is the reader's answer until the application is filed, so the
+     * draft follows it, firm, number and folder together.
+     *
+     * Drafts only. A filed application changes firm through
+     * {@see ProviderTransfer::transfer}, which asks for an administrator.
+     * And not an Add-On whose main application is known: that one belongs
+     * to its parent's firm whatever the select says ({@see adoptParentFirm}).
+     *
+     * `$provider` is already one this reader may file under: both callers
+     * resolve it through {@see providersFor}.
+     */
+    private static function followFormProvider(CipApplication $application, User $actor, ?CipProvider $provider): void
+    {
+        if ($provider === null
+            || ! $provider->active
+            || $application->status !== Status::DRAFT
+            || (int) $application->provider_id === (int) $provider->id) {
+            return;
+        }
+
+        if ($application->isAddOn() && $application->parent_application_id !== null) {
+            return;
+        }
+
+        Providers::ensureFolder($provider);
+        $provider->refresh();
+
+        ProviderTransfer::rehome($application, $provider, $actor, [
+            'reason' => ProviderTransfer::REASON_DRAFT_FORM,
+        ]);
+
+        // The move was written on a locked copy of the row; what the caller
+        // is holding has to see the new firm and the new number too.
+        $application->refresh();
+    }
+
+    /**
+     * An Add-On belongs to its main application's firm.
+     *
+     * A draft is opened under whichever firm the form had selected, before
+     * anybody has said which granted file it hangs off. Once that file is
+     * known the Add-On moves to its firm for real: provider_id alone left
+     * the number wearing the first firm's code and, on the filing path, the
+     * client folder under the first firm's drawer. One move, through the
+     * same door an administrator's transfer uses, so the firm, the number,
+     * the folder and the audit row agree.
+     */
+    private static function adoptParentFirm(CipApplication $application, CipApplication $parent, ?User $actor): void
+    {
+        $parent->loadMissing('provider');
+        $firm = $parent->provider;
+
+        if ($firm === null) {
+            // The parent's firm has been taken off the register. Keep the
+            // two rows on the same provider, as before; there is no live
+            // firm to number the Add-On under.
+            if ((int) $application->provider_id !== (int) $parent->provider_id) {
+                $application->forceFill(['provider_id' => $parent->provider_id])->save();
+            }
+
+            return;
+        }
+
+        if ((int) $application->provider_id !== (int) $firm->id) {
+            Providers::ensureFolder($firm);
+            $firm->refresh();
+
+            ProviderTransfer::rehome($application, $firm, $actor, [
+                'reason' => ProviderTransfer::REASON_PARENT_LINKED,
+            ]);
+
+            $application->refresh();
+            $application->setRelation('parent', $parent);
+        }
+
+        $application->setRelation('provider', $firm);
     }
 
     /**
@@ -1200,8 +1293,12 @@ class Intake
      *
      * @param  array<string, mixed>  $data  already validated by self::rules()
      */
-    public static function fileDraft(CipApplication $application, User $actor, array $data): CipApplication
-    {
+    public static function fileDraft(
+        CipApplication $application,
+        User $actor,
+        array $data,
+        ?CipProvider $provider = null,
+    ): CipApplication {
         if ($application->status !== Status::DRAFT) {
             throw new \RuntimeException('This application has been filed and is no longer a draft.');
         }
@@ -1212,8 +1309,13 @@ class Intake
         }
 
         if ($phase === Phase::ADD_ON || ($application->phase ?? '') === Phase::ADD_ON) {
-            return self::fileAddOnDraft($application, $actor, $data);
+            return self::fileAddOnDraft($application, $actor, $data, $provider);
         }
+
+        // Filed under the firm the form names, which may not be the one the
+        // first autosave opened it under. Before the answers are written, so
+        // the application lands on its lane already wearing its number.
+        self::followFormProvider($application, $actor, $provider);
 
         $application = self::update($application, $actor, $data);
 
@@ -1242,8 +1344,12 @@ class Intake
      * completing the row, and the parent named on the form must land on it
      * the same way {@see createAddOn} would on a first-sitting Add.
      */
-    private static function fileAddOnDraft(CipApplication $application, User $actor, array $data): CipApplication
-    {
+    private static function fileAddOnDraft(
+        CipApplication $application,
+        User $actor,
+        array $data,
+        ?CipProvider $provider = null,
+    ): CipApplication {
         $parent = self::requireAddOnParent($actor, $data, $application->id);
         $data = self::normaliseAddOnPerson($data);
         if ($mismatch = AddOn::typeMismatch(
@@ -1254,7 +1360,7 @@ class Intake
             throw new \InvalidArgumentException($mismatch);
         }
 
-        DB::transaction(function () use ($application, $actor, $data, $parent) {
+        DB::transaction(function () use ($application, $actor, $data, $parent, $provider) {
             $application = CipApplication::query()
                 ->whereKey($application->id)
                 ->lockForUpdate()
@@ -1264,6 +1370,15 @@ class Intake
                 throw new \RuntimeException('This application has been filed and is no longer a draft.');
             }
 
+            /*
+             * The parent's firm is NOT written here with the rest.
+             *
+             * It used to be, a line before the link ran, so the link found
+             * the firm already in place and skipped everything a change of
+             * firm means: the Add-On was filed under the parent's firm
+             * wearing the first firm's number, with its folder still in the
+             * first firm's drawer. adoptParentFirm below is the one move.
+             */
             $fill = [
                 'phase' => Phase::ADD_ON,
                 'parent_application_id' => $parent?->id,
@@ -1271,7 +1386,6 @@ class Intake
                 'sponsored' => false,
             ];
             if ($parent) {
-                $fill['provider_id'] = $parent->provider_id;
                 $fill['investment_type'] = $parent->investment_type;
                 $fill['investment_type_other'] = $parent->investment_type_other;
             }
@@ -1281,14 +1395,17 @@ class Intake
             self::retainTypedAddOnParent($application, $data);
             if ($parent) {
                 $application->setRelation('parent', $parent);
-                if ($parent->provider) {
-                    $application->setRelation('provider', $parent->provider);
-                }
+                self::adoptParentFirm($application, $parent, $actor);
             } else {
                 $application->unsetRelation('parent');
             }
 
             self::saveAddOnDraftAnswers($application, $actor, $data);
+
+            // No main application on file: the select is the only answer
+            // there is to whose Add-On this is. (A no-op once a parent has
+            // been linked, by the lines above or by the answers.)
+            self::followFormProvider($application, $actor, $provider);
         });
 
         $application = $application->fresh();
@@ -2695,31 +2812,17 @@ class Intake
             $parent->forceFill(['cor_number' => $cor])->save();
         }
 
-        $previousProviderId = $application->provider_id;
-
-        $application->forceFill([
-            'parent_application_id' => $parent->id,
-            'provider_id' => $parent->provider_id,
-        ])->save();
+        $application->forceFill(['parent_application_id' => $parent->id])->save();
         $application->setRelation('parent', $parent);
-        if ($parent->provider) {
-            $application->setRelation('provider', $parent->provider);
-        }
 
         /*
-         * Inherit the parent's firm for real: provider_id alone leaves the
-         * client Dropbox under whoever the draft first opened as. Move the
-         * folder when the firm changes so Supporting Documents and the rest
-         * land under the right Citizenship Applications drawer.
+         * Inherit the parent's firm for real: provider_id alone left the
+         * client Dropbox under whoever the draft first opened as, and the
+         * number wearing that firm's code. The firm, the number and the
+         * folder move together, so Supporting Documents and the rest land
+         * under the right Citizenship Applications drawer.
          */
-        if ($parent->provider
-            && (int) $previousProviderId !== (int) $parent->provider_id) {
-            Providers::ensureFolder($parent->provider);
-            $parent->provider->refresh();
-            $application->loadMissing(['client.folder', 'people']);
-            Tree::client($application, $actor);
-            ProviderTransfer::reparentClientFolder($application, $parent->provider);
-        }
+        self::adoptParentFirm($application, $parent, $actor);
     }
 
     /**

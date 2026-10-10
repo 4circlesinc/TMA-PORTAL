@@ -498,6 +498,13 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // Above `{uuid}`: "unread" is the menu badge, not an application id.
         Route::get('/applications/unread', [CipApplicationController::class, 'unread'])
             ->name('applications.unread');
+        /*
+         * The number a firm would give an application, shown the moment
+         * the reader picks that firm. Above the wildcard like its
+         * neighbours; read-only, the save is what mints.
+         */
+        Route::get('/applications/number-preview', [CipApplicationController::class, 'numberPreview'])
+            ->name('applications.number-preview');
         Route::get('/applications', [CipApplicationController::class, 'index'])->name('applications.index');
         Route::post('/applications', [CipApplicationController::class, 'store'])->name('applications.store');
         Route::get('/applications/{uuid}', [CipApplicationController::class, 'show'])->name('applications.show');

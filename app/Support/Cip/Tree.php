@@ -1072,6 +1072,49 @@ class Tree
         FolderProvisioner::syncClientFolderName($client);
     }
 
+    /**
+     * Keep a client that is still named after the file in step with its number.
+     *
+     * An application whose applicant has no name yet is given a hub client
+     * called "Application GAL26-00001", and a folder of the same name. When
+     * the number changes with the firm that label would go on naming a
+     * number the file no longer wears, in the table's Contact column and in
+     * the library, until somebody types a name.
+     *
+     * Matched on this application's own previous number and nothing looser.
+     * A client can be shared by two applications, and a pattern would rename
+     * one application's stand-in for the other's move. A client somebody has
+     * named, and one named for the Unit's CIP number, are left alone.
+     */
+    public static function followNumber(CipApplication $application, string $previousNumber): void
+    {
+        $application->loadMissing('client');
+        $client = $application->client;
+
+        if (! $client || $previousNumber === '') {
+            return;
+        }
+
+        $prefix = $application->isAddOn() ? 'Add-On ' : 'Application ';
+
+        if (strcasecmp(trim((string) $client->name), $prefix.$previousNumber) !== 0) {
+            return;
+        }
+
+        $name = $prefix.$application->displayNumber();
+
+        if ($name === $client->name) {
+            return;
+        }
+
+        $client->forceFill([
+            'name' => $name,
+            'initial' => Str::upper(Str::substr($name, 0, 1)),
+        ])->save();
+
+        FolderProvisioner::syncClientFolderName($client);
+    }
+
     /** Was this client minted as a stand-in for the file number? */
     private static function clientNameIsFileFallback(Client $client, CipApplication $application): bool
     {

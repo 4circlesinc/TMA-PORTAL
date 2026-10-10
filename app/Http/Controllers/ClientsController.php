@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CipApplication;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyMember;
@@ -24,6 +25,7 @@ use App\Support\Realtime\Live;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 /**
  * The firm's client directory (the "Client hub"). Staff-facing: administrators
@@ -320,6 +322,8 @@ class ClientsController extends Controller
             $data['companyId'] = $client->companyRecord?->uid;
         }
 
+        $this->refuseApplicantReferralChange($client, $data);
+
         $client->fill($this->columns($uid, $data, $client->creator));
         $client->save();
 
@@ -477,6 +481,52 @@ class ClientsController extends Controller
             'data' => $profile,
             'created_by' => $creator?->id,
         ];
+    }
+
+    /**
+     * A CIP applicant's referrer is the firm that holds their application.
+     *
+     * "Referred by" on this form and "Referred by" on the application are
+     * the same sentence, but only the application's is the fact: changing
+     * it there moves the file, its folder and its number to the new firm
+     * ({@see \App\Support\Cip\ProviderTransfer}), and the next save of the
+     * application writes that firm back here. A change made on this form
+     * instead used to be accepted, opened the client's folder to the new
+     * firm's contacts in the meantime, left the application and its number
+     * exactly where they were, and was then silently undone. Refusing it
+     * says where the change belongs.
+     *
+     * Only a CHANGE is refused. The form posts the referral it was given on
+     * every save, so it is compared as the form saw it: a referrer that has
+     * since been deleted reads as "No referral" on both sides, and editing
+     * a name is never turned away over a referral nobody touched.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function refuseApplicantReferralChange(Client $client, array $data): void
+    {
+        $posted = $this->resolveReferral($data);
+
+        $referrer = $client->referral_type === Client::REFERRAL_COMPANY && $client->referred_by_company_id
+            ? Company::find($client->referred_by_company_id)
+            : null;
+        $shown = match (true) {
+            $referrer !== null => ['type' => Client::REFERRAL_COMPANY, 'company_id' => $referrer->id],
+            $client->referral_type === Client::REFERRAL_PRIVATE => ['type' => Client::REFERRAL_PRIVATE, 'company_id' => null],
+            default => ['type' => Client::REFERRAL_NONE, 'company_id' => null],
+        };
+
+        if ($posted['type'] === $shown['type'] && (int) $posted['company_id'] === (int) $shown['company_id']) {
+            return;
+        }
+
+        if (! CipApplication::query()->where('client_id', $client->id)->exists()) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'referralType' => 'Change the service provider on the application; Referred by follows it.',
+        ]);
     }
 
     /**
