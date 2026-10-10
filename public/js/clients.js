@@ -3053,6 +3053,11 @@
     // Which lane the rows currently held actually belong to, so a miss can
     // tell "not fetched yet" from "fetched, and this is it".
     laneShown: null,
+    // Which list the rows on screen are a page of (applicationSliceFor), and
+    // whether they are being re-read behind the reader's back rather than
+    // loaded for the first time. See syncApplicationTableForPaint.
+    shownSlice: null,
+    quiet: false,
     expanded: {},
   };
 
@@ -3512,6 +3517,19 @@
   }
 
   /*
+   * Which list the rows on screen are a page of: the tab, the search, the
+   * filters and the page number, in whatever order they happen to be.
+   *
+   * The key above says whether the rows held are current. This says whether
+   * they are at least the right rows to leave up while the current ones are
+   * fetched, which is a looser question: a colleague's change makes them
+   * stale, but they are still this list and not another tab's.
+   */
+  function applicationSliceFor(state) {
+    return applicationTableKeyFor(applicationPhaseForTab(state), state.search || '', APP_TABLE.page, '', '');
+  }
+
+  /*
    * Whether ordering has to be asked of the server.
    *
    * A lane that fits in one page is sorted here, from the sortKeys each row
@@ -3623,11 +3641,37 @@
     if (!onApplicationsTable(state)) return;
     var lane = applicationPhaseForTab(state);
     var key = applicationTableKey(state);
-    if (APP_TABLE.loadedKey === key) return;
+    var slice = applicationSliceFor(state);
+    if (APP_TABLE.loadedKey === key) {
+      APP_TABLE.shownSlice = slice;
+      APP_TABLE.quiet = false;
+      return;
+    }
 
     var held = APP_TABLE.cache[key];
     if (held) {
       applyCachedApplicationPage(held, lane, key);
+      APP_TABLE.shownSlice = slice;
+      APP_TABLE.quiet = false;
+      return;
+    }
+
+    /*
+     * Nothing current is held, but what is on screen is this same list, gone
+     * stale: a colleague moved a file, a message arrived, the reader saved
+     * something. It stays up while the fresh page is fetched, and the answer
+     * is patched over it.
+     *
+     * Blanking here is what made the table "refresh at random". Every signal
+     * emptied it to the skeleton and drew it again a moment later, under
+     * someone reading it, taking their place in the list with it, and the
+     * signals come from the whole firm's work rather than from anything the
+     * reader did. An empty list is left up the same way: it is still the
+     * answer until the next one says otherwise.
+     */
+    if (APP_TABLE.shownSlice === slice && !APP_TABLE.error) {
+      APP_TABLE.laneShown = lane;
+      APP_TABLE.quiet = true;
       return;
     }
 
@@ -3638,6 +3682,8 @@
     APP_TABLE.lastPage = 1;
     APP_TABLE.loading = true;
     APP_TABLE.laneShown = lane;
+    APP_TABLE.shownSlice = null;
+    APP_TABLE.quiet = false;
   }
 
   /*
@@ -3729,9 +3775,12 @@
       APP_TABLE.loadingKey = key;
       APP_TABLE.loading = true;
       APP_TABLE.error = null;
-      APP_TABLE.rows = [];
-      APP_TABLE.total = 0;
-      APP_TABLE.lastPage = 1;
+      // A quiet refresh keeps what it is refreshing on screen.
+      if (!APP_TABLE.quiet) {
+        APP_TABLE.rows = [];
+        APP_TABLE.total = 0;
+        APP_TABLE.lastPage = 1;
+      }
       APP_TABLE.laneShown = lane;
       return;
     }
@@ -3839,7 +3888,12 @@
       })
       .catch(function (err) {
         if (APP_TABLE.fetchGen !== gen || APP_TABLE.loadingKey !== key) return;
-        APP_TABLE.error = (err && err.message) || 'Could not load applications.';
+        // A refresh nobody asked for that fails keeps the table it was
+        // refreshing: a working list is not replaced by an error because one
+        // background read timed out. The next signal asks again.
+        if (!APP_TABLE.quiet) {
+          APP_TABLE.error = (err && err.message) || 'Could not load applications.';
+        }
         APP_TABLE.loadedKey = key;
       })
       .then(function () {
@@ -3863,10 +3917,22 @@
     APP_TABLE.cache = {};
     // Rows added or removed move the page counts these were measured from.
     APP_TABLE.lanePages = {};
-    // The rows held are stale too, so the next miss must clear them rather
-    // than treat them as this lane's and paint them on.
+    // The rows held are stale too, so the next miss must not treat them as
+    // any lane's. Whether they stay up while the fresh ones are fetched is
+    // decided at paint (syncApplicationTableForPaint): only if they are the
+    // very list being painted.
     APP_TABLE.laneShown = null;
     APP_TABLE.fetchGen += 1;
+
+    /*
+     * And only a table somebody is looking at. Away from it there is nobody
+     * to disturb, and coming back to rows already known to be out of date,
+     * often by the reader's own change on the file they just left, is worse
+     * than the moment of skeleton it would save.
+     */
+    if (!(clientsMountState && onApplicationsTable(clientsMountState) && clientsViewShowing())) {
+      APP_TABLE.shownSlice = null;
+    }
   }
 
   /*
@@ -4173,8 +4239,12 @@
     return cipStatusChip(a);
   }
 
-  function renderApplicationTableMemberRow(a, member) {
-    return '<tr class="tma-cip-table__member-row" data-cip-open-member="' + esc(a.clientUid || '') + '"' +
+  function renderApplicationTableMemberRow(a, member, index) {
+    return '<tr class="tma-cip-table__member-row"' +
+      // Keyed like the row it hangs under, or a keyed neighbour above it
+      // would have every member row rebuilt on each paint.
+      ' data-key="app:' + esc(a.id) + ':member:' + esc((member && member.id) || index) + '"' +
+      ' data-cip-open-member="' + esc(a.clientUid || '') + '"' +
       ' data-cip-app="' + esc(a.id) + '"' +
       ' data-cip-profile-tab="' + esc(member.profileTab || 'applicant') + '">' +
       '<td></td>' +
@@ -4202,7 +4272,13 @@
       ? postApprovalProgressCell(a, members, expanded)
       : cipStatusChip(a);
 
-    var html = '<tr data-cip-open="' + esc(a.clientUid || '') + '" data-cip-app="' + esc(a.id) + '"' +
+    /*
+     * Keyed by the application, so a live update moves or adds a row instead
+     * of rewriting every row beneath it. Unkeyed, the morph pairs rows by
+     * position: one new file at the top redrew the whole table, each face
+     * reloading, to say that one line had been added.
+     */
+    var html = '<tr data-key="app:' + esc(a.id) + '" data-cip-open="' + esc(a.clientUid || '') + '" data-cip-app="' + esc(a.id) + '"' +
       // A draft is an application still being typed, so its row goes back to
       // the form rather than to a profile that has nothing filled in yet.
       (a.status === 'draft' ? ' data-cip-draft="1"' : '') + '>' +
@@ -4228,8 +4304,8 @@
       '</tr>';
 
     if (expanded && members.length) {
-      html += members.map(function (member) {
-        return renderApplicationTableMemberRow(a, member);
+      html += members.map(function (member, index) {
+        return renderApplicationTableMemberRow(a, member, index);
       }).join('');
     }
 
@@ -4271,7 +4347,7 @@
     var progressCell = cipStatusChip(a);
     var submitted = a.submittedAt ? fmtShortDate(a.submittedAt) : '';
 
-    return '<tr data-cip-open="' + esc(a.clientUid || '') + '" data-cip-app="' + esc(a.id) + '"' +
+    return '<tr data-key="app:' + esc(a.id) + '" data-cip-open="' + esc(a.clientUid || '') + '" data-cip-app="' + esc(a.id) + '"' +
       (a.status === 'draft' ? ' data-cip-draft="1"' : '') + '>' +
       '<td><span class="tma-cip-table__number">' + esc(a.number || a.internalNumber || '-') + '</span>' +
       applicationNumberSubline(a) + '</td>' +
@@ -4302,7 +4378,7 @@
 
     var headers = applicationTableHeaders(state);
 
-    if (APP_TABLE.loading && !APP_TABLE.rows.length) {
+    if (APP_TABLE.loading && !APP_TABLE.rows.length && !APP_TABLE.quiet) {
       return ui.table(headers, applicationTableSkeleton(state), {
         cls: 'tma-cip-table',
       });
@@ -5112,7 +5188,8 @@
       // The table says its own piece when the request fails; a number beside
       // that message would be a second, quieter claim about the same failure.
       if (APP_TABLE.error) return '';
-      if (APP_TABLE.loadedKey === null || APP_TABLE.loading) return clientsCountSkeleton();
+      // A quiet refresh keeps the number it is about to correct.
+      if (!APP_TABLE.quiet && (APP_TABLE.loadedKey === null || APP_TABLE.loading)) return clientsCountSkeleton();
 
       var apps = APP_TABLE.total || 0;
 

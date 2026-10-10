@@ -356,6 +356,38 @@ field placement and drawing, and computed CSS only exist in a browser.
   # File one application as the admin through the wizard (cip-application-full.mjs does), then:
   TMA_BASE_URL=http://127.0.0.1:8933 TMA_STAFF_EMAIL=rita@example.com TMA_APP=<uuid> node tests/Browser/cip-edit-reload.mjs
   ```
+- **`cip-table-quiet.mjs`** — the applications table catches up without being
+  redrawn. Every CIP signal used to drop the held rows, paint the loading
+  skeleton and draw the table again, under whoever was reading it; the signals
+  are the whole firm's work, so it looked like a table refreshing at random.
+  The assertions are about elements rather than text, because a rebuilt table
+  reads the same: each row is stamped before the signal and looked for after,
+  a MutationObserver counts any skeleton, and the listing is slowed to 900ms so
+  the wait can be watched. Pins a signal with nothing changed, a colleague
+  filing one application and moving another (one new row, the rest the same
+  elements), the unread-message event, a background read that fails (the table
+  stays), and a search, which is a new list and must still load as one.
+
+  Wants a dozen or more applications with a main applicant each, so there is
+  something to scroll, plus `rita@example.com` as a Reviewing Officer:
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FEATURE_CIP=true php artisan tinker --execute="
+    \$admin = App\Models\User::where('email', 'e2e@example.com')->first();
+    \$c = App\Models\Company::create(['uid' => 'galaxy', 'name' => 'Galaxy', 'created_by' => \$admin->id]);
+    \$p = App\Models\CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL', 'company_id' => \$c->id]);
+    foreach (range(1, 16) as \$i) {
+      \$a = App\Support\Cip\Applications::create(\$p, \$admin);
+      App\Models\CipPerson::create(['application_id' => \$a->id, 'role' => 'main_applicant', 'first_name' => 'Person', 'last_name' => 'Number'.\$i]);
+    }
+  "
+  : > storage/logs/laravel.log
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FEATURE_CIP=true FILES_DISK=local \
+    MAIL_MAILER=log CACHE_STORE=array SESSION_DRIVER=file QUEUE_CONNECTION=sync BROADCAST_CONNECTION=log \
+    php artisan serve --host=127.0.0.1 --port=8941 --no-reload &
+  npm run build   # the served shell uses public/build; a stale bundle tests the old code
+  TMA_DB="$DB" TMA_BASE_URL=http://127.0.0.1:8941 node tests/Browser/cip-table-quiet.mjs
+  ```
 - **`cip-application-full.mjs`** — a whole family, filed and read back.
   `cip-intake.mjs` pins that the form is wired to the endpoint; this pins what
   the endpoint *leaves behind*, which is where the parts that only exist after
