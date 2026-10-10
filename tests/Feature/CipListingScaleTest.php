@@ -355,6 +355,113 @@ class CipListingScaleTest extends TestCase
         );
     }
 
+    /*
+     * The page reads what its rows draw, and no more.
+     *
+     * The guards above count query shapes, and by that measure loading every
+     * document of every person on the page is perfect: it is two queries
+     * whatever the page holds. It was also sixteen thousand documents and
+     * eleven thousand files to draw eighty-five lines on All Applications,
+     * twenty times the cost of the Pre-Approval tab, because a family row is
+     * only drawn for a post-approval file and reads one file per person.
+     * So this one counts what was loaded, not how many times it was asked.
+     */
+    public function test_the_unfiltered_tab_loads_only_the_documents_its_family_rows_draw(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+        $pre = $this->applications($staff, $provider, 4, Phase::PRE_APPROVAL);
+        $post = $this->applications($staff, $provider, 2, Phase::POST_APPROVAL);
+
+        $folder = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Loaded scale papers',
+            'owner_id' => $staff->id,
+            'created_by' => $staff->id,
+            'folder_type' => Folder::TYPE_CLIENT,
+        ]);
+
+        $file = fn (string $name) => FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'folder_id' => $folder->id,
+            'owner_id' => $staff->id,
+            'name' => $name,
+            'extension' => 'jpg',
+            'mime_type' => 'image/jpeg',
+            'size' => 2048,
+            'disk' => 'local',
+            'storage_path' => 'tests/loaded-'.$name,
+        ]);
+
+        // In both lanes, every person: a photo, a second paper that is filed,
+        // and a third that is not.
+        foreach (array_merge($pre, $post) as $application) {
+            CipPerson::create([
+                'application_id' => $application->id,
+                'role' => CipPerson::ROLE_DEPENDENT,
+                'first_name' => 'Child',
+                'last_name' => 'Row',
+                'date_of_birth' => '2015-01-01',
+                'dependent_ordinal' => 1,
+            ]);
+
+            foreach ($application->people()->get() as $person) {
+                foreach ([
+                    [DocumentTypes::PASSPORT_PHOTO, true],
+                    ['birth_certificate', true],
+                    ['police_certificate', false],
+                ] as [$type, $filed]) {
+                    CipDocument::create([
+                        'uuid' => (string) Str::uuid(),
+                        'application_id' => $application->id,
+                        'person_id' => $person->id,
+                        'type' => $type,
+                        'label' => $type,
+                        'required' => true,
+                        'file_id' => $filed ? $file($type.'-'.$person->id.'.jpg')->id : null,
+                    ]);
+                }
+            }
+        }
+
+        $this->actingAs($staff);
+
+        // Rows that are a document or a file, as opposed to the grouped
+        // counts the checklist tally reads through the same model.
+        $documents = 0;
+        $files = 0;
+        CipDocument::retrieved(function (CipDocument $slot) use (&$documents) {
+            $documents += $slot->getKey() === null ? 0 : 1;
+        });
+        FileItem::retrieved(function (FileItem $file) use (&$files) {
+            $files += $file->getKey() === null ? 0 : 1;
+        });
+
+        $rows = collect(
+            $this->getJson('/portal/cip/applications?perPage=150')->assertOk()->json('applications')
+        )->keyBy('id');
+
+        // Two post-approval files of two people: three slots each, and the one
+        // file a row can show. Not the thirty-six slots and twenty-four files
+        // the twelve people on the page hold between them.
+        $this->assertSame(12, $documents, 'The page loaded documents for people whose rows do not draw them.');
+        $this->assertSame(4, $files, 'The page loaded files other than the passport photos it draws.');
+
+        // And the rows still say what they said.
+        $this->assertSame([], $rows[$pre[0]->uuid]['familyMembers']);
+
+        $family = $rows[$post[0]->uuid]['familyMembers'];
+        $this->assertCount(2, $family);
+
+        foreach ($family as $member) {
+            $this->assertSame(3, $member['docTotal']);
+            $this->assertSame(2, $member['docFiled']);
+            $this->assertSame(1, $member['docPending']);
+            $this->assertStringContainsString('/portal/files/', (string) $member['photo']);
+            $this->assertStringContainsString('/portal/files/', (string) $member['passportPhotoUrl']);
+        }
+    }
+
     public function test_a_sort_or_page_change_does_not_recount_the_whole_table(): void
     {
         $staff = $this->staff();

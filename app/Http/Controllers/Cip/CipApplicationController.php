@@ -887,15 +887,12 @@ class CipApplicationController extends Controller
                  * show their own document progress in an expandable row.
                  */
                 /*
-                 * With each slot's FILE, as the sync endpoint and record()
-                 * already load it. The expandable row draws every member's
-                 * passport photo off the filed slot, and without the file
-                 * loaded that walk was one `select * from files where id = ?`
-                 * per person - invisible on seed data with no photos filed,
-                 * and three queries a row on the real post-approval list.
+                 * The people only. What an expandable row reads off their
+                 * documents is loaded for the page afterwards, by
+                 * loadFamilyDocuments(), and only for the files that draw one.
                  */
                 'people' => $postApprovalList
-                    ? fn ($q) => $q->with('documents.file')->orderBy('id')
+                    ? fn ($q) => $q->orderBy('id')
                     : fn ($q) => $q->where('role', CipPerson::ROLE_MAIN_APPLICANT),
                 'parent.people' => fn ($q) => $q->where('role', CipPerson::ROLE_MAIN_APPLICANT),
                 'parent.client:id,name',
@@ -1002,6 +999,8 @@ class CipApplicationController extends Controller
         $this->applyListSort($query, $data['sort'] ?? null, $data['dir'] ?? null);
 
         $page = $query->paginate($perPage, ['*'], 'page', $data['page'] ?? 1);
+
+        $this->loadFamilyDocuments($page->items());
 
         // Measured for the whole page at once, then handed to each row: the
         // dot on an applicant's face costs one query per table draw, not one
@@ -1511,6 +1510,69 @@ class CipApplicationController extends Controller
             ),
             'relationship' => $lower($main?->relationship),
         ];
+    }
+
+    /**
+     * What the expandable family rows on this page read, and nothing more.
+     *
+     * A family row is drawn for a post-approval file and for no other, and
+     * it reads three things off a person's documents: which slots there are,
+     * which are filled, and the file behind the passport photo.
+     *
+     * The listing used to eager-load `people.documents.file` for the whole
+     * page instead: every document of every person on every application, and
+     * a full `files` row behind each. On All Applications, the tab the page
+     * opens on, that was some sixteen thousand documents and eleven thousand
+     * files to draw eighty-five lines, most of them for pre-approval files
+     * whose rows do not expand at all. It was twenty times the cost of the
+     * Pre-Approval tab for the same table, and it is why the table sat on its
+     * skeleton.
+     *
+     * So: the slots as five narrow columns, for the people who are drawn, and
+     * the one file each of them can show. Still a fixed number of queries
+     * whatever the page holds.
+     *
+     * @param  array<int, CipApplication>  $applications
+     */
+    private function loadFamilyDocuments(array $applications): void
+    {
+        $people = collect($applications)
+            ->filter(fn ($application) => $application->relationLoaded('people')
+                && ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL)
+            ->flatMap(fn ($application) => $application->people);
+
+        if ($people->isEmpty()) {
+            return;
+        }
+
+        $slots = CipDocument::query()
+            ->whereIn('person_id', $people->pluck('id'))
+            ->orderBy('id')
+            ->get(['id', 'person_id', 'requirement_id', 'type', 'file_id'])
+            ->groupBy('person_id');
+
+        $photoFileIds = $slots->flatten(1)
+            ->where('type', DocumentTypes::PASSPORT_PHOTO)
+            ->pluck('file_id')
+            ->filter()
+            ->unique();
+
+        // Trashed too, as the slot's own relation reads it.
+        $photos = $photoFileIds->isEmpty()
+            ? collect()
+            : FileItem::withTrashed()->whereIn('id', $photoFileIds)->get()->keyBy('id');
+
+        foreach ($people as $person) {
+            $own = $slots->get($person->id) ?? (new CipDocument)->newCollection();
+
+            foreach ($own as $slot) {
+                if ($slot->type === DocumentTypes::PASSPORT_PHOTO) {
+                    $slot->setRelation('file', $slot->file_id ? $photos->get($slot->file_id) : null);
+                }
+            }
+
+            $person->setRelation('documents', $own);
+        }
     }
 
     /**

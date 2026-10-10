@@ -3739,12 +3739,104 @@
           };
           APP_TABLE.cache[key] = page;
           APP_TABLE.lanePages[phase || ''] = page.lastPage;
+          // A default view by construction, so it is kept for the next start.
+          storeApplicationPage('cip:applications:v1:' + key, page);
           // Click landed while this was still coming: paint it, no second trip.
           adoptPrefetchedApplicationPage(key, phase, page);
         })
         .catch(function () {})
         .then(function () { delete APP_TABLE.prefetching[key]; });
     });
+  }
+
+  /*
+   * The last answer for a tab, kept in the portal's store.
+   *
+   * Only each tab as it opens - no search, no filters, first page - which is
+   * what a reader sees on arriving and the only view worth holding. On the
+   * desktop the store is on disk, so the table is there when the app starts;
+   * in a browser it is memory, and saves nothing across a reload. The prefix
+   * is `cip:`, which every CIP write in this tab already drops.
+   */
+  function applicationStoreKey(state, key) {
+    if (!window.TMAStore || !state || state.search || APP_TABLE.status || APP_TABLE.page !== 1) return null;
+    if (filterValues('bucket').length || filterValues('assignee').length || filterValues('provider').length) return null;
+
+    return 'cip:applications:v1:' + key;
+  }
+
+  function storeApplicationPage(storeKey, page) {
+    if (!storeKey || !window.TMAStore) return;
+
+    // With the menu's contents and the tab badges, which only the first
+    // listing of a visit carries: a table painted from here should not open
+    // with its tabs uncounted and its filter empty.
+    var held = {
+      rows: page.rows, page: page.page, lastPage: page.lastPage, total: page.total,
+      statuses: APP_TABLE.statuses, personStatuses: APP_TABLE.personStatuses,
+      assignees: APP_TABLE.assignees, providers: APP_TABLE.providers,
+      phaseCounts: APP_TABLE.facetsLoaded ? APP_TABLE.phaseCounts : null,
+    };
+
+    try {
+      var written = window.TMAStore.put(storeKey, held);
+      if (written && written.catch) written.catch(function () {});
+    } catch (e) { /* a cache that cannot be written is only a slower next visit */ }
+  }
+
+  /*
+   * Paint what was held for this tab while its rows are fetched.
+   *
+   * The request has already gone; this only decides what is on screen while
+   * it is out. Held rows go up as a stale copy of this very list, which is
+   * the state syncApplicationTableForPaint already knows how to leave alone,
+   * so the answer is patched over them the way a live update is. If the
+   * server answers first, or the reader has moved to another tab, nothing
+   * here is used.
+   */
+  function paintStoredApplicationPage(storeKey, key, lane, gen, state, render) {
+    if (!storeKey || !window.TMAStore || APP_TABLE.quiet || APP_TABLE.rows.length) return;
+
+    var read;
+    try { read = window.TMAStore.get(storeKey); } catch (e) { return; }
+    if (!read || !read.then) return;
+
+    read.then(function (held) {
+      // The page can open before /me has said whose store this is, and a
+      // read made then cannot find a copy kept from last time. Asked again
+      // once it can; if the server has answered by then, the guard below
+      // drops it.
+      if (held !== undefined || !window.TMAStore.whenAccount) return held;
+
+      return window.TMAStore.whenAccount().then(function () { return window.TMAStore.get(storeKey); });
+    }).then(function (held) {
+      if (!held || !held.rows || !held.rows.length) return;
+      if (APP_TABLE.fetchGen !== gen || APP_TABLE.loadingKey !== key || APP_TABLE.loadedKey === key) return;
+      if (APP_TABLE.rows.length || !clientsMountState || applicationTableKey(clientsMountState) !== key) return;
+
+      APP_TABLE.rows = held.rows;
+      APP_TABLE.rows.forEach(function (row) {
+        rememberCipApplicant(row && row.clientUid);
+      });
+      APP_TABLE.page = held.page || 1;
+      APP_TABLE.lastPage = held.lastPage || 1;
+      APP_TABLE.total = held.total || 0;
+      APP_TABLE.laneShown = lane;
+      APP_TABLE.shownSlice = applicationSliceFor(state);
+      APP_TABLE.quiet = true;
+
+      // Until the listing brings its own. facetsLoaded stays false, so the
+      // request that is already out is the one that corrects these.
+      if (!APP_TABLE.facetsLoaded) {
+        if (held.statuses && held.statuses.length) APP_TABLE.statuses = held.statuses;
+        if (held.personStatuses && held.personStatuses.length) APP_TABLE.personStatuses = held.personStatuses;
+        if (held.assignees) APP_TABLE.assignees = held.assignees;
+        if (held.providers) APP_TABLE.providers = held.providers;
+        if (held.phaseCounts) APP_TABLE.phaseCounts = held.phaseCounts;
+      }
+
+      render();
+    }).catch(function () {});
   }
 
   function ensureApplicationTable(state, render) {
@@ -3832,6 +3924,9 @@
     }
     if (APP_TABLE.unreadFirst) params.push('unread=1');
 
+    var storeKey = applicationStoreKey(state, key);
+    paintStoredApplicationPage(storeKey, key, lane, gen, state, render);
+
     clientsFetch('/portal/cip/applications?' + params.join('&'))
       .then(function (json) {
         // A forget() while this was in flight means these rows are stale.
@@ -3865,6 +3960,7 @@
           APP_TABLE.phaseCounts = json.phaseCounts;
           APP_TABLE.facetsLoaded = true;
         }
+        storeApplicationPage(storeKey, page);
 
         if (APP_TABLE.loadingKey !== key) return;
         adoptApplicationListing(json, lane);

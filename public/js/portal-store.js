@@ -60,6 +60,12 @@
      the first screen paints before the account is known. */
   var accountId = null;
 
+  /* Settles the first time the account is known. A screen that read before
+     /me answered looked under the anonymous scope, where a copy kept from
+     last time is not; this is how it asks again once that copy can be found. */
+  var announceAccount = null;
+  var accountKnown = new Promise(function (resolve) { announceAccount = resolve; });
+
   var dbPromise = null;
 
   function openDb() {
@@ -273,7 +279,10 @@
     var had = accountId;
     accountId = next;
 
-    return had === null ? claimAnonymous() : clear();
+    var settled = had === null ? claimAnonymous() : clear();
+    if (next !== null) settled.then(announceAccount, announceAccount);
+
+    return settled;
   }
 
   /*
@@ -359,6 +368,7 @@
     invalidate: invalidate,
     clear: clear,
     setAccount: setAccount,
+    whenAccount: function () { return accountKnown; },
     /* Whether anything survives a restart. Screens use it to decide what to
        promise, "available offline" is a lie in a browser. */
     persistent: persistent,

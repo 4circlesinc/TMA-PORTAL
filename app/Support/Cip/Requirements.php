@@ -41,10 +41,18 @@ class Requirements
     /** @var Collection<int, CipDocumentRequirement>|null */
     private static ?Collection $active = null;
 
+    /**
+     * Catalogues already worked out, by everything one depends on.
+     *
+     * @var array<string, list<CipDocumentRequirement>>
+     */
+    private static array $catalogues = [];
+
     /** Drop the in-process catalogue. Template edits and tests must see the new rows. */
     public static function flush(): void
     {
         self::$active = null;
+        self::$catalogues = [];
     }
 
     /**
@@ -137,38 +145,44 @@ class Requirements
         ?CipApplication $application = null,
         ?CipPerson $person = null,
     ): Collection {
-        $templates = self::activeTemplates()
-            ->where('applicant_type', $applicantType)
-            ->filter(function (CipDocumentRequirement $row) use ($phase) {
-                if ($phase === Phase::POST_APPROVAL) {
-                    return $row->at_post_approval
-                        || ($row->at_pre_approval && $row->carry_forward);
-                }
+        /*
+         * Worked out once for each kind of asker, not once per person.
+         *
+         * The answer turns on four things: the applicant type, the lane,
+         * whether the file is a real-estate one, and whether the person is a
+         * woman. A table page asks it for every member of every family on it,
+         * and filtering the whole catalogue afresh each time was the largest
+         * single cost of drawing the applications table: a third of a
+         * millisecond a person, several hundred people a page.
+         */
+        $withoutRealEstateOnly = $application && $application->investment_type !== InvestmentType::REAL_ESTATE;
+        $withoutFemaleOnly = $person !== null && strcasecmp((string) $person->gender, 'Female') !== 0;
+        $key = $applicantType.'|'.$phase.'|'.(int) $withoutRealEstateOnly.'|'.(int) $withoutFemaleOnly;
 
-                if ($phase === Phase::ADD_ON) {
-                    return (bool) $row->at_add_on;
-                }
+        if (! isset(self::$catalogues[$key])) {
+            self::$catalogues[$key] = self::activeTemplates()
+                ->where('applicant_type', $applicantType)
+                ->filter(function (CipDocumentRequirement $row) use ($phase) {
+                    if ($phase === Phase::POST_APPROVAL) {
+                        return $row->at_post_approval
+                            || ($row->at_pre_approval && $row->carry_forward);
+                    }
 
-                return (bool) $row->at_pre_approval;
-            })
-            ->values();
+                    if ($phase === Phase::ADD_ON) {
+                        return (bool) $row->at_add_on;
+                    }
 
-        if ($application && $application->investment_type !== InvestmentType::REAL_ESTATE) {
-            $templates = $templates->reject(fn (CipDocumentRequirement $row) => $row->real_estate_only);
+                    return (bool) $row->at_pre_approval;
+                })
+                ->reject(fn (CipDocumentRequirement $row) => $withoutRealEstateOnly && $row->real_estate_only)
+                ->reject(fn (CipDocumentRequirement $row) => $withoutFemaleOnly && $row->female_only)
+                ->values()
+                ->all();
         }
 
-        $templates = $templates->filter(fn (CipDocumentRequirement $row) => self::appliesToPerson($row, $person));
-
-        return $templates->values();
-    }
-
-    private static function appliesToPerson(CipDocumentRequirement $row, ?CipPerson $person): bool
-    {
-        if (! $row->female_only || $person === null) {
-            return true;
-        }
-
-        return strcasecmp((string) $person->gender, 'Female') === 0;
+        // A collection of its own each time, so a caller that filters or
+        // sorts what it is handed cannot reach the copy that is kept.
+        return new Collection(self::$catalogues[$key]);
     }
 
     /**

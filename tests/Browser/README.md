@@ -388,6 +388,22 @@ field placement and drawing, and computed CSS only exist in a browser.
   npm run build   # the served shell uses public/build; a stale bundle tests the old code
   TMA_DB="$DB" TMA_BASE_URL=http://127.0.0.1:8941 node tests/Browser/cip-table-quiet.mjs
   ```
+- **`cip-table-first-paint.mjs`** — the applications table is on screen before
+  the server has answered. On the desktop the store is on disk and the table
+  keeps each tab's last answer there, so a start paints that copy at once and
+  patches the fresh rows over it. Pins the order of events with the listing
+  held back three seconds: rows first (about 400ms), answer second, and the
+  answer arriving as an update to the same row elements. Also an application
+  filed while the app was closed, a second tab painted from the store, and a
+  plain browser as the control, where the wait is the real one and nothing is
+  written to disk. The desktop is stood in for by the one flag the store
+  reads, `window.TMADesktop.isDesktop`.
+
+  Same server and seed as `cip-table-quiet.mjs`:
+
+  ```sh
+  TMA_DB="$DB" TMA_BASE_URL=http://127.0.0.1:8941 node tests/Browser/cip-table-first-paint.mjs
+  ```
 - **`cip-application-full.mjs`** — a whole family, filed and read back.
   `cip-intake.mjs` pins that the form is wired to the endpoint; this pins what
   the endpoint *leaves behind*, which is where the parts that only exist after
