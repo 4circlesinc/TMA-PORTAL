@@ -8424,13 +8424,21 @@
       return '<p class="tma-dash__clients-appbar-note">COR package confirmed and locked. The firm records the submission next.</p>';
     }
 
+    // The same to the firm, whose next button (Record COR submission, from
+    // renderStageAction) follows it: where Confirm submission stood, the bar
+    // now says it has been done, so nobody goes looking to press it again.
+    if (app.status === 'apply_for_cor' && app.corLocked) {
+      return '<p class="tma-dash__clients-appbar-note">COR package confirmed and locked.</p>';
+    }
+
     if (app.status === 'ready_to_submit' && app.canConfirm && !app.locked) {
       return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-confirm>' +
         'Confirm submission</button>';
     }
 
     if (app.status === 'ready_to_submit' && app.locked && canRecordSubmission()) {
-      return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-submit>' +
+      return '<p class="tma-dash__clients-appbar-note">Package confirmed and locked.</p>' +
+        '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-submit>' +
         'Record submission</button>';
     }
 
@@ -12432,6 +12440,9 @@
     var ui = window.TMAPortalUI;
     var app = applicationFor(state.selectedId);
     if (!app || !ui || !ui.openModal) return;
+    // Whose record this dialog is about, kept from now: the answer to the
+    // press is told to THIS application, whatever is on screen by then.
+    var openedFor = state.selectedId;
 
     var today = new Date().toISOString().slice(0, 10);
     var cor = app.status === 'apply_for_cor';
@@ -12479,6 +12490,18 @@
             .then(function (json) {
               ui.closeModal();
               var uid = state.selectedId;
+              /*
+               * The answer is the application as it now stands: locked, and
+               * no longer this reader's to confirm. The copy on screen is
+               * told so before anything is repainted.
+               *
+               * It used to be repainted from the record as it was BEFORE the
+               * press. The bar went on offering Confirm submission until the
+               * page was reloaded, which read as the press having done
+               * nothing, and a second press sent the confirmation again.
+               */
+              var confirmed = json && json.application;
+              if (openedFor && confirmed) paintCipApplicationStatus(openedFor, confirmed.status, confirmed);
               if (uid) forgetApplication(uid);
               forgetApplicationTable();
               forgetBuckets();
@@ -12489,6 +12512,16 @@
                 render(usesPagedClientsFlow(state) ? { forceFull: true } : { detailOnly: true });
               } else {
                 repaintClients();
+              }
+              /*
+               * Then the whole record is read again, behind what is already
+               * right on screen: every document in the package is frozen
+               * now, and the history has a line it did not have.
+               */
+              if (openedFor) delete TIMELINE[openedFor];
+              if (uid && uid === openedFor) {
+                if (state.applicationFreshFor === uid) state.applicationFreshFor = null;
+                ensureApplicationLoaded(state, typeof render === 'function' ? render : repaintClients);
               }
             })
             .catch(function (err) {

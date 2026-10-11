@@ -354,6 +354,25 @@ field placement and drawing, and computed CSS only exist in a browser.
   TMA_BASE_URL=http://127.0.0.1:8933 TMA_APP=<uuid> node tests/Browser/cip-photo-adjust.mjs
   ```
 
+- **`cip-confirm-submission.mjs`** — Confirm submission says it has been
+  confirmed. The press locked the package and the server answered with the
+  application as it then stood, but the page repainted from the record it
+  held before the press, so the bar went on offering Confirm submission
+  until a reload; it read as the button having done nothing, and a second
+  press sent the confirmation again. Pins that the button is gone the moment
+  the dialog closes, with no reload; that the bar says the package is
+  confirmed and locked; that the confirmation was sent once; that the
+  Timeline shows the day; and that a reload shows the same. Same serve as
+  `cip-draft-autosave.mjs`. The check confirms the application it is given,
+  so seed a fresh one for each run; the seed prints `TMA_APP=…` as its last
+  line (a file at Ready to submit with every required document accepted):
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FEATURE_CIP=true FILES_DISK=local MALWARE_SCANNER=none \
+    php artisan tinker tests/Browser/fixtures/confirm-ready-seed.php < /dev/null
+  TMA_BASE_URL=http://127.0.0.1:8933 TMA_APP=<uuid> node tests/Browser/cip-confirm-submission.mjs
+  ```
+
 - **`cip-person-status.mjs`** — a person's status in post-approval, beside
   the application's (`App\Support\Cip\PersonStatus`). Each person used to
   wear a placeholder vocabulary nothing but a hand moved, so a file standing
