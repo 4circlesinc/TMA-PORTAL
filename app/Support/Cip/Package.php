@@ -73,7 +73,15 @@ class Package
             return false;
         }
 
-        if ($requirement && $requirement->at_post_approval && ! $requirement->at_pre_approval) {
+        /*
+         * The same judgement as for an empty slot ({@see
+         * belongsToCorPackage()}), or the two would disagree: a paper filed
+         * to a COR line on a post-approval file would be frozen by the
+         * original package the moment it landed, and a reviewer could never
+         * accept it. A paper sitting in the original tree never gets this
+         * far, its folder froze it above.
+         */
+        if (self::belongsToCorPackage($slot)) {
             return $slot->application?->isCorLocked() === true;
         }
 
@@ -139,6 +147,45 @@ class Package
     }
 
     /**
+     * Is this slot one the Certificate of Registration package is waiting
+     * on, so that it is that package's lock which freezes it?
+     *
+     * A requirement asked only in post-approval always was. One asked in
+     * BOTH lanes was judged by the original package instead: on a file that
+     * had moved into post-approval its line sat on the COR checklist as
+     * Pending upload and could never be filed, because the original package
+     * had been confirmed long before. The translator's credentials and the
+     * apostille are the usual ones; the firm asks for them again at COR.
+     *
+     * So on a post-approval file the question is which pack the requirement
+     * belongs to there ({@see Pack::of()}): a COR line stays open until the
+     * COR package is confirmed. A paper carried forward from the original
+     * package is judged first by where it lives ({@see locksFile()}), so it
+     * stays frozen with that package.
+     */
+    public static function belongsToCorPackage(CipDocument $document): bool
+    {
+        $requirement = $document->requirement;
+
+        if (! $requirement) {
+            return false;
+        }
+
+        if ($requirement->at_post_approval && ! $requirement->at_pre_approval) {
+            return true;
+        }
+
+        // The Additional Documents drawer keeps its own rule, below: open
+        // until the file is closed.
+        if (trim((string) $requirement->folder) === Tree::ADDITIONAL) {
+            return false;
+        }
+
+        return ($document->application?->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL
+            && Pack::of($requirement) === Pack::COR;
+    }
+
+    /**
      * Is this checklist slot part of a confirmed original or COR package?
      *
      * A filled slot follows its file. An empty pre-approval slot on a locked
@@ -162,7 +209,7 @@ class Package
             return false;
         }
 
-        if ($requirement && $requirement->at_post_approval && ! $requirement->at_pre_approval) {
+        if (self::belongsToCorPackage($document)) {
             return $document->application?->isCorLocked() === true;
         }
 

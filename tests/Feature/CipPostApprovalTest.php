@@ -1578,6 +1578,126 @@ class CipPostApprovalTest extends TestCase
         $this->assertSame($oath->file->uuid, $filed['fileId']);
     }
 
+    /**
+     * A document asked for in BOTH lanes can be filed on the COR checklist.
+     *
+     * The translator's credentials and the apostille are pre-approval
+     * requirements the firm also ticks for post-approval. On a file whose
+     * original package was confirmed long ago, their lines sat on the COR
+     * checklist as Pending upload and could never be filed: the empty slot
+     * was judged by the original package's lock, though the paper it is
+     * waiting for belongs to the COR package and is stored in the
+     * post-approval tree. It is the COR package's lock that freezes it.
+     */
+    public function test_a_requirement_asked_in_both_lanes_can_be_filed_on_the_cor_checklist(): void
+    {
+        $staff = $this->staff();
+        // The shipped COR list first, then the two the firm ticked itself in
+        // Settings (seeding afterwards would put them back to the default).
+        $this->seedCor();
+        $this->template('translator_credentials', "Certified Copy of Translator's Credentials", [
+            'required' => false,
+            'at_post_approval' => true,
+        ]);
+        $this->template('credentials_apostille', 'Apostille for Attorney-at-Law & Notary Credentials', [
+            'required' => false,
+            'at_post_approval' => true,
+        ]);
+        Requirements::flush();
+
+        $application = $this->granted($staff);
+        PostApproval::enter($application->fresh(['people']), $staff);
+        $application = $application->fresh(['people.documents']);
+        $person = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $person->setRelation('application', $application);
+        // The original package was confirmed before the file ever got here.
+        $application->forceFill(['locked_at' => now()->subMonth()])->save();
+
+        $translator = $person->documents()->where('type', 'translator_credentials')->first();
+        $apostille = $person->documents()->where('type', 'credentials_apostille')->first();
+        $this->assertNotNull($translator, 'A requirement ticked for post-approval is on the COR checklist.');
+        $this->assertNotNull($apostille);
+        $this->assertFalse(Package::locksDocument($translator->fresh()), 'The empty COR line is not frozen by the original package.');
+
+        $rows = collect($this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk()
+            ->json('application.applicant.documents'));
+
+        $this->assertTrue($rows->firstWhere('id', $translator->uuid)['canUpload']);
+        $this->assertTrue($rows->firstWhere('id', $apostille->uuid)['canUpload']);
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/documents/'.$translator->uuid.'/file', [
+                'file' => UploadedFile::fake()->create('translator.pdf', 40, 'application/pdf'),
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('document.uploaded', true)
+            ->assertJsonPath('document.status', DocumentStatus::APPLICATION_REVIEW);
+
+        // Filed in the post-approval tree, not into the frozen original one.
+        $file = $translator->fresh()->file;
+        $this->assertNotNull($file);
+        $this->assertNotSame($person->fresh()->folder_id, $file->folder_id);
+        $this->assertFalse(Package::locksFile($file), 'The filed paper is not in the frozen original tree.');
+
+        // So a reviewer can read it and accept it, like any COR paper.
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/documents/'.$translator->uuid.'/approve')
+            ->assertOk();
+        $this->assertSame(DocumentStatus::READY_FOR_SUBMISSION, $translator->fresh()->status);
+
+        // And frozen with the COR package, like every other COR line.
+        $application->fresh()->forceFill(['cor_locked_at' => now()])->save();
+        Package::forget();
+
+        $this->assertTrue(Package::locksDocument($apostille->fresh()));
+        $this->assertFalse(collect($this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->json('application.applicant.documents'))->firstWhere('id', $apostille->uuid)['canUpload']);
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/documents/'.$apostille->uuid.'/file', [
+                'file' => UploadedFile::fake()->create('apostille.pdf', 40, 'application/pdf'),
+            ], ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonPath('message', Confirmation::COR_LOCKED_MESSAGE);
+
+        $this->assertFalse($apostille->fresh()->isFilled(), 'Nothing was filed after the COR lock.');
+    }
+
+    /**
+     * The same requirement on a file still in pre-approval is the original
+     * package's, and freezes with it as it always did.
+     */
+    public function test_a_requirement_asked_in_both_lanes_still_freezes_with_the_original_package_before_post_approval(): void
+    {
+        $staff = $this->staff();
+        $this->template('translator_credentials', "Certified Copy of Translator's Credentials", [
+            'required' => false,
+            'at_post_approval' => true,
+        ]);
+        $application = $this->application($staff);
+        $person = $this->mainApplicant($application);
+        Tree::provision($application->fresh(['people']), $staff);
+        Requirements::materialise($person->fresh(['application']));
+
+        $slot = $person->documents()->where('type', 'translator_credentials')->first();
+        $this->assertNotNull($slot);
+        $this->assertFalse(Package::locksDocument($slot->fresh()));
+
+        $application->forceFill(['locked_at' => now()])->save();
+        Package::forget();
+
+        $this->assertTrue(Package::locksDocument($slot->fresh()));
+        $this->actingAs($staff)
+            ->post('/portal/cip/documents/'.$slot->uuid.'/file', [
+                'file' => UploadedFile::fake()->create('translator.pdf', 40, 'application/pdf'),
+            ], ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonPath('message', Confirmation::LOCKED_MESSAGE);
+    }
+
     public function test_a_provider_can_upload_a_cor_document_after_the_original_package_is_locked(): void
     {
         $staff = $this->staff();

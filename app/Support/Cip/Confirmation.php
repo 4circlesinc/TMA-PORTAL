@@ -407,10 +407,9 @@ class Confirmation
             throw new \InvalidArgumentException(self::CLOSED_MESSAGE);
         }
 
-        $requirement = $document->requirement;
-        $corSlot = $requirement
-            && $requirement->at_post_approval
-            && ! $requirement->at_pre_approval;
+        // Said in the words of the package that is doing the refusing.
+        $corSlot = Package::belongsToCorPackage($document)
+            && $document->application?->isCorLocked() === true;
 
         throw new \InvalidArgumentException(
             $corSlot ? self::COR_LOCKED_MESSAGE : self::LOCKED_MESSAGE
