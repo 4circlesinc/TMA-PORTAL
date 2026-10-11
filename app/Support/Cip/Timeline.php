@@ -169,6 +169,7 @@ class Timeline
             CipEvent::ACTION_DELAYED => self::delayedSentence($meta, $who),
             CipEvent::ACTION_POST_APPROVAL_ENTERED => "{$who} started the post-approval process (Certificate of Registration)",
             CipEvent::ACTION_STATUS_ATTACHMENT => self::attachmentSentence($meta, $who),
+            PersonStatus::ACTION_CHANGED => self::personSentence($event, $who),
             DocumentEngine::ACTION_STATUS_CHANGED => self::documentSentence($meta, $who, $documents),
             /*
              * An action added to the table after this file was written.
@@ -264,7 +265,9 @@ class Timeline
             ? "{$who} moved it to ".Status::label($to)
             : "{$who} moved it from ".Status::label($event->from_status).' to '.Status::label($to);
 
-        if (! empty($meta['override'])) {
+        // The checklist walking a file back is the file following its own
+        // documents, not somebody overriding it.
+        if (! empty($meta['override']) && ($meta['reason'] ?? null) !== 'checklist') {
             $from = $event->from_status !== null
                 ? Status::label($event->from_status)
                 : 'the previous status';
@@ -273,6 +276,31 @@ class Timeline
         }
 
         return $move;
+    }
+
+    /**
+     * One person's own step: "moved JIAN WEI to Pending NIC on 2026-10-03".
+     *
+     * Only the moves a hand makes are written, a date recorded for one
+     * person, an outcome of their own, or either being taken back. A family
+     * following its file is the file's row, not six more.
+     */
+    private static function personSentence(CipEvent $event, string $who): string
+    {
+        $meta = is_array($event->meta) ? $event->meta : [];
+        $name = trim((string) ($meta['person_name'] ?? '')) ?: 'a person';
+        $to = $event->to_status !== null ? PersonStatus::label($event->to_status) : 'a new status';
+
+        // `back` and not `override`: the vocabulary this replaced marked
+        // every move off its map an override, a jump forward included, and
+        // those rows must not start saying somebody was pulled back.
+        if (! empty($meta['back'])) {
+            return "{$who} pulled {$name} back to {$to}";
+        }
+
+        $line = "{$who} moved {$name} to {$to}";
+
+        return ! empty($meta['date']) ? $line.' on '.$meta['date'] : $line;
     }
 
     /**

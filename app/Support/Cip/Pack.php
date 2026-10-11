@@ -4,6 +4,7 @@ namespace App\Support\Cip;
 
 use App\Models\CipApplication;
 use App\Models\CipDocumentRequirement;
+use App\Models\CipPerson;
 
 /**
  * Which post-approval document pack a file is collecting, and which packs
@@ -46,6 +47,52 @@ class Pack
         }
 
         return $open;
+    }
+
+    /**
+     * Packs on one person's checklist.
+     *
+     * The file's own, and the passport pack as well for a person whose NIC
+     * was recorded as received on their own: passports are applied for per
+     * person, and somebody whose NIC is in should not wait on the rest of
+     * the family for the slots to file their passport papers in. The file's
+     * own judgement is untouched, {@see current()} still reads the pack the
+     * application is collecting, so one person's early passport slots can
+     * neither hold nor hurry the family's NIC step.
+     *
+     * @return list<string>
+     */
+    public static function openFor(?CipApplication $application, ?CipPerson $person): array
+    {
+        $open = self::open($application);
+
+        if ($open === [] || $person === null || in_array(self::PASSPORT, $open, true)) {
+            return $open;
+        }
+
+        if (! PersonStatus::hasOwnNic($person)) {
+            return $open;
+        }
+
+        return array_values(array_unique([...$open, self::NIC, self::PASSPORT]));
+    }
+
+    /**
+     * The packs still to come for one person: the complement of
+     * {@see openFor()}, the way {@see upcoming()} is of {@see open()}.
+     *
+     * @return list<string>
+     */
+    public static function upcomingFor(?CipApplication $application, ?CipPerson $person): array
+    {
+        if ($application === null || ($application->phase ?? Phase::PRE_APPROVAL) !== Phase::POST_APPROVAL) {
+            return [];
+        }
+
+        return array_values(array_diff(
+            [self::NIC, self::PASSPORT],
+            self::openFor($application, $person),
+        ));
     }
 
     /**

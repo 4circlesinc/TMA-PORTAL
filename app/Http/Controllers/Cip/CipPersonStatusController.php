@@ -6,21 +6,24 @@ use App\Http\Controllers\Controller;
 use App\Models\CipPerson;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\CipAccess;
-use App\Support\Cip\Engine;
+use App\Support\Cip\Contacts;
 use App\Support\Cip\PersonStatus;
-use App\Support\Cip\StatusAttachment;
 use App\Support\Cip\Phase;
+use App\Support\Cip\StatusAttachment;
 use App\Support\Realtime\Live;
-use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 
 /**
- * Post-approval status for one person on an application.
+ * One person's own step in the post-approval lane.
  *
- * Each family member has their own status once the file is in the
- * post-approval lane. Application-level status stays at Granted.
+ * A person stands where the application stands and their documents say;
+ * this is the door for the few moves a hand makes instead: a NIC or
+ * passport date recorded for this person alone, an outcome of their own,
+ * or either being taken back. {@see PersonStatus::move()} decides which
+ * of those the request is, and refuses everything else with the reason.
  */
 class CipPersonStatusController extends Controller
 {
@@ -46,50 +49,32 @@ class CipPersonStatusController extends Controller
 
         $data = $request->validate([
             'status' => ['required', 'string', Rule::in(PersonStatus::ALL)],
+            // The day a dated step happened. Asked for by the dialog; a
+            // caller that leaves it out is recording today.
+            'date' => ['nullable', 'date'],
             'note' => ['nullable', 'string', 'max:2000'],
         ]);
 
-        $from = $person->post_approval_status ?? PersonStatus::NOT_STARTED;
-        $to = $data['status'];
-
-        if ($from === $to) {
-            return response()->json([
-                'application' => app(CipApplicationController::class)
-                    ->showRecord($application, $user),
-            ]);
-        }
+        $person->setRelation('application', $application);
 
         try {
-            PersonStatus::assertMayMove($person, $to, $user);
-        } catch (AuthorizationException $e) {
-            abort(403, $e->getMessage());
+            $moved = PersonStatus::move(
+                $person,
+                $data['status'],
+                $user,
+                ! empty($data['date']) ? Carbon::parse($data['date']) : null,
+                (string) ($data['note'] ?? ''),
+            );
         } catch (\InvalidArgumentException $e) {
             abort(422, $e->getMessage());
         }
 
-        $note = trim($data['note'] ?? '');
-        $meta = array_filter([
-            'person_id' => $person->uuid,
-            'person_name' => $person->fullName(),
-            'person_role' => $person->role,
-            'note' => $note !== '' ? $note : null,
-            'override' => PersonStatus::canTransition($person, $to) ? null : true,
-        ]);
+        if ($moved['changed']) {
+            StatusAttachment::storeIfPresent($request, $application, $user, $person);
 
-        $person->forceFill(['post_approval_status' => $to])->save();
-
-        StatusAttachment::storeIfPresent($request, $application, $user, $person);
-
-        Engine::record(
-            $application,
-            'person_status_changed',
-            $user,
-            $meta,
-            $from,
-            $to,
-        );
-
-        Live::staff(Live::CIP);
+            // The provider side sees each person's chip too, so it hears.
+            Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
+        }
 
         return response()->json([
             'application' => app(CipApplicationController::class)

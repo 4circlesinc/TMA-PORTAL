@@ -4,6 +4,7 @@ namespace App\Support\Cip;
 
 use App\Models\CipApplication;
 use App\Models\CipDocument;
+use App\Models\CipPerson;
 use App\Models\User;
 use App\Support\Files\Comments;
 use Illuminate\Database\Eloquent\Builder;
@@ -48,6 +49,7 @@ class Review
 
         if ($application === null) {
             request()->attributes->remove('cip.tally');
+            request()->attributes->remove('cip.person_tally');
 
             return;
         }
@@ -55,6 +57,11 @@ class Review
         $store = request()->attributes->get('cip.tally', []);
         unset($store[(int) $application->getKey()]);
         request()->attributes->set('cip.tally', $store);
+
+        // The same slots, counted per person for {@see tallyByPerson()}.
+        $people = request()->attributes->get('cip.person_tally', []);
+        unset($people[(int) $application->getKey()]);
+        request()->attributes->set('cip.person_tally', $people);
     }
 
     /**
@@ -114,7 +121,7 @@ class Review
         if ($corIds !== []) {
             $grouped = $grouped->merge(
                 self::constrainToPack(
-                    self::ofLivePeople(CipDocument::query())->whereIn('application_id', $corIds),
+                    self::ofLivePeople(CipDocument::query(), true)->whereIn('application_id', $corIds),
                     Pack::COR,
                 )
                     ->selectRaw('application_id, status, required, COUNT(*) as total')
@@ -126,7 +133,7 @@ class Review
         if ($nicIds !== []) {
             $grouped = $grouped->merge(
                 self::constrainToPack(
-                    self::ofLivePeople(CipDocument::query())->whereIn('application_id', $nicIds),
+                    self::ofLivePeople(CipDocument::query(), true)->whereIn('application_id', $nicIds),
                     Pack::NIC,
                 )
                     ->selectRaw('application_id, status, required, COUNT(*) as total')
@@ -138,7 +145,7 @@ class Review
         if ($passportIds !== []) {
             $grouped = $grouped->merge(
                 self::constrainToPack(
-                    self::ofLivePeople(CipDocument::query())->whereIn('application_id', $passportIds),
+                    self::ofLivePeople(CipDocument::query(), true)->whereIn('application_id', $passportIds),
                     Pack::PASSPORT,
                 )
                     ->selectRaw('application_id, status, required, COUNT(*) as total')
@@ -359,7 +366,22 @@ class Review
             $application = Engine::set($application, $target, null, $meta);
         }
 
-        return $application;
+        /*
+         * Then the people on it. A document verdict changes where its owner
+         * stands whether or not it moved the file: one person's last paper
+         * accepted is that person at Apply for COR while the family is
+         * still collecting, and one sent back is that person on Updates
+         * Required and nobody else.
+         */
+        PersonStatus::settle($application);
+
+        /*
+         * And the file after them, if they have all left its step. A lift
+         * that was refused when the last person was recorded, because a
+         * paper was still unread or the file stood on Updates Required, has
+         * to be tried again when that clears, and this is where it clears.
+         */
+        return PersonStatus::lift($application);
     }
 
     /**
@@ -530,6 +552,13 @@ class Review
      * COR; a complete NIC or passport checklist stays on Apply for NIC /
      * Apply for Passport until the submission date is recorded.
      *
+     * A file collecting its COR documents has two names for that one step:
+     * Post-Approval until the lane's decision is recorded, Approved after it.
+     * The checklist drives both alike. Reading only the first left a file at
+     * Approved deaf to its own documents: a paper sent back did not make it
+     * Updates Required, and every paper accepted did not make it Apply for
+     * COR, which is the one move section 5 says happens by itself.
+     *
      * @param  array<string, array{total: int, required: int}>  $tally
      * @return list<string>
      */
@@ -541,21 +570,36 @@ class Review
         int $required,
         array $tally,
     ): array {
+        // Where a COR file goes back to: the label it wore while collecting.
+        $base = PersonStatus::base($application);
+
         [$collecting, $ready] = match (Pack::current($application)) {
             Pack::PASSPORT => [Status::APPLY_FOR_PASSPORT, Status::APPLY_FOR_PASSPORT],
             Pack::NIC => [Status::APPLY_FOR_NIC, Status::APPLY_FOR_NIC],
-            default => [Status::POST_APPROVAL, Status::APPLY_FOR_COR],
+            default => [$base, Status::APPLY_FOR_COR],
         };
 
+        // Every status that is this pack being collected or held ready.
+        $standing = $ready === Status::APPLY_FOR_COR
+            ? [Status::POST_APPROVAL, Status::POST_APPROVED, Status::APPLY_FOR_COR]
+            : [$collecting];
+
         if ($needsUpdates) {
-            return match ($from) {
-                $collecting, $ready => [Status::UPDATE_REQUIRED],
-                default => [],
-            };
+            return in_array($from, $standing, true) ? [Status::UPDATE_REQUIRED] : [];
         }
 
-        if ($from === $ready && $inReview && $collecting !== $ready) {
-            return [$collecting];
+        /*
+         * Apply for COR is a claim: every document accepted. A file standing
+         * on it with a paper back in review, or with one it owes not yet
+         * accepted, is no longer making that claim truthfully, so it returns
+         * to collecting. Once the package is confirmed the COR drawers are
+         * frozen and the claim was already tested, so only a paper actually
+         * reopened can take it back from there.
+         */
+        if ($from === $ready && $collecting !== $ready) {
+            return $inReview || (! $application->isCorLocked() && ! self::packageReady($application))
+                ? [$collecting]
+                : [];
         }
 
         $unassessed = $tally[DocumentStatus::PENDING_UPLOAD]['required']
@@ -570,18 +614,11 @@ class Review
             return [$collecting];
         }
 
-        if (! $allReady) {
+        if (! $allReady || $from === $ready) {
             return [];
         }
 
-        if ($from === $ready) {
-            return [];
-        }
-
-        return match ($from) {
-            $collecting, Status::UPDATE_REQUIRED => [$ready],
-            default => [],
-        };
+        return in_array($from, [...$standing, Status::UPDATE_REQUIRED], true) ? [$ready] : [];
     }
 
     /**
@@ -604,7 +641,8 @@ class Review
         }
 
         $rows = self::constrainToCurrentChecklist(
-            self::ofLivePeople(CipDocument::query())->where('application_id', $application->getKey()),
+            self::ofLivePeople(CipDocument::query(), self::inPostApproval($application))
+                ->where('application_id', $application->getKey()),
             $application->phase ?? Phase::PRE_APPROVAL,
             $application,
         )
@@ -619,18 +657,80 @@ class Review
     }
 
     /**
+     * One pack's checklist counted per person, in one query for the family.
+     *
+     * {@see PersonStatus} reads a person's own step off this: the file's
+     * tally says whether the FAMILY is ready, this says who in it is. Same
+     * constraint, same live people, so the two can never disagree about
+     * which slots belong to the pack.
+     *
+     * A person with no slot in the pack is simply absent: they owe nothing.
+     *
+     * Everyone still on the file is counted, a person set apart included.
+     * The file's own tally leaves them out because they no longer hold it,
+     * but this one also answers "where would they stand if they were taken
+     * back?", and counting nothing for them made a Denied person look as if
+     * every document they owed had been accepted.
+     *
+     * @return array<int, array<string, array{total: int, required: int}>>  by person id
+     */
+    public static function tallyByPerson(CipApplication $application, string $pack): array
+    {
+        $id = (int) $application->getKey();
+        $store = request()->attributes->get('cip.person_tally', []);
+
+        if (isset($store[$id][$pack])) {
+            return $store[$id][$pack];
+        }
+
+        $rows = self::constrainToPack(
+            self::ofLivePeople(CipDocument::query())->where('application_id', $id),
+            $pack,
+            $application,
+        )
+            ->selectRaw('person_id, status, required, COUNT(*) as total')
+            ->groupBy('person_id', 'status', 'required')
+            ->get()
+            ->groupBy(fn ($row) => (int) $row->person_id);
+
+        $tally = [];
+        foreach ($rows as $personId => $group) {
+            $tally[(int) $personId] = self::shapeTally($group);
+        }
+
+        $store[$id][$pack] = $tally;
+        request()->attributes->set('cip.person_tally', $store);
+
+        return $tally;
+    }
+
+    private static function inPostApproval(CipApplication $application): bool
+    {
+        return ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL;
+    }
+
+    /**
      * Only the people still on the application.
      *
      * A dependant taken off the form is soft-deleted and their slots stay
      * with them, out of every checklist a screen draws. Counting those slots
      * here held a package at "not ready" for a document nobody could see.
      *
+     * In post-approval, a person given an outcome of their own (Denied, or
+     * Closed) is out of the count too. They are not going to the Unit with
+     * the rest of the family, so the paper they never filed must not hold
+     * the family's package; see {@see PersonStatus::isApart()}.
+     *
      * @param  Builder<CipDocument>  $query
      * @return Builder<CipDocument>
      */
-    private static function ofLivePeople(Builder $query): Builder
+    private static function ofLivePeople(Builder $query, bool $postApproval = false): Builder
     {
-        return $query->whereHas('person');
+        return $query->whereHas('person', function (Builder $person) use ($postApproval) {
+            if ($postApproval) {
+                $person->whereNull('post_approval_apart');
+            }
+        });
     }
 
     /**
@@ -641,11 +741,38 @@ class Review
      */
     public static function blockers(CipApplication $application): array
     {
-        return self::constrainToCurrentChecklist(
-            self::ofLivePeople(CipDocument::query())->where('application_id', $application->getKey()),
+        return self::namedBlockers(self::constrainToCurrentChecklist(
+            self::ofLivePeople(CipDocument::query(), self::inPostApproval($application))
+                ->where('application_id', $application->getKey()),
             $application->phase ?? Phase::PRE_APPROVAL,
             $application,
-        )
+        ));
+    }
+
+    /**
+     * The same, for one person and one pack: what stands between them and
+     * a step recorded for them alone.
+     *
+     * @return list<string>
+     */
+    public static function blockersFor(CipApplication $application, string $pack, CipPerson $person): array
+    {
+        return self::namedBlockers(self::constrainToPack(
+            CipDocument::query()
+                ->where('application_id', $application->getKey())
+                ->where('person_id', $person->getKey()),
+            $pack,
+            $application,
+        ));
+    }
+
+    /**
+     * @param  Builder<CipDocument>  $slots
+     * @return list<string>
+     */
+    private static function namedBlockers(Builder $slots): array
+    {
+        return $slots
             ->with('person')
             ->orderBy('person_id')
             ->orderBy('id')

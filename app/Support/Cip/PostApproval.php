@@ -32,13 +32,10 @@ class PostApproval
         Package::forget();
         Requirements::materialiseApplication($application);
 
-        foreach ($application->people as $person) {
-            if ($person->post_approval_status === null) {
-                $person->forceFill([
-                    'post_approval_status' => PersonStatus::NOT_STARTED,
-                ])->save();
-            }
-        }
+        // Everyone on the file takes the step the file is on, read through
+        // their own documents. A dependant added later arrives the same way,
+        // owing papers an unconfirmed Apply for COR can no longer claim.
+        Settlement::afterChecklistChange($application);
 
         return $application->refresh();
     }
@@ -71,6 +68,10 @@ class PostApproval
         ];
         Engine::record($application, CipEvent::ACTION_STATUS_CHANGED, $actor, $meta, $from, Status::POST_DENIED);
         Engine::record($application, CipEvent::ACTION_DECISION_RECORDED, $actor, $meta);
+
+        // This write goes round the engine, so the people on the file are
+        // told here: a file denied on arrival is denied for everyone on it.
+        PersonStatus::settle($application);
 
         return $application->refresh();
     }

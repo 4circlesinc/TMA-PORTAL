@@ -872,6 +872,202 @@ class CipPostApprovalTest extends TestCase
     }
 
     /**
+     * A file at Approved is still collecting its COR documents.
+     *
+     * The lane's decision comes first, so a file spends this whole step
+     * wearing Approved rather than Post-Approval. The checklist used to
+     * drive only the second label: at Approved a paper sent back changed
+     * nothing, and every paper accepted changed nothing either, which is the
+     * one move the brief says happens by itself.
+     */
+    public function test_an_approved_file_follows_its_documents(): void
+    {
+        Mail::fake();
+        $staff = $this->staff();
+        [$application, $person, $oath] = $this->corFile($staff);
+
+        \App\Support\Cip\Decision::record(
+            $application->fresh(),
+            $staff,
+            Status::POST_APPROVED,
+            null,
+            '',
+            $this->cipDecisionLetterPdf(),
+        );
+        $this->assertSame(Status::POST_APPROVED, $application->fresh()->status);
+
+        $approvals = fn () => Mail::queued(
+            Postcard::class,
+            fn (Postcard $mail) => str_contains((string) $mail->subjectLine, ' APPROVED '),
+        )->count();
+        $decided = $approvals();
+        $this->assertGreaterThan(0, $decided);
+
+        // One document sent back: Updates Required, and the firm is told.
+        DocumentSlots::fill(
+            $person->fresh(['application', 'documents']),
+            CorRequirements::OATH_OF_ALLEGIANCE,
+            UploadedFile::fake()->create('oath.pdf', 40, 'application/pdf'),
+            $staff,
+        );
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/documents/'.$oath->uuid.'/request-changes', [
+                'comment' => 'The notary stamp is not legible.',
+            ])
+            ->assertOk();
+
+        $this->assertSame(Status::UPDATE_REQUIRED, $application->fresh()->status);
+
+        // Replaced: back to Approved, the label it was collecting under, and
+        // not announced as a second decision.
+        DocumentSlots::fill(
+            $person->fresh(['application', 'documents']),
+            CorRequirements::OATH_OF_ALLEGIANCE,
+            UploadedFile::fake()->create('oath-2.pdf', 40, 'application/pdf'),
+            $staff,
+        );
+
+        $fresh = $application->fresh();
+        $this->assertSame(Status::POST_APPROVED, $fresh->status);
+        $this->assertSame(Status::POST_APPROVED, $fresh->decision);
+        $this->assertSame($decided, $approvals());
+
+        // Every document accepted: Apply for COR, by itself.
+        $this->fileRequiredCor($application->fresh(), $staff);
+        $this->approveRequiredCor($application->fresh(), $staff);
+
+        $this->assertSame(Status::APPLY_FOR_COR, $application->fresh()->status);
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => str_contains((string) $mail->subjectLine, 'APPLY FOR COR'));
+
+        // And one reopened afterwards takes it back to Approved, not to a
+        // file that looks undecided.
+        $this->actingAs($staff)
+            ->patchJson('/portal/files/files/'.$oath->fresh()->file->uuid.'/review', [
+                'status' => DocumentStatus::APPLICATION_REVIEW,
+            ])
+            ->assertOk();
+
+        $this->assertSame(Status::POST_APPROVED, $application->fresh()->status);
+        $this->assertSame($decided, $approvals());
+    }
+
+    /**
+     * The decision can arrive after the papers.
+     *
+     * A file whose COR documents are all accepted while it is still
+     * undecided goes to Apply for COR by itself; recording the lane's
+     * approval then stands it on Approved, with nothing left to judge that
+     * would ever walk it on again. So the checklist is read as the decision
+     * lands, and it does not sit at Approved over a finished pack.
+     */
+    public function test_recording_the_approval_on_a_finished_pack_goes_straight_to_apply_for_cor(): void
+    {
+        Mail::fake();
+        $staff = $this->staff();
+        [$application] = $this->corFile($staff);
+
+        $this->fileRequiredCor($application, $staff);
+        $this->approveRequiredCor($application, $staff);
+        $this->assertSame(Status::APPLY_FOR_COR, $application->fresh()->status);
+
+        $decided = \App\Support\Cip\Decision::record(
+            $application->fresh(),
+            $staff,
+            Status::POST_APPROVED,
+            null,
+            '',
+            $this->cipDecisionLetterPdf(),
+        );
+
+        $this->assertSame(Status::APPLY_FOR_COR, $decided->status);
+        $this->assertSame(Status::POST_APPROVED, $decided->decision);
+        $this->assertSame(Status::APPLY_FOR_COR, $application->fresh()->status);
+
+        // Pressed again, a lost response and a second click: the same
+        // outcome, so the day may move and nothing else is recorded or sent.
+        $decisions = fn () => CipEvent::query()
+            ->where('application_id', $application->id)
+            ->where('action', CipEvent::ACTION_STATUS_CHANGED)
+            ->where('to_status', Status::POST_APPROVED)
+            ->count();
+        $before = $decisions();
+        Mail::fake();
+
+        $again = \App\Support\Cip\Decision::record(
+            $application->fresh(),
+            $staff,
+            Status::POST_APPROVED,
+            Carbon::parse('2026-09-30'),
+        );
+
+        $this->assertSame(Status::APPLY_FOR_COR, $again->status);
+        $this->assertSame('2026-09-30', $again->decided_at->toDateString());
+        $this->assertSame($before, $decisions());
+        Mail::assertNothingQueued();
+    }
+
+    /**
+     * Apply for COR says every document is Ready for submission, for an
+     * administrator as for anyone.
+     *
+     * The dated steps after it already refuse an unfinished pack whoever
+     * asks. An override straight to Apply for COR was the one way left to
+     * stand a file on that claim while it was untrue.
+     */
+    public function test_apply_for_cor_cannot_be_reached_by_override_while_documents_are_outstanding(): void
+    {
+        Mail::fake();
+        $staff = $this->staff();
+        [$application] = $this->corFile($staff);
+
+        $this->assertNotContains(Status::APPLY_FOR_COR, Engine::availableTransitions($application->fresh(), $staff));
+        $this->assertNotContains(Status::APPLY_FOR_COR, Engine::availableOverrides($application->fresh(), $staff));
+
+        $message = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::APPLY_FOR_COR,
+                'note' => 'The provider says the papers are on their way.',
+            ])
+            ->assertStatus(422)
+            ->json('message');
+
+        $this->assertStringContainsString('Ready for submission', $message);
+        $this->assertSame(Status::POST_APPROVAL, $application->fresh()->status);
+
+        // Pulling a file BACK is untouched: that is what an override is for.
+        $this->assertContains(Status::POST_APPROVAL, Engine::availableOverrides(
+            $application->fresh()->forceFill(['status' => Status::APPLY_FOR_COR]),
+            $staff,
+        ));
+    }
+
+    /**
+     * A file cannot go on standing at Apply for COR once a document it owes
+     * is no longer accepted, until the package has been confirmed.
+     */
+    public function test_an_unconfirmed_apply_for_cor_returns_to_collecting_when_a_document_is_withdrawn(): void
+    {
+        Mail::fake();
+        $staff = $this->staff();
+        [$application, $person, $oath] = $this->corFile($staff);
+
+        $this->fileRequiredCor($application, $staff);
+        $this->approveRequiredCor($application, $staff);
+        $this->assertSame(Status::APPLY_FOR_COR, $application->fresh()->status);
+
+        // The accepted oath is taken out of its slot again.
+        $oath->fresh()->forceFill([
+            'status' => DocumentStatus::PENDING_UPLOAD,
+            'file_id' => null,
+        ])->save();
+
+        Review::settle($application->fresh(), $staff);
+
+        $this->assertSame(Status::POST_APPROVAL, $application->fresh()->status);
+        $this->assertFalse(Review::packageReady($application->fresh()));
+    }
+
+    /**
      * "All documents READY FOR SUBMISSION" counts the optional ones somebody
      * actually filed.
      *
@@ -1736,6 +1932,8 @@ class CipPostApprovalTest extends TestCase
         $this->assertNotContains(PassportRequirements::ORIGINAL_BIRTH_CERTIFICATE, $keys);
         $this->assertNotContains(PassportRequirements::PHYSICAL_PASSPORT_PHOTOS, $keys);
 
+        $this->fileRequiredCor($application->fresh(['people']), $staff);
+        $this->approveRequiredCor($application->fresh(), $staff);
         Stages::record($application->fresh(), $staff, Stages::NIC_SUBMITTED, Carbon::parse('2026-08-22'));
 
         $stillPending = $person->fresh()->documents()->pluck('type')->all();
@@ -1967,7 +2165,9 @@ class CipPostApprovalTest extends TestCase
         $staff = $this->staff();
         [$application, $person] = $this->intoPendingPassport($staff);
 
-        $epp = $person->documents()->where('type', PassportRequirements::EPP_FORM)->first();
+        // An optional paper nobody has filed yet: the required ones went in
+        // with the pack before the passport application was recorded.
+        $epp = $person->documents()->where('type', PassportRequirements::ORIGINAL_TRANSLATIONS)->first();
         $this->assertFalse(Package::locksDocument($epp));
 
         $this->actingAs($staff)
@@ -2096,7 +2296,7 @@ class CipPostApprovalTest extends TestCase
         $staff = $this->staff();
         [$application, $person] = $this->intoClosed($staff);
 
-        $epp = $person->documents()->where('type', PassportRequirements::EPP_FORM)->first();
+        $epp = $person->documents()->where('type', PassportRequirements::ORIGINAL_TRANSLATIONS)->first();
         $this->assertTrue(Package::locksDocument($epp));
 
         $docs = $this->actingAs($staff)
@@ -2104,7 +2304,7 @@ class CipPostApprovalTest extends TestCase
             ->assertOk()
             ->json('application.applicant.documents');
 
-        $this->assertFalse(collect($docs)->firstWhere('type', PassportRequirements::EPP_FORM)['canUpload']);
+        $this->assertFalse(collect($docs)->firstWhere('type', PassportRequirements::ORIGINAL_TRANSLATIONS)['canUpload']);
 
         $this->actingAs($staff)
             ->post('/portal/cip/documents/'.$epp->uuid.'/file', [
@@ -2363,6 +2563,9 @@ class CipPostApprovalTest extends TestCase
     private function intoApplyForPassport(User $staff): array
     {
         [$application, $person] = $this->intoApplyForNic($staff);
+        // Sending the NIC pack requires the pack, here as in the portal.
+        $this->fileRequiredCor($application->fresh(['people']), $staff);
+        $this->approveRequiredCor($application->fresh(), $staff);
         Stages::record($application->fresh(), $staff, Stages::NIC_SUBMITTED, Carbon::parse('2026-08-22'));
         Stages::record($application->fresh(), $staff, Stages::NIC_RECEIVED, Carbon::parse('2026-08-23'));
 
@@ -2377,6 +2580,9 @@ class CipPostApprovalTest extends TestCase
     private function intoPendingPassport(User $staff): array
     {
         [$application, $person] = $this->intoApplyForPassport($staff);
+        // And the passport pack before the passport application.
+        $this->fileRequiredCor($application->fresh(['people']), $staff);
+        $this->approveRequiredCor($application->fresh(), $staff);
         Stages::record($application->fresh(), $staff, Stages::PASSPORT_SUBMITTED, Carbon::parse('2026-08-24'));
 
         $application = $application->fresh(['people.documents.requirement']);

@@ -181,7 +181,15 @@ class CipStatusOverrideTest extends TestCase
         $this->assertSame(Status::UPDATE_REQUIRED, $application->fresh()->status);
     }
 
-    public function test_an_officer_may_set_a_person_status_including_backwards(): void
+    /**
+     * A person's own outcome, and taking it back.
+     *
+     * Setting it is a mapped move, the officer's as much as an
+     * administrator's. Taking it back is the override, and that is theirs
+     * too. What neither may do is type a status the documents or the
+     * application decide; see CipPersonStatusTest for those rules.
+     */
+    public function test_an_officer_may_set_a_person_apart_and_pull_them_back(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $officer = $this->user(Role::REVIEWING_OFFICER);
@@ -194,31 +202,31 @@ class CipStatusOverrideTest extends TestCase
         PostApproval::enter($application->fresh(), $admin);
 
         $person = $application->fresh('people')->people->first();
-        $person->forceFill(['post_approval_status' => PersonStatus::PROCESSING])->save();
+        $this->assertSame(PersonStatus::POST_APPROVAL, $person->post_approval_status);
 
         $this->actingAs($officer)
             ->postJson('/portal/cip/people/'.$person->uuid.'/status', [
-                'status' => PersonStatus::NOT_STARTED,
+                'status' => PersonStatus::POST_DENIED,
             ])
             ->assertOk()
-            ->assertJsonPath('application.applicant.status', PersonStatus::NOT_STARTED);
-
-        $this->assertSame(PersonStatus::NOT_STARTED, $person->fresh()->post_approval_status);
-
-        $person->forceFill(['post_approval_status' => PersonStatus::PROCESSING])->save();
+            ->assertJsonPath('application.applicant.status', PersonStatus::POST_DENIED)
+            ->assertJsonPath('application.applicant.statusApart', true);
 
         $this->actingAs($officer)
             ->postJson('/portal/cip/people/'.$person->uuid.'/status', [
-                'status' => PersonStatus::COMPLETED,
+                'status' => PersonStatus::POST_APPROVAL,
             ])
             ->assertOk()
-            ->assertJsonPath('application.applicant.status', PersonStatus::COMPLETED);
+            ->assertJsonPath('application.applicant.status', PersonStatus::POST_APPROVAL)
+            ->assertJsonPath('application.applicant.statusApart', false);
 
+        $this->assertNull($person->fresh()->post_approval_apart);
+
+        // A status nobody types: the person's documents decide it.
         $this->actingAs($admin)
             ->postJson('/portal/cip/people/'.$person->uuid.'/status', [
-                'status' => PersonStatus::NOT_STARTED,
+                'status' => PersonStatus::APPLY_FOR_COR,
             ])
-            ->assertOk()
-            ->assertJsonPath('application.applicant.status', PersonStatus::NOT_STARTED);
+            ->assertStatus(422);
     }
 }

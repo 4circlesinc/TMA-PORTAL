@@ -358,9 +358,27 @@ class Engine
             fn (string $to) => $to !== $application->status
                 && ! in_array($to, $next, true)
                 && self::overrideFits($application, $to)
+                && self::packageAllowsOverride($application, $to, $forListing)
                 && (! Stages::owns($to) || $strandedStage($to))
                 && ! Delay::owns($to),
         ));
+    }
+
+    /**
+     * Apply for COR is the one status an override may not jump to.
+     *
+     * Every other post-approval step forward already records a date, and
+     * the date verbs refuse an unfinished pack for administrators too. An
+     * override straight to Apply for COR was the last way to put a file on
+     * "every document is Ready for submission" while some were not, where
+     * it then sat: the provider could not confirm it and the submission
+     * could not be recorded. So it is offered, and accepted, only when the
+     * claim is true. Pulling a file BACK is untouched, which is what an
+     * override is for.
+     */
+    private static function packageAllowsOverride(CipApplication $application, string $to, bool $forListing = false): bool
+    {
+        return $to !== Status::APPLY_FOR_COR || self::checklistAllows($application, $to, $forListing);
     }
 
     /**
@@ -440,6 +458,20 @@ class Engine
             ], true) || Status::inLane($to)) {
                 return false;
             }
+        }
+
+        /*
+         * A file the lane has already decided collects under Approved. From
+         * Updates Required it returns there by itself once nothing is
+         * refused; the mapped step back to Post-Approval would stand a
+         * decided file on the label of one that has not been, with its
+         * people still reading Approved. Undoing the decision is a
+         * different act and stays an override, see {@see write()}.
+         */
+        if ($to === Status::POST_APPROVAL && $post
+            && $application->status === Status::UPDATE_REQUIRED
+            && $application->decision === Status::POST_APPROVED) {
+            return false;
         }
 
         if ($to === Status::POST_APPROVAL) {
@@ -600,15 +632,20 @@ class Engine
          * it, so an option the menu never shows is not one the endpoint
          * quietly accepts.
          *
-         * The document checklist is not one of those gates. An override is
-         * the way past an unfinished checklist, and the reason above is what
-         * the audit keeps.
+         * The document checklist is not one of those gates in pre-approval:
+         * there an override is the way past an unfinished checklist, and the
+         * reason above is what the audit keeps. Apply for COR is the
+         * exception, checked just below; see {@see packageAllowsOverride()}.
          */
         if ($actor !== null && ! self::overrideFits($application, $to)) {
             throw new \InvalidArgumentException(sprintf(
                 '%s cannot be set on this application.',
                 Status::label($to),
             ));
+        }
+
+        if ($actor !== null && ! self::packageAllowsOverride($application, $to)) {
+            throw new \InvalidArgumentException(self::checklistRefusal($to));
         }
 
         // Section 26: an administrator may type any listed status, but the audit
@@ -657,6 +694,29 @@ class Engine
             ], $extra);
         }
 
+        /*
+         * Back to Post-Approval is the lane's decision being undone.
+         *
+         * Post-Approval is the file before it was approved or denied, so a
+         * decided file put back there no longer holds that decision. Left
+         * on the row it contradicted the chip, and the next time a paper
+         * was sent back and replaced the checklist read it and walked the
+         * file to Approved again with nobody having decided anything. What
+         * the file held before the lane decided, the Unit's grant, is put
+         * back in its place.
+         */
+        if ($to === Status::POST_APPROVAL
+            && ! $enteringPost
+            && $application->decision === Status::POST_APPROVED
+            && ! array_key_exists('decision', $extra)) {
+            [$earlier, $earlierAt] = self::decisionBeforeLane($application);
+
+            $meta['clearedDecision'] = $application->decision;
+            $meta['clearedDecidedAt'] = $application->decided_at?->toDateString();
+            $extra['decision'] = $earlier;
+            $extra['decided_at'] = $earlierAt;
+        }
+
         $from = $application->status;
         $application = DB::transaction(function () use ($application, $to, $actor, $meta, $from, $extra, $enteringPost) {
             $application->forceFill(array_merge(['status' => $to], $extra))->save();
@@ -671,6 +731,25 @@ class Engine
             if (in_array($to, [Status::APPLY_FOR_NIC, Status::APPLY_FOR_PASSPORT], true)) {
                 Requirements::materialiseApplication($application);
             }
+
+            // A pack has just gone to the Unit: anybody standing apart whose
+            // papers were not in it has missed it. The COR package is noted
+            // as it is confirmed, see {@see Confirmation}.
+            if ($to === Status::PENDING_NIC) {
+                PersonStatus::markMissed($application, Pack::NIC);
+            } elseif ($to === Status::PENDING_PASSPORT) {
+                PersonStatus::markMissed($application, Pack::PASSPORT);
+            }
+
+            /*
+             * Everyone on the file moves with it, in the same write.
+             *
+             * After the next pack's slots exist, because a person's step is
+             * read through their own documents. A file that has left the
+             * lane is left alone by this, so nothing is undone on the way
+             * back to pre-approval.
+             */
+            PersonStatus::settle($application);
 
             if ($to === Status::CLOSED) {
                 Package::forget();
@@ -698,13 +777,57 @@ class Engine
          *
          * Returning to Post-Approval from Apply for COR or Updates Required
          * is the reviewer still working the same COR checklist, not a second
-         * request for Stage 1 documents.
+         * request for Stage 1 documents. The same return for a file already
+         * decided lands on Approved, and is not a second decision: the
+         * letter went out once, when it was made.
          */
-        if ($enteringPost || $to !== Status::POST_APPROVAL) {
+        $backToCollecting = $to === Status::POST_APPROVED
+            && ($meta['reason'] ?? null) === 'checklist';
+
+        if (($enteringPost || $to !== Status::POST_APPROVAL) && ! $backToCollecting) {
             Notices::announce($application, $to, $actor, is_string($meta['message'] ?? null) ? $meta['message'] : null);
         }
 
+        /*
+         * Arriving at Apply for NIC or Apply for Passport opens a pack, and
+         * the pack may not be empty. Somebody whose NIC was recorded on
+         * their own has had their passport slots since, and a paper of
+         * theirs may already have been sent back: the file was not judged
+         * on it then, and is now. So the checklist is read once as the file
+         * arrives, the way it is when a decision lands. Not when the
+         * checklist itself brought the file here, which is that reading.
+         */
+        if (in_array($to, [Status::APPLY_FOR_NIC, Status::APPLY_FOR_PASSPORT], true)
+            && ($meta['reason'] ?? null) !== 'checklist') {
+            $application = Review::settle($application, $actor);
+        }
+
         return $application;
+    }
+
+    /**
+     * The decision a file held before the post-approval lane decided it:
+     * the Unit's grant and its day, read off the trail, or nothing for a
+     * file that was filed straight into the lane.
+     *
+     * @return array{0: ?string, 1: ?\Illuminate\Support\Carbon}
+     */
+    public static function decisionBeforeLane(CipApplication $application): array
+    {
+        $grant = CipEvent::query()
+            ->where('application_id', $application->getKey())
+            ->where('action', CipEvent::ACTION_DECISION_RECORDED)
+            ->orderByDesc('id')
+            ->get()
+            ->first(fn (CipEvent $event) => ($event->meta['decision'] ?? null) === Status::GRANTED);
+
+        if ($grant === null) {
+            return [null, null];
+        }
+
+        $day = $grant->meta['decidedAt'] ?? null;
+
+        return [Status::GRANTED, $day ? \Illuminate\Support\Carbon::parse($day) : $grant->created_at];
     }
 
     private static function checklistRefusal(string $to): string

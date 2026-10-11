@@ -1715,8 +1715,8 @@ class Intake
              * A post-approval edit can add a person who was not on the file
              * at filing — a dependent born later, a spouse the letter named.
              * {@see PostApproval::prepare} is the same door create uses: the
-             * PAD tree, the PAD checklist, and a status of Not started. Safe
-             * to call again when nobody new arrived.
+             * PAD tree, the PAD checklist, and the step the file itself is
+             * on as their status. Safe to call again when nobody new arrived.
              */
             if (($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL) {
                 $application = PostApproval::prepare($application, $actor);
@@ -1728,6 +1728,17 @@ class Intake
 
             if (! $locked) {
                 self::fileUploads($application, $data, $actor, $dependentUuids);
+            }
+
+            /*
+             * Who is on the file may have changed, and with it what the file
+             * can say. Take off the one person whose paper was holding the
+             * package and everybody left is ready, with no document left to
+             * judge that would ever tell the application so. It is read
+             * here, once, the way a document verdict would read it.
+             */
+            if (($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL) {
+                Review::settle($application->fresh(), $actor);
             }
 
             return $application->fresh();

@@ -21,6 +21,9 @@ use Illuminate\Support\Str;
     'country_of_residence', 'nationality', 'occupation', 'passport_number', 'folder_id',
     'post_approval_folder_id',
     'post_approval_status',
+    'post_approval_dates',
+    'post_approval_apart',
+    'post_approval_missed',
     'passport_number_lookup', 'date_of_birth_lookup',
 ])]
 class CipPerson extends Model
@@ -118,6 +121,9 @@ class CipPerson extends Model
         return [
             'date_of_birth' => EncryptedIdentity::class,
             'passport_number' => EncryptedIdentity::class,
+            // The post-approval steps recorded for this person alone, keyed
+            // by stage: see {@see \App\Support\Cip\PersonStatus}.
+            'post_approval_dates' => 'array',
         ];
     }
 

@@ -3250,18 +3250,23 @@
     { value: 'appeal_submitted', label: 'Appeal Submitted', tone: 'moss', lane: null },
   ];
 
+  /*
+   * A person's post-approval status is one of the application's own lane
+   * statuses, in the same words and colours; see PersonStatus. The server
+   * sends the list, this is only what is drawn before it has.
+   */
   var CIP_PERSON_STATUSES = [
-    { value: 'not_started', label: 'Not started', tone: 'neutral' },
-    { value: 'documents_pending', label: 'Documents pending', tone: 'neutral' },
-    { value: 'documents_in_review', label: 'Documents in review', tone: 'pending' },
-    { value: 'update_required', label: 'Update required', tone: 'danger' },
-    { value: 'ready_for_submission', label: 'Ready for submission', tone: 'teal' },
-    { value: 'processing', label: 'Processing', tone: 'indigo' },
-    { value: 'completed', label: 'Completed', tone: 'success' },
-    /* One person's own outcome. Not the application's decision — nothing is
-       sent when these are set; see PersonStatus. */
-    { value: 'approved', label: 'Approved', tone: 'success' },
-    { value: 'denied', label: 'Denied', tone: 'danger' },
+    { value: 'post_approval', label: 'Post-Approval', tone: 'action' },
+    { value: 'post_approved', label: 'Approved', tone: 'laurel' },
+    { value: 'post_denied', label: 'Denied', tone: 'garnet' },
+    { value: 'update_required', label: 'Updates Required', tone: 'amber' },
+    { value: 'apply_for_cor', label: 'Apply for COR', tone: 'emerald' },
+    { value: 'pending_cor', label: 'Pending COR', tone: 'slate' },
+    { value: 'apply_for_nic', label: 'Apply for NIC', tone: 'lime' },
+    { value: 'pending_nic', label: 'Pending NIC', tone: 'navy' },
+    { value: 'apply_for_passport', label: 'Apply for Passport', tone: 'gold' },
+    { value: 'pending_passport', label: 'Pending Passport', tone: 'plum' },
+    { value: 'ready_for_delivery', label: 'Ready for Delivery', tone: 'mint' },
     { value: 'closed', label: 'Closed', tone: 'stone' },
   ];
 
@@ -4309,9 +4314,9 @@
       docFiled: 0,
       docTotal: 0,
       docPending: 0,
-      status: 'not_started',
-      statusLabel: 'Not started',
-      statusTone: 'neutral',
+      status: a.status || 'post_approval',
+      statusLabel: a.statusLabel || 'Post-Approval',
+      statusTone: a.statusTone || 'action',
     }];
   }
 
@@ -4373,11 +4378,20 @@
     var appRecord = app || {};
     var person = member;
 
-    if (appRecord.phase === 'post_approval' && person && !person.statusLabel) {
+    /*
+     * A person with no status of their own yet stands where the file does.
+     * So does one whose status is not on the lane at all: a row stored
+     * before the lane replaced the old vocabulary still says Not started,
+     * and is painted for a moment before the fresh one arrives.
+     */
+    var onLane = !!(person && person.status && cipPersonStatusList(appRecord).some(function (s) {
+      return s.value === person.status;
+    }));
+    if (appRecord.phase === 'post_approval' && person && (!person.statusLabel || !onLane)) {
       person = Object.assign({}, person, {
-        status: 'not_started',
-        statusLabel: 'Not started',
-        statusTone: 'neutral',
+        status: appRecord.status || 'post_approval',
+        statusLabel: appRecord.statusLabel || 'Post-Approval',
+        statusTone: appRecord.statusTone || 'action',
       });
     }
 
@@ -4525,17 +4539,29 @@
       ' data-cip-open-member="' + esc(a.clientUid || '') + '"' +
       ' data-cip-app="' + esc(a.id) + '"' +
       ' data-cip-profile-tab="' + esc(member.profileTab || 'applicant') + '">' +
-      '<td></td>' +
+      // Spacer cells keep the columns on a desktop sheet; on a phone card
+      // each would be an empty line under a caption, so they stand down.
+      '<td class="tma-cip-table__member-spacer"></td>' +
       '<td><div class="tma-cip-table__member">' +
       '<span class="tma-cip-table__member-avatar">' + memberFace(member) + '</span>' +
       '<div class="tma-cip-table__member-text">' +
       '<span class="tma-cip-table__member-role">' + esc(cipPersonTitle(member)) + '</span>' +
       '<span class="tma-cip-table__member-name">' + esc(cipUpperName(member.name) || '-') + '</span>' +
       '</div></div></td>' +
-      '<td colspan="5"></td>' +
-      '<td>' + cipPersonStatusChip(member, a, true) + '</td>' +
-      '<td></td>' +
-      '<td></td>' +
+      /*
+       * Under the Status column, where the application's own chip sits.
+       *
+       * The row above has eight cells: number, applicant, provider,
+       * investment, family, status, assigned, menu. This one spanned two
+       * more than that, from when the table had them, which pushed each
+       * person's status past the last column and off the edge of the table.
+       */
+      '<td colspan="3" class="tma-cip-table__member-spacer"></td>' +
+      // Captioned by name: a phone card labels each cell from the header at
+      // the same position, and behind a colspan that position is wrong.
+      '<td data-label="Status">' + cipPersonStatusChip(member, a, true) + '</td>' +
+      '<td class="tma-cip-table__member-spacer"></td>' +
+      '<td class="tma-cip-table__member-spacer"></td>' +
       '</tr>';
   }
 
@@ -12976,7 +13002,7 @@
    * to which process to make sense of the menu.
    */
   function renderCipStatusPickerHtml(menu) {
-    // The person picker and older callers still pass the flat shape.
+    // Callers that pass the flat shape: a next list, then everything else.
     if (!menu.own && !menu.other) {
       var flat = menu.next || menu.list || [];
       var rest = (menu.overrides || []).concat(menu.locked || []);
@@ -13099,11 +13125,63 @@
     }, 0);
   }
 
+  /*
+   * The copy of an application the person picker should trust.
+   *
+   * On the applications table that is the table's own row. Anywhere else,
+   * on the file's page, it is the application record, which is what was
+   * re-read after the last move. The table's rows are not refreshed while a
+   * profile is showing, so a menu built from one went on offering a step
+   * the person had already taken: record NIC submitted, press the chip
+   * again, and Pending NIC was still the row to press.
+   */
+  function cipPersonSource(extra, clientUid) {
+    var state = (clientsMenuCtx && clientsMenuCtx.state) || clientsMountState;
+    var record = clientUid ? applicationFor(clientUid) : null;
+    if (record && !onApplicationsTable(state)) return record;
+
+    return cipSourceFor(extra, clientUid);
+  }
+
+  /*
+   * A table row told what a person's move changed, from the record the
+   * move returned, so the row is right before its own refetch lands: the
+   * person's chip and what their picker offers, and the file's own status,
+   * which the move may have carried with it.
+   */
+  function patchRowPeopleFromRecord(record) {
+    if (!record || !record.id) return;
+    var row = applicationRowById(record.id);
+    if (!row) return;
+
+    applyCipStatusFields(row, record.status, record);
+    if (!row.familyMembers) return;
+
+    var fresh = {};
+    [record.applicant, record.sponsor].concat(record.dependents || []).forEach(function (p) {
+      if (p && p.id) fresh[p.id] = p;
+    });
+    row.familyMembers = row.familyMembers.map(function (member) {
+      var p = fresh[member.id];
+      if (!p) return member;
+
+      return Object.assign({}, member, {
+        status: p.status,
+        statusLabel: p.statusLabel,
+        statusTone: p.statusTone,
+        statusApart: !!p.statusApart,
+        availableStatuses: p.availableStatuses || [],
+        availableStatusOverrides: p.availableStatusOverrides || [],
+        lockedStatuses: p.lockedStatuses || [],
+      });
+    });
+  }
+
   function cipPersonForStatus(extra, clientUid) {
     var personId = extra && extra.personId;
     if (!personId) return null;
 
-    var app = cipSourceFor(extra, clientUid);
+    var app = cipPersonSource(extra, clientUid);
     if (app) {
       var fromPeople = [app.applicant, app.sponsor].concat(app.dependents || []).filter(Boolean);
       var hit = fromPeople.filter(function (p) { return p.id === personId; })[0];
@@ -13125,7 +13203,7 @@
   }
 
   function cipPersonStatusMenu(extra, clientUid) {
-    var app = cipSourceFor(extra, clientUid);
+    var app = cipPersonSource(extra, clientUid);
     var person = cipPersonForStatus(extra, clientUid);
     var all = cipPersonStatusList(app);
     var nextValues = statusValues(person && person.availableStatuses);
@@ -13142,7 +13220,34 @@
       return lockedValues.indexOf(status.value) !== -1;
     });
 
-    return { next: next, overrides: overrides, locked: locked, current: person && person.status };
+    // The lane's own order, so a step that can be taken sits where it
+    // falls in the lifecycle rather than above everything that cannot.
+    var order = {};
+    all.forEach(function (status, index) { order[status.value] = index; });
+
+    return {
+      next: next,
+      overrides: overrides,
+      locked: locked,
+      order: order,
+      current: person && person.status,
+    };
+  }
+
+  /*
+   * The dated step behind a status, when the server says there is one.
+   *
+   * A NIC or passport step recorded for one person carries its day, the way
+   * the application's own does: `stage` names it and `dateLabel` is what to
+   * call the date. An outcome, or a step being taken back, has neither.
+   */
+  function cipPersonDatedStep(person, to) {
+    var list = (person && person.availableStatuses) || [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && list[i].value === to && list[i].stage) return list[i];
+    }
+
+    return null;
   }
 
   function openCipPersonStatusPicker(anchor, extra, clientUid) {
@@ -13153,7 +13258,19 @@
     clientsCtxEl = document.createElement('div');
     clientsCtxEl.className = 'tma-portal-context-menu';
     clientsCtxEl.setAttribute('role', 'menu');
-    clientsCtxEl.innerHTML = renderCipStatusPickerHtml(menu);
+    /*
+     * The whole lane, in order: the steps this reader may take as rows to
+     * press, the rest greyed. Most of a person's lane is not theirs to pick,
+     * the application or their own documents move them, and a menu of only
+     * the pressable rows read as one or two loose options with no lifecycle
+     * around them.
+     */
+    clientsCtxEl.innerHTML = renderCipStatusLaneBody(
+      menu.next.concat(menu.overrides),
+      menu.locked,
+      menu.current,
+      menu.order
+    );
     document.body.appendChild(clientsCtxEl);
 
     var box = anchor.getBoundingClientRect();
@@ -13183,14 +13300,23 @@
     }
 
     var person = cipPersonForStatus(extra, clientUid);
-    var app = cipSourceFor(extra, clientUid) || applicationFor(clientUid);
+    var app = cipPersonSource(extra, clientUid) || applicationFor(clientUid);
     var place = cipAttachmentPlace(app, person);
+    var step = cipPersonDatedStep(person, to);
+    var today = new Date().toISOString().slice(0, 10);
 
     ui.openModal({
       title: 'Change status',
       body:
         '<p class="tma-portal-modal__text">Move ' + esc((person && person.name) || 'this person') +
         ' to ' + esc(label || 'the next status') + '.</p>' +
+        (step
+          ? '<div class="tma-dash__clients-field">' +
+            '<label class="tma-dash__clients-field-label" for="cip-person-stage-date">' + esc(step.dateLabel || 'Date') + '</label>' +
+            '<input type="date" id="cip-person-stage-date" class="tma-dash__clients-field-input"' +
+            ' data-cip-person-stage-date value="' + esc(today) + '">' +
+            '</div>'
+          : '') +
         cipStatusAttachmentHtml(place) +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-person-status>Cancel</button>' +
@@ -13208,15 +13334,21 @@
             clientsToast('Upload a PDF or an image.', 'negative');
             return;
           }
+          var dateEl = el.querySelector('[data-cip-person-stage-date]');
+          var date = dateEl ? dateEl.value : '';
+          if (step && !date) {
+            clientsToast('Enter the ' + String(step.dateLabel || 'date').toLowerCase() + '.', 'negative');
+            return;
+          }
           cipPendingStatusFile = file;
           ui.closeModal();
-          changeCipPersonStatus(to, extra, clientUid, label, true);
+          changeCipPersonStatus(to, extra, clientUid, label, true, date);
         });
       },
     });
   }
 
-  function changeCipPersonStatus(to, extra, clientUid, label, confirmed) {
+  function changeCipPersonStatus(to, extra, clientUid, label, confirmed, date) {
     var personId = extra && extra.personId;
     if (!personId) {
       clientsToast('Could not find this person.', 'negative');
@@ -13238,11 +13370,14 @@
 
     cipPostWithAttachment('/portal/cip/people/' + encodeURIComponent(personId) + '/status', {
       status: to,
+      // The day a dated step happened; left out, the server records today.
+      date: date || undefined,
     })
       .then(function (json) {
         if (json && json.application && clientUid) {
           rememberApplication(clientUid, json.application);
         }
+        if (json && json.application) patchRowPeopleFromRecord(json.application);
         clientsToast('Moved to ' + (label || 'the next status'), 'positive');
         refreshAfterCipMove(clientUid);
         if (state) ensureApplicationLoaded(state, render);

@@ -220,11 +220,17 @@ class CipLettersTest extends TestCase
             UploadedFile::fake()->create('letter.pdf', 40, 'application/pdf'),
         );
 
-        $this->assertContains(
-            Status::APPLY_FOR_COR,
-            Engine::availableTransitions($decided->fresh(), $admin),
+        /*
+         * The stage is open: the edge is on the map now, which it was not
+         * before the decision. Whether it is OFFERED is the checklist's to
+         * say, and recording the decision reads the checklist, so a file
+         * that still owes COR documents waits at Approved for them.
+         */
+        $this->assertTrue(
+            Engine::canTransition($decided->fresh(), Status::APPLY_FOR_COR),
             'Once approved, the file collects its COR documents.',
         );
+        $this->assertFalse(Engine::canTransition($application->fresh()->forceFill(['status' => Status::POST_APPROVAL]), Status::APPLY_FOR_COR));
     }
 
     /** Rewriting one lane's letter leaves the other alone. */

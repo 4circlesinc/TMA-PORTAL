@@ -35,6 +35,7 @@ use App\Support\Cip\InvestmentType;
 use App\Support\Cip\Milestones;
 use App\Support\Cip\PassportPhoto;
 use App\Support\Cip\PersonStatus;
+use App\Support\Cip\Settlement;
 use App\Support\Cip\Phase;
 use App\Support\Cip\PostApproval;
 use App\Support\Cip\ProviderTransfer;
@@ -71,6 +72,13 @@ use Illuminate\Support\Str;
  */
 class CipApplicationController extends Controller
 {
+    /**
+     * Set while a response carries many full records (the offline sync), so
+     * the per-person picker is built the way a listing builds it. See
+     * {@see PersonStatus::present()}.
+     */
+    private bool $manyRecords = false;
+
     /*
      * How many applications one sync page carries.
      *
@@ -643,6 +651,10 @@ class CipApplicationController extends Controller
         $presenter = self::presenterFor($user, $live);
         $attention = Attention::forClients($user, $live->pluck('client_id')->filter()->all());
         Review::primeTally($live);
+        // A page of records, not one file: each person's next step is
+        // offered without counting their documents, and the write judges,
+        // the way a table row works. Counting here was a query per file.
+        $this->manyRecords = true;
 
         return response()->json([
             'applications' => $page->map(function ($application) use ($user, $presenter, $attention) {
@@ -1662,7 +1674,6 @@ class CipApplicationController extends Controller
             ->map(function (CipPerson $person) use ($phase, $viewer, $application) {
                 $person->setRelation('application', $application);
                 $progress = $this->documentProgress($person, $phase);
-                $status = PersonStatus::forPerson($person);
 
                 $photoFile = $person->documents
                     ->firstWhere('type', DocumentTypes::PASSPORT_PHOTO)?->file;
@@ -1675,10 +1686,9 @@ class CipApplicationController extends Controller
                     'name' => $person->fullName(),
                     'profileTab' => $this->profileTabForPerson($person),
                     ...$this->personPhotoUrls($person, $photoFile),
-                    ...$status,
-                    'availableStatuses' => PersonStatus::availableTransitions($person, $viewer),
-                    'availableStatusOverrides' => PersonStatus::availableOverrides($person, $viewer),
-                    'lockedStatuses' => PersonStatus::lockedStatuses($person, $viewer),
+                    // A table row has not counted this person's documents,
+                    // so a submission step is offered and the write judges.
+                    ...PersonStatus::present($person, $application, $viewer, forListing: true),
                     ...$progress,
                 ];
             })
@@ -1894,6 +1904,12 @@ class CipApplicationController extends Controller
          * applications moved since?" from exactly that timestamp.
          */
         Requirements::materialiseApplication($application);
+        // And the people on it stand where the file and their documents put
+        // them. Like the line above this writes only when the answer has
+        // changed, so a requirement an administrator added since the last
+        // open cannot leave a person, or an unconfirmed Apply for COR, on a
+        // status the checklist no longer supports.
+        Settlement::afterChecklistChange($application);
         $application->unsetRelation('people');
 
         return response()->json([
@@ -1974,6 +1990,12 @@ class CipApplicationController extends Controller
     public function showRecord(CipApplication $application, User $user): array
     {
         Requirements::materialiseApplication($application);
+        // And the people on it stand where the file and their documents put
+        // them. Like the line above this writes only when the answer has
+        // changed, so a requirement an administrator added since the last
+        // open cannot leave a person, or an unconfirmed Apply for COR, on a
+        // status the checklist no longer supports.
+        Settlement::afterChecklistChange($application);
         $application->unsetRelation('people');
 
         return $this->record($application->fresh(), $user);
@@ -2039,6 +2061,7 @@ class CipApplicationController extends Controller
             $application->refresh();
             Tree::syncClientName($application);
             Requirements::materialiseApplication($application);
+            Settlement::afterChecklistChange($application);
             $application->unsetRelation('people');
         }
 
@@ -2862,19 +2885,13 @@ class CipApplicationController extends Controller
                     ];
                 })->values()->all(),
             'outstanding' => DocumentSlots::outstanding($person),
-            ...($applicationPhase === Phase::POST_APPROVAL
-                ? PersonStatus::forPerson($person)
-                : []),
-            'availableStatuses' => $applicationPhase === Phase::POST_APPROVAL
-                && CipAccess::canChangeApplicationStatus($presenter->viewer())
-                ? PersonStatus::availableTransitions($person, $presenter->viewer())
-                : [],
-            'availableStatusOverrides' => $applicationPhase === Phase::POST_APPROVAL
-                ? PersonStatus::availableOverrides($person, $presenter->viewer())
-                : [],
-            'lockedStatuses' => $applicationPhase === Phase::POST_APPROVAL
-                ? PersonStatus::lockedStatuses($person, $presenter->viewer())
-                : [],
+            ...($applicationPhase === Phase::POST_APPROVAL && $person->application
+                ? PersonStatus::present($person, $person->application, $presenter->viewer(), $this->manyRecords)
+                : [
+                    'availableStatuses' => [],
+                    'availableStatusOverrides' => [],
+                    'lockedStatuses' => [],
+                ]),
         ];
     }
 

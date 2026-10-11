@@ -102,7 +102,7 @@ class Requirements
         if ($phase === Phase::POST_APPROVAL) {
             // No application yet is the intake wizard: Stage 1 COR only.
             // NIC slots wait until the COR received date is on the file.
-            $open = $application ? Pack::open($application) : [Pack::COR];
+            $open = $application ? Pack::openFor($application, $person) : [Pack::COR];
             $templates = $templates->filter(
                 fn (CipDocumentRequirement $row) => in_array(Pack::of($row), $open, true),
             );
@@ -127,7 +127,7 @@ class Requirements
         $templates = self::catalogue($applicantType, $phase, $application, $person);
 
         if ($phase === Phase::POST_APPROVAL && $application) {
-            $keep = array_merge(Pack::open($application), Pack::upcoming($application));
+            $keep = array_merge(Pack::openFor($application, $person), Pack::upcomingFor($application, $person));
             $templates = $templates->filter(
                 fn (CipDocumentRequirement $row) => in_array(Pack::of($row), $keep, true),
             );

@@ -79,6 +79,26 @@ class Decision
         $note = trim($note);
         $already = $application->status === $decision;
 
+        /*
+         * The lane's approval is already on the row, and the file has only
+         * been walked on from Approved by its own checklist.
+         *
+         * Recording Approved on a file whose papers are all in takes it
+         * straight to Apply for COR (see the end of this method), so the
+         * status no longer says Approved a moment later. A second press, a
+         * lost response and the button pressed again, would otherwise find
+         * the edge back to Approved open and record the whole decision
+         * twice: a second letter, a second notice to everybody. It is the
+         * same outcome again, and is treated as one.
+         */
+        if (! $already
+            && $decision === Status::POST_APPROVED
+            && $application->decision === Status::POST_APPROVED
+            && in_array($application->status, [Status::APPLY_FOR_COR, Status::UPDATE_REQUIRED], true)
+            && Pack::current($application) === Pack::COR) {
+            $already = true;
+        }
+
         if ($already) {
             // Same outcome again: the date can move. The other outcome cannot
             // overwrite this one through this door.
@@ -145,6 +165,20 @@ class Decision
 
             return $application->refresh();
         });
+
+        /*
+         * Approved in the lane, the file is collecting its COR documents,
+         * and may already have them.
+         *
+         * A file whose papers were all accepted before the decision was
+         * recorded has nothing left to judge, so no document verdict would
+         * ever walk it on: it would sit at Approved over a family that all
+         * reads Apply for COR. The checklist is read here instead, once,
+         * as the decision lands.
+         */
+        if (! $already && $application->status === Status::POST_APPROVED) {
+            $application = Review::settle($application, $actor);
+        }
 
         return $application;
     }

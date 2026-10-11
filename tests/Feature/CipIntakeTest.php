@@ -1077,6 +1077,70 @@ class CipIntakeTest extends TestCase
     }
 
     /**
+     * Taking somebody off the file changes what the file can say.
+     *
+     * The one person still owing a paper is removed on Edit application:
+     * everybody left is ready, and no document is left to judge that would
+     * ever tell the application so. The edit reads the checklist itself.
+     */
+    public function test_removing_the_person_holding_the_package_moves_a_post_approval_file_on(): void
+    {
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+        \Illuminate\Support\Facades\Mail::fake();
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($staff, $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12681P',
+        ]))->assertCreated()->json('application');
+
+        $application = CipApplication::where('uuid', $body['id'])->firstOrFail();
+
+        $this->edit($staff, $application, $this->edits($provider, [
+            'cipNumber' => '10T1G12681P',
+            'dependents' => [[
+                'firstName' => 'Lina',
+                'lastName' => 'Smith',
+                'dateOfBirth' => '2016-09-09',
+                'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+            ]],
+        ]))->assertOk();
+
+        // The main applicant hands everything over and has it accepted.
+        $main = $application->fresh()->people()->where('role', CipPerson::ROLE_MAIN_APPLICANT)->first();
+        $slots = \App\Support\Cip\Review::constrainToPack(
+            \App\Models\CipDocument::query()->where('person_id', $main->id)->where('required', true),
+            \App\Support\Cip\Pack::COR,
+            $application->fresh(),
+        )->get();
+        $this->assertNotEmpty($slots);
+
+        foreach ($slots as $slot) {
+            if (! $slot->file_id) {
+                $upload = $slot->type === \App\Support\Cip\DocumentTypes::PASSPORT_PHOTO
+                    ? UploadedFile::fake()->image('photo.jpg', 600, 600)
+                    : UploadedFile::fake()->create($slot->type.'.pdf', 40, 'application/pdf');
+                \App\Support\Cip\DocumentSlots::fill($main->fresh(['application', 'documents']), $slot->type, $upload, $staff);
+            }
+            if ($slot->fresh()->status !== \App\Support\Cip\DocumentStatus::READY_FOR_SUBMISSION) {
+                $this->actingAs($staff)->postJson('/portal/cip/documents/'.$slot->uuid.'/approve')->assertOk();
+            }
+        }
+
+        // Lina still owes hers, so the file waits.
+        $this->assertSame(Status::POST_APPROVAL, $application->fresh()->status);
+
+        $this->edit($staff, $application->fresh(), $this->edits($provider, [
+            'cipNumber' => '10T1G12681P',
+            'dependents' => [],
+        ]))->assertOk();
+
+        $this->assertSame(Status::APPLY_FOR_COR, $application->fresh()->status);
+        $this->assertSame(Status::APPLY_FOR_COR, $main->fresh()->post_approval_status);
+    }
+
+    /**
      * Post-approval Edit is the same form as a new post-approval filing.
      *
      * A dependent who was not on the file at intake can be added later —
@@ -1115,7 +1179,9 @@ class CipIntakeTest extends TestCase
         $application->refresh()->load('people.documents');
         $lina = $application->people->firstWhere('role', CipPerson::ROLE_DEPENDENT);
         $this->assertNotNull($lina);
-        $this->assertSame('not_started', $lina->post_approval_status);
+        // On the step the file itself is on, not a status of her own.
+        $this->assertSame(Status::POST_APPROVAL, $application->status);
+        $this->assertSame(Status::POST_APPROVAL, $lina->post_approval_status);
         $this->assertTrue(
             $lina->documents->isNotEmpty(),
             'A dependent added on Edit must get the post-approval checklist.',

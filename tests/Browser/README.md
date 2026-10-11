@@ -354,6 +354,32 @@ field placement and drawing, and computed CSS only exist in a browser.
   TMA_BASE_URL=http://127.0.0.1:8933 TMA_APP=<uuid> node tests/Browser/cip-photo-adjust.mjs
   ```
 
+- **`cip-person-status.mjs`** — a person's status in post-approval, beside
+  the application's (`App\Support\Cip\PersonStatus`). Each person used to
+  wear a placeholder vocabulary nothing but a hand moved, so a file standing
+  at Approved showed its main applicant as Not started. They now wear the
+  application's own lane statuses, read off the file, their own documents
+  and any NIC or passport step recorded for them alone; the rules are pinned
+  in `CipPersonStatusTest`. This pins what only a browser shows: the table's
+  family rows read in the application's words and colours and sit under the
+  Status column; a person whose documents are all accepted reads Apply for
+  COR while the file, waiting on the rest of the family, still reads
+  Approved; the chip opens the whole lane, pressable where a step is theirs
+  to take and grey where the application or their documents decide; a dated
+  step asks for its day and a submission is refused by name while a document
+  is not Ready for submission; recording it moves that person and nobody
+  else; and Denied, an outcome of their own, asks for no date and can be
+  taken back. Same serve as `cip-draft-autosave.mjs`. The check moves the
+  people it reads, so seed a fresh pair of families for each run; the seed
+  prints the environment the check wants as its last line:
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FEATURE_CIP=true FILES_DISK=local MALWARE_SCANNER=none \
+    php artisan tinker tests/Browser/fixtures/person-status-seed.php
+  TMA_BASE_URL=http://127.0.0.1:8933 TMA_APP_COR=… TMA_PERSON_READY=… TMA_PERSON_OPEN=… \
+    TMA_APP_NIC=… TMA_PERSON_NIC_READY=… TMA_PERSON_NIC_OPEN=… node tests/Browser/cip-person-status.mjs
+  ```
+
 - **`cip-edit-reload.mjs`** — Edit application opened by its address, as a
   Reviewing Officer who did not file it. The in-app Edit button always
   loaded the record; a reload of `/citizenship-applications/applications/{id}/edit`

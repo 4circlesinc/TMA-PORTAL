@@ -135,6 +135,12 @@ class Stages
         ];
     }
 
+    /** What the date of one step is called, for a dialog that asks for it. */
+    public static function dateLabel(string $key): ?string
+    {
+        return self::STEPS[$key]['dateLabel'] ?? null;
+    }
+
     public static function owns(string $status): bool
     {
         return in_array($status, self::destinations(), true);
@@ -221,10 +227,13 @@ class Stages
      *
      * Idempotent when the file already stands at the destination: a second
      * press updates the day rather than sending a second notice.
+     *
+     * A null actor is the system: the application following people who have
+     * each had the step recorded on their own ({@see PersonStatus}).
      */
     public static function record(
         CipApplication $application,
-        User $actor,
+        ?User $actor,
         string $key,
         ?Carbon $date = null,
         ?string $corNumber = null,

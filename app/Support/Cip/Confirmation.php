@@ -235,6 +235,10 @@ class Confirmation
         return DB::transaction(function () use ($application, $actor, $lockedAt, $override) {
             $application->forceFill(['cor_locked_at' => $lockedAt])->save();
 
+            // Anybody standing apart whose COR papers are not in it has
+            // missed this package, and cannot simply be put back in step.
+            PersonStatus::markMissed($application, Pack::COR);
+
             Package::forget();
             Package::revokeCorLinks($application);
 

@@ -1500,6 +1500,11 @@ body::-webkit-scrollbar,
   .tma-cip-table tr.tma-cip-table__member-row td {
     grid-column: 1 / -1;
   }
+
+  /* The cells that only hold the columns apart on the desktop sheet. */
+  .tma-cip-table tr.tma-cip-table__member-row td.tma-cip-table__member-spacer {
+    display: none;
+  }
 }
 
 /* ── Every other ui().table() listing (People, Admin, Files, Templates,
