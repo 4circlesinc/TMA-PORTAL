@@ -9350,6 +9350,8 @@
       // way reads the way a search under way does. Shown in place of the
       // arrow while the control is busy; see the aria-busy rules.
       '<span class="tma-dash__search-spinner" aria-hidden="true"><img src="' + ICONS.Loading16 + '" alt=""></span>' +
+      // Said in a word as well, beside the loader, while the file is sent.
+      '<span class="tma-dash__clients-checklist-upload-note" aria-hidden="true">Uploading…</span>' +
       '</button>';
   }
 

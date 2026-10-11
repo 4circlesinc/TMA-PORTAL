@@ -38407,6 +38407,36 @@ span.tma-dash__messages-profile-avatar {
   cursor: progress;
 }
 
+/* Drawn at full strength here. In the search bar it sits inside a field as a
+   quiet aside; on a checklist line it is the only sign a file is being sent,
+   and at the field's 40% it was barely there on the dark theme. */
+.tma-dash__clients-checklist-upload > .tma-dash__search-spinner img {
+  opacity: 1;
+}
+
+/* And the word beside it, in the small secondary type the line's own notes
+   use. Only while sending, when the control widens to hold it; not on a
+   phone, where the name needs the room. */
+.tma-dash__clients-checklist-upload-note {
+  display: none;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+@media (min-width: 641px) {
+  .tma-dash__clients-checklist-row .tma-dash__clients-checklist-upload[aria-busy="true"] {
+    width: auto;
+    gap: var(--space-4);
+    padding: 0 var(--space-4);
+  }
+
+  .tma-dash__clients-checklist-upload[aria-busy="true"] > .tma-dash__clients-checklist-upload-note {
+    display: inline;
+  }
+}
+
 /* The loader is black line work, which the dark theme has to lift the way it
    lifts the phosphor icons, or it turns unseen on a dark line. */
 :where(.tma-dash[data-theme="dark"], :root[data-theme="dark"]) .tma-dash__clients-checklist-upload > .tma-dash__search-spinner img {

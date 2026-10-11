@@ -178,6 +178,9 @@ try {
   check(loader.spinnerShown && loader.arrowHidden, 'the arrow gives place to the loader');
   check(loader.turning, 'which is turning, the way the search bar\'s does');
   check(loader.visible, 'and stays in view though the pointer has moved off the line');
+  const note = button.locator('.tma-dash__clients-checklist-upload-note');
+  check(await note.isVisible() && (await note.innerText()).trim() === 'Uploading…', 'with the word Uploading… beside it');
+  check(await button.locator('.tma-dash__search-spinner img').evaluate(n => Number(getComputedStyle(n).opacity) === 1), 'and the loader drawn at full strength');
   // A second file offered to the same line while the first is on its way.
   await page.locator(`[data-cip-slot-file="${target.upload}"]`).setInputFiles({ name: 'again.pdf', mimeType: 'application/pdf', buffer: tinyPdfBuffer() });
   /*
