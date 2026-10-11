@@ -78,16 +78,43 @@ final class MessageNotifier
             });
     }
 
-    /** Tell everyone else in the conversation that a message landed. */
-    public static function announceMessage(Conversation $conversation, Message $message, User $sender): void
-    {
+    /**
+     * Tell everyone else in the conversation that a message landed.
+     *
+     * Someone the message addresses, by name or with @all, is told that
+     * rather than that a message arrived. Being named reaches a member who
+     * has muted the conversation; @all does not, it is still the group
+     * talking to itself.
+     *
+     * @param  array{users?: list<int>, all?: bool}  $mentioned  From Mentions::sync.
+     */
+    public static function announceMessage(
+        Conversation $conversation,
+        Message $message,
+        User $sender,
+        array $mentioned = [],
+    ): void {
         try {
             $preview = self::preview($message);
             $url = self::url($conversation);
+            $named = $mentioned['users'] ?? [];
+            $everyone = (bool) ($mentioned['all'] ?? false);
 
-            foreach (self::recipients($conversation, $sender->id) as $participant) {
+            foreach (self::others($conversation, $sender->id) as $participant) {
                 $recipient = $participant->user;
                 if (! $recipient) {
+                    continue;
+                }
+
+                $byName = in_array((int) $recipient->id, $named, true);
+
+                if ($participant->isMuted() && ! $byName) {
+                    continue;
+                }
+
+                if ($byName || $everyone) {
+                    self::mention($conversation, $message, $sender, $recipient, $byName, $preview);
+
                     continue;
                 }
 
@@ -116,6 +143,73 @@ final class MessageNotifier
             // missing badge, never a failed send.
             Log::warning('MessageNotifier.announceMessage failed', ['error' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * Tell the people an edit has just started addressing.
+     *
+     * Nobody else hears about an edit: the message already reached them.
+     *
+     * @param  array{users?: list<int>, all?: bool}  $mentioned  From Mentions::sync.
+     */
+    public static function announceMentions(
+        Conversation $conversation,
+        Message $message,
+        User $sender,
+        array $mentioned,
+    ): void {
+        $named = $mentioned['users'] ?? [];
+        $everyone = (bool) ($mentioned['all'] ?? false);
+
+        if ($named === [] && ! $everyone) {
+            return;
+        }
+
+        try {
+            $preview = self::preview($message);
+
+            foreach (self::others($conversation, $sender->id) as $participant) {
+                $recipient = $participant->user;
+                $byName = $recipient && in_array((int) $recipient->id, $named, true);
+
+                if (! $recipient || ! ($byName || ($everyone && ! $participant->isMuted()))) {
+                    continue;
+                }
+
+                self::mention($conversation, $message, $sender, $recipient, $byName, $preview);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('MessageNotifier.announceMentions failed', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * One row per conversation, apart from the row its ordinary messages
+     * share, so "you were mentioned" is not folded into "3 new messages".
+     */
+    private static function mention(
+        Conversation $conversation,
+        Message $message,
+        User $sender,
+        User $recipient,
+        bool $byName,
+        string $preview,
+    ): void {
+        Notifier::send([
+            'user' => $recipient,
+            'actor' => $sender,
+            'type' => 'message.mention',
+            'title' => MessagingPresenter::title($conversation, $recipient),
+            'message' => $sender->name.($byName ? ' mentioned you: ' : ' mentioned everyone: ').$preview,
+            'subject' => $conversation,
+            'action_url' => self::url($conversation),
+            'dedupe_key' => self::mentionKey($conversation),
+            'dedupe_minutes' => self::MESSAGE_DEDUPE_MINUTES,
+            'metadata' => [
+                'conversationId' => $conversation->uuid,
+                'messageId' => $message->uuid,
+            ],
+        ]);
     }
 
     /**
@@ -183,7 +277,11 @@ final class MessageNotifier
             Notification::query()
                 ->where('user_id', $user->id)
                 ->whereNull('read_at')
-                ->whereIn('dedupe_key', [self::messageKey($conversation), self::callKey($conversation)])
+                ->whereIn('dedupe_key', [
+                    self::messageKey($conversation),
+                    self::mentionKey($conversation),
+                    self::callKey($conversation),
+                ])
                 ->update(['read_at' => now()]);
         } catch (\Throwable $e) {
             Log::warning('MessageNotifier.clearForConversation failed', ['error' => $e->getMessage()]);
@@ -198,13 +296,23 @@ final class MessageNotifier
      */
     private static function recipients(Conversation $conversation, int ...$excludeUserIds)
     {
-        return $conversation->activeParticipants()
-            ->with('user')
-            ->get()
-            ->reject(fn (ConversationParticipant $p) => in_array($p->user_id, $excludeUserIds, true))
+        return self::others($conversation, ...$excludeUserIds)
             // Muting a conversation is exactly the request not to be told about
             // it, the Messages badge still counts it, the bell stays quiet.
             ->reject(fn (ConversationParticipant $p) => $p->isMuted());
+    }
+
+    /**
+     * Everyone still in the conversation but the people given, muted or not.
+     *
+     * @return \Illuminate\Support\Collection<int, ConversationParticipant>
+     */
+    private static function others(Conversation $conversation, int ...$excludeUserIds)
+    {
+        return $conversation->activeParticipants()
+            ->with('user')
+            ->get()
+            ->reject(fn (ConversationParticipant $p) => in_array($p->user_id, $excludeUserIds, true));
     }
 
     /** Which registry type this message is, from the recipient's point of view. */
@@ -248,6 +356,11 @@ final class MessageNotifier
     private static function messageKey(Conversation $conversation): string
     {
         return 'message:'.$conversation->id;
+    }
+
+    private static function mentionKey(Conversation $conversation): string
+    {
+        return 'mention:'.$conversation->id;
     }
 
     private static function callKey(Conversation $conversation): string

@@ -591,11 +591,6 @@
     return { id: me.id, name: me.name, photo: me.photo || me.avatar, self: true };
   }
 
-  function groupPhotoClusterMember(row) {
-    if (!row || !row.photo) return null;
-    return { name: row.name, photo: row.photo, groupPhoto: true };
-  }
-
   function padClusterWithSelf(pool, min) {
     if (pool.length >= min) return pool;
     var me = selfClusterMember();
@@ -631,8 +626,6 @@
       if (ap !== bp) return ap - bp;
       return String(a.name || '').localeCompare(String(b.name || ''));
     });
-    var photo = groupPhotoClusterMember(row);
-    if (photo) pool.unshift(photo);
     return padClusterWithSelf(pool, 2).slice(0, GROUP_CLUSTER_MAX);
   }
 
@@ -661,16 +654,17 @@
   /*
    * Conversation avatar. Real photos only; where there is none the initials
    * tile stands in - the portal never shows a stock avatar for a real person.
-   * Groups are always the member-face cluster (see renderGroupCluster), in
-   * the inbox, the chat head and search alike.
+   * A group that has been given a picture is that picture; one that has not
+   * is the member-face cluster (see renderGroupCluster). The same in the
+   * inbox, the chat head and search alike.
    */
   function threadIcon(row) {
-    if (row.type === 'group') {
+    if (row.type === 'group' && !row.photo) {
       var members = groupClusterMembers(row);
       if (!members.length) {
         /* No members and no reader yet (a warm start before /me): the group's
          * own name still sits as one face in the disc, not a tile. */
-        members = [{ name: row.name || 'Group', photo: row.photo || null }];
+        members = [{ name: row.name || 'Group', photo: null }];
       }
       return renderGroupCluster(members, 'tma-dash__messages-row-avatar tma-dash__messages-row-avatar--group');
     }
@@ -715,6 +709,14 @@
       return window.TMABadge.renderBadge({ type: 'number', value: String(count), color: 'blue' });
     }
     return '<span class="tma-dash__messages-unread">' + esc(count) + '</span>';
+  }
+
+  function renderMentionBadge() {
+    var label = '<span class="tma-dash__messages-row-mention" title="You were mentioned" aria-label="You were mentioned">';
+    if (window.TMABadge) {
+      return label + window.TMABadge.renderBadge({ type: 'number', value: '@', color: 'blue' }) + '</span>';
+    }
+    return label + '<span class="tma-dash__messages-unread">@</span></span>';
   }
 
   function renderComposeBtn(className, attrs) {
@@ -1148,7 +1150,11 @@
       esc(row.timestamp ? (listTime(row.timestamp) || row.time || '') : (row.time || '')) +
       '</span>' +
       (row.unread
-        ? '<span class="tma-dash__messages-row-meta">' + renderBadge(row.unread) + '</span>'
+        ? '<span class="tma-dash__messages-row-meta' +
+          (row.mentioned ? ' tma-dash__messages-row-meta--mention' : '') + '">' +
+          // Something unread in here is addressed to the reader.
+          (row.mentioned ? renderMentionBadge() : '') +
+          renderBadge(row.unread) + '</span>'
         : '<span class="tma-dash__messages-row-meta" aria-hidden="true"></span>')
     );
   }
@@ -2326,6 +2332,320 @@
     });
   }
 
+  /* ------------------------------------------------------------------
+   * @mentions
+   *
+   * In a group, "@Their Name" addresses a member and "@all" addresses
+   * everyone. The server reads the names out of the message's own text, so
+   * nothing here is sent alongside it: the composer's list only saves typing
+   * the name, and a name typed out by hand counts the same.
+   * ---------------------------------------------------------------- */
+
+  // What follows the @ to address the whole group; the server's word for it.
+  var MENTION_EVERYONE = 'all';
+  var MENTION_LIST_MAX = 8;
+  // The list is kept while a conversation stays in use, and asked for again
+  // after this long so someone added to the group turns up in it.
+  var MENTION_ROSTER_MS = 60000;
+
+  function mentionRoster(conversationId) {
+    return (STORE.mentionable || {})[conversationId] || null;
+  }
+
+  function loadMentionRoster(conversationId, render) {
+    if (!STORE.mentionable) STORE.mentionable = {};
+
+    var roster = STORE.mentionable[conversationId];
+    if (roster && (roster.loading || Date.now() - roster.at < MENTION_ROSTER_MS)) return;
+
+    // What is already known keeps showing while the fresh answer is fetched.
+    roster = STORE.mentionable[conversationId] = {
+      people: roster ? roster.people : [],
+      everyone: roster ? roster.everyone : null,
+      loaded: !!(roster && roster.loaded),
+      loading: true,
+      at: roster ? roster.at : 0,
+    };
+
+    window.TMAMessagingAPI.mentionable(conversationId)
+      .then(function (data) {
+        roster.people = (data && data.people) || [];
+        roster.everyone = (data && data.everyone) || null;
+        roster.loaded = true;
+        roster.loading = false;
+        roster.at = Date.now();
+        render();
+      })
+      .catch(function () {
+        roster.loading = false;
+      });
+  }
+
+  /*
+   * The "@term" the caret is sitting at the end of, if it is.
+   *
+   * Read from the text just before the caret, so an @ typed a sentence ago
+   * does not reopen the list every time something else is typed.
+   */
+  function mentionTrigger(input) {
+    var caret = caretOffset(input);
+    if (caret === null || caret === undefined) return null;
+
+    var before = (input.textContent || '').slice(0, caret);
+    var match = /(^|[\s(])@([^\s@]{0,40})$/.exec(before);
+
+    return match ? { term: match[2], caret: caret } : null;
+  }
+
+  function mentionResults(state) {
+    var mention = state.mention;
+    if (!mention || mention.dismissed || mention.threadId !== state.selectedId) return [];
+
+    var roster = mentionRoster(state.selectedId);
+    if (!roster || !roster.loaded || !roster.people.length) return [];
+
+    var term = mention.term.toLowerCase();
+    var results = [];
+
+    if (roster.everyone && roster.everyone.indexOf(term) === 0) {
+      results.push({ everyone: true, name: roster.everyone, meta: 'Everyone in this group' });
+    }
+
+    roster.people.forEach(function (person) {
+      // The start of any part of the name: "mar" finds Ann Marie Joseph.
+      var matches = !term || person.name.toLowerCase().split(/\s+/).some(function (part, i, parts) {
+        return parts.slice(i).join(' ').indexOf(term) === 0;
+      });
+      if (matches) results.push(person);
+    });
+
+    return results.slice(0, MENTION_LIST_MAX);
+  }
+
+  function mentionFace(person) {
+    if (person.photo) return person.photo;
+    var store = window.TMACurrentUser;
+    return store && store.initialsFor ? store.initialsFor(person.name, String(person.id)) : '';
+  }
+
+  /*
+   * Always in the markup, hidden when there is nothing to offer: it sits
+   * ahead of the message box, and a node that came and went there would
+   * shift what the box is paired with on the next render.
+   */
+  function renderMentionMenu(state) {
+    var results = mentionResults(state);
+    var index = results.length ? Math.min(state.mention.index || 0, results.length - 1) : 0;
+
+    return (
+      '<div class="tma-dash__menu tma-dash__feed-mention-menu" data-key="mention-menu" ' +
+      'data-messages-mention-menu role="listbox" aria-label="Mention"' +
+      (results.length ? '' : ' hidden') + '>' +
+      results.map(function (item, i) {
+        var selected = i === index;
+        return (
+          '<button type="button" class="tma-dash__menu-item' +
+          (selected ? ' tma-dash__menu-item--active' : '') + '" ' +
+          'data-messages-mention-pick="' + i + '" role="option" aria-selected="' + selected + '">' +
+          '<img class="tma-dash__feed-mention-avatar" src="' +
+          esc(item.everyone ? ICON + 'At.svg' : mentionFace(item)) + '" alt="" width="22" height="22">' +
+          '<span class="tma-dash__feed-mention-ident">' +
+          '<span class="tma-dash__feed-mention-name">' + esc(item.everyone ? '@' + item.name : item.name) + '</span>' +
+          (item.meta ? '<span class="tma-dash__feed-mention-meta">' + esc(item.meta) + '</span>' : '') +
+          '</span>' +
+          '</button>'
+        );
+      }).join('') +
+      '</div>'
+    );
+  }
+
+  /* Open, move or close the list to match where the caret now is. */
+  function syncMention(state, input, render) {
+    var row = findThread(state.selectedId);
+    var trigger = row && row.type === 'group' && !state.recording ? mentionTrigger(input) : null;
+
+    if (!trigger) {
+      if (state.mention) {
+        state.mention = null;
+        render();
+      }
+      return;
+    }
+
+    var same = state.mention && state.mention.threadId === state.selectedId && state.mention.term === trigger.term;
+    if (same) {
+      state.mention.caret = trigger.caret;
+      return;
+    }
+
+    state.mention = { threadId: state.selectedId, term: trigger.term, index: 0, caret: trigger.caret };
+    loadMentionRoster(state.selectedId, render);
+    render();
+  }
+
+  /* Arrow, Enter, Tab and Escape while the list is open. True when it took the key. */
+  function handleMentionKeys(e, root, state, render) {
+    var results = mentionResults(state);
+    if (!results.length) return false;
+
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      var step = e.key === 'ArrowDown' ? 1 : -1;
+      state.mention.index = ((state.mention.index || 0) + step + results.length) % results.length;
+      render();
+      return true;
+    }
+
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      pickMention(root, state, Math.min(state.mention.index || 0, results.length - 1));
+      return true;
+    }
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      // Shut for this "@term": it stays shut until the term changes, rather
+      // than reopening because the caret is still sitting after it.
+      state.mention.dismissed = true;
+      render();
+      return true;
+    }
+
+    return false;
+  }
+
+  /*
+   * Put the chosen name where "@term" was.
+   *
+   * As plain text, like everything else in the composer, with a space after
+   * it so the next word does not run into the name.
+   */
+  function pickMention(root, state, index) {
+    var item = mentionResults(state)[index];
+    var input = root.querySelector('[data-messages-composer-input]');
+    if (!item || !input) return;
+
+    input.focus();
+
+    var selection = window.getSelection();
+    var range = selection && selection.rangeCount ? selection.getRangeAt(0) : null;
+
+    // A tap on a phone takes the caret out of the box before the choice
+    // lands; put it back where the "@term" was being typed.
+    if (!range || !input.contains(range.startContainer)) {
+      placeCaret(input, state.mention.caret);
+      selection = window.getSelection();
+      range = selection && selection.rangeCount ? selection.getRangeAt(0) : null;
+    }
+
+    var node = range && range.startContainer;
+    if (!node || node.nodeType !== 3 || !input.contains(node)) return;
+
+    var caret = range.startOffset;
+    var match = /(^|[\s(])@([^\s@]{0,40})$/.exec(node.textContent.slice(0, caret));
+    if (!match) return;
+
+    // Read the caret first: once the range has moved, its start is the new one.
+    range.setStart(node, caret - match[2].length - 1);
+    range.setEnd(node, caret);
+    range.deleteContents();
+
+    var text = document.createTextNode('@' + item.name + ' ');
+    range.insertNode(text);
+    range.setStartAfter(text);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    // The composer's own input handler keeps the draft; with the caret now
+    // past the name, it also finds no "@term" left and closes the list.
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  /*
+   * Who a piece of text addresses, worked out the way the server will.
+   *
+   * Only for the bubble shown while a send is still in flight; the answer
+   * that comes back with the stored message replaces it.
+   */
+  function guessMentions(conversationId, text) {
+    var roster = mentionRoster(conversationId);
+    var found = { mentions: [], mentionsAll: false };
+    if (!roster || !roster.loaded || String(text).indexOf('@') === -1) return found;
+
+    var rest = String(text);
+
+    roster.people
+      .slice()
+      .sort(function (a, b) { return b.name.length - a.name.length; })
+      .forEach(function (person) {
+        var pattern = mentionPattern([person.name], false);
+        if (!pattern || !pattern.test(rest)) return;
+        found.mentions.push({ id: person.id, name: person.name });
+        rest = rest.replace(mentionPattern([person.name], false), '$1 ');
+      });
+
+    var all = roster.everyone ? mentionPattern([roster.everyone], false) : null;
+    found.mentionsAll = !!(all && all.test(rest));
+
+    return found;
+  }
+
+  /*
+   * "@name" standing on its own: not inside a word or an address, and not
+   * the start of a longer word. The character before it is captured rather
+   * than looked behind at, which older Safari cannot do.
+   */
+  function mentionPattern(names, escaped) {
+    var alternatives = names
+      .slice()
+      .sort(function (a, b) { return b.length - a.length; })
+      .map(function (name) {
+        return (escaped ? esc(name) : String(name)).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      })
+      .join('|');
+
+    if (!alternatives) return null;
+
+    try {
+      return new RegExp('(^|[^\\p{L}\\p{N}_@])@(' + alternatives + ')(?![\\p{L}\\p{N}_])', 'giu');
+    } catch (e) {
+      return new RegExp('(^|[^A-Za-z0-9_@])@(' + alternatives + ')(?![A-Za-z0-9_])', 'gi');
+    }
+  }
+
+  /*
+   * A message's text, with its links live and the people it names marked.
+   *
+   * The names are wrapped after escaping and linking, and only in the text
+   * between tags and outside a link, so a name can never land inside an
+   * attribute or split an address in two.
+   */
+  function renderMessageText(msg) {
+    var html = linkify(msg.body);
+    var names = (msg.mentions || []).map(function (m) { return m.name; });
+    if (msg.mentionsAll) names.push(MENTION_EVERYONE);
+
+    var pattern = names.length ? mentionPattern(names, true) : null;
+    if (!pattern) return html;
+
+    var inLink = false;
+
+    return html.split(/(<[^>]+>)/).map(function (part) {
+      if (part.charAt(0) === '<') {
+        if (/^<a\b/i.test(part)) inLink = true;
+        else if (/^<\/a>/i.test(part)) inLink = false;
+        return part;
+      }
+      if (inLink) return part;
+
+      return part.replace(pattern, function (whole, lead, name) {
+        return lead + '<span class="tma-dash__messages-mention">@' + name + '</span>';
+      });
+    }).join('');
+  }
+
   /* Controls inside a message bubble that must receive their own clicks
    * rather than being absorbed by the swipe-to-reply gesture. */
   var INTERACTIVE_IN_BUBBLE =
@@ -3077,7 +3397,7 @@
         '">' +
         '<p class="tma-dash__messages-bubble-line">' +
         (hasText
-          ? '<span class="tma-dash__messages-bubble-copy">' + linkify(msg.body) + '</span>'
+          ? '<span class="tma-dash__messages-bubble-copy">' + renderMessageText(msg) + '</span>'
           : '') +
         timeHtml +
         '</p></div>';
@@ -3588,6 +3908,7 @@
       '<div class="tma-dash__messages-composer-wrap' +
       (editing ? ' tma-dash__messages-composer-wrap--editing' : '') +
       '">' +
+      renderMentionMenu(state) +
       renderEmojiPicker(state) +
       (editing
         ? '<div class="tma-dash__messages-composer-editing">Editing message, press Escape to cancel</div>'
@@ -3689,9 +4010,22 @@
         // Look up a preview for the first link as it is typed. Debounced with
         // the draft save so a half-typed URL isn't fetched on every keystroke.
         scheduleLinkPreview(state, text, render);
+
+        syncMention(state, input, render);
+      });
+
+      // The caret can leave an "@term" without anything being typed.
+      MORPH.on(input, 'keyup', function (e) {
+        if (/^(Arrow(Left|Right)|Home|End)$/.test(e.key)) syncMention(state, input, render);
+      });
+      MORPH.on(input, 'click', function () {
+        syncMention(state, input, render);
       });
 
       MORPH.on(input, 'keydown', function (e) {
+        // The list takes its keys first: Enter picks a name, it does not send.
+        if (handleMentionKeys(e, root, state, render)) return;
+
         if (e.key === 'Escape' && state.editing) {
           e.preventDefault();
           state.editing = null;
@@ -3806,6 +4140,16 @@
       });
     }
 
+    MORPH.unwired(composer, '[data-messages-mention-pick]').forEach(function (btn) {
+      // Not letting the press take focus is what keeps the caret where the
+      // name is about to go.
+      MORPH.on(btn, 'mousedown', function (e) { e.preventDefault(); });
+      MORPH.on(btn, 'click', function (e) {
+        e.stopPropagation();
+        pickMention(root, state, parseInt(btn.getAttribute('data-messages-mention-pick'), 10));
+      });
+    });
+
     var attachBtn = composer.querySelector('[data-messages-composer-attach]');
     var fileInput = composer.querySelector('[data-messages-composer-file]');
 
@@ -3893,9 +4237,16 @@
     if (!root._messagesComposerDocBound) {
       root._messagesComposerDocBound = true;
       document.addEventListener('click', function (e) {
-        if (!state.emojiPickerOpen) return;
         var activeComposer = root.querySelector('.tma-dash__messages-composer');
         if (activeComposer && activeComposer.contains(e.target)) return;
+
+        if (state.mention) {
+          state.mention = null;
+          var menu = root.querySelector('[data-messages-mention-menu]');
+          if (menu) menu.hidden = true;
+        }
+
+        if (!state.emojiPickerOpen) return;
         state.emojiPickerOpen = false;
         var activePicker = root.querySelector('[data-messages-emoji-picker]');
         if (activePicker) {
@@ -4311,11 +4662,11 @@
       // is a real photo, an initials tile has nothing to enlarge.
       '<div class="tma-dash__messages-profile-cover"></div>' +
       '<div class="tma-dash__messages-profile-head">' +
-      (row.type === 'group'
-        // A group is its people: the same circle cluster as the list, at
-        // profile size, rather than one photo or one initials tile.
+      (row.type === 'group' && !p.photo
+        // A group nobody has given a picture is its people: the same circle
+        // cluster as the list, at profile size, rather than an initials tile.
         ? '<span class="tma-dash__messages-profile-avatar tma-dash__messages-profile-avatar--group">' +
-          renderGroupCluster(groupClusterMembers({ name: p.name, photo: p.photo }, p.members)) +
+          renderGroupCluster(groupClusterMembers({ name: p.name }, p.members)) +
           '</span>'
         : p.photo
           ? '<button type="button" class="tma-dash__messages-profile-avatar" ' +
@@ -5938,6 +6289,11 @@
       can: { edit: false, delete: false },
     };
 
+    var guessed = guessMentions(conversationId, text);
+    pending.mentions = guessed.mentions;
+    pending.mentionsAll = guessed.mentionsAll;
+    state.mention = null;
+
     mergeMessages(conversationId, [pending], false);
     playSentMessageSound();
     clearReplyTo(state);
@@ -6242,6 +6598,8 @@
       if (!msg) return;
       msg.body = payload.body;
       msg.edited = true;
+      if (payload.mentions) msg.mentions = payload.mentions;
+      if (typeof payload.mentionsAll === 'boolean') msg.mentionsAll = payload.mentionsAll;
       render();
     });
 
@@ -6949,12 +7307,25 @@
     }
 
     var previous = msg.body;
+    var previousMentions = { mentions: msg.mentions, mentionsAll: msg.mentionsAll };
+    var guessed = guessMentions(state.selectedId, text);
     msg.body = text;
     msg.edited = true;
+    msg.mentions = guessed.mentions;
+    msg.mentionsAll = guessed.mentionsAll;
+    state.mention = null;
     render();
 
-    window.TMAMessagingAPI.editMessage(msg.id, text).catch(function (err) {
+    window.TMAMessagingAPI.editMessage(msg.id, text).then(function (data) {
+      // Who the new text addresses is the server's to say.
+      if (!data || !data.message) return;
+      msg.mentions = data.message.mentions || [];
+      msg.mentionsAll = !!data.message.mentionsAll;
+      render();
+    }).catch(function (err) {
       msg.body = previous;
+      msg.mentions = previousMentions.mentions;
+      msg.mentionsAll = previousMentions.mentionsAll;
       render();
       showMessagesToast(
         root,
@@ -8179,6 +8550,31 @@
       .catch(function () {});
   }
 
+  /*
+   * The portal's photo cropper, fetched the first time a group photo is
+   * chosen: the shell does not carry it. Resolves with nothing if it cannot
+   * be had, and the photo then goes up as it was picked.
+   */
+  var avatarCropperLoad = null;
+
+  function loadAvatarCropper() {
+    if (window.TMAAvatarCropper) return Promise.resolve(window.TMAAvatarCropper);
+    if (avatarCropperLoad) return avatarCropperLoad;
+
+    avatarCropperLoad = new Promise(function (resolve) {
+      var script = document.createElement('script');
+      script.src = 'js/avatar-cropper.js';
+      script.onload = function () { resolve(window.TMAAvatarCropper || null); };
+      script.onerror = function () {
+        avatarCropperLoad = null;
+        resolve(null);
+      };
+      document.head.appendChild(script);
+    });
+
+    return avatarCropperLoad;
+  }
+
   function groupAction(root, state, render, promise, failure) {
     promise
       .then(function (data) {
@@ -8745,12 +9141,40 @@
       });
       MORPH.on(groupPhotoFile, 'change', function () {
         if (!groupPhotoFile.files || !groupPhotoFile.files.length) return;
-        groupAction(
-          root, state, render,
-          window.TMAMessagingAPI.updateGroupPhoto(state.selectedId, groupPhotoFile.files[0]),
-          'The photo could not be saved'
-        );
+        var picked = groupPhotoFile.files[0];
+        // The crop can outlast a change of thread; the photo is for this one.
+        var conversationId = state.selectedId;
         groupPhotoFile.value = '';
+
+        var save = function (file) {
+          groupAction(
+            root, state, render,
+            window.TMAMessagingAPI.updateGroupPhoto(conversationId, file),
+            'The photo could not be saved'
+          );
+        };
+
+        // The same square crop an account photo gets, so a phone picture
+        // goes up framed and small rather than whole.
+        loadAvatarCropper().then(function (cropper) {
+          if (!cropper) { save(picked); return; }
+
+          // The crop closes without a word on a file the browser cannot
+          // draw, which would leave the button looking dead. Try it first.
+          var url = URL.createObjectURL(picked);
+          var probe = new Image();
+          probe.onload = function () {
+            URL.revokeObjectURL(url);
+            cropper.open(picked, function (blob) {
+              save(new File([blob], 'group.jpg', { type: 'image/jpeg' }));
+            });
+          };
+          probe.onerror = function () {
+            URL.revokeObjectURL(url);
+            showMessagesToast(root, 'That picture could not be opened');
+          };
+          probe.src = url;
+        });
       });
     }
 

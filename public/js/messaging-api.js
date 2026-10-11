@@ -354,6 +354,11 @@
       return api(BASE + '/conversations/' + encodeURIComponent(conversationId) + '/info');
     },
 
+    /* The members a message here may address with @, and the word for all of them. */
+    mentionable: function (conversationId) {
+      return api(BASE + '/conversations/' + encodeURIComponent(conversationId) + '/mentionable');
+    },
+
     /* Shared media, documents or links. */
     gallery: function (conversationId, shelf) {
       return api(

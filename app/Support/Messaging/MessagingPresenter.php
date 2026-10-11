@@ -7,6 +7,7 @@ use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\Message;
 use App\Models\MessageAttachment;
+use App\Models\MessageMention;
 use App\Models\MessageReaction;
 use App\Models\User;
 use App\Models\UserBlock;
@@ -233,6 +234,8 @@ class MessagingPresenter
      *                                        null keeps the single-conversation behaviour of looking one up.
      * @param  ?bool  $listed  Whether the row belongs in the inbox. The list
      *                         endpoint already filtered, so it passes true.
+     * @param  ?bool  $mentioned  Whether unread messages here address the
+     *                            viewer, when the caller has batched that.
      */
     public static function conversation(
         Conversation $conversation,
@@ -242,8 +245,10 @@ class MessagingPresenter
         ?Collection $latestReactions = null,
         ?array $workStatuses = null,
         ?bool $listed = null,
+        ?bool $mentioned = null,
     ): array {
         $participant ??= $conversation->participantFor($viewer);
+        $unreadCount = $participant ? self::unreadFor($participant, $conversation, $unread) : 0;
         $others = $conversation->activeParticipants
             ->where('user_id', '!=', $viewer->id)
             ->map(fn (ConversationParticipant $p) => $p->user)
@@ -276,7 +281,11 @@ class MessagingPresenter
             'reactionNote' => self::reactionNote($conversation, $viewer, $last, $latestReactions),
             'time' => self::listTime($conversation->last_message_at, $viewer),
             'timestamp' => $conversation->last_message_at?->toIso8601String(),
-            'unread' => $participant ? self::unreadFor($participant, $conversation, $unread) : 0,
+            'unread' => $unreadCount,
+            // Something in what they have not read names them, or @all.
+            // From the listing's batch when it has one.
+            'mentioned' => $unreadCount > 0 && $conversation->isGroup()
+                && ($mentioned ?? (Mentions::awaiting($viewer, [$conversation->id]) !== [])),
             'pinned' => $participant?->pinned_at !== null,
             'archived' => $participant?->archived_at !== null,
             'muted' => (bool) $participant?->isMuted(),
@@ -352,6 +361,16 @@ class MessagingPresenter
             )->values(),
             'reactions' => self::reactions($message, $viewer),
             'starred' => $message->stars->contains('user_id', $viewer->id),
+            // The names to highlight in the body, as they were written.
+            'mentions' => $deleted ? [] : $message->mentions
+                ->filter(fn (MessageMention $m) => ! $m->isEveryone())
+                ->map(fn (MessageMention $m) => ['id' => $m->user_id, 'name' => $m->label])
+                ->values(),
+            'mentionsAll' => ! $deleted && $message->mentions->contains(fn (MessageMention $m) => $m->isEveryone()),
+            'mentionsMe' => ! $deleted && $message->user_id !== $viewer->id
+                && $message->mentions->contains(
+                    fn (MessageMention $m) => $m->isEveryone() || $m->user_id === $viewer->id
+                ),
             'systemEvent' => $message->system_event,
             // Only the sender needs a delivery tick, and only when the people
             // who could read it have read receipts switched on.

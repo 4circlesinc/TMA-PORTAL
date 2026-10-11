@@ -367,6 +367,9 @@ final class HomeBoard
                 collect(),
                 [],
                 true,
+                // The card does not mark mentions; saying so here keeps the
+                // presenter from asking once a row.
+                false,
             ))
             ->reject(fn (array $row) => ! empty($row['archived']))
             ->sortBy([

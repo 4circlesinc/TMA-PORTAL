@@ -27,6 +27,7 @@ use App\Support\Messaging\AttachmentIntake;
 use App\Support\Messaging\Broadcaster;
 use App\Support\Messaging\ClientConversations;
 use App\Support\Messaging\LinkPreviewService;
+use App\Support\Messaging\Mentions;
 use App\Support\Messaging\MessageNotifier;
 use App\Support\Messaging\MessagingPresenter;
 use App\Support\Messaging\MessagingSearch;
@@ -98,6 +99,10 @@ class MessagingController extends Controller
 
         $unread = $this->unreadCounts($user);
 
+        // Which of them hold something addressed to this reader, asked once
+        // for the whole list rather than once a row.
+        $mentioned = array_flip(Mentions::awaiting($user));
+
         $latestReactions = $this->latestReactionsFor($conversations->pluck('id'));
 
         /*
@@ -120,7 +125,7 @@ class MessagingController extends Controller
         $rows = $conversations
             ->map(fn (Conversation $c) => MessagingPresenter::conversation(
                 $c, $user, $participants->get($c->id), (int) ($unread[$c->id] ?? 0),
-                $latestReactions, $workStatuses, true
+                $latestReactions, $workStatuses, true, isset($mentioned[$c->id])
             ))
             // Pinned conversations sort above the rest but keep recency within
             // each band, which is the order the list expects to render.
@@ -265,7 +270,7 @@ class MessagingController extends Controller
 
         $base = fn () => $conversation->messages()
             ->withTrashed()
-            ->with(['sender', 'attachments', 'reactions.user', 'stars', 'replyTo.sender', 'replyTo.attachments'])
+            ->with(['sender', 'attachments', 'reactions.user', 'stars', 'mentions', 'replyTo.sender', 'replyTo.attachments'])
             // Respect this participant's own "clear chat" marker. It is
             // personal: the other side still sees everything.
             ->where('id', '>', $cleared);
@@ -398,7 +403,9 @@ class MessagingController extends Controller
             $replyTo = $conversation->messages()->where('uuid', $data['replyTo'])->first();
         }
 
-        $message = DB::transaction(function () use ($conversation, $user, $body, $replyTo, $data, $staged) {
+        $mentioned = ['users' => [], 'all' => false];
+
+        $message = DB::transaction(function () use ($conversation, $user, $body, $replyTo, $data, $staged, &$mentioned) {
             $message = $conversation->messages()->create([
                 'user_id' => $user->id,
                 // The type describes what the message *is*, which the bubble
@@ -422,6 +429,9 @@ class MessagingController extends Controller
 
             $conversation->forceFill(['last_message_at' => $message->created_at])->save();
 
+            // @Name and @all, read out of the text itself.
+            $mentioned = Mentions::sync($message, $conversation);
+
             // Sending is also reading: the sender's own message must not come
             // back to them as unread, and their draft is now spent. Stamp
             // everyone else's messages first, while the old cursor is still
@@ -444,13 +454,13 @@ class MessagingController extends Controller
             return $message;
         });
 
-        $message->load(['sender', 'attachments', 'reactions.user', 'stars', 'replyTo.sender', 'replyTo.attachments']);
+        $message->load(['sender', 'attachments', 'reactions.user', 'stars', 'mentions', 'replyTo.sender', 'replyTo.attachments']);
 
         Broadcaster::toOthers(new MessageSent($message));
 
         // The Messages page has its own badge; this is what reaches the bell,
         // the right sidebar and Overview when the recipient is elsewhere.
-        MessageNotifier::announceMessage($conversation, $message, $user);
+        MessageNotifier::announceMessage($conversation, $message, $user, $mentioned);
 
         // Recipients only subscribe to threads already in their inbox. The
         // first real message on an unlisted client chat has to land on their
@@ -483,6 +493,22 @@ class MessagingController extends Controller
      * Deliberately separate from the client record, this is the messaging
      * profile, and it must not leak fields the viewer would not otherwise see.
      */
+    /**
+     * Who may be addressed with @ in this conversation.
+     *
+     * The whole membership in one answer: the composer filters it as the
+     * name is typed, so a keystroke never waits on a request.
+     */
+    public function mentionable(Request $request, string $uuid): JsonResponse
+    {
+        $conversation = $this->conversationFor($request, $uuid);
+
+        return response()->json([
+            'people' => Mentions::mentionable($conversation, $request->user()),
+            'everyone' => $conversation->isGroup() ? Mentions::EVERYONE : null,
+        ]);
+    }
+
     public function info(Request $request, string $uuid): JsonResponse
     {
         $user = $request->user();
@@ -979,9 +1005,14 @@ class MessagingController extends Controller
 
         $message->update(['body' => $body, 'edited_at' => now()]);
         ClientConversations::reflectChatEdit($message);
-        $message->load(['sender', 'attachments', 'reactions.user', 'stars', 'replyTo.sender', 'replyTo.attachments']);
+
+        // An edit can name someone the first version did not. They are told;
+        // whoever was already named is not told again.
+        $mentioned = Mentions::sync($message, $message->conversation);
+        $message->load(['sender', 'attachments', 'reactions.user', 'stars', 'mentions', 'replyTo.sender', 'replyTo.attachments']);
 
         Broadcaster::toOthers(new MessageUpdated($message));
+        MessageNotifier::announceMentions($message->conversation, $message, $user, $mentioned);
 
         return response()->json([
             'message' => MessagingPresenter::message($message, $user, $message->conversation),
@@ -1006,6 +1037,7 @@ class MessagingController extends Controller
             $attachment->delete();
         });
         $message->delete();
+        Mentions::forget($message);
 
         Broadcaster::toOthers(new MessageDeleted($message));
 

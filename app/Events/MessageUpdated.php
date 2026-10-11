@@ -3,6 +3,7 @@
 namespace App\Events;
 
 use App\Models\Message;
+use App\Models\MessageMention;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
@@ -34,6 +35,14 @@ class MessageUpdated implements ShouldBroadcastNow
             'seq' => $this->message->id,
             'body' => $this->message->body,
             'editedAt' => $this->message->edited_at?->toIso8601String(),
+            // Who the new text names, so the highlight follows the edit on
+            // every screen showing it, not only the author's.
+            'mentions' => $this->message->mentions
+                ->filter(fn (MessageMention $m) => ! $m->isEveryone())
+                ->map(fn (MessageMention $m) => ['id' => $m->user_id, 'name' => $m->label])
+                ->values()
+                ->all(),
+            'mentionsAll' => $this->message->mentions->contains(fn (MessageMention $m) => $m->isEveryone()),
         ];
     }
 }

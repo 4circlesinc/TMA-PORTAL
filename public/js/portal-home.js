@@ -944,7 +944,8 @@
 
   function chatAvatarHtml(c) {
     var online = !!(c.presence && c.presence.online);
-    if (c.type === 'group') {
+    // A group with a picture of its own is that picture, as in Messages.
+    if (c.type === 'group' && !c.photo) {
       var members = (c.members || []).slice();
       var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
       if (members.length < 2 && me && (me.name || me.avatar)) {

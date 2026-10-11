@@ -1125,6 +1125,7 @@ All paths are relative to `/Users/vernonfrancis/Github/TMA-PORTAL`. Everything b
 | POST `/conversations/{uuid}/block` / `/unblock` | – | `{blocked:bool}` | Direct only (422 otherwise). `:1511-1533` |
 | GET `/conversations/{uuid}/export` | – | `text/plain` attachment | `:1539-1578` |
 | GET `/conversations/{uuid}/info` | – | `{conversation, profile:{name,photo,email,accountType,about,jobTitle,presence,workStatus,memberCount,members:[{id,name,photo,role,workStatus}]}, counts:{media,documents,links}, can:{block,openClientRecord}}` | `:461-544` |
+| GET `/conversations/{uuid}/mentionable` | – | `{people:[{id,name,photo}], everyone:'all'|null}` | Who a message here may address with `@`: the other active members, by name. Empty with `everyone:null` for a direct conversation. Filter client-side as the name is typed |
 | GET `/conversations/{uuid}/gallery?shelf=media|documents|links&before=` | – | `{items:[Attachment + {messageId,seq,senderName,date}]}` or links `[{url,domain,title,imageUrl,messageId,seq,senderName,date}]` | Max 120. `:551-601` |
 | GET `/media?shelf=` | – | same items + `conversationId, conversationName` | Pooled across conversations. `:622-686` |
 | GET `/search?q=` (≤200) | – | `{results:{people,conversations,messages,files,links}}` | 12 per group; message item `{id,seq,conversationId,conversationName,senderName,excerpt,sentAt,date}`. `app/Support/Messaging/MessagingSearch.php:27,95-240` |
@@ -1147,10 +1148,12 @@ Recordings area (`routes/web.php:1266-1269`, capability `callRecordings.view`, *
 
 ### 3. Payload shapes (verbatim keys)
 
-**Conversation** (`MessagingPresenter.php:168-243`): `id(uuid), type:'direct'|'group', name, subtitle, subject:'provider'|'person'|null, about:{kind,clientUid,clientName,companyName}|null, photo, members:[{id,name,photo,online,lastSeenAt}] (groups, ≤5), memberCount, preview, reactionNote, time, timestamp(ISO), unread, pinned, archived, muted, markedUnread, draft, role:'member'|'admin', presence, workStatus, counterpartId, description, isDefault, autoJoin, canManage, canLeave, blocked`.
+**Conversation** (`MessagingPresenter.php:168-243`): `id(uuid), type:'direct'|'group', name, subtitle, subject:'provider'|'person'|null, about:{kind,clientUid,clientName,companyName}|null, photo, members:[{id,name,photo,online,lastSeenAt}] (groups, ≤5), memberCount, preview, reactionNote, time, timestamp(ISO), unread, mentioned (unread messages here name the viewer or `@all`), pinned, archived, muted, markedUnread, draft, role:'member'|'admin', presence, workStatus, counterpartId, description, isDefault, autoJoin, canManage, canLeave, blocked`.
 `presence` for a direct thread = availability shape (section 6); for a group = `{label:'N online'|'N members', onlineCount}`.
 
-**Message** (`:246-285`): `id(uuid), seq(int, monotonic — page & dedupe on this), type:'text'|'voice'|'attachment'|'system', direction:'in'|'out', body, deleted, edited, sender:{id,name,photo}|null, sentAt(ISO), time, replyTo:{id,seq,senderName,preview,type,attachmentName,thumbUrl}|null, attachments:[Attachment], reactions:[{emoji,count,mine,users:[{id,name}]}], starred, systemEvent:{event,...}|null, status:'sent'|'delivered'|'read'|null (own messages only; group needs everyone), can:{edit,delete}`.
+**Message** (`:246-285`): `id(uuid), seq(int, monotonic — page & dedupe on this), type:'text'|'voice'|'attachment'|'system', direction:'in'|'out', body, deleted, edited, sender:{id,name,photo}|null, sentAt(ISO), time, replyTo:{id,seq,senderName,preview,type,attachmentName,thumbUrl}|null, attachments:[Attachment], reactions:[{emoji,count,mine,users:[{id,name}]}], starred, mentions:[{id,name}] (members the text names; `name` is the text as written, highlight `@name`), mentionsAll (the text carries `@all`), mentionsMe (viewer is named, or `@all` from someone else), systemEvent:{event,...}|null, status:'sent'|'delivered'|'read'|null (own messages only; group needs everyone), can:{edit,delete}`.
+
+Mentions are read out of `body` server-side on send and on edit; nothing is posted alongside the text. Groups only. A member named directly is notified (`message.mention`) even when they have muted the conversation; `@all` respects mute.
 System events (`:517-537`): `group_created, case_opened, member_added, member_removed, member_left, admin_granted, admin_revoked, name_changed, photo_changed, call_ended, call_missed, call_started`; call events carry `{actorName, actorId, label:'Voice call'|'Video call', media, answered, initiatorId}` (`MessagingController.php:1130-1141`).
 
 **Attachment** (`:350-377`): `id, name, mime, size, width, height, durationMs, waveform:[0-100]≤60, shelf:'voice'|'media'|'documents', kind:'voice'|'image'|'video'|'audio'|'file', url, thumbUrl`.
@@ -2051,6 +2054,7 @@ Generated from `php artisan route:list --json` on 6 Sep 2026 (620 routes; `desig
 | GET | `/portal/messaging/conversations/{uuid}/export` | base | `MessagingController@export` |
 | GET | `/portal/messaging/conversations/{uuid}/gallery` | base | `MessagingController@gallery` |
 | GET | `/portal/messaging/conversations/{uuid}/info` | base | `MessagingController@info` |
+| GET | `/portal/messaging/conversations/{uuid}/mentionable` | base | `MessagingController@mentionable` |
 | GET | `/portal/messaging/conversations/{uuid}/messages` | base | `MessagingController@messages` |
 | POST | `/portal/messaging/conversations/{uuid}/messages` | base | `MessagingController@send` |
 | GET | `/portal/messaging/conversations/{uuid}/photo` | base | `MessagingAttachmentController@conversationPhoto` |

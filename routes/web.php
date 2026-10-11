@@ -1421,6 +1421,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/conversations/{uuid}/photo', [MessagingAttachmentController::class, 'conversationPhoto'])->name('conversations.photo');
         // The messaging profile panel and its shared-content shelves.
         Route::get('/conversations/{uuid}/info', [MessagingController::class, 'info'])->name('conversations.info');
+        // The people a message here may address with @, for the composer.
+        Route::get('/conversations/{uuid}/mentionable', [MessagingController::class, 'mentionable'])->name('conversations.mentionable');
         Route::get('/conversations/{uuid}/gallery', [MessagingController::class, 'gallery'])->name('conversations.gallery');
 
         Route::patch('/messages/{uuid}', [MessagingController::class, 'updateMessage'])->name('messages.update');

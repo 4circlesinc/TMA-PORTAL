@@ -2623,6 +2623,52 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
   be pinned, and pinned rows still sort by recency), and its member count is
   however many approved staff the seed holds, so it is only held to a floor.
 
+- **`messaging-mentions.mjs`** — `@Name` and `@all` in a group, and the
+  group's own picture. Typing "@" opens the list above the message box with
+  `@all` first and never the reader's own name; it narrows as the name is
+  typed; the arrow keys move and **Enter picks a name instead of sending**;
+  the name lands as plain text where the "@term" was, with the caret after
+  it; Escape and a click elsewhere shut it (the same handler still shuts the
+  emoji picker); an "@" inside a word opens nothing. The sent bubble marks
+  the whole name (`@Ann Marie Joseph`, not `@Ann`), and a name typed out by
+  hand is marked the same, because the server reads mentions out of the text
+  rather than taking a list of ids. A second account then finds "@" beside
+  the unread count, one `message.mention` notification for the conversation,
+  and both gone once the thread is opened.
+
+  The picture half: with none set a group is drawn as its members' faces;
+  "Change group photo" goes through the same crop an account photo does (a
+  1.9 MB fixture goes up as a 640px square), and from then on the group is
+  that picture in the chat list, the chat head and Conversation info, where
+  it used to be squeezed in as one face among the members'.
+
+  Six staff, so the firm chat (which makes itself) holds two names where one
+  begins the other. Sign-in reads the new-device code from the mail log, so
+  serve with `MAIL_MAILER=log QUEUE_CONNECTION=sync`:
+
+```sh
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
+  \$mk = function (\$name, \$email, \$type) {
+    \$u = App\Models\User::create(['name' => \$name, 'email' => \$email, 'password' => Hash::make('password12345')]);
+    \$u->forceFill(['email_verified_at' => now(), 'profile_completed_at' => now(), 'onboarding_completed_at' => now(),
+      'status' => 'approved', 'account_type' => \$type])->save();
+  };
+  \$officer = App\Support\Access\Role::REVIEWING_OFFICER;
+  \$mk('Test Admin', 'e2e@example.com', 'Administrator');
+  \$mk('Rita Officer', 'rita@example.com', \$officer);
+  \$mk('Omar Officer', 'omar@example.com', \$officer);
+  \$mk('Bea Admin', 'bea@example.com', 'Administrator');
+  \$mk('Ann', 'ann@example.com', \$officer);
+  \$mk('Ann Marie Joseph', 'annmarie@example.com', \$officer);
+"
+npm run build   # the served shell uses public/build; a stale bundle hides the change
+TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/messaging-mentions.mjs
+```
+
+  It can be run again against the same database: it clears a draft a stopped
+  run left in the box, counts only unread notifications, and skips the
+  "no picture yet" check once the group has one.
+
 - **`messaging-phase8.mjs`** — typing indicators, presence transitions, and
   unread counts that move without a reload. Two live sessions **and Reverb**,
   same setup as `messaging-realtime.mjs`.

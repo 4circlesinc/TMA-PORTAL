@@ -75,6 +75,12 @@ class Message extends Model
         return $this->hasMany(MessageStar::class);
     }
 
+    /** Who this message addresses by name, or with @all. */
+    public function mentions(): HasMany
+    {
+        return $this->hasMany(MessageMention::class);
+    }
+
     public function isSystem(): bool
     {
         return $this->type === self::TYPE_SYSTEM;

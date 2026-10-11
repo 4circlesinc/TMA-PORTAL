@@ -36544,6 +36544,36 @@ span.tma-dash__messages-profile-avatar {
   color: var(--color-primary-dark);
 }
 
+/* ── Messages: @mentions ──────────────────────────────────────────── */
+
+/* A member a message addresses, or @all: the File Library's mention, which
+ * is brand blue on a light surface. On your own blue bubble it keeps the
+ * bubble's white and is told apart by weight alone. */
+.tma-dash__messages-mention {
+  color: var(--color-primary-dark);
+  font-weight: var(--font-weight-semibold);
+}
+
+.tma-dash__messages-bubble--out .tma-dash__messages-mention {
+  color: inherit;
+}
+
+/* The Feed's @ list, placed for this composer: it opens upward from the
+ * message box, from its left edge. */
+.tma-dash__messages-composer-wrap .tma-dash__feed-mention-menu {
+  top: auto;
+  right: auto;
+  bottom: calc(100% + var(--space-8));
+  left: 0;
+}
+
+/* "@" beside the unread count, not stacked above it. */
+.tma-dash__messages-row-meta--mention {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-4);
+}
+
 /* The failed tone is picked for a light bubble; on blue it needs a lighter
  * equivalent. */
 .tma-dash__messages-bubble--out .tma-dash__messages-bubble-status--failed {
