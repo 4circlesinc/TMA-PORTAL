@@ -196,6 +196,12 @@ try {
   const saved = page.waitForResponse(r => r.url().includes('/portal/cip/applications/' + APP) && r.request().method() === 'POST');
   await page.click('[data-cip-save]');
   check((await saved).status() === 200, 'Save answers 200');
+  // A saved edit goes back to the application it edited, not to the table.
+  await page.waitForSelector('[data-clients-edit-application]', { timeout: 15000 }).catch(() => {});
+  check(await page.locator('[data-cip-form]').count() === 0
+    && await page.locator('[data-clients-edit-application]').count() > 0
+    && await page.locator('table.tma-cip-table').count() === 0,
+  'and lands on the application\'s details page');
 
   step(7, 'After a reload, the filed photo opens in the adjuster');
   await openEdit();

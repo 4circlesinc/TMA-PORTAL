@@ -16324,6 +16324,21 @@
               : 'Application ' + application.number + (filingNew ? ' created' : ' saved'),
             'positive');
           }
+          /*
+           * A saved edit goes back to the application it edited: its details
+           * page, where Back and Cancel on this form already lead (see
+           * leaveClientsForm). It used to drop the reader on the table, who
+           * then had to find the row again to see what they had just saved.
+           * A new filing, and a draft being filed, still land on the table.
+           */
+          var savedUid = (!filingNew && application)
+            ? (application.clientUid || state.selectedId)
+            : null;
+          if (savedUid) {
+            navigate('detail', savedUid);
+
+            return;
+          }
           navigate('list');
         },
       });
