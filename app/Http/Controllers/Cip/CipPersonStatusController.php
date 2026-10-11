@@ -7,6 +7,7 @@ use App\Models\CipPerson;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Contacts;
+use App\Support\Cip\NotReady;
 use App\Support\Cip\PersonStatus;
 use App\Support\Cip\Phase;
 use App\Support\Cip\StatusAttachment;
@@ -66,7 +67,7 @@ class CipPersonStatusController extends Controller
                 (string) ($data['note'] ?? ''),
             );
         } catch (\InvalidArgumentException $e) {
-            abort(422, $e->getMessage());
+            NotReady::abort($e);
         }
 
         if ($moved['changed']) {

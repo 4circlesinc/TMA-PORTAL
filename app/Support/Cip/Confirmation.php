@@ -145,7 +145,7 @@ class Confirmation
         }
 
         if (! Review::packageReady($application)) {
-            throw new \InvalidArgumentException(self::notReadyMessage($application));
+            throw self::notReady($application);
         }
 
         $lockedAt = ($lockedAt ?? Carbon::now())->startOfDay();
@@ -191,17 +191,18 @@ class Confirmation
      *
      * "Everything must be Ready for submission" sent the reader back to a
      * checklist that looked finished. The slots the check counted are the
-     * ones to name.
+     * ones to name: in the sentence, and as rows beside it for a screen
+     * that lists them ({@see NotReady}).
      */
-    private static function notReadyMessage(CipApplication $application): string
+    private static function notReady(CipApplication $application): NotReady
     {
-        $blockers = Review::blockers($application);
+        $rows = Review::blockerRows($application);
 
-        if ($blockers === []) {
-            return 'Every required document, and every document that has been uploaded, must be Ready for submission before the package can be confirmed.';
+        if ($rows === []) {
+            return new NotReady('Every required document, and every document that has been uploaded, must be Ready for submission before the package can be confirmed.');
         }
 
-        return 'Not yet Ready for submission: '.implode('; ', $blockers).'.';
+        return new NotReady('Not yet Ready for submission: '.implode('; ', Review::blockers($application)).'.', $rows);
     }
 
     /**
@@ -226,7 +227,7 @@ class Confirmation
         }
 
         if (! Review::packageReady($application)) {
-            throw new \InvalidArgumentException(self::notReadyMessage($application));
+            throw self::notReady($application);
         }
 
         $lockedAt = ($lockedAt ?? Carbon::now())->startOfDay();

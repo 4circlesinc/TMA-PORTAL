@@ -741,12 +741,7 @@ class Review
      */
     public static function blockers(CipApplication $application): array
     {
-        return self::namedBlockers(self::constrainToCurrentChecklist(
-            self::ofLivePeople(CipDocument::query(), self::inPostApproval($application))
-                ->where('application_id', $application->getKey()),
-            $application->phase ?? Phase::PRE_APPROVAL,
-            $application,
-        ));
+        return self::named(self::blockerRows($application));
     }
 
     /**
@@ -757,7 +752,32 @@ class Review
      */
     public static function blockersFor(CipApplication $application, string $pack, CipPerson $person): array
     {
-        return self::namedBlockers(self::constrainToPack(
+        return self::named(self::blockerRowsFor($application, $pack, $person));
+    }
+
+    /**
+     * The same documents as rows, for a screen that lists them rather than
+     * reading them out in a sentence: whose it is, what it is called, and
+     * where it stands, in the words and colour the checklist itself uses.
+     *
+     * @return list<array{id:?string, person:string, personId:?string, label:string, required:bool, status:string, statusLabel:string, statusTone:string}>
+     */
+    public static function blockerRows(CipApplication $application): array
+    {
+        return self::rowsOf(self::constrainToCurrentChecklist(
+            self::ofLivePeople(CipDocument::query(), self::inPostApproval($application))
+                ->where('application_id', $application->getKey()),
+            $application->phase ?? Phase::PRE_APPROVAL,
+            $application,
+        ));
+    }
+
+    /**
+     * @return list<array{id:?string, person:string, personId:?string, label:string, required:bool, status:string, statusLabel:string, statusTone:string}>
+     */
+    public static function blockerRowsFor(CipApplication $application, string $pack, CipPerson $person): array
+    {
+        return self::rowsOf(self::constrainToPack(
             CipDocument::query()
                 ->where('application_id', $application->getKey())
                 ->where('person_id', $person->getKey()),
@@ -768,9 +788,9 @@ class Review
 
     /**
      * @param  Builder<CipDocument>  $slots
-     * @return list<string>
+     * @return list<array{id:?string, person:string, personId:?string, label:string, required:bool, status:string, statusLabel:string, statusTone:string}>
      */
-    private static function namedBlockers(Builder $slots): array
+    private static function rowsOf(Builder $slots): array
     {
         return $slots
             ->with('person')
@@ -786,10 +806,34 @@ class Review
                 // An optional slot nobody filled owes nothing.
                 return $slot->required || $slot->isFilled();
             })
-            ->map(fn (CipDocument $slot) => trim(($slot->person?->fullName() ?? '').': '.$slot->label, ': ')
-                .' ('.DocumentStatus::label($slot->displayStatus()).')')
+            ->map(function (CipDocument $slot) {
+                $status = $slot->displayStatus();
+
+                return [
+                    'id' => $slot->uuid,
+                    'person' => $slot->person?->fullName() ?? '',
+                    'personId' => $slot->person?->uuid,
+                    'label' => (string) $slot->label,
+                    'required' => (bool) $slot->required,
+                    'status' => $status,
+                    'statusLabel' => DocumentStatus::label($status),
+                    'statusTone' => DocumentStatus::tone($status),
+                ];
+            })
             ->values()
             ->all();
+    }
+
+    /**
+     * @param  list<array{person:string, label:string, statusLabel:string}>  $rows
+     * @return list<string>
+     */
+    private static function named(array $rows): array
+    {
+        return array_map(
+            fn (array $row) => trim($row['person'].': '.$row['label'], ': ').' ('.$row['statusLabel'].')',
+            $rows,
+        );
     }
 
     /**

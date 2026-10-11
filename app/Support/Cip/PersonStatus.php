@@ -451,7 +451,7 @@ class PersonStatus
                 $pack = self::OWN_STEPS[$key]['pack'];
 
                 if ($pack !== null && ! self::ready(self::tally($person, $application, $pack, fresh: true))) {
-                    throw new \InvalidArgumentException(self::notReady($person, $application, $pack));
+                    throw self::notReady($person, $application, $pack);
                 }
 
                 $date = ($date ?? Carbon::now())->copy()->startOfDay();
@@ -1030,13 +1030,16 @@ class PersonStatus
     }
 
     /** The refusal for a submission whose documents are not ready, by name. */
-    private static function notReady(CipPerson $person, CipApplication $application, string $pack): string
+    private static function notReady(CipPerson $person, CipApplication $application, string $pack): NotReady
     {
-        $blockers = Review::blockersFor($application, $pack, $person);
+        $rows = Review::blockerRowsFor($application, $pack, $person);
 
-        return $blockers === []
-            ? 'Every document must be Ready for submission before this step can be recorded.'
-            : 'Not yet Ready for submission: '.implode('; ', $blockers).'.';
+        return $rows === []
+            ? new NotReady('Every document must be Ready for submission before this step can be recorded.')
+            : new NotReady(
+                'Not yet Ready for submission: '.implode('; ', Review::blockersFor($application, $pack, $person)).'.',
+                $rows,
+            );
     }
 
     /** Why a status that is on the lane is not this person's to be given now. */

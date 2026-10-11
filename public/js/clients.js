@@ -6052,6 +6052,123 @@
     return true;
   }
 
+  /*
+   * The same judgement as cipPackageReady, as the documents that failed it,
+   * in the shape the server names them in when it refuses a step (see
+   * App\Support\Cip\NotReady), so the one dialog below draws either.
+   */
+  function cipPackageBlockers(app) {
+    var rows = [];
+    cipFamily(app || {}).forEach(function (person) {
+      ((person && person.documents) || []).forEach(function (doc) {
+        if (!doc) return;
+        var held = doc.status === 'application_review' || doc.status === 'update_required';
+        if (!held && !(doc.required && doc.status !== 'ready_for_submission')) return;
+        var filed = !!doc.uploaded;
+        rows.push({
+          person: person.name || '',
+          personId: person.id || '',
+          label: doc.label || '',
+          required: doc.required !== false,
+          status: filed ? (doc.status || '') : 'pending_upload',
+          statusLabel: filed ? (doc.statusLabel || 'Filed') : 'Pending upload',
+          statusTone: filed ? (doc.statusTone || 'neutral') : 'neutral',
+        });
+      });
+    });
+
+    return rows;
+  }
+
+  /* The documents a refused step named, if it named any. */
+  function cipNotReadyRows(err) {
+    var rows = err && err.data && err.data.blockers;
+
+    return Array.isArray(rows) && rows.length ? rows : null;
+  }
+
+  /*
+   * A step refused over its documents, shown as the checklist it is.
+   *
+   * The refusal used to arrive as one sentence in a toast with every
+   * document strung along it, "Not yet Ready for submission: A (Application
+   * review); B (Pending upload); …". On a real file that was a paragraph
+   * cut off at the edge of the screen, and it read as an error dump rather
+   * than as a list of what is still to do. It is a list, so it is drawn as
+   * one: by person, each document with the status chip it wears on the
+   * checklist, in a dialog that stays until it has been read.
+   *
+   * Built from the checklist's own rows and the documented dialog, so it
+   * looks like the Documents list it is sending the reader back to.
+   */
+  function openCipNotReadyDialog(rows) {
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal || !rows || !rows.length) return false;
+
+    var groups = [];
+    var byPerson = {};
+    rows.forEach(function (row) {
+      var key = row.personId || row.person || '';
+      if (!byPerson[key]) {
+        byPerson[key] = { name: row.person || '', rows: [] };
+        groups.push(byPerson[key]);
+      }
+      byPerson[key].rows.push(row);
+    });
+
+    ui.openModal({
+      title: 'Documents not ready',
+      cls: 'tma-cip-not-ready',
+      body:
+        '<p class="tma-portal-modal__text">' +
+        (rows.length === 1
+          ? 'This document must be Ready for submission first.'
+          : 'These documents must be Ready for submission first.') +
+        '</p>' +
+        '<div class="tma-cip-not-ready__list">' +
+        groups.map(function (group) {
+          return '<section class="tma-cip-not-ready__group">' +
+            '<header class="tma-dash__clients-card-head">' +
+            '<h3 class="tma-dash__clients-card-title">' + esc(group.name || 'Application') + '</h3>' +
+            '<span class="tma-tab__count">' + esc(String(group.rows.length)) + '</span>' +
+            '</header>' +
+            '<ul class="tma-dash__clients-checklist">' +
+            group.rows.map(function (row) {
+              return '<li class="tma-dash__clients-checklist-row">' +
+                '<span class="tma-dash__clients-checklist-label">' + esc(row.label || 'Document') +
+                (row.required === false
+                  ? '<span class="tma-dash__clients-checklist-optional">Optional</span>'
+                  : '') +
+                '</span>' +
+                '<span class="tma-portal-status tma-portal-status--' + esc(row.statusTone || 'neutral') +
+                ' tma-portal-status--inline">' + esc(row.statusLabel || '') + '</span>' +
+                '</li>';
+            }).join('') +
+            '</ul>' +
+            '</section>';
+        }).join('') +
+        '</div>' +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn" data-cip-not-ready-close>Close</button>' +
+        '</div>',
+      onMount: function (el) {
+        var close = el.querySelector('[data-cip-not-ready-close]');
+        if (close) close.addEventListener('click', function () { ui.closeModal(); });
+      },
+    });
+
+    return true;
+  }
+
+  /*
+   * What a refused CIP step says to the reader: the documents it is waiting
+   * on, listed, when that is why; otherwise the server's own sentence.
+   */
+  function cipRefused(err, fallback) {
+    if (openCipNotReadyDialog(cipNotReadyRows(err))) return;
+    clientsToast((err && err.message) || fallback, 'negative');
+  }
+
   function cipAnyDocStatus(app, status) {
     if (!app) return false;
     var people = cipFamily(app);
@@ -12377,7 +12494,7 @@
             .catch(function (err) {
               save.disabled = false;
               save.textContent = 'Confirm submission';
-              clientsToast((err && err.message) || 'Could not confirm this submission.', 'negative');
+              cipRefused(err, 'Could not confirm this submission.');
             });
         });
       },
@@ -12516,7 +12633,7 @@
             .catch(function (err) {
               save.disabled = false;
               save.textContent = correcting ? 'Save number' : 'Record submission';
-              clientsToast((err && err.message) || 'Could not save that number.', 'negative');
+              cipRefused(err, 'Could not save that number.');
             });
         });
       },
@@ -13384,7 +13501,7 @@
         render({ forceFull: true });
       })
       .catch(function (err) {
-        clientsToast((err && err.message) || 'Could not change the status.', 'negative');
+        cipRefused(err, 'Could not change the status.');
       });
   }
 
@@ -13857,7 +13974,7 @@
           var held = applicationFor(clientUid);
           if (held) held._statusPending = false;
         }
-        clientsToast((err && err.message) || 'Could not change the status.', 'negative');
+        cipRefused(err, 'Could not change the status.');
         if (state && render) render({ forceFull: true });
       });
   }
@@ -14433,7 +14550,7 @@
             .catch(function (err) {
               save.disabled = false;
               save.textContent = saveLabel;
-              clientsToast((err && err.message) || 'Could not record this date.', 'negative');
+              cipRefused(err, 'Could not record this date.');
             });
         });
       },
@@ -14712,7 +14829,9 @@
           }
 
           if (!opts.override && picked === 'granted' && held && held.phase !== 'post_approval' && !cipPackageReady(held)) {
-            clientsToast('Every required document, and every document that has been uploaded, must be Ready for submission before this application can be Approved.', 'negative');
+            if (!openCipNotReadyDialog(cipPackageBlockers(held))) {
+              clientsToast('Every required document, and every document that has been uploaded, must be Ready for submission before this application can be Approved.', 'negative');
+            }
             return;
           }
 
@@ -14765,7 +14884,7 @@
             .catch(function (err) {
               save.disabled = false;
               save.textContent = 'Record decision';
-              clientsToast((err && err.message) || 'Could not record the decision.', 'negative');
+              cipRefused(err, 'Could not record the decision.');
             });
         });
       },

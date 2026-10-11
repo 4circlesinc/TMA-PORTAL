@@ -18,6 +18,7 @@ use App\Support\Cip\Delay;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\Engine;
 use App\Support\Cip\NonCompliance;
+use App\Support\Cip\NotReady;
 use App\Support\Cip\Phase;
 use App\Support\Cip\Stages;
 use App\Support\Cip\Status;
@@ -250,7 +251,7 @@ class CipTransitionController extends Controller
                 isset($data['lockedAt']) ? Carbon::parse($data['lockedAt']) : null,
             );
         } catch (\InvalidArgumentException $e) {
-            abort(422, $e->getMessage());
+            NotReady::abort($e);
         }
 
         Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
@@ -310,7 +311,7 @@ class CipTransitionController extends Controller
                 $request->boolean('override'),
             );
         } catch (\InvalidArgumentException $e) {
-            abort(422, $e->getMessage());
+            NotReady::abort($e);
         }
 
         StatusAttachment::storeIfPresent($request, $application, $user);
@@ -357,7 +358,7 @@ class CipTransitionController extends Controller
                 $data['message'] ?? null,
             );
         } catch (\InvalidArgumentException $e) {
-            abort(422, $e->getMessage());
+            NotReady::abort($e);
         }
 
         StatusAttachment::storeIfPresent($request, $application, $user);
@@ -399,7 +400,7 @@ class CipTransitionController extends Controller
                 $data['message'] ?? null,
             );
         } catch (\InvalidArgumentException $e) {
-            abort(422, $e->getMessage());
+            NotReady::abort($e);
         }
 
         StatusAttachment::storeIfPresent($request, $application, $user);
@@ -446,7 +447,7 @@ class CipTransitionController extends Controller
                 $data['message'] ?? null,
             );
         } catch (\InvalidArgumentException $e) {
-            abort(422, $e->getMessage());
+            NotReady::abort($e);
         }
 
         StatusAttachment::storeIfPresent($request, $application, $user);
@@ -476,7 +477,7 @@ class CipTransitionController extends Controller
         try {
             $application = Appeal::request($application, $user, $data['reason'] ?? null);
         } catch (\InvalidArgumentException $e) {
-            abort(422, $e->getMessage());
+            NotReady::abort($e);
         }
 
         StatusAttachment::storeIfPresent($request, $application, $user);
@@ -517,7 +518,7 @@ class CipTransitionController extends Controller
                 $data['message'] ?? null,
             );
         } catch (\InvalidArgumentException $e) {
-            abort(422, $e->getMessage());
+            NotReady::abort($e);
         }
 
         StatusAttachment::storeIfPresent($request, $application, $user);
@@ -556,7 +557,7 @@ class CipTransitionController extends Controller
                 $data['message'] ?? null,
             );
         } catch (\InvalidArgumentException $e) {
-            abort(422, $e->getMessage());
+            NotReady::abort($e);
         }
 
         StatusAttachment::storeIfPresent($request, $application, $user);
@@ -591,7 +592,7 @@ class CipTransitionController extends Controller
                 $data['message'] ?? null,
             );
         } catch (\InvalidArgumentException $e) {
-            abort(422, $e->getMessage());
+            NotReady::abort($e);
         }
 
         StatusAttachment::storeIfPresent($request, $application, $user);
@@ -631,7 +632,7 @@ class CipTransitionController extends Controller
                 $data['corNumber'] ?? null,
             );
         } catch (\InvalidArgumentException $e) {
-            abort(422, $e->getMessage());
+            NotReady::abort($e);
         }
 
         StatusAttachment::storeIfPresent($request, $application, $user);
@@ -673,7 +674,7 @@ class CipTransitionController extends Controller
                 ? Engine::apply($application, $to, $actor, $meta)
                 : Engine::set($application, $to, $actor, $meta);
         } catch (\InvalidArgumentException $e) {
-            abort(422, $e->getMessage());
+            NotReady::abort($e);
         }
 
         // Colleagues watching the table or this application see the move

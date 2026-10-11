@@ -589,7 +589,7 @@ class Engine
         }
 
         if (! self::checklistAllows($application, $to)) {
-            throw new \InvalidArgumentException(self::checklistRefusal($to));
+            throw new NotReady(self::checklistRefusal($to), Review::blockerRows($application));
         }
 
         return self::write($application, $to, $actor, $meta);
@@ -645,7 +645,7 @@ class Engine
         }
 
         if ($actor !== null && ! self::packageAllowsOverride($application, $to)) {
-            throw new \InvalidArgumentException(self::checklistRefusal($to));
+            throw new NotReady(self::checklistRefusal($to), Review::blockerRows($application));
         }
 
         // Section 26: an administrator may type any listed status, but the audit

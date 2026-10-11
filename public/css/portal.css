@@ -2098,6 +2098,53 @@
    row, the name/email pair and the type chips all ran off the right edge. */
 .tma-portal-modal__card:has(.tma-portal-request) { width: min(640px, 100%); }
 
+/*
+ * CIP: the documents a refused step is waiting on (openCipNotReadyDialog in
+ * clients.js).
+ *
+ * The dialog, the person heading, the checklist rows and the status chips
+ * are the documented ones, drawn as they are on the application's own
+ * Documents list. This only lays them out: people set apart from each
+ * other, and a long family scrolling under a title and a Close that stay
+ * where they are.
+ */
+.tma-cip-not-ready__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+  max-height: min(50vh, 420px);
+  overflow-y: auto;
+  /* Room for the scrollbar, so it does not sit on the status chips. */
+  padding-right: var(--space-4);
+}
+
+.tma-cip-not-ready__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+/* Named in full at every width. The checklist cuts a long name to two lines
+   on a phone, which is right for a list the reader already knows and wrong
+   for one whose whole purpose is to say which documents. */
+.tma-cip-not-ready .tma-dash__clients-checklist-label {
+  -webkit-line-clamp: none;
+  overflow: visible;
+}
+
+/* A long document name wraps under itself; its status stays on the first
+   line at the right, so the chips still read as one column. */
+.tma-cip-not-ready .tma-dash__clients-checklist-row {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+
+.tma-cip-not-ready .tma-dash__clients-checklist-row .tma-portal-status {
+  flex: 0 0 auto;
+}
+
+.tma-cip-not-ready .tma-portal-modal__foot { margin-top: 0; }
+
 .tma-portal-request {
   display: flex;
   flex-direction: column;

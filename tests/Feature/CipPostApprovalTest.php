@@ -1023,15 +1023,17 @@ class CipPostApprovalTest extends TestCase
         $this->assertNotContains(Status::APPLY_FOR_COR, Engine::availableTransitions($application->fresh(), $staff));
         $this->assertNotContains(Status::APPLY_FOR_COR, Engine::availableOverrides($application->fresh(), $staff));
 
-        $message = $this->actingAs($staff)
+        $refused = $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::APPLY_FOR_COR,
                 'note' => 'The provider says the papers are on their way.',
             ])
-            ->assertStatus(422)
-            ->json('message');
+            ->assertStatus(422);
+        $message = $refused->json('message');
 
         $this->assertStringContainsString('Ready for submission', $message);
+        // Which ones, for the dialog: the Oath is one of the COR papers owed.
+        $this->assertContains('Oath of Allegiance', array_column($refused->json('blockers'), 'label'));
         $this->assertSame(Status::POST_APPROVAL, $application->fresh()->status);
 
         // Pulling a file BACK is untouched: that is what an override is for.
@@ -1423,12 +1425,18 @@ class CipPostApprovalTest extends TestCase
         $this->assertSame(Status::APPLY_FOR_NIC, $application->status);
 
         // The NIC checklist materialised on arrival and stands pending, so
-        // the file may NOT move on: required documents come first.
-        $this->actingAs($staff)
+        // the file may NOT move on: required documents come first, and the
+        // refusal lists them for the dialog that shows which.
+        $refused = $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
                 'stage' => Stages::NIC_SUBMITTED, 'date' => '2026-08-22',
             ])
             ->assertStatus(422);
+
+        $waiting = $refused->json('blockers');
+        $this->assertNotEmpty($waiting);
+        $this->assertContains('Completed R3 Form', array_column($waiting, 'label'));
+        $this->assertSame(['pending_upload'], array_values(array_unique(array_column($waiting, 'status'))));
 
         $this->assertSame(Status::APPLY_FOR_NIC, $application->fresh()->status);
         $this->assertNull($application->fresh()->nic_submitted_at);

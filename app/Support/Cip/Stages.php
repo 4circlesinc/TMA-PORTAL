@@ -260,8 +260,9 @@ class Stages
          */
         if (in_array($key, [self::COR_SUBMITTED, self::NIC_SUBMITTED, self::PASSPORT_SUBMITTED], true)
             && ! Review::packageReady($application)) {
-            throw new \InvalidArgumentException(
+            throw new NotReady(
                 'Every required document, and every document that has been uploaded, must be Ready for submission before this stage can be recorded.',
+                Review::blockerRows($application),
             );
         }
 

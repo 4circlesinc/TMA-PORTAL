@@ -813,6 +813,93 @@ class CipReviewTest extends TestCase
     }
 
     /**
+     * A step refused over its documents says which, as rows beside the
+     * sentence.
+     *
+     * The sentence strings every document along one line, and on a real file
+     * that line was a paragraph in a toast that read like an error dump. The
+     * page lists them in a dialog instead, and draws that list from these
+     * rows: whose each one is, what it is called, and the status it wears on
+     * the checklist, in the checklist's own words and colour.
+     */
+    public function test_a_refused_confirmation_lists_the_documents_it_is_waiting_on(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $application = $this->application($staff, Status::READY_TO_SUBMIT);
+        $main = $application->people()->first();
+
+        $this->slot($application, 'passport_bio_page', 'Passport bio page', true, DocumentStatus::READY_FOR_SUBMISSION);
+        $police = $this->slot($application, 'police_certificate', 'Police certificate', true, DocumentStatus::PENDING_UPLOAD);
+        // An optional paper nobody filed owes nothing, and is not listed.
+        $this->slot($application, 'name_change', 'Name change document', false, DocumentStatus::PENDING_UPLOAD);
+
+        $dependant = CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_DEPENDENT,
+            'first_name' => 'Mei', 'last_name' => 'Wei',
+        ]);
+        $birth = CipDocument::create([
+            'application_id' => $application->id,
+            'person_id' => $dependant->id,
+            'type' => 'birth_certificate',
+            'label' => 'Birth certificate',
+            'required' => true,
+        ]);
+
+        $refused = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/confirm')
+            ->assertStatus(422);
+
+        // The sentence is what it was, for a reader with only a line to show.
+        $refused->assertJsonPath(
+            'message',
+            'Not yet Ready for submission: CHEN WEI: Police certificate (Pending upload); MEI WEI: Birth certificate (Pending upload).',
+        );
+
+        $this->assertSame([
+            [
+                'id' => $police->uuid,
+                'person' => 'CHEN WEI',
+                'personId' => $main->uuid,
+                'label' => 'Police certificate',
+                'required' => true,
+                'status' => DocumentStatus::PENDING_UPLOAD,
+                'statusLabel' => 'Pending upload',
+                'statusTone' => 'neutral',
+            ],
+            [
+                'id' => $birth->fresh()->uuid,
+                'person' => 'MEI WEI',
+                'personId' => $dependant->uuid,
+                'label' => 'Birth certificate',
+                'required' => true,
+                'status' => DocumentStatus::PENDING_UPLOAD,
+                'statusLabel' => 'Pending upload',
+                'statusTone' => 'neutral',
+            ],
+        ], $refused->json('blockers'));
+
+        $this->assertNull($application->fresh()->locked_at);
+    }
+
+    /** A refusal that is not about documents carries a sentence and no list. */
+    public function test_a_refusal_that_is_not_about_documents_carries_no_list(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $application = $this->application($staff, Status::NEW);
+        $this->slot($application, 'police_certificate', 'Police certificate', true, DocumentStatus::PENDING_UPLOAD);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                'stage' => 'cor_submitted',
+                'date' => '2026-08-20',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'The service provider must confirm submission before the COR package can be sent.')
+            ->assertJsonMissingPath('blockers');
+    }
+
+    /**
      * A dependant taken off the application takes their checklist with them.
      *
      * The person is soft-deleted and their slots stay on the row, out of

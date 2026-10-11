@@ -17,7 +17,8 @@ import { readFileSync } from 'node:fs';
  *  - the chip opens the whole lane, pressable where a step is theirs to
  *    take and grey where the application or their documents decide;
  *  - a dated step asks for its day in the dialog, and a submission whose
- *    documents are not Ready for submission is refused by name;
+ *    documents are not Ready for submission is refused in a dialog that
+ *    lists them, each with its status;
  *  - recording it, on the file's own page, moves that person and nobody
  *    else, and pressing the chip again offers the step after it;
  *  - an outcome of their own (Denied) asks for no date, and can be taken
@@ -167,13 +168,28 @@ try {
   check(await dateField.count() === 1, 'the dialog asks for the day');
   check((await modal.locator('label[for="cip-person-stage-date"]').innerText()).trim() === 'NIC submission date', 'and calls it NIC submission date');
   await modal.locator('[data-cip-save-person-status]').click();
-  await page.waitForTimeout(1500);
-  const refusal = await toastText();
-  console.log(`      toast: ${refusal.slice(0, 140)}`);
-  check(/Not yet Ready for submission/.test(refusal), 'refused, naming what is not Ready for submission');
+  /*
+   * Refused, in a dialog that lists what is not Ready for submission. It
+   * used to be one sentence in a toast with every document strung along
+   * it, cut off at the edge of the screen on a real file.
+   */
+  const notReady = page.locator('.tma-portal-modal__card.tma-cip-not-ready');
+  await notReady.waitFor({ timeout: 15000 });
+  check((await notReady.locator('.tma-portal-modal__title').innerText()).trim() === 'Documents not ready', 'refused in a dialog, Documents not ready');
+  const waiting = await notReady.locator('.tma-dash__clients-checklist-row').evaluateAll(rows => rows.map(r => ({
+    label: r.querySelector('.tma-dash__clients-checklist-label').textContent.trim(),
+    status: r.querySelector('.tma-portal-status').textContent.trim(),
+  })));
+  console.log(`      listed: ${waiting.map(w => `${w.label} (${w.status})`).join(' | ').slice(0, 160)}`);
+  check(waiting.length > 0 && waiting.some(w => /R3 Form/.test(w.label)), 'which lists the documents by name');
+  check(waiting.every(w => says(w.status, 'Pending upload')), 'each with the status it wears on the checklist');
+  check(await notReady.locator('.tma-cip-not-ready__group').count() === 1, 'this person\'s alone');
+  check(!/Not yet Ready/.test(await toastText()), 'and no sentence in a toast');
+  await notReady.locator('[data-cip-not-ready-close]').click();
+  await page.waitForTimeout(300);
+  check(await page.locator('.tma-portal-modal').count() === 0, 'Close puts it away');
   check(says(await chipText(PERSON_NIC_OPEN), 'Apply for NIC'), 'and the person has not moved');
   await park();
-  await page.waitForTimeout(4500);
 
   step(4, 'On the file\'s own page, with their documents accepted, the step is recorded for that person alone');
   await page.locator(`tr.tma-cip-table__member-row[data-cip-app="${APP_NIC}"]`).first().click();

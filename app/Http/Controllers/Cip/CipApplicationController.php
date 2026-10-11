@@ -34,6 +34,7 @@ use App\Support\Cip\Intake;
 use App\Support\Cip\InvestmentType;
 use App\Support\Cip\Milestones;
 use App\Support\Cip\PassportPhoto;
+use App\Support\Cip\NotReady;
 use App\Support\Cip\PersonStatus;
 use App\Support\Cip\Settlement;
 use App\Support\Cip\Phase;
@@ -2312,7 +2313,7 @@ class CipApplicationController extends Controller
                 trim($data['note'] ?? ''),
             );
         } catch (\InvalidArgumentException $e) {
-            abort(422, $e->getMessage());
+            NotReady::abort($e);
         }
 
         StatusAttachment::storeIfPresent($request, $application, $user);

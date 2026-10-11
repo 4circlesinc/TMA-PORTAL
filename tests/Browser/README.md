@@ -366,8 +366,10 @@ field placement and drawing, and computed CSS only exist in a browser.
   COR while the file, waiting on the rest of the family, still reads
   Approved; the chip opens the whole lane, pressable where a step is theirs
   to take and grey where the application or their documents decide; a dated
-  step asks for its day and a submission is refused by name while a document
-  is not Ready for submission; recording it moves that person and nobody
+  step asks for its day and a submission is refused while a document is not
+  Ready for submission, in a Documents not ready dialog that lists them with
+  their statuses (it was one long sentence in a toast); recording it moves
+  that person and nobody
   else; and Denied, an outcome of their own, asks for no date and can be
   taken back. Same serve as `cip-draft-autosave.mjs`. The check moves the
   people it reads, so seed a fresh pair of families for each run; the seed

@@ -486,13 +486,20 @@ class CipPersonStatusTest extends TestCase
         $this->assertContains(PersonStatus::PENDING_NIC, array_column($body['applicant']['lockedStatuses'], 'value'));
 
         // … and refused by name if it is asked for anyway.
-        $refusal = $this->move($staff, $main, PersonStatus::PENDING_NIC, ['date' => '2026-08-22'])
-            ->assertStatus(422)
-            ->json('message');
+        $refused = $this->move($staff, $main, PersonStatus::PENDING_NIC, ['date' => '2026-08-22'])
+            ->assertStatus(422);
+        $refusal = $refused->json('message');
 
         $this->assertStringContainsString('Not yet Ready for submission', $refusal);
         $this->assertStringContainsString('Completed R3 Form', $refusal);
         $this->assertSame(PersonStatus::APPLY_FOR_NIC, $main->fresh()->post_approval_status);
+
+        // And as rows for the dialog that lists them: his documents alone,
+        // though the spouse has filed nothing either.
+        $rows = $refused->json('blockers');
+        $this->assertContains('Completed R3 Form', array_column($rows, 'label'));
+        $this->assertSame([$main->uuid], array_values(array_unique(array_column($rows, 'personId'))));
+        $this->assertSame(['Pending upload'], array_values(array_unique(array_column($rows, 'statusLabel'))));
 
         // Filed but not yet read is still not ready.
         foreach ($this->slots($application, $main, Pack::NIC) as $slot) {
