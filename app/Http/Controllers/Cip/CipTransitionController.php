@@ -171,6 +171,30 @@ class CipTransitionController extends Controller
             abort(422, 'Record the decision instead, so the outcome and its date are stored.');
         }
 
+        /*
+         * A file the lane denied closes here, and only here. Every other
+         * dated step is a date verb's, but the one that lands on Closed
+         * records a passport being delivered, and a denied file was never
+         * issued one. {@see Engine::offMapStatuses()} already lists Closed
+         * for it; refusing it at this door left the delivery date as the
+         * only way to close a refusal.
+         */
+        if ($status === Status::CLOSED && $application->status === Status::POST_DENIED) {
+            // Listed as an override, so it is taken like one: with its reason.
+            abort_if(trim((string) request('note')) === '', 422, 'Give a reason for changing the status.');
+
+            return;
+        }
+
+        /*
+         * Back from Updates Required to the step it interrupted. The date
+         * that step is named for is already on the file, so there is none
+         * to ask for; see {@see Engine::returnsFromUpdates()}.
+         */
+        if (Engine::returnsFromUpdates($application, $status)) {
+            return;
+        }
+
         if (Stages::owns($status)) {
             abort(422, Stages::refusal($status));
         }
@@ -670,7 +694,12 @@ class CipTransitionController extends Controller
              */
             $ordinary = in_array($to, Engine::availableTransitions($application, $actor), true);
             $stated = trim((string) ($meta['note'] ?? '')) !== '';
-            $application = ($ordinary || (Engine::canTransition($application, $to) && ! $stated))
+            // The return from Updates Required is never an override: with a
+            // reason or without, apply() is what asks whether a paper is
+            // still sent back.
+            $application = ($ordinary
+                || Engine::returnsFromUpdates($application, $to)
+                || (Engine::canTransition($application, $to) && ! $stated))
                 ? Engine::apply($application, $to, $actor, $meta)
                 : Engine::set($application, $to, $actor, $meta);
         } catch (\InvalidArgumentException $e) {

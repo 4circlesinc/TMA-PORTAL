@@ -35,10 +35,19 @@ class Notices
      * officer when the system moved it (DELAYED). NEW APPLICATION before an
      * assignment uses the actor, the person who filed or created it.
      *
+     * `$token` replaces the status in the second place when the notice has a
+     * name of its own: section 22's examples say COR RECEIVED for the email
+     * sent as the COR arrives, where the status by then is Apply for NIC.
+     *
      * @param  array{number:string, applicant:string, familySize:int, addOn?:bool}  $facts
      */
-    public static function line(array $facts, string $status, ?User $actor = null, ?string $initials = null): string
-    {
+    public static function line(
+        array $facts,
+        string $status,
+        ?User $actor = null,
+        ?string $initials = null,
+        ?string $token = null,
+    ): string {
         $initials = trim((string) ($initials ?? ($actor ? SignaturePresenter::initials($actor->name) : '')));
         $addOn = (bool) ($facts['addOn'] ?? false);
         $applicant = mb_strtoupper($facts['applicant']);
@@ -48,7 +57,7 @@ class Notices
 
         return implode(' - ', array_filter([
             $initials !== '' ? $initials : null,
-            Status::subjectLabel($status, $addOn ? Phase::ADD_ON : null),
+            $token ?? Status::subjectLabel($status, $addOn ? Phase::ADD_ON : null),
             $facts['number'],
             $applicant,
             now()->format('d.m.Y'),
@@ -66,21 +75,29 @@ class Notices
         string $to,
         ?User $actor,
         ?string $message = null,
+        ?string $token = null,
     ): void {
         if ($to === Status::DRAFT) {
             return;
         }
 
+        /*
+         * Back at Apply for COR with the package already confirmed: there is
+         * nothing left to confirm, so the bell is an ordinary change of
+         * status and its link does not open the confirm dialog.
+         */
+        $confirmed = $to === Status::APPLY_FOR_COR && $application->isCorLocked();
+
         $facts = Contacts::facts($application);
-        $path = Contacts::path($application, $to);
+        $path = Contacts::path($application, $confirmed ? null : $to);
         $url = rtrim(config('app.url'), '/').$path;
         $initials = self::initials($actor, $application);
 
         self::fanOut(
             $application,
-            fn (?string $name) => self::postcard($application, $facts, $to, $url, $actor, $initials, $name, $message),
-            self::template($to),
-            self::bellType($to),
+            fn (?string $name) => self::postcard($application, $facts, $to, $url, $actor, $initials, $name, $message, $token),
+            $confirmed ? 'cip-status' : self::template($to),
+            $confirmed ? 'cip.status' : self::bellType($to),
             $actor,
             $facts['number'].': '.Status::label($to),
             self::bellMessage($application, $to, $facts),
@@ -358,8 +375,9 @@ class Notices
         string $initials,
         ?string $recipientName = null,
         ?string $message = null,
+        ?string $token = null,
     ): Postcard {
-        $subject = self::line($facts, $to, $actor, $initials);
+        $subject = self::line($facts, $to, $actor, $initials, $token);
 
         $letter = Status::isOutcome($to)
             ? $application->decisionLetterFile
@@ -370,7 +388,16 @@ class Notices
                 $facts, self::sentBack($application), $actor, $url, $recipientName, $subject,
             ),
             Status::READY_TO_SUBMIT => Postcards::cipReadyToSubmit($facts, $url, $recipientName, $subject),
-            Status::APPLY_FOR_COR => Postcards::cipApplyForCor($facts, $url, $recipientName, $subject),
+            /*
+             * Section 5's notice asks the provider to confirm submission. A
+             * file can come back to Apply for COR with its package already
+             * confirmed, a paper reopened and accepted again, and asking for
+             * a confirmation that was given is asking for nothing: that
+             * return is told as a plain change of status.
+             */
+            Status::APPLY_FOR_COR => $application->isCorLocked()
+                ? Postcards::cipStatus($facts, $to, $url, $recipientName, $subject, plain: true)
+                : Postcards::cipApplyForCor($facts, $url, $recipientName, $subject),
             Status::NON_COMPLIANT => Postcards::cipNonCompliant(
                 $facts, $url, $application->query_received_at?->toDateString(), $recipientName, $actor, $subject,
                 $message,
@@ -411,6 +438,16 @@ class Notices
                 $url,
                 $subject,
                 $recipientName,
+            ),
+            /*
+             * Closed has two ways in. The lane's last date is the passport
+             * being delivered, and that is what its own copy says; a file
+             * the lane denied closes with no passport ever issued, and is
+             * told so in the shared wording instead.
+             */
+            Status::CLOSED => Postcards::cipStatus(
+                $facts, $to, $url, $recipientName, $subject,
+                plain: $application->passport_delivered_at === null,
             ),
             default => Postcards::cipStatus($facts, $to, $url, $recipientName, $subject),
         };
@@ -494,7 +531,9 @@ class Notices
         return match ($to) {
             Status::UPDATE_REQUIRED => 'Documents were sent back with notes.',
             Status::READY_TO_SUBMIT => 'Confirm submission to lock the original package.',
-            Status::APPLY_FOR_COR => 'Confirm submission to lock the Certificate of Registration package.',
+            Status::APPLY_FOR_COR => $application->isCorLocked()
+                ? $facts['applicant'].' now stands at '.Status::label($to).'.'
+                : 'Confirm submission to lock the Certificate of Registration package.',
             Status::NON_COMPLIANT => 'The Unit has requested additional information.',
             Status::DD_QUERY => 'The Unit has requested additional documents during the background check.',
             Status::BACKGROUND_CHECK => 'The Unit has accepted this file for processing. A background check is underway.',
@@ -507,7 +546,9 @@ class Notices
             Status::APPLY_FOR_PASSPORT => 'Stage 3 (passport) documents are now required. Hard copy originals only, sent to T.M. Antoine Partners by courier.',
             Status::PENDING_PASSPORT => 'The passport application has been submitted. The file now waits for the passport.',
             Status::READY_FOR_DELIVERY => 'The passport has been received and is ready for delivery.',
-            Status::CLOSED => 'The passport has been delivered. This file is closed.',
+            Status::CLOSED => $application->passport_delivered_at === null
+                ? 'This file is closed.'
+                : 'The passport has been delivered. This file is closed.',
             Status::DENIED => 'The Unit has denied this application.',
             default => $facts['applicant'].' now stands at '.Status::label($to).'.',
         };

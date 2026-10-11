@@ -6002,7 +6002,7 @@
     record.statusLabel = (extra && extra.statusLabel) || (meta && meta.label) || to;
     record.statusTone = (extra && extra.statusTone) || (meta && meta.tone) || 'neutral';
     if (extra) {
-      ['availableTransitions', 'availableOverrides', 'lockedStatuses', 'locked', 'corLocked', 'canConfirm', 'canRequestAppeal', 'appealStartedBy', 'submittedAt', 'submittedBy', 'phase', 'phaseLabel', 'stageAction', 'corSubmittedAt', 'corReceivedAt', 'nicSubmittedAt', 'nicReceivedAt', 'passportSubmittedAt', 'passportReceivedAt', 'passportDeliveredAt']
+      ['availableTransitions', 'availableOverrides', 'lockedStatuses', 'locked', 'corLocked', 'canConfirm', 'canRequestAppeal', 'appealStartedBy', 'submittedAt', 'submittedBy', 'phase', 'phaseLabel', 'stageAction', 'stageHold', 'stageStatuses', 'corSubmittedAt', 'corReceivedAt', 'nicSubmittedAt', 'nicReceivedAt', 'passportSubmittedAt', 'passportReceivedAt', 'passportDeliveredAt']
         .forEach(function (k) {
           if (extra[k] !== undefined) record[k] = extra[k];
         });
@@ -13100,12 +13100,33 @@
     return cipRowForMenu(extra, clientUid) || applicationFor(clientUid) || null;
   }
 
+  /*
+   * What the application's own status menu is drawn from.
+   *
+   * On the applications table that is the row. On the file's own page it is
+   * the record: the page re-reads the record whenever anybody moves the
+   * file, and nothing re-reads a table that is not on screen, so a row left
+   * over from the way in went on offering a step a colleague had already
+   * taken. Pressed, that step was taken for a correction of its day. The
+   * person menu has read the record there since it was written; this is the
+   * same rule, checked against the application the menu was opened for.
+   */
+  function cipMenuSource(extra, clientUid) {
+    var state = (clientsMenuCtx && clientsMenuCtx.state) || clientsMountState;
+    var record = clientUid ? applicationFor(clientUid) : null;
+    var wanted = extra && extra.applicationId;
+
+    if (record && !onApplicationsTable(state) && (!wanted || record.id === wanted)) return record;
+
+    return cipSourceFor(extra, clientUid);
+  }
+
   function statusValues(list) {
     return (list || []).map(function (t) { return t.value || t; });
   }
 
   function cipStatusMenu(extra, clientUid) {
-    var source = cipSourceFor(extra, clientUid);
+    var source = cipMenuSource(extra, clientUid);
     var all = (APP_TABLE.statuses && APP_TABLE.statuses.length)
       ? APP_TABLE.statuses
       : CIP_STATUSES;
@@ -13125,8 +13146,21 @@
     var locked = all.filter(function (status) {
       return lockedValues.indexOf(status.value) !== -1;
     });
+    /*
+     * The dated step that can be recorded now is a row to press.
+     *
+     * It was a grey row like the steps after it, with the only way to take
+     * it a button in the strip at the top of the page, so a reader who came
+     * to the menu to move the file on found a column of statuses and none
+     * they could pick. Pressing it asks for the day, the way the button
+     * does; the day and the status still travel together.
+     */
+    var stageNow = cipStageOnOffer(source);
     var stages = all.filter(function (status) {
-      return stageValues.indexOf(status.value) !== -1;
+      return stageValues.indexOf(status.value) !== -1 && status.value !== stageNow;
+    });
+    var stageRows = all.filter(function (status) {
+      return stageNow && status.value === stageNow && status.value !== (source && source.status);
     });
 
     next = next.filter(function (status) { return status.value !== 'delayed'; });
@@ -13147,7 +13181,7 @@
      * own lane, because they are reachable from where it stands.
      */
     var lane = cipLaneOf(source);
-    var reachable = next.concat(overrides);
+    var reachable = next.concat(overrides, stageRows);
     var inLane = function (status) {
       return status.lane === lane || !status.lane;
     };
@@ -13188,7 +13222,44 @@
       // override.
       canOverride: overrides.length > 0,
       current: source && source.status,
+      // What the next dated step is waiting on, when it cannot be taken.
+      hold: cipStageHoldNote(source),
     };
+  }
+
+  /*
+   * The status the application's next date verb lands on, when this reader
+   * may record it now. The server sends the verb with where it leads; a
+   * reader without the capability is sent none.
+   */
+  function cipStageOnOffer(source) {
+    var action = source && source.stageAction;
+
+    return (action && action.to && canRecordSubmission()) ? action.to : null;
+  }
+
+  /*
+   * Why the next dated step is not on offer, in the server's one sentence.
+   * Never beside a step that is: the two are sent as one or the other, and
+   * a record patched from an older answer must not show both.
+   */
+  function cipStageHoldNote(source) {
+    var hold = source && source.stageHold;
+    if (!hold || !hold.note || (source && source.stageAction)) return '';
+
+    return String(hold.note);
+  }
+
+  /*
+   * Above the lane, where it is read before the greyed rows it explains,
+   * and where a menu opened near the foot of the window cannot cut it off.
+   */
+  function renderCipStatusHold(note) {
+    if (!note) return '';
+
+    return '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--static' +
+      ' tma-portal-context-menu__item--hint" role="presentation" data-cip-status-hold>' + esc(note) + '</div>' +
+      '<div class="tma-portal-context-menu__sep" role="separator"></div>';
   }
 
   /** The lane a file is in, defaulting to pre-approval. */
@@ -13302,7 +13373,8 @@
     var otherLocked = menu.otherLocked || [];
     var order = menu.order || null;
 
-    var body = renderCipStatusLaneBody(own, ownLocked, menu.current, order);
+    var body = renderCipStatusHold(menu.hold) +
+      renderCipStatusLaneBody(own, ownLocked, menu.current, order);
 
     var otherAll = other.concat(otherLocked);
     if (!otherAll.length) return body || renderCipStatusSub([], menu.current);
@@ -13509,13 +13581,79 @@
     var order = {};
     all.forEach(function (status, index) { order[status.value] = index; });
 
+    /*
+     * The COR goes to the Unit as one package and comes back for the family,
+     * so its two dates are the application's and nobody has one of their
+     * own. A person standing where the application stands is still where a
+     * reader looks for the way on, and found every step greyed: the step is
+     * offered on their row too, and pressing it records it for the file.
+     * NIC and passport steps stay each person's own, from the server's list.
+     */
+    var fileStep = cipPersonFileStep(app, person);
+    var fileRows = all.filter(function (status) {
+      return fileStep && status.value === fileStep.to && nextValues.indexOf(status.value) === -1;
+    });
+    if (fileRows.length) {
+      locked = locked.filter(function (status) { return status.value !== fileStep.to; });
+    }
+
+    /*
+     * What the next dated step is waiting on, unless this person can take
+     * it on their own: somebody whose NIC papers are all accepted is not
+     * held by a relative's. An outcome of their own, Denied or Closed, is
+     * always there to press and is not a way forward, so it does not count.
+     */
+    var hold = app && !app.stageAction && app.stageHold;
+    // A dated step of their own on offer: they are waiting on nothing.
+    var ownStep = ((person && person.availableStatuses) || []).some(function (s) { return s && s.stage; });
+    // Already at or past the step the file is held before: it is not theirs.
+    var past = hold && hold.to && person &&
+      order[person.status] !== undefined && order[hold.to] !== undefined &&
+      order[person.status] >= order[hold.to];
+    var waiting = person && !person.statusApart && !ownStep && !fileRows.length;
+    var held = waiting && hold && hold.to && !past;
+
     return {
-      next: next,
+      next: next.concat(fileRows),
       overrides: overrides,
       locked: locked,
       order: order,
       current: person && person.status,
+      fileStep: fileRows.length ? fileStep : null,
+      // The file's reason, or failing that their own: papers of theirs
+      // still to be accepted before their own NIC or passport step.
+      hold: held ? cipPersonHoldNote(app, person) : ((waiting && person.statusHold) || ''),
     };
+  }
+
+  /*
+   * Somebody whose own COR papers are all accepted stands at Apply for COR
+   * while the file is still collecting. Told that every document must be
+   * Ready for submission, they would look at their own list and find that
+   * every one is: what the step waits on is everybody else's.
+   */
+  function cipPersonHoldNote(app, person) {
+    if (person && app && person.status === 'apply_for_cor' && app.status !== 'apply_for_cor') {
+      // A table row carries its people as one list; the record by role.
+      var family = (app.familyMembers && app.familyMembers.length) ? app.familyMembers : cipFamily(app);
+      var behind = family.some(function (other) {
+        return other && other.id !== person.id && !other.statusApart && other.status !== 'apply_for_cor';
+      });
+      if (behind) return 'Waiting for the rest of the family\'s documents.';
+    }
+
+    return cipStageHoldNote(app);
+  }
+
+  var CIP_FILE_ONLY_STAGES = ['cor_submitted', 'cor_received'];
+
+  function cipPersonFileStep(app, person) {
+    var action = app && app.stageAction;
+    if (!action || !action.to || !person || person.statusApart) return null;
+    if (CIP_FILE_ONLY_STAGES.indexOf(action.key) === -1) return null;
+    if (!canRecordSubmission() || person.status !== app.status) return null;
+
+    return action;
   }
 
   /*
@@ -13549,7 +13687,7 @@
      * the pressable rows read as one or two loose options with no lifecycle
      * around them.
      */
-    clientsCtxEl.innerHTML = renderCipStatusLaneBody(
+    clientsCtxEl.innerHTML = renderCipStatusHold(menu.hold) + renderCipStatusLaneBody(
       menu.next.concat(menu.overrides),
       menu.locked,
       menu.current,
@@ -13566,6 +13704,14 @@
       var to = btn.getAttribute('data-cip-status-to');
       var label = btn.getAttribute('data-cip-status-label') || to;
       closeClientsContextMenu();
+      // The application's own step, offered on this person's row.
+      if (menu.fileStep && menu.fileStep.to === to) {
+        var app = cipPersonSource(extra, clientUid);
+        if (app && app.id) {
+          openStageDialog(app.id, clientUid || app.clientUid, menu.fileStep.key);
+          return;
+        }
+      }
       changeCipPersonStatus(to, extra, clientUid, label);
     });
 
@@ -13964,7 +14110,7 @@
   }
 
   function changeCipStatus(to, extra, clientUid, label, note, confirmed) {
-    var source = cipSourceFor(extra, clientUid);
+    var source = cipMenuSource(extra, clientUid);
     var applicationId = (extra && extra.applicationId) || (source && source.id);
     if (!applicationId) {
       clientsToast('Could not find this application.', 'negative');
@@ -14086,7 +14232,20 @@
       ready_for_delivery: 'passport_received',
       closed: 'passport_delivered',
     };
-    if (stageByStatus[to]) {
+    /*
+     * Closed is the exception on a denied file. Every other dated status
+     * asks for its day, but the day behind Closed is a passport being
+     * delivered, and a refused file was never issued one: it closes like
+     * any other status picked from the menu, with its reason.
+     */
+    var deniedClose = to === 'closed' && source && source.status === 'post_denied';
+    /*
+     * Nor does a dated status the server lists as a plain next step: the
+     * way back from Updates Required to Apply for NIC or Apply for Passport,
+     * whose date went on the file when the COR or the NIC first arrived.
+     */
+    var plainReturn = transitionValues.indexOf(to) !== -1;
+    if (stageByStatus[to] && !deniedClose && !plainReturn) {
       openStageDialog(applicationId, clientUid, stageByStatus[to]);
 
       return;

@@ -253,7 +253,41 @@ class PersonStatus
             'availableStatuses' => self::availableTransitions($person, $viewer, $forListing),
             'availableStatusOverrides' => self::availableOverrides($person, $viewer),
             'lockedStatuses' => self::lockedStatuses($person, $viewer, $forListing),
+            'statusHold' => self::hold($person, $viewer, $forListing),
         ];
+    }
+
+    /**
+     * Why this person's own next dated step is not on offer, or null.
+     *
+     * {@see availableTransitions()} leaves a submission out until the
+     * person's documents for it are Ready for submission, and their menu
+     * then showed the step greyed with nothing to say why. One sentence,
+     * the same one the application's menu uses ({@see Stages::hold()}), and
+     * only where that is the reason: somebody who owes nothing in the pack
+     * has no step of their own and is told nothing. A listing has not
+     * counted anybody's documents and offers the step instead.
+     */
+    public static function hold(CipPerson $person, ?User $actor, bool $forListing = false): ?string
+    {
+        $application = $person->application;
+
+        if ($forListing || $actor === null || $application === null
+            || ! CipAccess::canChangeApplicationStatus($actor)) {
+            return null;
+        }
+
+        foreach (self::nextSteps($person, $application) as $to => $key) {
+            $pack = $key !== null ? self::OWN_STEPS[$key]['pack'] : null;
+
+            if ($pack !== null
+                && Engine::allows($actor, $application, $to)
+                && ! self::ready(self::tally($person, $application, $pack))) {
+                return 'Every document must be Ready for submission first.';
+            }
+        }
+
+        return null;
     }
 
     /**

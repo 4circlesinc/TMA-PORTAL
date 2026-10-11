@@ -857,6 +857,17 @@
 
 .tma-portal-context-menu__item--static:hover { background: transparent; }
 
+/* A sentence about the menu rather than a row of it. The rows set how wide
+   the menu is and this wraps to that, where a line of its own length would
+   have stretched the menu to fit one sentence. */
+.tma-portal-context-menu__item--hint {
+  width: 0;
+  min-width: 100%;
+  font-size: var(--text-size-12);
+  line-height: 1.35;
+  white-space: normal;
+}
+
 /* A status the reader can see but not set: a date-driven step, or an
    off-map status for someone without the override. Listed so the
    lifecycle still reads in order, but grey and not a choice. */

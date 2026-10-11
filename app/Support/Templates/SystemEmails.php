@@ -1301,7 +1301,22 @@ Documents not written in English MUST be translated. The translation must be ori
 
 Open the application in the portal to upload the COR documents.',
             'cip-status-pending-cor' => 'The Certificate of Registration package for {{applicant}} has been submitted. The file now waits for the COR. You do not need to send anything further unless you are asked.',
-            'cip-status-apply-for-nic' => 'The Certificate of Registration has been received. Stage 2 is applying for the National Insurance Card (NIC). The National Insurance Corporation requires **soft copies only**. Send one PDF for each family member aged 16 and over, documents in the listed order. Open the application to upload them on each person’s Documents tab.',
+            'cip-status-apply-for-nic' => 'The Certificate of Registration has been received. Stage 2 is applying for the National Insurance Card (NIC). The National Insurance Corporation requires **soft copies only**. Send one PDF for each family member aged 16 and over, with the documents in the order listed below.
+
+1. **Completed R3 Form** (required): filled out by every applicant aged 16 and over with their accurate information and signed on the line "Signature of applicant". The Notary or Attorney-at-Law signs and stamps the line "Signature of Witness" and writes their name out.
+2. **Certified copy of passport bio data page** (required): certified as a true copy of the original by the Notary or Attorney-at-Law.
+3. **Certified copy of the Birth Certificate**: notarized and certified a true copy of the original by a Notary or an Attorney-at-Law.
+4. **Certified copy of Name Change Document** (optional, if applicable).
+5. **Certified copy of Marriage Certificate**.
+6. **Divorce Decree** (optional).
+7. **Death Certificate** (optional, as applicable, female applicants only).
+8. **Notarized Authorization Letter** (required): signed by the applicant, and signed and stamped by the Notary or Attorney-at-Law.
+
+Documents already filed with the original application are carried over where they apply. Each person’s Documents tab shows what is still needed.
+
+Documents not written in English MUST be translated. The translation must be original, signed and stamped by a Notary or Attorney-at-Law. A certified true copy of the credentials of the translator, Notary and/or Attorney-at-Law who certified or translated any of those documents must also be provided.
+
+Open the application to upload them on each person’s Documents tab.',
             'cip-status-pending-nic' => 'The NIC application for {{applicant}} has been submitted. The file now waits for the National Insurance Card. You do not need to send anything further unless you are asked.',
             'cip-status-apply-for-passport' => 'The National Insurance Card has been received. Stage 3 is applying for the passport. The passport office accepts **hard copy original documents only**. Track scans on each person’s Documents tab, then send the physical copies to T.M. Antoine Partners by courier: TaylorMarc Court, Rodney Bay, Gros Islet, Saint Lucia.
 

@@ -191,8 +191,14 @@ class Milestones
             return Confirmation::allows($actor, $application);
         }
 
-        if ($key === self::COR_SUBMITTED && ! $application->isCorLocked()) {
-            return false;
+        /*
+         * A post-approval step is on offer here exactly when the action bar
+         * offers it. Asking the map alone said yes to Passport delivered on
+         * a denied file, because Denied may close, and to COR received on a
+         * file back from Updates Required, because that edge exists too.
+         */
+        if (array_key_exists($key, self::POST_STEPS)) {
+            return (Stages::payload($application, $actor)['key'] ?? null) === $key;
         }
 
         $to = self::RECORDS[$key] ?? null;

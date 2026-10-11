@@ -234,9 +234,33 @@ class Engine
             fn (string $to) => self::canTransition($application, $to)
                 && self::allows($actor, $application, $to)
                 && self::checklistAllows($application, $to, $forListing)
-                && ! Stages::owns($to)
+                && (! Stages::owns($to) || self::returnIsOpen($application, $to))
                 && ! Delay::owns($to),
         ));
+    }
+
+    /**
+     * Is this the way back from Updates Required to the step it interrupted?
+     *
+     * Apply for NIC and Apply for Passport are each reached by a date, the
+     * COR or the NIC arriving, so they are a date verb's and not the
+     * picker's. Coming BACK to one from Updates Required is not that: the
+     * date was recorded long ago and nothing arrives twice. The checklist
+     * makes this return by itself once nothing is sent back; a file put on
+     * Updates Required by hand, with nothing sent back, has no document
+     * verb coming to walk it, and without this row had no way back at all.
+     */
+    public static function returnsFromUpdates(CipApplication $application, string $to): bool
+    {
+        return $application->status === Status::UPDATE_REQUIRED
+            && in_array($to, [Status::APPLY_FOR_NIC, Status::APPLY_FOR_PASSPORT], true)
+            && self::canTransition($application, $to);
+    }
+
+    /** That return, while no document is still standing at Update required. */
+    private static function returnIsOpen(CipApplication $application, string $to): bool
+    {
+        return self::returnsFromUpdates($application, $to) && ! Review::hasSentBack($application);
     }
 
     /**
@@ -474,16 +498,25 @@ class Engine
             return false;
         }
 
+        /*
+         * Nor is it a step back for a file whose COR has been received.
+         * Updates Required at the NIC or passport stage returns to Apply
+         * for NIC or Apply for Passport, and does so by itself; offered
+         * Post-Approval there, as the one row that could be pressed, a
+         * file was put on a label whose checklist it had already finished
+         * and then had no way forward. Asked before the general answer
+         * below, which used to return first and leave this unreachable.
+         */
+        if ($to === Status::POST_APPROVAL && $post && Pack::hasReachedNic($application)
+            && $application->status === Status::UPDATE_REQUIRED) {
+            return false;
+        }
+
         if ($to === Status::POST_APPROVAL) {
             return $application->status === Status::GRANTED || $post;
         }
 
         if ($to === Status::APPLY_FOR_COR && $post && Pack::hasReachedNic($application)) {
-            return false;
-        }
-
-        if ($to === Status::POST_APPROVAL && $post && Pack::hasReachedNic($application)
-            && $application->status === Status::UPDATE_REQUIRED) {
             return false;
         }
 
@@ -590,6 +623,24 @@ class Engine
 
         if (! self::checklistAllows($application, $to)) {
             throw new NotReady(self::checklistRefusal($to), Review::blockerRows($application));
+        }
+
+        /*
+         * Taken by hand while a paper is still sent back, the return would
+         * only be undone: the checklist is read as the file arrives and
+         * would stand it on Updates Required again, two notices for a file
+         * that went nowhere. The checklist's own walk is never caught here,
+         * it only sets out once nothing is refused.
+         */
+        if (self::returnsFromUpdates($application, $to)) {
+            Review::forgetTally($application);
+
+            if (Review::hasSentBack($application)) {
+                throw new NotReady(
+                    'A document that was sent back has to be replaced and accepted first.',
+                    Review::blockerRows($application),
+                );
+            }
         }
 
         return self::write($application, $to, $actor, $meta);
@@ -785,7 +836,17 @@ class Engine
             && ($meta['reason'] ?? null) === 'checklist';
 
         if (($enteringPost || $to !== Status::POST_APPROVAL) && ! $backToCollecting) {
-            Notices::announce($application, $to, $actor, is_string($meta['message'] ?? null) ? $meta['message'] : null);
+            Notices::announce(
+                $application,
+                $to,
+                $actor,
+                is_string($meta['message'] ?? null) ? $meta['message'] : null,
+                // COR RECEIVED, not APPLY FOR NIC: section 22 names a
+                // receipt for what arrived. Only when a date verb made the
+                // move; the checklist's own return to Apply for NIC is not
+                // the COR arriving a second time.
+                Stages::subject(is_string($meta['stage'] ?? null) ? $meta['stage'] : null),
+            );
         }
 
         /*

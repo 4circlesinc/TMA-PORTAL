@@ -5,6 +5,7 @@ namespace App\Support\Cip;
 use App\Models\CipApplication;
 use App\Models\CipEvent;
 use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -32,8 +33,18 @@ class Stages
     public const PASSPORT_DELIVERED = 'passport_delivered';
 
     /**
+     * `from` is the one status a step is recorded from. The map has other
+     * edges into some of these destinations, the checklist's own return from
+     * Updates Required to Apply for NIC for one, and a step offered along
+     * those was the COR received date being asked for a second time.
+     *
+     * `subject` is what section 22's worked examples put in the subject line
+     * for a receipt: COR RECEIVED, not the status the file moves on to.
+     *
      * @var array<string, array{
+     *     from: string,
      *     to: string,
+     *     subject?: string,
      *     column: string,
      *     action: string,
      *     label: string,
@@ -45,6 +56,7 @@ class Stages
      */
     private const STEPS = [
         self::COR_SUBMITTED => [
+            'from' => Status::APPLY_FOR_COR,
             'to' => Status::PENDING_COR,
             'column' => 'cor_submitted_at',
             'action' => CipEvent::ACTION_COR_SUBMITTED,
@@ -55,7 +67,9 @@ class Stages
             'lock' => 'cor',
         ],
         self::COR_RECEIVED => [
+            'from' => Status::PENDING_COR,
             'to' => Status::APPLY_FOR_NIC,
+            'subject' => 'COR RECEIVED',
             'column' => 'cor_received_at',
             'action' => CipEvent::ACTION_COR_RECEIVED,
             'label' => 'COR received',
@@ -64,6 +78,7 @@ class Stages
             'note' => 'The application will move to Apply for NIC.',
         ],
         self::NIC_SUBMITTED => [
+            'from' => Status::APPLY_FOR_NIC,
             'to' => Status::PENDING_NIC,
             'column' => 'nic_submitted_at',
             'action' => CipEvent::ACTION_NIC_SUBMITTED,
@@ -73,7 +88,9 @@ class Stages
             'note' => 'The application will move to Pending NIC.',
         ],
         self::NIC_RECEIVED => [
+            'from' => Status::PENDING_NIC,
             'to' => Status::APPLY_FOR_PASSPORT,
+            'subject' => 'NIC RECEIVED',
             'column' => 'nic_received_at',
             'action' => CipEvent::ACTION_NIC_RECEIVED,
             'label' => 'NIC received',
@@ -82,6 +99,7 @@ class Stages
             'note' => 'The application will move to Apply for Passport.',
         ],
         self::PASSPORT_SUBMITTED => [
+            'from' => Status::APPLY_FOR_PASSPORT,
             'to' => Status::PENDING_PASSPORT,
             'column' => 'passport_submitted_at',
             'action' => CipEvent::ACTION_PASSPORT_SUBMITTED,
@@ -91,7 +109,9 @@ class Stages
             'note' => 'The application will move to Pending Passport.',
         ],
         self::PASSPORT_RECEIVED => [
+            'from' => Status::PENDING_PASSPORT,
             'to' => Status::READY_FOR_DELIVERY,
+            'subject' => 'PASSPORT RECEIVED',
             'column' => 'passport_received_at',
             'action' => CipEvent::ACTION_PASSPORT_RECEIVED,
             'label' => 'Passport received',
@@ -100,6 +120,7 @@ class Stages
             'note' => 'The application will move to Ready for Delivery.',
         ],
         self::PASSPORT_DELIVERED => [
+            'from' => Status::READY_FOR_DELIVERY,
             'to' => Status::CLOSED,
             'column' => 'passport_delivered_at',
             'action' => CipEvent::ACTION_PASSPORT_DELIVERED,
@@ -129,10 +150,25 @@ class Stages
      */
     public static function into(CipApplication $application, ?User $actor): array
     {
+        $action = self::payload($application, $actor);
+
         return [
             ...self::dates($application),
-            'stageAction' => self::payload($application, $actor),
+            'stageAction' => $action,
+            'stageHold' => $action === null ? self::hold($application, $actor) : null,
         ];
+    }
+
+    /**
+     * What section 22's worked examples call this step in a subject line.
+     *
+     * Only a receipt has a name of its own there: COR RECEIVED, NIC
+     * RECEIVED, PASSPORT RECEIVED. Every other step is announced by the
+     * status the file moves to, so this is null for them.
+     */
+    public static function subject(?string $key): ?string
+    {
+        return $key !== null ? (self::STEPS[$key]['subject'] ?? null) : null;
     }
 
     /** What the date of one step is called, for a dialog that asks for it. */
@@ -182,6 +218,10 @@ class Stages
         }
 
         foreach (self::STEPS as $key => $step) {
+            if ($application->status !== $step['from']) {
+                continue;
+            }
+
             if (! Engine::canTransition($application, $step['to'])) {
                 continue;
             }
@@ -196,6 +236,9 @@ class Stages
 
             return [
                 'key' => $key,
+                // Where the step lands, so a status menu can offer it on
+                // that row and ask for the day as it is pressed.
+                'to' => $step['to'],
                 'label' => $step['button'],
                 'dateLabel' => $step['dateLabel'],
                 'note' => $step['note'],
@@ -203,6 +246,62 @@ class Stages
         }
 
         return null;
+    }
+
+    /**
+     * Why no date can be recorded yet, in one short sentence, or null.
+     *
+     * A status menu draws the dated steps greyed until they can be taken,
+     * and a column of grey rows with nothing beside it read as a menu that
+     * was broken. Each of these is something the file is waiting on, and
+     * who it is waiting on is the whole answer.
+     *
+     * Asked only when {@see payload()} has nothing to offer, and only of
+     * the stretches where the reason is one of these two: papers still to
+     * be accepted, or the package still to be confirmed. A file waiting on
+     * the Unit has its button; a denied or closed one has no step left.
+     *
+     * @return array{to:string, note:string}|null
+     */
+    public static function hold(CipApplication $application, ?User $actor): ?array
+    {
+        if ($actor === null
+            || ($application->phase ?? Phase::PRE_APPROVAL) !== Phase::POST_APPROVAL
+            || ! CipAccess::canChangeApplicationStatus($actor)) {
+            return null;
+        }
+
+        $status = $application->status;
+
+        if ($status === Status::APPLY_FOR_COR && ! $application->isCorLocked()) {
+            return [
+                'to' => Status::PENDING_COR,
+                'note' => Confirmation::allows($actor, $application)
+                    ? 'Confirm submission first.'
+                    : 'Waiting for the service provider to confirm submission.',
+            ];
+        }
+
+        if (! in_array($status, [Status::POST_APPROVAL, Status::POST_APPROVED, Status::UPDATE_REQUIRED], true)) {
+            return null;
+        }
+
+        // Said only while it is true. A file put on Updates Required by
+        // hand may have every paper accepted, and is waiting on no document.
+        if (Review::packageReady($application)) {
+            return null;
+        }
+
+        $to = match (Pack::current($application)) {
+            Pack::PASSPORT => Status::PENDING_PASSPORT,
+            Pack::NIC => Status::PENDING_NIC,
+            default => Status::PENDING_COR,
+        };
+
+        return [
+            'to' => $to,
+            'note' => 'Every document must be Ready for submission first.',
+        ];
     }
 
     /**
@@ -244,6 +343,30 @@ class Stages
             throw new \InvalidArgumentException('That is not a post-approval step this application can record.');
         }
 
+        /*
+         * Asked here as well as by the engine, because the engine is only
+         * reached when the file moves. Pressing a step the file already
+         * stands on rewrites its day and moves nothing, and that path let
+         * anybody who could open the file change a date the firm recorded.
+         */
+        if ($actor !== null && ! Engine::allows($actor, $application, $step['to'])) {
+            throw new AuthorizationException('You cannot record this step on this application.');
+        }
+
+        /*
+         * A file closed with no delivery on record was closed some other
+         * way: the lane denied it, and it was closed from the status menu
+         * with a reason. Pressing this step on it would be taken for a
+         * correction of the day and write a passport onto the timeline of a
+         * refusal. Read off the file as it stands, not off the decision
+         * column, which a denial that was later undone still carries.
+         */
+        if ($key === self::PASSPORT_DELIVERED
+            && $application->status === Status::CLOSED
+            && $application->passport_delivered_at === null) {
+            throw new \InvalidArgumentException('This application was closed without a passport delivery.');
+        }
+
         if (($step['lock'] ?? null) === 'cor' && ! $application->isCorLocked()) {
             throw new \InvalidArgumentException(
                 'The service provider must confirm submission before the COR package can be sent.',
@@ -269,7 +392,8 @@ class Stages
         $date ??= Carbon::now();
         $already = $application->status === $step['to'];
 
-        if (! $already && ! Engine::canTransition($application, $step['to'])) {
+        if (! $already
+            && ($application->status !== $step['from'] || ! Engine::canTransition($application, $step['to']))) {
             throw new \InvalidArgumentException(sprintf(
                 'A %s date cannot be recorded while this application stands at %s.',
                 lcfirst($step['label']),

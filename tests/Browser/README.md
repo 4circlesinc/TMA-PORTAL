@@ -377,6 +377,32 @@ field placement and drawing, and computed CSS only exist in a browser.
   TMA_BASE_URL=http://127.0.0.1:8933 TMA_APP=<uuid> node tests/Browser/cip-checklist-upload.mjs
   ```
 
+- **`cip-next-step-menu.mjs`** — The status menu is a way forward, and says
+  what it is waiting on. Brief sections 5 to 7: at Apply for COR the provider
+  confirms submission, then the COR submission date makes the file Pending
+  COR, then the COR received date makes it Apply for NIC. Each date has a
+  button in the strip at the top of the application, but the status menus,
+  where a reader goes to move a file on, drew every dated status greyed with
+  nothing beside it. Pins that while documents are still to be accepted the
+  menus say so in one line above the lane, wrapped to the menu's own width,
+  and that a person already at Apply for COR ahead of their family is told it
+  is the family's documents being waited on; that an unconfirmed Apply for
+  COR says to confirm submission first; that once confirmed Pending COR is a
+  row to press on a person's chip, opens the COR submission date and records
+  it for the application; that Apply for NIC is then a row to press on the
+  application's chip and opens the COR received date; and that the steps
+  after the next one stay greyed, in order. Same serve, an administrator,
+  and three families from the seed; it records dates on one of them, so seed
+  fresh ones for each run:
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FEATURE_CIP=true FILES_DISK=local MALWARE_SCANNER=none \
+    php artisan tinker tests/Browser/fixtures/next-step-seed.php < /dev/null
+  TMA_BASE_URL=http://127.0.0.1:8933 TMA_APP_WAITING=<uuid> TMA_PERSON_AHEAD=<uuid> \
+    TMA_APP_UNCONFIRMED=<uuid> TMA_PERSON_UNCONFIRMED=<uuid> \
+    TMA_APP_CONFIRMED=<uuid> TMA_PERSON_CONFIRMED=<uuid> node tests/Browser/cip-next-step-menu.mjs
+  ```
+
 - **`cip-confirm-submission.mjs`** — Confirm submission says it has been
   confirmed. The press locked the package and the server answered with the
   application as it then stood, but the page repainted from the record it

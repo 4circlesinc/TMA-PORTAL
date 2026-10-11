@@ -1095,15 +1095,23 @@ class Postcards
      *
      * @param  array{number:string, applicant:string, provider:string, familySize:int}  $facts
      */
-    public static function cipStatus(array $facts, string $status, string $url, ?string $recipientName = null, ?string $subject = null): Postcard
-    {
+    public static function cipStatus(
+        array $facts,
+        string $status,
+        string $url,
+        ?string $recipientName = null,
+        ?string $subject = null,
+        bool $plain = false,
+    ): Postcard {
         $subject ??= Notices::line($facts, $status);
         $label = Status::label($status);
 
         // Each section 22 stage is its own template on the Templates page; DRAFT
         // still files as NEW, and anything unmapped keeps the shared one.
+        // `$plain` asks for the shared one outright, for a status reached
+        // some other way than the one its own copy describes.
         $key = 'cip-status-'.str_replace('_', '-', $status === Status::DRAFT ? Status::NEW : $status);
-        if (! in_array($key, SystemEmails::keys(), true)) {
+        if ($plain || ! in_array($key, SystemEmails::keys(), true)) {
             $key = 'cip-status';
         }
 

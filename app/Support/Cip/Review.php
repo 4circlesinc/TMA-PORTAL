@@ -401,6 +401,19 @@ class Review
     }
 
     /**
+     * Is a document on the current checklist standing at Update required?
+     *
+     * The one thing that keeps a file on Updates Required: {@see plan()}
+     * walks it back the moment nothing is refused, whatever else is still
+     * owed. Asked by the engine before a reader takes that same step by
+     * hand.
+     */
+    public static function hasSentBack(CipApplication $application): bool
+    {
+        return self::tally($application)[DocumentStatus::UPDATE_REQUIRED]['total'] > 0;
+    }
+
+    /**
      * Whether this file may be submitted or approved.
      *
      * Every required slot has to stand at Ready for submission. Every uploaded

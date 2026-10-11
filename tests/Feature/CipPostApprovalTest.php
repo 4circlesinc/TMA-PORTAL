@@ -1468,13 +1468,15 @@ class CipPostApprovalTest extends TestCase
             ])
             ->assertOk();
 
+        // The subject names a receipt for what arrived, as section 22's
+        // examples do: COR RECEIVED, not the status the file moves on to.
         $hops = [
-            [Stages::COR_RECEIVED, Status::APPLY_FOR_NIC, 'APPLY FOR NIC', 'corReceivedAt'],
-            [Stages::NIC_SUBMITTED, Status::PENDING_NIC, 'PENDING NIC', 'nicSubmittedAt'],
-            [Stages::NIC_RECEIVED, Status::APPLY_FOR_PASSPORT, 'APPLY FOR PASSPORT', 'nicReceivedAt'],
-            [Stages::PASSPORT_SUBMITTED, Status::PENDING_PASSPORT, 'PENDING PASSPORT', 'passportSubmittedAt'],
-            [Stages::PASSPORT_RECEIVED, Status::READY_FOR_DELIVERY, 'READY FOR DELIVERY', 'passportReceivedAt'],
-            [Stages::PASSPORT_DELIVERED, Status::CLOSED, 'FILE CLOSED', 'passportDeliveredAt'],
+            [Stages::COR_RECEIVED, Status::APPLY_FOR_NIC, ' - COR RECEIVED - ', 'corReceivedAt'],
+            [Stages::NIC_SUBMITTED, Status::PENDING_NIC, ' - PENDING NIC - ', 'nicSubmittedAt'],
+            [Stages::NIC_RECEIVED, Status::APPLY_FOR_PASSPORT, ' - NIC RECEIVED - ', 'nicReceivedAt'],
+            [Stages::PASSPORT_SUBMITTED, Status::PENDING_PASSPORT, ' - PENDING PASSPORT - ', 'passportSubmittedAt'],
+            [Stages::PASSPORT_RECEIVED, Status::READY_FOR_DELIVERY, ' - PASSPORT RECEIVED - ', 'passportReceivedAt'],
+            [Stages::PASSPORT_DELIVERED, Status::CLOSED, ' - FILE CLOSED - ', 'passportDeliveredAt'],
         ];
 
         foreach ($hops as [$stage, $status, $subject, $dateKey]) {
@@ -2340,7 +2342,7 @@ class CipPostApprovalTest extends TestCase
         $this->assertSame(CipApplication::DECISION_GRANTED, $application->fresh()->decision);
 
         Mail::assertQueued(Postcard::class, function (Postcard $mail) {
-            return str_contains((string) $mail->subjectLine, 'READY FOR DELIVERY');
+            return str_contains((string) $mail->subjectLine, ' - PASSPORT RECEIVED - ');
         });
     }
 
@@ -2621,6 +2623,473 @@ class CipPostApprovalTest extends TestCase
         // what this prevents.
         $this->assertFalse(CipAccess::canEditPostApprovalPeople($contact));
         $this->assertFalse(CipAccess::canEditApplication($contact, $application));
+    }
+
+    /**
+     * Brief sections 7 and 9: a receipt is recorded once, from the Pending
+     * status it ends. Updates Required at the NIC stage has an edge back to
+     * Apply for NIC for the checklist to walk, and the date verb followed it:
+     * the bar offered "Record COR received" again, and pressing it rewrote
+     * the real date and announced the COR a second time.
+     */
+    public function test_updates_required_at_the_nic_stage_is_not_offered_the_cor_received_date_again(): void
+    {
+        $staff = $this->staff();
+        [$application, $person] = $this->intoApplyForNic($staff);
+
+        $r3 = $person->documents()->where('type', NicRequirements::R3_FORM)->first();
+        DocumentSlots::fill(
+            $person->fresh(['application', 'documents']),
+            NicRequirements::R3_FORM,
+            UploadedFile::fake()->create('r3.pdf', 40, 'application/pdf'),
+            $staff,
+        );
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/documents/'.$r3->uuid.'/request-changes', ['comment' => 'The witness stamp is missing.'])
+            ->assertOk();
+        $this->assertSame(Status::UPDATE_REQUIRED, $application->fresh()->status);
+
+        $record = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk()
+            ->json('application');
+
+        $this->assertNull($record['stageAction'], 'No date is on offer while a paper is sent back.');
+        $this->assertSame(Status::PENDING_NIC, $record['stageHold']['to']);
+        $this->assertSame('Every document must be Ready for submission first.', $record['stageHold']['note']);
+        $this->assertNull(Stages::payload($application->fresh(), $staff));
+
+        // Nor is Post-Approval a next step from here: the COR is long done.
+        $this->assertNotContains(Status::POST_APPROVAL, Engine::availableTransitions($application->fresh(), $staff));
+        $this->assertNotContains(
+            Status::POST_APPROVAL,
+            array_column($record['availableTransitions'], 'value'),
+        );
+        // And the way back to Apply for NIC is shut while the paper is out.
+        $this->assertNotContains(Status::APPLY_FOR_NIC, Engine::availableTransitions($application->fresh(), $staff));
+
+        Mail::fake();
+
+        // By hand it would only bounce: refused, with a reason or without,
+        // and the refusal names the paper.
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', ['status' => Status::APPLY_FOR_NIC])
+            ->assertStatus(422)
+            ->assertJsonPath('blockers.0.label', $r3->label);
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::APPLY_FOR_NIC, 'note' => 'Moving it on anyway.',
+            ])
+            ->assertStatus(422);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                'stage' => Stages::COR_RECEIVED, 'date' => '2026-09-01',
+            ])
+            ->assertStatus(422);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', ['status' => Status::POST_APPROVAL])
+            ->assertStatus(422);
+
+        $fresh = $application->fresh();
+        $this->assertSame('2026-08-21', $fresh->cor_received_at->toDateString());
+        $this->assertSame(Status::UPDATE_REQUIRED, $fresh->status);
+        Mail::assertNothingQueued();
+
+        // The checklist still brings it back by itself, and says so under
+        // the status it returns to: the COR did not arrive a second time.
+        DocumentSlots::fill(
+            $person->fresh(['application', 'documents']),
+            NicRequirements::R3_FORM,
+            UploadedFile::fake()->create('r3-v2.pdf', 42, 'application/pdf'),
+            $staff,
+        );
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/documents/'.$r3->uuid.'/approve')
+            ->assertOk();
+
+        $this->assertSame(Status::APPLY_FOR_NIC, $application->fresh()->status);
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => str_contains((string) $mail->subjectLine, ' - APPLY FOR NIC - '));
+        Mail::assertNotQueued(Postcard::class, fn (Postcard $mail) => str_contains((string) $mail->subjectLine, 'COR RECEIVED'));
+    }
+
+    public function test_updates_required_at_the_passport_stage_is_not_offered_the_nic_received_date_again(): void
+    {
+        $staff = $this->staff();
+        [$application] = $this->intoApplyForPassport($staff);
+
+        // Put by hand, with a reason, the way an officer would.
+        Engine::set($application->fresh(), Status::UPDATE_REQUIRED, $staff, ['note' => 'Photos are missing.']);
+
+        $fresh = $application->fresh();
+        $this->assertSame(Status::UPDATE_REQUIRED, $fresh->status);
+        $this->assertNull(Stages::payload($fresh, $staff));
+        $this->assertSame(Status::PENDING_PASSPORT, Stages::hold($fresh, $staff)['to'] ?? null);
+        $this->assertNotContains(Status::POST_APPROVAL, Engine::availableTransitions($fresh, $staff));
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                'stage' => Stages::NIC_RECEIVED, 'date' => '2026-09-02',
+            ])
+            ->assertStatus(422);
+
+        $this->assertSame('2026-08-23', $application->fresh()->nic_received_at->toDateString());
+
+        /*
+         * Nothing was sent back, so no document verb is coming to walk the
+         * file home. Apply for Passport is offered as an ordinary step, asks
+         * for no date, and is told as a return, not as the NIC arriving.
+         */
+        $this->assertContains(Status::APPLY_FOR_PASSPORT, Engine::availableTransitions($fresh, $staff));
+        $this->assertNotContains(Status::APPLY_FOR_NIC, Engine::availableTransitions($fresh, $staff));
+
+        Mail::fake();
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', ['status' => Status::APPLY_FOR_PASSPORT])
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::APPLY_FOR_PASSPORT)
+            ->assertJsonPath('application.nicReceivedAt', '2026-08-23');
+
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => str_contains((string) $mail->subjectLine, ' - APPLY FOR PASSPORT - '));
+        Mail::assertNotQueued(Postcard::class, fn (Postcard $mail) => str_contains((string) $mail->subjectLine, 'NIC RECEIVED'));
+    }
+
+    /**
+     * The sentence about documents is said only while it is true. A file put
+     * on Updates Required by hand with every paper accepted is waiting on no
+     * document, and its way back is there to press.
+     */
+    public function test_a_file_waiting_on_no_document_is_not_told_it_is(): void
+    {
+        $staff = $this->staff();
+        [$application] = $this->intoApplyForNic($staff);
+        $this->fileRequiredCor($application->fresh(['people']), $staff);
+        $this->approveRequiredCor($application->fresh(), $staff);
+
+        // An ordinary press, the row the menu offers at Apply for NIC.
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', ['status' => Status::UPDATE_REQUIRED])
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::UPDATE_REQUIRED)
+            ->assertJsonPath('application.stageAction', null)
+            ->assertJsonPath('application.stageHold', null);
+
+        $fresh = $application->fresh();
+        $this->assertNull(Stages::hold($fresh, $staff));
+        $this->assertContains(Status::APPLY_FOR_NIC, Engine::availableTransitions($fresh, $staff));
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', ['status' => Status::APPLY_FOR_NIC])
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::APPLY_FOR_NIC)
+            ->assertJsonPath('application.corReceivedAt', '2026-08-21')
+            ->assertJsonPath('application.stageAction.key', Stages::NIC_SUBMITTED);
+
+        // Outside the lane there is never anything to say.
+        $pre = $this->application($staff);
+        $this->assertNull(Stages::hold($pre->fresh(), $staff));
+    }
+
+    /**
+     * A person's own NIC step waits on their own papers, and their menu says
+     * so; somebody who owes nothing in the pack is told nothing.
+     */
+    public function test_a_person_is_told_when_their_own_documents_hold_their_step(): void
+    {
+        $staff = $this->staff();
+        [$application] = $this->intoApplyForNic($staff);
+
+        $applicant = fn () => $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk()
+            ->json('application.applicant');
+
+        $owing = $applicant();
+        $this->assertSame('Every document must be Ready for submission first.', $owing['statusHold']);
+        $this->assertNotContains(Status::PENDING_NIC, array_column($owing['availableStatuses'], 'value'));
+
+        $this->fileRequiredCor($application->fresh(['people']), $staff);
+        $this->approveRequiredCor($application->fresh(), $staff);
+
+        $ready = $applicant();
+        $this->assertNull($ready['statusHold']);
+        $this->assertContains(Status::PENDING_NIC, array_column($ready['availableStatuses'], 'value'));
+    }
+
+    /**
+     * Each step is recorded from the one status it follows. The date verb
+     * names the status it lands on, so a status menu can offer that row.
+     */
+    public function test_each_dated_step_is_offered_only_from_the_status_it_follows(): void
+    {
+        $staff = $this->staff();
+        [$application] = $this->corFile($staff);
+        $this->fileRequiredCor($application, $staff);
+        $this->approveRequiredCor($application, $staff);
+
+        // Apply for COR, unconfirmed: nothing to record, and the menu says why.
+        $fresh = $application->fresh();
+        $this->assertSame(Status::APPLY_FOR_COR, $fresh->status);
+        $this->assertNull(Stages::payload($fresh, $staff));
+        $this->assertSame(
+            ['to' => Status::PENDING_COR, 'note' => 'Confirm submission first.'],
+            Stages::hold($fresh, $staff),
+        );
+        $officer = $this->staff(Role::REVIEWING_OFFICER);
+        $this->assertSame(
+            'Waiting for the service provider to confirm submission.',
+            Stages::hold($fresh, $officer)['note'] ?? null,
+        );
+
+        Confirmation::confirm($fresh, $this->contactOn($application, $staff));
+
+        $walk = [
+            [Stages::COR_SUBMITTED, Status::PENDING_COR],
+            [Stages::COR_RECEIVED, Status::APPLY_FOR_NIC],
+            [Stages::NIC_SUBMITTED, Status::PENDING_NIC],
+            [Stages::NIC_RECEIVED, Status::APPLY_FOR_PASSPORT],
+            [Stages::PASSPORT_SUBMITTED, Status::PENDING_PASSPORT],
+            [Stages::PASSPORT_RECEIVED, Status::READY_FOR_DELIVERY],
+            [Stages::PASSPORT_DELIVERED, Status::CLOSED],
+        ];
+
+        foreach ($walk as [$key, $to]) {
+            if (in_array($key, [Stages::NIC_SUBMITTED, Stages::PASSPORT_SUBMITTED], true)) {
+                $this->fileRequiredCor($application->fresh(['people']), $staff);
+                $this->approveRequiredCor($application->fresh(), $staff);
+            }
+
+            $record = $this->actingAs($staff)
+                ->getJson('/portal/cip/applications/'.$application->uuid)
+                ->assertOk()
+                ->json('application');
+
+            $this->assertSame($key, $record['stageAction']['key'] ?? null);
+            $this->assertSame($to, $record['stageAction']['to'] ?? null);
+            $this->assertNull($record['stageHold'], 'A step that can be taken is waiting on nothing.');
+
+            // Every other step is refused from here, in either direction.
+            foreach ($walk as [$other]) {
+                if ($other === $key) {
+                    continue;
+                }
+
+                $before = $application->fresh()->status;
+
+                try {
+                    Stages::record($application->fresh(), $staff, $other, Carbon::parse('2026-09-09'));
+                    $recorded = true;
+                } catch (\InvalidArgumentException) {
+                    $recorded = false;
+                }
+
+                // The step that led here may be pressed again to correct its
+                // day; that is the one exception, and nothing moves at all.
+                $this->assertSame(
+                    $before === collect($walk)->firstWhere(0, $other)[1],
+                    $recorded,
+                    $other.' answered wrongly while the file stood at '.$before,
+                );
+                $this->assertSame($before, $application->fresh()->status, $other.' moved the file from '.$before);
+            }
+
+            Stages::record($application->fresh(), $staff, $key, Carbon::parse('2026-08-21'));
+            $this->assertSame($to, $application->fresh()->status);
+        }
+    }
+
+    /**
+     * Brief section 12 closes a file on the day its passport is delivered. A
+     * file the lane denied has no passport; it closes from the status menu
+     * and no delivery date is written on the way.
+     */
+    public function test_a_denied_file_closes_from_the_status_menu_without_a_passport_date(): void
+    {
+        $staff = $this->staff();
+        [$application] = $this->corFile($staff);
+
+        \App\Support\Cip\Decision::record(
+            $application->fresh(),
+            $staff,
+            Status::POST_DENIED,
+            Carbon::parse('2026-08-19'),
+            'Refused.',
+            $this->cipDecisionLetterPdf(),
+        );
+        $this->assertSame(Status::POST_DENIED, $application->fresh()->status);
+
+        // The delivery date is not a way to close it.
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                'stage' => Stages::PASSPORT_DELIVERED, 'date' => '2026-08-30',
+            ])
+            ->assertStatus(422);
+        $this->assertSame(Status::POST_DENIED, $application->fresh()->status);
+
+        $timeline = collect($this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk()
+            ->json('application.milestones'));
+        $delivered = $timeline->firstWhere('key', 'passport_delivered');
+        if ($delivered !== null) {
+            $this->assertFalse($delivered['canRecord'], 'The timeline does not offer the delivery date either.');
+        }
+
+        Mail::fake();
+
+        // Listed as an override, so it is taken like one: not without a reason.
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', ['status' => Status::CLOSED])
+            ->assertStatus(422);
+        $this->assertSame(Status::POST_DENIED, $application->fresh()->status);
+
+        // And not by somebody who may not move the file at all.
+        $this->actingAs($this->contactOn($application, $staff))
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::CLOSED, 'note' => 'Please close this.',
+            ])
+            ->assertForbidden();
+        $this->assertSame(Status::POST_DENIED, $application->fresh()->status);
+        Mail::assertNothingQueued();
+
+        $closed = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::CLOSED,
+                'note' => 'Refusal accepted by the applicant.',
+            ])
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame(Status::CLOSED, $closed['status']);
+        $this->assertNull($closed['passportDeliveredAt']);
+        $this->assertNull($application->fresh()->passport_delivered_at);
+        $this->assertSame(Status::POST_DENIED, $application->fresh()->decision);
+
+        // Told as a file closed, not as a passport delivered.
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) {
+            return str_contains((string) $mail->subjectLine, ' - FILE CLOSED - ')
+                && ! str_contains((string) json_encode($mail->payload), 'passport has been delivered');
+        });
+
+        // And once closed, a press on the delivery date still writes nothing.
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                'stage' => Stages::PASSPORT_DELIVERED, 'date' => '2026-08-31',
+            ])
+            ->assertStatus(422);
+        $this->assertNull($application->fresh()->passport_delivered_at);
+    }
+
+    /**
+     * The closed-without-a-passport refusal reads the file as it stands. A
+     * denial that was undone leaves its mark in the decision column, and a
+     * file that then worked the whole lane still closes on its delivery.
+     * A file that is not denied still cannot be closed without that date.
+     */
+    public function test_a_file_once_denied_still_closes_on_its_passport_delivery(): void
+    {
+        $staff = $this->staff();
+        [$application] = $this->intoReadyForDelivery($staff);
+        $application->forceFill(['decision' => Status::POST_DENIED])->save();
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::CLOSED, 'note' => 'Closing it.',
+            ])
+            ->assertStatus(422);
+        $this->assertSame(Status::READY_FOR_DELIVERY, $application->fresh()->status);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                'stage' => Stages::PASSPORT_DELIVERED, 'date' => '2026-08-27',
+            ])
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::CLOSED)
+            ->assertJsonPath('application.passportDeliveredAt', '2026-08-27');
+
+        // Its day can still be corrected the way every step's can.
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                'stage' => Stages::PASSPORT_DELIVERED, 'date' => '2026-08-28',
+            ])
+            ->assertOk()
+            ->assertJsonPath('application.passportDeliveredAt', '2026-08-28');
+    }
+
+    /**
+     * Pressing a step the file already stands on rewrites its day and moves
+     * nothing, so the engine's permission check was never reached: anybody
+     * who could open the file could change a date the firm recorded.
+     */
+    public function test_a_service_provider_cannot_rewrite_a_recorded_date(): void
+    {
+        $staff = $this->staff();
+        [$application] = $this->intoApplyForNic($staff);
+        $contact = $this->contactOn($application, $staff);
+
+        $this->actingAs($contact)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                'stage' => Stages::COR_RECEIVED, 'date' => '2026-01-01', 'corNumber' => 'FORGED',
+            ])
+            ->assertForbidden();
+
+        $fresh = $application->fresh();
+        $this->assertSame('2026-08-21', $fresh->cor_received_at->toDateString());
+        $this->assertNotSame('FORGED', $fresh->cor_number);
+
+        // The firm still corrects its own date this way.
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                'stage' => Stages::COR_RECEIVED, 'date' => '2026-08-22',
+            ])
+            ->assertOk();
+        $this->assertSame('2026-08-22', $application->fresh()->cor_received_at->toDateString());
+        $this->assertSame(Status::APPLY_FOR_NIC, $application->fresh()->status);
+    }
+
+    /**
+     * Brief section 5 asks the provider to confirm submission as the file
+     * reaches Apply for COR. A file that returns there with its package
+     * already confirmed is not asked a second time.
+     */
+    public function test_a_confirmed_package_is_not_asked_to_confirm_again(): void
+    {
+        Mail::fake();
+
+        $staff = $this->staff();
+        [$application] = $this->corFile($staff);
+        $this->fileRequiredCor($application, $staff);
+        $this->approveRequiredCor($application, $staff);
+
+        // The checklist moves the file as the system, so there are no
+        // officer initials in front of the status here.
+        $ask = fn (Postcard $mail) => str_contains((string) $mail->subjectLine, 'APPLY FOR COR - ')
+            && str_contains((string) json_encode($mail->payload), 'Confirm submission');
+        Mail::assertQueued(Postcard::class, $ask);
+
+        $contact = $this->contactOn($application, $staff);
+        Confirmation::confirm($application->fresh(), $contact);
+
+        Mail::fake();
+        $asked = fn () => \Illuminate\Support\Facades\DB::table('portal_notifications')
+            ->where('type', 'cip.apply-for-cor')->count();
+        $before = $asked();
+
+        Engine::set($application->fresh(), Status::UPDATE_REQUIRED, $staff, ['note' => 'Checking the Oath.']);
+        Review::settle($application->fresh(), $staff);
+
+        $this->assertSame(Status::APPLY_FOR_COR, $application->fresh()->status);
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => str_contains((string) $mail->subjectLine, 'APPLY FOR COR - '));
+        Mail::assertNotQueued(Postcard::class, $ask);
+
+        // The bell is an ordinary change of status too, with no confirm link.
+        $this->assertSame($before, $asked(), 'No second bell asks for a confirmation already given.');
+        $bell = \Illuminate\Support\Facades\DB::table('portal_notifications')
+            ->where('user_id', $contact->id)->where('type', 'cip.status')->latest('id')->first();
+        $this->assertNotNull($bell);
+        $this->assertStringNotContainsString('confirm=1', (string) $bell->action_url);
     }
 
     private function seedCor(): void
