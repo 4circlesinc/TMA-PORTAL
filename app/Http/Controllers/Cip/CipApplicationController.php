@@ -2400,9 +2400,33 @@ class CipApplicationController extends Controller
         $application->loadMissing(array_merge([
             'provider', 'client', 'assignedOfficer',
             'people.documents.file', 'people.documents.requirement',
+            // Trashed too: Package reads a file's folder that way, and the
+            // lock on a slot is asked of every line of the checklist.
+            'people.documents.file.folder' => fn ($q) => $q->withTrashed(),
             'parent.provider', 'parent.client',
             'parent.people' => fn ($q) => $q->where('role', CipPerson::ROLE_MAIN_APPLICANT),
         ], self::assigneeRelations()));
+
+        /*
+         * What each slot already is, said to it rather than left to be found.
+         *
+         * Whether a line may still be uploaded to is a question about the
+         * package ({@see Package::locksDocument()}), and it answers from the
+         * slot's application, its requirement, and the file's own slot. None
+         * of those was loaded the way it looks for them, so every filed
+         * document went back to the database four times: its folder, its slot
+         * by file, that slot's application, that slot's requirement. A file
+         * of a hundred papers was four hundred queries to draw one page, and
+         * each one is a round trip.
+         */
+        foreach ($application->people as $person) {
+            foreach ($person->documents as $slot) {
+                $slot->setRelation('application', $application);
+                if ($slot->file) {
+                    $slot->file->setRelation('cipDocument', $slot);
+                }
+            }
+        }
 
         /*
          * One presenter, primed once, for the family, or for the whole page.

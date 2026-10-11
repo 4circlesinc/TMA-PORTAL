@@ -142,4 +142,81 @@ class CipDetailScaleTest extends TestCase
             ."than per person.",
         );
     }
+
+    /*
+     * Nor a query per filed document.
+     *
+     * The guard above never files anything, so it could not see what a real
+     * application pays: each filled slot was asked whether its file still
+     * exists, and then whether the package locks it, which went looking for
+     * the file's folder, the file's slot, that slot's application and that
+     * slot's requirement. Five round trips a document. An application with
+     * three people and eighteen papers was 136 queries to open; a family of
+     * eight with their checklists filed was several hundred, each a round trip
+     * to a database that is not next door, and that is the page that "takes
+     * too long". Measured the same way as everything else here: a little
+     * paper, a lot of paper, and the number has to be the same.
+     */
+    public function test_opening_an_application_does_not_cost_a_query_per_filed_document(): void
+    {
+        $this->seed(\Database\Seeders\CipDocumentRequirementSeeder::class);
+
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+        $this->actingAs($staff);
+
+        $folder = \App\Models\Folder::create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'name' => 'Detail scale papers',
+            'owner_id' => $staff->id,
+            'created_by' => $staff->id,
+            'folder_type' => \App\Models\Folder::TYPE_CLIENT,
+        ]);
+
+        // The same family twice, one with a paper each and one with ten each.
+        $file = function (string $uuid, int $perPerson) use ($staff, $folder): int {
+            // The first open is what puts the checklist there to be filed.
+            $this->getJson('/portal/cip/applications/'.$uuid)->assertOk();
+
+            $filed = 0;
+            $application = \App\Models\CipApplication::where('uuid', $uuid)->firstOrFail();
+
+            foreach ($application->people()->get() as $person) {
+                foreach ($person->documents()->orderBy('id')->limit($perPerson)->get() as $slot) {
+                    $item = \App\Models\FileItem::create([
+                        'uuid' => (string) \Illuminate\Support\Str::uuid(),
+                        'folder_id' => $folder->id,
+                        'owner_id' => $staff->id,
+                        'name' => 'paper-'.$slot->id.'.pdf',
+                        'extension' => 'pdf',
+                        'mime_type' => 'application/pdf',
+                        'size' => 2048,
+                        'disk' => 'local',
+                        'storage_path' => 'tests/detail-scale-'.$slot->id.'.pdf',
+                    ]);
+                    $slot->forceFill(['file_id' => $item->id])->save();
+                    $filed++;
+                }
+            }
+
+            return $filed;
+        };
+
+        $thin = $this->application($staff, $provider, 2, true);
+        $thick = $this->application($staff, $provider, 2, true);
+
+        $few = $file($thin, 1);
+        $many = $file($thick, 10);
+        $this->assertGreaterThan($few * 5, $many, 'The fixture did not file enough to tell the two apart.');
+
+        $thinCost = $this->cost($thin);
+        $thickCost = $this->cost($thick);
+
+        $this->assertSame(
+            $thinCost,
+            $thickCost,
+            "Opening an application costs {$thinCost} queries with {$few} documents filed and "
+            ."{$thickCost} with {$many}: something is asked once per document.",
+        );
+    }
 }

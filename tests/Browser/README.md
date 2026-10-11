@@ -447,6 +447,21 @@ field placement and drawing, and computed CSS only exist in a browser.
   ```sh
   TMA_BASE_URL=http://127.0.0.1:8941 node tests/Browser/warm-reload.mjs
   ```
+- **`cip-application-open.mjs`** — what opening an application costs, and
+  when its page is there. The details page and the edit form "took too long"
+  because one read of the record ran four or five queries for every filed
+  document (pinned on the server by `CipDetailScaleTest`), and because the
+  pages asked for that record more than once, three times on the edit form.
+  This pins the browser's half: each page's requests are counted, a read's
+  cost is taken off the `Server-Timing` header (at most 70 queries; it was 139
+  on this seed), and a row the reader has rested the pointer on must open on
+  its tabs with the record request held back three seconds, which is the
+  hover prefetch. Wants an application with a client record, a family and
+  filed documents on the `cip-table-quiet.mjs` server.
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8941 node tests/Browser/cip-application-open.mjs
+  ```
 - **`cip-application-full.mjs`** — a whole family, filed and read back.
   `cip-intake.mjs` pins that the form is wired to the endpoint; this pins what
   the endpoint *leaves behind*, which is where the parts that only exist after

@@ -704,7 +704,35 @@
       '</div></section>';
   }
 
+  /*
+   * What the strip held last time, on the first paint.
+   *
+   * The Dashboard's file tables and default folders are loaded a moment after
+   * the board itself, on purpose, so they do not compete with it. That left
+   * them on their placeholders for the delay and then for four requests, on
+   * every load. The copy kept at the last settle is put back here, at the
+   * first render, before any of that; load() still runs when it always did
+   * and remounts only if what comes back is different.
+   */
+  function hydrateKept() {
+    if (state.loaded || state.keptTried || !window.TMAStore || !window.TMAStore.first) return;
+    state.keptTried = true;
+
+    // In a browser the copy is handed back before this returns, so the render
+    // that called this draws it. From the desktop's disk it arrives later.
+    var during = true;
+    window.TMAStore.first('home:library', function () { return !state.loaded; }, function (kept) {
+      if (!kept || state.loaded) return;
+      if (kept.defaults) state.defaults = kept.defaults;
+      if (kept.recent) state.recent = kept.recent;
+      if (kept.shared) state.shared = kept.shared;
+      if (!during) remountHome();
+    });
+    during = false;
+  }
+
   function render() {
+    hydrateKept();
     /*
      * Reconciled, never replaced.
      *
@@ -1095,6 +1123,13 @@
     function settle() {
       state.loaded = true;
       state.loadedAt = Date.now();
+      if (window.TMAStore) {
+        try {
+          window.TMAStore.put('home:library', {
+            defaults: state.defaults, recent: state.recent, shared: state.shared,
+          });
+        } catch (e) { /* a cold start next time */ }
+      }
       if (done && snapshot() !== before) done();
     }
 

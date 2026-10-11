@@ -482,6 +482,24 @@
     return m ? decodeURIComponent(m[1]) : '';
   }
 
+  /*
+   * The same read, asked for twice in the same breath, is one round trip.
+   *
+   * Opening an application asked for its record three times over: the head
+   * wanted to know whose it was, the profile wanted the record, the form
+   * wanted the record, each from its own function and each unaware of the
+   * others, and a panel that redraws while its list is loading asked for
+   * that list again on every redraw. The record is the heaviest answer in the
+   * module. A read joins one already on its way for the same address; each
+   * caller still gets a copy of its own to keep or change.
+   *
+   * Only while that request is out, and only if it left a moment ago. A
+   * write lets go of everything on its way, so a read made after a save can
+   * never be handed an answer from before it.
+   */
+  var CLIENTS_READS = {};
+  var CLIENTS_JOIN_MS = 1500;
+
   function clientsFetch(url, opts) {
     opts = opts || {};
     var headers = { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
@@ -494,15 +512,51 @@
     } else if (!(opts.body instanceof FormData)) {
       /* FormData sets its own multipart boundary; other bodies stay as passed. */
     }
-    return fetch(url, {
-      method: opts.method || 'GET',
-      credentials: 'same-origin',
-      headers: Object.assign(headers, opts.headers || {}),
-      body: opts.body,
-    }).then(function (res) {
-      var ct = res.headers.get('content-type') || '';
-      var parse = ct.indexOf('application/json') !== -1 ? res.json() : Promise.resolve(null);
-      return parse.then(function (data) {
+
+    var reading = (!opts.method || opts.method === 'GET') && !opts.body && !opts.headers;
+
+    var send = function () {
+      return fetch(url, {
+        method: opts.method || 'GET',
+        credentials: 'same-origin',
+        headers: Object.assign(headers, opts.headers || {}),
+        body: opts.body,
+      }).then(function (res) {
+        var ct = res.headers.get('content-type') || '';
+        var body = ct.indexOf('application/json') !== -1 ? res.text() : Promise.resolve(null);
+        return body.then(function (text) {
+          return {
+            ok: res.ok,
+            status: res.status,
+            offline: res.headers.get('x-tma-offline') === '1',
+            text: text,
+          };
+        });
+      });
+    };
+
+    var answer;
+    if (reading) {
+      var out = CLIENTS_READS[url];
+      if (out && (Date.now() - out.at) < CLIENTS_JOIN_MS) {
+        answer = out.answer;
+      } else {
+        answer = send();
+        var mine = { at: Date.now(), answer: answer };
+        CLIENTS_READS[url] = mine;
+        var landed = function () { if (CLIENTS_READS[url] === mine) delete CLIENTS_READS[url]; };
+        answer.then(landed, landed);
+      }
+    } else {
+      CLIENTS_READS = {};
+      answer = send();
+      var written = function () { CLIENTS_READS = {}; };
+      answer.then(written, written);
+    }
+
+    return answer.then(function (res) {
+      // Parsed per caller: two readers of one answer must not share an object.
+      return Promise.resolve(res.text === null ? null : JSON.parse(res.text)).then(function (data) {
         if (!res.ok) {
           var msg = (data && data.message) || '';
           if (!msg) {
@@ -513,7 +567,7 @@
           var err = new Error(msg);
           err.status = res.status;
           err.data = data;
-          err.offline = res.headers.get('x-tma-offline') === '1';
+          err.offline = res.offline;
           throw err;
         }
         /*
@@ -17381,9 +17435,30 @@
    * for a client that has no application. The two are different questions and
    * one being answered must not decide whether the other is asked.
    */
-  function ensureApplicationLoaded(state, render) {
+  function ensureApplicationLoaded(state, render, opts) {
     var id = state.selectedId;
     if (!id) return;
+
+    /*
+     * The profile being opened asks once, however often it is opened.
+     *
+     * A route is re-derived several times while a page settles: when the
+     * directory lands, when the companies land, on a resize. Each pass came
+     * through here having cleared "fresh", found the first request still out,
+     * and so booked a second for when it landed, and the pass after that
+     * booked a third. One open of one application read its record three
+     * times, and that record is the heaviest answer the module has. A pass
+     * that is only the same screen arriving again joins the read under way,
+     * and one that comes just after it has landed has its answer already.
+     * Anything that knows the record changed (a save, a live signal) does not
+     * say `opening`, and is treated exactly as before.
+     */
+    if (opts && opts.opening) {
+      if (state.applicationLoadingFor === id) return;
+      if (state.applicationLandedFor === id && (Date.now() - (state.applicationLandedAt || 0)) < 2000) return;
+      state.applicationFreshFor = null;
+    }
+
     if (state.applicationLoadingFor === id) {
       state.applicationNeedsReload = true;
       return;
@@ -17427,7 +17502,11 @@
       }
 
       if (state.selectedId !== id) return;
-      if (!meta || !meta.stale) state.applicationFreshFor = id;
+      if (!meta || !meta.stale) {
+        state.applicationFreshFor = id;
+        state.applicationLandedFor = id;
+        state.applicationLandedAt = Date.now();
+      }
       watchCipThread(state, render);
       if (usesPagedClientsFlow(state)) render();
       else render({ detailOnly: true });
@@ -17510,6 +17589,65 @@
   function applicationCacheKey(clientId) {
     return 'cip:application:' + clientId;
   }
+
+  /*
+   * Start reading an application the reader looks about to open.
+   *
+   * A row is pointed at for a quarter of a second or more before it is
+   * clicked, and the record is the slowest thing the profile waits for. Asked
+   * for when the pointer settles on the row (or the finger lands on it), it is
+   * usually in the store by the time the click arrives, and the profile opens
+   * on its tabs and checklist instead of on a wait. The profile still reads
+   * it again as it opens, as it always has; if this request is still out, that
+   * read joins it rather than starting another.
+   *
+   * Held back three ways, because a pointer crossing the table is not thirty
+   * intentions: the pointer has to rest, one row at a time, and a record just
+   * fetched is not fetched again for half a minute.
+   */
+  var APPLICATION_PREFETCH = { at: {}, timer: null, row: null, last: 0 };
+
+  function prefetchApplication(uid) {
+    if (!uid || !window.TMAStore) return;
+    var now = Date.now();
+    if (now - (APPLICATION_PREFETCH.at[uid] || 0) < 30000) return;
+    if (now - APPLICATION_PREFETCH.last < 400) return;
+    APPLICATION_PREFETCH.at[uid] = now;
+    APPLICATION_PREFETCH.last = now;
+
+    clientsFetch('/portal/cip/clients/' + encodeURIComponent(uid) + '/application')
+      .then(function (json) {
+        if (!json || !json.application) return;
+        try { window.TMAStore.put(applicationCacheKey(uid), json); } catch (e) { /* the click fetches it */ }
+      })
+      .catch(function () { delete APPLICATION_PREFETCH.at[uid]; });
+  }
+
+  function applicationRowUnder(target) {
+    var row = target && target.closest ? target.closest('.tma-cip-table tr[data-cip-open], .tma-cip-table tr[data-cip-open-member]') : null;
+    if (!row || row.hasAttribute('data-cip-draft')) return null;
+
+    return row.getAttribute('data-cip-open') || row.getAttribute('data-cip-open-member') || null;
+  }
+
+  document.addEventListener('pointerover', function (e) {
+    if (e.pointerType === 'touch') return;
+    var uid = applicationRowUnder(e.target);
+    if (uid === APPLICATION_PREFETCH.row) return;
+    APPLICATION_PREFETCH.row = uid;
+    if (APPLICATION_PREFETCH.timer) { clearTimeout(APPLICATION_PREFETCH.timer); APPLICATION_PREFETCH.timer = null; }
+    if (!uid) return;
+    APPLICATION_PREFETCH.timer = setTimeout(function () {
+      APPLICATION_PREFETCH.timer = null;
+      if (APPLICATION_PREFETCH.row === uid) prefetchApplication(uid);
+    }, 150);
+  }, { passive: true });
+
+  // A finger has no hover: the press itself is the earliest sign there is.
+  document.addEventListener('pointerdown', function (e) {
+    var uid = applicationRowUnder(e.target);
+    if (uid) prefetchApplication(uid);
+  }, { passive: true });
 
   /* Drop the held copy as well as the in-page one. Both exist: the object
      above survives a tab change, the store survives a reload, and an edit has
@@ -18059,9 +18197,8 @@
       }
 
       if ((state.screen === 'contact' || state.screen === 'detail') && state.selectedId) {
-        state.applicationFreshFor = null;
         ensureProfileLoaded(state, render);
-        ensureApplicationLoaded(state, render);
+        ensureApplicationLoaded(state, render, { opening: true });
         if (!isExternalCipUser()) {
           ensureAccessLoaded(state, render);
           ensureAssignmentsLoaded(state, render, { quiet: true });
@@ -18752,5 +18889,9 @@
     // (which is also what lets the browser tests prove the seam is real
     // rather than assert around it).
     api: ClientsAPI,
+    // One read of an address for whoever asks at the same time. The intake
+    // form uses it for the record the profile is asking for in the same
+    // instant, so opening Edit is one request for that record and not three.
+    read: function (url) { return clientsFetch(url); },
   };
 })();

@@ -221,7 +221,11 @@ class Requirements
      * member, and the list each one returns is discarded. On a file of six
      * that was six queries paid for nothing.
      */
-    public static function settleChecklist(CipPerson $person): void
+    /**
+     * @param  Collection<int, CipDocument>|null  $slots  the person's slots with
+     *                                                    their files, when the caller has just read them for the whole family
+     */
+    public static function settleChecklist(CipPerson $person, ?Collection $slots = null): void
     {
         $person->loadMissing('application');
 
@@ -237,7 +241,7 @@ class Requirements
         // One transaction: a half-applied template change would leave a
         // checklist that is neither the old one nor the new one, and the next
         // reviewer to open it would have no way of telling.
-        DB::transaction(function () use ($person, $templates, $keep) {
+        DB::transaction(function () use ($person, $templates, $keep, $slots) {
             /*
              * The person's slots are read ONCE and handed down.
              *
@@ -247,7 +251,14 @@ class Requirements
              * forty-two round trips to settle a checklist that had not
              * changed. One read, keyed by the slug the template is keyed on.
              */
-            $existing = $person->documents()->get()->keyBy('type');
+            /*
+             * With each slot's file. Settling asks every filled slot whether
+             * its file is still there ({@see CipDocument::isFilled()}), and
+             * unloaded that is a query per document: opening one application
+             * with a hundred papers on it was a hundred round trips to learn
+             * that nothing had changed.
+             */
+            $existing = ($slots ?? $person->documents()->with('file')->get())->keyBy('type');
 
             foreach ($templates as $template) {
                 self::openSlot($person, $template, $existing->get($template->key));
@@ -256,10 +267,14 @@ class Requirements
             // Anything still pointing at a template outside that list is a
             // requirement this person has stopped owing. Slots with no
             // requirement_id are left alone, see {@see self::openSlot()}.
-            $person->documents()
-                ->whereNotNull('requirement_id')
-                ->whereNotIn('requirement_id', $keep->pluck('id')->all())
-                ->get()
+            // Read off the same rows: openSlot writes through the instances it
+            // is handed, and a slot it has just opened is by construction on
+            // the list, so there is nothing a second query could add.
+            $kept = $keep->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+            $existing
+                ->filter(fn (CipDocument $slot) => $slot->requirement_id !== null
+                    && ! in_array((int) $slot->requirement_id, $kept, true))
                 ->each(fn (CipDocument $slot) => self::withdraw($slot));
         });
     }
@@ -275,12 +290,30 @@ class Requirements
     {
         $application->loadMissing('people');
 
+        // A filed application is not settled at all, so it is not read either.
+        if (! self::isOpen($application) || $application->people->isEmpty()) {
+            return;
+        }
+
+        /*
+         * The whole family's slots in one read, with their files in a second,
+         * rather than two reads a person and one more for every filled slot.
+         * This runs on every open of an application, and each of those was a
+         * round trip.
+         */
+        $slots = CipDocument::query()
+            ->whereIn('person_id', $application->people->pluck('id'))
+            ->with('file')
+            ->orderBy('id')
+            ->get()
+            ->groupBy('person_id');
+
         foreach ($application->people as $person) {
             $person->setRelation('application', $application);
             // Settle the checklist, but do not pay for the re-read:
             // materialise() hands back the whole list because most callers
             // want it, and this one throws it away once per person.
-            self::settleChecklist($person);
+            self::settleChecklist($person, $slots->get($person->id) ?? (new CipDocument)->newCollection());
         }
     }
 
