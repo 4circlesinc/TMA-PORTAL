@@ -377,6 +377,32 @@ field placement and drawing, and computed CSS only exist in a browser.
   TMA_BASE_URL=http://127.0.0.1:8933 TMA_APP=<uuid> node tests/Browser/cip-checklist-upload.mjs
   ```
 
+- **`cip-messages-tab.mjs`** — The Messages tab of an application holds its
+  thread. Two faults a long thread showed. The tab's card was sized to the
+  window, not to what it held: every panel fills the height on offer and may
+  be shrunk to it, which is right for Documents, whose list scrolls inside,
+  but a thread has no scroller of its own, so the card's background stopped
+  at the fold and the messages and the composer ran on past its rounded
+  corner onto the bare page (Activity did the same). And the sender's photo
+  is aligned to the foot of the column that stacks a bubble with its
+  reactions and its readers' faces, so with either under the bubble the
+  photo dropped below it and sat beside those faces. Pins, at a desktop
+  width light and dark and at a phone's, that the card reaches below the
+  thread, the composer and the lists under it; that every sender's photo
+  ends 2px above the foot of its bubble with nothing under it, with a
+  counted reaction and one reader, and with a reaction and two lines of
+  readers; that Activity is held the same way; and that Assigned and Portal
+  access still fill the height while Documents is still fitted to it.
+  Assigned is left alone on purpose, its staff list scrolls inside the
+  card. Same serve and an administrator.
+  Read-only, so one seed serves every run:
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FEATURE_CIP=true FILES_DISK=local MALWARE_SCANNER=none \
+    php artisan tinker tests/Browser/fixtures/messages-tab-seed.php < /dev/null
+  TMA_BASE_URL=http://127.0.0.1:8933 TMA_APP=<uuid> node tests/Browser/cip-messages-tab.mjs
+  ```
+
 - **`cip-next-step-menu.mjs`** — The status menu is a way forward, and says
   what it is waiting on. Brief sections 5 to 7: at Apply for COR the provider
   confirms submission, then the COR submission date makes the file Pending

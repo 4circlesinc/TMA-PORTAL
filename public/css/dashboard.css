@@ -20277,6 +20277,25 @@ button.tma-file-status-chip:focus-visible,
   flex: 0 0 auto;
 }
 
+/*
+ * A card read from top to bottom is never shorter than what it holds.
+ *
+ * Every panel fills the height on offer and may be shrunk to it. That is
+ * right for Documents, whose list scrolls inside the space it is given, and
+ * for Assigned, whose staff list does the same under its picker. A thread,
+ * an activity trail and the portal access lists have no scroller of their
+ * own, the page behind them scrolls, so on a long one the card was cut down
+ * to the window: its background stopped at the fold and the messages, then
+ * the composer, ran on past its rounded corner onto the bare page. These
+ * still stretch to fill a tall window. They are no longer shrunk to fit a
+ * short one.
+ */
+.tma-dash__clients-profile--cards > .tma-dash__clients-profile-panel[data-clients-panel="messages"],
+.tma-dash__clients-profile--cards > .tma-dash__clients-profile-panel[data-clients-panel="activity"],
+.tma-dash__clients-profile--cards > .tma-dash__clients-profile-panel[data-clients-panel="access"] {
+  flex: 1 0 auto;
+}
+
 .tma-dash__clients-profile-panel[data-clients-panel="overview"]:not([hidden]) {
   display: block;
   flex: 0 0 auto;
@@ -33139,8 +33158,9 @@ button.tma-dash__header-popup-item:focus-visible {
   width: var(--messages-avatar);
   height: var(--messages-avatar);
   /* Bottom-aligned with the last line of the bubble, not floating beside its
-   * middle — the tail and the photo should meet. */
-  margin-bottom: 2px;
+   * middle — the tail and the photo should meet. Whatever hangs under the
+   * bubble is lifted out of the sum below, or the photo meets that instead. */
+  margin-bottom: calc(2px + var(--messages-under-reactions, 0px) + var(--messages-under-receipt, 0px));
   overflow: hidden;
   border-radius: 50%;
   background: var(--color-overlay-4);
@@ -33166,6 +33186,41 @@ button.tma-dash__header-popup-item:focus-visible {
  * one column. */
 .tma-dash__messages-bubble-avatar--blank {
   background: none;
+}
+
+/*
+ * Reactions and the read receipt stack under the bubble in the same column,
+ * and the photo is aligned to the foot of that column. With either there it
+ * dropped below the bubble and sat beside the readers' small faces, two
+ * sizes of photo in a row under a message neither of them was attached to.
+ * So the photo is raised by the height of each row that is there: one line
+ * of reactions, drawn tight against the bubble (16px of bare emoji, 18px
+ * once one of them carries a count, whose text is a taller line), and one
+ * line of faces (18px, after a gap). Measured in the browser, not summed
+ * from the rules: tests/Browser/cip-messages-tab.mjs holds the photo's foot
+ * to the bubble's for each of them.
+ */
+.tma-dash__messages-bubble-avatar:has(+ .tma-dash__messages-bubble-main > .tma-dash__messages-reactions) {
+  --messages-under-reactions: 16px;
+}
+
+.tma-dash__messages-bubble-avatar:has(+ .tma-dash__messages-bubble-main > .tma-dash__messages-reactions .tma-dash__messages-reaction-count) {
+  --messages-under-reactions: 18px;
+}
+
+.tma-dash__messages-bubble-avatar:has(+ .tma-dash__messages-bubble-main > .tma-dash__messages-bubble-receipt) {
+  --messages-under-receipt: calc(18px + var(--space-4));
+}
+
+/* Six faces fit the receipt's line (six at 18px with 2px between, in 132px);
+ * the seventh starts a second and the thirteenth a third, 20px each. A firm
+ * chat everybody has read gets there. */
+.tma-dash__messages-bubble-avatar:has(+ .tma-dash__messages-bubble-main > .tma-dash__messages-bubble-receipt > :nth-child(7)) {
+  --messages-under-receipt: calc(38px + var(--space-4));
+}
+
+.tma-dash__messages-bubble-avatar:has(+ .tma-dash__messages-bubble-main > .tma-dash__messages-bubble-receipt > :nth-child(13)) {
+  --messages-under-receipt: calc(58px + var(--space-4));
 }
 
 .tma-dash__messages-bubble-main {
