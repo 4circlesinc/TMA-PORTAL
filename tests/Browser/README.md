@@ -2668,6 +2668,14 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
   that picture in the chat list, the chat head and Conversation info, where
   it used to be squeezed in as one face among the members'.
 
+  Then Conversation info itself: "Rename group" opens the portal's own
+  dialog on the current name (a native `dialog` event here is the
+  regression: it was `window.prompt`, which the desktop app does not have,
+  so the button did nothing there), Enter and Save both rename, Escape
+  closes the dialog and leaves the panel open under it, and the list of
+  members is the panel's last section with Rename and Change group photo
+  still at the top.
+
   Six staff, so the firm chat (which makes itself) holds two names where one
   begins the other. Sign-in reads the new-device code from the mail log, so
   serve with `MAIL_MAILER=log QUEUE_CONNECTION=sync`:

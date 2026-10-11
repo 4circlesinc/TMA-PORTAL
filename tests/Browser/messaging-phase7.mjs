@@ -187,8 +187,10 @@ try {
   const renamed = groupName + ' Squad';
   await admin.click('[data-messages-open-profile]');
   await admin.waitForTimeout(2000);
-  admin.once('dialog', (d) => d.accept(renamed));
+  // The portal's own dialog, not window.prompt: the desktop app has none.
   await admin.click('[data-messages-group-rename]');
+  await admin.fill('[data-messages-group-name]', renamed);
+  await admin.click('[data-messages-group-name-save]');
   await admin.waitForTimeout(2500);
 
   await admin.click('[data-messages-profile-back]');

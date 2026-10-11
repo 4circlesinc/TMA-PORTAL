@@ -35294,6 +35294,11 @@ span.tma-dash__messages-profile-avatar {
   overflow-wrap: anywhere;
 }
 
+/* The members close the panel, so they carry its bottom margin. */
+.tma-dash__messages-profile-section--members {
+  padding-bottom: var(--space-24);
+}
+
 .tma-dash__messages-profile-note {
   margin: 0;
   padding: var(--space-12) var(--space-16);

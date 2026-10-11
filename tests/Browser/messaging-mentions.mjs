@@ -166,7 +166,6 @@ try {
     return { above: m.bottom <= i.top + 1, onScreen: m.top >= 0 && m.left >= 0 && m.width > 150 };
   }, [MENU, INPUT]);
   check(placed.above && placed.onScreen, 'it opens upward, above the box, on screen');
-  await a.screenshot({ path: join(HERE, 'messaging-mentions.png') });
 
   step(3, 'The list follows the name as it is typed');
   await a.keyboard.type('an');
@@ -373,7 +372,76 @@ try {
   });
   check(headPhoto, 'and so does the chat head');
 
-  step(13, 'A conversation between two people has no list');
+  step(13, 'The group is renamed in the portal\'s own dialog');
+  await a.click('[data-messages-open-profile]');
+  await a.waitForSelector('[data-messages-group-rename]', { timeout: 10000 });
+  // window.prompt does not exist in the desktop app, where the button used
+  // to do nothing. A native dialog appearing here is that regression.
+  let nativeDialog = false;
+  a.on('dialog', (d) => { nativeDialog = true; d.dismiss().catch(() => {}); });
+  await a.click('[data-messages-group-rename]');
+  await a.waitForSelector('.tma-portal-modal [data-messages-group-name]', { timeout: 5000 });
+  check(!nativeDialog, 'no browser prompt is used');
+  check((await a.inputValue('[data-messages-group-name]')) === GROUP, 'the dialog opens on the current name');
+  check(await a.evaluate(() => document.activeElement && document.activeElement.hasAttribute('data-messages-group-name')), 'with the name field focused');
+
+  await a.keyboard.press('Escape');
+  await a.waitForTimeout(300);
+  check(!(await a.$('.tma-portal-modal')), 'Escape closes the dialog');
+  check(!!(await a.$('.tma-dash__messages-chat--profile')), 'and leaves Conversation info open under it');
+
+  const renamed = 'All Staff ' + String(Date.now()).slice(-5);
+  await a.click('[data-messages-group-rename]');
+  await a.waitForSelector('[data-messages-group-name]', { timeout: 5000 });
+  await a.fill('[data-messages-group-name]', renamed);
+  await a.keyboard.press('Enter');
+  await a.waitForFunction((name) => {
+    const el = document.querySelector('.tma-dash__messages-profile-name');
+    return el && el.textContent === name;
+  }, renamed, { timeout: 8000 }).catch(() => {});
+  check(!(await a.$('.tma-portal-modal')), 'Enter saves and closes it');
+  check((await a.textContent('.tma-dash__messages-profile-name')) === renamed, `the panel shows the new name ("${renamed}")`);
+  check((await a.textContent('.tma-dash__messages-row--active .tma-dash__messages-row-name-text')) === renamed, 'and so does the chat list');
+  const stored = (await api(a, '/portal/messaging/conversations')).body.conversations.find((c) => c.id === groupId);
+  check(stored.name === renamed, 'the server has it');
+
+  step(14, 'The members are the last section of Conversation info');
+  const order = await a.evaluate(() => {
+    const body = document.querySelector('[data-messages-profile-body]');
+    const kids = Array.from(body.children);
+    const members = body.querySelector('[data-messages-group-members]');
+    const actions = body.querySelector('[data-messages-group-rename]').closest('.tma-dash__messages-profile-section');
+    const gallery = body.querySelector('.tma-dash__messages-gallery-tabs').closest('.tma-dash__messages-profile-section');
+    return {
+      membersLast: kids[kids.length - 1] === members,
+      rows: members.querySelectorAll('.tma-dash__messages-member').length,
+      heading: members.querySelector('.tma-dash__messages-list-group').textContent,
+      renameAboveGallery: kids.indexOf(actions) < kids.indexOf(gallery),
+      membersBelowGallery: kids.indexOf(members) > kids.indexOf(gallery),
+    };
+  });
+  log('    order:', JSON.stringify(order));
+  check(order.membersLast, 'nothing comes after the list of members');
+  check(order.rows === 6, `all six members are in it (${order.rows})`);
+  check(order.membersBelowGallery, 'it sits below the shared media');
+  check(order.renameAboveGallery, 'Rename and Change group photo stay at the top');
+
+  // Put the name back, so the script can find the group on its next run.
+  await a.click('[data-messages-group-rename]');
+  await a.waitForSelector('[data-messages-group-name]', { timeout: 5000 });
+  await a.fill('[data-messages-group-name]', GROUP);
+  await a.click('[data-messages-group-name-save]');
+  await a.waitForFunction((name) => {
+    const el = document.querySelector('.tma-dash__messages-profile-name');
+    return el && el.textContent === name;
+  }, GROUP, { timeout: 8000 }).catch(() => {});
+  check((await a.textContent('.tma-dash__messages-profile-name')) === GROUP, 'the Save button works as well as Enter');
+  await a.mouse.move(1000, 700);
+  await a.screenshot({ path: join(HERE, 'messaging-mentions.png') });
+  await a.click('[data-messages-profile-back]');
+  await a.waitForSelector(INPUT, { timeout: 8000 });
+
+  step(15, 'A conversation between two people has no list');
   const people = await api(a, `/portal/messaging/conversations/${groupId}/mentionable`);
   const rita = people.body.people.find((p) => p.name === 'Rita Officer');
   const direct = await api(a, '/portal/messaging/conversations', { method: 'POST', json: { userId: rita.id } });

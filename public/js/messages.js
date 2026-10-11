@@ -4541,13 +4541,32 @@
   }
 
   /*
-   * Group membership and administration.
+   * Group administration: what an admin opens this panel to do, so it sits
+   * straight under the name.
    *
    * What is offered depends on the server's own verdict (`canManage`), not on
    * a guess here, the organization chat is administrator-only however the
-   * participant roles happen to be set, and nobody can leave it at all.
+   * participant roles happen to be set.
    */
-  function renderGroupSection(state, info, row) {
+  function renderGroupActions(info) {
+    if (!info.conversation.canManage) return '';
+
+    return (
+      '<div class="tma-dash__messages-profile-section" data-key="group-actions">' +
+      '<button type="button" class="tma-dash__messages-profile-action" ' +
+      'data-messages-group-rename>Rename group</button>' +
+      '<button type="button" class="tma-dash__messages-profile-action" ' +
+      'data-messages-group-photo>Change group photo</button>' +
+      '<input type="file" accept="image/*" hidden data-messages-group-photo-file>' +
+      '</div>'
+    );
+  }
+
+  /*
+   * Who is in the group: the last section of the panel, under everything
+   * about the conversation itself. Nobody can leave the organization chat.
+   */
+  function renderGroupMembers(state, info, row) {
     var members = info.profile.members || [];
     var canManage = !!info.conversation.canManage;
     // The staff list decides who is in an auto-join group, so there is
@@ -4556,7 +4575,8 @@
     var me = (STORE.me || {}).id;
 
     return (
-      '<div class="tma-dash__messages-profile-section">' +
+      '<div class="tma-dash__messages-profile-section tma-dash__messages-profile-section--members" ' +
+      'data-key="group-members" data-messages-group-members>' +
       '<div class="tma-dash__messages-list-group">' +
       members.length + ' member' + (members.length === 1 ? '' : 's') +
       (info.conversation.isDefault ? ' · Organization chat' : '') +
@@ -4565,13 +4585,6 @@
       (canCurate
         ? '<button type="button" class="tma-dash__messages-profile-action" ' +
           'data-messages-group-add>Add people</button>'
-        : '') +
-      (canManage
-        ? '<button type="button" class="tma-dash__messages-profile-action" ' +
-          'data-messages-group-rename>Rename group</button>' +
-          '<button type="button" class="tma-dash__messages-profile-action" ' +
-          'data-messages-group-photo>Change group photo</button>' +
-          '<input type="file" accept="image/*" hidden data-messages-group-photo-file>'
         : '') +
 
       members
@@ -4680,9 +4693,7 @@
         : '') +
       '</div>' +
 
-      // Group management sits above the details: it is what an admin opens
-      // this panel to do.
-      (row.type === 'group' ? renderGroupSection(state, info, row) : '') +
+      (row.type === 'group' ? renderGroupActions(info) : '') +
 
       '<div class="tma-dash__messages-profile-section">' +
       renderProfileRow('Email', p.email) +
@@ -4770,6 +4781,8 @@
           (row.blocked ? 'Unblock contact' : 'Block contact') + '</button>'
         : '') +
       '</div>' +
+
+      (row.type === 'group' ? renderGroupMembers(state, info, row) : '') +
 
       '</div></div>'
     );
@@ -8575,6 +8588,56 @@
     return avatarCropperLoad;
   }
 
+  /*
+   * Ask for the group's new name in the portal's own dialog.
+   *
+   * It used to be window.prompt, which the desktop app does not have: there
+   * the button did nothing at all, with no error to say why.
+   */
+  function openGroupRename(root, state, render) {
+    var portal = window.TMAPortalUI;
+    var conversationId = state.selectedId;
+    var current = (findThread(conversationId) || {}).name || '';
+    if (!portal || !conversationId) return;
+
+    portal.openModal({
+      title: 'Rename group',
+      body:
+        portal.field('Group name', portal.input({
+          value: current,
+          attrs: 'data-messages-group-name maxlength="120"',
+        })) +
+        '<div class="tma-portal-form-actions">' +
+        portal.btn({ label: 'Save', attrs: ' data-messages-group-name-save' }) +
+        '</div>',
+      onMount: function (host) {
+        var field = host.querySelector('[data-messages-group-name]');
+
+        var save = function () {
+          var name = (field.value || '').trim();
+          if (!name) return;
+          portal.closeModal();
+          // Saving the name it already has is not a rename.
+          if (name === current) return;
+          groupAction(
+            root, state, render,
+            window.TMAMessagingAPI.updateGroup(conversationId, { name: name }),
+            'The group could not be renamed'
+          );
+        };
+
+        host.querySelector('[data-messages-group-name-save]').addEventListener('click', save);
+        field.addEventListener('keydown', function (e) {
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          save();
+        });
+        // The dialog focuses the field after this runs; select once it has.
+        setTimeout(function () { field.select(); }, 0);
+      },
+    });
+  }
+
   function groupAction(root, state, render, promise, failure) {
     promise
       .then(function (data) {
@@ -9122,14 +9185,7 @@
     var groupRename = MORPH.unwiredOne(root, '[data-messages-group-rename]');
     if (groupRename) {
       groupRename.addEventListener('click', function () {
-        var row = findThread(state.selectedId) || {};
-        var next = window.prompt('Group name', row.name || '');
-        if (next === null) return;
-        groupAction(
-          root, state, render,
-          window.TMAMessagingAPI.updateGroup(state.selectedId, { name: next }),
-          'The group could not be renamed'
-        );
+        openGroupRename(root, state, render);
       });
     }
 
@@ -9880,6 +9936,10 @@
        */
       document.addEventListener('keydown', function (e) {
         if (!root.isConnected) return;
+
+        // A dialog over the page owns its keys. Escape in the rename dialog
+        // or the photo crop closes that, not the panel underneath it too.
+        if (document.querySelector('.tma-portal-modal, .tma-cropper')) return;
 
         var target = e.target;
         var typing =
