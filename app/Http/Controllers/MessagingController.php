@@ -32,6 +32,7 @@ use App\Support\Messaging\MessageNotifier;
 use App\Support\Messaging\MessagingPresenter;
 use App\Support\Messaging\MessagingSearch;
 use App\Support\Messaging\MessagingSettings;
+use App\Support\Messaging\Posting;
 use App\Support\Messaging\ReadReceipts;
 use App\Support\Messaging\OrganizationChat;
 use App\Support\Messaging\PresenceService;
@@ -353,9 +354,16 @@ class MessagingController extends Controller
             // uuids of files already staged by uploadAttachment().
             'attachments' => ['nullable', 'array', 'max:'.AttachmentIntake::MAX_PER_MESSAGE],
             'attachments.*' => ['string'],
+            // Marks the message for the whole group. Its admins only.
+            'announcement' => ['nullable', 'boolean'],
         ]);
 
         $body = trim((string) ($data['body'] ?? ''));
+        $announcement = (bool) ($data['announcement'] ?? false);
+
+        if ($announcement) {
+            abort_unless($conversation->isManageableBy($user), 403, 'Only a group admin can post an announcement.');
+        }
 
         // Claim the staged files. Scoped to this conversation and this
         // uploader, so a uuid from elsewhere cannot be attached here.
@@ -399,62 +407,27 @@ class MessagingController extends Controller
         $replyTo = null;
         if (! empty($data['replyTo'])) {
             // A reply target must live in this same conversation, or a reply
-            // could quote a message from a thread the sender can't see.
-            $replyTo = $conversation->messages()->where('uuid', $data['replyTo'])->first();
+            // could quote a message from a thread the sender can't see. The
+            // one exception is answering somebody privately.
+            $replyTo = $conversation->messages()->where('uuid', $data['replyTo'])->first()
+                ?? $this->privateReplySource($conversation, $user, $data['replyTo']);
         }
 
-        $mentioned = ['users' => [], 'all' => false];
+        [$message, $mentioned] = Posting::write($conversation, $user, [
+            // The type describes what the message *is*, which the bubble
+            // uses to choose a renderer.
+            'type' => match (true) {
+                $staged->contains(fn ($a) => $a->isVoice()) => Message::TYPE_VOICE,
+                $staged->isNotEmpty() => Message::TYPE_ATTACHMENT,
+                default => Message::TYPE_TEXT,
+            },
+            'body' => $body === '' ? null : $body,
+            'reply_to_id' => $replyTo?->id,
+            'client_nonce' => $data['nonce'] ?? null,
+            'is_announcement' => $announcement,
+        ], $staged);
 
-        $message = DB::transaction(function () use ($conversation, $user, $body, $replyTo, $data, $staged, &$mentioned) {
-            $message = $conversation->messages()->create([
-                'user_id' => $user->id,
-                // The type describes what the message *is*, which the bubble
-                // uses to choose a renderer.
-                'type' => match (true) {
-                    $staged->contains(fn ($a) => $a->isVoice()) => Message::TYPE_VOICE,
-                    $staged->isNotEmpty() => Message::TYPE_ATTACHMENT,
-                    default => Message::TYPE_TEXT,
-                },
-                'body' => $body === '' ? null : $body,
-                'reply_to_id' => $replyTo?->id,
-                'client_nonce' => $data['nonce'] ?? null,
-            ]);
-
-            if ($staged->isNotEmpty()) {
-                MessageAttachment::whereIn('id', $staged->pluck('id'))->update([
-                    'message_id' => $message->id,
-                    'status' => MessageAttachment::STATUS_READY,
-                ]);
-            }
-
-            $conversation->forceFill(['last_message_at' => $message->created_at])->save();
-
-            // @Name and @all, read out of the text itself.
-            $mentioned = Mentions::sync($message, $conversation);
-
-            // Sending is also reading: the sender's own message must not come
-            // back to them as unread, and their draft is now spent. Stamp
-            // everyone else's messages first, while the old cursor is still
-            // the time they were actually seen.
-            $participant = ConversationParticipant::query()
-                ->where('conversation_id', $conversation->id)
-                ->where('user_id', $user->id)
-                ->first();
-
-            if ($participant) {
-                ReadReceipts::note($participant, $message->id);
-                $participant->forceFill([
-                    'last_read_message_id' => $message->id,
-                    'last_read_at' => now(),
-                    'marked_unread_at' => null,
-                    'draft' => null,
-                ])->save();
-            }
-
-            return $message;
-        });
-
-        $message->load(['sender', 'attachments', 'reactions.user', 'stars', 'mentions', 'replyTo.sender', 'replyTo.attachments']);
+        $message->load(Posting::RELATIONS);
 
         Broadcaster::toOthers(new MessageSent($message));
 
@@ -1866,6 +1839,46 @@ class MessagingController extends Controller
     }
 
     /** A blocked pair may not exchange messages in their direct thread. */
+    /**
+     * The message a private reply answers.
+     *
+     * Replying privately takes something said in a group to a one-to-one
+     * conversation with whoever said it. So the quote may come from another
+     * conversation only when this one is direct, the person being written to
+     * is the quoted message's author, and the sender is in that group now:
+     * both of them can already read what is being quoted.
+     */
+    private function privateReplySource(Conversation $conversation, User $user, string $uuid): ?Message
+    {
+        if ($conversation->isGroup()) {
+            return null;
+        }
+
+        $other = $conversation->counterpartFor($user);
+
+        if (! $other) {
+            return null;
+        }
+
+        $quoted = Message::query()
+            ->where('uuid', $uuid)
+            ->where('user_id', $other->id)
+            ->where('type', '!=', Message::TYPE_SYSTEM)
+            ->first();
+
+        if (! $quoted) {
+            return null;
+        }
+
+        $inGroup = Conversation::query()
+            ->forUser($user)
+            ->whereKey($quoted->conversation_id)
+            ->where('type', Conversation::TYPE_GROUP)
+            ->exists();
+
+        return $inGroup ? $quoted : null;
+    }
+
     private function assertNotBlocked(Conversation $conversation, User $user): void
     {
         if ($conversation->isGroup()) {

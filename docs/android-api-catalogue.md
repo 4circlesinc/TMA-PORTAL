@@ -2062,6 +2062,8 @@ Generated from `php artisan route:list --json` on 6 Sep 2026 (620 routes; `desig
 | GET | `/portal/messaging/conversations/{uuid}/photo` | base | `MessagingAttachmentController@conversationPhoto` |
 | POST | `/portal/messaging/conversations/{uuid}/read` | base | `MessagingController@markRead` |
 | POST | `/portal/messaging/conversations/{uuid}/recordings` | base | `CallRecordingController@start` |
+| GET | `/portal/messaging/conversations/{uuid}/scheduled` | base | `MessagingScheduleController@index` |
+| POST | `/portal/messaging/conversations/{uuid}/scheduled` | base | `MessagingScheduleController@store` |
 | POST | `/portal/messaging/conversations/{uuid}/typing` | base | `MessagingController@typing` |
 | POST | `/portal/messaging/conversations/{uuid}/unblock` | base | `MessagingController@unblock` |
 | POST | `/portal/messaging/conversations/{uuid}/unread` | base | `MessagingController@markUnread` |
@@ -2082,6 +2084,7 @@ Generated from `php artisan route:list --json` on 6 Sep 2026 (620 routes; `desig
 | POST | `/portal/messaging/messages/{uuid}/star` | base | `MessagingController@toggleStar` |
 | POST | `/portal/messaging/recordings/{uuid}/chunks` | base | `CallRecordingController@chunk` |
 | POST | `/portal/messaging/recordings/{uuid}/finish` | base | `CallRecordingController@finish` |
+| DELETE | `/portal/messaging/scheduled/{uuid}` | base | `MessagingScheduleController@destroy` |
 | GET | `/portal/messaging/search` | base | `MessagingController@search` |
 | GET | `/portal/messaging/settings` | base | `MessagingController@settings` |
 | PUT | `/portal/messaging/settings` | base | `MessagingController@updateSettings` |

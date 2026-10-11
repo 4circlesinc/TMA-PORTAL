@@ -355,7 +355,9 @@ class MessagingPresenter
             ] : null,
             'sentAt' => $message->created_at->toIso8601String(),
             'time' => UserTime::format($message->created_at, $viewer, 'g:i A'),
-            'replyTo' => $message->replyTo ? self::replyStub($message->replyTo) : null,
+            'replyTo' => $message->replyTo ? self::replyStub($message->replyTo, $message, $viewer) : null,
+            // Marked for the whole group by one of its admins.
+            'announcement' => ! $deleted && (bool) $message->is_announcement,
             'attachments' => $deleted ? [] : $message->attachments->map(
                 fn (MessageAttachment $a) => self::attachment($a)
             )->values(),
@@ -418,13 +420,24 @@ class MessagingPresenter
      * a file-type icon, replying to a photo should look like replying to a
      * photo, not read as a line of text.
      */
-    public static function replyStub(Message $message): array
+    public static function replyStub(Message $message, ?Message $quoting = null, ?User $viewer = null): array
     {
         $attachment = $message->trashed() ? null : $message->attachments->first();
+
+        // A private reply quotes a message from the group it was said in.
+        // Naming the group is what makes the quote make sense here.
+        $from = null;
+        if ($quoting && $viewer && $message->conversation_id !== $quoting->conversation_id && $message->conversation) {
+            $from = [
+                'id' => $message->conversation->uuid,
+                'name' => self::title($message->conversation, $viewer),
+            ];
+        }
 
         return [
             'id' => $message->uuid,
             'seq' => $message->id,
+            'from' => $from,
             'senderName' => $message->sender?->name ?? 'System',
             'preview' => $message->trashed()
                 ? 'Message deleted'
@@ -629,6 +642,12 @@ class MessagingPresenter
         // Group rows name the speaker; direct rows only mark your own sends.
         if ($message->isSystem()) {
             return $snippet;
+        }
+
+        // Said to the whole group, its author included: the row is about
+        // the announcement, not about who is reading it.
+        if ($message->is_announcement) {
+            return 'Announcement: '.$snippet;
         }
 
         if ($message->user_id === $viewer->id) {

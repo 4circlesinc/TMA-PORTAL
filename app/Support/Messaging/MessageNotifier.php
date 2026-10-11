@@ -98,7 +98,9 @@ final class MessageNotifier
             $preview = self::preview($message);
             $url = self::url($conversation);
             $named = $mentioned['users'] ?? [];
-            $everyone = (bool) ($mentioned['all'] ?? false);
+            // An announcement addresses the whole group, whether or not it
+            // says @all.
+            $everyone = (bool) ($mentioned['all'] ?? false) || (bool) $message->is_announcement;
 
             foreach (self::others($conversation, $sender->id) as $participant) {
                 $recipient = $participant->user;
@@ -200,7 +202,11 @@ final class MessageNotifier
             'actor' => $sender,
             'type' => 'message.mention',
             'title' => MessagingPresenter::title($conversation, $recipient),
-            'message' => $sender->name.($byName ? ' mentioned you: ' : ' mentioned everyone: ').$preview,
+            'message' => $sender->name.match (true) {
+                $byName => ' mentioned you: ',
+                (bool) $message->is_announcement => ' announced: ',
+                default => ' mentioned everyone: ',
+            }.$preview,
             'subject' => $conversation,
             'action_url' => self::url($conversation),
             'dedupe_key' => self::mentionKey($conversation),

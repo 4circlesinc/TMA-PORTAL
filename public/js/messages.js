@@ -2338,7 +2338,10 @@
 
   function messageReplyLabel(msg) {
     if (msg.direction === 'out') return 'Replying to yourself';
-    return 'Replying to ' + ((msg.sender && msg.sender.name) || 'them');
+    var name = (msg.sender && msg.sender.name) || 'them';
+    // Quoted from a group into this one-to-one conversation.
+    if (msg.fromGroup) return 'Replying privately to ' + name;
+    return 'Replying to ' + name;
   }
 
   function clearReplyTo(state) {
@@ -2365,7 +2368,9 @@
 
   function getReplyMessage(state) {
     if (!state.replyTo || state.replyTo.threadId !== state.selectedId) return null;
-    return findMessageById(state.selectedId, state.replyTo.messageId);
+    // A private reply answers a message from another conversation. This
+    // thread does not hold it, so it travels with the reply.
+    return findMessageById(state.selectedId, state.replyTo.messageId) || state.replyTo.source || null;
   }
 
   /*
@@ -3018,14 +3023,22 @@
         '<img src="' + esc(attachmentIconSrc(quoted.attachmentName)) + '" alt=""></span>';
     }
 
+    // A private reply quotes what was said in a group, and says which.
+    var from = quoted.from && quoted.from.id ? quoted.from : null;
+
     return (
       '<button type="button" class="tma-dash__messages-bubble-quote" data-messages-jump="' +
       esc(quoted.id) +
-      '">' +
+      '"' +
+      (from
+        ? ' data-messages-jump-in="' + esc(from.id) + '" data-messages-jump-seq="' + esc(quoted.seq || '') + '"'
+        : '') +
+      '>' +
       '<span class="tma-dash__messages-bubble-quote-bar" aria-hidden="true"></span>' +
       '<span class="tma-dash__messages-bubble-quote-body">' +
       '<span class="tma-dash__messages-bubble-quote-name">' +
       esc(quoted.senderName) +
+      (from && from.name ? ' · ' + esc(from.name) : '') +
       '</span>' +
       '<span class="tma-dash__messages-bubble-quote-text">' +
       esc(quoted.preview) +
@@ -3473,16 +3486,26 @@
      * edge of the message and live outside the swipe wrapper, which clips its
      * overflow so the bubble can slide under the reply icon.
      */
+    // Marked for the whole group by one of its admins.
+    var announcementHtml =
+      msg.announcement && !msg.deleted
+        ? '<span class="tma-dash__messages-bubble-announcement">' +
+          '<span class="tma-dash__messages-bubble-announcement-icon" aria-hidden="true"></span>' +
+          'Announcement</span>'
+        : '';
+
     var bubble =
       renderBubbleAvatar(msg, row, side, opts.showAvatar) +
       '<div class="tma-dash__messages-bubble-main">' +
       '<div class="tma-dash__messages-bubble tma-dash__messages-bubble--' + side +
       bubbleExtraClass +
+      (announcementHtml ? ' tma-dash__messages-bubble--announcement' : '') +
       (isReplyTarget ? ' tma-dash__messages-bubble--reply-target' : '') +
       (msg.failed ? ' tma-dash__messages-bubble--failed' : '') +
       (msg.pending ? ' tma-dash__messages-bubble--pending' : '') +
       '">' +
       senderHtml +
+      announcementHtml +
       renderQuotedReply(msg) +
       inner +
       '</div>' +
@@ -6337,7 +6360,9 @@
     var replyTo = state.replyTo && state.replyTo.threadId === conversationId
       ? state.replyTo.messageId
       : null;
-    var replySource = replyTo ? findMessageById(conversationId, replyTo) : null;
+    var replySource = replyTo
+      ? (findMessageById(conversationId, replyTo) || state.replyTo.source || null)
+      : null;
     var nonce = window.TMAMessagingAPI.newNonce();
 
     // Optimistic bubble, shown immediately and reconciled on the response.
@@ -6356,8 +6381,10 @@
       replyTo: replySource
         ? {
             id: replySource.id,
+            seq: replySource.seq,
             senderName: (replySource.sender && replySource.sender.name) || 'You',
             preview: messagePreview(replySource),
+            from: replySource.fromGroup || null,
           }
         : null,
       // Show the real attachments straight away, they are already uploaded.
@@ -6413,7 +6440,7 @@
 
         var row = findThread(conversationId);
         if (row) {
-          row.preview = 'You: ' + messagePreview(confirmed);
+          row.preview = (confirmed.announcement ? 'Announcement: ' : 'You: ') + messagePreview(confirmed);
           row.timestamp = confirmed.sentAt;
           row.draft = null;
           row.listed = true;
@@ -7656,6 +7683,54 @@
   }
 
   /*
+   * Answer a group message one to one.
+   *
+   * Opens the direct conversation with whoever wrote it, with their message
+   * already quoted in the composer. The quote is carried on the reply, with
+   * the group it came from, because the direct thread does not hold it. The
+   * server accepts it only for the message's own author, in a group the
+   * sender is still in.
+   */
+  function replyPrivately(root, state, render, msg) {
+    var group = findThread(state.selectedId);
+    if (!group || !msg.sender || !msg.sender.id) return;
+
+    var source = {
+      id: msg.id,
+      seq: msg.seq,
+      type: msg.type,
+      direction: 'in',
+      body: msg.body,
+      sender: msg.sender,
+      attachments: msg.attachments || [],
+      fromGroup: { id: group.id, name: group.name },
+    };
+
+    window.TMAMessagingAPI.openDirect(msg.sender.id)
+      .then(function (data) {
+        var conversation = data.conversation;
+        replaceThread(conversation);
+
+        // openConversation() bails when the id is already selected, and it
+        // clears any reply in progress, so the quote goes on after it.
+        state.selectedId = null;
+        showMessagesChats(state);
+        openConversation(root, state, render, conversation.id);
+        subscribeToConversation(root, state, render, conversation.id);
+
+        state.replyTo = { threadId: conversation.id, messageId: msg.id, source: source };
+        render();
+        focusComposerInput(root);
+      })
+      .catch(function (err) {
+        showMessagesToast(
+          root,
+          err.status === 403 ? 'You cannot message this person' : 'Conversation could not be opened'
+        );
+      });
+  }
+
+  /*
    * The calls module lives outside this file and has no store of its own, so
    * the call-related settings are handed to it whenever settings load or
    * change, the display preference, and what to ring with. Devices are
@@ -8807,6 +8882,201 @@
     });
   }
 
+  /* A datetime-local input wants "YYYY-MM-DDTHH:MM" in local time. */
+  function toLocalInput(date) {
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+    return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
+      'T' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+  }
+
+  function scheduledWhen(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  }
+
+  function renderScheduledRow(item) {
+    var text = item.body.length > 60 ? item.body.slice(0, 60) + '…' : item.body;
+    return (
+      '<div class="tma-portal-check-row" data-messages-scheduled="' + esc(item.id) + '">' +
+      '<span>' +
+      esc(item.failed ? 'Not sent. ' + (item.failedReason || '') : scheduledWhen(item.sendAt)) +
+      '<br>' + esc(text) +
+      '</span>' +
+      window.TMAPortalUI.btn({
+        label: item.failed ? 'Remove' : 'Cancel',
+        variant: 'ghost',
+        small: true,
+        attrs: ' data-messages-scheduled-cancel="' + esc(item.id) + '"',
+      }) +
+      '</div>'
+    );
+  }
+
+  /*
+   * An announcement: a message a group's admins address to all of it, posted
+   * now or at a time they set. One dialog writes it, and lists the ones still
+   * waiting so they can be withdrawn.
+   */
+  function openAnnouncement(root, state, render, conversationId) {
+    var portal = window.TMAPortalUI;
+    var api = window.TMAMessagingAPI;
+    if (!portal || !conversationId) return;
+
+    // The next whole hour: a time somebody might mean, and never in the past.
+    var soon = new Date();
+    soon.setHours(soon.getHours() + 1, 0, 0, 0);
+
+    portal.openModal({
+      title: 'Announcement',
+      body:
+        portal.field('Message', portal.textarea({
+          attrs: 'data-messages-announce-body rows="4" maxlength="20000"',
+        })) +
+        portal.field('Send', portal.select(
+          [{ value: 'now', label: 'Now' }, { value: 'later', label: 'At a set time' }],
+          'now',
+          'data-messages-announce-when',
+          'When to send'
+        )) +
+        '<div data-messages-announce-at-field hidden>' +
+        portal.field('Date and time', portal.input({
+          type: 'datetime-local',
+          value: toLocalInput(soon),
+          attrs: 'data-messages-announce-at min="' + toLocalInput(new Date()) + '"',
+        })) +
+        '</div>' +
+        '<div data-messages-announce-error hidden></div>' +
+        '<div class="tma-portal-form-actions">' +
+        portal.btn({ label: 'Post', attrs: ' data-messages-announce-save' }) +
+        '</div>' +
+        '<div data-messages-announce-waiting hidden>' +
+        portal.field('Scheduled', '<div class="tma-portal-check-list" data-messages-announce-list></div>') +
+        '</div>',
+      onMount: function (host) {
+        var body = host.querySelector('[data-messages-announce-body]');
+        var when = host.querySelector('[data-messages-announce-when]');
+        var atField = host.querySelector('[data-messages-announce-at-field]');
+        var at = host.querySelector('[data-messages-announce-at]');
+        var save = host.querySelector('[data-messages-announce-save]');
+        var waiting = host.querySelector('[data-messages-announce-waiting]');
+        var list = host.querySelector('[data-messages-announce-list]');
+        var error = host.querySelector('[data-messages-announce-error]');
+
+        // Said in the dialog itself: the page's toast sits under it.
+        function fail(message) {
+          error.innerHTML = portal.banner('warning', esc(message));
+          error.hidden = false;
+        }
+
+        function settle() {
+          error.hidden = true;
+          error.innerHTML = '';
+        }
+
+        body.addEventListener('input', settle);
+        at.addEventListener('input', settle);
+
+        when.addEventListener('change', function () {
+          var later = when.value === 'later';
+          atField.hidden = !later;
+          save.querySelector('span').textContent = later ? 'Schedule' : 'Post';
+          settle();
+        });
+
+        function drawWaiting(items) {
+          list.innerHTML = items.map(renderScheduledRow).join('');
+          waiting.hidden = !items.length;
+        }
+
+        api.scheduled(conversationId)
+          .then(function (data) { drawWaiting((data && data.scheduled) || []); })
+          .catch(function () { /* the list is a convenience; writing still works */ });
+
+        list.addEventListener('click', function (e) {
+          var btn = e.target.closest('[data-messages-scheduled-cancel]');
+          if (!btn) return;
+          btn.disabled = true;
+          api.cancelScheduled(btn.getAttribute('data-messages-scheduled-cancel'))
+            .then(function () {
+              var row = btn.closest('[data-messages-scheduled]');
+              if (row) row.remove();
+              waiting.hidden = !list.children.length;
+            })
+            .catch(function () {
+              btn.disabled = false;
+              fail('That could not be cancelled');
+            });
+        });
+
+        save.addEventListener('click', function () {
+          var text = (body.value || '').trim();
+          if (!text) {
+            body.focus();
+            return;
+          }
+
+          if (when.value !== 'later') {
+            save.disabled = true;
+            postAnnouncement(root, state, render, conversationId, text)
+              .then(function () { portal.closeModal(); })
+              .catch(function (err) {
+                save.disabled = false;
+                fail(announcementError(err, 'Announcement not posted'));
+              });
+            return;
+          }
+
+          var chosen = at.value ? new Date(at.value) : null;
+          if (!chosen || isNaN(chosen.getTime()) || chosen.getTime() <= Date.now()) {
+            fail('Choose a time that has not passed');
+            at.focus();
+            return;
+          }
+
+          save.disabled = true;
+          api.schedule(conversationId, { body: text, sendAt: chosen.toISOString() })
+            .then(function () {
+              portal.closeModal();
+              showMessagesToast(root, 'Announcement scheduled for ' + scheduledWhen(chosen.toISOString()));
+            })
+            .catch(function (err) {
+              save.disabled = false;
+              fail(announcementError(err, 'Announcement not scheduled'));
+            });
+        });
+      },
+    });
+  }
+
+  /* The server's own sentence when it gave one (a time already past, no right to post). */
+  function announcementError(err, fallback) {
+    if (err && (err.status === 403 || err.status === 422) && err.message) return err.message;
+    return fallback;
+  }
+
+  /* Post now. The author has no local copy until the server answers. */
+  function postAnnouncement(root, state, render, conversationId, text) {
+    var nonce = window.TMAMessagingAPI.newNonce();
+
+    return window.TMAMessagingAPI.send(conversationId, { body: text, nonce: nonce, announcement: true })
+      .then(function (data) {
+        var confirmed = data.message;
+        var bucket = STORE.threadMessages[conversationId];
+        if (bucket && bucket.loaded) mergeMessages(conversationId, [confirmed], false);
+
+        var row = findThread(conversationId);
+        if (row) {
+          row.preview = 'Announcement: ' + messagePreview(confirmed);
+          row.timestamp = confirmed.sentAt;
+          row.listed = true;
+        }
+
+        playSentMessageSound();
+        render({ chatToBottom: state.selectedId === conversationId });
+      });
+  }
+
   function groupAction(root, state, render, promise, failure) {
     promise
       .then(function (data) {
@@ -8836,6 +9106,11 @@
       { action: 'export', label: 'Export chat' },
       { action: 'clear', label: 'Clear messages', danger: true },
     ];
+
+    // The group's admins speak to all of it, now or at a set time.
+    if (row.type === 'group' && row.canManage) {
+      items.unshift({ action: 'announce', label: 'New announcement' });
+    }
 
     // Blocking only means anything between two people.
     if (row.type !== 'group') {
@@ -8899,6 +9174,11 @@
     // Pin / mute / archive already have optimistic handling.
     if (action === 'pin' || action === 'mute' || action === 'archive') {
       commitMessagesRowAction(root, state, render, conversationId, action);
+      return;
+    }
+
+    if (action === 'announce') {
+      openAnnouncement(root, state, render, conversationId);
       return;
     }
 
@@ -9088,6 +9368,18 @@
       btn.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
+
+        // Quoted from a group: the original is there, not in this thread.
+        // Read at click time, because a reconciled node can change its quote.
+        var elsewhere = btn.getAttribute('data-messages-jump-in');
+        if (elsewhere) {
+          var seq = parseInt(btn.getAttribute('data-messages-jump-seq'), 10);
+          if (seq && findThread(elsewhere)) {
+            jumpToConversationMessage(root, state, render, elsewhere, seq);
+          }
+          return;
+        }
+
         jumpToMessage(root, btn.getAttribute('data-messages-jump'));
       });
     });
@@ -9840,6 +10132,12 @@
       { action: 'reply', label: 'Reply' },
       { action: 'forward', label: 'Forward' },
     ];
+    // Take it up with whoever said it, away from the group. Only in a group,
+    // and only on somebody else's message.
+    var inGroup = (findThread(state.selectedId) || {}).type === 'group';
+    if (inGroup && msg.direction === 'in' && msg.sender && msg.sender.id) {
+      items.splice(1, 0, { action: 'reply-private', label: 'Reply privately' });
+    }
     if (msg.body) {
       items.push({ action: 'copy', label: 'Copy text' });
       items.push({ action: 'translate', label: 'Translate' });
@@ -9897,7 +10195,8 @@
           setReplyTo(state, msg.id);
           render();
           focusComposerInput(root);
-        } else if (action === 'copy') copyMessageText(root, msg);
+        } else if (action === 'reply-private') replyPrivately(root, state, render, msg);
+        else if (action === 'copy') copyMessageText(root, msg);
         else if (action === 'edit') startEditingMessage(root, state, render, msg);
         else if (action === 'delete') deleteMessage(root, state, render, msg);
         else if (action === 'forward') forwardMessage(root, state, render, msg);

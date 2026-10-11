@@ -2508,7 +2508,7 @@ picked up the live mailbox's token and synced a real account into itself.
 
 The Messages page was a pure mock — a hard-coded `THREADS` array with a
 scripted ByeWind conversation and no network calls at all. It is now backed by
-`/portal/messaging`, so these nine scripts exist to keep it that way.
+`/portal/messaging`, so these scripts exist to keep it that way.
 
 - **`messaging.mjs`** — the page against a real server: the list comes from the
   API (and contains none of the old mock names), messages load and send and
@@ -2572,6 +2572,40 @@ scripted ByeWind conversation and no network calls at all. It is now backed by
   channel must still end up subscribed) and `REVERB_APP_MAX_CONNECTIONS=1`
   (the second browser is refused with 4004 and must still receive messages,
   by the 10 second poll).
+
+- **`messaging-announcements.mjs`** — answering a group message privately,
+  and announcements in a group. "Reply privately" is offered on somebody
+  else's message in a group and never on your own; it opens the direct
+  conversation with whoever wrote it, their message already quoted, and the
+  composer says "Replying privately to". The quote names the group on both
+  sides ("Ana Ruiz · group"), nothing reaches the group, and clicking the
+  quote opens the group at the original.
+
+  Then the announcement dialog, from the conversation's own menu: Post puts
+  a marked message in the thread and "Announcement: …" in the other person's
+  chat list, live; "At a set time" shows the date and time and renames the
+  button to Schedule; a time that has passed is refused **inside the dialog**
+  (the page's toast sits under it); a scheduled one waits in the dialog's
+  Scheduled list and not in the thread, and Cancel takes it off.
+
+  The step worth keeping honest is the scheduler's. The script brings the
+  time forward in the database and runs `messaging:send-scheduled` itself,
+  the way cron would: the announcement has to arrive in **two open threads
+  with no reload** (a sentinel on `window` proves it), because nobody's
+  browser sent it and the author's own tab has to hear it too. A second pass
+  posts nothing.
+
+  Same servers as `messaging-realtime.mjs`, on a fresh database from the same
+  seed, with the `REVERB_*` overrides in the shell that runs the script as
+  well (its artisan calls broadcast), and `TMA_DB` naming the database:
+
+  ```sh
+  env $R TMA_DB="$DB" node tests/Browser/messaging-announcements.mjs
+  ```
+
+  The firm chat makes itself and every seeded account is an administrator,
+  so both people may announce in it; that a member may not is
+  `MessagingAnnouncementsTest`'s to prove.
 
 - **`messaging-toolbar.mjs`** — the three controls in the chat-list header,
   which were all dead chrome: the "search" was a `<span>` with no input behind

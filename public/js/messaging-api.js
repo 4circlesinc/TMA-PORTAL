@@ -359,6 +359,23 @@
       return api(BASE + '/conversations/' + encodeURIComponent(conversationId) + '/mentionable');
     },
 
+    /* Announcements written for later in this group; empty unless you run it. */
+    scheduled: function (conversationId) {
+      return api(BASE + '/conversations/' + encodeURIComponent(conversationId) + '/scheduled');
+    },
+
+    /* `sendAt` is an ISO instant; the server posts it then, as its author. */
+    schedule: function (conversationId, payload) {
+      return api(BASE + '/conversations/' + encodeURIComponent(conversationId) + '/scheduled', {
+        method: 'POST',
+        json: payload,
+      });
+    },
+
+    cancelScheduled: function (scheduledId) {
+      return api(BASE + '/scheduled/' + encodeURIComponent(scheduledId), { method: 'DELETE' });
+    },
+
     /* Shared media, documents or links. */
     gallery: function (conversationId, shelf) {
       return api(

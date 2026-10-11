@@ -103,6 +103,7 @@ use App\Http\Controllers\MeOneDriveController;
 use App\Http\Controllers\MessagingAttachmentController;
 use App\Http\Controllers\MessagingController;
 use App\Http\Controllers\MessagingGroupController;
+use App\Http\Controllers\MessagingScheduleController;
 use App\Http\Controllers\MeSyncStatusController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\NotificationHistoryController;
@@ -1424,6 +1425,10 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // The people a message here may address with @, for the composer.
         Route::get('/conversations/{uuid}/mentionable', [MessagingController::class, 'mentionable'])->name('conversations.mentionable');
         Route::get('/conversations/{uuid}/gallery', [MessagingController::class, 'gallery'])->name('conversations.gallery');
+        // Announcements a group's admins have written for later.
+        Route::get('/conversations/{uuid}/scheduled', [MessagingScheduleController::class, 'index'])->name('conversations.scheduled');
+        Route::post('/conversations/{uuid}/scheduled', [MessagingScheduleController::class, 'store'])->name('conversations.scheduled.store');
+        Route::delete('/scheduled/{uuid}', [MessagingScheduleController::class, 'destroy'])->name('scheduled.destroy');
 
         Route::patch('/messages/{uuid}', [MessagingController::class, 'updateMessage'])->name('messages.update');
         Route::delete('/messages/{uuid}', [MessagingController::class, 'destroyMessage'])->name('messages.destroy');

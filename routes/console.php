@@ -29,6 +29,7 @@ use App\Support\Files\Workflow\Status;
 use App\Support\Imports\ImportPause;
 use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
+use App\Support\Messaging\ScheduledMessages;
 use App\Support\Messaging\OrganizationChat;
 use App\Support\Messaging\Thumbnailer;
 use App\Support\Notifications\Notifier;
@@ -307,6 +308,24 @@ Artisan::command('messaging:prune-attachments {--hours=24}', function () {
 })->purpose('Remove staged message attachments that were never sent');
 
 Schedule::command('messaging:prune-attachments')->hourly();
+
+/*
+ * Post scheduled messages whose time has arrived.
+ *
+ * Posted here, in the command, and not handed to the queue: the worker has
+ * not always been running on this portal, and an announcement timed for nine
+ * that goes out whenever the queue drains was not scheduled at all.
+ */
+Artisan::command('messaging:send-scheduled', function () {
+    $sent = ScheduledMessages::deliverDue();
+
+    $this->info("Posted {$sent} scheduled message(s).");
+})->purpose('Post scheduled messages whose time has arrived');
+
+// Minute granularity matches the time picker, which is to the minute.
+Schedule::command('messaging:send-scheduled')
+    ->everyMinute()
+    ->withoutOverlapping(10);
 
 // Escalating email reminders (1h/20h/24h) for unread portal messages.
 Schedule::command('messaging:send-unread-reminders')->everyFifteenMinutes()->withoutOverlapping(30);
