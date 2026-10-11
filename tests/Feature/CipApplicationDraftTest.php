@@ -912,6 +912,8 @@ class CipApplicationDraftTest extends TestCase
                 'cipNumber' => $number,
                 'draftId' => $draft->uuid,
                 'outcome' => $outcome,
+                'decided_at' => '2026-09-18',
+                'decision_letter' => $this->cipDecisionLetterPdf(),
             ];
             $filing['firstName'] = $first;
             $filing['passportNumber'] = 'X'.substr($number, -7);
@@ -933,13 +935,130 @@ class CipApplicationDraftTest extends TestCase
         $approved = $fileDraft('10T1G12681P', 'John', 'approved');
         $this->assertSame(Status::POST_APPROVED, $approved->status);
         $this->assertSame(Status::POST_APPROVED, $approved->decision);
-        $this->assertNotNull($approved->decided_at);
+        $this->assertSame('2026-09-18', $approved->decided_at->toDateString());
+        $this->assertNotNull($approved->decision_letter_file_id, 'The letter is on the file.');
         $this->assertSame(['cip-status-post-approval', 'cip-granted'], $sent($approved));
 
         $denied = $fileDraft('10T1G12682P', 'Omar', 'denied');
         $this->assertSame(Status::POST_DENIED, $denied->status);
         $this->assertSame(Status::POST_DENIED, $denied->decision);
+        $this->assertSame('2026-09-18', $denied->decided_at->toDateString());
+        $this->assertNotNull($denied->decision_letter_file_id, 'The letter is on the file.');
         $this->assertSame(['cip-denied'], $sent($denied));
+
+        // Each decision went out with its own letter attached.
+        foreach ([[$approved, ' - APPROVED - '], [$denied, ' - DENIED - ']] as [$filed, $token]) {
+            \Illuminate\Support\Facades\Mail::assertQueued(
+                \App\Mail\Postcard::class,
+                fn (\App\Mail\Postcard $mail) => str_contains((string) $mail->subjectLine, $token)
+                    && str_contains((string) $mail->subjectLine, $filed->cip_number)
+                    && $mail->attachment !== null
+                    && $mail->attachment->id === $filed->decision_letter_file_id,
+            );
+        }
+    }
+
+    /**
+     * Filing a draft with its decision lands whole or not at all.
+     *
+     * The decision stores its letter. A letter that could not be stored used
+     * to stop the filing with the row already off Draft: on Post-Approval,
+     * undecided, nobody told, and no longer a draft the next Add could find.
+     * And the letter is asked for on the lane the filing will take, which
+     * for a draft is the draft's own when the request names none.
+     */
+    public function test_a_post_approval_draft_filed_with_a_decision_lands_whole_or_not_at_all(): void
+    {
+        Storage::fake('local');
+        \Illuminate\Support\Facades\Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->actingAs($staff)->post('/portal/cip/applications/draft', $this->answers($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12695P',
+            'firstName' => 'Layla',
+            'lastName' => 'Smith',
+            'gender' => 'Female',
+            'dateOfBirth' => '1985-04-12',
+            'countryOfBirth' => 'Lebanon',
+            'countryOfResidence' => 'United Arab Emirates',
+            'occupation' => 'Engineer',
+            'passportNumber' => 'X1269500',
+            'investmentType' => InvestmentType::REAL_ESTATE,
+            'sponsored' => '0',
+            'passportPhoto' => $this->photo(),
+            'oathOfAllegiance' => [UploadedFile::fake()->create('oath.pdf', 40, 'application/pdf')],
+            'proofOfPayment' => [UploadedFile::fake()->create('payment.pdf', 40, 'application/pdf')],
+        ]), ['Accept' => 'application/json'])->assertOk();
+
+        $draft = CipApplication::query()->where('cip_number', '10T1G12695P')->firstOrFail();
+
+        $filing = function (array $extra) use ($provider, $draft): array {
+            $filing = $this->filing($provider) + ['draftId' => $draft->uuid] + $extra;
+            $filing['firstName'] = 'Layla';
+            $filing['gender'] = 'Female';
+            $filing['passportNumber'] = 'X1269500';
+            unset(
+                $filing['passportPhoto'],
+                $filing['passportBioPage'],
+                $filing['birthCertificate'],
+                $filing['policeCertificate'],
+                $filing['proofOfAddress'],
+            );
+
+            return $filing;
+        };
+
+        $untouched = function () use ($draft): void {
+            $row = $draft->fresh();
+            $this->assertSame(Status::DRAFT, $row->status, 'The row left Draft though the filing was refused.');
+            $this->assertNull($row->decision);
+            $this->assertNull($row->decision_letter_file_id);
+            $this->assertSame(0, \Illuminate\Support\Facades\DB::table('email_deliveries')->where('related_id', $row->id)->count());
+        };
+
+        // A file sent as a PDF but named as a Word document passes the
+        // upload rules and is refused where the letter is stored, which is
+        // after the status has moved: the whole filing has to come back.
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications', $filing([
+                'phase' => Phase::POST_APPROVAL,
+                'cipNumber' => '10T1G12695P',
+                'outcome' => 'denied',
+                'decided_at' => '2026-09-18',
+                'decision_letter' => UploadedFile::fake()->create('letter.docx', 40, 'application/pdf'),
+            ]), ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            // Objected to by the letter's own guard, under its own key: this
+            // refusal came from the store, past every rule, not from the rules.
+            ->assertJsonValidationErrors(['decisionLetter'])
+            ->assertJsonMissingValidationErrors(['decision_letter']);
+        $untouched();
+
+        // No phase in the body: still a post-approval filing, by the draft's
+        // own, so the letter and the day are still asked for.
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications', $filing(['outcome' => 'denied']), ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['decision_letter', 'decided_at']);
+        $untouched();
+
+        // And with them, it files.
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications', $filing([
+                'phase' => Phase::POST_APPROVAL,
+                'cipNumber' => '10T1G12695P',
+                'outcome' => 'denied',
+                'decided_at' => '2026-09-18',
+                'decision_letter' => $this->cipDecisionLetterPdf(),
+            ]), ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        $filed = $draft->fresh();
+        $this->assertSame(Status::POST_DENIED, $filed->status);
+        $this->assertNotNull($filed->decision_letter_file_id);
     }
 
     /**
@@ -992,6 +1111,8 @@ class CipApplicationDraftTest extends TestCase
                 'cipNumber' => $number,
                 'draftId' => $draft->uuid,
                 'outcome' => $outcome,
+                'decided_at' => '2026-09-18',
+                'decision_letter' => $this->cipDecisionLetterPdf(),
             ];
             $filing['firstName'] = $first;
             $filing['passportNumber'] = 'X'.substr($number, -7);

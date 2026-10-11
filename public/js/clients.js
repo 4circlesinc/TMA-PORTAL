@@ -15050,17 +15050,28 @@
     return s ? s.charAt(0).toLowerCase() + s.slice(1) : s;
   }
 
+  /*
+   * `opts.collect` turns this into the question a post-approval filing asks
+   * as it is added: the same decision, the same day, notes and letter, and
+   * the same checks on them, but handed back to the form that is filing
+   * instead of posted, because there is no application to post them to
+   * yet. The decision then rides with the filing and is recorded with it.
+   * `opts.defaults` is what was answered before a filing the server
+   * refused, so the reader is not made to type it twice.
+   */
   function openDecisionDialog(applicationId, clientUid, decision, opts) {
     opts = opts || {};
     var ui = window.TMAPortalUI;
     if (!ui || !ui.openModal) return;
 
+    var collecting = typeof opts.collect === 'function';
+    var defaults = opts.defaults || {};
     var today = new Date().toISOString().slice(0, 10);
     var chosen = decision === 'granted' || decision === 'denied' ? decision : '';
     var picking = !chosen;
     var letterOptional = !!opts.letterOptional;
     var existingLetter = opts.existingLetter;
-    var held = applicationHeldById(applicationId);
+    var held = collecting ? null : applicationHeldById(applicationId);
     var route = (opts.investmentType || (held && held.investmentType) || '').trim();
     var letterLine = picking
       ? (route
@@ -15091,9 +15102,11 @@
       ?         '<div class="tma-dash__clients-field">' +
         '<span class="tma-dash__clients-field-label">Decision type</span>' +
         '<div class="tma-portal-radio-row">' +
-        '<label class="tma-portal-radio"><input type="radio" name="cip-decision-type" value="granted" data-cip-decision-type>' +
+        '<label class="tma-portal-radio"><input type="radio" name="cip-decision-type" value="granted" data-cip-decision-type' +
+        (defaults.decision === 'granted' ? ' checked' : '') + '>' +
         '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Approved</label>' +
-        '<label class="tma-portal-radio"><input type="radio" name="cip-decision-type" value="denied" data-cip-decision-type>' +
+        '<label class="tma-portal-radio"><input type="radio" name="cip-decision-type" value="denied" data-cip-decision-type' +
+        (defaults.decision === 'denied' ? ' checked' : '') + '>' +
         '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Denied</label>' +
         '</div></div>'
       : '';
@@ -15104,27 +15117,31 @@
         '<div class="tma-dash__clients-field">' +
         '<label class="tma-dash__clients-field-label" for="cip-decided">Decision date</label>' +
         '<input type="date" id="cip-decided" class="tma-dash__clients-field-input"' +
-        ' data-cip-decided value="' + esc(today) + '">' +
+        ' data-cip-decided value="' + esc(defaults.decidedAt || today) + '">' +
         '</div>' +
         typeField +
         '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
         '<label class="tma-dash__clients-field-label" for="cip-decision-note">Decision notes</label>' +
         '<textarea id="cip-decision-note" class="tma-dash__clients-field-textarea" data-cip-decision-note' +
-        ' rows="3" maxlength="2000" placeholder="Optional notes on this decision"></textarea>' +
+        ' rows="3" maxlength="2000" placeholder="Optional notes on this decision">' + esc(defaults.note || '') + '</textarea>' +
         '</div>' +
         letterField +
-        cipStatusAttachmentHtml(cipAttachmentPlace(held)) +
+        // A file attached to a status change is filed in the application's
+        // folders, and a filing has none yet: its own form takes the papers.
+        (collecting ? '' : cipStatusAttachmentHtml(cipAttachmentPlace(held))) +
         (opts.override ? cipOverrideFieldsHtml() : '') +
         '<p class="tma-portal-modal__text">' +
-        (picking
-          ? 'The application will move to Approved or Denied.' + letterLine + ' This cannot be undone from here.'
-          : (chosen === 'granted'
-            ? 'The application will move to Approved.' + letterLine + ' This cannot be undone from here.'
-            : 'The application will move to Denied.' + letterLine + ' This cannot be undone from here.')) +
+        (collecting
+          ? 'The application will be added as Approved or Denied.' + letterLine
+          : (picking
+            ? 'The application will move to Approved or Denied.' + letterLine + ' This cannot be undone from here.'
+            : (chosen === 'granted'
+              ? 'The application will move to Approved.' + letterLine + ' This cannot be undone from here.'
+              : 'The application will move to Denied.' + letterLine + ' This cannot be undone from here.'))) +
         '</p>' +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-decision>Cancel</button>' +
-        '<button type="button" class="tma-no-data__btn" data-cip-save-decision>Record decision</button>' +
+        '<button type="button" class="tma-no-data__btn" data-cip-save-decision>' + (collecting ? 'Add' : 'Record decision') + '</button>' +
         '</div>',
       onMount: function (el) {
         var cancel = el.querySelector('[data-cip-cancel-decision]');
@@ -15132,6 +15149,18 @@
 
         wireDecisionLetterDrop(el);
         wireCipStatusAttachment(el);
+
+        // The letter chosen before a filing the server refused, put back
+        // through the drop's own change handler so it is drawn as chosen.
+        if (collecting && defaults.letter) {
+          try {
+            var kept = new DataTransfer();
+            kept.items.add(defaults.letter);
+            var keptInput = el.querySelector('[data-cip-decision-letter]');
+            keptInput.files = kept.files;
+            keptInput.dispatchEvent(new Event('change'));
+          } catch (e) { /* chosen again by hand */ }
+        }
 
         var save = el.querySelector('[data-cip-save-decision]');
         if (!save) return;
@@ -15180,6 +15209,15 @@
 
           var noteEl = el.querySelector('[data-cip-decision-note]');
           var note = overrideReason || (noteEl && noteEl.value ? noteEl.value.trim() : '');
+
+          // Asked on behalf of a filing: every check above has passed, and
+          // the answer goes back to the form to be sent with it.
+          if (collecting) {
+            ui.closeModal();
+            opts.collect({ decision: picked, decidedAt: date, note: note, letter: letterFile });
+
+            return;
+          }
 
           save.disabled = true;
           save.textContent = 'Recording…';
@@ -16566,6 +16604,16 @@
         : ('new:' + (state.applicationPhase || 'pre_approval'));
       window.TMACipIntake.open(intakeMount, {
         applicationId: editing ? state.applicationId : null,
+        /*
+         * A post-approval filing records the Unit's decision as it is
+         * added, and asks for it in the dialog every other decision is
+         * recorded in: the day, Approved or Denied, the notes and the
+         * letter. The form calls this with what was answered last time, if
+         * a filing was refused, and is called back with the answer.
+         */
+        askDecision: function (previous, done) {
+          openDecisionDialog(null, null, null, { collect: done, defaults: previous || {} });
+        },
         /*
          * The wizard asks the server for its document requirements as it
          * opens, and that ask is keyed on the phase. A filed edit (and a

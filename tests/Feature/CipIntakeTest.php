@@ -2400,6 +2400,9 @@ class CipIntakeTest extends TestCase
             'phase' => Phase::POST_APPROVAL,
             'cipNumber' => '10T1G12661P',
             'outcome' => Intake::OUTCOME_DENIED,
+            'decided_at' => '2026-09-18',
+            'decision_note' => 'Refused on the source of funds.',
+            'decision_letter' => $this->cipDecisionLetterPdf(),
             'oathOfAllegiance' => $this->scan('oath.pdf'),
             'proofOfPayment' => $this->scan('payment.pdf'),
         ]))
@@ -2409,7 +2412,9 @@ class CipIntakeTest extends TestCase
         $this->assertSame(Phase::POST_APPROVAL, $body['phase']);
         $this->assertSame(Status::POST_DENIED, $body['status']);
         $this->assertSame(Status::POST_DENIED, $body['decision']);
-        $this->assertNotNull($body['decidedAt']);
+        // The day the Unit decided, not the day the file was typed in.
+        $this->assertSame('2026-09-18', $body['decidedAt']);
+        $this->assertNotNull($body['decisionLetter'], 'The letter is on the file.');
         $this->assertNotNull($body['postApprovalAt']);
 
         $application = CipApplication::where('uuid', $body['id'])->first();
@@ -2437,13 +2442,21 @@ class CipIntakeTest extends TestCase
             ['cip-denied'],
             $this->templatesSentTo($application, $staff),
         );
-        // A filing carries no letter, so the email does not promise one.
+        // It goes out the way a denial recorded from the status menu does:
+        // with the Unit's letter attached, and saying so.
+        $this->assertNotNull($application->fresh()->decision_letter_file_id);
         \Illuminate\Support\Facades\Mail::assertQueued(
             \App\Mail\Postcard::class,
             fn (\App\Mail\Postcard $mail) => str_contains((string) $mail->subjectLine, ' - DENIED - ')
                 && str_contains((string) json_encode($mail->payload), 'has been denied')
-                && ! str_contains((string) json_encode($mail->payload), 'official letter attached'),
+                && str_contains((string) json_encode($mail->payload), 'official letter attached')
+                && $mail->attachment !== null
+                && $mail->attachment->id === $application->fresh()->decision_letter_file_id,
         );
+        // The note is on the trail with the decision.
+        $recorded = $application->events()->where('action', CipEvent::ACTION_DECISION_RECORDED)->first();
+        $this->assertSame('Refused on the source of funds.', $recorded->meta['note'] ?? null);
+        $this->assertSame('2026-09-18', $recorded->meta['decidedAt'] ?? null);
     }
 
     /**
@@ -2465,11 +2478,19 @@ class CipIntakeTest extends TestCase
             'phase' => Phase::POST_APPROVAL,
             'cipNumber' => '10T1G12661P',
             'outcome' => Intake::OUTCOME_APPROVED,
+            'decided_at' => '2026-09-18',
+            'decision_note' => 'Approved in principle.',
+            'decision_letter' => $this->cipDecisionLetterPdf(),
             'oathOfAllegiance' => $this->scan('oath.pdf'),
             'proofOfPayment' => $this->scan('payment.pdf'),
         ]))
             ->assertCreated()
             ->json('application');
+
+        // The decision is recorded as it is anywhere else: its own day, the
+        // Unit's letter on the file, the note on the trail.
+        $this->assertSame('2026-09-18', $body['decidedAt']);
+        $this->assertNotNull($body['decisionLetter'], 'The letter is on the file.');
 
         $this->assertSame(Phase::POST_APPROVAL, $body['phase']);
         $this->assertSame(Status::POST_APPROVED, $body['status']);
@@ -2508,20 +2529,88 @@ class CipIntakeTest extends TestCase
             \App\Mail\Postcard::class,
             fn (\App\Mail\Postcard $mail) => str_contains((string) $mail->subjectLine, ' - POST APPROVAL - '),
         );
-        // The approval, in the lane's own letter, promising no attachment
-        // a filing does not carry.
+        // The approval, in the lane's own letter, with the Unit's letter
+        // attached the way a decision recorded from the status menu sends it.
+        $letterId = $application->fresh()->decision_letter_file_id;
+        $this->assertNotNull($letterId);
         \Illuminate\Support\Facades\Mail::assertQueued(
             \App\Mail\Postcard::class,
             fn (\App\Mail\Postcard $mail) => str_contains((string) $mail->subjectLine, ' - APPROVED - ')
                 && str_contains((string) json_encode($mail->payload), 'on the approval of their post-approval application')
-                && ! str_contains((string) json_encode($mail->payload), 'official letter attached'),
+                && str_contains((string) json_encode($mail->payload), 'official letter attached')
+                && $mail->attachment !== null
+                && $mail->attachment->id === $letterId,
         );
+        // The Stage 1 request is not the decision and carries no letter.
+        \Illuminate\Support\Facades\Mail::assertQueued(
+            \App\Mail\Postcard::class,
+            fn (\App\Mail\Postcard $mail) => str_contains((string) $mail->subjectLine, ' - POST APPROVAL - ')
+                && $mail->attachment === null,
+        );
+        $recorded = $application->events()->where('action', CipEvent::ACTION_DECISION_RECORDED)->first();
+        $this->assertSame('Approved in principle.', $recorded->meta['note'] ?? null);
+        $this->assertSame('2026-09-18', $application->fresh()->decided_at->toDateString());
 
         // The decision is on the file, so the menu does not ask for it again.
         $this->assertNotContains(
             Status::POST_APPROVED,
             \App\Support\Cip\Engine::availableTransitions($application->fresh(), $staff),
         );
+    }
+
+    /**
+     * A decision said at filing needs what a decision needs anywhere else.
+     *
+     * The letter is what goes out with the notice and the day is what every
+     * report measures from, so a filing answered Approved or Denied without
+     * them is refused whole: no application, no email. A filing that records
+     * no decision is asked for neither.
+     */
+    public function test_a_decision_at_filing_needs_its_letter_and_its_day(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        foreach ([Intake::OUTCOME_APPROVED, Intake::OUTCOME_DENIED] as $outcome) {
+            $this->file($staff, $this->payload($provider, [
+                'phase' => Phase::POST_APPROVAL,
+                'cipNumber' => '10T1G12661P',
+                'outcome' => $outcome,
+                'oathOfAllegiance' => $this->scan('oath.pdf'),
+                'proofOfPayment' => $this->scan('payment.pdf'),
+            ]))
+                ->assertStatus(422)
+                ->assertJsonValidationErrors(['decision_letter', 'decided_at'])
+                ->assertJsonPath('errors.decision_letter.0', 'Upload the decision letter as a PDF.')
+                ->assertJsonPath('errors.decided_at.0', 'Enter the decision date.');
+
+            // A Word file is not the letter.
+            $this->file($staff, $this->payload($provider, [
+                'phase' => Phase::POST_APPROVAL,
+                'cipNumber' => '10T1G12661P',
+                'outcome' => $outcome,
+                'decided_at' => '2026-09-18',
+                'decision_letter' => UploadedFile::fake()->create('letter.docx', 30),
+                'oathOfAllegiance' => $this->scan('oath.pdf'),
+                'proofOfPayment' => $this->scan('payment.pdf'),
+            ]))
+                ->assertStatus(422)
+                ->assertJsonValidationErrors(['decision_letter'])
+                ->assertJsonPath('errors.decision_letter.0', 'Upload the decision letter as a PDF.');
+        }
+
+        $this->assertSame(0, CipApplication::count());
+        \Illuminate\Support\Facades\Mail::assertNothingQueued();
+
+        // No decision, nothing to ask for.
+        $this->file($staff, $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12661P',
+            'outcome' => Intake::OUTCOME_POST_APPROVAL,
+            'oathOfAllegiance' => $this->scan('oath.pdf'),
+            'proofOfPayment' => $this->scan('payment.pdf'),
+        ]))->assertCreated();
     }
 
     /**
@@ -2538,6 +2627,8 @@ class CipIntakeTest extends TestCase
             'phase' => Phase::POST_APPROVAL,
             'cipNumber' => '10T1G12661P',
             'outcome' => Intake::OUTCOME_APPROVED,
+            'decided_at' => '2026-09-18',
+            'decision_letter' => $this->cipDecisionLetterPdf(),
             'oathOfAllegiance' => $this->scan('oath.pdf'),
             'proofOfPayment' => $this->scan('payment.pdf'),
         ]))->assertCreated()->json('application');
@@ -2596,7 +2687,10 @@ class CipIntakeTest extends TestCase
                 'outcome' => $outcome,
                 'oathOfAllegiance' => $this->scan('oath.pdf'),
                 'proofOfPayment' => $this->scan('payment.pdf'),
-            ]),
+            ] + ($outcome === Intake::OUTCOME_POST_APPROVAL ? [] : [
+                'decided_at' => '2026-09-18',
+                'decision_letter' => $this->cipDecisionLetterPdf(),
+            ])),
         )->assertCreated()->json('application.id'))->firstOrFail();
 
         $approved = $file('10T1G12671P', 'Amal', Intake::OUTCOME_APPROVED);

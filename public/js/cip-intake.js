@@ -2179,6 +2179,7 @@
     state.errors = {};
     // Start over is a different application: ask approved or denied afresh.
     state.outcome = null;
+    state.decision = null;
     // The number went with the row the server has just deleted. None is
     // shown until a save says what the next one is.
     state.numbered = null;
@@ -2740,6 +2741,9 @@
     }
 
     // What the reader said this post-approval filing is: see askOutcome().
+    // The decision's own day, note and letter ride with the request that
+    // files it, see decisionParts(): not here, where a letter would be
+    // counted among the scans and sent to the draft with them.
     if (filing && isPostApprovalIntake() && !isAddOnIntake() && state.outcome) {
       out.push({ name: 'outcome', value: state.outcome });
     }
@@ -2792,6 +2796,57 @@
     return list.filter(function (part) { return part.file; }).map(function (part) {
       return { path: part.path, sig: oneFileSig(part.file) };
     });
+  }
+
+  /*
+   * The decision a post-approval filing records as it is added: its day,
+   * its note and the Unit's letter.
+   *
+   * Sent with the one request that files the application and nowhere else.
+   * The letter is not one of the applicant's scans, so it is not among
+   * parts(): it must not be held back behind the scans, flushed to the
+   * draft with them, or remembered as a saved file. One more file on a
+   * request that carries at most MAX_UPLOADS_PER_REQUEST is well inside
+   * what the host takes, and it goes first so it is never the one cut.
+   */
+  function decisionParts() {
+    var decision = state.decision;
+    if (!isFiling() || !isPostApprovalIntake() || isAddOnIntake() || !state.outcome || !decision) return [];
+
+    // Underscored on purpose: a document requirement is posted under the
+    // camel case of its label, and one called "Decision Letter" would be
+    // `decisionLetter`. See Intake::DECISION_LETTER.
+    var out = [];
+    if (decision.letter) {
+      out.push({ name: 'decision_letter', file: decision.letter, filename: decision.letter.name || 'decision-letter.pdf' });
+    }
+    if (decision.decidedAt) out.push({ name: 'decided_at', value: decision.decidedAt });
+    if (decision.note) out.push({ name: 'decision_note', value: decision.note });
+
+    return out;
+  }
+
+  /*
+   * What the server said about the decision itself, taken out of a refusal.
+   *
+   * The decision is asked in a dialog, not on the form, so there is no
+   * control to mark: left among the form's errors it became "Check one
+   * answer." with nothing marked and no reason. Its own words are said
+   * instead. A letter the server would not take is dropped from what the
+   * dialog puts back, or Add would offer the same file again.
+   */
+  function takeDecisionError(errors) {
+    var said = '';
+    // `decisionLetter` is the key the letter's own guard objects under.
+    ['decision_letter', 'decisionLetter', 'decided_at', 'decision_note'].forEach(function (key) {
+      if (!errors || errors[key] === undefined) return;
+      var msg = errors[key];
+      if (!said) said = Array.isArray(msg) ? String(msg[0] || '') : String(msg || '');
+      if ((key === 'decision_letter' || key === 'decisionLetter') && state.decision) state.decision.letter = null;
+      delete errors[key];
+    });
+
+    return said;
   }
 
   function body(list) {
@@ -3689,7 +3744,10 @@
       credentials: 'same-origin',
       // No Content-Type: the browser sets the multipart boundary itself.
       headers: headers(),
-      body: body(batch.parts),
+      // The request that files it carries the decision with it. A batch
+      // with scans still held back is not that request: it is an edit
+      // posting in turns, and a filing flushed its scans above.
+      body: body(decisionParts().concat(batch.parts)),
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (json) {
         state.saving = false;
@@ -3706,12 +3764,13 @@
         if (!res.ok && !(res.status === 409 && json.duplicate)) state.outcome = null;
 
         if (res.status === 422 && json.errors) {
+          var decisionSaid = takeDecisionError(json.errors);
           // The server's word, field by field, already keyed to our paths,
           // except that one file in a list objects as `passportBioPage.0` and
           // the control it belongs to is `passportBioPage`.
           applyErrors(json.errors);
           render(root);
-          ui().toastError(checkAnswersMessage(Object.keys(state.errors).length));
+          ui().toastError(decisionSaid || checkAnswersMessage(Object.keys(state.errors).length));
 
           return;
         }
@@ -3772,8 +3831,33 @@
     });
   }
 
-  /** Approved or denied: the question Add asks before it files. */
+  /**
+   * Approved or denied: the question Add asks before it files.
+   *
+   * Asked in the dialog the portal records every other decision in, which
+   * the page that mounted this form lends it (askDecision): the day, the
+   * outcome, the notes and the Unit's letter, with the same checks. What
+   * comes back is kept here and sent with the filing.
+   */
   function askOutcome() {
+    if (state.askDecision) {
+      state.askDecision(state.decision, function (answer) {
+        if (!answer) return;
+        state.decision = {
+          decision: answer.decision,
+          decidedAt: answer.decidedAt || '',
+          note: answer.note || '',
+          letter: answer.letter || null,
+        };
+        state.outcome = answer.decision === 'granted' ? 'approved' : 'denied';
+        submit();
+      });
+
+      return;
+    }
+
+    // Mounted by a page that lends no dialog: the bare question. The
+    // server asks for the letter, so this files nothing without one.
     ui().openModal({
       title: 'Post-approval application',
       body: '<p class="tma-portal-modal__text">Was this application approved or denied?</p>' +
@@ -3885,7 +3969,9 @@
         : 'A new application for ' + fullName(),
       method: 'POST',
       url: url,
-      parts: parts(),
+      // With the decision a post-approval filing records, letter included:
+      // the replay is the request that files it.
+      parts: decisionParts().concat(parts()),
       // Everything drawn from this application, wherever it was cached. Two
       // prefixes because two screens ask different questions of the same
       // record: the profile keys on the client, the wizard on the application.
@@ -4149,6 +4235,9 @@
     state.allowDuplicate = false;
     state.allowUnmatchedParent = false;
     state.outcome = null;
+    // The decision that goes with that answer, and the dialog it is asked in.
+    state.decision = null;
+    state.askDecision = typeof opts.askDecision === 'function' ? opts.askDecision : null;
     state.numbered = null;
     state.numberPreview = null;
     state.numberAsk = null;

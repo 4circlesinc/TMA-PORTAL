@@ -378,22 +378,26 @@ field placement and drawing, and computed CSS only exist in a browser.
   ```
 
 - **`cip-post-approval-filing.mjs`** — Adding a post-approval application
-  asks, once, whether it was approved or denied. A firm bringing its existing
-  files into the portal adds them straight into post-approval, and each is
-  one of the two. Approved enters the lane and stands on Approved; the
-  service provider is asked for the Stage 1 documents and then told the
-  application was approved. Denied lands on Denied and is sent the denial
-  alone. The emails are pinned in CipIntakeTest and CipApplicationDraftTest;
-  this is the question itself. Pins that Save on a complete post-approval
-  filing asks "Was this application approved or denied?" with Approved,
-  Denied and Cancel and no undecided answer; that Cancel files nothing and
-  the next Save asks again; that an Add the server refuses forgets the
-  answer, so it is asked again; that Approved files it once and the application
-  reads Approved with the decision and its day; and that Denied does the
-  same for Denied. Same serve, an administrator, and `TMA_PROVIDER`, the
-  uuid of a service provider that account may file under. It writes its own
-  two drafts through the draft endpoint and files them, under fresh numbers
-  each run:
+  records the Unit's decision with it. A firm bringing its existing files
+  into the portal adds them straight into post-approval, and each is a file
+  the Unit approved or one it denied. Add asks for that decision in the
+  dialog every other decision is recorded in: the day, Approved or Denied,
+  the notes and the Unit's letter as a PDF. Approved enters the lane and
+  stands on Approved; the service provider is asked for the Stage 1
+  documents and then sent the approval with its letter. Denied lands on
+  Denied and is sent the denial with its letter, alone. The emails are
+  pinned in CipIntakeTest and CipApplicationDraftTest; this is the question
+  itself. Pins that Add opens Record decision with the date, the outcome,
+  the notes and a required letter, and no loose attachment; that it will
+  not go on without an outcome or without the letter; that Cancel files
+  nothing and the next Add asks again; that an Add the server refuses asks
+  again with the answer and the chosen letter still in place; that a letter
+  the server will not take is said so and not offered again; that Approved
+  files it once on the day given with the letter on file; and that Denied
+  does the same. Same serve, an administrator, and `TMA_PROVIDER`, the uuid
+  of a service provider that account may file under. It writes its own two
+  drafts through the draft endpoint and files them, under fresh names and
+  numbers each run:
 
   ```sh
   TMA_BASE_URL=http://127.0.0.1:8933 TMA_PROVIDER=<uuid> node tests/Browser/cip-post-approval-filing.mjs

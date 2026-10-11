@@ -106,6 +106,13 @@ class Intake
 
     public const OUTCOME_DENIED = 'denied';
 
+    /** The decision a post-approval filing records as it is added: see {@see rules()}. */
+    public const DECIDED_AT = 'decided_at';
+
+    public const DECISION_NOTE = 'decision_note';
+
+    public const DECISION_LETTER = 'decision_letter';
+
     public static function documentFields(
         string $applicantType,
         string $phase = Phase::PRE_APPROVAL,
@@ -351,6 +358,24 @@ class Intake
                     self::OUTCOME_APPROVED,
                     self::OUTCOME_DENIED,
                 ])],
+                /*
+                 * A decision said at filing is recorded the way one is
+                 * anywhere else in the portal: with the day it was made,
+                 * the Unit's letter as a PDF, and whatever was noted. The
+                 * letter is what goes out with the notice, so a filing that
+                 * says Approved or Denied without one is refused here
+                 * rather than sent as an email promising an attachment.
+                 *
+                 * Named with underscores on purpose. Every document a firm
+                 * asks for is posted under the camel case of its own label,
+                 * and a requirement called "Decision Letter" would be
+                 * `decisionLetter`: the filing would then be judged by that
+                 * requirement's rules and the letter filed as one of the
+                 * applicant's scans. No label can produce an underscore.
+                 */
+                self::DECIDED_AT => [self::decidesAtIntake(request()->all(), $draft) ? 'required' : 'nullable', 'date'],
+                self::DECISION_NOTE => ['nullable', 'string', 'max:2000'],
+                self::DECISION_LETTER => DecisionLetter::rules(self::decidesAtIntake(request()->all(), $draft)),
                 /*
                  * A post-approval filing arrives with the Unit's number
                  * already on it: the file was approved before the portal saw
@@ -869,6 +894,13 @@ class Intake
                 ? 'Choose an enterprise category.'
                 : 'Say which investment type this is.',
             'investmentTypeOther.in' => 'Choose Marketing, Infrastructure or Housing.',
+            self::DECIDED_AT.'.required' => 'Enter the decision date.',
+            self::DECIDED_AT.'.date' => 'Enter the decision date.',
+            self::DECISION_LETTER.'.required' => 'Upload the decision letter as a PDF.',
+            self::DECISION_LETTER.'.file' => 'Upload the decision letter as a PDF.',
+            self::DECISION_LETTER.'.mimes' => 'Upload the decision letter as a PDF.',
+            self::DECISION_LETTER.'.mimetypes' => 'Upload the decision letter as a PDF.',
+            self::DECISION_LETTER.'.max' => 'That letter is too large. Keep it under 10MB.',
             'cipNumber.required' => 'Enter the CIP application number from the Unit.',
             'cipNumber.prohibited' => 'A CIP number is recorded when the application is submitted to the Unit.',
             'parentCipNumber.required' => 'Enter the CIP application number of the granted file.',
@@ -1039,9 +1071,9 @@ class Intake
             self::fileUploads($application, $data, $creator, $dependentUuids);
 
             if ($phase === Phase::POST_APPROVAL && self::deniedAtIntake($data)) {
-                PostApproval::denyAtIntake($application, $creator);
+                PostApproval::denyAtIntake($application, $creator, ...self::decisionAtIntake($data));
             } elseif ($phase === Phase::POST_APPROVAL && self::approvedAtIntake($data)) {
-                PostApproval::approveAtIntake($application, $creator);
+                PostApproval::approveAtIntake($application, $creator, ...self::decisionAtIntake($data));
             }
 
             return $application->fresh();
@@ -1520,23 +1552,36 @@ class Intake
             $number = (string) ($application->cip_number ?? '');
         }
 
-        Submission::adopt($application, $creator, $number);
+        /*
+         * One write, the way {@see create()} files in one. The decision
+         * stores its letter, and a letter the disk would not take used to
+         * stop here with the row already off Draft: on Post-Approval,
+         * undecided, nobody told, and no longer a draft the next Add could
+         * find. All of it lands or none of it does, and the notice waits
+         * for the commit, so nothing is announced that did not happen.
+         */
+        $application = DB::transaction(function () use ($application, $creator, $data, $number) {
+            Submission::adopt($application, $creator, $number);
 
-        $from = $application->status;
-        $application->forceFill([
-            'phase' => Phase::POST_APPROVAL,
-            'status' => Status::POST_APPROVAL,
-            'post_approval_at' => $application->post_approval_at ?? now(),
-        ])->save();
-        Engine::record($application, CipEvent::ACTION_STATUS_CHANGED, $creator, [], $from, Status::POST_APPROVAL);
-        Engine::record($application, CipEvent::ACTION_POST_APPROVAL_ENTERED, $creator, []);
+            $from = $application->status;
+            $application->forceFill([
+                'phase' => Phase::POST_APPROVAL,
+                'status' => Status::POST_APPROVAL,
+                'post_approval_at' => $application->post_approval_at ?? now(),
+            ])->save();
+            Engine::record($application, CipEvent::ACTION_STATUS_CHANGED, $creator, [], $from, Status::POST_APPROVAL);
+            Engine::record($application, CipEvent::ACTION_POST_APPROVAL_ENTERED, $creator, []);
 
-        $application = PostApproval::prepare($application->fresh(), $creator);
-        if (self::deniedAtIntake($data)) {
-            $application = PostApproval::denyAtIntake($application, $creator);
-        } elseif (self::approvedAtIntake($data)) {
-            $application = PostApproval::approveAtIntake($application, $creator);
-        }
+            $application = PostApproval::prepare($application->fresh(), $creator);
+            if (self::deniedAtIntake($data)) {
+                $application = PostApproval::denyAtIntake($application, $creator, ...self::decisionAtIntake($data));
+            } elseif (self::approvedAtIntake($data)) {
+                $application = PostApproval::approveAtIntake($application, $creator, ...self::decisionAtIntake($data));
+            }
+
+            return $application;
+        });
+
         self::announcePostApprovalFiling($application, $creator, $data);
 
         if (Assignments::claimFilingOfficer($application, $creator)) {
@@ -1568,6 +1613,49 @@ class Intake
     private static function approvedAtIntake(array $data): bool
     {
         return ($data['outcome'] ?? '') === self::OUTCOME_APPROVED;
+    }
+
+    /**
+     * Is this filing recording the Unit's decision as it is added?
+     *
+     * Only a post-approval filing can: the answer means nothing on any
+     * other, and is not read there.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private static function decidesAtIntake(array $data, ?CipApplication $draft = null): bool
+    {
+        /*
+         * The lane the filing will take, read the way {@see fileDraft()}
+         * reads it: the phase the request names, and failing that the
+         * draft's own. Judged on the request alone, a draft filed with no
+         * phase in the body was a post-approval filing to everything that
+         * follows and not to this rule, and was decided with no letter.
+         */
+        $posted = (string) ($data['phase'] ?? '');
+        $phase = Phase::isValid($posted) ? $posted : (string) ($draft?->phase ?? '');
+
+        return $phase === Phase::POST_APPROVAL
+            && (self::approvedAtIntake($data) || self::deniedAtIntake($data));
+    }
+
+    /**
+     * The day, the note and the letter that came with that decision, in the
+     * order {@see PostApproval::approveAtIntake()} takes them.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array{0: ?Carbon, 1: string, 2: ?UploadedFile}
+     */
+    private static function decisionAtIntake(array $data): array
+    {
+        $day = $data[self::DECIDED_AT] ?? null;
+        $letter = $data[self::DECISION_LETTER] ?? null;
+
+        return [
+            $day ? Carbon::parse($day) : null,
+            trim((string) ($data[self::DECISION_NOTE] ?? '')),
+            $letter instanceof UploadedFile ? $letter : null,
+        ];
     }
 
     /**

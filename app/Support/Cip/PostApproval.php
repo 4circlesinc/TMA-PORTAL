@@ -5,6 +5,8 @@ namespace App\Support\Cip;
 use App\Models\CipApplication;
 use App\Models\CipEvent;
 use App\Models\User;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 
 /**
  * Entering the post-approval lane: folder tree, checklist, and carried
@@ -45,74 +47,88 @@ class PostApproval
      *
      * The file enters the lane the way every post-approval filing does, so
      * its folders and checklist exist, then lands on Denied with the
-     * decision and the day recorded, in one write. Not through the engine:
-     * the provider side files these too and holds no cip.decide, and the
-     * engine's own announce would send a Post-Approval notice the denial
-     * then contradicts. The caller announces Denied once, after the commit.
+     * decision, its day, its letter and its note recorded, in one write.
+     * Not through the engine: the provider side files these too and holds
+     * no cip.decide, and the engine's own announce would send a
+     * Post-Approval notice the denial then contradicts. The caller
+     * announces Denied once, after the commit.
      */
-    public static function denyAtIntake(CipApplication $application, User $actor): CipApplication
-    {
-        $from = $application->status;
-        $decidedAt = now();
-
-        $application->forceFill([
-            'status' => Status::POST_DENIED,
-            'decision' => Status::POST_DENIED,
-            'decided_at' => $decidedAt,
-        ])->save();
-
-        $meta = [
-            'decision' => Status::POST_DENIED,
-            'decidedAt' => $decidedAt->toDateString(),
-            'atIntake' => true,
-        ];
-        Engine::record($application, CipEvent::ACTION_STATUS_CHANGED, $actor, $meta, $from, Status::POST_DENIED);
-        Engine::record($application, CipEvent::ACTION_DECISION_RECORDED, $actor, $meta);
-
-        // This write goes round the engine, so the people on the file are
-        // told here: a file denied on arrival is denied for everyone on it.
-        PersonStatus::settle($application);
-
-        return $application->refresh();
+    public static function denyAtIntake(
+        CipApplication $application,
+        User $actor,
+        ?Carbon $decidedAt = null,
+        string $note = '',
+        ?UploadedFile $letter = null,
+    ): CipApplication {
+        return self::decideAtIntake($application, $actor, Status::POST_DENIED, $decidedAt, $note, $letter);
     }
 
     /**
      * A post-approval filing the Unit had already approved.
      *
-     * The twin of {@see denyAtIntake()}: the file enters the lane the way
-     * every post-approval filing does, then stands on Approved with the
-     * decision and the day recorded, in one write. Not through the engine
-     * for the same two reasons. The provider side files these too and holds
-     * no cip.decide; and {@see Decision::record()} asks for the decision
-     * letter, which a file being brought across from somewhere else may not
-     * have to hand. The letter can be added from the decision afterwards.
-     *
-     * Approved is the label a decided file collects its COR documents
-     * under, so nothing else changes: the checklist drives it from here
-     * exactly as it drives a file approved from the status menu. The caller
-     * announces Post-Approval and then Approved, after the commit.
+     * The twin of {@see denyAtIntake()}: the file enters the lane, then
+     * stands on Approved with the decision recorded. Approved is the label
+     * a decided file collects its COR documents under, so nothing else
+     * changes: the checklist drives it from here exactly as it drives a
+     * file approved from the status menu. The caller announces
+     * Post-Approval and then Approved, after the commit.
      */
-    public static function approveAtIntake(CipApplication $application, User $actor): CipApplication
-    {
+    public static function approveAtIntake(
+        CipApplication $application,
+        User $actor,
+        ?Carbon $decidedAt = null,
+        string $note = '',
+        ?UploadedFile $letter = null,
+    ): CipApplication {
+        return self::decideAtIntake($application, $actor, Status::POST_APPROVED, $decidedAt, $note, $letter);
+    }
+
+    /**
+     * Record at filing what {@see Decision::record()} records from the
+     * status menu: the outcome, the day it was made, the Unit's letter and
+     * the note that went with it.
+     *
+     * The letter is filed first, where every decision letter is filed, so
+     * the notice the caller sends afterwards carries it. Round the engine,
+     * for the reason given above, so the people on the file are settled
+     * here: each reads the outcome, or stands further along where their own
+     * papers put them.
+     */
+    private static function decideAtIntake(
+        CipApplication $application,
+        User $actor,
+        string $decision,
+        ?Carbon $decidedAt,
+        string $note,
+        ?UploadedFile $letter,
+    ): CipApplication {
         $from = $application->status;
-        $decidedAt = now();
+        $decidedAt ??= now();
+        $note = trim($note);
+
+        if ($letter !== null) {
+            DecisionLetter::store($application, $letter, $actor, $decision);
+            $application->refresh();
+        }
 
         $application->forceFill([
-            'status' => Status::POST_APPROVED,
-            'decision' => Status::POST_APPROVED,
+            'status' => $decision,
+            'decision' => $decision,
             'decided_at' => $decidedAt,
         ])->save();
 
         $meta = [
-            'decision' => Status::POST_APPROVED,
+            'decision' => $decision,
             'decidedAt' => $decidedAt->toDateString(),
             'atIntake' => true,
         ];
-        Engine::record($application, CipEvent::ACTION_STATUS_CHANGED, $actor, $meta, $from, Status::POST_APPROVED);
+        if ($note !== '') {
+            $meta['note'] = $note;
+        }
+
+        Engine::record($application, CipEvent::ACTION_STATUS_CHANGED, $actor, $meta, $from, $decision);
         Engine::record($application, CipEvent::ACTION_DECISION_RECORDED, $actor, $meta);
 
-        // Round the engine, so the people on the file are told here: each
-        // reads Approved, or further along where their own papers put them.
         PersonStatus::settle($application);
 
         return $application->refresh();
