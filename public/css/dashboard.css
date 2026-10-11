@@ -3858,6 +3858,7 @@
   --color-bg-input: rgba(255, 255, 255, 0.07);
   --color-bg-popup: rgba(40, 40, 42, 0.92);
   --color-bg-popup-glass: rgba(40, 40, 42, 0.85);
+  --color-bg-elevated: #2a2a2c;
   --color-1: color-mix(in srgb, var(--color-primary) 16%, #1c1c1c);
   --color-2: color-mix(in srgb, var(--color-primary-dark) 22%, #1c1c1c);
   --color-accent-bg: color-mix(in srgb, var(--color-primary) 16%, transparent);
@@ -31511,7 +31512,7 @@ button.tma-dash__header-popup-item:focus-visible {
   max-height: calc(100vh - 48px);
   display: flex;
   flex-direction: column;
-  background: var(--color-bg-elevated, var(--color-white));
+  background: var(--color-white);
   border: 1px solid var(--color-border-soft);
   border-radius: var(--radius-16);
   overflow: hidden;
@@ -31901,7 +31902,7 @@ button.tma-dash__header-popup-item:focus-visible {
   border: 1px solid var(--color-border-soft);
   border-radius: var(--radius-16);
   overflow: hidden;
-  background: var(--color-bg-elevated, var(--color-white));
+  background: var(--color-white);
 }
 
 .tma-dash__email-settings-signature-editor .tma-dash__email-compose-toolbar {
@@ -32075,7 +32076,7 @@ button.tma-dash__header-popup-item:focus-visible {
   max-height: min(80vh, 720px);
   padding: var(--space-20);
   border-radius: var(--radius-16);
-  background: var(--color-bg-elevated, var(--color-white));
+  background: var(--color-white);
   border: 1px solid var(--color-border-soft);
   display: flex;
   flex-direction: column;
@@ -33230,6 +33231,9 @@ button.tma-dash__header-popup-item:focus-visible {
   min-width: 26px;
   min-height: 26px;
   padding: 3px;
+  /* A button takes the system's black unless told otherwise, which only read
+     while this strip was white in both themes. */
+  color: var(--color-text-primary);
 }
 
 .tma-dash__messages-bubble-action--emoji {
@@ -33279,6 +33283,7 @@ button.tma-dash__header-popup-item:focus-visible {
   background: none;
   font: inherit;
   font-size: var(--text-size-14);
+  color: var(--color-text-primary);
   text-align: left;
   cursor: pointer;
 }
@@ -33289,6 +33294,12 @@ button.tma-dash__header-popup-item:focus-visible {
 
 .tma-dash__messages-message-menu-item--danger {
   color: var(--color-danger, #d92d20);
+}
+
+/* The light red sinks into the dark menu; this is the one the badges use. */
+.tma-dash[data-theme="dark"] .tma-dash__messages-message-menu-item--danger,
+:root[data-theme="dark"] .tma-dash__messages-message-menu-item--danger {
+  color: var(--color-red);
 }
 
 /* Target of a "jump to replied message" click. */

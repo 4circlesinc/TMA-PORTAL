@@ -2794,6 +2794,7 @@
   --color-hover: rgba(255, 255, 255, 0.08);
   --color-hover-deep: rgba(255, 255, 255, 0.12);
   --color-bg-card: #2a2a2c;
+  --color-bg-elevated: #2a2a2c;
   --color-overlay-4: rgba(255, 255, 255, 0.08);
   --color-overlay-10: rgba(255, 255, 255, 0.14);
   --color-overlay-40: rgba(255, 255, 255, 0.45);
