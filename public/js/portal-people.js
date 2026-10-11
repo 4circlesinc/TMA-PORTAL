@@ -120,6 +120,10 @@
         if (!snap || f.real || f.items.length) return;
         f.items = snap.items || [];
         f.extra = snap.extra || {};
+        // The home cards and the two create buttons are drawn from what this
+        // reader may do, which arrives with the same answer. Kept with it,
+        // or a warm start shows half the page and adds the rest a second on.
+        if (snap.caps && !f.real) state.caps = snap.caps;
         f.loaded = true;
         f.error = null;
         render();
@@ -136,7 +140,7 @@
         f.loading = false;
         f.real = true;
         if (window.TMAStore) {
-          window.TMAStore.put(snapKey, { items: f.items, extra: f.extra });
+          window.TMAStore.put(snapKey, { items: f.items, extra: f.extra, caps: (d && d.capabilities) || null });
         }
         render();
       })

@@ -417,19 +417,43 @@
          screen, so creating one doesn't paint its numbers and then immediately
          fetch and paint them a second time. */
       function load(repaint) {
+        /*
+         * The list as it was last read, while it is read again. The page used
+         * to hold a skeleton for the whole of that request every time it was
+         * opened. Only the list: an open report is asked for by itself.
+         */
+        var kept = false;
+        if (!payload && repaint !== false && !self.open && window.TMAStore && window.TMAStore.first) {
+          window.TMAStore.first('admin:reports', function () { return !payload; }, function (held) {
+            if (!held || payload) return;
+            payload = held;
+            kept = true;
+            paintList();
+          });
+        }
+
         return secApi('GET', '/admin/reports').then(function (r) {
           if (r.status === 403) { fail('Only administrators can open reporting.'); return null; }
           /* A failed request still answers with JSON, so parsing it and
              carrying on paints "no reports have been created yet" over what is
              actually a broken endpoint. Anything but a 200 is a failure. */
-          if (!r.ok) { fail('Couldn\'t load reports. Refresh to try again.'); return null; }
+          if (!r.ok) {
+            // A list already on screen from last time is better than a line
+            // saying it could not be fetched again.
+            if (!kept) fail('Couldn\'t load reports. Refresh to try again.');
+
+            return null;
+          }
           return r.json();
         }).then(function (d) {
           if (!d) return;
           payload = d;
+          if (window.TMAStore) {
+            try { window.TMAStore.put('admin:reports', d); } catch (e) { /* a cold start next time */ }
+          }
           if (repaint === false) return;
           self.open ? openReport(self.open) : paintList();
-        }).catch(function () { fail('Couldn\'t load reports. Refresh to try again.'); });
+        }).catch(function () { if (!kept) fail('Couldn\'t load reports. Refresh to try again.'); });
       }
 
       /* ── the two tabs ─────────────────────────────── */

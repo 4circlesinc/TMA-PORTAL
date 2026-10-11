@@ -3626,6 +3626,84 @@
     APP_TABLE.loadedKey = key;
   }
 
+  /* How long a held page is painted without being asked for again. */
+  var APP_TABLE_FRESH_MS = 60 * 1000;
+
+  /*
+   * Have the table's first page before anyone opens the page.
+   *
+   * The mailbox opens with its mail because its requests leave as the portal
+   * loads, long before Email is clicked. The applications table asked for its
+   * rows when it was opened, so the click was always followed by a skeleton
+   * and a wait. This is the same warm-up: once the shell is quiet (or at
+   * once, on a load that opens straight onto the table) the tab the reader
+   * left the table on is fetched and filed where the first paint looks, and
+   * kept in the store so a reload finds it too.
+   *
+   * Nothing here paints. If the table is already up, or already asking, it
+   * is left to its own load.
+   */
+  function warmApplicationTable() {
+    if (!window.TMABootCipReach) return;
+
+    var tab = loadListTab();
+    if (!onApplicationsTable({ listTab: tab, screen: 'list' })) return;
+    if (APP_TABLE.status || APP_TABLE.unreadFirst) return;
+    if (filterValues('bucket').length || filterValues('assignee').length || filterValues('provider').length) return;
+
+    var phase = phaseForListTab(tab);
+    var key = applicationTableKeyFor(phase, '', 1, '', '');
+    if (APP_TABLE.cache[key] || APP_TABLE.prefetching[key]) return;
+    if (APP_TABLE.loadedKey === key || APP_TABLE.loadingKey === key) return;
+
+    var gen = APP_TABLE.fetchGen;
+    APP_TABLE.prefetching[key] = true;
+
+    // The address ensureApplicationTable builds for a first draw, so a head
+    // start from the shell is taken here rather than asked for twice.
+    applicationListingRequest('/portal/cip/applications?perPage=150&page=1' +
+      (APP_TABLE.facetsLoaded ? '' : '&facets=1') +
+      (phase ? '&phase=' + encodeURIComponent(phase) : ''))
+      .then(function (json) {
+        if (APP_TABLE.fetchGen !== gen) return;
+        var page = {
+          rows: (json && json.applications) || [],
+          page: (json && json.page) || 1,
+          lastPage: (json && json.lastPage) || 1,
+          total: (json && json.total) || 0,
+          at: Date.now(),
+        };
+        APP_TABLE.cache[key] = page;
+        APP_TABLE.lanePages[phase || ''] = page.lastPage;
+        APP_TABLE.statuses = (json && json.statuses) || APP_TABLE.statuses;
+        if (json && json.personStatuses) APP_TABLE.personStatuses = json.personStatuses;
+        if (json && json.assignees) APP_TABLE.assignees = json.assignees;
+        if (json && json.providers) APP_TABLE.providers = json.providers;
+        if (json && json.phaseCounts) {
+          APP_TABLE.phaseCounts = json.phaseCounts;
+          APP_TABLE.facetsLoaded = true;
+        }
+        storeApplicationPage('cip:applications:v1:' + key, page);
+        // Opened while this was on its way: paint it, no second trip.
+        adoptPrefetchedApplicationPage(key, phase, page);
+      })
+      .catch(function () {})
+      .then(function () { delete APP_TABLE.prefetching[key]; });
+  }
+
+  /* Dropped while nobody was looking at it: fetched again now, so the next
+     visit opens on rows that are already current. One request however many
+     signals arrive together. */
+  var warmApplicationTableTimer = null;
+  function warmApplicationTableSoon() {
+    if (warmApplicationTableTimer) return;
+    warmApplicationTableTimer = setTimeout(function () {
+      warmApplicationTableTimer = null;
+      if (document.visibilityState === 'hidden') return;
+      warmApplicationTable();
+    }, 600);
+  }
+
   /*
    * Align APP_TABLE with the tab about to be painted.
    *
@@ -3653,6 +3731,22 @@
       applyCachedApplicationPage(held, lane, key);
       APP_TABLE.shownSlice = slice;
       APP_TABLE.quiet = false;
+
+      /*
+       * Fetched a while ago, most often by the warm-up that runs before the
+       * reader has opened this page at all. It is painted, which is what
+       * makes the page open with its rows, and then treated as the stale
+       * copy of this list that it is: let go of here, so the load that
+       * follows this paint reads it again and patches the answer over it.
+       * A live signal would have dropped it sooner, but a tab that sat in
+       * the background may not have been sent one.
+       */
+      if (held.at && (Date.now() - held.at) > APP_TABLE_FRESH_MS) {
+        delete APP_TABLE.cache[key];
+        APP_TABLE.loadedKey = null;
+        APP_TABLE.quiet = true;
+      }
+
       return;
     }
 
@@ -3736,6 +3830,7 @@
             page: (json && json.page) || 1,
             lastPage: (json && json.lastPage) || 1,
             total: (json && json.total) || 0,
+            at: Date.now(),
           };
           APP_TABLE.cache[key] = page;
           APP_TABLE.lanePages[phase || ''] = page.lastPage;
@@ -3902,6 +3997,9 @@
         APP_TABLE.lastPage = 1;
       }
       APP_TABLE.laneShown = lane;
+      // The copy kept from last time goes up while that answer is out, the
+      // same as when this function sends the request itself.
+      paintStoredApplicationPage(applicationStoreKey(state, key), key, lane, APP_TABLE.fetchGen, state, render);
       return;
     }
 
@@ -3969,6 +4067,7 @@
           page: (json && json.page) || 1,
           lastPage: (json && json.lastPage) || 1,
           total: (json && json.total) || 0,
+          at: Date.now(),
         };
         APP_TABLE.cache[key] = page;
         APP_TABLE.lanePages[lane || ''] = page.lastPage;
@@ -4056,6 +4155,7 @@
      */
     if (!(clientsMountState && onApplicationsTable(clientsMountState) && clientsViewShowing())) {
       APP_TABLE.shownSlice = null;
+      warmApplicationTableSoon();
     }
   }
 
@@ -18425,8 +18525,12 @@
     if (clientsLoaded) startClients();
     else if (window.TMABoot && window.TMABoot.deferUnless) {
       // The directory is 600 KB the Dashboard never shows. It loads when the
-      // Clients page is entered, or once the shell has gone quiet.
-      window.TMABoot.deferUnless(['clients'], loadClients);
+      // Clients page is entered, or once the shell has gone quiet. The table's
+      // own first page goes ahead of it: that is what the reader sees first.
+      window.TMABoot.deferUnless(['clients'], function () {
+        warmApplicationTable();
+        loadClients();
+      });
     } else {
       loadClients();
     }

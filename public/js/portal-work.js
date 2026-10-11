@@ -670,6 +670,29 @@
 
   /* ── loading ───────────────────────────────────── */
 
+  /*
+   * A list's last answer, kept under the address that was asked.
+   *
+   * Workflows and Signature requests each drew a skeleton and waited every
+   * time they were opened. The answer to a list's plain view (no search) is
+   * kept in the portal's store, and painted before the request that would
+   * have fetched it has answered; that request still goes, and replaces it.
+   * The address is the key, so a tab or a filter only ever opens on its own
+   * last answer.
+   */
+  function keptListKey(url) { return 'work:list:' + url; }
+
+  function keepList(url, res) {
+    if (!window.TMAStore) return;
+    try { window.TMAStore.put(keptListKey(url), res); } catch (e) { /* a cold start next time */ }
+  }
+
+  function paintKeptList(url, wanted, paint) {
+    if (!window.TMAStore || !window.TMAStore.first) return false;
+
+    return window.TMAStore.first(keptListKey(url), wanted, paint);
+  }
+
   function wfUrl(path, cursor) {
     var params = new URLSearchParams();
     // Comments use the intended tab, not wfActiveTab(): that helper falls
@@ -693,25 +716,46 @@
     opts = opts || {};
     var seq = ++wf.seq;
 
+    var path = wf.page === 'comments' ? '/workflows/comments'
+      : wf.page === 'updates' ? '/workflows/updates'
+        : '/workflows';
+    var url = wfUrl(path, opts.more ? wf.cursor : null);
+    var plain = !opts.more && !wf.search;
+    var kept = false;
+    // Whether this call put the kept copy up, whenever that happened.
+    var paintedKept = false;
+
     if (!opts.silent && !opts.more) {
       wf.loading = true;
       wf.error = null;
-      renderWorkflows();
+      // What this list held last time, before the skeleton has a chance.
+      if (plain) {
+        kept = paintKeptList(url, function () { return seq === wf.seq && wf.loading; }, function (held) {
+          if (!held || !held.items || seq !== wf.seq) return;
+          if (wf.page === 'comments') wf.comments = held.items;
+          else wf.items = held.items;
+          wf.cursor = held.nextCursor || null;
+          wf.counts = held.counts || wf.counts;
+          wf.canSeeAll = !!held.canSeeAll;
+          wf.loading = false;
+          wf.loaded = true;
+          paintedKept = true;
+          renderWorkflows();
+        });
+      }
+      if (!kept) renderWorkflows();
     }
     if (opts.more) {
       wf.loadingMore = true;
       renderWorkflows();
     }
 
-    var path = wf.page === 'comments' ? '/workflows/comments'
-      : wf.page === 'updates' ? '/workflows/updates'
-        : '/workflows';
-
-    return net().fetchJSON(wfUrl(path, opts.more ? wf.cursor : null))
+    return net().fetchJSON(url)
       .then(function (res) {
         if (seq !== wf.seq) return;
 
         var items = res.items || [];
+        if (plain) keepList(url, res);
 
         if (wf.page === 'comments') {
           wf.comments = opts.more ? wf.comments.concat(items) : items;
@@ -750,8 +794,11 @@
         wf.loadingMore = false;
         wf.loaded = true;
         // A live refresh that fails leaves the list the reader already has —
-        // erasing it would be worse than showing it a few seconds stale.
-        if (!opts.silent) wf.error = (err && err.message) || 'Could not load this list.';
+        // erasing it would be worse than showing it a few seconds stale. The
+        // same for a list opened on its kept copy.
+        if (!opts.silent && !paintedKept) {
+          wf.error = (err && err.message) || 'Could not load this list.';
+        }
         renderWorkflows();
       });
   }
@@ -1882,20 +1929,36 @@
   function loadSignatures(opts) {
     opts = opts || {};
     var seq = ++sig.searchSeq;
-    if (!opts.silent) {
-      sig.loading = true;
-      sig.error = null;
-      renderSignatures();
-    }
 
     var params = new URLSearchParams();
     if (sig.search) params.set('search', sig.search);
     if (sig.status !== 'all') params.set('status', sig.status);
     if (sig.adminView) params.set('scope', 'all');
+    var url = sigUrl('/?' + params.toString());
+    var plain = !sig.search;
+    // Whether this call put the kept copy up, whenever that happened.
+    var paintedKept = false;
 
-    return net().fetchJSON(sigUrl('/?' + params.toString()))
+    if (!opts.silent) {
+      sig.loading = true;
+      sig.error = null;
+      // What this list held last time, before the skeleton has a chance.
+      var kept = plain && paintKeptList(url, function () { return seq === sig.searchSeq && sig.loading; }, function (held) {
+        if (!held || !held.requests || seq !== sig.searchSeq) return;
+        sig.requests = held.requests;
+        sig.canAdminView = !!held.canAdminView;
+        sig.loading = false;
+        sig.loaded = true;
+        paintedKept = true;
+        renderSignatures();
+      });
+      if (!kept) renderSignatures();
+    }
+
+    return net().fetchJSON(url)
       .then(function (res) {
         if (seq !== sig.searchSeq) return;
+        if (plain) keepList(url, res);
         sig.requests = res.requests || [];
         sig.canAdminView = !!res.canAdminView;
         sig.loading = false;
@@ -1908,8 +1971,9 @@
         sig.loading = false;
         sig.loaded = true;
         // A silent refresh is a live update, not a request from the reader —
-        // a failed one leaves the list they have rather than erasing it.
-        if (!opts.silent) {
+        // a failed one leaves the list they have rather than erasing it. The
+        // same for a list opened on its kept copy.
+        if (!opts.silent && !paintedKept) {
           sig.error = (err && err.message) || 'Could not load signature requests.';
         }
         renderSignatures();

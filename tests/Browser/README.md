@@ -395,8 +395,11 @@ field placement and drawing, and computed CSS only exist in a browser.
   held back three seconds: rows first (about 400ms), answer second, and the
   answer arriving as an update to the same row elements. Also an application
   filed while the app was closed, a second tab painted from the store, and a
-  plain browser as the control, where the wait is the real one and nothing is
-  written to disk. The desktop is stood in for by the one flag the store
+  plain browser, which has no disk tier: there the copy is the tab's, so a
+  reload paints it, IndexedDB stays empty and the store's `clear()` (sign-out)
+  removes it; the same browser is then sent to the table from another page,
+  where the idle warm-up must already have fetched it. The desktop is stood in
+  for by the one flag the store
   reads, `window.TMADesktop.isDesktop`. Its last step pins where the request
   starts: PortalShell sends the first listing from `<head>`, so no more than
   `/me` may leave before it, it must be for the tab the reader left the table
@@ -406,6 +409,24 @@ field placement and drawing, and computed CSS only exist in a browser.
 
   ```sh
   TMA_DB="$DB" TMA_BASE_URL=http://127.0.0.1:8941 node tests/Browser/cip-table-first-paint.mjs
+  ```
+- **`warm-reload.mjs`** — which pages open with their data, and which open
+  on a skeleton. The mailbox was the one page that opened already filled,
+  because it kept its last page in `sessionStorage`; every other screen kept
+  its answer in `TMAStore`, which in a browser was memory only, so a reload
+  emptied them all. The store now has a tab tier, and this measures it page by
+  page, the same way for each and without knowing any page's markup: open it,
+  let it settle, reload with every `/portal`, `/admin` and `/me/…` request
+  held for 3.5s, and look at 1.5s. A warm page already reads like its settled
+  self (word overlap, taken from the same load) with no skeleton to speak of.
+  It prints a line per page and fails only on the ones named in
+  `TMA_WARM_MUST` (default: CIP Applications and the Dashboard). Email reads
+  cold on an account with no mailbox connected, which is a statement about the
+  account. Same server and seed as `cip-table-quiet.mjs`; it adds a feed post
+  and a calendar event of its own through the API.
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8941 node tests/Browser/warm-reload.mjs
   ```
 - **`cip-application-full.mjs`** — a whole family, filed and read back.
   `cip-intake.mjs` pins that the form is wired to the endpoint; this pins what

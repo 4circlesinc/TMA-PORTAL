@@ -807,8 +807,45 @@ if (state.filters.user) {
      *   and the rows they have ticked, and leaves a working table alone if the
      *   refresh fails, see the guards below.
      */
+    var USERS_STORE_KEY = 'users:directory';
+
+    function applyDirectory(j) {
+      if (j.accountTypes) ACCOUNT_TYPES = j.accountTypes;
+      if (j.avatarChoices) SYSTEM_AVATARS = j.avatarChoices;
+      state.rows = (j.users || []).map(realRow);
+      state.loadError = false;
+      state.loadErrorStatus = 0;
+      state.loadErrorMessage = '';
+      state.canManage = !!j.canManage;
+      state.orgRequiresAuthenticator = !!j.orgRequiresAuthenticator;
+      state.live = true;
+    }
+
+    /*
+     * Open on the directory as it was last read.
+     *
+     * The table used to wait for /admin/users behind a skeleton every time
+     * the page was opened or reloaded. What came back last time is kept in
+     * the store; it goes up at once and the read that follows corrects it,
+     * as a refresh nobody asked for, so a tick or a page turn made in that
+     * second is not undone.
+     */
+    function paintKeptDirectory() {
+      if (!window.TMAStore || !window.TMAStore.first) return;
+      window.TMAStore.first(USERS_STORE_KEY, function () { return !state.live; }, function (kept) {
+        if (!kept || !kept.users || state.live) return;
+        applyDirectory(kept);
+        state.keptPainted = true;
+        render();
+      });
+    }
+
     function loadRealUsers(silent) {
       state.booted = true;
+      // The first read behind a kept copy is a refresh, not an arrival. Only
+      // the first: a reload the reader asks for later starts the table over.
+      if (state.keptPainted && silent === undefined) silent = true;
+      state.keptPainted = false;
       return fetchDirectory().then(function (res) {
         if (!res.ok) {
           // A refresh nobody asked for must not replace a working directory
@@ -828,15 +865,12 @@ if (state.filters.user) {
           return;
         }
         return res.json().then(function (j) {
-          if (j.accountTypes) ACCOUNT_TYPES = j.accountTypes;
-          if (j.avatarChoices) SYSTEM_AVATARS = j.avatarChoices;
-          state.rows = (j.users || []).map(realRow);
-          state.loadError = false;
-          state.loadErrorStatus = 0;
-          state.loadErrorMessage = '';
-          state.canManage = !!j.canManage;
-          state.orgRequiresAuthenticator = !!j.orgRequiresAuthenticator;
-          state.live = true;
+          // Kept for the next time this page opens, so it opens on the
+          // directory rather than on a skeleton. See paintKeptDirectory.
+          if (window.TMAStore) {
+            try { window.TMAStore.put(USERS_STORE_KEY, j); } catch (e) { /* a cold start next time */ }
+          }
+          applyDirectory(j);
 
           if (silent) {
             // Someone else's change must not move this reader: staying on
@@ -882,6 +916,7 @@ if (state.filters.user) {
       if (!state.booted) return Promise.resolve();
       return loadRealUsers(silent);
     };
+    paintKeptDirectory();
     if (isOverview || !window.TMABoot || !window.TMABoot.deferUnless) {
       loadRealUsers();
     } else {

@@ -14,8 +14,11 @@ import { readFileSync } from 'node:fs';
  *
  * The listing is held back three seconds so "before the answer" is not a race
  * the test can win by luck. The desktop is stood in for by the one flag the
- * store reads (window.TMADesktop.isDesktop); a second, ordinary browser is the
- * control, because there nothing is kept on disk and the wait is real.
+ * store reads (window.TMADesktop.isDesktop). A second, ordinary browser has no
+ * disk tier: there the copy is the tab's (sessionStorage), so a reload paints
+ * it, IndexedDB stays empty, and signing out removes it. The same browser is
+ * then sent to the table from another page, where the warm-up that runs once
+ * the portal is quiet must already have fetched it.
  *
  * It also pins where the request starts. PortalShell sends the first listing
  * from <head>, so it is under way while the bundle loads rather than leaving
@@ -196,14 +199,19 @@ try {
   await app.screenshot({ path: 'tests/Browser/cip-table-first-paint.png', fullPage: false });
 
   // ── A browser: memory only, by the firm's decision. ───────────────────
-  step(5, 'In a browser nothing is kept between loads, so the wait is the real one');
+  // ── A browser: the tab keeps it, the disk does not. ───────────────────
+  step(5, 'In a browser a reload paints from the tab, and nothing is written to disk');
   const web = await browser.newContext({ viewport: { width: 1500, height: 900 }, storageState: await desktop.storageState() });
   await web.addInitScript(accept);
   const tab = await web.newPage();
-  await open(tab);
+  const cold = await open(tab);
+  check(cold.ms !== null && !cold.beforeAnswer, `a tab that has never seen the table waits for it (${cold.ms}ms)`);
   await tab.waitForTimeout(1500);
   const again = await open(tab);
-  check(again.ms !== null && !again.beforeAnswer, `the rows waited for the listing (${again.ms}ms)`);
+  check(again.beforeAnswer, `after that, a reload has the rows ${again.ms}ms in, with the listing still held for ${HOLD}ms`);
+  check(again.settled.kept === again.settled.rows, `and the answer is patched over them (${again.settled.kept}/${again.settled.rows})`);
+  const inTab = () => tab.evaluate(() => Object.keys(sessionStorage).filter(k => k.indexOf('tma.store.v1::') === 0).length);
+  check(await inTab() > 0, `kept in this tab's sessionStorage (${await inTab()} entries)`);
   const onDisk = await tab.evaluate(() => new Promise(resolve => {
     const req = indexedDB.open('tma-portal');
     req.onsuccess = () => {
@@ -216,6 +224,27 @@ try {
     req.onerror = () => resolve(-1);
   }));
   check(onDisk === 0, `and nothing about a client was written to the browser's disk (${onDisk} entries)`);
+
+  // Opened from another page, which is how the table is mostly reached: the
+  // warm-up that runs once the portal is quiet has already fetched it.
+  await tab.unroute('**/portal/cip/applications?**').catch(() => {});
+  await tab.evaluate(() => { Object.keys(sessionStorage).filter(k => k.indexOf('tma.store.v1::') === 0).forEach(k => sessionStorage.removeItem(k)); });
+  await tab.goto(`${BASE}/overview`, { waitUntil: 'domcontentloaded' });
+  await tab.waitForTimeout(6000);
+  let navAnswered = false;
+  await tab.route('**/portal/cip/applications?**', async route => {
+    await new Promise(r => setTimeout(r, HOLD));
+    navAnswered = true;
+    return route.continue().catch(() => {});
+  });
+  await tab.click('.tma-dash__nav-item[data-nav="clients"]');
+  let navRows = 0;
+  try {
+    await tab.waitForSelector('.tma-cip-table tbody tr[data-cip-open]', { timeout: HOLD - 800 });
+    navRows = await tab.locator('.tma-cip-table tbody tr[data-cip-open]').count();
+  } catch (e) { /* counted as zero */ }
+  check(navRows > 0 && !navAnswered, `clicked from Overview with an empty tab store: ${navRows} rows at once, nothing waited for`);
+  await tab.waitForTimeout(HOLD + 1500);
 
   // ── Either way: the request itself leaves first. ──────────────────────
   step(6, 'The first listing leaves from the page head, ahead of everything else');
@@ -237,6 +266,11 @@ try {
     + (saved === 'all_applications' ? '' : '&phase=' + saved);
   check(sent[at] === wanted, `for the tab the reader left it on (${saved}: ${sent[at]})`);
   check(sent.filter(u => u === sent[at]).length === 1, 'and the table took that answer instead of asking again');
+
+  step(7, 'Signing out leaves nothing in the tab');
+  check(await inTab() > 0, `there is something to remove (${await inTab()} entries)`);
+  await tab.evaluate(() => window.TMAStore.clear());
+  check(await inTab() === 0, `the store's clear(), which sign-out runs, empties it (${await inTab()} left)`);
 } catch (e) {
   failures.push(String(e).slice(0, 300));
 } finally {
