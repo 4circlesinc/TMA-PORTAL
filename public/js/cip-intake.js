@@ -199,6 +199,11 @@
        from the draft because a File cannot be re-rendered into an attribute
        the way a string can. */
     files: {},
+    /* Each photo as it was chosen, by the same path: what the adjuster cuts
+       from, so adjusting twice does not soften the picture twice. */
+    originals: {},
+    /* How each of those was last adjusted, so the dialog reopens there. */
+    adjusted: {},
     /* Chosen documents, a LIST per path, because a requirement can be
        answered with more than one scan. Kept apart from `files` so nothing
        has to ask whether the value at a path is one file or several. */
@@ -898,6 +903,12 @@
       ' data-cip-photo-remove="' + esc(path) + '" aria-label="Remove photo">' +
       '<img src="' + ICON + 'Xcircle.svg" alt="" class="tma-dash__clients-photo-remove-icon" width="20" height="20">' +
       '</button></div>' +
+      // Offered once there is a photo to adjust: straighten, turn, zoom and
+      // reposition it inside the 2×2 square it has to be.
+      (preview && window.TMAPhotoAdjuster
+        ? '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost tma-dash__clients-photo-adjust"' +
+          ' data-cip-photo-adjust="' + esc(path) + '">Adjust photo</button>'
+        : '') +
       '<p class="tma-dash__clients-photo-hint">2×2 inches, square, ' +
       PHOTO_MIN_PX + '×' + PHOTO_MIN_PX + ' pixels or larger.</p>' +
       fieldError(path) +
@@ -2157,6 +2168,8 @@
     clearDraft();
     state.draft = emptyDraft();
     state.files = {};
+    state.originals = {};
+    state.adjusted = {};
     state.previews = {};
     state.documents = {};
     state.filed = {};
@@ -2199,26 +2212,38 @@
           render(root);
           return;
         }
-        var kept = keepFile(file);
+        var kept = keepFile(file) || file;
         var reader = new FileReader();
         reader.onload = function (ev) {
-          measure(ev.target.result, function (why, dataUrl) {
+          measure(ev.target.result, function (why, dataUrl, kind) {
+            /*
+             * Big enough, but not square. That used to be refused, and a
+             * reader holding a perfectly good portrait had to leave the
+             * portal to crop it. The adjuster cuts the square out here; the
+             * photo already on the form stays until they use the new one.
+             */
+            if (kind === 'shape' && window.TMAPhotoAdjuster) {
+              input.value = '';
+              delete state.errors[path];
+              adjustPhoto(root, path, [kept], file.name, kept);
+
+              return;
+            }
             if (why) {
               state.errors[path] = why;
               delete state.files[path];
               delete state.previews[path];
+              delete state.originals[path];
               input.value = '';
-            } else {
-              state.files[path] = kept || file;
-              state.previews[path] = dataUrl;
-              delete state.errors[path];
-              // A chosen scan is a change to the draft like any other, and
-              // the ONLY change on a form somebody is filling from paper —
-              // without this the photo waited for the next keystroke to be
-              // saved, and a document chosen last was never saved at all.
-              touchDraft();
+              render(root);
+
+              return;
             }
-            render(root);
+            // Already 2×2: taken as it is, byte for byte, and remembered so
+            // an adjustment later is cut from the picture as it was chosen.
+            state.originals[path] = kept;
+            delete state.adjusted[path];
+            acceptPhoto(root, path, kept, dataUrl);
           });
         };
         reader.readAsDataURL(file);
@@ -2233,6 +2258,14 @@
       });
     });
 
+    MORPH.unwired(root, '[data-cip-photo-adjust]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var path = btn.getAttribute('data-cip-photo-adjust');
+        var held = state.originals[path] || state.files[path];
+        adjustPhoto(root, path, photoSources(path), held && held.name);
+      });
+    });
+
     MORPH.unwired(root, '[data-cip-photo-remove]').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
         e.preventDefault();
@@ -2241,6 +2274,8 @@
         delete state.files[path];
         delete state.previews[path];
         delete state.filed[path];
+        delete state.originals[path];
+        delete state.adjusted[path];
         render(root);
         touchDraft();
       });
@@ -2435,7 +2470,7 @@
   function moveDependentAssets(from, to) {
     var re = new RegExp('^dependents\\.' + from + '\\.');
     var prefix = 'dependents.' + to + '.';
-    [state.files, state.documents, state.previews, state.filed].forEach(function (bag) {
+    [state.files, state.documents, state.previews, state.filed, state.originals, state.adjusted].forEach(function (bag) {
       Object.keys(bag).forEach(function (path) {
         if (!re.test(path)) return;
         bag[path.replace(re, prefix)] = bag[path];
@@ -2446,7 +2481,7 @@
 
   function clearDependentAssets(index) {
     var re = new RegExp('^dependents\\.' + index + '\\.');
-    [state.files, state.documents, state.previews, state.filed, state.errors].forEach(function (bag) {
+    [state.files, state.documents, state.previews, state.filed, state.errors, state.originals, state.adjusted].forEach(function (bag) {
       Object.keys(bag).forEach(function (path) {
         if (re.test(path)) delete bag[path];
       });
@@ -2458,7 +2493,14 @@
     return window.CSS && window.CSS.escape ? window.CSS.escape(value) : value.replace(/\./g, '\\.');
   }
 
-  /* Square within a pixel or two, and big enough to print at 2 inches. */
+  /*
+   * Square within a pixel or two, and big enough to print at 2 inches.
+   *
+   * Too small is refused: no amount of adjusting adds detail. Not square is
+   * a different answer, `shape`, because that one the reader can put right
+   * here: the adjuster cuts the square out of it. With nothing to adjust
+   * with, it is refused in words as before.
+   */
   function measure(dataUrl, done) {
     var img = new Image();
     img.onload = function () {
@@ -2470,13 +2512,115 @@
         return;
       }
       if (Math.abs(w - h) / Math.max(w, h) > 0.02) {
-        done('A passport photo has to be square (2×2 inches), this one is ' + w + '×' + h + '.');
+        done('A passport photo has to be square (2×2 inches), this one is ' + w + '×' + h + '.',
+          dataUrl, 'shape');
         return;
       }
       done(null, dataUrl);
     };
     img.onerror = function () { done('That image could not be read. Try a JPG, PNG, or WebP.'); };
     img.src = dataUrl;
+  }
+
+  /* ── the photo adjuster ────────────────────────────────────────── */
+
+  /* A photo the form has accepted: kept, shown, and saved with the draft. */
+  function acceptPhoto(root, path, file, dataUrl) {
+    state.files[path] = keepFile(file) || file;
+    state.previews[path] = dataUrl;
+    delete state.errors[path];
+    // A chosen scan is a change to the draft like any other, and the ONLY
+    // change on a form somebody is filling from paper: without this the
+    // photo waited for the next keystroke to be saved.
+    touchDraft();
+    render(root);
+  }
+
+  /*
+   * The picture to adjust from, best first.
+   *
+   * The file as it was chosen, if this form still holds it: every
+   * adjustment is cut again from that, so turning a photo back shows what
+   * the last cut left out and nothing is softened by being saved twice.
+   * Failing that, what is on the form now. Failing that, the photo as it
+   * was filed, asked for by the person it belongs to, at the address that
+   * hands back the bytes themselves; the picture drawn in the control may
+   * be a thumbnail, or may come from storage a canvas is not allowed to
+   * read back. A list, tried in order, because the filed photo is not
+   * always where the first address looks.
+   */
+  function photoSources(path) {
+    if (state.originals[path]) return [state.originals[path]];
+    if (state.files[path]) return [state.files[path]];
+
+    var kept = blobFromDataUrl(state.previews[path]);
+    if (kept) return [kept];
+
+    var out = [];
+    var prefix = path.replace(/passportPhoto$/, '');
+    var person = prefix === ''
+      ? (state.record && state.record.applicant && state.record.applicant.id)
+      : state.draft[prefix + 'id'] ||
+        (prefix === 'sponsor.' && state.record && state.record.sponsor && state.record.sponsor.id);
+    if (person) out.push('/portal/cip/people/' + encodeURIComponent(person) + '/passport-photo');
+    // Last, the picture the control is drawing. It may be smaller than the
+    // one filed, but it is better than telling the reader there is none.
+    if (state.previews[path]) out.push(state.previews[path]);
+
+    return out;
+  }
+
+  /*
+   * Open the adjuster on a picture, and take what it hands back.
+   *
+   * What comes back is measured like any chosen photo before it is kept,
+   * so the rule has one author: a square the adjuster cut is still a
+   * square the form checked.
+   */
+  function adjustPhoto(root, path, sources, name, keepAsOriginal) {
+    sources = (sources || []).slice();
+    var source = sources.shift();
+    if (!window.TMAPhotoAdjuster || !source) return;
+
+    /*
+     * Where the last adjustment of this same picture stopped. Only when the
+     * picture being opened IS the one that adjustment was made on: the
+     * original this form still holds. A newly chosen file, or the filed
+     * copy (which is already the cut square), starts from the beginning.
+     */
+    var resumes = !keepAsOriginal && state.originals[path] && source === state.originals[path];
+
+    window.TMAPhotoAdjuster.open(source, {
+      name: name || 'passport-photo.jpg',
+      minPx: PHOTO_MIN_PX,
+      start: resumes ? state.adjusted[path] : null,
+      onDone: function (file, dataUrl, info) {
+        measure(dataUrl, function (why) {
+          if (why) {
+            state.errors[path] = why;
+            render(root);
+
+            return;
+          }
+          if (keepAsOriginal) state.originals[path] = keepAsOriginal;
+          if (state.originals[path] && (keepAsOriginal || resumes)) {
+            state.adjusted[path] = info && info.state;
+          } else {
+            delete state.adjusted[path];
+          }
+          acceptPhoto(root, path, file, dataUrl);
+        });
+      },
+      onError: function () {
+        // The next place the picture might be, before giving up on it.
+        if (sources.length) {
+          adjustPhoto(root, path, sources, name, keepAsOriginal);
+
+          return;
+        }
+        ui().toastError('That photo could not be opened. Choose it again.');
+      },
+    });
   }
 
   /* ── the wire ──────────────────────────────────────────────────── */
@@ -3961,6 +4105,11 @@
     state.root = root;
     state.draft = emptyDraft();
     state.files = {};
+    // Each photo as it was chosen, so an adjustment is cut from that and
+    // not from the last adjustment, and where that adjustment stopped, so
+    // the next one starts there. Memory only; gone with the form.
+    state.originals = {};
+    state.adjusted = {};
     state.previews = {};
     state.documents = {};
     state.filed = {};
@@ -4095,12 +4244,17 @@
    * the offline case, where the choice is that or nothing.
    *
    * Only the desktop keeps these across a restart; in a browser the store is
-   * memory alone, so what can be edited with no network is what was opened
-   * with one. That is the firm's decision about whose disk holds a client's
-   * details, not an oversight, see portal-store.js.
+   * memory and the tab, so what can be edited with no network is what was
+   * opened with one in this tab. That is the firm's decision about whose disk
+   * holds a client's details, not an oversight, see portal-store.js.
    */
   function held(key, url) {
     var ask = function () {
+      // Through the hub's reader where there is one: it is asking for this
+      // same record in the same instant, and the two then share one request.
+      // Still the network, still this moment's answer.
+      if (window.TMAClients && window.TMAClients.read) return window.TMAClients.read(url);
+
       return api('GET', url).then(function (res) {
         if (!res.ok) throw new Error(url);
 

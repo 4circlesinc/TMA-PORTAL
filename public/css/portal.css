@@ -1088,6 +1088,96 @@
   border-radius: var(--radius-16);
 }
 
+/* Adjust, under the photo it adjusts and no wider than it. */
+.tma-dash__clients-photo--passport .tma-dash__clients-photo-adjust {
+  align-self: flex-start;
+}
+
+/*
+ * Adjust photo (TMAPhotoAdjuster): the picture behind a fixed square.
+ *
+ * The portal's own modal, a little narrower than its default so the frame
+ * is the widest thing in it. The frame gives way on a short window rather
+ * than pushing Use photo off the bottom of the card.
+ */
+.tma-portal-modal__card.tma-photo-adjust__card {
+  width: min(440px, 100%);
+}
+
+.tma-photo-adjust {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.tma-photo-adjust__stage {
+  position: relative;
+  width: min(360px, 100%, 46vh);
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+  overflow: hidden;
+  /* Barely rounded: the photo that comes out has square corners, and a
+     frame that hid them would hide what is being cut. */
+  border-radius: var(--radius-4);
+  background: var(--color-bg-input);
+  outline: 1px solid var(--color-border-soft);
+  cursor: grab;
+  /* The drag and the pinch are this control's; the page must not scroll or
+     zoom under them. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tma-photo-adjust__stage.is-dragging { cursor: grabbing; }
+
+.tma-photo-adjust__stage:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.tma-photo-adjust__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.tma-photo-adjust__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+.tma-photo-adjust__label {
+  flex: 0 0 84px;
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-secondary);
+}
+
+.tma-photo-adjust__range {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--color-text-primary);
+}
+
+.tma-photo-adjust__value {
+  flex: 0 0 auto;
+  min-width: 44px; /* fixed so the slider does not jump as digits change */
+  text-align: right;
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.tma-photo-adjust__turns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.tma-photo-adjust .tma-portal-modal__foot { margin-top: 0; }
+
 /*
  * A document drop box.
  *

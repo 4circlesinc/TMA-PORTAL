@@ -1,6 +1,6 @@
 {
-  "css": "app-af2b3f5c944f.css",
-  "js": "app-5523da015c10.js",
+  "css": "app-d0f01a246f9e.css",
+  "js": "app-b7dbc7298e0a.js",
   "sources": {
     "css": [
       "tokens.css",
@@ -96,6 +96,7 @@
       "toast.js",
       "sync-toasts.js",
       "head-dropdown.js",
+      "photo-adjuster.js",
       "cip-intake.js",
       "portal-replica.js",
       "cip-sync.js",

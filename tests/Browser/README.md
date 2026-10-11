@@ -335,6 +335,25 @@ field placement and drawing, and computed CSS only exist in a browser.
   TMA_BASE_URL=http://127.0.0.1:8933 node tests/Browser/cip-draft-autosave.mjs
   ```
 
+- **`cip-photo-adjust.mjs`** — Adjust photo on the passport photo of Edit
+  application (`TMAPhotoAdjuster`, `public/js/photo-adjuster.js`). The
+  control used to take a 2×2 photo or refuse it; a portrait that was not
+  square got a sentence, and a slanted one was filed slanted. Pins that a
+  non-square photo opens the adjuster instead of an error; that straighten,
+  zoom and drag move the picture and Use photo hands back a square of at
+  least 600 px the server files; that Adjust photo reopens where the last
+  adjustment stopped and Escape changes nothing; that the filed photo opens
+  in it after a reload; that a ready 2×2 skips the dialog and one too small
+  is still refused in words; and that the grid is drawn lightly, read off
+  the frame's own pixels (a third line moves a pale background by a small
+  step, not by a solid rule). Draws its portraits on a canvas, so it ships
+  no fixture. Same serve as `cip-draft-autosave.mjs`; needs an administrator
+  and the uuid of a filed, unlocked application:
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8933 TMA_APP=<uuid> node tests/Browser/cip-photo-adjust.mjs
+  ```
+
 - **`cip-edit-reload.mjs`** — Edit application opened by its address, as a
   Reviewing Officer who did not file it. The in-app Edit button always
   loaded the record; a reload of `/citizenship-applications/applications/{id}/edit`
