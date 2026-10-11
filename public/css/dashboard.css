@@ -38390,9 +38390,27 @@ span.tma-dash__messages-profile-avatar {
 }
 
 .tma-dash__clients-checklist-row .tma-dash__clients-checklist-upload[aria-busy="true"] {
-  opacity: 0.45;
+  opacity: 1;
   pointer-events: none;
   cursor: progress;
+}
+
+/* While the file is on its way the arrow gives place to the search bar's
+   loader (the same element, .tma-dash__search-spinner, turning on the same
+   keyframes), so "working on it" looks the same here as it does there. */
+.tma-dash__clients-checklist-upload[aria-busy="true"] > img {
+  display: none;
+}
+
+.tma-dash__clients-checklist-upload[aria-busy="true"] > .tma-dash__search-spinner {
+  display: inline-flex;
+  cursor: progress;
+}
+
+/* The loader is black line work, which the dark theme has to lift the way it
+   lifts the phosphor icons, or it turns unseen on a dark line. */
+:where(.tma-dash[data-theme="dark"], :root[data-theme="dark"]) .tma-dash__clients-checklist-upload > .tma-dash__search-spinner img {
+  filter: invert(1) brightness(1.6);
 }
 
 /* On a line that carries it, the name gives up the slack it normally takes

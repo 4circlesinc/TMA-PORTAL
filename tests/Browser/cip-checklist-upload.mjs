@@ -131,6 +131,7 @@ try {
   await row.locator('.tma-dash__clients-checklist-label').hover();
   await page.waitForTimeout(250);
   check(await shown(button) === 1, 'hovering the name shows it');
+  check(await button.evaluate(b => getComputedStyle(b.querySelector('.tma-dash__search-spinner')).display === 'none'), 'with the arrow, and no loader, at rest');
   check((await button.getAttribute('title')) === 'Upload', 'it says Upload');
   const box = await button.boundingBox();
   check(!!box && box.width >= 24 && box.height >= 24, `and is big enough to press (${box ? Math.round(box.width) + '×' + Math.round(box.height) : 'no box'})`);
@@ -157,9 +158,26 @@ try {
     await route.continue();
   });
   await chooser.setFiles({ name: 'credentials.pdf', mimeType: 'application/pdf', buffer: tinyPdfBuffer() });
+  await page.mouse.move(700, 880);
   await page.waitForTimeout(400);
   check((await button.getAttribute('aria-busy')) === 'true' && await button.isDisabled(), 'the control is busy and disabled');
   check((await button.getAttribute('title')) === 'Uploading…', 'and says Uploading…');
+  // The search bar's loader, turning, in place of the arrow.
+  const loader = await button.evaluate((b) => {
+    const spin = b.querySelector('.tma-dash__search-spinner');
+    const arrow = b.querySelector(':scope > img');
+    const img = spin && spin.querySelector('img');
+
+    return {
+      spinnerShown: !!spin && getComputedStyle(spin).display !== 'none',
+      arrowHidden: !!arrow && getComputedStyle(arrow).display === 'none',
+      turning: !!img && getComputedStyle(img).animationName === 'tma-dash-spin',
+      visible: Number(getComputedStyle(b).opacity) === 1,
+    };
+  });
+  check(loader.spinnerShown && loader.arrowHidden, 'the arrow gives place to the loader');
+  check(loader.turning, 'which is turning, the way the search bar\'s does');
+  check(loader.visible, 'and stays in view though the pointer has moved off the line');
   // A second file offered to the same line while the first is on its way.
   await page.locator(`[data-cip-slot-file="${target.upload}"]`).setInputFiles({ name: 'again.pdf', mimeType: 'application/pdf', buffer: tinyPdfBuffer() });
   /*

@@ -9345,7 +9345,12 @@
       (sending ? ' disabled aria-busy="true"' : '') +
       ' title="' + esc(sending ? 'Uploading…' : verb) + '"' +
       ' aria-label="' + esc(verb + ' ' + (d.label || 'document')) + '">' +
-      '<img src="' + ICON + 'UploadSimple.svg" alt="" width="16" height="16"></button>';
+      '<img src="' + ICON + 'UploadSimple.svg" alt="" width="16" height="16">' +
+      // The search bar's own loader, in the same markup, so a file on its
+      // way reads the way a search under way does. Shown in place of the
+      // arrow while the control is busy; see the aria-busy rules.
+      '<span class="tma-dash__search-spinner" aria-hidden="true"><img src="' + ICONS.Loading16 + '" alt=""></span>' +
+      '</button>';
   }
 
   /*
