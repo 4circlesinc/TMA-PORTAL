@@ -2251,12 +2251,25 @@ class CipIntakeTest extends TestCase
         $application = CipApplication::where('uuid', $created['id'])->first();
 
         // Refused whole: the correction posted with it is not half-saved.
+        // The correction is one an officer MAY make (occupation is not; it
+        // is identity, and would be refused for that alone), so the only
+        // thing standing between this request and a 200 is the firm.
         $this->edit($this->user(Role::REVIEWING_OFFICER), $application, $this->edits($bluemina, [
-            'occupation' => 'Retired Engineer',
-        ]))->assertStatus(422);
+            'investmentType' => InvestmentType::NATIONAL_ECONOMIC_FUND,
+        ]))
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Only an administrator can change the service provider.');
         $this->assertSame((int) $galaxy->id, (int) $application->fresh()->provider_id);
         $this->assertSame("GAL{$yy}-00001", $application->fresh()->internal_number);
-        $this->assertSame('Engineer', $application->fresh()->people()->first()->occupation);
+        $this->assertSame(InvestmentType::REAL_ESTATE, $application->fresh()->investment_type);
+
+        // What the form really posts when the firm was not touched: no firm
+        // at all. An officer's ordinary correction goes through.
+        $untouched = $this->edits($galaxy, ['investmentType' => InvestmentType::NATIONAL_ECONOMIC_FUND]);
+        unset($untouched['providerId']);
+        $this->edit($this->user(Role::REVIEWING_OFFICER), $application, $untouched)->assertOk();
+        $this->assertSame(InvestmentType::NATIONAL_ECONOMIC_FUND, $application->fresh()->investment_type);
+        $this->assertSame((int) $galaxy->id, (int) $application->fresh()->provider_id);
 
         // Sending the firm it already has is not a change and needs no right.
         $this->edit($this->user(Role::REVIEWING_OFFICER), $application, $this->edits($galaxy))
@@ -2266,7 +2279,8 @@ class CipIntakeTest extends TestCase
         // A firm taken off the register is refused before anything is written.
         $bluemina->forceFill(['active' => false])->save();
         $this->edit($admin, $application, $this->edits($bluemina, ['occupation' => 'Retired Engineer']))
-            ->assertStatus(422);
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'That service provider is not active.');
         $this->assertSame((int) $galaxy->id, (int) $application->fresh()->provider_id);
         $this->assertSame('Engineer', $application->fresh()->people()->first()->occupation);
     }

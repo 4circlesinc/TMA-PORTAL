@@ -322,7 +322,7 @@ class ClientsController extends Controller
             $data['companyId'] = $client->companyRecord?->uid;
         }
 
-        $this->refuseApplicantReferralChange($client, $data);
+        $data = $this->keepApplicantReferral($client, $data);
 
         $client->fill($this->columns($uid, $data, $client->creator));
         $client->save();
@@ -493,40 +493,53 @@ class ClientsController extends Controller
      * application writes that firm back here. A change made on this form
      * instead used to be accepted, opened the client's folder to the new
      * firm's contacts in the meantime, left the application and its number
-     * exactly where they were, and was then silently undone. Refusing it
-     * says where the change belongs.
+     * exactly where they were, and was then silently undone.
      *
-     * Only a CHANGE is refused. The form posts the referral it was given on
-     * every save, so it is compared as the form saw it: a referrer that has
-     * since been deleted reads as "No referral" on both sides, and editing
-     * a name is never turned away over a referral nobody touched.
+     * So for a client who holds an application this form does not write
+     * the referral at all. A post that names a DIFFERENT firm, or Private
+     * where the client is not, is somebody trying to change it here and is
+     * told where the change belongs. Anything else keeps what is stored,
+     * and that includes "No referral": the form can only offer firms on the
+     * reader's own company list, so an officer assigned to the applicant
+     * but not to the firm that now holds the file posts "none" on every
+     * save without having touched the control. Refusing that turned away
+     * a corrected phone number; accepting it as written would have wiped
+     * the referral. It is neither: the referral was not this form's to say.
+     *
+     * Answers the data to save, with the referral put back as stored.
      *
      * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
      */
-    private function refuseApplicantReferralChange(Client $client, array $data): void
+    private function keepApplicantReferral(Client $client, array $data): array
     {
+        if (! CipApplication::query()->where('client_id', $client->id)->exists()) {
+            return $data;
+        }
+
         $posted = $this->resolveReferral($data);
 
         $referrer = $client->referral_type === Client::REFERRAL_COMPANY && $client->referred_by_company_id
             ? Company::find($client->referred_by_company_id)
             : null;
-        $shown = match (true) {
-            $referrer !== null => ['type' => Client::REFERRAL_COMPANY, 'company_id' => $referrer->id],
-            $client->referral_type === Client::REFERRAL_PRIVATE => ['type' => Client::REFERRAL_PRIVATE, 'company_id' => null],
-            default => ['type' => Client::REFERRAL_NONE, 'company_id' => null],
-        };
+        $private = $referrer === null && $client->referral_type === Client::REFERRAL_PRIVATE;
 
-        if ($posted['type'] === $shown['type'] && (int) $posted['company_id'] === (int) $shown['company_id']) {
-            return;
+        $namesAnotherFirm = $posted['type'] === Client::REFERRAL_COMPANY
+            && (int) $posted['company_id'] !== (int) ($referrer?->id ?? 0);
+        $namesPrivate = $posted['type'] === Client::REFERRAL_PRIVATE && ! $private;
+
+        if ($namesAnotherFirm || $namesPrivate) {
+            throw ValidationException::withMessages([
+                'referralType' => 'Change the service provider on the application; Referred by follows it.',
+            ]);
         }
 
-        if (! CipApplication::query()->where('client_id', $client->id)->exists()) {
-            return;
-        }
+        $data['referralType'] = $referrer !== null
+            ? Client::REFERRAL_COMPANY
+            : ($private ? Client::REFERRAL_PRIVATE : Client::REFERRAL_NONE);
+        $data['referredByCompanyId'] = $referrer?->uid;
 
-        throw ValidationException::withMessages([
-            'referralType' => 'Change the service provider on the application; Referred by follows it.',
-        ]);
+        return $data;
     }
 
     /**

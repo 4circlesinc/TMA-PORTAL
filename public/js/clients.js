@@ -6608,16 +6608,29 @@
    * select, disabled: the save reads its value like any other, so nothing
    * about the referral is posted differently.
    */
-  function renderReferralSelect(draft, locked) {
+  function renderReferralSelect(draft, locked, referrerLabel) {
     var selected = draft.referralType === 'company' && draft.referredByCompanyId
       ? 'company:' + draft.referredByCompanyId
       : (draft.referralType || 'none');
 
+    var known = false;
     var companyOpts = COMPANIES.map(function (c) {
       var value = 'company:' + c.id;
+      if (value === selected) known = true;
       return '<option value="' + esc(value) + '"' + (value === selected ? ' selected' : '') + '>' +
         esc(c.name) + '</option>';
     }).join('');
+    /*
+     * The referrer can be a firm outside this reader's own company list (an
+     * officer assigned to the applicant but not to the firm that now holds
+     * the file), or the list may not have arrived yet. With no option for
+     * it the control fell back to "No referral", showed that, and posted
+     * it: an edit that never touched the referral read as clearing it.
+     */
+    if (!known && selected.indexOf('company:') === 0) {
+      companyOpts = '<option value="' + esc(selected) + '" selected>' +
+        esc(referrerLabel || 'Service provider') + '</option>' + companyOpts;
+    }
 
     return (
       '<label class="tma-dash__clients-form-field">' +
@@ -6774,7 +6787,7 @@
         'Classification',
         '<div class="tma-dash__clients-form-grid">' +
         renderClientTypeSelect(draft) +
-        renderReferralSelect(draft, !!opts.referralLocked) +
+        renderReferralSelect(draft, !!opts.referralLocked, opts.referralLabel) +
         '</div>'
       ) +
       renderFormSection(
@@ -6849,6 +6862,8 @@
       toolbar +
       renderContactForm(draft, {
         referralLocked: !!(state.editing && state.selectedId && isCipApplicant(state.selectedId)),
+        // The name the server already gave this reader for the referrer.
+        referralLabel: state.editing && state.selectedId ? clientReferralLabel(state.selectedId) : '',
       }) +
       '</div></div>'
     );
@@ -11448,13 +11463,21 @@
     draft.clientType = typeSel ? typeSel.value : 'private';
 
     var referralSel = root.querySelector('[data-clients-referral]');
-    var referral = referralSel ? referralSel.value : 'none';
-    if (referral.indexOf('company:') === 0) {
-      draft.referralType = 'company';
-      draft.referredByCompanyId = referral.slice('company:'.length);
-    } else {
-      draft.referralType = referral === 'private' ? 'private' : 'none';
-      draft.referredByCompanyId = '';
+    /*
+     * A locked control is not an answer. For a client who holds an
+     * application the referral is shown, not asked, so what the draft was
+     * loaded with goes back as it came rather than whatever the disabled
+     * select happens to be resting on.
+     */
+    if (referralSel && !referralSel.disabled) {
+      var referral = referralSel.value;
+      if (referral.indexOf('company:') === 0) {
+        draft.referralType = 'company';
+        draft.referredByCompanyId = referral.slice('company:'.length);
+      } else {
+        draft.referralType = referral === 'private' ? 'private' : 'none';
+        draft.referredByCompanyId = '';
+      }
     }
 
     var companySel = root.querySelector('[data-clients-company-id]');

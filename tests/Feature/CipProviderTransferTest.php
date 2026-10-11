@@ -16,6 +16,8 @@ use App\Support\Cip\Applications;
 use App\Support\Cip\Engine;
 use App\Support\Cip\FolderAccess;
 use App\Support\Cip\Phase;
+use App\Support\Cip\ProviderTransfer;
+use App\Support\Cip\Status;
 use App\Support\Cip\Timeline;
 use App\Support\Clients\ClientDirectory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -632,6 +634,147 @@ class CipProviderTransferTest extends TestCase
     }
 
     /**
+     * A firm with no company behind it still takes the file away from the
+     * firm that had it.
+     *
+     * Private Clients has no company by design, and neither does a firm
+     * born from a library folder. The hub referral used to be rewritten
+     * only when the destination had a company to name, and folder reach is
+     * read from that referral, so the firm that lost the file went on
+     * opening the client's papers as an editor while the dialog said it
+     * "loses access".
+     */
+    public function test_a_move_to_a_firm_with_no_company_cuts_the_outgoing_firm_off(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'admin@example.com');
+        [$galaxy, $galaxyCompany, $galaxyContact, $galaxyFolder] = $this->firm('GAL', 'Galaxy', $admin);
+        $private = CipProvider::create(['name' => 'Private Clients', 'code' => 'PRI', 'active' => true]);
+        [$application, $client] = $this->filed($admin, $galaxy, $galaxyFolder);
+
+        FolderAccess::forget();
+        $this->assertContains((int) $client->id, FolderAccess::clientIdsFor($galaxyContact));
+        $this->assertSame($galaxyCompany->id, $client->referred_by_company_id);
+
+        $this->transfer($admin, $application, $private)
+            ->assertOk()
+            ->assertJsonPath('application.internalNumber', 'PRI'.$this->yy().'-00001');
+
+        $client->refresh();
+        $this->assertSame(Client::REFERRAL_PRIVATE, $client->referral_type);
+        $this->assertNull($client->referred_by_company_id);
+
+        FolderAccess::forget();
+        $this->assertNotContains((int) $client->id, FolderAccess::clientIdsFor($galaxyContact));
+    }
+
+    /**
+     * One move, however many times it is asked for.
+     *
+     * A double click, or the dialog racing the edit form: the second
+     * request arrives holding a copy of the row from before the first one
+     * landed. It must find the application already there and do nothing,
+     * not mint a second number and write a second audit row.
+     */
+    public function test_moving_twice_with_a_stale_copy_moves_once(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'admin@example.com');
+        [$galaxy, , , $galaxyFolder] = $this->firm('GAL', 'Galaxy', $admin);
+        [$igraphix] = $this->firm('IGA', 'iGraphix', $admin);
+        [$application] = $this->filed($admin, $galaxy, $galaxyFolder);
+        $stale = $application->fresh();
+
+        $this->assertNotNull(ProviderTransfer::rehome($application, $igraphix, $admin));
+        $this->assertNull(ProviderTransfer::rehome($stale, $igraphix, $admin));
+
+        $this->assertSame('IGA'.$this->yy().'-00001', $application->fresh()->internal_number);
+        $this->assertSame(1, $application->events()->where('action', CipEvent::ACTION_PROVIDER_TRANSFERRED)->count());
+        $this->assertSame(1, (int) DB::table('cip_counters')->where('provider_id', $igraphix->id)->value('last_sequence'));
+    }
+
+    /** A condition handed to the move is judged on the row as it stands, not on the caller's copy. */
+    public function test_a_move_conditional_on_the_row_is_refused_when_the_row_has_moved_on(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'admin@example.com');
+        [$galaxy, , , $galaxyFolder] = $this->firm('GAL', 'Galaxy', $admin);
+        [$igraphix] = $this->firm('IGA', 'iGraphix', $admin);
+        [$application] = $this->filed($admin, $galaxy, $galaxyFolder);
+
+        $moved = ProviderTransfer::rehome(
+            $application, $igraphix, $admin, [],
+            fn (CipApplication $locked) => $locked->status === Status::DRAFT,
+        );
+
+        $this->assertNull($moved, 'a filed application is not a draft, whatever the caller believed');
+        $this->assertSame($galaxy->id, $application->fresh()->provider_id);
+        $this->assertSame(0, DB::table('cip_counters')->where('provider_id', $igraphix->id)->count());
+    }
+
+    /**
+     * A move the library refuses is refused whole.
+     *
+     * The firm, the number and the counter are written before the folder is
+     * moved, in the same transaction, so a folder that cannot go (here, a
+     * destination that sits inside the folder being moved) takes all three
+     * back with it. No number is spent at a firm the file never reached.
+     */
+    public function test_a_refused_folder_move_takes_the_firm_and_the_number_back_with_it(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'admin@example.com');
+        [$galaxy, $galaxyCompany, , $galaxyFolder] = $this->firm('GAL', 'Galaxy', $admin);
+        [$igraphix, , , $igaFolder] = $this->firm('IGA', 'iGraphix', $admin);
+        [$application, $client, $folder] = $this->filed($admin, $galaxy, $galaxyFolder);
+
+        // iGraphix's drawer is inside the client's own folder: moving the
+        // client folder there would put it inside itself.
+        $igaFolder->forceFill(['parent_id' => $folder->id])->save();
+
+        $this->transfer($admin, $application, $igraphix)->assertStatus(422);
+
+        $this->assertSame($galaxy->id, $application->fresh()->provider_id);
+        $this->assertSame('GAL'.$this->yy().'-00001', $application->fresh()->internal_number);
+        $this->assertSame($galaxyCompany->id, $client->fresh()->referred_by_company_id);
+        $this->assertSame($galaxyFolder->id, $folder->fresh()->parent_id);
+        $this->assertSame(0, DB::table('cip_counters')->where('provider_id', $igraphix->id)->count());
+        $this->assertFalse($application->events()->where('action', CipEvent::ACTION_PROVIDER_TRANSFERRED)->exists());
+    }
+
+    /**
+     * The number the form showed an Add-On is the number it gets.
+     *
+     * A family moves together and each lane mints in the order the rows are
+     * walked. Walked parent-first, the second of two Add-Ons was shown the
+     * lane's next number and then watched its elder sibling take it. The
+     * application the reader is moving goes first.
+     */
+    public function test_a_second_add_on_gets_the_number_the_form_showed_it(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'admin@example.com');
+        [$galaxy, , , $galaxyFolder] = $this->firm('GAL', 'Galaxy', $admin);
+        [$igraphix] = $this->firm('IGA', 'iGraphix', $admin);
+        [$parent] = $this->filed($admin, $galaxy, $galaxyFolder);
+        $yy = $this->yy();
+
+        $addOns = collect([1, 2])->map(function () use ($galaxy, $admin, $parent) {
+            $addOn = Applications::create($galaxy, $admin, ['phase' => Phase::ADD_ON]);
+            $addOn->forceFill(['parent_application_id' => $parent->id])->save();
+
+            return $addOn->fresh();
+        });
+        [$elder, $second] = $addOns->all();
+
+        $shown = $this->actingAs($admin)->getJson(
+            '/portal/cip/applications/number-preview?providerId='.$igraphix->uuid.'&application='.$second->uuid
+        )->assertOk()->json('number');
+        $this->assertSame("IGA-AO-{$yy}-00001", $shown);
+
+        $this->transfer($admin, $second, $igraphix)->assertOk()->assertJsonCount(3, 'moved');
+
+        $this->assertSame($shown, $second->fresh()->internal_number);
+        $this->assertSame("IGA-AO-{$yy}-00002", $elder->fresh()->internal_number);
+        $this->assertSame("IGA{$yy}-00001", $parent->fresh()->internal_number);
+    }
+
+    /**
      * The files moved before numbers followed the firm: listed, then
      * numbered again, once, by the repair. A file that a register merge
      * moved has no transfer in its trail and is left exactly as it is.
@@ -656,23 +799,44 @@ class CipProviderTransferTest extends TestCase
         $merged->forceFill(['provider_id' => $igraphix->id])->save();
         $mergedNumber = $merged->internal_number;
 
+        // What the old parent link left: an Add-On opened under Galaxy,
+        // then linked to a main application at iGraphix. The firm was
+        // written, with no audit row and no new number.
+        $main = Applications::create($igraphix, $admin);
+        $followed = Applications::create($galaxy, $admin, ['phase' => Phase::ADD_ON]);
+        $followed->forceFill(['provider_id' => $igraphix->id, 'parent_application_id' => $main->id])->save();
+        $this->assertSame('GAL-AO-'.$this->yy().'-00001', $followed->internal_number);
+
+        // And a merged family's Add-On, which wears a code no longer on the
+        // register and keeps it.
+        $retired = CipProvider::create(['name' => 'Old Row', 'code' => 'OLD', 'active' => true]);
+        $mergedParent = Applications::create($retired, $admin);
+        $mergedAddOn = Applications::create($retired, $admin, ['phase' => Phase::ADD_ON]);
+        $mergedParent->forceFill(['provider_id' => $igraphix->id])->save();
+        $mergedAddOn->forceFill(['provider_id' => $igraphix->id, 'parent_application_id' => $mergedParent->id])->save();
+        $retired->delete();
+
         $this->artisan('cip:remint-transferred')
-            ->expectsOutputToContain('1 application(s) would be numbered again')
+            ->expectsOutputToContain('2 application(s) would be numbered again')
             ->assertSuccessful();
         $this->assertSame('GAL'.$this->yy().'-00001', $moved->fresh()->internal_number);
 
         $this->artisan('cip:remint-transferred', ['--apply' => true])
-            ->expectsOutputToContain('1 application(s) numbered again')
+            ->expectsOutputToContain('2 application(s) numbered again')
             ->assertSuccessful();
 
-        $this->assertSame('IGA'.$this->yy().'-00001', $moved->fresh()->internal_number);
+        // iGraphix had minted one family number of its own (the Add-On's
+        // main application), so the moved file takes the next.
+        $this->assertSame('IGA'.$this->yy().'-00002', $moved->fresh()->internal_number);
+        $this->assertSame('IGA-AO-'.$this->yy().'-00001', $followed->fresh()->internal_number);
         $this->assertSame($mergedNumber, $merged->fresh()->internal_number);
+        $this->assertSame('OLD-AO-'.$this->yy().'-00001', $mergedAddOn->fresh()->internal_number);
 
         $event = $moved->events()->where('action', CipEvent::ACTION_RENUMBERED)->sole();
         $this->assertNull($event->actor_id);
         $this->assertSame('GAL'.$this->yy().'-00001', $event->meta['previousInternalNumber']);
         $this->assertContains(
-            'the system changed the application number from GAL'.$this->yy().'-00001 to IGA'.$this->yy().'-00001',
+            'the system changed the application number from GAL'.$this->yy().'-00001 to IGA'.$this->yy().'-00002',
             array_map('lcfirst', array_column(Timeline::for($moved->fresh(), $admin), 'what')),
         );
 

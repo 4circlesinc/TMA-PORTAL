@@ -36,10 +36,14 @@ use Illuminate\Validation\ValidationException;
  * was already sent citing it is history and is not rewritten. The Unit's CIP
  * number is a different thing and never moves with the firm.
  *
- * {@see rehome} is the one writer of an application's firm after creation.
- * The administrator's transfer, a draft whose form names another firm, and
- * an Add-On adopting its parent's firm all come through it, so the firm, the
+ * {@see rehome} is the one writer when an application changes firm. The
+ * administrator's transfer, a draft whose form names another firm, and an
+ * Add-On adopting its parent's firm all come through it, so the firm, the
  * number, the hub referral, the folder and the audit row cannot drift apart.
+ * Two writers of provider_id are deliberately not it, because neither is a
+ * change of firm: {@see ProviderMerge}, which joins two register rows of
+ * one firm and keeps every number, and the fallback in
+ * {@see Intake::adoptParentFirm} for a parent whose firm is off the register.
  */
 final class ProviderTransfer
 {
@@ -85,7 +89,18 @@ final class ProviderTransfer
             ]);
         }
 
-        $family = self::family($application);
+        /*
+         * The application the reader is moving goes first, then the rest of
+         * its family. Each lane mints in the order the rows are walked, and
+         * the form has already shown this application the next number in
+         * its lane ({@see Applications::preview}): walked parent-first, a
+         * second Add-On was promised a number its elder sibling then took.
+         */
+        $family = collect([$application])
+            ->concat(self::family($application))
+            ->unique('id')
+            ->values()
+            ->all();
 
         // Notify both firms' contacts: the leavers lose the file, the arrivals
         // gain it. Collected before the write so the old provider_id is still
@@ -138,10 +153,13 @@ final class ProviderTransfer
      * firms and both numbers. Answers null when the application is already
      * there, so a double submit or two doors racing mint nothing twice.
      *
-     * No permission is asked here: who may move a filed application is
-     * {@see transfer}'s question, and the other callers are moving a file
-     * that is still being typed. `$meta` is added to the audit row, for a
-     * caller that has a reason worth keeping.
+     * No permission is asked here; each door asks its own. {@see transfer}
+     * wants an administrator. A draft follows its form only while it is
+     * still a draft the reader can reach, and an Add-On that has been filed
+     * follows a new parent to another firm only for an administrator
+     * ({@see Intake::followFormProvider}, {@see Intake::linkAddOnParent}).
+     * `$when` is a last condition judged on the locked row, and `$meta` is
+     * added to the audit row, for a caller that has a reason worth keeping.
      *
      * Opens its own transaction, so it is safe alone and nests inside a
      * caller's. A refused folder move rolls the firm, the number and the
@@ -154,8 +172,9 @@ final class ProviderTransfer
         CipProvider $to,
         ?User $actor,
         array $meta = [],
+        ?\Closure $when = null,
     ): ?CipApplication {
-        return DB::transaction(function () use ($application, $to, $actor, $meta) {
+        return DB::transaction(function () use ($application, $to, $actor, $meta, $when) {
             $member = CipApplication::query()
                 ->whereKey($application->id)
                 ->lockForUpdate()
@@ -166,6 +185,18 @@ final class ProviderTransfer
             }
 
             $member->loadMissing(['provider', 'client.folder']);
+
+            /*
+             * The caller's condition, asked of the row as it stands NOW.
+             * A caller that checked "still a draft" or "still with the firm
+             * my form thinks it is with" on the copy it was handed has
+             * checked the past: another request may have filed or moved the
+             * application since. Under the lock is the only place the
+             * answer is true for the write that follows.
+             */
+            if ($when !== null && ! $when($member)) {
+                return null;
+            }
 
             $from = $member->provider;
             $previousNumber = (string) $member->internal_number;
@@ -247,6 +278,18 @@ final class ProviderTransfer
         if ($to->company_id) {
             $patch['referral_type'] = Client::REFERRAL_COMPANY;
             $patch['referred_by_company_id'] = $to->company_id;
+        } else {
+            /*
+             * A firm with no company behind it: Private Clients by design,
+             * and the ones born from a library folder. There is nobody to
+             * name as the referrer, but the outgoing firm is no longer it,
+             * and folder reach is read from this very column
+             * ({@see FolderAccess}): left alone, the firm that lost the
+             * file went on opening the client's papers as an editor. The
+             * pair {@see Tree::client} writes for such a firm at creation.
+             */
+            $patch['referral_type'] = Client::REFERRAL_PRIVATE;
+            $patch['referred_by_company_id'] = null;
         }
 
         // Drop mistaken membership if a past transfer or fixture left the

@@ -319,10 +319,10 @@ class Intake
                 /*
                  * The firm, an administrator's to change on a filed
                  * application. Optional and judged in the controller: the
-                 * form sends the provider back whether or not it moved, and
-                 * only a different one is a transfer. The firm's own
-                 * application number is deliberately absent: it is
-                 * generated, so one posted here is not read at all.
+                 * form sends it only when the reader picked another one,
+                 * and a firm that differs from the file's is a transfer.
+                 * The firm's own application number is deliberately absent:
+                 * it is generated, so one posted here is not read at all.
                  */
                 'providerId' => ['nullable', 'string'],
             ] : [
@@ -359,6 +359,9 @@ class Intake
                 // The draft this filing completes, when it was reopened from
                 // the table rather than typed in one sitting.
                 'draftId' => ['nullable', 'string', 'max:64'],
+                // The firm the form believes that draft is with: a draft
+                // follows the select only when this is true of the row.
+                'providerWas' => ['nullable', 'string', 'max:64'],
             ],
             self::personRules(),
             self::mainApplicantDocumentRules($draft, $editing),
@@ -392,6 +395,8 @@ class Intake
             'providerId' => ['required', 'string'],
             'phase' => ['nullable', 'string', Rule::in(Phase::ALL)],
             'submissionId' => ['nullable', 'string', 'max:64'],
+            // See followFormProvider: the firm the form believes the draft is with.
+            'providerWas' => ['nullable', 'string', 'max:64'],
             'investmentType' => ['nullable', 'string', Rule::in(array_keys(InvestmentType::ALL))],
             'investmentTypeOther' => self::investmentTypeOtherRules(required: false),
             'sponsored' => ['nullable', 'boolean'],
@@ -1168,6 +1173,8 @@ class Intake
         ?CipProvider $provider = null,
     ): CipApplication {
         return DB::transaction(function () use ($application, $actor, $data, $provider) {
+            // `$provider` is the firm the reader chose on the form, or null;
+            // `providerWas` is the firm the form believes the draft is with.
             /*
              * Two autosaves in flight used to both read the same people list,
              * both mint new dependents, and leave Suha with two Ahmeds. Lock
@@ -1190,7 +1197,7 @@ class Intake
             self::saveDraftAnswers($application, $actor, $data);
             // After the answers: an Add-On's parent is linked by them, and
             // a linked Add-On follows its parent rather than the select.
-            self::followFormProvider($application, $actor, $provider);
+            self::followFormProvider($application, $actor, $provider, $data['providerWas'] ?? null);
 
             return $application->fresh();
         });
@@ -1207,17 +1214,40 @@ class Intake
      * select is the reader's answer until the application is filed, so the
      * draft follows it, firm, number and folder together.
      *
-     * Drafts only. A filed application changes firm through
-     * {@see ProviderTransfer::transfer}, which asks for an administrator.
-     * And not an Add-On whose main application is known: that one belongs
-     * to its parent's firm whatever the select says ({@see adoptParentFirm}).
+     * But only an answer the reader GAVE. The form posts its firm on every
+     * autosave, so a firm that merely differs from the row's is not an
+     * instruction: it is just as likely a form opened before somebody else
+     * moved the draft, and following it would move the draft straight back,
+     * a new number spent at each firm on every keystroke. So the form also
+     * says which firm it believes the draft is with (`$was`), and the draft
+     * moves only when that belief is true of the row as it stands. A form
+     * that is behind moves nothing; the answer tells it where the draft is.
      *
-     * `$provider` is already one this reader may file under: both callers
-     * resolve it through {@see providersFor}.
+     * And only for a reader who can reach the draft under the firm it is
+     * with now. Drafts are also found by their author's submission key, so
+     * an author can arrive here for a draft an administrator has since
+     * moved out of their reach, and must not be able to pull it back.
+     *
+     * Drafts only, judged on the locked row. A filed application changes
+     * firm through {@see ProviderTransfer::transfer}, which asks for an
+     * administrator. And not an Add-On whose main application is known:
+     * that one belongs to its parent's firm whatever the select says
+     * ({@see adoptParentFirm}).
+     *
+     * `$provider` is the firm the reader chose on the form, already one
+     * they may file under ({@see providersFor}); never one inherited from
+     * an Add-On's parent.
      */
-    private static function followFormProvider(CipApplication $application, User $actor, ?CipProvider $provider): void
-    {
+    private static function followFormProvider(
+        CipApplication $application,
+        User $actor,
+        ?CipProvider $provider,
+        ?string $was = null,
+    ): void {
+        $was = trim((string) $was);
+
         if ($provider === null
+            || $was === ''
             || ! $provider->active
             || $application->status !== Status::DRAFT
             || (int) $application->provider_id === (int) $provider->id) {
@@ -1228,12 +1258,25 @@ class Intake
             return;
         }
 
+        if (! ApplicationScope::query($actor)->whereKey($application->id)->exists()) {
+            return;
+        }
+
         Providers::ensureFolder($provider);
         $provider->refresh();
 
-        ProviderTransfer::rehome($application, $provider, $actor, [
-            'reason' => ProviderTransfer::REASON_DRAFT_FORM,
-        ]);
+        ProviderTransfer::rehome(
+            $application,
+            $provider,
+            $actor,
+            ['reason' => ProviderTransfer::REASON_DRAFT_FORM],
+            // The same three questions, asked again of the row under its
+            // lock: the copy in hand may be from before another request
+            // filed the draft, linked its parent, or moved it.
+            fn (CipApplication $locked) => $locked->status === Status::DRAFT
+                && ! ($locked->isAddOn() && $locked->parent_application_id !== null)
+                && (string) $locked->provider?->uuid === $was,
+        );
 
         // The move was written on a locked copy of the row; what the caller
         // is holding has to see the new firm and the new number too.
@@ -1315,7 +1358,13 @@ class Intake
         // Filed under the firm the form names, which may not be the one the
         // first autosave opened it under. Before the answers are written, so
         // the application lands on its lane already wearing its number.
-        self::followFormProvider($application, $actor, $provider);
+        self::followFormProvider($application, $actor, $provider, $data['providerWas'] ?? null);
+
+        // followFormProvider re-read the row. If another request filed this
+        // draft while this one was on its way, there is nothing to file.
+        if ($application->status !== Status::DRAFT) {
+            throw new \RuntimeException('This application has been filed and is no longer a draft.');
+        }
 
         $application = self::update($application, $actor, $data);
 
@@ -1405,7 +1454,7 @@ class Intake
             // No main application on file: the select is the only answer
             // there is to whose Add-On this is. (A no-op once a parent has
             // been linked, by the lines above or by the answers.)
-            self::followFormProvider($application, $actor, $provider);
+            self::followFormProvider($application, $actor, $provider, $data['providerWas'] ?? null);
         });
 
         $application = $application->fresh();
@@ -2812,6 +2861,28 @@ class Intake
             $parent->forceFill(['cor_number' => $cor])->save();
         }
 
+        /*
+         * A filed Add-On does not change firm because somebody retyped its
+         * main application's number.
+         *
+         * Naming a granted file held by another firm moves the Add-On there:
+         * its folder, who may open its papers, and now its number. On a
+         * draft that is the link doing its job. On an application already
+         * filed, even one locked and numbered by the Unit, it is a transfer,
+         * and a transfer is an administrator's; anyone else who could edit
+         * the Add-On and see a file in another firm used to be able to make
+         * one from here, while the transfer door refused the same person.
+         * Refused before the link is written, so nothing is half-saved.
+         */
+        if ($parent->provider_id !== null
+            && (int) $application->provider_id !== (int) $parent->provider_id
+            && $application->status !== Status::DRAFT
+            && ! CipAccess::canTransferProvider($actor)) {
+            throw new \InvalidArgumentException(
+                'Only an administrator can move a filed Add-On to another service provider.'
+            );
+        }
+
         $application->forceFill(['parent_application_id' => $parent->id])->save();
         $application->setRelation('parent', $parent);
 
@@ -2894,6 +2965,8 @@ class Intake
                 'providerId' => ['nullable', 'string'],
                 'phase' => ['nullable', 'string', Rule::in(Phase::ALL)],
                 'submissionId' => ['nullable', 'string', 'max:64'],
+                // See followFormProvider: the firm the form believes the draft is with.
+                'providerWas' => ['nullable', 'string', 'max:64'],
                 'draftId' => ['nullable', 'string', 'max:64'],
                 'parentCipNumber' => ['required', 'string', 'max:'.Submission::MAX_LENGTH],
                 'parentCorNumber' => ['nullable', 'string', 'max:64'],
@@ -2924,6 +2997,8 @@ class Intake
             'providerId' => ['nullable', 'string'],
             'phase' => ['nullable', 'string', Rule::in(Phase::ALL)],
             'submissionId' => ['nullable', 'string', 'max:64'],
+            // See followFormProvider: the firm the form believes the draft is with.
+            'providerWas' => ['nullable', 'string', 'max:64'],
             'parentCipNumber' => ['nullable', 'string', 'max:'.Submission::MAX_LENGTH],
             'parentCorNumber' => ['nullable', 'string', 'max:64'],
             'parentApplicantName' => ['nullable', 'string', 'max:191'],

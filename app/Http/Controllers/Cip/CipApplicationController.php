@@ -405,8 +405,15 @@ class CipApplicationController extends Controller
         if ($draft) {
             try {
                 // Under the firm this form names, not whichever one the
-                // first autosave happened to open the draft under.
-                $application = Intake::fileDraft($draft, $user, $data, $provider);
+                // first autosave happened to open the draft under. The firm
+                // the READER chose, never one inherited from an Add-On's
+                // parent: that reaches the draft through the link itself.
+                $application = Intake::fileDraft(
+                    $draft,
+                    $user,
+                    $data,
+                    Intake::providersFor($user)->firstWhere('uuid', $data['providerId'] ?? ''),
+                );
             } catch (\InvalidArgumentException $e) {
                 abort(422, $e->getMessage());
             }

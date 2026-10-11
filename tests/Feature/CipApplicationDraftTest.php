@@ -1345,8 +1345,12 @@ class CipApplicationDraftTest extends TestCase
         $standIn = $draft->client?->name;
         $uid = $draft->client?->uid;
 
+        // The form names the new firm, and says which firm it believes the
+        // draft is with: that belief being true is what makes this a change
+        // the reader made rather than a form that is merely out of date.
         $second = $this->actingAs($staff)->postJson('/portal/cip/applications/draft?application='.$first['id'], [
             'providerId' => $bluemina->uuid,
+            'providerWas' => $galaxy->uuid,
             'phase' => Phase::PRE_APPROVAL,
             'countryOfResidence' => 'United Arab Emirates',
         ])->assertOk()->json('draft');
@@ -1390,6 +1394,7 @@ class CipApplicationDraftTest extends TestCase
         // Add pressed before the autosave caught the change of firm.
         $filing = $this->filing($bluemina);
         $filing['draftId'] = $draft->uuid;
+        $filing['providerWas'] = $galaxy->uuid;
 
         $filed = $this->actingAs($staff)
             ->post('/portal/cip/applications', $filing, ['Accept' => 'application/json'])
@@ -1400,6 +1405,148 @@ class CipApplicationDraftTest extends TestCase
         $this->assertSame($bluemina->uuid, $filed['providerId']);
         $this->assertSame("BLU{$yy}-00001", $filed['internalNumber']);
         $this->assertSame(1, CipApplication::count());
+    }
+
+    /**
+     * A form that is behind moves nothing.
+     *
+     * The form posts its firm on every autosave. "Differs from the row" is
+     * therefore not "the reader changed it": it is just as likely a form
+     * opened before somebody else moved the draft, and following it moved
+     * the draft straight back, a number spent at each firm per keystroke.
+     * The draft moves only when the firm the form believes it is with is
+     * the firm it is with.
+     */
+    public function test_a_form_opened_before_a_move_does_not_move_the_draft_back(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $author = $this->user(Role::REVIEWING_OFFICER);
+        $galaxy = $this->provider('GAL');
+        $bluemina = $this->provider('BLU');
+        $yy = now()->format('y');
+
+        $first = $this->save($author, $this->answers($galaxy, ['submissionId' => 'key-1']))->assertOk()->json('draft');
+        $draft = CipApplication::query()->where('uuid', $first['id'])->firstOrFail();
+
+        // An administrator moves the draft while the author's form is open.
+        $this->actingAs($admin)->postJson('/portal/cip/applications/'.$draft->uuid.'/provider', [
+            'providerId' => $bluemina->uuid, 'confirm' => true,
+        ])->assertOk();
+        $this->assertSame("BLU{$yy}-00001", $draft->fresh()->internal_number);
+
+        // The author types: their form still names Galaxy, and believes Galaxy.
+        $behind = $this->actingAs($author)->postJson('/portal/cip/applications/draft?application='.$draft->uuid, $this->answers($galaxy, [
+            'submissionId' => 'key-1', 'providerWas' => $galaxy->uuid, 'firstName' => 'Johnny',
+        ]))->assertOk()->json('draft');
+
+        // The answers landed; the draft did not move, and the reply says
+        // where it is so the form can catch up.
+        $this->assertSame($bluemina->id, $draft->fresh()->provider_id);
+        $this->assertSame("BLU{$yy}-00001", $draft->fresh()->internal_number);
+        $this->assertSame($bluemina->uuid, $behind['answers']['providerId']);
+        $this->assertSame('JOHNNY', $behind['answers']['firstName']);
+        $this->assertSame(1, $draft->events()->where('action', \App\Models\CipEvent::ACTION_PROVIDER_TRANSFERRED)->count());
+
+        // Nor does a save that says nothing about what it believes.
+        $this->actingAs($author)->postJson('/portal/cip/applications/draft?application='.$draft->uuid, $this->answers($galaxy, [
+            'submissionId' => 'key-1',
+        ]))->assertOk();
+        $this->assertSame($bluemina->id, $draft->fresh()->provider_id);
+
+        // Caught up, the same reader can still change the firm on purpose.
+        $this->actingAs($author)->postJson('/portal/cip/applications/draft?application='.$draft->uuid, $this->answers($galaxy, [
+            'submissionId' => 'key-1', 'providerWas' => $bluemina->uuid,
+        ]))->assertOk();
+        $this->assertSame($galaxy->id, $draft->fresh()->provider_id);
+        $this->assertSame("GAL{$yy}-00002", $draft->fresh()->internal_number);
+    }
+
+    /**
+     * Its author cannot pull back a draft moved out of their reach.
+     *
+     * Drafts are also found by their author's submission key, with no
+     * regard to whether the author can still see the row. That was harmless
+     * while a save wrote answers only. A Galaxy contact whose draft an
+     * administrator gave to Bluemina must not take it back by typing.
+     */
+    public function test_an_author_cannot_pull_back_a_draft_moved_out_of_their_reach(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $galaxy = $this->provider('GAL');
+        $bluemina = $this->provider('BLU');
+        $contact = $this->user(Role::CLIENT);
+        \App\Models\CompanyMember::create([
+            'company_id' => $galaxy->company_id, 'user_id' => $contact->id,
+            'name' => $contact->name, 'email' => $contact->email,
+            'role' => 'member', 'status' => \App\Models\CompanyMember::STATUS_ACTIVE,
+        ]);
+        $yy = now()->format('y');
+
+        $first = $this->save($contact, $this->answers($galaxy, ['submissionId' => 'key-9']))->assertOk()->json('draft');
+        $draft = CipApplication::query()->where('uuid', $first['id'])->firstOrFail();
+
+        $this->actingAs($admin)->postJson('/portal/cip/applications/'.$draft->uuid.'/provider', [
+            'providerId' => $bluemina->uuid, 'confirm' => true,
+        ])->assertOk();
+        $this->actingAs($contact)->getJson('/portal/cip/applications/'.$draft->uuid)->assertNotFound();
+
+        // Every shape of save the open form can make, each claiming to
+        // believe whatever would make the move look like the reader's own.
+        foreach ([$galaxy->uuid, $bluemina->uuid] as $believed) {
+            $this->actingAs($contact)->postJson('/portal/cip/applications/draft?application='.$draft->uuid, $this->answers($galaxy, [
+                'submissionId' => 'key-9', 'providerWas' => $believed,
+            ]));
+            $this->actingAs($contact)->postJson('/portal/cip/applications/draft', $this->answers($galaxy, [
+                'submissionId' => 'key-9', 'providerWas' => $believed,
+            ]));
+        }
+
+        $this->assertSame($bluemina->id, $draft->fresh()->provider_id);
+        $this->assertSame("BLU{$yy}-00001", $draft->fresh()->internal_number);
+        $this->assertSame(1, $draft->events()->where('action', \App\Models\CipEvent::ACTION_PROVIDER_TRANSFERRED)->count());
+    }
+
+    /**
+     * A firm reached by naming a parent is not the reader's choice of firm.
+     *
+     * The draft controller numbers a NEW Add-On under its main
+     * application's firm. Handing that firm to an existing draft as though
+     * the reader had picked it let somebody who may file under one firm
+     * only put an ordinary draft under another, by posting an Add-On's
+     * fields at it.
+     */
+    public function test_naming_a_parent_does_not_move_an_ordinary_draft_to_that_parents_firm(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $galaxy = $this->provider('GAL');
+        $bluemina = $this->provider('BLU');
+
+        // A granted file at Bluemina, which a parent lookup can find.
+        $parent = Applications::create($bluemina, $admin, ['investment_type' => InvestmentType::REAL_ESTATE]);
+        CipPerson::create([
+            'application_id' => $parent->id, 'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'CHEN', 'last_name' => 'WEI',
+        ]);
+        $parent->forceFill([
+            'status' => Status::GRANTED, 'decision' => CipApplication::DECISION_GRANTED,
+            'cip_number' => '10T1BLU01P', 'cor_number' => 'COR-7',
+        ])->save();
+
+        $first = $this->save($admin, $this->answers($galaxy, ['submissionId' => 'key-5']))->assertOk()->json('draft');
+        $draft = CipApplication::query()->where('uuid', $first['id'])->firstOrFail();
+
+        $this->actingAs($admin)->postJson('/portal/cip/applications/draft', [
+            'phase' => Phase::ADD_ON,
+            'submissionId' => 'key-5',
+            'providerWas' => $galaxy->uuid,
+            'parentCipNumber' => '10T1BLU01P',
+            'parentCorNumber' => 'COR-7',
+            'firstName' => 'John',
+            'lastName' => 'Smith',
+        ]);
+
+        $this->assertSame($galaxy->id, $draft->fresh()->provider_id);
+        $this->assertSame($first['number'], $draft->fresh()->internal_number);
     }
 
     /** A firm the reader may not file under moves nothing. */
@@ -1418,7 +1565,7 @@ class CipApplicationDraftTest extends TestCase
 
         $this->actingAs($contact)->postJson(
             '/portal/cip/applications/draft?application='.$first['id'],
-            $this->answers($bluemina),
+            $this->answers($bluemina, ['providerWas' => $galaxy->uuid]),
         )->assertStatus(422);
 
         $draft = CipApplication::query()->where('uuid', $first['id'])->firstOrFail();

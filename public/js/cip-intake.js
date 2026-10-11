@@ -1158,10 +1158,19 @@
      * Everyone else sees the firm as a fact rather than a control the
      * server would turn away.
      */
+    /*
+     * A filed Add-On is with its main application's firm whatever a select
+     * says, so it is never offered one here: the control was drawn, the
+     * choice was posted, the save answered "saved", and nothing moved. An
+     * administrator moves the whole family from the table's row menu.
+     */
     var fixed = (state.options && state.options.providerFixed)
-      || (editingFiled() && !(state.record && state.record.canTransferProvider));
+      || (editingFiled() && (isAddOnIntake() || !(state.record && state.record.canTransferProvider)));
     if (fixed) {
-      var shown = providerName(state.draft.providerId)
+      // On a filed application the record is the fact; the draft key can
+      // still hold the main application's firm from the prefill.
+      var shown = (editingFiled() && state.record && state.record.provider)
+        || providerName(state.draft.providerId)
         || (state.record && state.record.provider) || '';
       return '<div class="tma-portal-field"><span class="tma-portal-field__label">' + esc(LABELS.providerId) + '</span>' +
         '<p class="tma-portal-field__static">' + esc(shown || '—') + '</p></div>';
@@ -1205,6 +1214,7 @@
    */
   function numberBasis() {
     if (state.numbered) return state.numbered;
+    if (state.numberDiscarded) return null;
     if (state.record && state.record.internalNumber) {
       return { number: state.record.internalNumber, providerId: state.record.providerId || '' };
     }
@@ -1288,9 +1298,16 @@
   }
 
   /* On a filed application: has the reader picked a firm other than its own? */
+  /*
+   * Picked, not merely different. The record under an open form can be
+   * replaced (a document filed from this screen refetches it), and after a
+   * colleague's transfer the firm the form was opened with would then read
+   * as this reader's own choice: an officer's every Save refused, an
+   * administrator's Save quietly moving the file back.
+   */
   function providerChanged() {
-    return editingFiled() && !!state.draft.providerId && !!state.record.providerId &&
-      state.draft.providerId !== state.record.providerId;
+    return editingFiled() && !!state.providerPicked && !!state.draft.providerId &&
+      !!state.record.providerId && state.draft.providerId !== state.record.providerId;
   }
 
   function investmentCard() {
@@ -1753,7 +1770,10 @@
           if (path === 'investmentType') state.draft.investmentTypeOther = '';
           // The number follows the firm: ask for the picked firm's next one
           // now, so it is on screen before the reader has moved on.
-          if (path === 'providerId') previewNumber();
+          if (path === 'providerId') {
+            state.providerPicked = true;
+            previewNumber();
+          }
           if (path === 'addonType') {
             if (el.value === 'spouse') state.draft.relationship = 'spouse';
             else if (state.draft.relationship === 'spouse') state.draft.relationship = '';
@@ -2144,6 +2164,12 @@
     state.draftId = null;
     state.dependents = 0;
     state.errors = {};
+    // The number went with the row the server has just deleted. None is
+    // shown until a save says what the next one is.
+    state.numbered = null;
+    state.numberPreview = null;
+    state.numberAsk = null;
+    state.numberDiscarded = true;
     // The one answer the form fills in for itself, put back.
     if (state.options && state.options.providers && state.options.providers.length === 1) {
       state.draft.providerId = state.options.providers[0].id;
@@ -2583,6 +2609,7 @@
     var draftUuid = (editingDraft() && state.applicationId) ? state.applicationId : state.draftId;
     if (filing && draftUuid) {
       out.push({ name: 'draftId', value: draftUuid });
+      appendProviderWas(function (value) { out.push({ name: 'providerWas', value: value }); });
     }
 
     return out;
@@ -2865,6 +2892,8 @@
       form.append('submissionId', state.submissionKey);
     }
 
+    appendProviderWas(function (value) { form.append('providerWas', value); });
+
     list.forEach(function (part) {
       if (part.file) { files++; form.append(part.name, part.file, part.filename || 'upload'); }
       else form.append(part.name, part.value);
@@ -2872,6 +2901,24 @@
     form.append('uploadCount', String(files));
 
     return form;
+  }
+
+  /*
+   * The firm this form believes the draft is with, sent beside the firm it
+   * names.
+   *
+   * A draft follows its select, but the form posts the select on every
+   * autosave, and "differs from the row" is not the same as "the reader
+   * changed it": a form opened before somebody else moved the draft would
+   * move it straight back on the next keystroke. The server moves a draft
+   * only when this belief is true of the row, so a form that is behind
+   * changes nothing and is told where the draft is instead (see the save's
+   * reply). Nothing is sent before the draft exists: there is no row to be
+   * wrong about.
+   */
+  function appendProviderWas(add) {
+    var basis = numberBasis();
+    if (basis && basis.providerId) add(basis.providerId);
   }
 
   function draftBody() {
@@ -3030,6 +3077,9 @@
      */
     var batch = limitFiles(parts(), MAX_UPLOADS_PER_REQUEST);
     var pendingFiles = fileSigs(batch.parts);
+    // The firm this request names, to tell afterwards whether the reader
+    // has picked again while it was in the air.
+    var sentProvider = state.draft.providerId || '';
 
     // Multipart, not JSON: the scans go with the answers. FormData sets its
     // own Content-Type boundary, so none is passed here.
@@ -3109,10 +3159,24 @@
          * numbered under it. Kept, and drawn into the one node that shows
          * it, so the preview the reader was looking at becomes the fact.
          */
+        /*
+         * The draft is with another firm than this form named, and the
+         * reader has not picked again since: the form was behind (somebody
+         * else moved the draft, or its main application decided the firm).
+         * It takes the server's word rather than go on showing a firm the
+         * draft is not with, and naming it on every save.
+         */
+        var serverFirm = (json.draft && json.draft.answers && json.draft.answers.providerId) || '';
+        if (serverFirm && serverFirm !== sentProvider && (state.draft.providerId || '') === sentProvider) {
+          state.draft.providerId = serverFirm;
+          state.numberPreview = null;
+          var firmSelect = state.root && state.root.querySelector('[data-cip-field="providerId"]');
+          if (firmSelect) firmSelect.value = serverFirm;
+        }
         if (json.draft && json.draft.number) {
           state.numbered = {
             number: json.draft.number,
-            providerId: (json.draft.answers && json.draft.answers.providerId) || state.draft.providerId || '',
+            providerId: serverFirm || state.draft.providerId || '',
           };
           paintNumber();
         }
@@ -3925,6 +3989,8 @@
     state.numbered = null;
     state.numberPreview = null;
     state.numberAsk = null;
+    state.numberDiscarded = false;
+    state.providerPicked = false;
     state.moved = null;
     if (state.draftTimer) { clearTimeout(state.draftTimer); state.draftTimer = null; }
     state.draftSaving = false;
@@ -4063,7 +4129,16 @@
      live in the head with Cancel, so both are called from there. */
   function applyRecord(record) {
     if (!record || !state.root) return;
+    // The firm follows the record unless the reader picked another one: a
+    // colleague's transfer read back here is not this reader's choice.
+    var was = (state.record && state.record.providerId) || '';
+    var untouched = !state.providerPicked || !state.draft.providerId || state.draft.providerId === was;
     state.record = record;
+    if (untouched && editingFiled()) {
+      state.draft.providerId = record.providerId || '';
+      state.providerPicked = false;
+      state.numberPreview = null;
+    }
     render(state.root);
   }
 

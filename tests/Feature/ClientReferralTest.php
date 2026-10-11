@@ -173,9 +173,10 @@ class ClientReferralTest extends TestCase
      * but only the application's is the fact. Changing it here used to be
      * accepted: the new firm's contacts gained the client's folder, the
      * application and its number stayed where they were, and the next save
-     * of the application quietly put the old firm back. It is refused now,
-     * with where the change belongs, and nothing else about the client is
-     * harder to edit.
+     * of the application quietly put the old firm back. For a client who
+     * holds an application this form does not write the referral at all:
+     * naming another firm, or Private, is refused with where the change
+     * belongs, and everything else keeps what is stored.
      */
     public function test_referred_by_is_changed_on_the_application_for_a_client_who_has_one(): void
     {
@@ -201,7 +202,7 @@ class ClientReferralTest extends TestCase
             ->assertJsonValidationErrors(['referralType']);
         $this->actingAs($staff)
             ->patchJson('/portal/clients/mary-brown', $this->payload('mary-brown', 'Mary Brown', [
-                'referralType' => 'none',
+                'referralType' => 'private',
             ]))
             ->assertStatus(422);
         $this->assertSame($galaxy->id, $client->fresh()->referred_by_company_id);
@@ -216,6 +217,41 @@ class ClientReferralTest extends TestCase
             ->assertOk()
             ->assertJsonPath('client.name', 'Mary Browne')
             ->assertJsonPath('client.referredByLabel', 'Galaxy');
+    }
+
+    /**
+     * "No referral" from this form is not an instruction for an applicant.
+     *
+     * The form can only offer firms on the reader's own company list. An
+     * officer assigned to the applicant but not to the firm that now holds
+     * the file has no option for it, so the control rests on "No referral"
+     * and posts that on every save. Refusing it turned away a corrected
+     * phone number; taking it at its word would wipe the referral. It is
+     * neither: the edit saves and the referral is left as it was.
+     */
+    public function test_an_applicants_edit_saves_when_the_form_could_not_show_the_referrer(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $staff = $this->staff();
+        $galaxy = $this->company($staff, 'Galaxy');
+        $provider = \App\Models\CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL', 'company_id' => $galaxy->id]);
+
+        $this->actingAs($staff)->postJson('/portal/clients', $this->payload('mary-brown', 'Mary Brown', [
+            'referralType' => 'company',
+            'referredByCompanyId' => 'galaxy',
+        ]))->assertOk();
+        $client = Client::where('uid', 'mary-brown')->firstOrFail();
+        \App\Support\Cip\Applications::create($provider, $staff, ['client_id' => $client->id]);
+
+        foreach ([['referralType' => 'none'], ['referralType' => 'company', 'referredByCompanyId' => 'no-such-firm'], []] as $posted) {
+            $this->actingAs($staff)
+                ->patchJson('/portal/clients/mary-brown', $this->payload('mary-brown', 'Mary Browne', $posted))
+                ->assertOk()
+                ->assertJsonPath('client.name', 'Mary Browne')
+                ->assertJsonPath('client.referralType', 'company')
+                ->assertJsonPath('client.referredByLabel', 'Galaxy');
+            $this->assertSame($galaxy->id, $client->fresh()->referred_by_company_id);
+        }
     }
 
     public function test_deleting_a_referrer_leaves_its_referrals_unrecorded_rather_than_dangling(): void

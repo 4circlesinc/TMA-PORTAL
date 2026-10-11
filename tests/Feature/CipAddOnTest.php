@@ -790,6 +790,83 @@ class CipAddOnTest extends TestCase
         $this->assertSame($parent->provider->company_id, $row->client->referred_by_company_id);
     }
 
+    /**
+     * A filed Add-On does not change firm because somebody retyped its main
+     * application's number.
+     *
+     * Naming a granted file held by another firm moves the Add-On there:
+     * its folder, who may open its papers, and its number. On a draft that
+     * is the link doing its job. On an application already filed it is a
+     * transfer, and anyone who could edit the Add-On and see a file in
+     * another firm could make one from here while the transfer door refused
+     * the same person. An administrator still can.
+     */
+    public function test_only_an_administrator_moves_a_filed_add_on_by_naming_another_firms_parent(): void
+    {
+        $admin = $this->staff();
+        $officer = $this->officer();
+        $parent = $this->grantedParent($admin);
+        $bluemina = $this->secondProvider();
+        $yy = now()->format('y');
+
+        // A granted file held by Bluemina.
+        $other = Applications::create($bluemina, $admin, ['investment_type' => 'real_estate', 'sponsored' => false]);
+        $this->mainApplicant($other, 'Li', 'Na');
+        $other->forceFill([
+            'status' => Status::GRANTED,
+            'decision' => CipApplication::DECISION_GRANTED,
+            'phase' => Phase::POST_APPROVAL,
+            'post_approval_at' => now(),
+            'cip_number' => '10T1BLU01P',
+            'cor_number' => 'COR-2002',
+        ])->save();
+
+        $filed = $this->file($admin, $this->addOnPayload($parent))->assertCreated()->json('application');
+        $row = CipApplication::query()->where('uuid', $filed['id'])->firstOrFail();
+        $this->assertSame("GAL-AO-{$yy}-00001", $row->internal_number);
+
+        // The Add-On's own answers exactly as filed, with another firm's
+        // file named as its main application.
+        $edit = [
+            'addonType' => AddOn::TYPE_SPOUSE,
+            'firstName' => 'Mei',
+            'lastName' => 'Wei',
+            'dateOfBirth' => '1988-06-01',
+            'nationality' => 'China',
+            'countryOfResidence' => 'China',
+            'passportNumber' => 'X1234567',
+            'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+            'parentCipNumber' => '10T1BLU01P',
+            'parentCorNumber' => 'COR-2002',
+            'parentApplicantName' => 'Li Na',
+        ];
+
+        $this->actingAs($officer)
+            ->post('/portal/cip/applications/'.$filed['id'], $edit, ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Only an administrator can move a filed Add-On to another service provider.');
+
+        // Refused whole: nothing about the link was half-saved.
+        $row->refresh();
+        $this->assertSame($parent->provider_id, $row->provider_id);
+        $this->assertSame("GAL-AO-{$yy}-00001", $row->internal_number);
+        $this->assertSame($parent->id, $row->parent_application_id);
+        $this->assertSame($parent->cip_number, $row->parent_cip_number);
+        $this->assertFalse($row->events()->where('action', CipEvent::ACTION_PROVIDER_TRANSFERRED)->exists());
+
+        $this->actingAs($admin)
+            ->post('/portal/cip/applications/'.$filed['id'], $edit, ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $row->refresh();
+        $this->assertSame($bluemina->id, $row->provider_id);
+        $this->assertSame("BLU-AO-{$yy}-00001", $row->internal_number);
+        $this->assertSame($other->id, $row->parent_application_id);
+        $event = $row->events()->where('action', CipEvent::ACTION_PROVIDER_TRANSFERRED)->sole();
+        $this->assertSame(ProviderTransfer::REASON_PARENT_LINKED, $event->meta['reason']);
+        $this->assertSame("GAL-AO-{$yy}-00001", $event->meta['previousInternalNumber']);
+    }
+
     public function test_an_add_on_draft_saves_from_parent_cip_alone_when_cor_is_not_on_file(): void
     {
         $staff = $this->staff();

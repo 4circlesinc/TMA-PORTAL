@@ -17,9 +17,9 @@ use Illuminate\Validation\ValidationException;
  * parent's, is the one the Add-On is known by from here on (Add-On section 15).
  *
  * Section 7 keeps two numbers for one application. The internal number is ours,
- * generated on creation and permanent, invoices, drafts, reviews and
- * assessment feedback all refer to it, and it stays stored and searchable
- * forever. The CIP number is the government's, and it does not exist until
+ * generated, never typed, and issued again only when the file changes service
+ * provider; invoices, drafts, reviews and assessment feedback all refer to it,
+ * and the number it leaves stays searchable. The CIP number is the government's, and it does not exist until
  * the Unit has the application in hand.
  *
  * This is the moment the second number arrives on a family file. Because every

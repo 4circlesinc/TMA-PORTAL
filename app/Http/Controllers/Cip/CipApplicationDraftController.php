@@ -125,16 +125,26 @@ class CipApplicationDraftController extends Controller
             return response()->json(['draft' => null]);
         }
 
-        $provider = Intake::providersFor($user)->firstWhere('uuid', $data['providerId'] ?? '');
         /*
+         * Two firms, kept apart. `$chosen` is the one the reader picked on
+         * the form, and only ever one they may file under. `$provider` is
+         * the one a NEW draft is numbered under, which for an Add-On is its
+         * main application's firm when that is already known.
+         *
          * An Add-On belongs to its main application's firm, and a new one is
          * numbered under that firm from the start. The select used to win
          * here while the filing step gave the parent the last word, so a
          * draft was minted under one firm, moved to the other by the link a
          * moment later, and left wearing a number the first firm could
-         * never issue again. An existing draft keeps the cheap path: the
-         * link moves it if its parent turns out to sit elsewhere.
+         * never issue again.
+         *
+         * Only `$chosen` is handed to an existing draft. A firm reached by
+         * naming a parent is not the reader's choice of firm, and treating
+         * it as one let a reader who may file under one firm put an
+         * ordinary draft under another by posting an Add-On's fields at it.
          */
+        $chosen = Intake::providersFor($user)->firstWhere('uuid', $data['providerId'] ?? '');
+        $provider = $chosen;
         if (Intake::filingPhase() === Phase::ADD_ON && ($draft === null || $provider === null)) {
             $provider = $this->addOnDraftProvider($user, $data) ?? $provider;
         }
@@ -151,7 +161,7 @@ class CipApplicationDraftController extends Controller
             // An existing draft follows the firm the form names: the
             // select is the reader's answer until the application is filed.
             $draft = $draft
-                ? Intake::updateDraft($draft, $user, $data, $provider)
+                ? Intake::updateDraft($draft, $user, $data, $chosen)
                 : Intake::createDraft($provider, $user, $data);
         } catch (UniqueConstraintViolationException $e) {
             /*
@@ -172,7 +182,7 @@ class CipApplicationDraftController extends Controller
             if ($existing === null) {
                 throw $e;
             }
-            $draft = Intake::updateDraft($existing, $user, $data, $provider);
+            $draft = Intake::updateDraft($existing, $user, $data, $chosen);
         } catch (\InvalidArgumentException $e) {
             $message = $e->getMessage();
 
