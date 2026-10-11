@@ -2427,6 +2427,192 @@ class CipIntakeTest extends TestCase
             'template' => 'cip-status-post-approval',
             'related_id' => $application->id,
         ]);
+        $this->assertDatabaseMissing('email_deliveries', [
+            'template' => 'cip-granted',
+            'related_id' => $application->id,
+        ]);
+
+        // One email each, and it is the denial.
+        $this->assertSame(
+            ['cip-denied'],
+            $this->templatesSentTo($application, $staff),
+        );
+        // A filing carries no letter, so the email does not promise one.
+        \Illuminate\Support\Facades\Mail::assertQueued(
+            \App\Mail\Postcard::class,
+            fn (\App\Mail\Postcard $mail) => str_contains((string) $mail->subjectLine, ' - DENIED - ')
+                && str_contains((string) json_encode($mail->payload), 'has been denied')
+                && ! str_contains((string) json_encode($mail->payload), 'official letter attached'),
+        );
+    }
+
+    /**
+     * A post-approval filing that the Unit approved.
+     *
+     * Asked in the same breath as Denied, once, as the file is added. The
+     * file enters the lane and stands on Approved with the decision
+     * recorded. The service provider is asked for the Stage 1 documents and
+     * then told the application was approved: two emails, in that order,
+     * and never the denial.
+     */
+    public function test_a_post_approval_filing_can_be_approved_at_intake(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($staff, $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12661P',
+            'outcome' => Intake::OUTCOME_APPROVED,
+            'oathOfAllegiance' => $this->scan('oath.pdf'),
+            'proofOfPayment' => $this->scan('payment.pdf'),
+        ]))
+            ->assertCreated()
+            ->json('application');
+
+        $this->assertSame(Phase::POST_APPROVAL, $body['phase']);
+        $this->assertSame(Status::POST_APPROVED, $body['status']);
+        $this->assertSame('Approved', $body['statusLabel']);
+        $this->assertSame(Status::POST_APPROVED, $body['decision']);
+        $this->assertNotNull($body['decidedAt']);
+        $this->assertNotNull($body['postApprovalAt']);
+
+        $application = CipApplication::where('uuid', $body['id'])->first();
+        $this->assertTrue($application->events()->where('action', CipEvent::ACTION_DECISION_RECORDED)->exists());
+        $this->assertTrue($application->events()->where('action', CipEvent::ACTION_POST_APPROVAL_ENTERED)->exists());
+        foreach ([Status::POST_APPROVAL, Status::POST_APPROVED] as $to) {
+            $this->assertTrue($application->events()
+                ->where('action', CipEvent::ACTION_STATUS_CHANGED)
+                ->where('to_status', $to)
+                ->exists(), 'No status change to '.$to.' on the trail.');
+        }
+
+        // Everyone on it reads Approved with the file, and it goes on
+        // collecting its COR documents under that label.
+        $main = $application->people()->where('role', CipPerson::ROLE_MAIN_APPLICANT)->first();
+        $this->assertSame(Status::POST_APPROVED, $main->post_approval_status);
+        $this->assertNull($application->fresh()->cor_locked_at);
+
+        // Stage 1 first, then the approval; never the denial.
+        $this->assertSame(
+            ['cip-status-post-approval', 'cip-granted'],
+            $this->templatesSentTo($application, $staff),
+        );
+        $this->assertDatabaseMissing('email_deliveries', [
+            'template' => 'cip-denied',
+            'related_id' => $application->id,
+        ]);
+
+        \Illuminate\Support\Facades\Mail::assertQueued(
+            \App\Mail\Postcard::class,
+            fn (\App\Mail\Postcard $mail) => str_contains((string) $mail->subjectLine, ' - POST APPROVAL - '),
+        );
+        // The approval, in the lane's own letter, promising no attachment
+        // a filing does not carry.
+        \Illuminate\Support\Facades\Mail::assertQueued(
+            \App\Mail\Postcard::class,
+            fn (\App\Mail\Postcard $mail) => str_contains((string) $mail->subjectLine, ' - APPROVED - ')
+                && str_contains((string) json_encode($mail->payload), 'on the approval of their post-approval application')
+                && ! str_contains((string) json_encode($mail->payload), 'official letter attached'),
+        );
+
+        // The decision is on the file, so the menu does not ask for it again.
+        $this->assertNotContains(
+            Status::POST_APPROVED,
+            \App\Support\Cip\Engine::availableTransitions($application->fresh(), $staff),
+        );
+    }
+
+    /**
+     * The sentence about the attached letter goes with the letter.
+     *
+     * A decision recorded from the status menu has one and keeps the
+     * sentence. Wording an administrator wrote is never trimmed.
+     */
+    public function test_a_decision_letter_only_promises_an_attachment_it_carries(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+        $body = $this->file($staff, $this->payload($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12661P',
+            'outcome' => Intake::OUTCOME_APPROVED,
+            'oathOfAllegiance' => $this->scan('oath.pdf'),
+            'proofOfPayment' => $this->scan('payment.pdf'),
+        ]))->assertCreated()->json('application');
+        $application = CipApplication::where('uuid', $body['id'])->first();
+
+        $with = \App\Support\Cip\Letters::copy($application, Status::POST_APPROVED, 'Gil');
+        $without = \App\Support\Cip\Letters::copy($application, Status::POST_APPROVED, 'Gil', false);
+        $this->assertStringContainsString(\App\Support\Cip\Letters::ATTACHED_LINE, (string) $with['bodyHtml']);
+        $this->assertStringNotContainsString(\App\Support\Cip\Letters::ATTACHED_LINE, (string) $without['bodyHtml']);
+        $this->assertStringContainsString('Kind regards', (string) $without['bodyHtml']);
+        $this->assertSame($with['lead'], $without['lead']);
+
+        // Somebody's own wording about the letter stays as they wrote it.
+        $template = \App\Support\Cip\Letters::for($application, Status::POST_APPROVED);
+        $template->forceFill(['body' => "Well done {{applicant}}.\n\nThe letter is attached for your records.\n\nKind regards,"])->save();
+        $own = \App\Support\Cip\Letters::copy($application, Status::POST_APPROVED, 'Gil', false);
+        $this->assertStringContainsString('The letter is attached for your records.', (string) $own['bodyHtml']);
+
+        // A letter saved from the rich editor is stored as HTML, and the
+        // shipped sentence is left out of that the same way.
+        $template->forceFill([
+            'body' => '<p>Well done {{applicant}}.</p><p>'.\App\Support\Cip\Letters::ATTACHED_LINE.'</p><p>Kind regards,</p>',
+        ])->save();
+        $htmlWith = \App\Support\Cip\Letters::copy($application, Status::POST_APPROVED, 'Gil');
+        $htmlWithout = \App\Support\Cip\Letters::copy($application, Status::POST_APPROVED, 'Gil', false);
+        $this->assertStringContainsString(\App\Support\Cip\Letters::ATTACHED_LINE, (string) $htmlWith['bodyHtml']);
+        $this->assertStringNotContainsString(\App\Support\Cip\Letters::ATTACHED_LINE, (string) $htmlWithout['bodyHtml']);
+        $this->assertStringContainsString('Kind regards', (string) $htmlWithout['bodyHtml']);
+        $this->assertStringContainsString('Well done', $htmlWithout['lead']);
+    }
+
+    /**
+     * One time means one time whoever files it.
+     *
+     * An officer who files an application is given it, and handing a file
+     * over part-way through its life tells the section 22 list where it
+     * stands. A post-approval filing is already past New when its author is
+     * claimed, so that notice went out on top of the filing's own: the
+     * denial twice, or the approval twice. The administrator's copy is read
+     * here because every recipient is sent the same sequence.
+     */
+    public function test_an_officer_who_files_a_decided_post_approval_application_sends_each_email_once(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider('GAL');
+
+        $file = fn (string $number, string $first, string $outcome) => CipApplication::where('uuid', $this->file(
+            $officer,
+            $this->payload($provider, [
+                'phase' => Phase::POST_APPROVAL,
+                'cipNumber' => $number,
+                'firstName' => $first,
+                'passportNumber' => 'P'.substr($number, -7),
+                'outcome' => $outcome,
+                'oathOfAllegiance' => $this->scan('oath.pdf'),
+                'proofOfPayment' => $this->scan('payment.pdf'),
+            ]),
+        )->assertCreated()->json('application.id'))->firstOrFail();
+
+        $approved = $file('10T1G12671P', 'Amal', Intake::OUTCOME_APPROVED);
+        $this->assertSame(Status::POST_APPROVED, $approved->status);
+        $this->assertSame($officer->id, $approved->assigned_officer_id, 'The officer who filed it still holds it.');
+        $this->assertSame(['cip-status-post-approval', 'cip-granted'], $this->templatesSentTo($approved, $admin));
+
+        $denied = $file('10T1G12672P', 'Basil', Intake::OUTCOME_DENIED);
+        $this->assertSame(Status::POST_DENIED, $denied->status);
+        $this->assertSame($officer->id, $denied->assigned_officer_id);
+        $this->assertSame(['cip-denied'], $this->templatesSentTo($denied, $admin));
+
+        // And the filing with no decision asks for its documents once.
+        $plain = $file('10T1G12673P', 'Cyrus', Intake::OUTCOME_POST_APPROVAL);
+        $this->assertSame(Status::POST_APPROVAL, $plain->status);
+        $this->assertSame(['cip-status-post-approval'], $this->templatesSentTo($plain, $admin));
     }
 
     public function test_a_post_approval_filing_defaults_to_the_post_approval_notice(): void
@@ -2453,6 +2639,22 @@ class CipIntakeTest extends TestCase
             'template' => 'cip-status-post-approval',
             'related_id' => $application->id,
         ]);
+        // The answer the form gave before it asked Approved or Denied:
+        // still accepted, and still the Stage 1 notice alone.
+        $this->assertSame(['cip-status-post-approval'], $this->templatesSentTo($application, $staff));
+        $this->assertNull($application->fresh()->decision);
+    }
+
+    /** The CIP emails one mailbox was sent about this application, oldest first. */
+    private function templatesSentTo(CipApplication $application, User $recipient): array
+    {
+        return \Illuminate\Support\Facades\DB::table('email_deliveries')
+            ->where('related_id', $application->id)
+            ->where('recipient', $recipient->email)
+            ->where('template', 'like', 'cip-%')
+            ->orderBy('id')
+            ->pluck('template')
+            ->all();
     }
 
     public function test_turning_the_sponsor_off_and_on_keeps_the_same_person(): void

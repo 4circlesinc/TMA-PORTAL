@@ -864,6 +864,157 @@ class CipApplicationDraftTest extends TestCase
     }
 
     /**
+     * The answer to "approved or denied?" rides with the filing whether the
+     * form is completing a draft or filing afresh. Approved stands the file
+     * on Approved and sends the Stage 1 notice, then the approval; Denied
+     * sends the denial alone.
+     */
+    public function test_filing_a_post_approval_draft_as_approved_or_denied(): void
+    {
+        Storage::fake('local');
+        \Illuminate\Support\Facades\Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $sent = fn (CipApplication $application) => \Illuminate\Support\Facades\DB::table('email_deliveries')
+            ->where('related_id', $application->id)
+            ->where('recipient', $staff->email)
+            ->where('template', 'like', 'cip-%')
+            ->orderBy('id')
+            ->pluck('template')
+            ->all();
+
+        $fileDraft = function (string $number, string $first, string $outcome) use ($staff, $provider): CipApplication {
+            $this->actingAs($staff)->post('/portal/cip/applications/draft', $this->answers($provider, [
+                'phase' => Phase::POST_APPROVAL,
+                'cipNumber' => $number,
+                'firstName' => $first,
+                'lastName' => 'Smith',
+                'gender' => 'Male',
+                'dateOfBirth' => '1985-04-12',
+                'countryOfBirth' => 'Lebanon',
+                'countryOfResidence' => 'United Arab Emirates',
+                'occupation' => 'Engineer',
+                'passportNumber' => 'X'.substr($number, -7),
+                'investmentType' => InvestmentType::REAL_ESTATE,
+                'sponsored' => '0',
+                'passportPhoto' => $this->photo(),
+                'oathOfAllegiance' => [UploadedFile::fake()->create('oath.pdf', 40, 'application/pdf')],
+                'proofOfPayment' => [UploadedFile::fake()->create('payment.pdf', 40, 'application/pdf')],
+            ]), ['Accept' => 'application/json'])->assertOk();
+
+            $draft = CipApplication::query()->where('cip_number', $number)->firstOrFail();
+            $this->assertSame(Status::DRAFT, $draft->status);
+
+            $filing = $this->filing($provider) + [
+                'phase' => Phase::POST_APPROVAL,
+                'cipNumber' => $number,
+                'draftId' => $draft->uuid,
+                'outcome' => $outcome,
+            ];
+            $filing['firstName'] = $first;
+            $filing['passportNumber'] = 'X'.substr($number, -7);
+            unset(
+                $filing['passportPhoto'],
+                $filing['passportBioPage'],
+                $filing['birthCertificate'],
+                $filing['policeCertificate'],
+                $filing['proofOfAddress'],
+            );
+
+            $this->actingAs($staff)
+                ->post('/portal/cip/applications', $filing, ['Accept' => 'application/json'])
+                ->assertCreated();
+
+            return $draft->fresh();
+        };
+
+        $approved = $fileDraft('10T1G12681P', 'John', 'approved');
+        $this->assertSame(Status::POST_APPROVED, $approved->status);
+        $this->assertSame(Status::POST_APPROVED, $approved->decision);
+        $this->assertNotNull($approved->decided_at);
+        $this->assertSame(['cip-status-post-approval', 'cip-granted'], $sent($approved));
+
+        $denied = $fileDraft('10T1G12682P', 'Omar', 'denied');
+        $this->assertSame(Status::POST_DENIED, $denied->status);
+        $this->assertSame(Status::POST_DENIED, $denied->decision);
+        $this->assertSame(['cip-denied'], $sent($denied));
+    }
+
+    /**
+     * An officer completing a draft somebody else started is given the
+     * file, and the hand-over must not announce the decision a second time.
+     */
+    public function test_an_officer_filing_a_colleagues_post_approval_draft_sends_each_email_once(): void
+    {
+        Storage::fake('local');
+        \Illuminate\Support\Facades\Mail::fake();
+
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+        $provider = $this->provider();
+
+        $sent = fn (CipApplication $application) => \Illuminate\Support\Facades\DB::table('email_deliveries')
+            ->where('related_id', $application->id)
+            ->where('recipient', $admin->email)
+            ->where('template', 'like', 'cip-%')
+            ->orderBy('id')
+            ->pluck('template')
+            ->all();
+
+        foreach ([['10T1G12691P', 'Nadia', 'approved', Status::POST_APPROVED, ['cip-status-post-approval', 'cip-granted']],
+            ['10T1G12692P', 'Idris', 'denied', Status::POST_DENIED, ['cip-denied']]] as [$number, $first, $outcome, $status, $expected]) {
+            // The administrator starts it …
+            $this->actingAs($admin)->post('/portal/cip/applications/draft', $this->answers($provider, [
+                'phase' => Phase::POST_APPROVAL,
+                'cipNumber' => $number,
+                'firstName' => $first,
+                'lastName' => 'Smith',
+                'gender' => 'Male',
+                'dateOfBirth' => '1985-04-12',
+                'countryOfBirth' => 'Lebanon',
+                'countryOfResidence' => 'United Arab Emirates',
+                'occupation' => 'Engineer',
+                'passportNumber' => 'X'.substr($number, -7),
+                'investmentType' => InvestmentType::REAL_ESTATE,
+                'sponsored' => '0',
+                'passportPhoto' => $this->photo(),
+                'oathOfAllegiance' => [UploadedFile::fake()->create('oath.pdf', 40, 'application/pdf')],
+                'proofOfPayment' => [UploadedFile::fake()->create('payment.pdf', 40, 'application/pdf')],
+            ]), ['Accept' => 'application/json'])->assertOk();
+
+            $draft = CipApplication::query()->where('cip_number', $number)->firstOrFail();
+
+            // … and an officer files it.
+            $filing = $this->filing($provider) + [
+                'phase' => Phase::POST_APPROVAL,
+                'cipNumber' => $number,
+                'draftId' => $draft->uuid,
+                'outcome' => $outcome,
+            ];
+            $filing['firstName'] = $first;
+            $filing['passportNumber'] = 'X'.substr($number, -7);
+            unset(
+                $filing['passportPhoto'],
+                $filing['passportBioPage'],
+                $filing['birthCertificate'],
+                $filing['policeCertificate'],
+                $filing['proofOfAddress'],
+            );
+
+            $this->actingAs($officer)
+                ->post('/portal/cip/applications', $filing, ['Accept' => 'application/json'])
+                ->assertCreated();
+
+            $filed = $draft->fresh();
+            $this->assertSame($status, $filed->status);
+            $this->assertSame($officer->id, $filed->assigned_officer_id, 'The officer who filed it holds it.');
+            $this->assertSame($expected, $sent($filed), $outcome.' was not announced exactly once.');
+        }
+    }
+
+    /**
      * Autosave writes the wizard's submission key onto the draft. Save
      * used to find that row and return it as if the filing had already
      * happened — still a Draft. Completing it is what the press was for.

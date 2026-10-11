@@ -77,6 +77,48 @@ class PostApproval
     }
 
     /**
+     * A post-approval filing the Unit had already approved.
+     *
+     * The twin of {@see denyAtIntake()}: the file enters the lane the way
+     * every post-approval filing does, then stands on Approved with the
+     * decision and the day recorded, in one write. Not through the engine
+     * for the same two reasons. The provider side files these too and holds
+     * no cip.decide; and {@see Decision::record()} asks for the decision
+     * letter, which a file being brought across from somewhere else may not
+     * have to hand. The letter can be added from the decision afterwards.
+     *
+     * Approved is the label a decided file collects its COR documents
+     * under, so nothing else changes: the checklist drives it from here
+     * exactly as it drives a file approved from the status menu. The caller
+     * announces Post-Approval and then Approved, after the commit.
+     */
+    public static function approveAtIntake(CipApplication $application, User $actor): CipApplication
+    {
+        $from = $application->status;
+        $decidedAt = now();
+
+        $application->forceFill([
+            'status' => Status::POST_APPROVED,
+            'decision' => Status::POST_APPROVED,
+            'decided_at' => $decidedAt,
+        ])->save();
+
+        $meta = [
+            'decision' => Status::POST_APPROVED,
+            'decidedAt' => $decidedAt->toDateString(),
+            'atIntake' => true,
+        ];
+        Engine::record($application, CipEvent::ACTION_STATUS_CHANGED, $actor, $meta, $from, Status::POST_APPROVED);
+        Engine::record($application, CipEvent::ACTION_DECISION_RECORDED, $actor, $meta);
+
+        // Round the engine, so the people on the file are told here: each
+        // reads Approved, or further along where their own papers put them.
+        PersonStatus::settle($application);
+
+        return $application->refresh();
+    }
+
+    /**
      * Move a granted pre-approval application into post-approval.
      *
      * Status, phase, COR checklist, folders and the COR notice all travel

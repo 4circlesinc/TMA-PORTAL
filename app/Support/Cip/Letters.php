@@ -40,6 +40,18 @@ class Letters
     }
 
     /**
+     * The sentence the post-approval letters end on.
+     *
+     * A decision recorded from the status menu always has its letter. One
+     * said at filing, a file brought across already approved or denied, has
+     * none yet, and an email promising an attachment it does not carry reads
+     * as a mistake. {@see copy()} leaves this paragraph out when nothing is
+     * attached. Only this sentence, as shipped: an administrator's own
+     * wording is theirs to keep.
+     */
+    public const ATTACHED_LINE = 'Please find the official letter attached.';
+
+    /**
      * The twenty shipped letters, keyed type → phase → outcome.
      *
      * firstOrCreate uses these; restore writes them back. An administrator's
@@ -212,18 +224,33 @@ class Letters
      *
      * @return array{title:string, lead:string, bodyHtml:?string}
      */
-    public static function copy(CipApplication $application, string $decision, ?string $recipientName = null): array
-    {
+    public static function copy(
+        CipApplication $application,
+        string $decision,
+        ?string $recipientName = null,
+        bool $attached = true,
+    ): array {
         $template = self::for($application, $decision);
         $vars = self::vars($application, $recipientName);
         $title = self::fill($template->title, $vars);
 
         if (\App\Support\Templates\Markup::looksLikeHtml($template->body)) {
-            return self::htmlCopy($template->body, $vars, $title);
+            $body = $attached
+                ? $template->body
+                : (string) preg_replace(
+                    '/<(p|div)\b[^>]*>\s*'.preg_quote(self::ATTACHED_LINE, '/').'\s*<\/\1>/iu',
+                    '',
+                    $template->body,
+                );
+
+            return self::htmlCopy($body, $vars, $title);
         }
 
         $paragraphs = preg_split("/\n\s*\n/", trim(self::fill($template->body, $vars))) ?: [];
-        $paragraphs = array_values(array_filter(array_map('trim', $paragraphs), fn (string $p) => $p !== ''));
+        $paragraphs = array_values(array_filter(
+            array_map('trim', $paragraphs),
+            fn (string $p) => $p !== '' && ($attached || $p !== self::ATTACHED_LINE),
+        ));
 
         $lead = $paragraphs[0] ?? '';
         $rest = array_slice($paragraphs, 1);

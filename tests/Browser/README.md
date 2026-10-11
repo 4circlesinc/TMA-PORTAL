@@ -377,6 +377,28 @@ field placement and drawing, and computed CSS only exist in a browser.
   TMA_BASE_URL=http://127.0.0.1:8933 TMA_APP=<uuid> node tests/Browser/cip-checklist-upload.mjs
   ```
 
+- **`cip-post-approval-filing.mjs`** — Adding a post-approval application
+  asks, once, whether it was approved or denied. A firm bringing its existing
+  files into the portal adds them straight into post-approval, and each is
+  one of the two. Approved enters the lane and stands on Approved; the
+  service provider is asked for the Stage 1 documents and then told the
+  application was approved. Denied lands on Denied and is sent the denial
+  alone. The emails are pinned in CipIntakeTest and CipApplicationDraftTest;
+  this is the question itself. Pins that Save on a complete post-approval
+  filing asks "Was this application approved or denied?" with Approved,
+  Denied and Cancel and no undecided answer; that Cancel files nothing and
+  the next Save asks again; that an Add the server refuses forgets the
+  answer, so it is asked again; that Approved files it once and the application
+  reads Approved with the decision and its day; and that Denied does the
+  same for Denied. Same serve, an administrator, and `TMA_PROVIDER`, the
+  uuid of a service provider that account may file under. It writes its own
+  two drafts through the draft endpoint and files them, under fresh numbers
+  each run:
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8933 TMA_PROVIDER=<uuid> node tests/Browser/cip-post-approval-filing.mjs
+  ```
+
 - **`cip-messages-tab.mjs`** — The Messages tab of an application holds its
   thread. Two faults a long thread showed. The tab's card was sized to the
   window, not to what it held: every panel fills the height on offer and may

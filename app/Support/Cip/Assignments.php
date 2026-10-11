@@ -216,12 +216,21 @@ class Assignments
         $role = CipAccess::REVIEWING_OFFICER;
         self::grantHubAccess($application, $officer, $officer, $role);
 
+        /*
+         * Not announced. {@see assign()} tells the section 22 list where a
+         * file stands when it changes hands part-way through its life, and a
+         * post-approval filing is already past NEW when its author is
+         * claimed, so that notice went out on top of the filing's own: the
+         * Stage 1 request twice, or the approval twice, or the denial the
+         * firm asked to send once. A filing says what it is itself.
+         */
         return self::assign(
             $application,
             $officer,
             $officer,
             $role,
             systemStatusMove: $systemStatusMove,
+            announce: false,
         );
     }
 
@@ -327,6 +336,7 @@ class Assignments
         User $actor,
         string $role = CipAccess::REVIEWING_OFFICER,
         bool $systemStatusMove = false,
+        bool $announce = true,
     ): CipApplicationAssignment {
         $shared = $role === self::SERVICE_PROVIDER_CONTACT;
         $live = self::live($application);
@@ -425,7 +435,7 @@ class Assignments
          * that a new officer holds it, in the filing subject for where the
          * file actually stands.
          */
-        if (! $shared && $fromStatus !== Status::NEW) {
+        if ($announce && ! $shared && $fromStatus !== Status::NEW) {
             $application = $application->fresh();
             Notices::announce($application, $application->status, $actor);
         }

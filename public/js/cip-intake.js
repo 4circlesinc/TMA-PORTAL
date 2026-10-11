@@ -2177,6 +2177,8 @@
     state.draftId = null;
     state.dependents = 0;
     state.errors = {};
+    // Start over is a different application: ask approved or denied afresh.
+    state.outcome = null;
     // The number went with the row the server has just deleted. None is
     // shown until a save says what the next one is.
     state.numbered = null;
@@ -3630,10 +3632,10 @@
 
     /*
      * A post-approval filing is one of two things: a file the Unit approved,
-     * which enters the lane and sends the Post-Approval notice, or one it
-     * denied, which lands on Denied and sends the denial. Asked once, on
-     * Add, rather than filed and then re-labelled by hand a minute later
-     * with a second email behind it.
+     * which enters the lane, sends the Post-Approval notice and then the
+     * approval, or one it denied, which lands on Denied and sends the denial
+     * alone. Asked once, on Add, rather than filed and then decided by hand
+     * a minute later.
      */
     if (isFiling() && isPostApprovalIntake() && !isAddOnIntake() && !state.outcome) {
       askOutcome();
@@ -3692,6 +3694,16 @@
       return res.json().catch(function () { return {}; }).then(function (json) {
         state.saving = false;
         if (state.onSaving) state.onSaving(false);
+
+        /*
+         * Refused, so nothing was filed and the answer to "approved or
+         * denied?" is asked again with the next Add. Kept, it rode along
+         * with whatever the reader typed next: correct the form into a
+         * different applicant and they were filed as Denied, and emailed,
+         * with no question asked. The one refusal that keeps it is the
+         * duplicate, whose own dialog files this same application anyway.
+         */
+        if (!res.ok && !(res.status === 409 && json.duplicate)) state.outcome = null;
 
         if (res.status === 422 && json.errors) {
           // The server's word, field by field, already keyed to our paths,
@@ -3760,15 +3772,15 @@
     });
   }
 
-  /** Post-approval or denied: the question Add asks before it files. */
+  /** Approved or denied: the question Add asks before it files. */
   function askOutcome() {
     ui().openModal({
       title: 'Post-approval application',
-      body: '<p class="tma-portal-modal__text">Is this a post-approval application, or one the Unit denied?</p>' +
+      body: '<p class="tma-portal-modal__text">Was this application approved or denied?</p>' +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-outcome-cancel>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-outcome="denied">Denied</button>' +
-        '<button type="button" class="tma-no-data__btn" data-outcome="post_approval">Post-approval</button>' +
+        '<button type="button" class="tma-no-data__btn" data-outcome="approved">Approved</button>' +
         '</div>',
       onMount: function (host) {
         host.querySelector('[data-outcome-cancel]').addEventListener('click', function () {
@@ -3802,6 +3814,8 @@
         '</div>',
       onMount: function (host) {
         host.querySelector('[data-dup-cancel]').addEventListener('click', function () {
+          // Not filed after all: the answer goes with it (see submit()).
+          state.outcome = null;
           ui().closeModal();
         });
         host.querySelector('[data-dup-file]').addEventListener('click', function () {

@@ -426,7 +426,7 @@ class Notices
             ),
             Status::GRANTED, Status::DENIED, Status::POST_APPROVED, Status::POST_DENIED => Postcards::cipDecision(
                 $facts, $url, $to, $application->decided_at?->toDateString(), $recipientName, $actor, $subject,
-                Letters::copy($application, $to, $recipientName),
+                Letters::copy($application, $to, $recipientName, $letter !== null),
                 $letter,
             ),
             Status::REVIEW_APPLICATION => Postcards::cipAssigned(
