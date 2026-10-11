@@ -17519,6 +17519,18 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   mask-image: linear-gradient(to bottom, #000 30%, transparent 100%);
 }
 
+/* The frost is the page colour thinning out, so on the dark theme it is the
+ * dark page: white here laid a grey haze over the top of the thread. */
+.tma-dash[data-theme="dark"] .tma-dash__messages-chat-head::before,
+:root[data-theme="dark"] .tma-dash__messages-chat-head::before {
+  background: linear-gradient(
+    to bottom,
+    rgb(28 28 28 / 0.6) 0%,
+    rgb(28 28 28 / 0.22) 45%,
+    rgb(28 28 28 / 0) 100%
+  );
+}
+
 .tma-dash__messages-chat-head > * {
   pointer-events: auto;
   position: relative;
@@ -17675,6 +17687,14 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
   box-shadow: var(--shadow-pill);
+}
+
+/* Its icons turn white on the dark theme, so the pill cannot stay white. The
+ * ring is drawn inside the shadow so the pill keeps its size. */
+.tma-dash[data-theme="dark"] .tma-dash__messages-chat-actions,
+:root[data-theme="dark"] .tma-dash__messages-chat-actions {
+  background: var(--color-bg-popup-glass);
+  box-shadow: var(--shadow-pill), inset 0 0 0 0.5px var(--color-border-soft);
 }
 
 .tma-dash__messages-chat-actions .tma-dash__messages-icon-btn {
