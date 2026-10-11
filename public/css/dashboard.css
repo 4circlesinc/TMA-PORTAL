@@ -38378,6 +38378,57 @@ span.tma-dash__messages-profile-avatar {
   }
 }
 
+/* Upload, on a line that is still owed (checklistUploadHtml). It is the
+   Download control with a different verb, so it wears that class and is
+   revealed with it. All this adds is what a <button> needs to look like the
+   link beside it, and a state for while the file is on its way: it stays
+   up, dimmed, and takes no second press. */
+.tma-dash__clients-checklist-upload {
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tma-dash__clients-checklist-row .tma-dash__clients-checklist-upload[aria-busy="true"] {
+  opacity: 0.45;
+  pointer-events: none;
+  cursor: progress;
+}
+
+/* On a line that carries it, the name gives up the slack it normally takes
+   and the control sits straight after it, where the reader's pointer already
+   is when they hover the words. The status stays hard right, pushed there by
+   the control's own margin. Lines without it are laid out as they were. */
+.tma-dash__clients-checklist-row--owed > .tma-dash__clients-checklist-label,
+.tma-dash__clients-checklist-row--owed > .tma-dash__clients-checklist-open {
+  flex: 0 1 auto;
+}
+
+.tma-dash__clients-checklist-row--owed > .tma-dash__clients-checklist-upload {
+  margin-right: auto;
+}
+
+/* At tablet width and below the reviewable status carries an auto margin of
+   its own (dashboard-tma-overrides.css), which used to resolve to nothing
+   because the name took the slack. Beside the control's margin it would
+   split the space and leave the comment flag adrift mid-line, so on these
+   lines it is put back to what it resolved to. */
+@media (max-width: 1024px) {
+  .tma-dash__clients-checklist-row.tma-dash__clients-checklist-row--owed .tma-file-status-chip {
+    margin-left: 0;
+  }
+}
+
+/* On a phone a line that is filed AND still owed would carry Download and
+   Upload side by side and leave the name a few letters wide. Upload is the
+   one the line is waiting on; the name still opens the document, and the
+   viewer has Download. */
+@media (max-width: 640px) {
+  .tma-dash__clients-checklist-row--owed > a.tma-dash__clients-checklist-download {
+    display: none;
+  }
+}
+
 /* The document's own picture, beside the line it answers — see
    checklistThumbHtml. The empty slot on an unfiled line is deliberate: it
    keeps every label in one column. */

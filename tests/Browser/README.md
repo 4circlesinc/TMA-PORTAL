@@ -354,6 +354,29 @@ field placement and drawing, and computed CSS only exist in a browser.
   TMA_BASE_URL=http://127.0.0.1:8933 TMA_APP=<uuid> node tests/Browser/cip-photo-adjust.mjs
   ```
 
+- **`cip-checklist-upload.mjs`** — Upload from the Documents checklist on an
+  application. The checklist named the documents still owed and sent the
+  reader elsewhere to supply them; each line that may be filed to now carries
+  an Upload control straight after its name, the twin of Download (hidden
+  until the line is hovered or focused, always shown on a touch screen),
+  filed through the door the drops already use. Which lines qualify is the
+  server's `canUpload`. Pins that owed lines have the control and accepted
+  documents do not; that it is invisible at rest and appears on hover, right
+  after the name, with the status still at the right; that pressing it opens
+  the chooser for a PDF or an image; that the line says Uploading… and takes
+  no second file meanwhile; that once filed the line is ticked, shows
+  Application review and offers Download with the control gone and no
+  reload; and that no other line moved. Same serve and the same seed as
+  `cip-confirm-submission.mjs` (an application with accepted documents and
+  empty optional slots, package not confirmed); it files a document, so seed
+  a fresh application for each run:
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FEATURE_CIP=true FILES_DISK=local MALWARE_SCANNER=none \
+    php artisan tinker tests/Browser/fixtures/confirm-ready-seed.php < /dev/null
+  TMA_BASE_URL=http://127.0.0.1:8933 TMA_APP=<uuid> node tests/Browser/cip-checklist-upload.mjs
+  ```
+
 - **`cip-confirm-submission.mjs`** — Confirm submission says it has been
   confirmed. The press locked the package and the server answered with the
   application as it then stood, but the page repainted from the record it

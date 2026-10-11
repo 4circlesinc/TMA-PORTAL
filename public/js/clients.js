@@ -8834,7 +8834,12 @@
         var file = input.files && input.files[0];
         var id = input.getAttribute('data-cip-slot-file');
         input.value = '';
-        if (file) uploadCipSlot(state, render, id, file, input.closest('[data-cip-slot-drop]'));
+        // One file at a time from a checklist line; see checklistUploadSending.
+        if (file && cipSlotSending[id]) return;
+        if (file) {
+          checklistUploadSending(root, state, render, id,
+            uploadCipSlot(state, render, id, file, input.closest('[data-cip-slot-drop]')));
+        }
       });
     });
 
@@ -8888,7 +8893,7 @@
     ).trim();
     if (documentName) form.append('documentName', documentName);
 
-    clientsFetch('/portal/cip/documents/' + encodeURIComponent(slotId) + '/file', {
+    return clientsFetch('/portal/cip/documents/' + encodeURIComponent(slotId) + '/file', {
       method: 'POST',
       body: form,
     })
@@ -8898,6 +8903,9 @@
           paintCipApplicationStatus(state.selectedId, json.application.status, json.application);
         }
         refreshCipAfterFileChange(state, render);
+
+        // The answer, for a caller that asked to be told (a checklist line).
+        return json;
       })
       .catch(function (err) {
         if (hint) hint.textContent = previous || 'Drop a file here, or choose one';
@@ -9299,6 +9307,121 @@
       '<img src="' + ICONS.DownloadSimple + '" alt="" width="16" height="16"></a>';
   }
 
+  /*
+   * Upload, from the line that is still owed.
+   *
+   * The checklist said what was missing and then sent the reader somewhere
+   * else to supply it: Edit application, or a drop further down the page.
+   * The line itself is where they are looking, so it carries the control.
+   * It is the Download control's twin: the same place in the row, shown the
+   * same way (on hover or focus; always, on a touch screen), with the same
+   * look.
+   *
+   * Offered only where the server says this slot may be filed to right now
+   * (`canUpload`: an empty slot, one sent back for an update, or the open
+   * Additional documents box, and never once the package is locked). The
+   * hidden input and the button carry the same attributes the drops use, so
+   * the one wiring (wireCipSlotUploads) and the one upload (uploadCipSlot)
+   * serve both.
+   */
+  var cipSlotSending = {};
+
+  function checklistUploadHtml(d) {
+    if (!d || !d.canUpload || !d.id) return '';
+
+    var photo = d.type === 'passport_photo';
+    var accept = photo ? 'image/jpeg,image/png,image/webp,image/heic,.jpg,.jpeg,.png,.webp,.heic' : '.pdf,image/*';
+    var sending = !!cipSlotSending[d.id];
+    // An empty slot is filed; the open box takes one more; a document sent
+    // back is replaced.
+    var verb = !d.uploaded
+      ? 'Upload'
+      : (d.type === 'additional_documents' ? 'Upload another' : 'Upload a replacement');
+
+    return '<input type="file" accept="' + accept + '" class="tma-dash__clients-photo-input"' +
+      ' data-cip-slot-file="' + esc(d.id) + '" aria-hidden="true" tabindex="-1">' +
+      '<button type="button" class="tma-dash__clients-checklist-download tma-dash__clients-checklist-upload"' +
+      ' data-cip-slot-file-btn="' + esc(d.id) + '" data-cip-slot-verb="' + esc(verb) + '"' +
+      (sending ? ' disabled aria-busy="true"' : '') +
+      ' title="' + esc(sending ? 'Uploading…' : verb) + '"' +
+      ' aria-label="' + esc(verb + ' ' + (d.label || 'document')) + '">' +
+      '<img src="' + ICON + 'UploadSimple.svg" alt="" width="16" height="16"></button>';
+  }
+
+  /*
+   * The line says it is sending, and takes no second file until it has
+   * finished. Kept in `cipSlotSending` as well as on the button, because a
+   * repaint in the middle of an upload redraws the button from its markup.
+   *
+   * When the file lands, the line is told so from the answer itself (the
+   * slot as the server now has it) and redrawn before the control is let
+   * go. Releasing it first left a moment, until the whole record had been
+   * read again, where the toast said uploaded over a line that still said
+   * Pending upload with a live control, and a second press sent a second
+   * file.
+   */
+  function checklistUploadSending(root, state, render, id, sending) {
+    var find = function () {
+      return root.querySelector('.tma-dash__clients-checklist-upload[data-cip-slot-file-btn="' + id + '"]');
+    };
+    if (!find() || !sending || typeof sending.then !== 'function') return;
+
+    var uid = state && state.selectedId;
+    cipSlotSending[id] = true;
+    var btn = find();
+    btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
+    btn.setAttribute('title', 'Uploading…');
+
+    var done = function (json) {
+      var filed = json && json.document && json.document.id === id
+        && checklistApplySlotAnswer(uid, json.document);
+      delete cipSlotSending[id];
+
+      if (filed && state && state.selectedId === uid && typeof render === 'function') {
+        render(usesPagedClientsFlow(state) ? { forceFull: true } : { detailOnly: true });
+
+        return;
+      }
+
+      var now = find();
+      if (!now) return;
+      now.disabled = false;
+      now.removeAttribute('aria-busy');
+      now.setAttribute('title', now.getAttribute('data-cip-slot-verb') || 'Upload');
+    };
+    sending.then(done, function () { done(null); });
+  }
+
+  /*
+   * The slot as the upload's answer describes it, written onto the record
+   * this screen is drawing: filed, its status, and whether it may still be
+   * filed to. The whole record is read again straight after (the document's
+   * picture and its download address come with that); this is what the line
+   * shows in between.
+   */
+  function checklistApplySlotAnswer(uid, answer) {
+    var app = uid ? applicationFor(uid) : null;
+    if (!app || !answer) return false;
+
+    var hit = false;
+    cipFamily(app).forEach(function (person) {
+      ((person && person.documents) || []).forEach(function (doc) {
+        if (!doc || doc.id !== answer.id) return;
+        doc.uploaded = !!answer.uploaded;
+        doc.status = answer.status;
+        doc.statusLabel = answer.statusLabel;
+        doc.statusTone = answer.statusTone;
+        doc.fileId = answer.fileId || null;
+        doc.fileName = answer.fileName || null;
+        doc.canUpload = !!answer.canUpload;
+        hit = true;
+      });
+    });
+
+    return hit;
+  }
+
   function renderChecklistRow(d) {
     var filed = !!d.uploaded;
     var status = filed
@@ -9334,7 +9457,8 @@
         '<span class="tma-portal-status tma-portal-status--' + esc(tone) +
         ' tma-portal-status--inline">' + esc(status) + '</span>';
     }
-    var download = checklistDownloadHtml(d) ||
+    var upload = checklistUploadHtml(d);
+    var download = (checklistDownloadHtml(d) + upload) ||
       '<span class="tma-dash__clients-checklist-download-slot" aria-hidden="true"></span>';
     var body = opens
       ? '<button type="button" class="tma-dash__clients-checklist-open" data-cip-file="' +
@@ -9346,7 +9470,10 @@
       : '';
 
     return (
-      '<li class="tma-dash__clients-checklist-row"' + (d.id ? ' data-key="doc-' + esc(d.id) + '"' : '') + '>' +
+      // --owed: this line carries Upload, which sits straight after the name
+      // (where the pointer already is) instead of across the row by the status.
+      '<li class="tma-dash__clients-checklist-row' + (upload ? ' tma-dash__clients-checklist-row--owed' : '') + '"' +
+      (d.id ? ' data-key="doc-' + esc(d.id) + '"' : '') + '>' +
       '<input type="checkbox" class="tma-dash__check"' + (filed ? ' checked' : '') +
       ' disabled tabindex="-1" aria-hidden="true">' +
       body +
