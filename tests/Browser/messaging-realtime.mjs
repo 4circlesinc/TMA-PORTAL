@@ -1,4 +1,5 @@
 import { chromium } from 'playwright';
+import { readFileSync } from 'fs';
 
 // Two people, two browser sessions, one conversation: what one sends must
 // appear in the other's open thread with no reload and no polling.
@@ -11,6 +12,13 @@ import { chromium } from 'playwright';
 const BASE = process.env.TMA_BASE_URL || 'http://127.0.0.1:8899';
 const USER_A = process.env.TMA_EMAIL || 'e2e@example.com';
 const USER_B = process.env.TMA_EMAIL_B || 'user0@example.com'; // Ana Ruiz
+/* Where MAIL_MAILER=log leaves the new-device code. */
+const LOG = process.env.TMA_LOG || 'storage/logs/laravel.log';
+
+function loginCode() {
+  const hits = [...readFileSync(LOG, 'utf8').matchAll(/letter-spacing:\.24em[^>]*>(\d{6})</g)];
+  return hits.length ? hits[hits.length - 1][1] : null;
+}
 
 const log = (...a) => console.log(...a);
 const failures = [];
@@ -25,7 +33,15 @@ const browser = await chromium.launch();
 async function session(email) {
   // A separate context per user: separate cookies, separate session.
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  // The sign-in page asks each new browser to agree to the legal terms first.
+  await context.addInitScript(() => { try { localStorage.setItem('tma.legalAccepted', '1'); } catch (e) {} });
   const page = await context.newPage();
+
+  // What the Messages page costs to wire up, and how many sockets it holds.
+  const wire = { signOffs: 0, sockets: [] };
+  page.on('request', (r) => { if (r.url().includes('/broadcasting/auth')) wire.signOffs += 1; });
+  page.on('websocket', (ws) => { wire.sockets.push(ws); });
+  wire.open = () => wire.sockets.filter((ws) => !ws.isClosed()).length;
 
   await page.goto(`${BASE}/auth/login`, { waitUntil: 'networkidle' });
   await page.click('text=Sign in with Email');
@@ -36,12 +52,53 @@ async function session(email) {
     page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
     page.click('button[type="submit"]:visible'),
   ]);
+  // A fresh browser is a new device: the six digits come from the mail log.
+  if (page.url().includes('/auth/login-code')) {
+    await page.waitForTimeout(900);
+    const code = loginCode();
+    if (!code) throw new Error(`no sign-in code in ${LOG}`);
+    await page.locator('.tma-auth__otp-digit').first().click();
+    await page.keyboard.type(code, { delay: 40 });
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
+      page.click('button[type="submit"]:visible'),
+    ]);
+  }
+  const stay = page.locator('form:has(input[name="stay"][value="yes"]) button[type="submit"]');
+  if (await stay.count()) {
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'networkidle' }).catch(() => {}),
+      stay.first().click(),
+    ]);
+  }
   if (page.url().includes('/auth/login')) throw new Error('login failed for ' + email);
 
+  // Counted for the Messages page alone: the page before it had a socket
+  // and sign-offs of its own, and leaving it does not always report a close.
+  wire.signOffs = 0;
+  wire.sockets = [];
   await page.goto(`${BASE}/social/messages`, { waitUntil: 'networkidle' });
   await page.waitForSelector('.tma-dash__messages-row', { timeout: 15000 });
+  // A fresh account's sidebar is a hover overlay; a pointer left on it keeps
+  // it open over the page.
+  await page.mouse.move(900, 600);
   await page.waitForTimeout(1500);
-  return { context, page };
+  return { context, page, wire };
+}
+
+const send = async (page, text) => {
+  await page.click('[data-messages-composer-input]');
+  await page.keyboard.type(text);
+  await page.click('[data-messages-composer-send]');
+};
+
+/* Poll a page for up to `ms`, never touching it otherwise. */
+async function eventually(page, ms, probe) {
+  for (let waited = 0; waited < ms; waited += 200) {
+    if (await probe()) return true;
+    await page.waitForTimeout(200);
+  }
+  return false;
 }
 
 let a, b;
@@ -52,15 +109,24 @@ try {
   check(true, `A = ${USER_A}, B = ${USER_B}`);
 
   step(2, 'The websocket actually connected');
-  const socketState = await a.page.evaluate(() => ({
-    enabled: !!(window.TMAMessagingRealtime && window.TMAMessagingRealtime.connected),
-    socketId: window.TMAMessagingRealtime && window.TMAMessagingRealtime.socketId,
-    channels: window.TMAMessagingRealtime
-      ? Object.keys(window.TMAMessagingRealtime.channels).length
-      : 0,
-  }));
+  const socketState = await a.page.evaluate(() => {
+    const rt = window.TMAMessagingRealtime;
+    const names = rt ? Object.keys(rt.channels) : [];
+    return {
+      enabled: !!(rt && rt.connected),
+      socketId: rt && rt.socketId,
+      channels: names.length,
+      subscribed: names.filter((name) => rt.channels[name].subscribed).length,
+    };
+  });
   check(socketState.enabled, `A's socket is connected (id ${socketState.socketId})`);
   check(socketState.channels > 0, `A subscribed to ${socketState.channels} conversation channels`);
+  check(socketState.subscribed === socketState.channels,
+    `every channel is confirmed (${socketState.subscribed} of ${socketState.channels})`);
+  // Each conversation registers nine listeners, and each of those used to
+  // post its own sign-off and send its own subscribe frame.
+  check(a.wire.signOffs > 0 && a.wire.signOffs <= socketState.channels,
+    `one sign-off per channel (${a.wire.signOffs} for ${socketState.channels})`);
 
   step(3, 'Open the shared conversation on both sides');
   // A opens the conversation with B; B opens the one with A.
@@ -168,6 +234,52 @@ try {
     return res.status;
   }, BASE);
   check(authStatus === 403, `channel auth for a foreign conversation refused (${authStatus})`);
+
+  step(9, 'A reply that lands while A is in another conversation is there when A comes back');
+  // The thread was read once, so it is shown from memory when reopened. The
+  // arrival used to move only its row: the list said there was a reply and
+  // the conversation did not have it until the page was reloaded.
+  const rowAna = a.page.locator('.tma-dash__messages-row', { hasText: 'Ana Ruiz' }).first();
+  // A draft another run left in the box stands in the row where the preview
+  // goes, and the row is what the first check reads.
+  const box = a.page.locator('[data-messages-composer-input]');
+  if ((await box.textContent()).trim()) {
+    await box.fill('');
+    await a.page.waitForTimeout(900);
+  }
+  await a.page.locator('.tma-dash__messages-row', { hasText: 'Peer 01' }).first().click();
+  await a.page.waitForTimeout(1000);
+
+  const away = 'sent while away ' + Date.now();
+  await send(b.page, away);
+  const rowMoved = await eventually(a.page, 8000, async () => (await rowAna.textContent()).includes('sent while away'));
+  check(rowMoved, "A's chat list shows the reply while A reads someone else");
+
+  await rowAna.click();
+  const inThread = await eventually(a.page, 5000,
+    async () => (await a.page.textContent('[data-messages-chat-body]')).includes(away));
+  check(inThread, 'reopening the conversation shows the reply, with no reload');
+
+  step(10, 'A reconnect leaves one socket, and it still hears');
+  // The replaced socket's close used to be taken for the connection dropping
+  // and a second socket was opened beside the new one. The server then cut
+  // off whichever went unanswered, about once a minute, with its channels.
+  await a.page.evaluate(() => window.TMAMessagingRealtime.reconnect());
+  await a.page.waitForTimeout(3500);
+  const after = await a.page.evaluate(() => {
+    const rt = window.TMAMessagingRealtime;
+    const names = Object.keys(rt.channels);
+    return { connected: rt.connected, channels: names.length, subscribed: names.filter((n) => rt.channels[n].subscribed).length };
+  });
+  check(a.wire.open() === 1, `the tab holds one socket after reconnecting (${a.wire.open()})`);
+  check(after.connected && after.subscribed === after.channels,
+    `every channel is back on it (${after.subscribed} of ${after.channels})`);
+
+  const afterwards = 'after the reconnect ' + Date.now();
+  await send(b.page, afterwards);
+  const heard = await eventually(a.page, 6000,
+    async () => (await a.page.textContent('[data-messages-chat-body]')).includes(afterwards));
+  check(heard, 'A saw a message sent after the reconnect');
 
   await a.page.screenshot({ path: new URL('./messaging-realtime.png', import.meta.url).pathname });
   log('\nwrote messaging-realtime.png');

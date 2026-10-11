@@ -260,6 +260,62 @@
   }
 
   /*
+   * Bring a thread that is held but not on screen up to its newest page.
+   *
+   * If the page does not reach back to what is held, the messages between
+   * the two were never fetched. Keeping both would be a thread with a hole
+   * in it and no way to fill it, so the older part is let go and comes back
+   * through "Load earlier messages".
+   */
+  function mergeNewestPage(id, data) {
+    var bucket = threadBucket(id);
+    var incoming = (data && data.messages) || [];
+    var more = !!(data && data.hasMore);
+
+    var newestHeld = 0;
+    bucket.messages.forEach(function (msg) {
+      if (msg.seq && msg.seq > newestHeld) newestHeld = msg.seq;
+    });
+
+    if (!newestHeld) {
+      // Nothing held yet: the page is the thread, and says how far it goes.
+      bucket.hasMore = more;
+    } else if (more && incoming.length && incoming[0].seq > newestHeld) {
+      // Unsent bubbles carry no seq and stay where they are.
+      bucket.messages = bucket.messages.filter(function (msg) {
+        return !msg.seq;
+      });
+      bucket.hasMore = true;
+    }
+
+    mergeMessages(id, incoming, false);
+    bucket.stale = false;
+    return bucket;
+  }
+
+  /*
+   * A conversation opened once is shown from memory the next time, without
+   * asking. That only holds while what is held is the whole conversation, so
+   * anything that learns a thread has moved on without having its messages
+   * says so here, and the next opening asks again.
+   */
+  function markThreadStale(id) {
+    var bucket = STORE.threadMessages[id];
+    if (bucket && bucket.loaded) bucket.stale = true;
+  }
+
+  /* After the list is read again: every held thread whose row moved on. */
+  function markMovedThreads(previous) {
+    var before = {};
+    (previous || []).forEach(function (row) {
+      before[row.id] = row.timestamp;
+    });
+    (STORE.threads || []).forEach(function (row) {
+      if (before[row.id] !== row.timestamp) markThreadStale(row.id);
+    });
+  }
+
+  /*
    * The server resolves display names, photos and presence for the viewer, so
    * there is nothing left to overlay client-side. Kept as a seam because the
    * render functions all call it.
@@ -6071,6 +6127,7 @@
         STORE.real = true;
 
         retainOpenThread(previousThreads, state.selectedId);
+        markMovedThreads(previousThreads);
 
         if (window.TMAStore) {
           window.TMAStore.put('messages:warm', {
@@ -6117,7 +6174,7 @@
         window.TMAMessagingAPI.markAllDelivered();
 
         if (state.selectedId) {
-          loadThread(root, state, render, state.selectedId, { toBottom: true });
+          loadThread(root, state, render, state.selectedId, { toBottom: true, quiet: !!options.silent });
         }
       })
       .catch(function (err) {
@@ -6150,10 +6207,18 @@
       .then(function (data) {
         bucket.loading = false;
         bucket.loadingOlder = false;
-        bucket.loaded = true;
-        bucket.hasMore = !!data.hasMore;
 
-        mergeMessages(conversationId, data.messages || [], !!options.before);
+        if (options.quiet && bucket.loaded && !options.before) {
+          // Catching up on a thread already held. How far back it reaches
+          // is still what it was, unless the page no longer joins up with it.
+          mergeNewestPage(conversationId, data);
+        } else {
+          bucket.hasMore = !!data.hasMore;
+          mergeMessages(conversationId, data.messages || [], !!options.before);
+          // The newest page is in: what is held is the conversation again.
+          if (!options.before) bucket.stale = false;
+        }
+        bucket.loaded = true;
 
         // The conversation row can have moved on while history was in flight.
         if (data.conversation) replaceThread(data.conversation);
@@ -6177,6 +6242,10 @@
             return row.id !== conversationId;
           });
           if (state.selectedId === conversationId) state.selectedId = null;
+        } else if (options.quiet && bucket.messages.length) {
+          // A refresh behind a thread that is already up. What is on screen
+          // is the last known truth; an error card in its place would not be.
+          bucket.stale = true;
         } else {
           bucket.error = err;
         }
@@ -6472,6 +6541,9 @@
     } else {
       markConversationRead(root, state, render, conversationId);
       subscribeToConversation(root, state, render, conversationId);
+      // What is held fell behind while this conversation was closed. Show
+      // it, and bring the rest in behind it.
+      if (bucket.stale) loadThread(root, state, render, conversationId, { toBottom: true, quiet: true });
     }
   }
 
@@ -6511,19 +6583,27 @@
   function startRealtime(root, state, render) {
     var realtime = window.TMAMessagingRealtime;
 
-    // No websocket configured at all, poll instead of going dead.
-    if (!STORE.realtime || !realtime || !realtime.start(STORE.realtime)) {
-      startPollingFallback(root, state, render);
-      return;
-    }
+    // Runs either way. It stands down while the socket is delivering, and
+    // is what keeps the page moving whenever it is not.
+    startPollingFallback(root, state, render);
 
-    // The socket can also be refused after connecting (a cluster that does not
-    // allow this origin, for instance). That is not recoverable by retrying,
-    // so fall back to polling rather than leaving the page frozen.
+    // No websocket configured at all: the poll is all there is.
+    if (!STORE.realtime || !realtime || !realtime.start(STORE.realtime)) return;
+
     if (!realtime._tmaStateBound) {
       realtime._tmaStateBound = true;
-      realtime.onState(function (status) {
-        if (status === 'refused') startPollingFallback(root, state, render);
+      realtime.onState(function (status, detail) {
+        /*
+         * The list is read before its subscriptions take effect, on first
+         * load and again after every reconnect, and whatever is sent in
+         * between reaches nobody. Once this page's channels are confirmed,
+         * read once more; from there the socket has it.
+         */
+        if (status !== 'subscribed') return;
+        var ours = ((detail && detail.channels) || []).some(function (name) {
+          return name.indexOf('private-conversation.') === 0 || name.indexOf('private-messaging.user.') === 0;
+        });
+        if (ours) refreshInbox(root, state, render);
       });
     }
 
@@ -6532,52 +6612,117 @@
     });
   }
 
+  /* Is the socket delivering right now? Refused, down, parked or silent is no. */
+  function socketIsLive() {
+    var realtime = window.TMAMessagingRealtime;
+    if (!realtime || !STORE.realtime || !STORE.realtime.enabled) return false;
+    if (typeof realtime.isHealthy === 'function') return realtime.isHealthy();
+    return !!(realtime.connected && realtime.socketId);
+  }
+
   /*
-   * Fallback for when live updates are unavailable. Deliberately slower than
-   * the socket - it exists so the page keeps working, not so it feels instant.
-   * Skipped entirely while the tab is hidden.
+   * Read the list again behind what is on screen, and bring the open thread
+   * up to date if its row moved on. The same pass serves the poll and the
+   * catch-up after a socket comes back.
+   */
+  var inboxRefresh = null;
+  var inboxRefreshAgain = false;
+
+  function refreshInbox(root, state, render) {
+    // Asked for again while one is in flight: that answer may already be
+    // behind, so run once more after it instead of beside it.
+    if (inboxRefresh) {
+      inboxRefreshAgain = true;
+      return inboxRefresh;
+    }
+
+    inboxRefresh = window.TMAMessagingAPI.conversations()
+      .then(function (data) {
+        var previous = STORE.threads || [];
+        var open = state.selectedId;
+        var wasOpen = open ? findThread(open) : null;
+
+        STORE.threads = data.conversations || [];
+        retainOpenThread(previous, open);
+        markMovedThreads(previous);
+
+        // A conversation that appeared since the list was last read.
+        getThreads().forEach(function (row) {
+          subscribeToConversation(root, state, render, row.id);
+        });
+
+        // Opening a thread reads it here before the server has heard, and
+        // this list may have been counted in between. A conversation with
+        // nothing new in it cannot have gained unread messages.
+        var isOpen = open ? findThread(open) : null;
+        if (wasOpen && isOpen && !wasOpen.unread && wasOpen.timestamp === isOpen.timestamp) {
+          isOpen.unread = 0;
+        }
+
+        render();
+        syncTabBarBadges();
+
+        // Pull the open thread's newest page if it moved on. Asked of the
+        // thread, not of the row: a pull that failed is still owed on the
+        // next pass, when the row no longer looks any different.
+        var held = open ? STORE.threadMessages[open] : null;
+        if (held && held.loaded && held.stale && !held.loading) {
+          return window.TMAMessagingAPI.messages(open).then(function (thread) {
+            mergeMessages(open, thread.messages || [], false);
+            held.stale = false;
+            render();
+            window.TMAMessagingAPI.markDelivered(open).catch(function () {});
+            if (!document.hidden) markConversationRead(root, state, render, open);
+          });
+        }
+      })
+      .catch(function () {
+        // A missed pass is not worth surfacing; the next one retries.
+      })
+      .then(function () {
+        inboxRefresh = null;
+        if (!inboxRefreshAgain) return;
+        inboxRefreshAgain = false;
+        return refreshInbox(root, state, render);
+      });
+
+    return inboxRefresh;
+  }
+
+  /*
+   * Fallback for when live updates are not arriving: no socket configured,
+   * the cluster refusing this tab, or a connection that is down. Deliberately
+   * slower than the socket - it exists so the page keeps working, not so it
+   * feels instant. Skipped while the tab is hidden, and a pass in six while
+   * Messages is not the page on show: the nav badge still has to move.
+   *
+   * It used to start only when a refusal was heard, and the shell opens the
+   * socket long before this page listens to it. A tab the cluster had turned
+   * away got neither live updates nor this, until it was reloaded.
    */
   var POLL_INTERVAL = 10000;
+  var POLL_AWAY_EVERY = 6;
   var pollTimer = null;
+  var pollTick = 0;
+  var pollWarned = false;
 
   function startPollingFallback(root, state, render) {
     if (pollTimer) return;
 
-    if (window.console) {
-      console.warn('[messaging] live updates unavailable, falling back to polling.');
-    }
-
     pollTimer = setInterval(function () {
       if (document.hidden || !root.isConnected) return;
+      if (socketIsLive()) return;
 
-      window.TMAMessagingAPI.conversations()
-        .then(function (data) {
-          var previous = STORE.threads || [];
-          var previousTimes = {};
-          previous.forEach(function (row) {
-            previousTimes[row.id] = row.timestamp;
-          });
-          STORE.threads = data.conversations || [];
-          retainOpenThread(previous, state.selectedId);
+      pollTick += 1;
+      // No boxes at all while the Messages view is not the one showing.
+      if (!root.getClientRects().length && pollTick % POLL_AWAY_EVERY !== 0) return;
 
-          // Pull the open thread's newest page if it actually moved on.
-          var open = state.selectedId;
-          if (open) {
-            var row = findThread(open);
-            if (row && previousTimes[open] !== row.timestamp) {
-              return window.TMAMessagingAPI.messages(open).then(function (thread) {
-                mergeMessages(open, thread.messages || [], false);
-                render();
-                if (!document.hidden) markConversationRead(root, state, render, open);
-              });
-            }
-          }
+      if (!pollWarned && window.console) {
+        pollWarned = true;
+        console.warn('[messaging] live updates unavailable, falling back to polling.');
+      }
 
-          render();
-        })
-        .catch(function () {
-          // A missed poll is not worth surfacing; the next one retries.
-        });
+      refreshInbox(root, state, render);
     }, POLL_INTERVAL);
   }
 
@@ -6903,7 +7048,18 @@
 
       if (payload.seq && payload.seq <= newest) return; // already have it
 
-      window.TMAMessagingAPI.messages(conversationId).then(function (data) {
+      pullArrival(root, state, render, conversationId, payload, 0);
+      return;
+    }
+
+    // Not the open conversation, but it still arrived at this client.
+    window.TMAMessagingAPI.markDelivered(conversationId).catch(function () {});
+    refreshConversationRow(root, state, render, conversationId, payload);
+  }
+
+  function pullArrival(root, state, render, conversationId, payload, attempt) {
+    window.TMAMessagingAPI.messages(conversationId)
+      .then(function (data) {
         mergeMessages(conversationId, data.messages || [], false);
         if (data.conversation) replaceThread(data.conversation);
         render();
@@ -6915,18 +7071,29 @@
         if (!document.hidden) markConversationRead(root, state, render, conversationId);
 
         notifyNewMessage(root, conversationId, payload);
+      })
+      .catch(function () {
+        // The event is only the doorbell, and it rings once. Ask again
+        // before leaving the message owed to the next pass over the list.
+        if (attempt < 2) {
+          setTimeout(function () {
+            pullArrival(root, state, render, conversationId, payload, attempt + 1);
+          }, 1500 * (attempt + 1));
+          return;
+        }
+        markThreadStale(conversationId);
       });
-      return;
-    }
-
-    // Not the open conversation, but it still arrived at this client.
-    window.TMAMessagingAPI.markDelivered(conversationId).catch(function () {});
-    refreshConversationRow(root, state, render, conversationId, payload);
   }
 
   function refreshConversationRow(root, state, render, conversationId, payload) {
     window.TMAMessagingAPI.messages(conversationId)
       .then(function (data) {
+        // A thread read earlier is still held, and opening it again shows
+        // what is held without asking. Moving only the row left the reply
+        // out of its own conversation until the page was reloaded.
+        var held = STORE.threadMessages[conversationId];
+        if (held && held.loaded) mergeNewestPage(conversationId, data);
+
         if (data.conversation) {
           replaceThread(data.conversation);
           render();
@@ -6934,7 +7101,9 @@
         }
         notifyNewMessage(root, conversationId, payload);
       })
-      .catch(function () {});
+      .catch(function () {
+        markThreadStale(conversationId);
+      });
   }
 
   /* ------------------------------------------------------------------

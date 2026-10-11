@@ -2529,6 +2529,50 @@ scripted ByeWind conversation and no network calls at all. It is now backed by
   refuses a channel for a conversation the caller is not in, which is the
   websocket half of the membership rule the HTTP routes enforce.
 
+  Three checks were each a way for "messages do not arrive until I reload"
+  to happen with everything apparently connected:
+
+  - *A reply that lands while A is in another conversation* must be in the
+    thread when A comes back. A thread read once is shown from memory, and
+    the arrival used to move only its row in the chat list: the list said
+    there was a reply and the conversation did not have it.
+  - *One sign-off per channel.* A conversation registers nine listeners and
+    each used to post its own `/broadcasting/auth` and send its own subscribe
+    frame, about 130 of each on a page with 14 conversations. A server that
+    limits frames per connection drops the excess, and a dropped subscription
+    was never asked for again.
+  - *A reconnect leaves one socket.* The replaced socket's `close` was heard
+    as the connection dropping and a second socket was opened beside the new
+    one; the server cut off whichever went unanswered about once a minute,
+    with its channels. It needs no sleeping laptop to start: stock Reverb
+    speaks to an idle connection every 60 to 120 seconds and the client used
+    to reopen after 90 of silence.
+
+  Sign-in reads the new-device code from the mail log, and step 9 wants a
+  second conversation ("Peer 01") for A to step into:
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker \
+    --execute="require 'tests/Browser/fixtures/messaging-realtime-seed.php';" < /dev/null
+
+  R="BROADCAST_CONNECTION=reverb REVERB_APP_ID=local REVERB_APP_KEY=localkey REVERB_APP_SECRET=localsecret \
+    REVERB_HOST=127.0.0.1 REVERB_PORT=8080 REVERB_SCHEME=http"
+  env $R php artisan reverb:start --host=127.0.0.1 --port=8080 &
+  env $R DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= MAIL_MAILER=log QUEUE_CONNECTION=sync \
+    CACHE_STORE=array SESSION_DRIVER=file PHP_CLI_SERVER_WORKERS=8 \
+    php artisan serve --host=127.0.0.1 --port=8899 --no-reload &
+  npm run build   # the served shell uses public/build; a stale bundle hides the change
+  node tests/Browser/messaging-realtime.mjs
+  ```
+
+  The `REVERB_*` overrides matter: the host `.env` names the production
+  cluster, and without them the test broadcasts there. Two more conditions
+  are worth setting up by hand when this area is touched, both on the Reverb
+  process: `REVERB_APP_RATE_LIMITING_ENABLED=true` (60 frames a minute; every
+  channel must still end up subscribed) and `REVERB_APP_MAX_CONNECTIONS=1`
+  (the second browser is refused with 4004 and must still receive messages,
+  by the 10 second poll).
+
 - **`messaging-toolbar.mjs`** — the three controls in the chat-list header,
   which were all dead chrome: the "search" was a `<span>` with no input behind
   it, the compose button had no handler, and the gear did nothing. It checks

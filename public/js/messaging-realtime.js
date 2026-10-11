@@ -34,6 +34,36 @@
   var STALE_MS = 90000;
 
   /*
+   * Silence alone does not mean a dead socket. The server speaks to an idle
+   * connection only once it has heard nothing from it for a minute, checked
+   * once a minute, so a healthy one can be silent for up to two: past
+   * STALE_MS a good part of the time. Read as death, that reopened working
+   * sockets every few minutes. So a quiet socket is asked (pusher:ping,
+   * answered with pusher:pong) before it goes stale, and a stale one is
+   * asked once more and only reopened if nothing answers.
+   */
+  var PROBE_AFTER_MS = 40000;
+  var PROBE_WAIT_MS = 5000;
+
+  /*
+   * A subscription the server has not confirmed this long after it was sent
+   * is taken as lost and asked for again. The server confirms the ones it
+   * accepts and says nothing that names the channel about one it drops (a
+   * rate-limited frame is answered with a bare pusher:error), so silence is
+   * the only sign there is. Retries back off, up to a minute apart.
+   */
+  var SUBSCRIBE_CONFIRM_MS = 8000;
+  var SUBSCRIBE_RETRY_BASE = 2000;
+  var SUBSCRIBE_RETRY_MAX = 60000;
+  var AUTHORIZE_TIMEOUT_MS = 20000;
+
+  /* Sign-off answers that are answers: asking again gets the same one. */
+  var REFUSED = { 401: true, 403: true, 404: true, 419: true };
+
+  /* How long a tab turned away by a full cluster waits before asking again. */
+  var QUOTA_RETRY_MS = 5 * 60 * 1000;
+
+  /*
    * Idle-tab parking. The WebSocket cluster admits a limited number of
    * connections, and every open tab holds one, so a user with three portal
    * tabs spends three slots to hear each doorbell once. A tab hidden this
@@ -51,9 +81,14 @@
     this.config = null;
     this.socket = null;
     this.socketId = null;
-    this.channels = {};      // name -> { handlers: {event: [fn]}, subscribed: bool }
+    // name -> { handlers: {event: [fn]}, subscribed, pending, attempts, ticket, timer, auth }
+    this.channels = {};
+    // Channels confirmed since the last 'subscribed' state went out.
+    this._confirmed = [];
     this.retries = 0;
     this.retryTimer = null;
+    this.probeTimer = null;
+    this.quotaTimer = null;
     this.connected = false;
     this.stateHandlers = [];
     this.closedByUs = false;
@@ -94,17 +129,41 @@
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
     }
-    if (this.socket) {
-      try { this.socket.close(); } catch (e) { /* ignore */ }
-      this.socket = null;
-    }
-    this.connected = false;
-    this.socketId = null;
-    Object.keys(this.channels).forEach(function (name) {
-      this.channels[name].subscribed = false;
-    }.bind(this));
     this.retries = 0;
+    // open() lets the old socket go and starts the new one from nothing.
     this.open();
+  };
+
+  /*
+   * Let go of the socket in use. Its handlers compare themselves against
+   * this.socket, so from here on nothing it does is heard: a socket that has
+   * been replaced must not be able to speak for the connection.
+   */
+  Realtime.prototype.release = function () {
+    var old = this.socket;
+    this.socket = null;
+    if (old) {
+      try { old.close(); } catch (e) { /* ignore */ }
+    }
+  };
+
+  /* A new socket starts with no subscriptions, and no answer still in flight
+     for the old one counts towards it. */
+  Realtime.prototype.dropSubscriptions = function () {
+    var self = this;
+    Object.keys(this.channels).forEach(function (name) {
+      var entry = self.channels[name];
+      entry.subscribed = false;
+      entry.pending = false;
+      entry.attempts = 0;
+      entry.ticket += 1;
+      entry.auth = null;
+      if (entry.timer) {
+        clearTimeout(entry.timer);
+        entry.timer = null;
+      }
+    });
+    this._confirmed = [];
   };
 
   Realtime.prototype.isHealthy = function () {
@@ -120,8 +179,35 @@
       this.unpark();
       return;
     }
-    if (this.isHealthy()) return;
+    if (this.isHealthy()) {
+      // Quiet, not yet stale: ask before it is, so that silence past
+      // STALE_MS means a dead socket and not merely an idle one.
+      if (Date.now() - this.lastMessageAt > PROBE_AFTER_MS) this.send({ event: 'pusher:ping', data: {} });
+      return;
+    }
+    // Still open but silent too long (a tab that was hidden asks nothing).
+    // Ask once, and reconnect only if nothing comes back.
+    if (this.connected && this.socket && this.socket.readyState === 1) {
+      this.probe();
+      return;
+    }
     this.reconnect();
+  };
+
+  Realtime.prototype.probe = function () {
+    var self = this;
+    if (this.probeTimer) return;
+
+    var socket = this.socket;
+    var asked = Date.now();
+    this.send({ event: 'pusher:ping', data: {} });
+
+    this.probeTimer = setTimeout(function () {
+      self.probeTimer = null;
+      // Replaced in the meantime, or it answered.
+      if (self.socket !== socket || self.lastMessageAt >= asked) return;
+      self.reconnect();
+    }, PROBE_WAIT_MS);
   };
 
   Realtime.prototype.bindWakeHandlers = function () {
@@ -251,16 +337,10 @@
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
     }
-    if (this.socket) {
-      try { this.socket.close(); } catch (err) { /* ignore */ }
-      this.socket = null;
-    }
+    this.release();
     this.connected = false;
     this.socketId = null;
-    var self = this;
-    Object.keys(this.channels).forEach(function (name) {
-      self.channels[name].subscribed = false;
-    });
+    this.dropSubscriptions();
     this.beat();
   };
 
@@ -291,35 +371,51 @@
     // Whatever path opens a socket, the tab is no longer parked.
     this.parked = false;
 
+    /*
+     * One socket per tab. The one being replaced is closed here and its late
+     * events are ignored below. A replaced socket's 'close' used to be heard
+     * as the connection dropping: it scheduled a retry that opened a second
+     * socket beside the new one, the subscriptions sat on one while pings
+     * were answered on the other, and the server cut the unanswered one off
+     * a minute later, taking every subscription with it, again and again.
+     */
+    this.release();
+    this.connected = false;
+    this.socketId = null;
+    this.dropSubscriptions();
+
+    var socket;
     try {
-      this.socket = new WebSocket(this.url());
+      socket = new WebSocket(this.url());
     } catch (err) {
       this.scheduleRetry();
       return;
     }
+    this.socket = socket;
 
-    this.socket.addEventListener('open', function () {
+    socket.addEventListener('open', function () {
+      if (self.socket !== socket) return;
       // Not "connected" yet, that waits for pusher:connection_established,
       // which carries the socket_id every private subscription needs.
       self.retries = 0;
     });
 
-    this.socket.addEventListener('message', function (e) {
+    socket.addEventListener('message', function (e) {
+      if (self.socket !== socket) return;
       self.receive(e.data);
     });
 
-    this.socket.addEventListener('close', function () {
+    socket.addEventListener('close', function () {
+      if (self.socket !== socket) return;
       self.connected = false;
       self.socketId = null;
-      Object.keys(self.channels).forEach(function (name) {
-        self.channels[name].subscribed = false;
-      });
+      self.dropSubscriptions();
       self.emitState('disconnected');
       self.beat();
       if (!self.closedByUs && !self.parked) self.scheduleRetry();
     });
 
-    this.socket.addEventListener('error', function () {
+    socket.addEventListener('error', function () {
       // 'close' always follows; retry is scheduled there so it happens once.
     });
   };
@@ -370,7 +466,21 @@
     }
 
     if (event === 'pusher_internal:subscription_succeeded') {
-      if (this.channels[payload.channel]) this.channels[payload.channel].subscribed = true;
+      var entry = this.channels[payload.channel];
+      if (entry) {
+        var fresh = !entry.subscribed;
+        entry.subscribed = true;
+        entry.pending = false;
+        entry.attempts = 0;
+        if (entry.timer) {
+          clearTimeout(entry.timer);
+          entry.timer = null;
+        }
+        if (fresh) {
+          this._confirmed.push(payload.channel);
+          this.settle();
+        }
+      }
       return;
     }
 
@@ -398,6 +508,10 @@
     if (fatal) {
       // Stop the reconnect loop; this cannot succeed as configured.
       this.closedByUs = true;
+      // A full cluster is the one refusal that passes by itself, as other
+      // tabs close. Ask again now and then, far apart, or a tab opened in a
+      // busy hour stays without live updates until it is reloaded.
+      if (code === 4004) this.retryWhenThereIsRoom();
       if (window.console) {
         console.error(
           '[messaging] realtime disabled, the server refused the connection (' +
@@ -411,6 +525,18 @@
     }
 
     this.emitState(fatal ? 'refused' : 'error', { code: code, message: message });
+  };
+
+  Realtime.prototype.retryWhenThereIsRoom = function () {
+    var self = this;
+    if (this.quotaTimer) return;
+    this.quotaTimer = setTimeout(function () {
+      self.quotaTimer = null;
+      if (!self.config || self.connected) return;
+      self.closedByUs = false;
+      self.retries = 0;
+      self.open();
+    }, QUOTA_RETRY_MS);
   };
 
   Realtime.prototype.dispatch = function (channel, event, data) {
@@ -437,6 +563,11 @@
    * and pass the signature it returns back over the socket.
    */
   Realtime.prototype.authorize = function (channel) {
+    // A sign-off that never answers would hold its channel in flight, and
+    // so unsubscribed, for good. Give up on it and let the retry ask again.
+    var abort = typeof AbortController === 'function' ? new AbortController() : null;
+    var giveUp = abort ? setTimeout(function () { abort.abort(); }, AUTHORIZE_TIMEOUT_MS) : null;
+
     return fetch(ROOT + '/broadcasting/auth', {
       method: 'POST',
       credentials: 'same-origin',
@@ -447,30 +578,111 @@
         'X-XSRF-TOKEN': csrf(),
       },
       body: JSON.stringify({ socket_id: this.socketId, channel_name: channel }),
+      signal: abort ? abort.signal : undefined,
     }).then(function (res) {
-      if (!res.ok) throw new Error('Channel auth failed (' + res.status + ')');
+      if (!res.ok) {
+        var err = new Error('Channel auth failed (' + res.status + ')');
+        err.status = res.status;
+        throw err;
+      }
       return res.json();
+    }).then(function (auth) {
+      if (giveUp) clearTimeout(giveUp);
+      return auth;
+    }, function (err) {
+      if (giveUp) clearTimeout(giveUp);
+      throw err;
     });
   };
 
   Realtime.prototype.subscribe = function (channel) {
     var self = this;
     var entry = this.channels[channel];
-    if (!entry || entry.subscribed || !this.connected || !this.socketId) return;
+    if (!entry || entry.subscribed || entry.pending || !this.connected || !this.socketId) return;
 
-    this.authorize(channel)
+    // One sign-off and one subscribe per channel, however many listeners ask
+    // for it. A conversation registers nine, and each used to post its own:
+    // nine requests and nine frames per conversation on every page load.
+    entry.pending = true;
+    if (entry.timer) {
+      clearTimeout(entry.timer);
+      entry.timer = null;
+    }
+
+    // Left, or the socket replaced, while an answer was in flight: the
+    // answer belongs to something that is gone.
+    var ticket = entry.ticket;
+    function current() {
+      return self.channels[channel] === entry && entry.ticket === ticket;
+    }
+
+    // A sign-off is for this socket and this channel and stays good for
+    // both, so a frame the server dropped goes out again without asking the
+    // app a second time.
+    var signed = entry.auth ? Promise.resolve(entry.auth) : this.authorize(channel);
+
+    signed
       .then(function (auth) {
-        // The channel may have been left while auth was in flight.
-        if (!self.channels[channel]) return;
+        if (!current()) return;
+        entry.auth = auth;
         self.send({
           event: 'pusher:subscribe',
           data: { channel: channel, auth: auth.auth, channel_data: auth.channel_data },
         });
+        entry.timer = setTimeout(function () {
+          entry.timer = null;
+          if (!current() || entry.subscribed) return;
+          entry.pending = false;
+          self.retrySubscribe(channel);
+          self.settle();
+        }, SUBSCRIBE_CONFIRM_MS);
       })
-      .catch(function () {
-        // Denied or offline. Leave it unsubscribed; the next reconnect or
-        // explicit listen() retries it.
+      .catch(function (err) {
+        if (!current()) return;
+        entry.pending = false;
+        // Refused is left unsubscribed; the next reconnect or explicit
+        // listen() asks afresh. Anything else (offline, a server error) is
+        // asked again here, or the channel stays deaf for as long as the
+        // socket stays up.
+        if (!(err && REFUSED[err.status])) self.retrySubscribe(channel);
+        self.settle();
       });
+  };
+
+  Realtime.prototype.retrySubscribe = function (channel) {
+    var self = this;
+    var entry = this.channels[channel];
+    if (!entry || entry.timer) return;
+
+    var delay = Math.min(SUBSCRIBE_RETRY_MAX, SUBSCRIBE_RETRY_BASE * Math.pow(2, entry.attempts));
+    // Jitter, so channels dropped together do not all ask again together.
+    delay = delay * (0.7 + Math.random() * 0.6);
+    entry.attempts += 1;
+
+    var ticket = entry.ticket;
+    entry.timer = setTimeout(function () {
+      entry.timer = null;
+      if (self.channels[channel] === entry && entry.ticket === ticket) self.subscribe(channel);
+    }, delay);
+  };
+
+  /*
+   * Say which channels have just been confirmed, once nothing is still in
+   * flight. A surface that read its data before its subscription took effect
+   * has a gap between the two that no event will ever fill, on first load
+   * and after every reconnect; this is its cue to read once more.
+   */
+  Realtime.prototype.settle = function () {
+    var self = this;
+    if (!this._confirmed.length) return;
+    var waiting = Object.keys(this.channels).some(function (name) {
+      return self.channels[name].pending;
+    });
+    if (waiting) return;
+
+    var batch = this._confirmed;
+    this._confirmed = [];
+    this.emitState('subscribed', { channels: batch });
   };
 
   Realtime.prototype.resubscribeAll = function () {
@@ -483,7 +695,15 @@
   /* Register a handler and make sure we're subscribed to its channel. */
   Realtime.prototype.listen = function (channel, event, handler) {
     if (!this.channels[channel]) {
-      this.channels[channel] = { handlers: {}, subscribed: false };
+      this.channels[channel] = {
+        handlers: {},
+        subscribed: false,
+        pending: false,
+        attempts: 0,
+        ticket: 0,
+        timer: null,
+        auth: null,
+      };
     }
     var handlers = this.channels[channel].handlers;
     if (!handlers[event]) handlers[event] = [];
@@ -501,9 +721,12 @@
   };
 
   Realtime.prototype.leave = function (channel) {
-    if (!this.channels[channel]) return;
+    var entry = this.channels[channel];
+    if (!entry) return;
     if (this.connected) this.send({ event: 'pusher:unsubscribe', data: { channel: channel } });
+    if (entry.timer) clearTimeout(entry.timer);
     delete this.channels[channel];
+    this.settle();
   };
 
   Realtime.prototype.scheduleRetry = function () {
@@ -540,6 +763,10 @@
     if (this.retryTimer) {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
+    }
+    if (this.quotaTimer) {
+      clearTimeout(this.quotaTimer);
+      this.quotaTimer = null;
     }
     if (this.socket) this.socket.close();
     this.socket = null;
