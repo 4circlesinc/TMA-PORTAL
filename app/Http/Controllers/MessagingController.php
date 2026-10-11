@@ -64,10 +64,11 @@ class MessagingController extends Controller
     {
         $user = $request->user();
 
-        // Self-healing membership for firm-wide chats: staff approved after
-        // one was created are added on their next visit. Outside accounts
-        // are kept out, and dropped if they were already in.
-        OrganizationChat::syncMembership($user);
+        // Self-healing firm-wide chat: made if the firm has none, and kept
+        // in line with the staff list, so someone approved since the last
+        // load is already in. Outside accounts are kept out, and dropped if
+        // they were already in.
+        OrganizationChat::syncMembership();
         ClientConversations::attachLogin($user);
 
         $membershipIds = Conversation::query()

@@ -1147,7 +1147,7 @@ Recordings area (`routes/web.php:1266-1269`, capability `callRecordings.view`, *
 
 ### 3. Payload shapes (verbatim keys)
 
-**Conversation** (`MessagingPresenter.php:168-243`): `id(uuid), type:'direct'|'group', name, subtitle, subject:'provider'|'person'|null, about:{kind,clientUid,clientName,companyName}|null, photo, members:[{id,name,photo,online,lastSeenAt}] (groups, ≤5), memberCount, preview, reactionNote, time, timestamp(ISO), unread, pinned, archived, muted, markedUnread, draft, role:'member'|'admin', presence, workStatus, counterpartId, description, isDefault, canManage, canLeave, blocked`.
+**Conversation** (`MessagingPresenter.php:168-243`): `id(uuid), type:'direct'|'group', name, subtitle, subject:'provider'|'person'|null, about:{kind,clientUid,clientName,companyName}|null, photo, members:[{id,name,photo,online,lastSeenAt}] (groups, ≤5), memberCount, preview, reactionNote, time, timestamp(ISO), unread, pinned, archived, muted, markedUnread, draft, role:'member'|'admin', presence, workStatus, counterpartId, description, isDefault, autoJoin, canManage, canLeave, blocked`.
 `presence` for a direct thread = availability shape (section 6); for a group = `{label:'N online'|'N members', onlineCount}`.
 
 **Message** (`:246-285`): `id(uuid), seq(int, monotonic — page & dedupe on this), type:'text'|'voice'|'attachment'|'system', direction:'in'|'out', body, deleted, edited, sender:{id,name,photo}|null, sentAt(ISO), time, replyTo:{id,seq,senderName,preview,type,attachmentName,thumbUrl}|null, attachments:[Attachment], reactions:[{emoji,count,mine,users:[{id,name}]}], starred, systemEvent:{event,...}|null, status:'sent'|'delivered'|'read'|null (own messages only; group needs everyone), can:{edit,delete}`.

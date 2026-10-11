@@ -312,23 +312,22 @@ Schedule::command('messaging:prune-attachments')->hourly();
 Schedule::command('messaging:send-unread-reminders')->everyFifteenMinutes()->withoutOverlapping(30);
 
 /*
- * Create the firm-wide default conversation if it does not exist yet.
+ * Create the firm-wide default conversation ahead of anyone's first visit.
  *
- * Membership is not seeded here: OrganizationChat::syncMembership runs when a
- * staff member loads their conversations, so anyone approved later joins on
- * their next visit rather than needing this to be re-run. Outside accounts
- * are never added, and are dropped if they somehow already were.
+ * Nothing depends on this being run: OrganizationChat::syncMembership creates
+ * the chat and puts every member of staff in it the first time anybody loads
+ * their conversations, and keeps it in line with the staff list on every load
+ * after that. Outside accounts are never added, and are dropped if they
+ * somehow already were.
  */
 Artisan::command('messaging:org-chat', function () {
     $staff = User::where('account_type', 'Administrator')->orderBy('id')->first();
     $chat = OrganizationChat::ensure($staff);
 
-    if ($staff) {
-        OrganizationChat::syncMembership($staff);
-    }
+    OrganizationChat::syncMembership();
 
     $this->info("Organization chat ready: \"{$chat->name}\" ({$chat->uuid}).");
-    $this->line('Staff join automatically the next time they open Messages. Outside accounts are kept out.');
+    $this->line('Every member of staff is in it. Outside accounts are kept out.');
 })->purpose('Create the firm-wide default conversation');
 
 /*

@@ -4199,6 +4199,9 @@
   function renderGroupSection(state, info, row) {
     var members = info.profile.members || [];
     var canManage = !!info.conversation.canManage;
+    // The staff list decides who is in an auto-join group, so there is
+    // nobody to add and nobody to take out.
+    var canCurate = canManage && !info.conversation.autoJoin;
     var me = (STORE.me || {}).id;
 
     return (
@@ -4208,10 +4211,12 @@
       (info.conversation.isDefault ? ' · Organization chat' : '') +
       '</div>' +
 
+      (canCurate
+        ? '<button type="button" class="tma-dash__messages-profile-action" ' +
+          'data-messages-group-add>Add people</button>'
+        : '') +
       (canManage
         ? '<button type="button" class="tma-dash__messages-profile-action" ' +
-          'data-messages-group-add>Add people</button>' +
-          '<button type="button" class="tma-dash__messages-profile-action" ' +
           'data-messages-group-rename>Rename group</button>' +
           '<button type="button" class="tma-dash__messages-profile-action" ' +
           'data-messages-group-photo>Change group photo</button>' +
@@ -4246,9 +4251,11 @@
                 'data-messages-member-role="' + member.id + '" ' +
                 'data-messages-member-next="' + (isAdmin ? 'member' : 'admin') + '">' +
                 (isAdmin ? 'Demote' : 'Make admin') + '</button>' +
-                '<button type="button" class="tma-dash__messages-member-btn ' +
-                'tma-dash__messages-member-btn--danger" data-messages-member-remove="' + member.id + '" ' +
-                'aria-label="Remove ' + esc(member.name || '') + '">Remove</button>'
+                (canCurate
+                  ? '<button type="button" class="tma-dash__messages-member-btn ' +
+                    'tma-dash__messages-member-btn--danger" data-messages-member-remove="' + member.id + '" ' +
+                    'aria-label="Remove ' + esc(member.name || '') + '">Remove</button>'
+                  : '')
               : '') +
             '</div>'
           );

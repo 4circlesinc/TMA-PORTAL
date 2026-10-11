@@ -304,6 +304,8 @@ class MessagingPresenter
             // The firm's own chat: managed by administrators, and nobody
             // leaves it.
             'isDefault' => (bool) $conversation->is_default,
+            // Membership is the staff list: nobody is added or removed by hand.
+            'autoJoin' => (bool) $conversation->auto_join,
             'canManage' => $conversation->isManageableBy($viewer),
             'canLeave' => $conversation->isLeavableBy($viewer),
             // Drives Block vs Unblock in the conversation menu.

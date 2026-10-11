@@ -83,8 +83,8 @@ try {
   // index 0 forever, since other conversations can be pinned too and pinned
   // rows still sort by recency among themselves.
   check(org?.pinnedBandTop === true, `it sits in the pinned band (index ${org?.index})`);
-  // Membership grows as accounts open Messages, so it is asserted in step 12
-  // once a second account has been through the auto-join path.
+  // Every approved member of staff is in from the first load, whoever made
+  // it; step 12 holds the second account to that.
   check(org?.members >= 1, `this account is already a member (${org?.members})`);
 
   step(3, 'An administrator may manage it, but nobody may leave it');
@@ -255,10 +255,9 @@ try {
     }).then((res) => res.json());
     return !!r.conversations.find((c) => c.isDefault);
   }, BASE);
-  check(joined, 'the second account is a member simply by opening Messages');
+  check(joined, 'the second account is a member without being added by anyone');
 
-  // Now that two accounts have opened Messages, the chat should hold both —
-  // without the seeding command being re-run.
+  // The chat holds both accounts, and no seeding command was ever run.
   const grown = await admin.evaluate(async (base) => {
     const r = await fetch(base + '/portal/messaging/conversations', {
       headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },

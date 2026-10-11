@@ -191,6 +191,7 @@ class MessagingGroupController extends Controller
         $conversation = $this->groupFor($request, $uuid);
 
         $this->assertManages($conversation, $user);
+        $this->assertCurated($conversation);
 
         $data = $request->validate([
             'memberIds' => ['required', 'array', 'min:1'],
@@ -211,7 +212,7 @@ class MessagingGroupController extends Controller
             ->where('status', User::STATUS_APPROVED)
             ->get();
 
-        if ($conversation->auto_join || $conversation->is_default) {
+        if ($conversation->is_default) {
             $candidates = $candidates->filter(fn (User $member) => Role::isStaff($member))->values();
             if ($candidates->isEmpty()) {
                 throw ValidationException::withMessages([
@@ -261,6 +262,7 @@ class MessagingGroupController extends Controller
         $conversation = $this->groupFor($request, $uuid);
 
         $this->assertManages($conversation, $user);
+        $this->assertCurated($conversation);
 
         $participant = $conversation->activeParticipants()->where('user_id', $userId)->first();
         abort_if($participant === null, 404, 'That person is not in this group.');
@@ -337,6 +339,18 @@ class MessagingGroupController extends Controller
                 ? 'Only administrators can change the organization chat.'
                 : 'Only group administrators can change this group.'
         );
+    }
+
+    /**
+     * Membership of an auto-join group is the staff list, not a choice.
+     *
+     * Anyone added or removed by hand would be taken out, or put back, the
+     * next time somebody loaded their conversations, with a line in the
+     * thread saying otherwise.
+     */
+    private function assertCurated(Conversation $conversation): void
+    {
+        abort_if($conversation->auto_join, 422, 'This group takes its members from the staff list.');
     }
 
     /**

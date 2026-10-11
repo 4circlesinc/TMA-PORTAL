@@ -2587,18 +2587,15 @@ node tests/Browser/messaging-phase4.mjs
   to change, **impossible to leave** (the server returns 422), and membership
   that follows the staff list rather than being curated.
 
-  The org chat must exist before running it:
+  Nothing has to be created first. `OrganizationChat::syncMembership` runs
+  when anybody loads their conversations: it makes the org chat if the
+  database has none and puts every approved member of staff in it, so the
+  second account the script signs in is already a member before it has opened
+  Messages.
 
 ```sh
-DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan messaging:org-chat
-
 node tests/Browser/messaging-phase7.mjs
 ```
-
-  Membership is **not** seeded by that command — `OrganizationChat::syncMembership`
-  runs when a user loads their conversations, so each account joins on its next
-  visit. The script proves that by signing in a second account and watching the
-  member count grow without re-seeding.
 
   Groups created by a run are named `Falcon …`; purge them between runs or the
   conversation list fills up:
@@ -2623,8 +2620,8 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
 
   Two assertions had to be *loosened* rather than fixed, and the reasons matter:
   the org chat is pinned but not necessarily at index 0 (other conversations can
-  be pinned, and pinned rows still sort by recency), and its member count starts
-  at 1 because membership grows as accounts sign in.
+  be pinned, and pinned rows still sort by recency), and its member count is
+  however many approved staff the seed holds, so it is only held to a floor.
 
 - **`messaging-phase8.mjs`** — typing indicators, presence transitions, and
   unread counts that move without a reload. Two live sessions **and Reverb**,

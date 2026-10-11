@@ -325,7 +325,7 @@ final class HomeBoard
      */
     private static function chats(User $user): array
     {
-        OrganizationChat::syncMembership($user);
+        OrganizationChat::syncMembership();
         ClientConversations::attachLogin($user);
 
         $conversations = Conversation::query()
