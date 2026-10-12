@@ -9,6 +9,7 @@ use App\Support\Files\FileType;
 use App\Support\Files\FileValidationException;
 use App\Support\Files\Vault;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
@@ -168,6 +169,57 @@ class AttachmentIntake
         Thumbnailer::pruneStaged(24, $user->id);
 
         return $attachment;
+    }
+
+    /**
+     * A copy of a sent attachment, staged for a message in another
+     * conversation: what forwarding a file is.
+     *
+     * The copy has bytes of its own. Two rows on one blob would mean that
+     * deleting the message in either conversation, or emptying the recycle
+     * bin, took the file out of the other. Its thumbnail is copied beside it
+     * for the same reason; a forward that loses its thumbnail still has its
+     * file, so that part never stops the forward.
+     *
+     * @throws FileValidationException when the original's bytes are gone
+     */
+    public static function copyFor(MessageAttachment $source, Conversation $conversation, User $user): MessageAttachment
+    {
+        $stored = Vault::duplicateStored($source->disk, (string) $source->path, (string) $source->extension);
+
+        $copy = MessageAttachment::create([
+            'uuid' => (string) Str::uuid(),
+            'message_id' => null,
+            'conversation_id' => $conversation->id,
+            'uploaded_by' => $user->id,
+            'disk' => $stored['disk'],
+            'path' => $stored['path'],
+            'name' => $source->name,
+            'mime' => $source->mime,
+            'extension' => $source->extension,
+            'status' => MessageAttachment::STATUS_STAGED,
+            'is_voice' => $source->is_voice,
+            'size' => $source->size,
+            'width' => $source->width,
+            'height' => $source->height,
+            'duration_ms' => $source->duration_ms,
+            'waveform' => $source->waveform,
+        ]);
+
+        if ($source->thumb_path) {
+            try {
+                $bytes = Storage::disk($source->disk ?: Vault::diskName())->get($source->thumb_path);
+                $path = 'messaging/thumbs/'.date('Y/m').'/'.Str::uuid()->toString().'.jpg';
+
+                if ($bytes !== null && Storage::disk($stored['disk'])->put($path, $bytes)) {
+                    $copy->forceFill(['thumb_path' => $path])->save();
+                }
+            } catch (\Throwable) {
+                // Shown from the full image instead.
+            }
+        }
+
+        return $copy;
     }
 
     /** Longest voice note we will accept, in milliseconds. */

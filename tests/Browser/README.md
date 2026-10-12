@@ -2618,6 +2618,35 @@ scripted ByeWind conversation and no network calls at all. It is now backed by
   so both people may announce in it; that a member may not is
   `MessagingAnnouncementsTest`'s to prove.
 
+- **`messaging-forward.mjs`** — forwarding a message. Forward used to ask
+  for the destination with `window.prompt`, which the desktop app does not
+  have (the menu item did nothing there), and the server passed on one line
+  of text whatever was forwarded: a photo arrived as "Forwarded: photo.png".
+  The script listens for any native dialog for its whole run and counts one
+  as the regression.
+
+  Forward now opens the portal's own dialog: which file is going, a Caption
+  (or Message, when there is no file) holding what the original said and
+  free to change, and a searchable list of the other conversations with
+  Forward disabled until one is ticked. A photo sent with nothing under it
+  is given a caption on the way, and the other person's **open thread** gets
+  the photo itself, marked Forwarded, with an image that has really loaded
+  (`naturalWidth > 0`: it is served from the copy's own bytes). Forwarding
+  that again offers the caption it now has; a message emptied of its words
+  is refused inside the dialog; and one forward ticked for two conversations
+  reaches both.
+
+  A photo goes through the composer's image editor before it is staged
+  (`[data-ie-done]`), and comes out renamed `…-edited.jpg`. Two live
+  sessions and Reverb, same servers and seed as `messaging-realtime.mjs`,
+  with `FILES_DISK=local` on the app server so the upload has somewhere to
+  go; it writes a few small files under `storage/app/private/vault`, which
+  is ignored by git:
+
+  ```sh
+  node tests/Browser/messaging-forward.mjs
+  ```
+
 - **`messaging-toolbar.mjs`** — the three controls in the chat-list header,
   which were all dead chrome: the "search" was a `<span>` with no input behind
   it, the compose button had no handler, and the gear did nothing. It checks

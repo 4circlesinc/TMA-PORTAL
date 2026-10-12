@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 #[Fillable([
     'uuid', 'conversation_id', 'user_id', 'type', 'body',
     'reply_to_id', 'edited_at', 'system_event', 'client_nonce',
-    'cip_application_message_id', 'is_announcement',
+    'cip_application_message_id', 'is_announcement', 'is_forwarded',
 ])]
 class Message extends Model
 {
@@ -36,6 +36,7 @@ class Message extends Model
             'deleted_at' => 'datetime',
             'system_event' => 'array',
             'is_announcement' => 'boolean',
+            'is_forwarded' => 'boolean',
         ];
     }
 

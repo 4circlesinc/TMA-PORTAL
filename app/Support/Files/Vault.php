@@ -172,6 +172,51 @@ class Vault
     }
 
     /**
+     * Copy bytes that are already in the vault to a path of their own.
+     *
+     * For rows that are not library files, such as a message attachment being
+     * forwarded: a row owns exactly one blob, so removing either copy can
+     * never blank the other. The bytes go across as they are stored, envelope
+     * and all.
+     *
+     * @return array{disk:string, path:string}
+     */
+    public static function duplicateStored(?string $disk, string $path, string $ext): array
+    {
+        $srcDiskName = $disk ?: self::diskName();
+        $srcDisk = Storage::disk($srcDiskName);
+
+        if ($path === '' || ! $srcDisk->exists($path)) {
+            throw new FileValidationException('The original file no longer exists.');
+        }
+
+        $relPath = self::relPath((string) Str::uuid(), $ext);
+
+        // Same disk → let the driver copy server-side (S3 CopyObject, local FS).
+        if ($srcDiskName === self::diskName() && $srcDisk->copy($path, $relPath)) {
+            return ['disk' => self::diskName(), 'path' => $relPath];
+        }
+
+        // Different disk (or copy unsupported) → stream the bytes across.
+        $in = $srcDisk->readStream($path);
+        if ($in === false || $in === null) {
+            throw new FileValidationException('Storage unavailable, the file could not be copied.');
+        }
+        try {
+            $ok = self::disk()->writeStream($relPath, $in);
+        } finally {
+            if (is_resource($in)) {
+                fclose($in);
+            }
+        }
+        if (! $ok) {
+            throw new FileValidationException('Storage unavailable, the file could not be copied.');
+        }
+
+        return ['disk' => self::diskName(), 'path' => $relPath];
+    }
+
+    /**
      * Copy an older version's bytes to a fresh vault path.
      *
      * Restoring gets its own blob rather than pointing a second version row at

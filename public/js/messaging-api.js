@@ -132,10 +132,16 @@
       return api(BASE + '/messages/' + encodeURIComponent(messageId) + '/star', { method: 'POST' });
     },
 
-    forwardMessage: function (messageId, conversationId) {
+    /*
+     * `body` is what goes with it as the forwarder left it: the text, or a
+     * file's caption. Leave it undefined to pass the original on unchanged.
+     */
+    forwardMessage: function (messageId, conversationId, body) {
+      var payload = { conversationId: conversationId };
+      if (body !== undefined) payload.body = body;
       return api(BASE + '/messages/' + encodeURIComponent(messageId) + '/forward', {
         method: 'POST',
-        json: { conversationId: conversationId },
+        json: payload,
       });
     },
 

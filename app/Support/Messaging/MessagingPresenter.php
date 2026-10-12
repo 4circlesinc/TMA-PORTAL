@@ -358,6 +358,8 @@ class MessagingPresenter
             'replyTo' => $message->replyTo ? self::replyStub($message->replyTo, $message, $viewer) : null,
             // Marked for the whole group by one of its admins.
             'announcement' => ! $deleted && (bool) $message->is_announcement,
+            // Passed on from another conversation by whoever sent it here.
+            'forwarded' => ! $deleted && (bool) $message->is_forwarded,
             'attachments' => $deleted ? [] : $message->attachments->map(
                 fn (MessageAttachment $a) => self::attachment($a)
             )->values(),

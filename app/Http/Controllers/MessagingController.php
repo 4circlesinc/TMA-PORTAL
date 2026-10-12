@@ -23,6 +23,7 @@ use App\Models\UserBlock;
 use App\Models\WorkDay;
 use App\Support\Access\ContactScope;
 use App\Support\Access\Role;
+use App\Support\Files\FileValidationException;
 use App\Support\Messaging\AttachmentIntake;
 use App\Support\Messaging\Broadcaster;
 use App\Support\Messaging\ClientConversations;
@@ -1062,34 +1063,50 @@ class MessagingController extends Controller
 
         $data = $request->validate([
             'conversationId' => ['required', 'string'],
+            // What goes with it, as the person forwarding it left it: the
+            // original's text, changed, or a caption a bare file never had.
+            // Absent means "as it was".
+            'body' => ['nullable', 'string', 'max:20000'],
         ]);
 
         $target = $this->conversationFor($request, $data['conversationId']);
         $this->assertNotBlocked($target, $user);
 
-        $body = trim((string) $source->body);
-        if ($body === '') {
-            $body = match (true) {
-                $source->type === Message::TYPE_VOICE => 'Voice note',
-                $source->attachments->isNotEmpty() => $source->attachments->first()->name ?: 'Attachment',
-                default => 'Forwarded message',
-            };
+        $body = trim((string) ($request->has('body') ? ($data['body'] ?? '') : $source->body));
+
+        // A file can travel without words. Words cannot travel without words.
+        if ($body === '' && $source->attachments->isEmpty()) {
+            throw ValidationException::withMessages(['body' => 'A message needs some text.']);
         }
 
-        $message = DB::transaction(function () use ($target, $user, $body) {
-            $message = $target->messages()->create([
-                'user_id' => $user->id,
-                'type' => Message::TYPE_TEXT,
-                'body' => 'Forwarded: '.$body,
-            ]);
+        // The files go too, each as a copy of its own, staged the way an
+        // upload is so the write below claims them like any other.
+        try {
+            $copies = $source->attachments
+                ->map(fn (MessageAttachment $a) => AttachmentIntake::copyFor($a, $target, $user))
+                ->values();
+        } catch (FileValidationException $e) {
+            throw ValidationException::withMessages(['attachments' => $e->getMessage()]);
+        }
 
-            $target->forceFill(['last_message_at' => $message->created_at])->save();
+        [$message, $mentioned] = Posting::write($target, $user, [
+            'type' => match (true) {
+                $copies->contains(fn ($a) => $a->isVoice()) => Message::TYPE_VOICE,
+                $copies->isNotEmpty() => Message::TYPE_ATTACHMENT,
+                default => Message::TYPE_TEXT,
+            },
+            'body' => $body === '' ? null : $body,
+            'is_forwarded' => true,
+        ], $copies);
 
-            return $message;
-        });
+        $message->load(Posting::RELATIONS);
 
-        $message->load(['sender', 'attachments', 'reactions.user', 'stars', 'replyTo.sender', 'replyTo.attachments']);
         Broadcaster::toOthers(new MessageSent($message));
+        MessageNotifier::announceMessage($target, $message, $user, $mentioned);
+        $this->announceFirstCorrespondence($target, $message, $user);
+
+        // Fresh, so the row carries the message just written as its preview.
+        $target->load(['messages' => fn ($q) => $q->latest('id')->limit(1)]);
 
         return response()->json([
             'message' => MessagingPresenter::message($message, $user, $target),

@@ -3583,6 +3583,14 @@
           'Announcement</span>'
         : '';
 
+    // Passed on from another conversation by whoever sent it here.
+    var forwardedHtml =
+      msg.forwarded && !msg.deleted
+        ? '<span class="tma-dash__messages-bubble-forwarded">' +
+          '<span class="tma-dash__messages-bubble-forwarded-icon" aria-hidden="true"></span>' +
+          'Forwarded</span>'
+        : '';
+
     var bubble =
       renderBubbleAvatar(msg, row, side, opts.showAvatar) +
       '<div class="tma-dash__messages-bubble-main">' +
@@ -3595,6 +3603,7 @@
       '">' +
       senderHtml +
       announcementHtml +
+      forwardedHtml +
       renderQuotedReply(msg) +
       inner +
       '</div>' +
@@ -7508,44 +7517,198 @@
       });
   }
 
+  /* How many conversations one forward may go to. */
+  var FORWARD_MAX = 10;
+
+  /*
+   * Forward a message: what goes with it, and where it goes, in one dialog.
+   *
+   * The text is the forwarder's to change on the way, and a file that came
+   * with no caption can be given one. The files themselves go as they are;
+   * the server copies them. This used to be a window.prompt asking for a
+   * conversation's name, which the desktop app does not have, so there the
+   * menu item did nothing at all.
+   */
   function forwardMessage(root, state, render, msg) {
+    var portal = window.TMAPortalUI;
+    var api = window.TMAMessagingAPI;
+    if (!portal) return;
+
     var targets = getThreads().filter(function (row) {
-      return row.id !== state.selectedId && !row.archived;
+      return row.id !== state.selectedId && !row.archived && !row.blocked;
     });
     if (!targets.length) {
       showMessagesToast(root, 'No other conversations to forward to');
       return;
     }
 
-    var pick = window.prompt(
-      'Forward to conversation (type the name):\n' +
-        targets.slice(0, 12).map(function (t, i) { return (i + 1) + '. ' + t.name; }).join('\n')
-    );
-    if (!pick) return;
+    var files = msg.attachments || [];
+    var isVoice = msg.type === 'voice';
+    // A voice note is the whole message: there is nothing to caption.
+    var editable = !isVoice;
 
-    var target = null;
-    var asNum = parseInt(pick, 10);
-    if (!isNaN(asNum) && asNum >= 1 && asNum <= targets.length) {
-      target = targets[asNum - 1];
-    } else {
-      var term = pick.trim().toLowerCase();
-      target = targets.find(function (t) {
-        return (t.name || '').toLowerCase().indexOf(term) !== -1;
-      });
-    }
+    var filesLine = files.length
+      ? portal.field(
+          'Forwarding',
+          '<div class="tma-dash__messages-reply-preview">' +
+          '<span class="tma-dash__messages-reply-preview-bar" aria-hidden="true"></span>' +
+          '<span class="tma-dash__messages-reply-preview-body">' +
+          '<span class="tma-dash__messages-reply-preview-label">' +
+          esc((msg.sender && msg.sender.name) || 'You') +
+          '</span>' +
+          '<span class="tma-dash__messages-reply-preview-text">' +
+          esc(isVoice ? 'Voice note' : (files.length === 1 ? files[0].name : files.length + ' files')) +
+          '</span></span></div>'
+        )
+      : '';
 
-    if (!target) {
-      showMessagesToast(root, 'Conversation not found');
-      return;
-    }
+    portal.openModal({
+      title: 'Forward',
+      body:
+        filesLine +
+        (editable
+          ? portal.field(files.length ? 'Caption' : 'Message', portal.textarea({
+              value: msg.body || '',
+              attrs: 'data-messages-forward-body rows="3" maxlength="20000"',
+            }))
+          : '') +
+        portal.field(
+          'Send to',
+          portal.input({
+            placeholder: 'Search',
+            ariaLabel: 'Search conversations',
+            attrs: 'data-messages-forward-search',
+          }) +
+          '<div class="tma-portal-check-list" data-messages-forward-list>' +
+          targets.map(function (row) {
+            return (
+              '<label class="tma-portal-check-row" data-messages-forward-row="' +
+              esc(String(row.name || '').toLowerCase()) + '">' +
+              '<input type="checkbox" class="tma-dash__check" value="' + esc(row.id) + '">' +
+              '<span>' + esc(row.name || 'Conversation') + '</span>' +
+              '</label>'
+            );
+          }).join('') +
+          '</div>'
+        ) +
+        '<div data-messages-forward-error hidden></div>' +
+        '<div class="tma-portal-form-actions">' +
+        portal.btn({ label: 'Forward', attrs: ' data-messages-forward-save', disabled: true }) +
+        '</div>',
+      onMount: function (host) {
+        var body = host.querySelector('[data-messages-forward-body]');
+        var search = host.querySelector('[data-messages-forward-search]');
+        var list = host.querySelector('[data-messages-forward-list]');
+        var save = host.querySelector('[data-messages-forward-save]');
+        var error = host.querySelector('[data-messages-forward-error]');
 
-    window.TMAMessagingAPI.forwardMessage(msg.id, target.id)
-      .then(function () {
-        showMessagesToast(root, 'Forwarded to ' + target.name);
-      })
-      .catch(function () {
-        showMessagesToast(root, 'Could not forward message');
-      });
+        // Said in the dialog itself: the page's toast sits under it.
+        function fail(message) {
+          error.innerHTML = portal.banner('warning', esc(message));
+          error.hidden = false;
+        }
+
+        function settle() {
+          error.hidden = true;
+          error.innerHTML = '';
+        }
+
+        function chosen() {
+          return Array.prototype.map.call(list.querySelectorAll('input:checked'), function (box) {
+            return box.value;
+          });
+        }
+
+        search.addEventListener('input', function () {
+          var term = search.value.trim().toLowerCase();
+          list.querySelectorAll('[data-messages-forward-row]').forEach(function (row) {
+            // The row is a flex label, which outranks the hidden attribute.
+            row.style.display = !term || row.getAttribute('data-messages-forward-row').indexOf(term) !== -1 ? '' : 'none';
+          });
+        });
+
+        list.addEventListener('change', function (e) {
+          var picked = chosen();
+          if (picked.length > FORWARD_MAX && e.target && e.target.checked) {
+            e.target.checked = false;
+            fail('Forward to ' + FORWARD_MAX + ' conversations at most');
+            return;
+          }
+          settle();
+          save.disabled = !picked.length;
+        });
+
+        if (body) body.addEventListener('input', settle);
+
+        save.addEventListener('click', function () {
+          var picked = chosen();
+          if (!picked.length) return;
+
+          var text = body ? body.value : undefined;
+          if (!files.length && !(text || '').trim()) {
+            fail('A message needs some text');
+            body.focus();
+            return;
+          }
+
+          save.disabled = true;
+          var sent = [];
+
+          // One after another: each is its own message, and a failure part
+          // way through has to be able to say how far it got.
+          picked
+            .reduce(function (chain, conversationId) {
+              return chain.then(function () {
+                return api.forwardMessage(msg.id, conversationId, text).then(function (data) {
+                  absorbForward(root, state, render, conversationId, data);
+                  sent.push(conversationId);
+                });
+              });
+            }, Promise.resolve())
+            .then(function () {
+              portal.closeModal();
+              render();
+              syncTabBarBadges();
+              var only = sent.length === 1 ? findThread(sent[0]) : null;
+              showMessagesToast(
+                root,
+                only ? 'Forwarded to ' + only.name : 'Forwarded to ' + sent.length + ' conversations'
+              );
+            })
+            .catch(function (err) {
+              save.disabled = false;
+              render();
+              syncTabBarBadges();
+
+              // What went is unticked, so trying again does not send it twice.
+              sent.forEach(function (id) {
+                var box = list.querySelector('input[value="' + id + '"]');
+                if (box) box.checked = false;
+              });
+
+              var reason = err && err.status === 403
+                ? 'You cannot send to this conversation'
+                : (err && err.status === 422 && err.message) || 'Message not forwarded';
+              fail(sent.length ? 'Forwarded to ' + sent.length + ', then stopped. ' + reason : reason);
+            });
+        });
+      },
+    });
+  }
+
+  /*
+   * A forward is a message this tab sent into another conversation. Its row
+   * moves, and a thread already read into memory has to be given the message
+   * or it would be opened without it.
+   */
+  function absorbForward(root, state, render, conversationId, data) {
+    if (!data) return;
+    if (data.conversation) replaceThread(data.conversation);
+
+    var held = STORE.threadMessages[conversationId];
+    if (data.message && held && held.loaded) mergeMessages(conversationId, [data.message], false);
+
+    subscribeToConversation(root, state, render, conversationId);
   }
 
   function translateMessage(root, state, render, msg) {
