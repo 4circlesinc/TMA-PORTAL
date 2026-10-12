@@ -246,6 +246,20 @@ try {
     'a line says when it will go out');
   check(!(await thread(a)).includes(later), 'nothing was posted yet');
 
+  // Up front, where its author is looking, not only inside the dialog.
+  const strip = a.locator('[data-messages-scheduled-strip]');
+  check(await eventually(a, 5000, async () => {
+    if (!(await strip.isVisible())) return false;
+    const text = await strip.textContent();
+    return text.includes('Scheduled for') && text.includes('Payroll closes at noon');
+  }), 'it shows above the message box, with its time');
+  const above = await a.evaluate(() => {
+    const s = document.querySelector('[data-messages-scheduled-strip]').getBoundingClientRect();
+    const box = document.querySelector('[data-messages-composer-input]').getBoundingClientRect();
+    return s.bottom <= box.top + 1;
+  });
+  check(above, 'and sits above the box you type in');
+
   await openAnnouncement(a);
   const waitingRows = a.locator('[data-messages-scheduled]');
   check((await waitingRows.count()) === 1 && (await waitingRows.first().textContent()).includes('Payroll closes at noon'),
@@ -260,6 +274,7 @@ try {
 
   check(await eventually(a, 8000, async () => (await marked(a, later).count()) === 1), "A's open thread shows it, marked");
   check(await eventually(b, 8000, async () => (await marked(b, later).count()) === 1), "B's open thread shows it, marked");
+  check(await eventually(a, 6000, async () => !(await strip.isVisible())), 'and it leaves the strip above the message box');
   check((await a.evaluate(() => window.__sentinel)) === 'still here', 'A never reloaded');
 
   // Posted once: a second pass finds nothing.
@@ -281,6 +296,30 @@ try {
   check(await eventually(a, 4000, async () => (await a.locator('[data-messages-scheduled]').count()) === 0), 'Cancel takes it off the list');
   await a.screenshot({ path: new URL('./messaging-announcements.png', import.meta.url).pathname });
   await a.keyboard.press('Escape');
+
+  artisan('tinker', '--execute', 'App\\Models\\ScheduledMessage::query()->update(["send_at" => now()->subMinute()]);');
+  check(/Posted 0 scheduled message/.test(artisan('messaging:send-scheduled')), 'and it is never posted');
+
+  step(11, 'Or cancelled from the chat itself, after being asked once');
+  await openAnnouncement(a);
+  await a.fill('[data-messages-announce-body]', 'Never mind ' + Date.now());
+  await a.selectOption('[data-messages-announce-when]', 'later');
+  await a.fill('[data-messages-announce-at]', await localInput(a, 240));
+  await a.click('[data-messages-announce-save]');
+  check(await eventually(a, 5000, async () => (await strip.isVisible()) && (await strip.textContent()).includes('Never mind')),
+    'it is in the strip');
+
+  // Saying no leaves it where it is.
+  a.once('dialog', (d) => d.dismiss());
+  await a.click('[data-messages-strip-cancel]');
+  await a.waitForTimeout(600);
+  check(await strip.isVisible(), 'declining the question keeps it');
+
+  let asked = '';
+  a.once('dialog', (d) => { asked = d.message(); d.accept(); });
+  await a.click('[data-messages-strip-cancel]');
+  check(await eventually(a, 4000, async () => !(await strip.isVisible())), 'Cancel takes it out of the chat');
+  check(asked === 'Cancel this scheduled announcement?', `it asked first (${asked})`);
 
   artisan('tinker', '--execute', 'App\\Models\\ScheduledMessage::query()->update(["send_at" => now()->subMinute()]);');
   check(/Posted 0 scheduled message/.test(artisan('messaging:send-scheduled')), 'and it is never posted');

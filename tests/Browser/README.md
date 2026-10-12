@@ -2592,6 +2592,13 @@ scripted ByeWind conversation and no network calls at all. It is now backed by
   (the page's toast sits under it); a scheduled one waits in the dialog's
   Scheduled list and not in the thread, and Cancel takes it off.
 
+  A scheduled one also has to be **up front in the chat**: a strip above the
+  message box says "Scheduled for" with its time and its text, for the
+  people who run the group. It is asked for when the conversation opens,
+  leaves by itself when the scheduler posts it, and its own Cancel asks once
+  before withdrawing (declining keeps it). Only the next two are drawn; the
+  rest are behind "N more scheduled", which opens the dialog.
+
   The step worth keeping honest is the scheduler's. The script brings the
   time forward in the database and runs `messaging:send-scheduled` itself,
   the way cron would: the announcement has to arrive in **two open threads

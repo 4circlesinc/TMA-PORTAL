@@ -114,6 +114,9 @@
     threads: [],
     // conversation id -> { messages: [], hasMore: bool, loading: bool, loaded: bool }
     threadMessages: {},
+    // conversation id -> announcements waiting to go out, soonest first.
+    // Only ever filled for a group the viewer runs: nobody else is told.
+    scheduled: {},
     me: null,
     settings: {},
     realtime: null,
@@ -2753,6 +2756,92 @@
     );
   }
 
+  /* How many waiting announcements the chat shows before "N more". */
+  var SCHEDULED_SHOWN = 2;
+
+  function scheduledFor(conversationId) {
+    return STORE.scheduled[conversationId] || [];
+  }
+
+  /*
+   * Announcements waiting to go out, above the message box.
+   *
+   * In the chat, where the person who wrote them is looking, and not only
+   * inside the dialog that wrote them: something scheduled and out of sight
+   * is something forgotten. It is the reply preview's own row with a Cancel
+   * on it. The wrapper is always rendered, keyed and hidden when empty,
+   * because it sits before the message box (see the mention menu).
+   */
+  function renderScheduledStrip(state) {
+    var items = scheduledFor(state.selectedId);
+    var shown = items.slice(0, SCHEDULED_SHOWN);
+    var more = items.length - shown.length;
+    var portal = window.TMAPortalUI;
+
+    return (
+      '<div class="tma-dash__messages-scheduled-strip" data-key="scheduled-strip" data-messages-scheduled-strip' +
+      (items.length && portal ? '' : ' hidden') + '>' +
+      (portal
+        ? shown.map(function (item) {
+            return (
+              '<div class="tma-dash__messages-reply-preview" data-key="scheduled-' + esc(item.id) + '">' +
+              '<span class="tma-dash__messages-reply-preview-bar" aria-hidden="true"></span>' +
+              '<span class="tma-dash__messages-reply-preview-body">' +
+              '<span class="tma-dash__messages-reply-preview-label">' +
+              esc(item.failed ? 'Not sent' : 'Scheduled for ' + scheduledWhen(item.sendAt)) +
+              '</span>' +
+              '<span class="tma-dash__messages-reply-preview-text">' +
+              esc(item.failed && item.failedReason ? item.failedReason : item.body) +
+              '</span></span>' +
+              portal.btn({
+                label: item.failed ? 'Remove' : 'Cancel',
+                variant: 'ghost',
+                small: true,
+                attrs: ' data-messages-strip-cancel="' + esc(item.id) + '"',
+              }) +
+              '</div>'
+            );
+          }).join('') +
+          (more > 0
+            ? portal.btn({
+                label: more + ' more scheduled',
+                variant: 'ghost',
+                small: true,
+                attrs: ' data-messages-strip-all',
+              })
+            : '')
+        : '') +
+      '</div>'
+    );
+  }
+
+  /*
+   * Read what is waiting in a group the viewer runs. Asked when the
+   * conversation is opened and whenever something could have changed it:
+   * one written or withdrawn here, or an announcement arriving, which is
+   * what a scheduled one becomes.
+   */
+  function loadScheduled(root, state, render, conversationId) {
+    var row = findThread(conversationId);
+
+    if (!row || row.type !== 'group' || !row.canManage) {
+      if (STORE.scheduled[conversationId]) {
+        delete STORE.scheduled[conversationId];
+        if (state.selectedId === conversationId) render();
+      }
+      return;
+    }
+
+    window.TMAMessagingAPI.scheduled(conversationId)
+      .then(function (data) {
+        STORE.scheduled[conversationId] = (data && data.scheduled) || [];
+        if (state.selectedId === conversationId) render();
+      })
+      .catch(function () {
+        // What is shown stays: a failed refresh is not an empty list.
+      });
+  }
+
   /*
    * Times are formatted HERE, from the ISO instant, never taken from the
    * server's pre-formatted string.
@@ -4923,6 +5012,7 @@
       '<div class="tma-dash__messages-composer' +
       (state.replyTo && state.replyTo.threadId === state.selectedId ? ' tma-dash__messages-composer--reply' : '') +
       '">' +
+      renderScheduledStrip(state) +
       renderReplyPreview(state) +
       renderComposer(state) +
       '</div>' +
@@ -6198,6 +6288,7 @@
 
         if (state.selectedId) {
           loadThread(root, state, render, state.selectedId, { toBottom: true, quiet: !!options.silent });
+          loadScheduled(root, state, render, state.selectedId);
         }
       })
       .catch(function (err) {
@@ -6562,6 +6653,7 @@
 
     var bucket = threadBucket(conversationId);
     render({ chatToBottom: true });
+    loadScheduled(root, state, render, conversationId);
 
     if (!bucket.loaded) {
       loadThread(root, state, render, conversationId, { toBottom: true });
@@ -7090,6 +7182,10 @@
         mergeMessages(conversationId, data.messages || [], false);
         if (data.conversation) replaceThread(data.conversation);
         render();
+
+        // A scheduled announcement arrives as a message like any other, so
+        // an arrival where one was waiting may be it going out.
+        if (scheduledFor(conversationId).length) loadScheduled(root, state, render, conversationId);
 
         // Acknowledge receipt first, that is true the moment it arrives.
         // Marking it read is a separate, weaker claim and only holds if the
@@ -8634,6 +8730,7 @@
     state.profileOpen = false;
     clearReplyTo(state);
     render();
+    loadScheduled(root, state, render, conversationId);
 
     window.TMAMessagingAPI.messagesAround(conversationId, seq)
       .then(function (data) {
@@ -9002,6 +9099,7 @@
               var row = btn.closest('[data-messages-scheduled]');
               if (row) row.remove();
               waiting.hidden = !list.children.length;
+              loadScheduled(root, state, render, conversationId);
             })
             .catch(function () {
               btn.disabled = false;
@@ -9039,6 +9137,7 @@
             .then(function () {
               portal.closeModal();
               showMessagesToast(root, 'Announcement scheduled for ' + scheduledWhen(chosen.toISOString()));
+              loadScheduled(root, state, render, conversationId);
             })
             .catch(function (err) {
               save.disabled = false;
@@ -9047,6 +9146,29 @@
         });
       },
     });
+  }
+
+  /* Withdraw one from the strip above the message box. */
+  function cancelScheduledFromChat(root, state, render, scheduledId) {
+    var conversationId = state.selectedId;
+    var item = scheduledFor(conversationId).filter(function (s) { return s.id === scheduledId; })[0];
+    if (!item) return;
+
+    // One that could not be sent is only being cleared away.
+    if (!item.failed && !window.confirm('Cancel this scheduled announcement?')) return;
+
+    window.TMAMessagingAPI.cancelScheduled(scheduledId)
+      .then(function () {
+        STORE.scheduled[conversationId] = scheduledFor(conversationId).filter(function (s) {
+          return s.id !== scheduledId;
+        });
+        render();
+        if (!item.failed) showMessagesToast(root, 'Scheduled announcement cancelled');
+      })
+      .catch(function () {
+        showMessagesToast(root, 'That could not be cancelled');
+        loadScheduled(root, state, render, conversationId);
+      });
   }
 
   /* The server's own sentence when it gave one (a time already past, no right to post). */
@@ -9463,6 +9585,21 @@
       row.addEventListener('pointerup', function () { cancelPress(false); });
       row.addEventListener('pointercancel', function () { cancelPress(true); });
     });
+
+    // Announcements waiting above the message box. The id is read at click
+    // time: a reconciled row can come to stand for a different one.
+    MORPH.unwired(root, '[data-messages-strip-cancel]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        cancelScheduledFromChat(root, state, render, btn.getAttribute('data-messages-strip-cancel'));
+      });
+    });
+
+    var allScheduledBtn = MORPH.unwiredOne(root, '[data-messages-strip-all]');
+    if (allScheduledBtn) {
+      allScheduledBtn.addEventListener('click', function () {
+        openAnnouncement(root, state, render, state.selectedId);
+      });
+    }
 
     // The chat header's three-dot menu.
     var convMenuBtn = MORPH.unwiredOne(root, '[data-messages-conversation-menu]');

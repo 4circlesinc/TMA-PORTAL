@@ -18075,6 +18075,30 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   color: var(--color-text-primary);
 }
 
+/*
+ * Announcements waiting to go out, above the message box. Each is the reply
+ * preview's own row; only the button on it and the stack are new.
+ */
+.tma-dash__messages-scheduled-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-8);
+}
+
+.tma-dash__messages-scheduled-strip[hidden] {
+  display: none;
+}
+
+.tma-dash__messages-scheduled-strip .tma-no-data__btn {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.tma-dash__messages-scheduled-strip > .tma-no-data__btn {
+  align-self: flex-start;
+}
+
 .tma-dash__messages-composer-wrap {
   position: relative;
   display: flex;
