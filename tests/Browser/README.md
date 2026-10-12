@@ -2626,10 +2626,16 @@ scripted ByeWind conversation and no network calls at all. It is now backed by
   The script listens for any native dialog for its whole run and counts one
   as the regression.
 
-  Forward now opens the portal's own dialog: which file is going, a Caption
-  (or Message, when there is no file) holding what the original said and
-  free to change, and a searchable list of the other conversations with
-  Forward disabled until one is ticked. A photo sent with nothing under it
+  Forward now opens the portal's own dialog: what is going, a Caption (or
+  Message, when there is no file) holding what the original said and free to
+  change, and a searchable list of the other conversations with Forward
+  disabled until one is ticked. What is going is **shown**: a picture as the
+  picture, loaded, and any other file as the composer's card (icon, name,
+  size). Every conversation in the list carries the face the chat list gives
+  it, a photo, initials or the group's cluster, at the same 40px. With a
+  picture in it the dialog used to scroll as a whole and lose its title off
+  the top, so the script checks the title and the button are both on screen:
+  the list is the one part that scrolls. A photo sent with nothing under it
   is given a caption on the way, and the other person's **open thread** gets
   the photo itself, marked Forwarded, with an image that has really loaded
   (`naturalWidth > 0`: it is served from the copy's own bytes). Forwarding

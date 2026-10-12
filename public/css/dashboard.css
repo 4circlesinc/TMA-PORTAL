@@ -18076,6 +18076,73 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
 }
 
 /*
+ * What is being forwarded, in the Forward dialog: the bubble's own picture
+ * tile and the composer's file card, held to a size that leaves room for the
+ * list of conversations under them.
+ */
+.tma-dash__messages-forward-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.tma-dash__messages-forward-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.tma-dash__messages-forward-images .tma-dash__messages-attachment {
+  width: auto;
+  cursor: default;
+}
+
+.tma-dash__messages-forward-images .tma-dash__messages-attachment--image img {
+  width: auto;
+  max-width: 220px;
+  max-height: 140px;
+}
+
+/*
+ * The Forward dialog keeps its title and its button on screen. A dialog taller
+ * than its limit scrolls as a whole, which here would put the title above the
+ * top and the button below the bottom as soon as there is a picture to show.
+ * So the list of conversations is the one part that gives: everything else
+ * keeps its size and the list takes what is left, scrolling inside itself.
+ */
+.tma-portal-modal__card.tma-dash__messages-forward .tma-portal-modal__head,
+.tma-portal-modal__card.tma-dash__messages-forward .tma-portal-modal__body > * {
+  flex-shrink: 0;
+}
+
+.tma-portal-modal__card.tma-dash__messages-forward .tma-portal-modal__body,
+.tma-portal-modal__card.tma-dash__messages-forward .tma-dash__messages-forward-to,
+.tma-portal-modal__card.tma-dash__messages-forward .tma-dash__messages-forward-to > .tma-portal-field {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.tma-portal-modal__card.tma-dash__messages-forward .tma-portal-modal__body > .tma-dash__messages-forward-to {
+  flex-shrink: 1;
+  /* Its label, the search field and the list at its shortest. Below this the
+     list would spill over the button, so on a window too short for even that
+     the dialog scrolls as a whole, as any other does. */
+  min-height: 184px;
+}
+
+.tma-portal-modal__card.tma-dash__messages-forward .tma-portal-check-list {
+  flex: 1 1 auto;
+  min-height: 112px;
+  max-height: 280px;
+}
+
+.tma-dash__messages-forward-preview .tma-dash__messages-tray {
+  padding: 0;
+}
+
+/*
  * Announcements waiting to go out, above the message box. Each is the reply
  * preview's own row; only the button on it and the stack are new.
  */

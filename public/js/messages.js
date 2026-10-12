@@ -7547,23 +7547,13 @@
     // A voice note is the whole message: there is nothing to caption.
     var editable = !isVoice;
 
-    var filesLine = files.length
-      ? portal.field(
-          'Forwarding',
-          '<div class="tma-dash__messages-reply-preview">' +
-          '<span class="tma-dash__messages-reply-preview-bar" aria-hidden="true"></span>' +
-          '<span class="tma-dash__messages-reply-preview-body">' +
-          '<span class="tma-dash__messages-reply-preview-label">' +
-          esc((msg.sender && msg.sender.name) || 'You') +
-          '</span>' +
-          '<span class="tma-dash__messages-reply-preview-text">' +
-          esc(isVoice ? 'Voice note' : (files.length === 1 ? files[0].name : files.length + ' files')) +
-          '</span></span></div>'
-        )
-      : '';
+    var filesLine = files.length ? portal.field('Forwarding', renderForwardPreview(files)) : '';
 
     portal.openModal({
       title: 'Forward',
+      // Its own class: here the list is the part that scrolls, so the title
+      // and the Forward button are on screen however long the list is.
+      cls: 'tma-dash__messages-forward',
       body:
         filesLine +
         (editable
@@ -7572,6 +7562,7 @@
               attrs: 'data-messages-forward-body rows="3" maxlength="20000"',
             }))
           : '') +
+        '<div class="tma-dash__messages-forward-to">' +
         portal.field(
           'Send to',
           portal.input({
@@ -7585,12 +7576,16 @@
               '<label class="tma-portal-check-row" data-messages-forward-row="' +
               esc(String(row.name || '').toLowerCase()) + '">' +
               '<input type="checkbox" class="tma-dash__check" value="' + esc(row.id) + '">' +
+              // The face the chat list gives it: a name alone is a lot to
+              // ask of anyone choosing between two people called Peer.
+              threadIcon(resolveThread(row)) +
               '<span>' + esc(row.name || 'Conversation') + '</span>' +
               '</label>'
             );
           }).join('') +
           '</div>'
         ) +
+        '</div>' +
         '<div data-messages-forward-error hidden></div>' +
         '<div class="tma-portal-form-actions">' +
         portal.btn({ label: 'Forward', attrs: ' data-messages-forward-save', disabled: true }) +
@@ -7694,6 +7689,54 @@
         });
       },
     });
+  }
+
+  /*
+   * What is being forwarded, shown in the Forward dialog.
+   *
+   * A picture is shown as the picture, the way its bubble shows it, so what
+   * is about to be sent can be seen and not only named. Anything else is the
+   * card the composer shows for a file it has staged: its icon, name and size.
+   */
+  function renderForwardPreview(files) {
+    var images = files.filter(function (file) { return file.kind === 'image'; });
+    var others = files.filter(function (file) { return file.kind !== 'image'; });
+
+    return (
+      '<div class="tma-dash__messages-forward-preview" data-messages-forward-preview>' +
+      (images.length
+        ? '<div class="tma-dash__messages-forward-images">' +
+          images.map(function (file) {
+            return (
+              '<span class="tma-dash__messages-attachment tma-dash__messages-attachment--image">' +
+              '<img src="' + esc(file.thumbUrl || file.url) + '" alt="' + esc(file.name || '') + '">' +
+              '</span>'
+            );
+          }).join('') +
+          '</div>'
+        : '') +
+      (others.length
+        ? '<div class="tma-dash__messages-tray">' +
+          others.map(function (file) {
+            var name = file.kind === 'voice' ? 'Voice note' : (file.name || 'File');
+            return (
+              '<div class="tma-dash__messages-tray-item">' +
+              '<span class="tma-dash__messages-tray-thumb">' +
+              (file.thumbUrl
+                ? '<img src="' + esc(file.thumbUrl) + '" alt="">'
+                : '<img class="tma-dash__messages-tray-icon" src="' +
+                  esc(attachmentIconSrc(file.name || '')) + '" alt="">') +
+              '</span>' +
+              '<span class="tma-dash__messages-tray-text">' +
+              '<span class="tma-dash__messages-tray-name" title="' + esc(name) + '">' + esc(name) + '</span>' +
+              '<span class="tma-dash__messages-tray-meta">' + esc(formatBytes(file.size)) + '</span>' +
+              '</span></div>'
+            );
+          }).join('') +
+          '</div>'
+        : '') +
+      '</div>'
+    );
   }
 
   /*

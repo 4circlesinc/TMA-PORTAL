@@ -20,6 +20,7 @@ const BASE = process.env.TMA_BASE_URL || 'http://127.0.0.1:8899';
 const USER_A = process.env.TMA_EMAIL || 'e2e@example.com';      // Test User
 const USER_B = process.env.TMA_EMAIL_B || 'user0@example.com';  // Ana Ruiz
 const PHOTO = join(HERE, 'fixtures', 'message-photo.png');
+const NOTES = join(HERE, 'fixtures', 'message-notes.txt');
 /* Where MAIL_MAILER=log leaves the new-device code. */
 const LOG = process.env.TMA_LOG || 'storage/logs/laravel.log';
 
@@ -140,9 +141,28 @@ try {
   await openForward(a, photoRow);
   check(nativeDialogs.length === 0, `no native prompt was raised (${nativeDialogs.join(' | ') || 'none'})`);
   check((await a.textContent('.tma-portal-modal__title')) === 'Forward', 'the dialog is titled Forward');
-  // The image editor re-encodes a photo, so the name is the sent file's own.
-  const going = await a.textContent('.tma-portal-modal .tma-dash__messages-reply-preview-text');
-  check(/^message-photo[\w-]*\.(png|jpe?g|webp)$/i.test(going.trim()), `it says which file is going (${going.trim()})`);
+  // What is going is shown, not only named: the picture itself, loaded. The
+  // image editor re-encodes a photo, so its name is the sent file's own.
+  const preview = a.locator('.tma-portal-modal [data-messages-forward-preview] .tma-dash__messages-attachment--image img');
+  const shown = await eventually(a, 6000, async () => (await preview.count()) === 1
+    && (await preview.evaluate((img) => img.complete && img.naturalWidth > 0)));
+  check(shown, 'the photo being forwarded is shown in the dialog');
+  const alt = (await preview.getAttribute('alt')) || '';
+  check(/^message-photo[\w-]*\.(png|jpe?g|webp)$/i.test(alt), `and it is the one that was sent (${alt})`);
+  const box = await preview.boundingBox();
+  check(box && box.height <= 161 && box.width <= 221, `kept small enough to leave room for the list (${box && Math.round(box.width)}x${box && Math.round(box.height)})`);
+
+  // Every conversation carries the face the chat list gives it.
+  const rows = a.locator('.tma-portal-modal .tma-portal-check-row');
+  const faces = a.locator('.tma-portal-modal .tma-portal-check-row .tma-dash__messages-row-avatar');
+  check((await rows.count()) > 0 && (await faces.count()) === (await rows.count()),
+    `each of the ${await rows.count()} conversations has its picture`);
+  const anaFace = rows.filter({ hasText: 'Ana Ruiz' }).locator('.tma-dash__messages-row-avatar');
+  check((await anaFace.textContent()).trim() === 'AR', "Ana, who has no photo, has her initials");
+  check((await rows.filter({ hasText: 'TM Antoine' }).locator('.tma-dash__messages-row-avatar--group').count()) === 1,
+    'the group is drawn as a group');
+  const face = await anaFace.boundingBox();
+  check(face && Math.round(face.width) === 40 && Math.round(face.height) === 40, `at the chat list's own size (${face && Math.round(face.width)}px)`);
   check((await a.inputValue('[data-messages-forward-body]')) === '', 'the caption starts empty, as the photo had none');
   check(await a.isDisabled('[data-messages-forward-save]'), 'Forward waits for somewhere to send it');
   check((await a.locator('.tma-portal-modal .tma-portal-check-row', { hasText: 'Peer 01' }).count()) === 0,
@@ -157,6 +177,22 @@ try {
   await a.fill('[data-messages-forward-body]', caption);
   await tick(a, 'Ana Ruiz');
   check(!(await a.isDisabled('[data-messages-forward-save]')), 'ticking her enables Forward');
+
+  // The list is the part that scrolls. With a picture in it the dialog used
+  // to scroll as a whole, and ticking a row low in the list took the title
+  // off the top of the screen.
+  const fit = await a.evaluate(() => {
+    const edge = (sel) => document.querySelector(sel).getBoundingClientRect();
+    return {
+      title: edge('.tma-portal-modal__title').top,
+      button: edge('[data-messages-forward-save]').bottom,
+      card: edge('.tma-portal-modal__card'),
+      scrolled: document.querySelector('.tma-portal-modal__card').scrollTop,
+      height: innerHeight,
+    };
+  });
+  check(fit.title >= fit.card.top && fit.button <= fit.card.bottom && fit.card.bottom <= fit.height && fit.scrolled === 0,
+    'the title and the Forward button are both on screen');
   await a.click('[data-messages-forward-save]');
   check(await closed(a), 'the dialog closes');
   check(await eventually(a, 3000, async () => (await a.textContent('[data-messages-toast-text]')) === 'Forwarded to Ana Ruiz'),
@@ -226,6 +262,24 @@ try {
   const there = bubble(a, rewritten);
   check(await eventually(a, 6000, async () => (await there.count()) === 1
     && (await there.locator('.tma-dash__messages-bubble-forwarded').count()) === 1), 'opened, it is there and marked');
+
+  step(8, 'A document is shown as its card: icon, name and size');
+  await row(a, 'Peer 01').click();
+  await a.waitForTimeout(800);
+  await a.setInputFiles('[data-messages-composer-file]', [NOTES]);
+  await a.waitForTimeout(2500);
+  await a.click('[data-messages-composer-send]');
+  const docRow = a.locator('.tma-dash__messages-bubble-row--out', { hasText: 'message-notes.txt' }).last();
+  check(await eventually(a, 8000, async () => (await docRow.count()) === 1), 'the document is in the thread');
+  await openForward(a, docRow);
+  const card = a.locator('.tma-portal-modal [data-messages-forward-preview] .tma-dash__messages-tray-item');
+  check((await card.count()) === 1, 'one card for the one file');
+  check((await card.locator('.tma-dash__messages-tray-name').textContent()) === 'message-notes.txt', 'it carries the name');
+  check(/\d/.test(await card.locator('.tma-dash__messages-tray-meta').textContent()), 'and the size');
+  check((await card.locator('.tma-dash__messages-tray-thumb img').count()) === 1, 'with its file-type icon');
+  check((await a.locator('.tma-portal-modal [data-messages-forward-preview] .tma-dash__messages-attachment--image').count()) === 0,
+    'and no picture, there being none');
+  await a.keyboard.press('Escape');
 
   check(nativeDialogs.length === 0, `nothing native was raised at any point (${nativeDialogs.join(' | ') || 'none'})`);
 
