@@ -2659,6 +2659,33 @@ scripted ByeWind conversation and no network calls at all. It is now backed by
   node tests/Browser/messaging-forward.mjs
   ```
 
+- **`messaging-text-layout.mjs`** — a message is laid out the way it was
+  typed. Two faults made every multi-line message one paragraph, one at each
+  end. The bubble is an inline run, and HTML folds each line break in one
+  into a space, so what was stored with its breaks was drawn without them
+  (only the application thread, which sets `pre-wrap`, kept them). And the
+  message box is contenteditable and was read with `textContent`, which
+  reads straight through the `<br>` a typed Shift+Enter leaves: two typed
+  lines were sent as one word, while pasted text, which goes in as text,
+  kept its newlines. So the script types with Shift+Enter, pastes, and fills
+  the announcement dialog, and reads the result on both people's screens and
+  again after a reload.
+
+  It pins the lists too (`formatMessageBody`): a line that begins with `*`,
+  `-` or `•` is a bullet and one that begins `1.` or `1)` is numbered, each
+  with its marker in a column of its own so a long item wraps under its own
+  first word; **the number shown is the number typed**, never renumbered;
+  bullets straight after a numbered line sit under it; a blank line is a
+  gap; a message of one line is left alone (`- ok` is somebody talking);
+  and tags in the text stay text. All of it is spans, because the text sits
+  inside a `<p>` and a real list would close it the moment it was parsed.
+  A draft keeps its lines while it waits. Same servers and seed as
+  `messaging-realtime.mjs`:
+
+  ```sh
+  node tests/Browser/messaging-text-layout.mjs
+  ```
+
 - **`messaging-toolbar.mjs`** — the three controls in the chat-list header,
   which were all dead chrome: the "search" was a `<span>` with no input behind
   it, the compose button had no handler, and the gear did nothing. It checks

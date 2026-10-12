@@ -2687,11 +2687,19 @@
    * attribute or split an address in two.
    */
   function renderMessageText(msg) {
-    var html = linkify(msg.body);
     var names = (msg.mentions || []).map(function (m) { return m.name; });
     if (msg.mentionsAll) names.push(MENTION_EVERYONE);
 
     var pattern = names.length ? mentionPattern(names, true) : null;
+
+    return formatMessageBody(msg.body, function (text) {
+      return inlineMessageHtml(text, pattern);
+    });
+  }
+
+  /* One line's worth: links live, and the people it names marked. */
+  function inlineMessageHtml(text, pattern) {
+    var html = linkify(text);
     if (!pattern) return html;
 
     var inLink = false;
@@ -2707,6 +2715,95 @@
       return part.replace(pattern, function (whole, lead, name) {
         return lead + '<span class="tma-dash__messages-mention">@' + name + '</span>';
       });
+    }).join('');
+  }
+
+  /*
+   * A message laid out the way it was typed.
+   *
+   * The lines somebody broke stay broken, a blank line stays a gap, and lines
+   * that begin with a bullet or a number are set as a list: the marker in a
+   * column of its own and the text beside it, so a long item wraps under its
+   * own first word and not under its marker. Bullets that follow a numbered
+   * line sit under it, as the points of that heading.
+   *
+   * Bubbles used to collapse all of it: a message is one inline run, and
+   * HTML folds every line break in one into a space. So an announcement
+   * written as five numbered sections arrived as a single paragraph with the
+   * asterisks left in.
+   *
+   * The number shown is the number typed. Nothing is renumbered, so a list
+   * that starts at 3, or skips, says what its author wrote. And a message of
+   * one line is left exactly as it is: "- ok" is somebody talking, not a list.
+   *
+   * Everything here is a span. The text sits inside a <p>, and a real list
+   * or div would close that paragraph the moment the markup was parsed.
+   */
+  var BULLET_LINE = /^([ \t]*)[*\-\u2022\u2013\u2014\u00b7][ \t]+(\S.*)$/;
+  var NUMBER_LINE = /^([ \t]*)(\d{1,3}[.)])[ \t]+(\S.*)$/;
+
+  function formatMessageBody(body, inline) {
+    var lines = String(body == null ? '' : body).replace(/\r\n?/g, '\n').split('\n');
+    while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+    while (lines.length && !lines[0].trim()) lines.shift();
+
+    if (lines.length <= 1) return inline(lines[0] || '');
+
+    var blocks = [];
+    // Bullets straight after a numbered line belong to it.
+    var underNumber = false;
+
+    lines.forEach(function (line) {
+      var last = blocks[blocks.length - 1];
+
+      if (!line.trim()) {
+        underNumber = false;
+        if (last && last.type !== 'gap') blocks.push({ type: 'gap' });
+        return;
+      }
+
+      var bullet = BULLET_LINE.exec(line);
+      var number = bullet ? null : NUMBER_LINE.exec(line);
+
+      if (bullet || number) {
+        var indent = (bullet || number)[1].replace(/\t/g, '  ').length;
+        var item = bullet
+          ? { mark: '\u2022', text: bullet[2], nested: indent >= 2 || underNumber, bullet: true }
+          : { mark: number[2], text: number[3], nested: indent >= 2, bullet: false };
+
+        if (number) underNumber = true;
+
+        if (last && last.type === 'list') last.items.push(item);
+        else blocks.push({ type: 'list', items: [item] });
+        return;
+      }
+
+      underNumber = false;
+      if (last && last.type === 'text') last.lines.push(line);
+      else blocks.push({ type: 'text', lines: [line] });
+    });
+
+    return blocks.map(function (block) {
+      if (block.type === 'gap') return '<span class="tma-dash__messages-para-gap"></span>';
+
+      if (block.type === 'text') return block.lines.map(inline).join('<br>');
+
+      return (
+        '<span class="tma-dash__messages-list" role="list">' +
+        block.items.map(function (item) {
+          return (
+            '<span class="tma-dash__messages-list-item' +
+            (item.nested ? ' tma-dash__messages-list-item--nested' : '') +
+            '" role="listitem">' +
+            '<span class="tma-dash__messages-list-mark' +
+            (item.bullet ? ' tma-dash__messages-list-mark--bullet" aria-hidden="true' : '') + '">' +
+            esc(item.mark) + '</span>' +
+            '<span class="tma-dash__messages-list-text">' + inline(item.text) + '</span>' +
+            '</span>'
+          );
+        }).join('') +
+        '</span>'
+      );
     }).join('');
   }
 
@@ -4144,6 +4241,43 @@
     input.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
+  /*
+   * What is in the message box, as text.
+   *
+   * The box is contenteditable, which holds a typed line break as a <br> or
+   * as a new <div>, depending on the key and the browser. textContent reads
+   * straight through both, so two lines typed with Shift+Enter were sent as
+   * one, without so much as a space between them. Only pasted text kept its
+   * breaks, because that goes in as text with the newlines in it.
+   */
+  function composerPlainText(input) {
+    if (!input) return '';
+    var out = '';
+
+    (function walk(node) {
+      for (var child = node.firstChild; child; child = child.nextSibling) {
+        if (child.nodeType === 3) {
+          out += child.data;
+          continue;
+        }
+        if (child.nodeType !== 1) continue;
+
+        if (child.tagName === 'BR') {
+          out += '\n';
+          continue;
+        }
+
+        // A block starts on a line of its own and ends one.
+        var block = /^(DIV|P|LI)$/.test(child.tagName);
+        if (block && out && out.charAt(out.length - 1) !== '\n') out += '\n';
+        walk(child);
+        if (block && out.charAt(out.length - 1) !== '\n') out += '\n';
+      }
+    })(input);
+
+    return out;
+  }
+
   function syncComposerInputState(input) {
     if (!input) return;
     var hasText = (input.textContent || '').trim().length > 0;
@@ -4163,7 +4297,7 @@
       syncComposerInputState(input);
 
       MORPH.on(input, 'input', function () {
-        var text = input.textContent || '';
+        var text = composerPlainText(input);
         setComposerDraft(state, text);
         syncComposerInputState(input);
 
@@ -4388,7 +4522,7 @@
 
     if (sendBtn) {
       MORPH.on(sendBtn, 'click', function () {
-        var text = input ? (input.textContent || '').trim() : getComposerDraft(state).trim();
+        var text = input ? composerPlainText(input).trim() : getComposerDraft(state).trim();
 
         // A message may be files only. Bailing on empty text here is what
         // previously made an attachment-only send do nothing at all.
@@ -7762,7 +7896,7 @@
 
     var host = root.querySelector('[data-messages-id="' + msg.id + '"] .tma-dash__messages-bubble-copy');
     if (msg._translated) {
-      if (host) host.textContent = msg.body;
+      if (host) host.innerHTML = renderMessageText(msg);
       msg._translated = false;
       showMessagesToast(root, 'Original text restored');
       return;
@@ -7770,7 +7904,7 @@
 
     function apply(text) {
       msg._translated = true;
-      if (host) host.textContent = text;
+      if (host) host.innerHTML = renderMessageText({ body: text });
       showMessagesToast(root, 'Translated');
     }
 

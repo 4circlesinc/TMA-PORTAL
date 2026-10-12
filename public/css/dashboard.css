@@ -34832,6 +34832,51 @@ button.tma-dash__header-popup-item:focus-visible {
   overflow-wrap: anywhere;
 }
 
+/*
+ * A message laid out the way it was typed: a blank line is a gap, and lines
+ * that begin with a bullet or a number are a list, the marker in a column of
+ * its own so a long item wraps under its own first word. All of it is spans,
+ * because the text sits inside a paragraph; these rules are what make them
+ * blocks.
+ */
+.tma-dash__messages-para-gap {
+  display: block;
+  height: var(--space-8);
+}
+
+.tma-dash__messages-list {
+  display: block;
+}
+
+.tma-dash__messages-list-item {
+  display: flex;
+  align-items: baseline;
+  /* With the marker's column, this puts a nested bullet under the first
+     letter of the heading it belongs to. */
+  gap: var(--space-4);
+}
+
+/* The points under a numbered heading, or ones their author indented. */
+.tma-dash__messages-list-item--nested {
+  padding-left: var(--space-20);
+}
+
+.tma-dash__messages-list-mark {
+  flex: 0 0 auto;
+  min-width: 1.5em;
+  font-variant-numeric: tabular-nums;
+}
+
+.tma-dash__messages-list-mark--bullet {
+  min-width: 0.75em;
+  text-align: center;
+}
+
+.tma-dash__messages-list-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 /* --- reaction pill --- */
 
 /*
