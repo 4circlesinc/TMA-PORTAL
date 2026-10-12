@@ -34877,6 +34877,15 @@ button.tma-dash__header-popup-item:focus-visible {
   min-width: 0;
 }
 
+/* *bold* and _italic_, said outright: nothing upstream may flatten them. */
+.tma-dash__messages-bubble-copy strong {
+  font-weight: 700;
+}
+
+.tma-dash__messages-bubble-copy em {
+  font-style: italic;
+}
+
 /* --- reaction pill --- */
 
 /*

@@ -2328,7 +2328,12 @@
   function messagePreview(msg) {
     if (!msg) return '';
     if (msg.deleted) return 'Message deleted';
-    if (msg.body) return msg.body.length > 96 ? msg.body.slice(0, 96) + '…' : msg.body;
+    if (msg.body) {
+      // One plain line: the marks for bold and italic would only be stray
+      // asterisks here.
+      var plain = plainMessageText(msg.body).replace(/\s+/g, ' ').trim();
+      return plain.length > 96 ? plain.slice(0, 96) + '…' : plain;
+    }
     var attachment = msg.attachments && msg.attachments[0];
     if (msg.type === 'voice') return 'Voice note';
     if (attachment) {
@@ -2697,8 +2702,91 @@
     });
   }
 
-  /* One line's worth: links live, and the people it names marked. */
-  function inlineMessageHtml(text, pattern) {
+  /*
+   * Bold and italic, written the way people already write them in a chat:
+   * *bold* (or **bold**, or __bold__) and _italic_.
+   *
+   * A mark opens at the start of the text or after a space, an opening
+   * bracket or a quote, with a character straight after it, and closes
+   * straight after a character and before anything that is not a letter or
+   * a digit. That is what leaves 2*3*4, snake_case_name, a correction like
+   * *their and the underscores in an address alone: none of them opens after
+   * a space and closes before one. MessageText::plain on the server takes
+   * the same marks out of one-line previews; keep the two in step.
+   */
+  var EMPHASIS_LEAD = '(^|[\\s(\\[{"\u201c\u2018\'])';
+  var EMPHASIS_BODY = '(\\*\\*|__|\\*|_)(\\S|\\S.*?\\S)\\2';
+
+  function emphasisPattern() {
+    try {
+      return new RegExp(EMPHASIS_LEAD + EMPHASIS_BODY + '(?![\\p{L}\\p{N}_*])', 'gu');
+    } catch (e) {
+      return new RegExp(EMPHASIS_LEAD + EMPHASIS_BODY + '(?![A-Za-z0-9_*])', 'g');
+    }
+  }
+
+  /* The marked stretches of one line, in order. */
+  function emphasisRuns(text) {
+    var pattern = emphasisPattern();
+    var runs = [];
+    var match;
+
+    while ((match = pattern.exec(text))) {
+      // Marks around nothing but marks are punctuation, not emphasis.
+      if (!/[^*_]/.test(match[3])) continue;
+
+      runs.push({
+        start: match.index + match[1].length,
+        end: match.index + match[0].length,
+        tag: match[2] === '_' ? 'em' : 'strong',
+        inner: match[3],
+      });
+    }
+
+    return runs;
+  }
+
+  /* The same line with the marks taken out, for a preview that is one plain line. */
+  function plainMessageText(text) {
+    var plain = String(text == null ? '' : text);
+
+    // Marks can sit inside marks, a level at a time.
+    for (var level = 0; level < 3; level++) {
+      var next = plain.replace(emphasisPattern(), function (whole, lead, mark, inner) {
+        return /[^*_]/.test(inner) ? lead + inner : whole;
+      });
+      if (next === plain) break;
+      plain = next;
+    }
+
+    return plain;
+  }
+
+  /*
+   * One line's worth: bold and italic drawn, links live, and the people it
+   * names marked. Emphasis is read from the text before anything is escaped
+   * or linked, so a stretch of it can hold a link or a name whole.
+   */
+  function inlineMessageHtml(text, pattern, depth) {
+    text = String(text == null ? '' : text);
+    depth = depth || 0;
+
+    var html = '';
+    var from = 0;
+
+    (depth < 3 ? emphasisRuns(text) : []).forEach(function (run) {
+      html += plainInlineHtml(text.slice(from, run.start), pattern) +
+        '<' + run.tag + '>' + inlineMessageHtml(run.inner, pattern, depth + 1) + '</' + run.tag + '>';
+      from = run.end;
+    });
+
+    return html + plainInlineHtml(text.slice(from), pattern);
+  }
+
+  /* Text with no emphasis left in it: links live, names marked. */
+  function plainInlineHtml(text, pattern) {
+    if (!text) return '';
+
     var html = linkify(text);
     if (!pattern) return html;
 
@@ -4278,6 +4366,79 @@
     return out;
   }
 
+  /* Cmd/Ctrl+B is bold and Cmd/Ctrl+I is italic; anything else is null. */
+  function emphasisKey(e) {
+    if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return null;
+    var key = String(e.key || '').toLowerCase();
+    if (key === 'b') return '*';
+    if (key === 'i') return '_';
+    return null;
+  }
+
+  /*
+   * Put the marks for bold or italic round what is selected in the message
+   * box, or an empty pair to type into.
+   *
+   * Left to the browser, Cmd+B makes the text in the box bold and nothing
+   * more: the box is read as plain text, so the message looked styled while
+   * it was written and went out plain. The marks are what the message is
+   * read by, so they are what the key types.
+   */
+  function wrapComposerSelection(input, mark) {
+    var selection = window.getSelection();
+    if (!selection || !selection.rangeCount) return;
+
+    var range = selection.getRangeAt(0);
+    if (!input.contains(range.commonAncestorContainer)) return;
+
+    var caret = document.createRange();
+
+    if (range.collapsed) {
+      var pair = document.createTextNode(mark + mark);
+      range.insertNode(pair);
+      caret.setStart(pair, mark.length);
+    } else {
+      // The closing mark first: adding the opening one moves nothing after it.
+      var close = document.createTextNode(mark);
+      var end = range.cloneRange();
+      end.collapse(false);
+      end.insertNode(close);
+
+      var start = range.cloneRange();
+      start.collapse(true);
+      start.insertNode(document.createTextNode(mark));
+
+      caret.setStartAfter(close);
+    }
+
+    caret.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(caret);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  /* The same two keys in a dialog's text field (an announcement, a caption). */
+  function bindEmphasisKeys(field) {
+    if (!field) return;
+
+    field.addEventListener('keydown', function (e) {
+      var mark = emphasisKey(e);
+      if (!mark) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      var start = field.selectionStart;
+      var end = field.selectionEnd;
+      var picked = field.value.slice(start, end);
+
+      field.setRangeText(mark + picked + mark, start, end, 'end');
+      // Nothing selected: leave the caret between the pair.
+      if (!picked) field.setSelectionRange(start + mark.length, start + mark.length);
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+
   function syncComposerInputState(input) {
     if (!input) return;
     var hasText = (input.textContent || '').trim().length > 0;
@@ -4342,6 +4503,14 @@
           state.editing = null;
           setComposerDraft(state, '');
           render();
+          return;
+        }
+
+        var mark = emphasisKey(e);
+        if (mark) {
+          e.preventDefault();
+          e.stopPropagation();
+          wrapComposerSelection(input, mark);
           return;
         }
 
@@ -7726,6 +7895,7 @@
         '</div>',
       onMount: function (host) {
         var body = host.querySelector('[data-messages-forward-body]');
+        bindEmphasisKeys(body);
         var search = host.querySelector('[data-messages-forward-search]');
         var list = host.querySelector('[data-messages-forward-list]');
         var save = host.querySelector('[data-messages-forward-save]');
@@ -9392,6 +9562,7 @@
         '</div>',
       onMount: function (host) {
         var body = host.querySelector('[data-messages-announce-body]');
+        bindEmphasisKeys(body);
         var when = host.querySelector('[data-messages-announce-when]');
         var atField = host.querySelector('[data-messages-announce-at-field]');
         var at = host.querySelector('[data-messages-announce-at]');

@@ -669,7 +669,7 @@ class MessagingPresenter
         }
 
         if ($message->body) {
-            return Str::limit($message->body, 80);
+            return Str::limit(MessageText::plain($message->body), 80);
         }
 
         $attachment = $message->attachments->first();

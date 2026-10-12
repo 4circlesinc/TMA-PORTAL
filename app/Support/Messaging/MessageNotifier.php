@@ -342,7 +342,7 @@ final class MessageNotifier
     /** What the notification says the message was. */
     private static function preview(Message $message): string
     {
-        $body = trim((string) $message->body);
+        $body = MessageText::plain($message->body);
         if ($body !== '') {
             return mb_strimwidth($body, 0, self::PREVIEW_CHARS, '…');
         }

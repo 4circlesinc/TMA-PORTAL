@@ -257,6 +257,81 @@ try {
   check(posted.gaps === 4, `the blank lines between them are gaps (${posted.gaps})`);
   check(posted.items[0].text === 'Improved Performance' && posted.items[3].text === 'Document Management', 'the headings read as headings');
   check(posted.items.filter((i) => i.nested).length === 3, 'and the points sit under them');
+  step(8, 'Bold and italic are drawn, and nothing else is taken for them');
+  await row(a, 'Ana Ruiz').click();
+  await a.waitForTimeout(800);
+  const marked = `Emphasis ${stamp}`;
+  await typeLines(a, [`${marked} *Important* and _quietly_ and **also** but 2*3*4 and snake_case_name and *their`]);
+  await a.click('[data-messages-composer-send]');
+
+  /* What a bubble draws as bold and as italic, and how. */
+  const emphasis = (target) => target.locator('.tma-dash__messages-bubble-copy').evaluate((copy) => {
+    const strong = Array.from(copy.querySelectorAll('strong'));
+    const em = Array.from(copy.querySelectorAll('em'));
+    return {
+      bold: strong.map((el) => el.textContent),
+      italic: em.map((el) => el.textContent),
+      weight: strong.length ? Number(getComputedStyle(strong[0]).fontWeight) : 0,
+      base: Number(getComputedStyle(copy).fontWeight),
+      slant: em.length ? getComputedStyle(em[0]).fontStyle : '',
+      text: copy.innerText,
+      links: Array.from(copy.querySelectorAll('a')).map((el) => el.getAttribute('href')),
+    };
+  });
+
+  for (const [who, page] of [['A', a], ['B', b]]) {
+    check(await eventually(page, 8000, async () => (await bubble(page, marked).count()) === 1), `${who} sees the message`);
+    const e = await emphasis(bubble(page, marked));
+    check(e.bold.join('|') === 'Important|also', `${who}: *Important* and **also** are bold (${e.bold.join('|')})`);
+    check(e.italic.join('|') === 'quietly', `${who}: _quietly_ is italic (${e.italic.join('|')})`);
+    check(e.weight >= 600 && e.weight > e.base && e.slant === 'italic', `${who}: and are really drawn so (${e.weight} over ${e.base}, ${e.slant})`);
+    check(!e.text.includes('*Important*') && !e.text.includes('_quietly_') && !e.text.includes('**'), `${who}: with their marks gone`);
+    check(e.text.includes('2*3*4') && e.text.includes('snake_case_name') && e.text.includes('*their'),
+      `${who}: arithmetic, an identifier and a correction are left as typed`);
+  }
+  check(await eventually(a, 4000, async () => (await row(a, 'Ana Ruiz').textContent()).includes('Important and quietly and also')),
+    "the chat list reads it as one plain line, without the marks");
+
+  step(9, 'Inside a list, around a link, and across the dialog');
+  const notes = `Notes ${stamp}`;
+  await typeLines(a, [notes, '* *Key point* first', '1. see https://example.com/a_b_c/_x_ for _details_']);
+  await a.click('[data-messages-composer-send]');
+  check(await eventually(b, 8000, async () => (await bubble(b, notes).count()) === 1), 'B gets it');
+  const inList = await emphasis(bubble(b, notes));
+  check(inList.bold.join('|') === 'Key point' && inList.italic.join('|') === 'details', `a bullet holds bold and a numbered line italic (${inList.bold.join('|')} / ${inList.italic.join('|')})`);
+  check(inList.links.join('|') === 'https://example.com/a_b_c/_x_', `the address keeps its underscores and is one link (${inList.links.join('|')})`);
+
+  step(10, 'Ctrl or Cmd with B and I type the marks, in the box and in a dialog');
+  const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
+  const keyed = `Keys ${stamp}`;
+  await a.click('[data-messages-composer-input]');
+  await a.keyboard.type(`${keyed} make this bold`);
+  for (let i = 0; i < 4; i++) await a.keyboard.press('Shift+ArrowLeft');
+  await a.keyboard.press(`${mod}+b`);
+  const box = a.locator('[data-messages-composer-input]');
+  check((await box.evaluate((el) => el.innerText.trim())) === `${keyed} make this *bold*`, 'with a word selected, the marks go round it');
+  check((await box.locator('b, strong, i, em').count()) === 0, 'and the box itself is not styled: what you see is what is sent');
+
+  await a.keyboard.type(' and ');
+  await a.keyboard.press(`${mod}+i`);
+  await a.keyboard.type('slanted');
+  check((await box.evaluate((el) => el.innerText.trim())) === `${keyed} make this *bold* and _slanted_`, 'with nothing selected, a pair is typed and the caret left inside it');
+  await a.click('[data-messages-composer-send]');
+  check(await eventually(b, 8000, async () => (await bubble(b, keyed).count()) === 1), 'B gets it');
+  const byKey = await emphasis(bubble(b, keyed));
+  check(byKey.bold.join('|') === 'bold' && byKey.italic.join('|') === 'slanted', `and it arrives bold and italic (${byKey.bold.join('|')} / ${byKey.italic.join('|')})`);
+
+  await row(a, GROUP).click();
+  await a.waitForTimeout(800);
+  await a.click('[data-messages-conversation-menu]');
+  await a.click('[data-conv-action="announce"]');
+  await a.waitForSelector('.tma-portal-modal [data-messages-announce-body]', { timeout: 5000 });
+  await a.fill('[data-messages-announce-body]', 'Office closed');
+  await a.locator('[data-messages-announce-body]').press(`${mod}+a`);
+  await a.locator('[data-messages-announce-body]').press(`${mod}+b`);
+  check((await a.inputValue('[data-messages-announce-body]')) === '*Office closed*', 'the same key marks an announcement being written');
+  await a.keyboard.press('Escape');
+
   await bubble(a, news).scrollIntoViewIfNeeded();
   await a.waitForTimeout(400);
   await a.screenshot({ path: new URL('./messaging-text-layout.png', import.meta.url).pathname });

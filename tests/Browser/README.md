@@ -2679,8 +2679,22 @@ scripted ByeWind conversation and no network calls at all. It is now backed by
   gap; a message of one line is left alone (`- ok` is somebody talking);
   and tags in the text stay text. All of it is spans, because the text sits
   inside a `<p>` and a real list would close it the moment it was parsed.
-  A draft keeps its lines while it waits. Same servers and seed as
-  `messaging-realtime.mjs`:
+  A draft keeps its lines while it waits.
+
+  And bold and italic, written as chat already writes them: `*bold*`
+  (`**bold**` and `__bold__` too) and `_italic_`, drawn as `<strong>` and
+  `<em>` and checked by computed weight and slant, not by tag alone. A mark
+  opens only at the start or after a space, bracket or quote and closes
+  before anything that is not a letter or digit, which is what leaves
+  `2*3*4`, `snake_case_name`, a correction like `*their` and the underscores
+  in an address as typed; the script sends all four. The chat list reads the
+  same message as one plain line with the marks gone (`MessageText::plain`
+  on the server and `plainMessageText` here hold the same rule, and
+  `MessagingTextTest` pins the server's). Ctrl or Cmd with B and I type the
+  marks round the selection, or an empty pair to type into, in the message
+  box and in the announcement and forward dialogs: left to the browser, the
+  key styled the text in the box and the message went out plain. Same
+  servers and seed as `messaging-realtime.mjs`:
 
   ```sh
   node tests/Browser/messaging-text-layout.mjs
