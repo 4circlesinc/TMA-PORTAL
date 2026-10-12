@@ -20,6 +20,9 @@ use App\Models\CipApplicationMessage;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Client;
+use App\Models\Conversation;
+use App\Models\ConversationParticipant;
+use App\Models\Message;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
@@ -108,5 +111,29 @@ foreach (['Aldo', 'Bea', 'Cato', 'Dina', 'Emil', 'Fay', 'Gus'] as $name) {
     auth()->setUser($late);
     Threads::markRead($application, $late);
 }
+
+/*
+ * Two conversations on the file, for the list under the thread: one with a
+ * colleague and one group. Each is drawn there with the picture it has in
+ * Messages, initials for the one and the members' faces for the other.
+ */
+$onFile = function (string $type, ?string $name, array $people, User $speaker, string $body) use ($application, $admin) {
+    $conversation = Conversation::create([
+        'type' => $type, 'name' => $name, 'client_id' => $application->client_id,
+        'created_by' => $admin->id, 'last_message_at' => now(),
+    ]);
+
+    foreach ($people as $person) {
+        ConversationParticipant::create([
+            'conversation_id' => $conversation->id, 'user_id' => $person->id,
+            'role' => ConversationParticipant::ROLE_MEMBER, 'joined_at' => now(),
+        ]);
+    }
+
+    $conversation->messages()->create(['user_id' => $speaker->id, 'type' => Message::TYPE_TEXT, 'body' => $body]);
+};
+
+$onFile(Conversation::TYPE_DIRECT, null, [$admin, $writer], $writer, 'I am not able to see the image.');
+$onFile(Conversation::TYPE_GROUP, 'Calder file', [$admin, $writer, $reader], $reader, 'Documents received.');
 
 echo 'TMA_APP='.$application->uuid.PHP_EOL;

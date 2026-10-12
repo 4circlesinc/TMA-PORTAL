@@ -421,7 +421,12 @@ field placement and drawing, and computed CSS only exist in a browser.
   readers; that Activity is held the same way; and that Assigned and Portal
   access still fill the height while Documents is still fitted to it.
   Assigned is left alone on purpose, its staff list scrolls inside the
-  card. Same serve and an administrator.
+  card. It also pins the Conversations list under the thread: every row
+  used to carry one chat-bubble glyph, and now carries the picture that
+  conversation has in Messages (`TMAMessages.avatarHtml`), a photo or
+  initials for a person and the members' faces for a group, at the 40px the
+  page's other rows use. The seed puts one of each on the file. Same serve
+  and an administrator.
   Read-only, so one seed serves every run:
 
   ```sh

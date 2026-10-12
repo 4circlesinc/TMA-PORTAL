@@ -207,6 +207,35 @@ async function run(name, viewport, dark) {
     check(f.every(r => r.below), 'what hangs under a bubble is below the photo, not beside it');
     check(f.every(r => r.aligned), 'and stays under the bubble');
 
+    step(name, 'Each conversation on the file carries the picture it has in Messages');
+    // They were all one chat-bubble glyph, which says "a conversation" and
+    // nothing about which. The picture stands where the icon slot would be
+    // and not inside it: that slot sizes every image in it to the whole
+    // slot, which would blow each face of a group up over the others.
+    const threads = await page.evaluate(() => Array.from(document.querySelectorAll('[data-clients-open-thread]')).map((row) => {
+      const face = row.querySelector('.tma-dash__messages-row-avatar');
+      const box = face ? face.getBoundingClientRect() : null;
+      return {
+        title: (row.querySelector('.tma-dash__clients-assigned-title') || {}).textContent || '',
+        face: !!face,
+        group: !!(face && face.classList.contains('tma-dash__messages-row-avatar--group')),
+        initials: face ? face.textContent.trim() : '',
+        width: box ? Math.round(box.width) : 0,
+        height: box ? Math.round(box.height) : 0,
+        glyph: !!row.querySelector('.tma-dash__clients-assigned-icon'),
+        leftOfTitle: !!(box && box.right <= row.querySelector('.tma-dash__clients-assigned-title').getBoundingClientRect().left),
+      };
+    }));
+    console.log(`      ${threads.map(t => `${t.title}: ${t.group ? 'group' : t.initials || 'photo'} ${t.width}x${t.height}`).join(' | ')}`);
+    check(threads.length === 2, `both conversations are listed (${threads.length})`);
+    check(threads.every(t => t.face && !t.glyph), 'each has a picture and none has the chat glyph');
+    check(threads.every(t => t.width === 40 && t.height === 40), 'at the size the other rows on this page use');
+    check(threads.every(t => t.leftOfTitle), 'beside its name, not over it');
+    const direct = threads.find(t => t.title === 'Tessa Officer');
+    const group = threads.find(t => t.title === 'Calder file');
+    check(!!direct && !direct.group && direct.initials === 'TO', 'the one with a colleague is her initials, having no photo');
+    check(!!group && group.group, 'the group is its members\' faces');
+
     step(name, 'Activity is held by its card too');
     await openTab(page, 'activity');
     /*

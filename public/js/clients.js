@@ -11559,6 +11559,24 @@
     if (save && !save.disabled) save.textContent = copy.button;
   }
 
+  /*
+   * The picture a conversation has in Messages, so a thread on a file is
+   * recognised here as it is there: the applicant and the firm's contact for
+   * a provider case, a person's photo or initials otherwise. It stands where
+   * the icon slot would be and is not wrapped in it, because that slot sizes
+   * every image inside it to the whole slot, which is right for one face and
+   * wrong for a cluster of them. The glyph is only for a shell without
+   * Messages loaded.
+   */
+  function conversationAvatarHtml(row) {
+    var messages = window.TMAMessages;
+    if (messages && typeof messages.avatarHtml === 'function') {
+      return messages.avatarHtml(row);
+    }
+    return '<span class="tma-dash__clients-assigned-icon" aria-hidden="true">' +
+      '<img src="' + ICONS.ChatTeardropDots + '" alt="" width="16" height="16"></span>';
+  }
+
   function renderClientMessagesPanel(state, hidden) {
     var app = applicationFor(state.selectedId);
     var cipThread = (app && isApplicationProfile(app))
@@ -11589,8 +11607,7 @@
         if (row.preview) meta.push(row.preview);
         return '<button type="button" class="tma-dash__clients-assigned tma-dash__clients-thread" data-clients-open-thread="' +
           esc(row.id) + '">' +
-          '<span class="tma-dash__clients-assigned-icon" aria-hidden="true">' +
-          '<img src="' + ICONS.ChatTeardropDots + '" alt="" width="16" height="16"></span>' +
+          conversationAvatarHtml(row) +
           '<span class="tma-dash__clients-assigned-main">' +
           '<span class="tma-dash__clients-assigned-title">' + esc(row.name || 'Conversation') + '</span>' +
           '<span class="tma-dash__clients-assigned-meta">' + esc(meta.filter(Boolean).join(' · ')) + '</span>' +

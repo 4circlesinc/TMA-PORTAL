@@ -10970,6 +10970,15 @@
     clearMobileHeader: clearMessagesMobileHeader,
     getInboxUnreadCount: getInboxUnreadCount,
     getMissedCallCount: getMissedCallCount,
+    /*
+     * A conversation's own face, as the chat list draws it: a person's photo
+     * or initials, a group's picture or its members. For any other page that
+     * lists conversations, so one is recognised there as it is here. Takes a
+     * conversation as the server presents it.
+     */
+    avatarHtml: function (row) {
+      return row ? threadIcon(resolveThread(row)) : '';
+    },
     /** `opts.startCall` = 'audio' | 'video' rings once the thread is open. */
     openDirect: function (userId, opts) {
       var mountEl = document.querySelector('[data-messages]');
