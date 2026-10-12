@@ -3843,6 +3843,21 @@
     if (state.askDecision) {
       state.askDecision(state.decision, function (answer) {
         if (!answer) return;
+
+        /*
+         * Skipped: this file has no decision yet. It enters the lane
+         * undecided, the way one moved across from Approved does, and is
+         * asked for its Stage 1 documents; the decision is recorded from the
+         * status menu when there is one.
+         */
+        if (answer.skipped) {
+          state.decision = null;
+          state.outcome = 'post_approval';
+          submit();
+
+          return;
+        }
+
         state.decision = {
           decision: answer.decision,
           decidedAt: answer.decidedAt || '',

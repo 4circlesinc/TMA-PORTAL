@@ -15141,11 +15141,27 @@
         '</p>' +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-decision>Cancel</button>' +
+        // Not every file brought into the portal has a decision yet. Skip
+        // adds it with none recorded; one is recorded later from the status
+        // menu, in this same dialog.
+        (collecting
+          ? '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-skip-decision' +
+            ' title="Add the application with no decision">Skip</button>'
+          : '') +
         '<button type="button" class="tma-no-data__btn" data-cip-save-decision>' + (collecting ? 'Add' : 'Record decision') + '</button>' +
         '</div>',
       onMount: function (el) {
         var cancel = el.querySelector('[data-cip-cancel-decision]');
         if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
+
+        // Nothing in the dialog is read or checked: there is no decision.
+        var skip = el.querySelector('[data-cip-skip-decision]');
+        if (skip) {
+          skip.addEventListener('click', function () {
+            ui.closeModal();
+            opts.collect({ skipped: true });
+          });
+        }
 
         wireDecisionLetterDrop(el);
         wireCipStatusAttachment(el);

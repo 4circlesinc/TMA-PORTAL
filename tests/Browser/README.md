@@ -393,11 +393,12 @@ field placement and drawing, and computed CSS only exist in a browser.
   nothing and the next Add asks again; that an Add the server refuses asks
   again with the answer and the chosen letter still in place; that a letter
   the server will not take is said so and not offered again; that Approved
-  files it once on the day given with the letter on file; and that Denied
-  does the same. Same serve, an administrator, and `TMA_PROVIDER`, the uuid
-  of a service provider that account may file under. It writes its own two
-  drafts through the draft endpoint and files them, under fresh names and
-  numbers each run:
+  files it once on the day given with the letter on file; that Denied does
+  the same; and that Skip adds an application with no decision yet, which
+  stands on Post-Approval with nothing recorded. Same serve, an
+  administrator, and `TMA_PROVIDER`, the uuid of a service provider that
+  account may file under. It writes its own three drafts through the draft
+  endpoint and files them, under fresh names and numbers each run:
 
   ```sh
   TMA_BASE_URL=http://127.0.0.1:8933 TMA_PROVIDER=<uuid> node tests/Browser/cip-post-approval-filing.mjs

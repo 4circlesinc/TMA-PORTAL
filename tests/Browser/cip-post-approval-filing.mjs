@@ -25,11 +25,13 @@ import { readFileSync } from 'node:fs';
  *    not put back for the next Add;
  *  - Approved files it once: the application reads Approved, on the day
  *    that was given, with the letter on file;
- *  - Denied does the same for Denied.
+ *  - Denied does the same for Denied;
+ *  - Skip adds an application that has no decision yet: it stands on
+ *    Post-Approval with nothing recorded.
  *
  * Needs the standard throwaway server with FEATURE_CIP=true, an
  * administrator (TMA_STAFF_EMAIL) and TMA_PROVIDER, the uuid of a service
- * provider that account may file under. It files two applications each run
+ * provider that account may file under. It files three applications each run
  * under fresh names and numbers. See README.
  */
 const BASE = process.env.TMA_BASE_URL || 'http://127.0.0.1:8899';
@@ -175,7 +177,7 @@ try {
   check(await modal.locator('[data-cip-decision-letter]').count() === 1 && /Decision letter \(PDF\)\s*\*/.test((await modal.locator('[data-cip-decision-drop]').innerText()).replace(/\s+/g, ' ')), 'and the decision letter as a PDF, required');
   check(await modal.locator('[data-cip-status-drop]').count() === 0, 'with no loose attachment to file before there is an application');
   const buttons = (await modal.locator('.tma-portal-modal__foot button').allInnerTexts()).map(t => t.trim());
-  check(buttons.join(' | ') === 'Cancel | Add', `Cancel and Add to press (${buttons.join(' | ')})`);
+  check(buttons.join(' | ') === 'Cancel | Skip | Add', `Cancel, Skip and Add to press (${buttons.join(' | ')})`);
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/post-approval-filing-question.png` });
 
   step(2, 'It will not go on without an outcome, or without the letter');
@@ -296,6 +298,23 @@ try {
   check(denied.status === 'post_denied' && denied.label === 'Denied', 'the application stands on Denied');
   check(denied.decision === 'post_denied' && denied.decidedAt === '2026-09-25', 'the decision is recorded on the day that was given');
   check(!!denied.letter, 'the letter is on the file');
+
+  step(8, 'Skip adds an application that has no decision yet');
+  const third = await seedDraft('Cosmo', number());
+  check(third.status === 200 && !!third.id && third.id !== second.id, 'a third draft is on file');
+  await openDraft(third.id);
+  await page.click('[data-cip-save]');
+  await modal.waitFor({ timeout: 8000 });
+  // Pressed with the dialog untouched: no outcome, no date change, no letter.
+  await modal.locator('[data-cip-skip-decision]').click();
+  await gone();
+  await filed();
+  await page.waitForTimeout(1500);
+  check(filings.length === 5 && filings[4] === 201, `filed once (${filings.join(',')})`);
+  const undecided = await record(third.id);
+  console.log(`      record: ${JSON.stringify(undecided)}`);
+  check(undecided.status === 'post_approval' && undecided.phase === 'post_approval', 'the application stands on Post-Approval');
+  check(!undecided.decision && !undecided.decidedAt && !undecided.letter, 'with no decision, no decision date and no letter recorded');
 
   check(pageErrors.length === 0, `no page errors (${pageErrors.slice(0, 2).join(' / ') || 'none'})`);
 } finally {
