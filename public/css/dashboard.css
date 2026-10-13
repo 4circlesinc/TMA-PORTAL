@@ -20703,6 +20703,14 @@ button.tma-file-status-chip:focus-visible,
   overflow-y: auto;
 }
 
+/* Six rows, then it scrolls: a service provider's Access card. This is six
+   one-line rows; clients.js moves the cap to the foot of the sixth row as
+   drawn, because a wrapped meta line makes a row taller. */
+.tma-dash__clients-assigned-list--six {
+  max-height: calc(6 * 66px + 5 * var(--space-8));
+  scrollbar-width: thin;
+}
+
 /* Portal access — can this client sign in, and where has their invitation
    got to. Sits above the assigned-staff list in the Assigned tab, so "who
    looks after them" and "can they get in" read as one section. */

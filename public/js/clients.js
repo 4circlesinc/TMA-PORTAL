@@ -7133,7 +7133,10 @@
             half: true, count: company.referredCount || 0,
           })
         : '') +
-      companyCard('Access', renderCompanyMembersBlock(state, company), { half: true }) +
+      // The count says there is more than the six rows on show.
+      companyCard('Access', renderCompanyMembersBlock(state, company), {
+        half: true, count: (state.companyMembers || []).length,
+      }) +
       companyCard('Provider contacts', renderCompanyPeople(company), {
         half: true, count: (company.people || []).length,
       }) +
@@ -7323,8 +7326,12 @@
         '</div>'
       : '';
 
+    // Keyed: the form above it comes and goes with the load, and an unkeyed
+    // list would be redrawn out of the form's element, avatars and all.
     var list = members.length
-      ? '<div class="tma-dash__clients-assigned-list">' + members.map(function (m) {
+      ? '<div class="tma-dash__clients-assigned-list tma-dash__clients-assigned-list--six"' +
+        ' data-key="company-members" data-company-members-list="' + esc(company.id) + '">' +
+        members.map(function (m) {
           var meta = [m.accountType === 'Service Provider admin'
             ? 'Service Provider admin'
             : companyRoleLabel(m.role)];
@@ -7358,6 +7365,49 @@
 
     return '<div class="tma-dash__clients-access-block">' +
       form + list + '</div>';
+  }
+
+  /*
+   * Six members, then the Access list scrolls.
+   *
+   * A row is as tall as its meta line wraps, so six rows is a measurement and
+   * not a number. The stylesheet caps the list at six one-line rows; this
+   * moves the cap to the foot of the sixth row as drawn. The morph drops an
+   * inline height on every repaint, so it is set again after each one.
+   */
+  var COMPANY_MEMBERS_SHOWN = 6;
+
+  /* Where the Access list is scrolled to, and whose list it is. */
+  function companyMembersScroll(root) {
+    var list = root && root.querySelector('[data-company-members-list]');
+    if (!list) return null;
+    return { company: list.getAttribute('data-company-members-list'), top: list.scrollTop };
+  }
+
+  /*
+   * `held` is where the list stood before the repaint. A members reload
+   * takes the add form away and brings it back, the morph moves the list
+   * each time, and a moved element forgets its scroll: removing the eighth
+   * member would put the reader back at the first.
+   */
+  function fitCompanyMembersList(root, held) {
+    var list = root && root.querySelector('[data-company-members-list]');
+    if (!list) return;
+
+    var rows = list.children;
+    if (rows.length <= COMPANY_MEMBERS_SHOWN) {
+      list.style.maxHeight = '';
+      return;
+    }
+
+    var last = rows[COMPANY_MEMBERS_SHOWN - 1];
+    var height = last.offsetTop + last.offsetHeight - rows[0].offsetTop;
+    // Not laid out (a hidden view): leave the stylesheet's cap in charge.
+    if (height > 0) list.style.maxHeight = height + 'px';
+
+    if (held && held.top && held.company === list.getAttribute('data-company-members-list')) {
+      list.scrollTop = held.top;
+    }
   }
 
   /* The firm's own people looking after this company. */
@@ -18989,8 +19039,10 @@
         return;
       }
 
+      var membersScroll = companyMembersScroll(root);
       MORPH.patch(root, renderDetailPage(state));
       wireEvents(root, state, 'detail', navigate, render);
+      fitCompanyMembersList(root, membersScroll);
     }
 
     function navigate(screen, contactId, navOpts) {
@@ -19224,6 +19276,8 @@
 
     var lastMobile = isClientsMobile();
     window.addEventListener('resize', function () {
+      // A narrower card wraps the rows, which moves the foot of the sixth.
+      fitCompanyMembersList(root);
       var nextMobile = isClientsMobile();
       if (nextMobile === lastMobile) return;
       lastMobile = nextMobile;

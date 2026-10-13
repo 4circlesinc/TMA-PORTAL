@@ -3312,3 +3312,27 @@ node tests/Browser/overview-recycle-columns.mjs
 ```sh
 node tests/Browser/provider-overview-nav.mjs
 ```
+
+- **`provider-access-card.mjs`** — a service provider's Access card. It lists
+  everyone at the firm who can reach its records, and a firm with a dozen
+  people pushed every card under it off the screen. It shows six and the rest
+  scroll inside the card. Six rows is a measurement and not a number: a row
+  is as tall as its meta line wraps, so the cap is moved to the foot of the
+  sixth row as drawn, and only a browser can say where that is.
+
+  It pins that a firm with nine members shows exactly six whole rows with
+  none cut through, that the card's header carries the count, that the list
+  scrolls to the last member, that a repaint keeps the same list element at
+  the same scroll position (a members reload takes the add form away and
+  brings it back, and the morph moves the list each time), that a narrow
+  window where the rows wrap still ends on the sixth, and that a firm with
+  three members has no cap at all. Standard throwaway server with
+  `FEATURE_CIP=true`; the seed makes its own administrator and prints the
+  environment as its last line. Read-only, so one seed serves every run:
+
+```sh
+DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FEATURE_CIP=true \
+  php artisan tinker tests/Browser/fixtures/provider-access-seed.php < /dev/null
+TMA_COMPANY_MANY=galaxy TMA_COMPANY_FEW=orbit TMA_BASE_URL=http://127.0.0.1:8941 \
+  node tests/Browser/provider-access-card.mjs
+```
