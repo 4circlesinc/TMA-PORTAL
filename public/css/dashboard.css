@@ -34855,17 +34855,21 @@ button.tma-dash__header-popup-item:focus-visible {
  * its own so a long item wraps under its own first word. All of it is spans,
  * because the text sits inside a paragraph; these rules are what make them
  * blocks.
+ *
+ * Named tma-dash__messages-copy-*, and nothing shorter. The list was first
+ * .tma-dash__messages-list, which is the inbox column: `display: block` on
+ * it here undid the column's flex layout and its bar left the bottom.
  */
-.tma-dash__messages-para-gap {
+.tma-dash__messages-copy-gap {
   display: block;
   height: var(--space-8);
 }
 
-.tma-dash__messages-list {
+.tma-dash__messages-copy-list {
   display: block;
 }
 
-.tma-dash__messages-list-item {
+.tma-dash__messages-copy-item {
   display: flex;
   align-items: baseline;
   /* With the marker's column, this puts a nested bullet under the first
@@ -34874,22 +34878,22 @@ button.tma-dash__header-popup-item:focus-visible {
 }
 
 /* The points under a numbered heading, or ones their author indented. */
-.tma-dash__messages-list-item--nested {
+.tma-dash__messages-copy-item--nested {
   padding-left: var(--space-20);
 }
 
-.tma-dash__messages-list-mark {
+.tma-dash__messages-copy-mark {
   flex: 0 0 auto;
   min-width: 1.5em;
   font-variant-numeric: tabular-nums;
 }
 
-.tma-dash__messages-list-mark--bullet {
+.tma-dash__messages-copy-mark--bullet {
   min-width: 0.75em;
   text-align: center;
 }
 
-.tma-dash__messages-list-text {
+.tma-dash__messages-copy-text {
   flex: 1 1 auto;
   min-width: 0;
 }

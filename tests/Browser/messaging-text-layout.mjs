@@ -110,17 +110,17 @@ async function typeLines(page, lines) {
 /* How one bubble's text is laid out: its plain lines, its list, where things sit. */
 const layout = (target) => target.locator('.tma-dash__messages-bubble-copy').evaluate((copy) => {
   const box = (el) => { const b = el.getBoundingClientRect(); return { x: Math.round(b.left), y: Math.round(b.top), bottom: Math.round(b.bottom) }; };
-  const items = Array.from(copy.querySelectorAll('.tma-dash__messages-list-item')).map((item) => ({
-    mark: item.querySelector('.tma-dash__messages-list-mark').textContent,
-    text: item.querySelector('.tma-dash__messages-list-text').textContent,
-    nested: item.classList.contains('tma-dash__messages-list-item--nested'),
-    textX: box(item.querySelector('.tma-dash__messages-list-text')).x,
+  const items = Array.from(copy.querySelectorAll('.tma-dash__messages-copy-item')).map((item) => ({
+    mark: item.querySelector('.tma-dash__messages-copy-mark').textContent,
+    text: item.querySelector('.tma-dash__messages-copy-text').textContent,
+    nested: item.classList.contains('tma-dash__messages-copy-item--nested'),
+    textX: box(item.querySelector('.tma-dash__messages-copy-text')).x,
     ...box(item),
   }));
   return {
     breaks: copy.querySelectorAll('br').length,
-    gaps: copy.querySelectorAll('.tma-dash__messages-para-gap').length,
-    lists: copy.querySelectorAll('.tma-dash__messages-list').length,
+    gaps: copy.querySelectorAll('.tma-dash__messages-copy-gap').length,
+    lists: copy.querySelectorAll('.tma-dash__messages-copy-list').length,
     items,
     text: copy.innerText,
     // An inline run has a box for each row it is drawn on (and may have an
@@ -128,6 +128,47 @@ const layout = (target) => target.locator('.tma-dash__messages-bubble-copy').eva
     rows: new Set(Array.from(copy.getClientRects()).filter((r) => r.width > 0).map((r) => Math.round(r.top))).size,
   };
 });
+
+/*
+ * The inbox column, measured. A message's bullet list was first given the
+ * class the column itself has, and the rule that made the list a block made
+ * the column one: its bar left the bottom and the New message button sat on
+ * the last conversation. Nothing in a bubble may reach it.
+ */
+const inbox = (page) => page.evaluate(() => {
+  const box = (el) => el.getBoundingClientRect();
+  const columns = document.querySelectorAll('.tma-dash__messages-list');
+  const column = columns[0];
+  const style = getComputedStyle(column);
+  const foot = box(column.querySelector('.tma-dash__messages-list-foot'));
+  const body = box(column.querySelector('.tma-dash__messages-list-body'));
+  const fab = box(column.querySelector('.tma-dash__messages-fab'));
+  const chat = box(document.querySelector('.tma-dash__messages-chat'));
+  const rows = Array.from(column.querySelectorAll('.tma-dash__messages-row')).map(box);
+  const last = rows[rows.length - 1];
+  return {
+    count: columns.length,
+    display: style.display,
+    direction: style.flexDirection,
+    footToBottom: Math.round(box(column).bottom - foot.bottom),
+    columnToChat: Math.round(Math.abs(box(column).bottom - chat.bottom)),
+    bodyToFoot: Math.round(foot.top - body.bottom),
+    fabAboveFoot: fab.bottom <= foot.top + 1,
+    // Only a short list leaves room to tell: the button must not sit on a row.
+    fabClearOfRows: !last || last.bottom <= fab.top || fab.right <= last.left || rows.length > 8,
+    spare: Math.round(foot.top - (last ? last.bottom : body.top)),
+  };
+});
+
+async function checkInbox(page, when) {
+  const i = await inbox(page);
+  check(i.count === 1, `${when}: one element carries the inbox column's class (${i.count})`);
+  check(i.display === 'flex' && i.direction === 'column', `${when}: the column is still a flex column (${i.display} ${i.direction})`);
+  check(i.footToBottom >= 0 && i.footToBottom <= 2 && i.columnToChat <= 2,
+    `${when}: its bar is at the bottom, level with the chat beside it (${i.footToBottom}px, ${i.columnToChat}px)`);
+  check(i.bodyToFoot >= 0 && i.bodyToFoot <= 16, `${when}: the list reaches down to the bar (${i.bodyToFoot}px)`);
+  check(i.fabAboveFoot && i.fabClearOfRows, `${when}: New message floats above the bar, clear of the conversations (${i.spare}px spare under the last one)`);
+}
 
 let a, b;
 try {
@@ -137,6 +178,7 @@ try {
   await row(a, 'Ana Ruiz').click();
   await row(b, 'Test User').click();
   await a.waitForTimeout(1000);
+  await checkInbox(a, 'before anything is sent');
 
   const stamp = Date.now();
   const first = `First line ${stamp}`;
@@ -175,12 +217,16 @@ try {
   }
 
   // A long item wraps under its own first word, not under its marker.
-  const wrapped = await bubble(b, agenda).locator('.tma-dash__messages-list-item').nth(1).evaluate((item) => {
-    const mark = item.querySelector('.tma-dash__messages-list-mark').getBoundingClientRect();
-    const text = item.querySelector('.tma-dash__messages-list-text').getBoundingClientRect();
+  const wrapped = await bubble(b, agenda).locator('.tma-dash__messages-copy-item').nth(1).evaluate((item) => {
+    const mark = item.querySelector('.tma-dash__messages-copy-mark').getBoundingClientRect();
+    const text = item.querySelector('.tma-dash__messages-copy-text').getBoundingClientRect();
     return { markRight: Math.round(mark.right), textLeft: Math.round(text.left) };
   });
   check(wrapped.textLeft >= wrapped.markRight, 'an item\'s text stays to the right of its marker');
+
+  // The list is on screen now, in both threads: the column must not have moved.
+  await checkInbox(a, 'with a list in the thread');
+  await checkInbox(b, 'for the person reading it');
 
   step(3, 'One line is left as somebody talking');
   const dash = `- ok ${stamp}`;

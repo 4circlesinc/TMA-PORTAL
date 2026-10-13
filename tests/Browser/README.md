@@ -2681,6 +2681,18 @@ scripted ByeWind conversation and no network calls at all. It is now backed by
   inside a `<p>` and a real list would close it the moment it was parsed.
   A draft keeps its lines while it waits.
 
+  **It also measures the inbox column, three times, and that is not
+  padding.** The list was first given the class `tma-dash__messages-list`,
+  which is the inbox column's own: `display: block` for a message's list
+  was `display: block` for the column, whose bar then floated up under the
+  last conversation with the New message button on top of it. Nothing in
+  the script looked at the column, so it shipped. The spans are
+  `tma-dash__messages-copy-*` now, and the script checks that exactly one
+  element carries the column's class, that it is a flex column, that its
+  bar is at the bottom and level with the chat beside it, and that the
+  button is clear of the rows. `messaging-realtime.mjs` carries a shorter
+  form of the same check, since it is the one run most.
+
   And bold and italic, written as chat already writes them: `*bold*`
   (`**bold**` and `__bold__` too) and `_italic_`, drawn as `<strong>` and
   `<em>` and checked by computed weight and slant, not by tag alone. A mark

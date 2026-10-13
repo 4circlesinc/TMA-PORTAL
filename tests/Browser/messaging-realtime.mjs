@@ -128,6 +128,18 @@ try {
   check(a.wire.signOffs > 0 && a.wire.signOffs <= socketState.channels,
     `one sign-off per channel (${a.wire.signOffs} for ${socketState.channels})`);
 
+  // The inbox column itself: a flex column whose bar sits at the bottom. A
+  // rule added for something inside a bubble once took its class and undid it.
+  const column = await a.page.evaluate(() => {
+    const all = document.querySelectorAll('.tma-dash__messages-list');
+    const el = all[0];
+    const foot = el.querySelector('.tma-dash__messages-list-foot').getBoundingClientRect();
+    const style = getComputedStyle(el);
+    return { count: all.length, display: style.display, direction: style.flexDirection, gap: Math.round(el.getBoundingClientRect().bottom - foot.bottom) };
+  });
+  check(column.count === 1 && column.display === 'flex' && column.direction === 'column' && column.gap >= 0 && column.gap <= 2,
+    `the inbox column is a flex column with its bar at the bottom (${column.display} ${column.direction}, ${column.gap}px)`);
+
   step(3, 'Open the shared conversation on both sides');
   // A opens the conversation with B; B opens the one with A.
   await a.page.locator('.tma-dash__messages-row', { hasText: 'Ana Ruiz' }).first().click();

@@ -2826,6 +2826,11 @@
    *
    * Everything here is a span. The text sits inside a <p>, and a real list
    * or div would close that paragraph the moment the markup was parsed.
+   *
+   * Their classes are tma-dash__messages-copy-*, after the bubble's text
+   * they sit in. They were first called tma-dash__messages-list…, which is
+   * the inbox column's own class: the rule that made a message's list a
+   * block made the whole column one, and its bar came loose from the bottom.
    */
   var BULLET_LINE = /^([ \t]*)[*\-\u2022\u2013\u2014\u00b7][ \t]+(\S.*)$/;
   var NUMBER_LINE = /^([ \t]*)(\d{1,3}[.)])[ \t]+(\S.*)$/;
@@ -2872,21 +2877,21 @@
     });
 
     return blocks.map(function (block) {
-      if (block.type === 'gap') return '<span class="tma-dash__messages-para-gap"></span>';
+      if (block.type === 'gap') return '<span class="tma-dash__messages-copy-gap"></span>';
 
       if (block.type === 'text') return block.lines.map(inline).join('<br>');
 
       return (
-        '<span class="tma-dash__messages-list" role="list">' +
+        '<span class="tma-dash__messages-copy-list" role="list">' +
         block.items.map(function (item) {
           return (
-            '<span class="tma-dash__messages-list-item' +
-            (item.nested ? ' tma-dash__messages-list-item--nested' : '') +
+            '<span class="tma-dash__messages-copy-item' +
+            (item.nested ? ' tma-dash__messages-copy-item--nested' : '') +
             '" role="listitem">' +
-            '<span class="tma-dash__messages-list-mark' +
-            (item.bullet ? ' tma-dash__messages-list-mark--bullet" aria-hidden="true' : '') + '">' +
+            '<span class="tma-dash__messages-copy-mark' +
+            (item.bullet ? ' tma-dash__messages-copy-mark--bullet" aria-hidden="true' : '') + '">' +
             esc(item.mark) + '</span>' +
-            '<span class="tma-dash__messages-list-text">' + inline(item.text) + '</span>' +
+            '<span class="tma-dash__messages-copy-text">' + inline(item.text) + '</span>' +
             '</span>'
           );
         }).join('') +
