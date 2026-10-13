@@ -733,6 +733,12 @@
       return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid) +
         '/members/' + encodeURIComponent(memberId), { method: 'DELETE' });
     },
+    /* The one member the firm's email notifications go to; none is everyone. */
+    notifyOnly: function (uid, memberId) {
+      return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid) + '/notification-email', {
+        method: 'PUT', json: { member: memberId || null },
+      });
+    },
   };
 
   var CompanyStaffAPI = {
@@ -7301,6 +7307,12 @@
     return 'Service provider member';
   }
 
+  /* Where a member's notices are written to: the row's own address before
+     the login's, so not always the one the row shows. */
+  function companyMemberNotifyAddress(m) {
+    return (m && (m.notificationAddress || m.email)) || '';
+  }
+
   /* Who at the company can reach its records, and how far each has got. */
   function renderCompanyMembersBlock(state, company) {
     var members = state.companyMembers || [];
@@ -7326,6 +7338,34 @@
         '</div>'
       : '';
 
+    /*
+     * Where the firm's email notifications go: everyone on the list, or one
+     * of them. Choosing one leaves the others their access and the bell.
+     * It stays drawn while the list reloads, so it does not blink out under
+     * the reader, and it is keyed, because the add form above it comes and
+     * goes and an unkeyed row would be handed that form's element.
+     */
+    var mailable = members.filter(function (m) { return !!companyMemberNotifyAddress(m); });
+    var saved = members.filter(function (m) { return !!m.notificationEmail; })[0];
+    // A choice on its way to the server is what the select shows, and it
+    // waits for the answer. It waits for a reload too: a list read before
+    // the save would land on top of it and put the old choice back.
+    var pending = state.companyNotifyPending && state.companyNotifyPending.company === company.id
+      ? state.companyNotifyPending : null;
+    var picked = pending ? pending.member : (saved ? saved.id : '');
+    var notify = canManage && mailable.length
+      ? '<div class="tma-dash__clients-assign-form" data-key="company-notify">' +
+        '<select class="tma-dash__clients-field-select tma-dash__clients-field-select--wide"' +
+        ' data-company-notify-email aria-label="Email notifications"' +
+        (pending || loading ? ' disabled' : '') + '>' +
+        '<option value=""' + (picked ? '' : ' selected') + '>Email everyone with access</option>' +
+        mailable.map(function (m) {
+          return '<option value="' + esc(m.id) + '"' + (m.id === picked ? ' selected' : '') + '>' +
+            esc('Email only ' + companyMemberNotifyAddress(m)) + '</option>';
+        }).join('') +
+        '</select></div>'
+      : '';
+
     // Keyed: the form above it comes and goes with the load, and an unkeyed
     // list would be redrawn out of the form's element, avatars and all.
     var list = members.length
@@ -7340,6 +7380,8 @@
           else if (m.inviteError) meta.push('Invite failed');
           else if (m.inviteSent) meta.push('Invite sent');
           else meta.push('No invite sent');
+          // Said on the row too: the reader who cannot change it sees no select.
+          if (m.notificationEmail) meta.push('Notification email');
           return '<div class="tma-dash__clients-assigned">' +
             '<span class="tma-dash__clients-assigned-icon" aria-hidden="true">' + staffAvatarHtml(m) + '</span>' +
             '<span class="tma-dash__clients-assigned-main">' +
@@ -7364,7 +7406,7 @@
           : clientsEmpty('No portal access yet', 'Illustration09')));
 
     return '<div class="tma-dash__clients-access-block">' +
-      form + list + '</div>';
+      form + notify + list + '</div>';
   }
 
   /*
@@ -17291,6 +17333,42 @@
           });
       });
     });
+
+    /*
+     * One notification email, or everyone. The answer carries the list as it
+     * now stands, so the card repaints from that and nothing reloads; a
+     * refusal repaints too, which puts the select back on what is saved.
+     */
+    var notifyEmail = MORPH.unwiredOne(root, '[data-company-notify-email]');
+    if (notifyEmail) {
+      notifyEmail.addEventListener('change', function (e) {
+        var select = e.currentTarget;
+        var companyId = state.companyId;
+        var pending = { company: companyId, member: select.value || '' };
+        state.companyNotifyPending = pending;
+        select.disabled = true;
+        var settle = function () {
+          if (state.companyNotifyPending === pending) state.companyNotifyPending = null;
+        };
+        CompanyMembersAPI.notifyOnly(companyId, pending.member).then(function (res) {
+          settle();
+          if (state.companyId !== companyId) return;
+          if (res && res.members) state.companyMembers = res.members;
+          var only = (state.companyMembers || []).filter(function (m) { return !!m.notificationEmail; })[0];
+          clientsToast(only
+            ? 'Emails go to ' + companyMemberNotifyAddress(only) + ' only'
+            : 'Emails go to everyone with access', 'positive');
+          // A list reload already on its way read the firm before this was
+          // saved; ask again so it cannot land on top with the old choice.
+          if (state.companyMembersLoading) refreshCompanyPanels();
+          render();
+        }).catch(function (err) {
+          settle();
+          clientsToast((err && err.message) || 'Could not save that', 'negative');
+          if (state.companyId === companyId) render();
+        });
+      });
+    }
 
     MORPH.unwired(root, '[data-company-member-remove]').forEach(function (btn) {
       btn.addEventListener('click', function () {

@@ -18,11 +18,19 @@ import { readFileSync } from 'node:fs';
  *  - a repaint keeps the same list element and its scroll position (the
  *    morph drops the inline height on every repaint; it has to come back);
  *  - a narrower window, where rows wrap, still ends on the sixth row;
- *  - a firm with three members has no cap and no scrolling.
+ *  - a firm with three members has no cap and no scrolling;
+ *  - the card offers one notification email or everyone: choosing a member
+ *    says so, marks their row, survives a reload, and leaves the select on
+ *    what was saved; choosing everyone again clears the mark; the list does
+ *    not blink away or lose its place while it saves.
+ *
+ * The emails themselves are pinned in CompanyNotificationEmailTest; this is
+ * the control, which only a browser draws.
  *
  * Needs the standard throwaway server with FEATURE_CIP=true, an administrator
  * (TMA_STAFF_EMAIL), a provider company with nine members (TMA_COMPANY_MANY,
- * its uid) and one with three (TMA_COMPANY_FEW). Read-only. See README.
+ * its uid) and one with three (TMA_COMPANY_FEW). It leaves the firms as it
+ * found them, with nobody chosen. See README.
  */
 const BASE = process.env.TMA_BASE_URL || 'http://127.0.0.1:8899';
 const EMAIL = process.env.TMA_STAFF_EMAIL || 'e2e@example.com';
@@ -171,6 +179,61 @@ try {
   check(m.whole === 3 && m.scrollHeight <= m.clientHeight + 1, 'all three on show, and the list does not scroll');
   const style = await page.evaluate((sel) => document.querySelector(sel).style.maxHeight, LIST);
   check(style === '', `no measured height is left on a short list ("${style}")`);
+
+  step(6, 'One notification email, or everyone');
+  await openCompany(MANY);
+  const NOTIFY = '.tma-dash__clients-detail [data-company-notify-email]';
+  const select = page.locator(NOTIFY).first();
+  const toast = () => page.locator('.tma-toast-floating-host').filter({ hasText: /Emails go to/ }).last();
+  const marked = () => page.locator(`${LIST} .tma-dash__clients-assigned-meta`).filter({ hasText: 'Notification email' });
+  const options = await select.locator('option').allInnerTexts();
+  check(await select.count() === 1, 'the card has the select');
+  check(options[0] === 'Email everyone with access', `which opens on everyone ("${options[0]}")`);
+  check(options.length === 10 && options.slice(1).every(o => o.startsWith('Email only ')), `and offers each of the nine addresses (${options.length - 1})`);
+  check(await select.inputValue() === '', 'nobody is chosen to begin with');
+  check(await marked().count() === 0, 'and no row is marked');
+  const aboveList = await page.evaluate(([a, b]) => {
+    const s = document.querySelector(a).getBoundingClientRect();
+    const l = document.querySelector(b).getBoundingClientRect();
+    return s.bottom <= l.top;
+  }, [NOTIFY, LIST]);
+  check(aboveList, 'it sits above the list, under the add form');
+
+  // Scrolled down first: saving must not put the reader back at the top.
+  await page.evaluate((sel) => { const l = document.querySelector(sel); l.scrollTop = 120; l.__kept = true; }, LIST);
+  const target = options.findIndex(o => o === 'Email only cara@galaxy.example.com');
+  check(target > 0, 'Cara is among them');
+  await select.selectOption({ index: target });
+  await toast().waitFor({ timeout: 8000 }).catch(() => {});
+  const said = (await toast().innerText().catch(() => '')).trim();
+  check(/Emails go to cara@galaxy\.example\.com only/.test(said), `the page says where the emails go now ("${said}")`);
+  await page.waitForTimeout(400);
+  check(await marked().count() === 1, 'exactly one row is marked');
+  const markedRow = await marked().first().innerText();
+  check(/cara@galaxy\.example\.com/.test(markedRow), `and it is hers (${markedRow.replace(/\s+/g, ' ').trim()})`);
+  check(/^Email only cara@/.test(await select.locator('option:checked').innerText()), 'the select shows her address');
+  check(!(await select.isDisabled()), 'and can be used again');
+  m = await measure();
+  const sameList = await page.evaluate((sel) => !!document.querySelector(sel).__kept, LIST);
+  check(sameList && Math.abs(m.scrollTop - 120) <= 1, `the list kept its place while it saved (${Math.round(m.scrollTop)}px)`);
+  check(m.whole >= 5 && Math.abs(m.clientHeight - (m.rows[5].bottom - m.rows[0].top)) <= 1, 'and is still six rows tall');
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/provider-access-notify.png` });
+
+  await openCompany(MANY);
+  check(/^Email only cara@/.test(await page.locator(NOTIFY).first().locator('option:checked').innerText()), 'a reload shows the same choice');
+  check(await marked().count() === 1, 'and the same row marked');
+
+  // The other firm is untouched by this one's choice.
+  await openCompany(FEW);
+  check(await page.locator(NOTIFY).first().inputValue() === '', 'the other firm still emails everyone');
+  check(await marked().count() === 0, 'with no row marked');
+
+  await openCompany(MANY);
+  await page.locator(NOTIFY).first().selectOption({ index: 0 });
+  await page.locator('.tma-toast-floating-host').filter({ hasText: 'Emails go to everyone with access' }).last().waitFor({ timeout: 8000 }).catch(() => {});
+  await page.waitForTimeout(400);
+  check(await marked().count() === 0, 'choosing everyone again clears the mark');
+  check(await page.locator(NOTIFY).first().inputValue() === '', 'and the select is back on everyone');
 
   check(pageErrors.length === 0, `no script errors (${pageErrors.join(' | ') || 'none'})`);
 } catch (e) {

@@ -19474,6 +19474,15 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   max-width: 240px;
 }
 
+/* A select that holds an address takes the slack the email field above it
+   does, so the two line up and the address is not cut at 240. After the rule
+   above on purpose: the two are equally specific and the later one wins. */
+.tma-dash__clients-assign-form .tma-dash__clients-field-select--wide {
+  flex: 1 1 160px;
+  width: auto;
+  max-width: 340px;
+}
+
 /* The member's email field takes the slack in its own row, on the same terms
    as the person picker — an input stretched to eight hundred pixels for an
    address reads as a mistake. The basis is small enough that the field, the

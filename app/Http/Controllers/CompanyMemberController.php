@@ -11,6 +11,7 @@ use App\Support\Access\Role;
 use App\Support\Companies\CompanyAccess;
 use App\Support\Companies\CompanyMembers;
 use App\Support\Companies\CompanyRoles;
+use App\Support\Companies\NotificationEmail;
 use App\Support\Invitations\Invitations;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -218,6 +219,43 @@ class CompanyMemberController extends Controller
     }
 
     /**
+     * Choose the one member this firm's email notifications go to, or send
+     * null to go back to everyone on the list.
+     *
+     * The others keep their access and the bell; see {@see NotificationEmail}.
+     * Anybody still on the list with an address may be chosen, an invited
+     * member too: a shared mailbox need never sign in to be where mail goes.
+     */
+    public function notificationEmail(Request $request, string $uid): JsonResponse
+    {
+        $company = Company::where('uid', $uid)->firstOrFail();
+        abort_unless(CompanyAccess::canManageMembers($request->user(), $company), 403);
+
+        // A uuid or nothing: the column is a real uuid on Postgres, where
+        // any other string is an error from the database and not a refusal.
+        $data = $request->validate([
+            'member' => ['present', 'nullable', 'uuid'],
+        ]);
+
+        $member = null;
+
+        if ($data['member'] !== null) {
+            $member = CompanyMember::current()
+                ->where('company_id', $company->id)
+                ->where('uuid', $data['member'])
+                ->with('user')
+                ->first();
+
+            abort_if($member === null, 422, 'Choose someone on this list.');
+            abort_if(NotificationEmail::addressOf($member) === null, 422, 'Add an email address for them first.');
+        }
+
+        NotificationEmail::choose($company, $member, $request->user());
+
+        return response()->json(['members' => $this->present($company)]);
+    }
+
+    /**
      * Turn the posted ability map into the snake_case flags a member row holds.
      * Anything not named is left to the role's default.
      *
@@ -293,11 +331,20 @@ class CompanyMemberController extends Controller
                 ->unique(fn (Invitation $i) => Str::lower($i->email))
                 ->keyBy(fn (Invitation $i) => Str::lower($i->email));
 
-        return $members->map(function (CompanyMember $member) use ($invites) {
+        // The one member the firm's email notifications go to, if it chose
+        // one. Nobody flagged is everyone. Read afresh: removing or
+        // re-adding that member a moment ago ended the choice.
+        $chosen = NotificationEmail::memberFor($company, fresh: true);
+
+        return $members->map(function (CompanyMember $member) use ($invites, $chosen) {
             $row = $member->toRecord();
             $invite = $invites[Str::lower((string) ($member->displayEmail() ?? ''))] ?? null;
             $row['inviteSent'] = (bool) $invite?->last_sent_at;
             $row['inviteError'] = $invite?->last_error;
+            $row['notificationEmail'] = $chosen !== null && $chosen->id === $member->id;
+            // Where their notices are written to, which is the row's own
+            // address before the login's, and so not always `email` above.
+            $row['notificationAddress'] = NotificationEmail::addressOf($member);
 
             return $row;
         })->values()->all();

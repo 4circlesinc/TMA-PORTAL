@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\Companies\CompanyRoles;
+use App\Support\Companies\NotificationEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -51,6 +52,17 @@ class CompanyMember extends Model
         static::creating(function (CompanyMember $member) {
             $member->uuid ??= (string) Str::uuid();
         });
+
+        // Being the firm's one notification email is a choice about somebody
+        // on its list. Leaving the list ends it, and so does coming back:
+        // the row is revived, and nobody chose them a second time.
+        static::updated(function (CompanyMember $member) {
+            if ($member->wasChanged('status')
+                && ($member->isRemoved() || $member->getOriginal('status') === self::STATUS_REMOVED)) {
+                NotificationEmail::forget($member);
+            }
+        });
+        static::deleted(fn (CompanyMember $member) => NotificationEmail::forget($member));
     }
 
     public function company(): BelongsTo

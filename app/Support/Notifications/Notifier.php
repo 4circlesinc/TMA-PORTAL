@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\Notification;
 use App\Models\User;
 use App\Models\UserPresence;
+use App\Support\Companies\NotificationEmail;
 use App\Support\Mail\Postcards;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -207,6 +208,13 @@ final class Notifier
             return;
         }
 
+        // A firm that asked for its notification emails to go to one of its
+        // people: the others have the bell. Asked last, it is the only check
+        // here that reads the database for somebody outside the firm's staff.
+        if (! self::alwaysTheirs($notification->type) && ! NotificationEmail::wanted($recipient)) {
+            return;
+        }
+
         try {
             Mail::to($recipient->email)->queue(Postcards::notification(
                 $notification->title,
@@ -219,6 +227,18 @@ final class Notifier
         } catch (\Throwable $e) {
             Log::warning('Notifier.email failed', ['error' => $e->getMessage()]);
         }
+    }
+
+    /**
+     * Mail that is the person's own whatever their firm chose: security and
+     * approvals, a change to their own access at a company, and a file they
+     * by name have been asked to approve, which has no other email.
+     */
+    private static function alwaysTheirs(string $type): bool
+    {
+        return in_array(NotificationType::preferenceGroup($type), NotificationType::NON_SILENCEABLE, true)
+            || str_starts_with($type, 'company.')
+            || in_array($type, ['file.approval_requested', 'file.approval_reminder'], true);
     }
 
     private static function isActivelyOnline(User $user): bool

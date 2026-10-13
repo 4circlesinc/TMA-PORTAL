@@ -11,6 +11,7 @@ use App\Models\CipApplicationMessageReceipt;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Companies\ContactIdentity;
+use App\Support\Companies\NotificationEmail;
 use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
 use App\Support\Messaging\Broadcaster;
@@ -726,7 +727,9 @@ class Threads
         $email = $message->lane === CipApplicationMessage::LANE_PROVIDER;
 
         foreach (self::recipients($application, $message, $author) as $recipient) {
-            if ($email) {
+            // A firm that chose one notification email: the rest of its
+            // people get the bell below and not the postcard.
+            if ($email && ! NotificationEmail::quiet($recipient)) {
                 Deliveries::send(
                     Postcards::notification(
                         $title,

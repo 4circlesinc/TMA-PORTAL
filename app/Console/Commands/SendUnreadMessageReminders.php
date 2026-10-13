@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\ConversationParticipant;
 use App\Models\Message;
+use App\Support\Companies\NotificationEmail;
 use App\Support\Mail\Postcards;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Mail;
@@ -78,16 +79,23 @@ class SendUnreadMessageReminders extends Command
             return false;
         }
 
-        Mail::to($user->email)->queue(Postcards::messageReminder(
-            $tier,
-            $message->sender?->name ?? 'A colleague',
-            $this->preview($message),
-            url('/social/messages'),
-        ));
+        // Somebody at a firm whose notification emails go to one address
+        // has the bell and no reminder. The tier is stamped either way, or
+        // they would be weighed again on every run.
+        $wanted = NotificationEmail::wanted($user);
+
+        if ($wanted) {
+            Mail::to($user->email)->queue(Postcards::messageReminder(
+                $tier,
+                $message->sender?->name ?? 'A colleague',
+                $this->preview($message),
+                url('/social/messages'),
+            ));
+        }
 
         $participant->forceFill(['reminder_tier' => $tier])->save();
 
-        return true;
+        return $wanted;
     }
 
     private function tierFor(int $ageHours): int

@@ -1046,6 +1046,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/{uid}/members/{member}/invite', [CompanyMemberController::class, 'invite'])->name('members.invite');
         Route::patch('/{uid}/members/{member}', [CompanyMemberController::class, 'update'])->name('members.update');
         Route::delete('/{uid}/members/{member}', [CompanyMemberController::class, 'destroy'])->name('members.destroy');
+        // The one member the firm's email notifications go to; null is everyone.
+        Route::put('/{uid}/notification-email', [CompanyMemberController::class, 'notificationEmail'])->name('members.notification-email');
 
         // The firm's own staff looking after the company.
         Route::get('/{uid}/staff', [CompanyStaffController::class, 'index'])->name('staff.index');

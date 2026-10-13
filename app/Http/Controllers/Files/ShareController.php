@@ -9,6 +9,7 @@ use App\Models\Share;
 use App\Models\User;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Companies\CompanyRoles;
+use App\Support\Companies\NotificationEmail;
 use App\Support\Files\Activity;
 use App\Support\Files\Assignable;
 use App\Support\Files\FileAccess;
@@ -207,18 +208,22 @@ class ShareController extends BaseFilesController
                 // The fileShared postcard below is the email for this moment.
                 'email' => false,
             ]);
-            Mail::to($target->email)->queue(
-                Postcards::fileShared(
-                    $user->name,
-                    $item->name,
-                    $type === 'folder',
-                    // Same target as the bell notification above, the API path
-                    // this used to point at is not a page.
-                    url($type === 'folder'
-                        ? '/folders/all?folder='.$item->uuid
-                        : '/folders/all?file='.$item->uuid),
-                )
-            );
+            // At a firm whose notification emails go to somebody else, the
+            // bell above is how they hear of it.
+            if (NotificationEmail::wanted($target)) {
+                Mail::to($target->email)->queue(
+                    Postcards::fileShared(
+                        $user->name,
+                        $item->name,
+                        $type === 'folder',
+                        // Same target as the bell notification above, the API path
+                        // this used to point at is not a page.
+                        url($type === 'folder'
+                            ? '/folders/all?folder='.$item->uuid
+                            : '/folders/all?file='.$item->uuid),
+                    )
+                );
+            }
         }
     }
 

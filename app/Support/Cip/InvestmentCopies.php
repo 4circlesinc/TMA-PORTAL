@@ -4,6 +4,7 @@ namespace App\Support\Cip;
 
 use App\Models\CipApplication;
 use App\Models\CipProvider;
+use App\Support\Companies\NotificationEmail;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -111,7 +112,10 @@ class InvestmentCopies
 
             foreach ($providers as $provider) {
                 foreach (Contacts::providerContacts($provider) as $recipient) {
-                    $recipients[mb_strtolower($recipient['email'])] = $recipient;
+                    // Each firm's own choice of notification email rides in
+                    // on its rows; a mailbox two firms share is mailed if
+                    // either would mail it.
+                    NotificationEmail::fold($recipients, $recipient);
                 }
             }
         }
@@ -120,6 +124,9 @@ class InvestmentCopies
             $key = mb_strtolower($email);
             if (! isset($recipients[$key])) {
                 $recipients[$key] = ['email' => $email, 'name' => null, 'userId' => null];
+            } else {
+                // Typed in by hand, so it is mailed whatever its firm chose.
+                unset($recipients[$key]['mail']);
             }
         }
 

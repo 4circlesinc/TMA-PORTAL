@@ -3326,9 +3326,18 @@ node tests/Browser/provider-overview-nav.mjs
   the same scroll position (a members reload takes the add form away and
   brings it back, and the morph moves the list each time), that a narrow
   window where the rows wrap still ends on the sixth, and that a firm with
-  three members has no cap at all. Standard throwaway server with
+  three members has no cap at all.
+
+  The card also says where the firm's email notifications go: everyone on
+  the list, or one of them. It pins that the select opens on everyone and
+  offers each address, that choosing a member says so, marks their row and
+  nobody else's, survives a reload and leaves the list where it was scrolled
+  to, that the other firm is untouched, and that choosing everyone again
+  clears the mark. Who is then emailed is pinned in
+  `CompanyNotificationEmailTest`. Standard throwaway server with
   `FEATURE_CIP=true`; the seed makes its own administrator and prints the
-  environment as its last line. Read-only, so one seed serves every run:
+  environment as its last line. It leaves the firms as it found them, so one
+  seed serves every run:
 
 ```sh
 DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FEATURE_CIP=true \

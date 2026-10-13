@@ -8,6 +8,7 @@ use App\Models\CipProvider;
 use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Companies\NotificationEmail;
 
 /**
  * Who a CIP notice writes to. Section 22's four classes, unique by mailbox.
@@ -67,7 +68,10 @@ class Contacts
             // firm filed: Settings › CIP Console › Investment Copies.
             ...InvestmentCopies::recipients($application),
         ] as $recipient) {
-            $recipients[mb_strtolower($recipient['email'])] = $recipient;
+            // One mailbox reached through two classes is mailed if either
+            // class mails it: a firm's choice of notification email quiets
+            // its own contacts, never a copy another class is owed.
+            NotificationEmail::fold($recipients, $recipient);
         }
 
         return array_values($recipients);
@@ -200,8 +204,13 @@ class Contacts
             }
         }
 
-        // A private client is their own provider side.
-        if ($recipients === [] && $application->client) {
+        // A private client is their own provider side. Nobody at the firm
+        // means nobody on its standing list: a mailbox that is there only
+        // because the firm chose an invited member does not make the client
+        // any less the one to tell.
+        $standing = array_filter($recipients, fn (array $row) => ! ($row['invited'] ?? false));
+
+        if ($standing === [] && $application->client) {
             $email = $application->client->user?->email ?: $application->client->email;
 
             if ($email) {
@@ -224,13 +233,21 @@ class Contacts
      * of the investment ({@see InvestmentCopies}) receives, so a developer
      * on the register hears exactly what it would hear as the filing firm.
      *
-     * @return list<array{email:string, name:?string, userId:?int}>
+     * A firm that chose one notification email ({@see NotificationEmail})
+     * still gets the whole list back; every row but the chosen one carries
+     * `mail => false`, which the two delivery loops read before they send.
+     *
+     * @return list<array{email:string, name:?string, userId:?int, mail?:false, invited?:true}>
      */
     public static function providerContacts(CipProvider $provider): array
     {
         $provider->loadMissing('company');
         $recipients = [];
         $company = $provider->company;
+        // The one member the firm asked its notification emails to go to,
+        // if it chose one, and where they sit on this list.
+        $chosen = NotificationEmail::memberFor($company);
+        $chosenKey = null;
 
         if ($company) {
             foreach ($company->members()->where('status', CompanyMember::STATUS_ACTIVE)->get() as $member) {
@@ -242,8 +259,25 @@ class Contacts
                         'name' => $member->name,
                         'userId' => $member->user_id,
                     ];
+
+                    if ($chosen && $member->id === $chosen->id) {
+                        $chosenKey = mb_strtolower($email);
+                    }
                 }
             }
+        }
+
+        // Chosen and still only invited: a shared mailbox that never signs
+        // in is not an active member, and is where the firm wants its mail.
+        if ($chosen && $chosenKey === null) {
+            $email = (string) NotificationEmail::addressOf($chosen);
+            $chosenKey = mb_strtolower($email);
+            $recipients[$chosenKey] ??= [
+                'email' => $email,
+                'name' => $chosen->name,
+                'userId' => $chosen->user_id,
+                'invited' => true,
+            ];
         }
 
         // The registry's own contact address, where it is nobody already on
@@ -269,6 +303,12 @@ class Contacts
                 'name' => $company->name,
                 'userId' => null,
             ];
+        }
+
+        // Everyone else stays on the list without the email: the bell and
+        // the live refresh are read from it too ({@see providerUserIds}).
+        if ($chosenKey !== null) {
+            $recipients = NotificationEmail::only($recipients, $chosenKey);
         }
 
         return array_values($recipients);

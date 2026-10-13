@@ -663,6 +663,7 @@ All routes gate on `clients.view` (writes included — `CompaniesController.php:
 | `POST …/members/{uuid}/invite` | — | `{invitation, members}` |
 | `PATCH …/members/{uuid}` | `role, primary, abilities{}` | `{member, members}` |
 | `DELETE …/members/{uuid}` | — | `{members}` |
+| `PUT …/notification-email` | `member` required: a current member's uuid, or `null` for everyone. The one member the firm's email notifications go to; the others keep access and the bell. Gate as member writes. **422** for anything but a uuid, for a uuid not on this firm's list, and for a member with no address | `{members}` (each carries `notificationEmail: bool` and `notificationAddress`, where their notices are written to) |
 | `GET …/staff` | — | `{assignments, history, assignable, roles, scopes:[{value,label}]}` |
 | `POST …/staff/preview` | `{appliesToClients}` | `{preview:{appliesToClients,label,companyName,contactsCovered,contactsWithLogins,includesFuture,memberCount}}` |
 | `POST …/staff` | `userId, level` required; `role, appliesToClients(company_only|existing|existing_future), primary, endsAt, notes` | `{assignments, assignable, applied}` |

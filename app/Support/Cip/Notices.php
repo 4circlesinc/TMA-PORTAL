@@ -8,6 +8,7 @@ use App\Models\CipDocument;
 use App\Models\CipPerson;
 use App\Models\CipPersonChangeRequest;
 use App\Models\User;
+use App\Support\Companies\NotificationEmail;
 use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
 use App\Support\Notifications\Notifier;
@@ -271,16 +272,20 @@ class Notices
                 ? 'Your correction has been applied.'
                 : 'Your correction was not applied.');
 
-        Deliveries::send(
-            Postcards::notification(
-                $title, $message, Contacts::url($application), 'Open the application',
-                strtok($requester->name, ' ') ?: $requester->name,
-                'CIP Applications',
-            ),
-            $requester->email,
-            $application,
-            'cip-person-change',
-        );
+        // A requester at a firm whose notification emails go to somebody
+        // else reads the answer on the bell, like every other notice.
+        if (NotificationEmail::wanted($requester)) {
+            Deliveries::send(
+                Postcards::notification(
+                    $title, $message, Contacts::url($application), 'Open the application',
+                    strtok($requester->name, ' ') ?: $requester->name,
+                    'CIP Applications',
+                ),
+                $requester->email,
+                $application,
+                'cip-person-change',
+            );
+        }
 
         Notifier::send([
             'user' => $requester,
@@ -331,7 +336,10 @@ class Notices
             // Queue: a status click must not wait on the mailbox. Walking
             // Assessment feedback then Updates Required would otherwise send
             // eight letters before the chip could move.
-            if (Copies::wanted($user)) {
+            // Two reasons a mailbox on the list goes without the email: its
+            // firm asked for its notification emails to go to one address,
+            // or it is a staff copy somebody declined. The bell is neither.
+            if (! NotificationEmail::quiet($recipient) && Copies::wanted($user)) {
                 Deliveries::send($card($recipient['name']), $recipient['email'], $application, $template);
             }
 

@@ -547,6 +547,13 @@ final class Knowledge
                 'answer' => "[Settings → Notifications](/account-settings?settings-page=notifications) → **Copy me on service provider emails**. Off stops the email; the bell in the portal still shows every change.\n\nWhat you are copied on follows your account: administrators get every application, CROs the files they hold.",
             ],
             [
+                'id' => 'provider-notification-email',
+                'q' => 'How do I send a service provider’s emails to one address only?',
+                'keywords' => ['notification email', 'one email', 'only one email', 'which email', 'email only', 'provider emails', 'not getting emails', 'stopped getting emails'],
+                'cipOnly' => true,
+                'answer' => "Open the service provider → **Access**. Under the email field, pick **Email only** and the person’s address. From then on that address alone gets the firm’s email notifications. Everyone else on the list keeps their access and still sees every change on the bell in the portal.\n\nPick **Email everyone with access** to go back. A TMA administrator or the firm’s own Service Provider admin can change it. Removing the chosen person from the list also goes back to everyone.\n\nA notice written to one person, like a file shared with them or a reminder of an unread message, is not passed on to the chosen address. That person sees it on the bell.\n\nSign-in codes, password and security emails, invitations, and requests to sign or approve still go to each person.",
+            ],
+            [
                 'id' => 'pin-folder',
                 'q' => 'How do I pin a folder?',
                 'keywords' => ['pin', 'shortcut', 'folder shortcuts', 'star', 'favorites'],
