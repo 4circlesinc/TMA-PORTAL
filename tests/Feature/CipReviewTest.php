@@ -681,6 +681,8 @@ class CipReviewTest extends TestCase
         Mail::fake();
 
         $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        // Administrators start with provider-email copies off (Cip\Copies); Ada has hers on.
+        $staff->forceFill(['preferences' => ['notifyProviderCopies' => true]])->save();
         $company = null;
         $application = $this->application($staff, Status::REVIEW_APPLICATION, $company);
         $passport = $this->slot($application, 'passport_bio_page', 'Passport bio page');
@@ -774,6 +776,8 @@ class CipReviewTest extends TestCase
         Mail::fake();
 
         $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        // Administrators start with provider-email copies off (Cip\Copies); Ada has hers on.
+        $staff->forceFill(['preferences' => ['notifyProviderCopies' => true]])->save();
         $company = null;
         $application = $this->application($staff, Status::REVIEW_APPLICATION, $company);
         $passport = $this->slot($application, 'passport_bio_page', 'Passport bio page');

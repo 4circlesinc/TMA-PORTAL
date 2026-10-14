@@ -282,7 +282,7 @@ def _navigation(doc, add_title, add_h2, add_body, add_bullets, add_table, add_ca
             ["File Library", "All Files, Personal Folders, Shared Folders, Shared With Me, Favorites, Recent, File Box, Recycle Bin."],
             ["Users", "Account table. Administrators."],
             ["Reporting", "Firm reports. Administrators."],
-            ["Templates", "System Emails, Email Templates, Granted And Denied Letters, Document Requirements."],
+            ["Templates", "System Emails, Email Templates, Granted And Denied Letters, Document Requirements, Welcome Message."],
             ["Workflows", "Requests, Feedback And Comments, Updates Required."],
             ["Call Recordings", "Recorded client calls. Staff; employees see their own recordings."],
             ["People", "Directories, address books, distribution groups, resend welcome emails."],
@@ -1217,6 +1217,15 @@ def _messages(doc, add_title, add_h2, add_body, add_bullets, add_table, add_call
         doc,
         "Client-call recordings, when captured, appear under Call Recordings. See section 23.",
     )
+    add_h2(doc, "The welcome in Messages")
+    add_body(
+        doc,
+        "Administrators write this under Templates → Welcome Message. It is sent once, in Messages, from the administrator chosen on that page, the first time an account can use the portal (an approval, an accepted invitation, or a denied account that is later let in). The new person finds it unread and can reply, the same as any other conversation. People who joined while it was switched off are not greeted if it is switched on later. It is separate from People → Resend Welcome Emails, which resends an invitation email.",
+    )
+    add_body(
+        doc,
+        "The message can name the new person and the sender with {{firstName}}, {{name}}, {{senderName}} and {{senderTitle}}. A part wrapped as {{#firstName}} … {{/firstName}} is left out when that name is missing, and the same for a job title. Restore default puts the shipped wording back. Save keeps the switch, the sender and the wording.",
+    )
     add_callout(
         doc,
         "TIP",
@@ -1447,7 +1456,12 @@ def _settings(doc, add_title, add_h2, add_body, add_bullets, add_table, add_call
     add_h2(doc, "Notifications")
     add_body(
         doc,
-        "Email notifications, always send email, copy me on service provider emails (staff: administrators are copied on every CIP application, CROs on the files they hold; the bell still shows every change), toast behaviour, and per-module Portal / Email / Desktop / Sound. Security & Approvals on the portal channel stays on.",
+        "Email notifications, always send email, service provider emails, toast behaviour, and per-module Portal / Email / Desktop / Sound. Security & Approvals on the portal channel stays on.",
+    )
+    add_h2(doc, "Service Provider Emails")
+    add_body(
+        doc,
+        "Staff only. One switch per CIP status, plus document comments, for the copies of what service providers are sent. Administrators are copied on every application and CROs on the files they hold. The switches start on for CROs and off for administrators; All service provider emails moves every switch at once. The bell still shows every change.",
     )
     add_h2(doc, "Privacy")
     add_body(
@@ -1610,6 +1624,7 @@ def _common(doc, add_title, add_table):
             ["Request a name/DOB correction (CRO)", "Open the file → Edit → Save (waits on an administrator)."],
             ["Import an email signature", "Email settings → Import from Outlook / Gmail / mailbox."],
             ["Start a video call / share screen", "Messages → Video call → Share your screen."],
+            ["Welcome a new person in Messages", "Templates → Welcome Message. Administrators. Choose who it comes from, then Send to new accounts. Sent once."],
             ["Pin a folder to the main menu", "File Library → right-click → Add to Folder Shortcuts."],
             ["Colour-code a folder", "File Library → Folder appearance."],
             ["Change language", "Settings → Time And Language → Language and Region."],

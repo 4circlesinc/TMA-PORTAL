@@ -7491,6 +7491,17 @@ body:has(.tma-dash.is-sidebar-collapsed) .tma-sync-pill {
   background: #f9f9fa;
 }
 
+/* Templates > Welcome Message: the preview is a Messages bubble, so the box
+   holds it the way the chat does rather than at an email's fixed height. */
+.tma-portal-tpl-edit__chat {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  min-height: 240px;
+  padding: var(--space-16);
+  overflow: auto;
+}
+
 @media (max-width: 960px) {
   .tma-portal-tpl-edit { grid-template-columns: 1fr; }
   .tma-portal-tpl-edit__preview { position: static; }

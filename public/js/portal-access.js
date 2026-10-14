@@ -34,6 +34,7 @@
     'templates-email': 'templates.email',
     'templates-letters': 'templates.view',
     'templates-documents': 'templates.view',
+    'templates-welcome': 'templates.view',
     'folders-all': 'files.viewOrg',
     'folders-shared': 'files.viewOrg',
     'workflows-automated': 'workflows.view',
@@ -107,6 +108,7 @@
      Mirrors Role::SETTINGS_PAGE_CAPABILITIES; PortalAccessTest holds the two
      together. */
   var SETTINGS_CAPABILITIES = {
+    'provider-emails': 'cip.view',
     'background-ops': 'settings.operations',
     'notification-history': 'settings.reporting',
     'branding': 'settings.branding',

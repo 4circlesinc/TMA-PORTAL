@@ -152,6 +152,10 @@ class AppServiceProvider extends ServiceProvider
         // straight away, not on their next refresh.
         \App\Models\User::observe(\App\Observers\UserAccountObserver::class);
 
+        // Someone who can first use the portal finds the firm's welcome in
+        // their Messages inbox (Templates > Welcome Message).
+        \App\Models\User::observe(\App\Observers\WelcomeMessageObserver::class);
+
         // The client hub keeps up with whoever else is editing it.
         \App\Models\Client::observe(\App\Observers\ClientDirectoryObserver::class);
         \App\Models\Company::observe(\App\Observers\ClientDirectoryObserver::class);

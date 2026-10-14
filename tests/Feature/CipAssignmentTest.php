@@ -404,6 +404,8 @@ class CipAssignmentTest extends TestCase
         Mail::fake();
 
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        // Administrators start with provider-email copies off (Cip\Copies); this one has them on.
+        $admin->forceFill(['preferences' => ['notifyProviderCopies' => true]])->save();
         $officer = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Marshall');
         $application = $this->filed($admin);
 

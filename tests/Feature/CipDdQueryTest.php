@@ -318,6 +318,8 @@ class CipDdQueryTest extends TestCase
         Mail::fake();
 
         $staff = $this->user(Role::ADMINISTRATOR);
+        // Administrators start with provider-email copies off (Cip\Copies); this one has them on.
+        $staff->forceFill(['preferences' => ['notifyProviderCopies' => true]])->save();
         $company = null;
         $application = $this->inBackgroundCheck($staff, $company);
         CompanyMember::create([

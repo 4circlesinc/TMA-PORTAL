@@ -87,12 +87,15 @@ final class MessageNotifier
      * talking to itself.
      *
      * @param  array{users?: list<int>, all?: bool}  $mentioned  From Mentions::sync.
+     * @param  bool  $email  False for a message the reader has just had an
+     *                       email about anyway (the welcome message).
      */
     public static function announceMessage(
         Conversation $conversation,
         Message $message,
         User $sender,
         array $mentioned = [],
+        bool $email = true,
     ): void {
         try {
             $preview = self::preview($message);
@@ -138,6 +141,7 @@ final class MessageNotifier
                         'conversationId' => $conversation->uuid,
                         'messageId' => $message->uuid,
                     ],
+                    'email' => $email,
                 ]);
             }
         } catch (\Throwable $e) {

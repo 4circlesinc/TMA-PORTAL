@@ -21,6 +21,7 @@ use App\Support\Cip\Applications;
 use App\Support\Cip\Assignments;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Confirmation;
+use App\Support\Cip\Copies;
 use App\Support\Cip\CorRequirements;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
@@ -64,13 +65,20 @@ class CipPostApprovalTest extends TestCase
 
     private function staff(string $type = Role::ADMINISTRATOR): User
     {
-        return User::factory()->create([
+        $user = User::factory()->create([
             'status' => 'approved',
             'account_type' => $type,
             'email_verified_at' => now(),
             'profile_completed_at' => now(),
             'onboarding_completed_at' => now(),
         ]);
+
+        // Administrators start with provider-email copies off (Cip\Copies); these have them on.
+        if ($type === Role::ADMINISTRATOR) {
+            $user->forceFill(['preferences' => [Copies::PREFERENCE => true]])->save();
+        }
+
+        return $user;
     }
 
     private function provider(string $code = 'GAL'): CipProvider

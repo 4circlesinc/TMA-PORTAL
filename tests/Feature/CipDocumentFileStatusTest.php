@@ -264,6 +264,8 @@ class CipDocumentFileStatusTest extends TestCase
         Mail::fake();
 
         [$slot, $file, , $staff] = $this->filed(DocumentStatus::APPLICATION_REVIEW);
+        // Administrators start with provider-email copies off (Cip\Copies); this one has them on.
+        $staff->forceFill(['preferences' => ['notifyProviderCopies' => true]])->save();
         $slot->loadMissing('application');
         // The file already stands at Updates Required for another document,
         // so this verdict moves no status and the status notice cannot fire.

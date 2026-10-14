@@ -81,6 +81,11 @@ class CompanyNotificationEmailTest extends TestCase
             'account_type' => $type,
         ])->save();
 
+        // Administrators start with provider-email copies off (Cip\Copies); these have them on.
+        if ($type === Role::ADMINISTRATOR) {
+            $user->forceFill(['preferences' => ['notifyProviderCopies' => true]])->save();
+        }
+
         return $user;
     }
 

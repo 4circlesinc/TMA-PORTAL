@@ -91,6 +91,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'require_two_factor' => 'boolean',
             'privacy_policy_accepted_at' => 'datetime',
             'processing_restricted_at' => 'datetime',
+            'welcomed_at' => 'datetime',
         ];
     }
 

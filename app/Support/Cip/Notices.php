@@ -102,6 +102,7 @@ class Notices
             $actor,
             $facts['number'].': '.Status::label($to),
             self::bellMessage($application, $to, $facts),
+            $to,
             path: $path,
         );
     }
@@ -135,6 +136,7 @@ class Notices
             $actor,
             $facts['number'].': '.Status::label(Status::UPDATE_REQUIRED),
             $document->label.' was sent back'.($reason !== '' ? ': '.Str::limit($reason, 140) : '.'),
+            Status::UPDATE_REQUIRED,
         );
     }
 
@@ -164,6 +166,7 @@ class Notices
             $author,
             $title,
             $message,
+            Copies::COMMENT,
             $author->email,
         );
     }
@@ -195,6 +198,7 @@ class Notices
             $author,
             $title,
             $message,
+            Status::NEW_APPEAL,
             $author->email,
         );
     }
@@ -308,8 +312,9 @@ class Notices
      * second, differently-worded copy of the same fact.
      *
      * A staff mailbox is a copy of what the provider side is sent, and
-     * {@see Copies} lets its owner decline that copy. The bell still rings
-     * for them: the switch is about email, not about hearing of the change.
+     * {@see Copies} lets its owner decline that copy, one `$kind` of notice
+     * at a time. The bell still rings for them: the switch is about email,
+     * not about hearing of the change.
      *
      * @param  callable(?string): Postcard  $card
      */
@@ -321,6 +326,7 @@ class Notices
         ?User $actor,
         string $title,
         string $message,
+        string $kind,
         ?string $skipMailbox = null,
         ?string $path = null,
     ): void {
@@ -339,7 +345,7 @@ class Notices
             // Two reasons a mailbox on the list goes without the email: its
             // firm asked for its notification emails to go to one address,
             // or it is a staff copy somebody declined. The bell is neither.
-            if (! NotificationEmail::quiet($recipient) && Copies::wanted($user)) {
+            if (! NotificationEmail::quiet($recipient) && Copies::wanted($user, $kind)) {
                 Deliveries::send($card($recipient['name']), $recipient['email'], $application, $template);
             }
 

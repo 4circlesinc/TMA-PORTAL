@@ -6,6 +6,7 @@ use App\Models\Template;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Messaging\WelcomeMessage;
 use App\Support\Templates\ComposeTemplates;
 use App\Support\Templates\Markup;
 use App\Support\Templates\SystemEmails;
@@ -234,6 +235,92 @@ class TemplatesController extends Controller
         return response()->json([
             'subject' => (string) ($data['subject'] ?? ''),
             'html' => ComposeTemplates::bodyHtml((string) ($data['body'] ?? '')),
+        ]);
+    }
+
+    /* ── Welcome message ────────────────────────────────────────────
+     * What a new person finds in their Messages inbox from the administrator
+     * chosen to greet them. Sent by App\Support\Messaging\WelcomeMessage.
+     */
+
+    public function welcomeIndex(): JsonResponse
+    {
+        return $this->welcomeRecord();
+    }
+
+    public function welcomeUpdate(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'enabled' => ['required', 'boolean'],
+            'senderId' => ['nullable', 'integer'],
+            'body' => ['required', 'string', 'max:'.WelcomeMessage::MAX_CHARS],
+        ]);
+
+        $enabled = (bool) $data['enabled'];
+
+        WelcomeMessage::save([
+            'enabled' => $enabled,
+            'senderId' => isset($data['senderId']) ? (int) $data['senderId'] : null,
+            'body' => $data['body'],
+        ], $request->user());
+
+        ActivityLogger::log([
+            'actor' => $request->user(),
+            'type' => 'templates.welcome_message_updated',
+            'module' => 'system',
+            'description' => 'Welcome message updated ('.($enabled ? 'on' : 'off').')',
+            'new' => ['enabled' => $enabled, 'senderId' => $data['senderId'] ?? null],
+        ]);
+
+        return $this->welcomeRecord();
+    }
+
+    /** The draft as a sample new person would read it. */
+    public function welcomePreview(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'body' => ['nullable', 'string', 'max:'.WelcomeMessage::MAX_CHARS],
+            'senderId' => ['nullable', 'integer'],
+        ]);
+
+        $sender = isset($data['senderId']) ? User::find((int) $data['senderId']) : null;
+
+        return response()->json([
+            'text' => WelcomeMessage::preview(
+                (string) ($data['body'] ?? ''),
+                WelcomeMessage::canSend($sender) ? $sender : null,
+            ),
+        ]);
+    }
+
+    private function welcomeRecord(): JsonResponse
+    {
+        $settings = WelcomeMessage::settings();
+        $row = $settings['row'];
+        $row?->loadMissing('editor:id,name');
+
+        return response()->json([
+            'enabled' => $settings['enabled'],
+            'senderId' => $settings['senderId'],
+            'body' => $settings['body'],
+            'defaultBody' => WelcomeMessage::DEFAULT_BODY,
+            'maxLength' => WelcomeMessage::MAX_CHARS,
+            'updatedAt' => $row?->updated_at?->toIso8601String(),
+            'editor' => $row?->editor?->name,
+            'variables' => collect(WelcomeMessage::VARIABLES)
+                ->map(fn (string $meaning, string $token) => ['token' => $token, 'meaning' => $meaning])
+                ->values()
+                ->all(),
+            'senders' => WelcomeMessage::senders()
+                ->map(fn (User $u) => [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'email' => $u->email,
+                    'jobTitle' => $u->job_title,
+                    'photo' => $u->photoUrl(),
+                ])
+                ->values()
+                ->all(),
         ]);
     }
 

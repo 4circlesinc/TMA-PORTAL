@@ -148,7 +148,7 @@ final class Knowledge
             'settings' => 'Account settings. Theme (Light/Dark, sidebar hover vs click), Time and Language, Account Security (two-factor), Connectors. Administrator groups appear only with the matching permission.',
             'users' => 'Account table for administrators. Approve, suspend, reset, delete, and assign CRO / Reviewing officer or Administrator. Client accounts arrive by invitation, not from this page.',
             'reporting' => 'Firm reports. Administrators.',
-            'templates' => 'System Emails, Email Templates, Granted And Denied Letters, Document Requirements.',
+            'templates' => 'System Emails, Email Templates, Granted And Denied Letters, Document Requirements, and Welcome Message (the note a new account finds once in Messages, from the administrator chosen to send it).',
             'workflows' => 'Requests, Feedback And Comments, Updates Required.',
             'people' => 'Directories, address books, distribution groups. Administrators.',
             'calls' => 'Recorded client calls. Staff; employees see their own recordings.',
@@ -541,10 +541,10 @@ final class Knowledge
             [
                 'id' => 'provider-copies',
                 'q' => 'How do I stop getting copies of the emails sent to service providers?',
-                'keywords' => ['copy', 'copies', 'cc', 'service provider emails', 'cip emails', 'too many emails', 'notification emails'],
+                'keywords' => ['copy', 'copies', 'cc', 'service provider emails', 'cip emails', 'too many emails', 'notification emails', 'status emails', 'which emails'],
                 'cipOnly' => true,
                 'staffOnly' => true,
-                'answer' => "[Settings → Notifications](/account-settings?settings-page=notifications) → **Copy me on service provider emails**. Off stops the email; the bell in the portal still shows every change.\n\nWhat you are copied on follows your account: administrators get every application, CROs the files they hold.",
+                'answer' => "[Settings → Service Provider Emails](/account-settings?settings-page=provider-emails) has one switch per status, plus document comments. Off stops that email; the bell in the portal still shows every change. **All service provider emails** turns every switch on or off at once.\n\nWhat you are copied on follows your account: administrators get every application, CROs the files they hold. The switches start on for CROs and off for administrators.",
             ],
             [
                 'id' => 'provider-notification-email',

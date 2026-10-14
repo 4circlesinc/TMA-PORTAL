@@ -156,9 +156,12 @@ class EmployeeReachTest extends TestCase
         $this->actingAs($officer)->get('/templates')->assertNotFound();
         $this->actingAs($officer)->get('/templates/letters')->assertNotFound();
         $this->actingAs($officer)->get('/templates/documents')->assertNotFound();
+        $this->actingAs($officer)->get('/templates/welcome')->assertNotFound();
+        $this->actingAs($admin)->get('/templates/welcome')->assertOk();
+        $this->assertStringContainsString('href="/templates/welcome"', $html);
 
         $client = $this->user(Role::CLIENT);
-        foreach (['/templates', '/templates/email', '/templates/letters', '/templates/documents'] as $page) {
+        foreach (['/templates', '/templates/email', '/templates/letters', '/templates/documents', '/templates/welcome'] as $page) {
             $this->actingAs($client)->get($page)
                 ->assertNotFound($page.' should be closed to a client');
         }

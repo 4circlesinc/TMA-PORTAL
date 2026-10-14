@@ -97,6 +97,8 @@ class CipDistributionTest extends TestCase
         Mail::fake();
 
         $admin = $this->user(Role::ADMINISTRATOR);
+        // Administrators start with provider-email copies off (Cip\Copies); this one has them on.
+        $admin->forceFill(['preferences' => ['notifyProviderCopies' => true]])->save();
 
         $saved = $this->actingAs($admin)
             ->patchJson('/portal/cip/distribution', [

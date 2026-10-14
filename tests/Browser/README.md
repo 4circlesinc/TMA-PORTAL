@@ -2520,6 +2520,49 @@ The Messages page was a pure mock — a hard-coded `THREADS` array with a
 scripted ByeWind conversation and no network calls at all. It is now backed by
 `/portal/messaging`, so these scripts exist to keep it that way.
 
+- **`welcome-message.mjs`** — Templates > Welcome Message, end to end. The
+  administrator opens it from the sidebar, the shipped message is offered
+  switched off with the writer as the sender, and the preview is a real
+  Messages bubble (`TMAMessages.previewBubbleHtml`) filled for a sample new
+  person, line breaks and the sender's face included. Ctrl+B types the bold
+  marks, a placeholder chip lands at the caret, Restore default puts the
+  shipped copy back, and the saved switch survives a hard refresh. Moving
+  between Templates panes by the sidebar draws the pane clicked: the view
+  mounts before the address bar changes, so the pane is read off the nav id.
+  Then a pending account is approved and that person signs in to find the
+  welcome in their inbox, unread, from the chosen administrator; the
+  sender's inbox holds the same conversation. It also measures the inbox
+  column (one, a flex column, bar at the bottom), the phone width (no
+  sideways scroll) and that an officer has no row and a 403 from the API.
+
+  A throwaway SQLite database with three accounts: the administrator
+  (`e2e@example.com`, Vernon Francis, job title "IT and Web Solutions
+  Specialist"), an officer (`officer@example.com`) and a PENDING account
+  that has verified, set up its profile and onboarded (`newbie@example.com`,
+  Dana Reed). `BROADCAST_CONNECTION=log`, or the approval broadcasts to the
+  Reverb cluster named in `.env`:
+
+  ```sh
+  DB=$(mktemp -d)/e2e.sqlite && touch "$DB"
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan migrate --force
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= CACHE_STORE=array BROADCAST_CONNECTION=log \
+    MAIL_MAILER=log QUEUE_CONNECTION=sync php artisan tinker --execute="
+    \$done = ['email_verified_at' => now(), 'profile_completed_at' => now(), 'onboarding_completed_at' => now()];
+    \$v = App\Models\User::create(['name' => 'Vernon Francis', 'first_name' => 'Vernon', 'last_name' => 'Francis', 'email' => 'e2e@example.com', 'password' => Hash::make('password12345')]);
+    \$v->forceFill(\$done + ['status' => 'approved', 'account_type' => 'Administrator', 'job_title' => 'IT and Web Solutions Specialist'])->save();
+    \$o = App\Models\User::create(['name' => 'Olive Officer', 'email' => 'officer@example.com', 'password' => Hash::make('password12345')]);
+    \$o->forceFill(\$done + ['status' => 'approved', 'account_type' => 'CRO / Reviewing officer'])->save();
+    \$n = App\Models\User::create(['name' => 'Dana Reed', 'first_name' => 'Dana', 'last_name' => 'Reed', 'email' => 'newbie@example.com', 'password' => Hash::make('password12345')]);
+    \$n->forceFill(\$done)->save();
+  "
+  : > storage/logs/laravel.log
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FILES_DISK=local MAIL_MAILER=log CACHE_STORE=array \
+    SESSION_DRIVER=file BROADCAST_CONNECTION=log QUEUE_CONNECTION=sync \
+    php artisan serve --host=127.0.0.1 --port=8897 --no-reload &
+  npm run build   # the served shell uses public/build; a stale bundle hides the change
+  node tests/Browser/welcome-message.mjs
+  ```
+
 - **`messaging.mjs`** — the page against a real server: the list comes from the
   API (and contains none of the old mock names), messages load and send and
   survive a reload, replies carry a quoted original, drafts stay with their own

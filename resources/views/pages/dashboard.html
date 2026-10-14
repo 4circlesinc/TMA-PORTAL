@@ -32,7 +32,7 @@
   <link rel="stylesheet" href="css/theme.css">
   <link rel="stylesheet" href="css/components.css?v=4">
   <link rel="stylesheet" href="css/pagination.css?v=4">
-  <link rel="stylesheet" href="css/dashboard.css?v=346">
+  <link rel="stylesheet" href="css/dashboard.css?v=347">
   <link rel="stylesheet" href="css/global-search.css?v=5">
   <link rel="stylesheet" href="css/filter-and-sort.css">
   <link rel="stylesheet" href="css/table-filter-sort.css?v=7">
@@ -53,7 +53,7 @@
   <link rel="stylesheet" href="css/table-b-sessions.css">
   <link rel="stylesheet" href="css/table.css">
   <link rel="stylesheet" href="css/table-a.css">
-  <link rel="stylesheet" href="css/portal.css?v=95">
+  <link rel="stylesheet" href="css/portal.css?v=96">
   <link rel="stylesheet" href="css/portal-files.css?v=41">
   <link rel="stylesheet" href="css/dashboard-tma-overrides.css?v=57">
   <link rel="stylesheet" href="css/feed.css?v=3">
@@ -61,7 +61,7 @@
        sidebar paints, so a client never sees Clients/Users/Email flash by.
        The capabilities are injected immediately above by App\Support\
        PortalShell, so it needs no round trip to know which rows to drop. -->
-  <script src="js/portal-access.js?v=29"></script>
+  <script src="js/portal-access.js?v=30"></script>
   <script>
     if (/\/email\/compose\/?$/.test(location.pathname)) {
       document.documentElement.classList.add('tma-dash--compose-popout');
@@ -198,6 +198,7 @@
           <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/templates/email" data-nav="templates-email" data-title="Email Templates" data-crumb="Templates / Email Templates" data-view="templates"><span>Email Templates</span></a>
           <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/templates/letters" data-nav="templates-letters" data-title="Granted And Denied Letters" data-crumb="Templates / Granted And Denied Letters" data-view="templates"><span>Granted And Denied Letters</span></a>
           <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/templates/documents" data-nav="templates-documents" data-title="Document Requirements" data-crumb="Templates / Document Requirements" data-view="templates"><span>Document Requirements</span></a>
+          <a class="tma-dash__nav-item tma-dash__nav-item--nested" href="/templates/welcome" data-nav="templates-welcome" data-title="Welcome Message" data-crumb="Templates / Welcome Message" data-view="templates"><span>Welcome Message</span></a>
         </div>
 
         <button type="button" class="tma-dash__nav-item tma-dash__nav-item--expand" data-expand="workflows" aria-expanded="false">
@@ -596,6 +597,9 @@
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="templates-documents" data-title="Document Requirements" data-crumb="Templates / Document Requirements" data-view="templates">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/Table.svg" alt=""><span>Document Requirements</span>
         </button>
+        <button type="button" class="tma-dash__mrow" data-mrow data-nav="templates-welcome" data-title="Welcome Message" data-crumb="Templates / Welcome Message" data-view="templates">
+          <img class="tma-dash__mrow-icon" src="images/icons/phosphor/Table.svg" alt=""><span>Welcome Message</span>
+        </button>
         <button type="button" class="tma-dash__mrow" data-mrow data-nav="workflows-automated" data-title="Requests" data-crumb="Workflows / Requests" data-view="workflows">
           <img class="tma-dash__mrow-icon" src="images/icons/phosphor/ArrowsClockwise.svg" alt=""><span>Workflows</span>
         </button>
@@ -695,7 +699,7 @@
   <script src="js/messaging-realtime.js?v=2" defer></script>
   <script src="js/messaging-image-editor.js" defer></script>
   <script src="js/messaging-calls.js?v=4" defer></script>
-  <script src="js/messages.js?v=29" defer></script>
+  <script src="js/messages.js?v=30" defer></script>
   <script src="js/feed-api.js?v=1" defer></script>
   <script src="js/feed.js?v=6" defer></script>
   <script src="js/schedule.js" defer></script>
@@ -715,7 +719,7 @@
   <script src="js/calendar.js?v=8" defer></script>
   <script src="js/pricing.js" defer></script>
   <script src="js/two-step-countries.js" defer></script>
-  <script src="js/settings.js?v=4" defer></script>
+  <script src="js/settings.js?v=5" defer></script>
   <script src="js/user-info-panel-icons.js" defer></script>
   <script src="js/user-info-panel.js?v=4" defer></script>
   <script src="js/users.js?v=14" defer></script>
@@ -724,16 +728,16 @@
   <script src="js/right-sidebar.js?v=9" defer></script>
   <script src="js/notify-realtime.js?v=2" defer></script>
   <script src="js/activity-popups.js?v=3" defer></script>
-  <script src="js/portal-search-index.js?v=17" defer></script>
+  <script src="js/portal-search-index.js?v=18" defer></script>
   <script src="js/global-search.js?v=10" defer></script>
   <script src="js/dash-search-chrome.js" defer></script>
     <script src="js/tabbar-indicator.js" defer></script>
   <script src="js/portal-data.js" defer></script>
   <script src="js/portal-views.js?v=8" defer></script>
   <script src="js/portal-folders.js?v=2" defer></script>
-  <script src="js/portal-work.js?v=16" defer></script>
+  <script src="js/portal-work.js?v=17" defer></script>
   <script src="js/portal-people.js?v=4" defer></script>
-  <script src="js/portal-admin.js?v=27" defer></script>
+  <script src="js/portal-admin.js?v=28" defer></script>
   <script src="js/portal-upload-manager.js?v=10" defer></script>
   <!-- The people cell and its hover card, shared by the File Library's Owner
        column and CIP's Assigned column. Must precede both: they call

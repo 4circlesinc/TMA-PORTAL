@@ -26,6 +26,7 @@
     { id: 'theme', label: 'Theme', group: 'Settings' },
     { id: 'time', label: 'Time And Language', group: 'Settings' },
     { id: 'notifications', label: 'Notifications', group: 'Settings' },
+    { id: 'provider-emails', label: 'Service Provider Emails', group: 'Settings', keywords: ['copy', 'copies', 'cip emails', 'status emails'] },
     { id: 'privacy', label: 'Privacy', group: 'Settings' },
     { id: 'payment', label: 'Payment', group: 'Settings' },
     { id: 'plugins', label: 'Plugins', group: 'Settings' },

@@ -1077,6 +1077,10 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
             Route::patch('/system-emails/{key}', [TemplatesController::class, 'update'])->name('system.update');
             Route::post('/system-emails/{key}/restore', [TemplatesController::class, 'restore'])->name('system.restore');
             Route::post('/system-emails/{key}/preview', [TemplatesController::class, 'preview'])->name('system.preview');
+            // The welcome a new person finds in their Messages inbox.
+            Route::get('/welcome-message', [TemplatesController::class, 'welcomeIndex'])->name('welcome.index');
+            Route::patch('/welcome-message', [TemplatesController::class, 'welcomeUpdate'])->name('welcome.update');
+            Route::post('/welcome-message/preview', [TemplatesController::class, 'welcomePreview'])->name('welcome.preview');
         });
 
         Route::middleware('capability:templates.email')->group(function () {

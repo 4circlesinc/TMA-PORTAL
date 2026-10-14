@@ -70,6 +70,8 @@ class CipIntakeTest extends TestCase
             'email_verified_at' => now(),
             'profile_completed_at' => now(),
             'onboarding_completed_at' => now(),
+            // Administrators start with provider-email copies off (Cip\Copies); these have them on.
+            'preferences' => $type === Role::ADMINISTRATOR ? ['notifyProviderCopies' => true] : null,
         ]);
     }
 

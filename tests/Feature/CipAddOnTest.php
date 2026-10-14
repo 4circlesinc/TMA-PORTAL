@@ -471,6 +471,8 @@ class CipAddOnTest extends TestCase
         $this->travelTo('2026-08-20 12:00:00');
 
         $staff = $this->staff();
+        // Administrators start with provider-email copies off (Cip\Copies); this one has them on.
+        $staff->forceFill(['preferences' => ['notifyProviderCopies' => true]])->save();
         $parent = $this->grantedParent($staff);
         $contact = $this->providerContact($parent->provider);
 

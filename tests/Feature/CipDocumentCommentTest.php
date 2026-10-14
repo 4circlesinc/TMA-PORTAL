@@ -171,6 +171,8 @@ class CipDocumentCommentTest extends TestCase
         Mail::fake();
 
         $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        // Administrators start with provider-email copies off (Cip\Copies); this one has them on.
+        $staff->forceFill(['preferences' => ['notifyProviderCopies' => true]])->save();
         $company = null;
         $slot = $this->slot($staff, $company);
         $application = $slot->application;

@@ -875,6 +875,8 @@ class CipApplicationDraftTest extends TestCase
         \Illuminate\Support\Facades\Mail::fake();
 
         $staff = $this->user(Role::ADMINISTRATOR);
+        // Administrators start with provider-email copies off (Cip\Copies); this one has them on.
+        $staff->forceFill(['preferences' => ['notifyProviderCopies' => true]])->save();
         $provider = $this->provider();
 
         $sent = fn (CipApplication $application) => \Illuminate\Support\Facades\DB::table('email_deliveries')
@@ -1071,6 +1073,8 @@ class CipApplicationDraftTest extends TestCase
         \Illuminate\Support\Facades\Mail::fake();
 
         $admin = $this->user(Role::ADMINISTRATOR);
+        // Administrators start with provider-email copies off (Cip\Copies); this one has them on.
+        $admin->forceFill(['preferences' => ['notifyProviderCopies' => true]])->save();
         $officer = $this->user(Role::REVIEWING_OFFICER);
         $provider = $this->provider();
 

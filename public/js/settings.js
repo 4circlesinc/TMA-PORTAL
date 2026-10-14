@@ -47,6 +47,8 @@
 
   function detailTitle(id) {
     if (id === 'profile') return 'Profile';
+    // Opened from a row on Notifications rather than from this menu.
+    if (id === 'provider-emails') return 'Service Provider Emails';
     return navLabel(id);
   }
 
@@ -399,7 +401,9 @@
     'tma.timezone': 'timezone',
     'tma.language': 'language',
     'tma.notify.alwaysEmail': 'notifyAlwaysEmail',
-    'tma.notify.providerCopies': 'notifyProviderCopies',
+    // Hydrated only. The Service Provider Emails page writes through its
+    // own queue, so this key never reaches pushPref.
+    'tma.notify.cipCopies': 'cipCopies',
     'tma.voice': 'voice',
     'tma.sidebarStyle': 'sidebarStyle',
     'tma.themeMode': 'themeMode',
@@ -427,7 +431,13 @@
   var PREF_CODECS = {
     autoTimezone: prefBoolCodec(),
     notifyAlwaysEmail: prefBoolCodec(),
-    notifyProviderCopies: prefBoolCodec(),
+    // kind => bool, as JSON text. PHP sends an empty map as [].
+    cipCopies: {
+      toServer: function (v) {
+        try { var o = JSON.parse(v); return o && typeof o === 'object' && !Array.isArray(o) ? o : {}; } catch (e) { return {}; }
+      },
+      toLocal: function (v) { return JSON.stringify(v && typeof v === 'object' && !Array.isArray(v) ? v : {}); },
+    },
     // Without a codec this round-trips as the string "true"/"false", and the
     // column wants a real boolean, the validator rejects the string.
     fileSyncNoticeDismissed: prefBoolCodec(),
@@ -560,6 +570,7 @@
     try { syncTimePanelUI(root); } catch (e) {}
     try { syncThemePanelUI(root); } catch (e) {}
     try { syncNotificationsPanelUI(root); } catch (e) {}
+    try { syncProviderEmailsUI(root); } catch (e) {}
     try { syncPrivacyPanelUI(root); } catch (e) {}
     try { syncPluginsPanelUI(root); } catch (e) {}
   }
@@ -585,6 +596,8 @@
       Object.keys(PREF_SERVER_KEYS).forEach(function (localKey) {
         var serverKey = PREF_SERVER_KEYS[localKey];
         if (p[serverKey] === undefined || p[serverKey] === null) return;
+        // An answer read before a switch was flipped must not flip it back.
+        if (localKey === PROVIDER_EMAIL_KEY && providerEmailWriting()) return;
         var val = prefToLocal(serverKey, p[serverKey]);
         if (localStorage.getItem(localKey) === val) return;
         try { localStorage.setItem(localKey, val); } catch (e) {}
@@ -1148,7 +1161,6 @@
 
   var NOTIFY_STORAGE_KEYS = {
     'always-email': 'tma.notify.alwaysEmail',
-    'provider-copies': 'tma.notify.providerCopies',
   };
 
   var PICKER_STORAGE_KEYS = {
@@ -1216,23 +1228,269 @@
   function readNotificationsPrefs() {
     return {
       alwaysEmail: store.get('tma.notify.alwaysEmail', '0') === '1',
-      // On until turned off, like every other channel (server default true).
-      providerCopies: store.get('tma.notify.providerCopies', '1') === '1',
     };
   }
 
-  /* Staff only. Whether the account is staff comes from /me, which may land
-     after the panel is drawn, so the rows carry a marker and
-     syncStaffOnlyRows() settles them once it has. */
-  function isStaffViewer() {
+  /* ── Service Provider Emails ──────────────────────────────────────
+     One switch per kind of CIP notice a staff member is copied on, the
+     status it announces plus the document comment. Same ids, same order
+     as App\Support\Cip\Copies::KINDS; CipProviderCopiesTest holds the
+     two together. Labels are the status chips' own. */
+  var PROVIDER_EMAIL_GROUPS = [
+    { label: 'Applications', kinds: [
+      { id: 'new', label: 'New Applications' },
+      { id: 'review_application', label: 'Review Applications' },
+      { id: 'assessment_feedback', label: 'Assessment Feedback' },
+      { id: 'update_required', label: 'Updates Required' },
+      { id: 'ready_to_submit', label: 'Ready to Submit' },
+      { id: 'pending_review', label: 'Pending Review' },
+      { id: 'non_compliant', label: 'Non-compliant' },
+      { id: 'background_check', label: 'Background Check' },
+      { id: 'dd_query', label: 'DD Query' },
+      { id: 'delayed', label: 'Delayed' },
+      { id: 'granted', label: 'Approved' },
+      { id: 'denied', label: 'Denied' },
+    ] },
+    { label: 'Post-approval', kinds: [
+      { id: 'post_approval', label: 'Post-Approval' },
+      { id: 'apply_for_cor', label: 'Apply for COR' },
+      { id: 'pending_cor', label: 'Pending COR' },
+      { id: 'apply_for_nic', label: 'Apply for NIC' },
+      { id: 'pending_nic', label: 'Pending NIC' },
+      { id: 'apply_for_passport', label: 'Apply for Passport' },
+      { id: 'pending_passport', label: 'Pending Passport' },
+      { id: 'ready_for_delivery', label: 'Ready for Delivery' },
+      { id: 'post_approved', label: 'Approved' },
+      { id: 'post_denied', label: 'Denied' },
+      { id: 'closed', label: 'Closed' },
+    ] },
+    { label: 'Appeals', kinds: [
+      { id: 'new_appeal', label: 'New Appeal' },
+      { id: 'appeal_ready', label: 'Appeal Ready' },
+      { id: 'appeal_submitted', label: 'Appeal Submitted' },
+    ] },
+    { label: 'Comments', kinds: [
+      { id: 'comment', label: 'Document comments' },
+    ] },
+  ];
+
+  var PROVIDER_EMAIL_KEY = 'tma.notify.cipCopies';
+
+  function providerEmailKinds() {
+    var ids = [];
+    PROVIDER_EMAIL_GROUPS.forEach(function (g) {
+      g.kinds.forEach(function (k) { ids.push(k.id); });
+    });
+    return ids;
+  }
+
+  /* Before /me/preferences answers, an untouched switch reads the way the
+     server will answer it: on for employees, off for administrators. */
+  function viewerIsAdmin() {
+    var me = window.TMACurrentUser && window.TMACurrentUser.get();
+    if (me && typeof me.isAdmin === 'boolean') return me.isAdmin;
+    return window.TMABootIsAdmin === true || window.TMABootIsAdmin === 'true';
+  }
+
+  function readProviderEmailPrefs() {
+    var stored = null;
+    try { stored = JSON.parse(localStorage.getItem(PROVIDER_EMAIL_KEY) || 'null'); } catch (e) { stored = null; }
+    var fallback = !viewerIsAdmin();
+    var out = {};
+    providerEmailKinds().forEach(function (id) {
+      out[id] = stored && typeof stored[id] === 'boolean' ? stored[id] : fallback;
+    });
+    return out;
+  }
+
+  function keepProviderEmailPrefs(map) {
+    var out = {};
+    providerEmailKinds().forEach(function (id) { out[id] = !!map[id]; });
+    try { localStorage.setItem(PROVIDER_EMAIL_KEY, JSON.stringify(out)); } catch (e) {}
+  }
+
+  function providerEmailSummary(map) {
+    var ids = providerEmailKinds();
+    var on = ids.filter(function (id) { return map[id]; }).length;
+    if (on === ids.length) return 'On';
+    if (on === 0) return 'Off';
+    return 'Custom';
+  }
+
+  /* One body at a time, in the order the switches were flipped. "All"
+     replaces whatever single switches were waiting, because it answers
+     for them too; the server applies it before any single switch sent
+     with it. */
+  var providerEmailPending = null;
+  var providerEmailTimer = null;
+  var providerEmailSending = 0;
+  var providerEmailChain = null;
+
+  function providerEmailWriting() {
+    return !!(providerEmailPending || providerEmailTimer || providerEmailSending);
+  }
+
+  function queueProviderEmailWrite(kind, on) {
+    if (kind === null) {
+      providerEmailPending = { notifyProviderCopies: on };
+    } else {
+      providerEmailPending = providerEmailPending || {};
+      providerEmailPending.cipCopies = providerEmailPending.cipCopies || {};
+      providerEmailPending.cipCopies[kind] = on;
+    }
+    if (providerEmailTimer) clearTimeout(providerEmailTimer);
+    providerEmailTimer = setTimeout(flushProviderEmailWrites, 350);
+  }
+
+  function flushProviderEmailWrites() {
+    if (providerEmailTimer) clearTimeout(providerEmailTimer);
+    providerEmailTimer = null;
+    var body = providerEmailPending;
+    providerEmailPending = null;
+    if (!body) return;
+    // A write changes the answer a shared read just gave.
+    if (window.TMABoot && window.TMABoot.forget) window.TMABoot.forget('GET /me/preferences');
+    providerEmailSending++;
+    var send = function () {
+      return fetch('/me/preferences', {
+        method: 'PUT',
+        credentials: 'same-origin',
+        keepalive: true,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-XSRF-TOKEN': prefXsrf(),
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify(body),
+      }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+    };
+    providerEmailChain = (providerEmailChain || Promise.resolve()).then(send).then(function (p) {
+      providerEmailSending--;
+      // The server's answer is the truth once nothing newer is waiting.
+      if (p && p.cipCopies && !providerEmailWriting()) {
+        keepProviderEmailPrefs(p.cipCopies);
+        syncProviderEmailsUI(document);
+      }
+    });
+  }
+
+  // A switch flipped just before leaving the page still saves.
+  window.addEventListener('pagehide', function () {
+    if (providerEmailPending) flushProviderEmailWrites();
+  });
+
+  function setProviderEmail(kind, on) {
+    var map = readProviderEmailPrefs();
+    if (kind === null) {
+      providerEmailKinds().forEach(function (id) { map[id] = on; });
+    } else {
+      map[kind] = on;
+    }
+    keepProviderEmailPrefs(map);
+    queueProviderEmailWrite(kind, on);
+  }
+
+  /* Only somebody who works on CIP files is ever copied, which is what the
+     settings rail gates the page on (cip.view). Capabilities ride in the
+     shell, so this is settled before paint; a shell without them falls
+     back to asking whether the account is staff. */
+  function canOpenProviderEmails() {
+    var access = window.TMAPortalAccess;
+    if (access && access.canSettingsPage && access.capabilities && access.capabilities().length) {
+      return access.canSettingsPage('provider-emails');
+    }
     var me = window.TMACurrentUser && window.TMACurrentUser.get();
     return !!(me && me.isStaff);
   }
 
-  function syncStaffOnlyRows(root) {
-    var staff = isStaffViewer();
-    root.querySelectorAll('[data-settings-staff-only]').forEach(function (el) {
-      el.hidden = !staff;
+  function syncProviderEmailsRows(root) {
+    var open = canOpenProviderEmails();
+    root.querySelectorAll('[data-settings-provider-emails-row]').forEach(function (el) {
+      el.hidden = !open;
+    });
+  }
+
+  function syncProviderEmailsUI(root) {
+    var map = readProviderEmailPrefs();
+    var ids = providerEmailKinds();
+    root.querySelectorAll('[data-settings-copy]').forEach(function (input) {
+      input.checked = !!map[input.getAttribute('data-settings-copy')];
+    });
+    root.querySelectorAll('[data-settings-copy-all]').forEach(function (input) {
+      input.checked = ids.every(function (id) { return map[id]; });
+    });
+    root.querySelectorAll('[data-settings-row-value="open-provider-emails"]').forEach(function (el) {
+      el.textContent = providerEmailSummary(map);
+    });
+    syncProviderEmailsRows(root);
+  }
+
+  function openProviderEmails(root) {
+    // Inside /account-settings the page is a section of the rail, so it
+    // gets the rail's own back button on phones.
+    if (root.closest && root.closest('.tma-portal-admin') && window.TMAPortalAdmin && window.TMAPortalAdmin.setPage) {
+      window.TMAPortalAdmin.setPage('provider-emails');
+      return;
+    }
+    activateNav(root, 'provider-emails');
+  }
+
+  function renderProviderEmailsPanel() {
+    var map = readProviderEmailPrefs();
+    var ids = providerEmailKinds();
+    var groups = PROVIDER_EMAIL_GROUPS.map(function (g) {
+      return '<div class="tma-dash__settings-notifications-group">' +
+        '<p class="tma-dash__settings-notifications-group-label">' + esc(g.label) + '</p>' +
+        g.kinds.map(function (k) {
+          return renderRow({
+            label: k.label,
+            switch: true,
+            switchChecked: !!map[k.id],
+            switchLabel: g.label + ': ' + k.label,
+            switchAttrs: 'data-settings-copy="' + esc(k.id) + '"',
+            chevron: false,
+          });
+        }).join(profileInnerDivider()) +
+      '</div>';
+    }).join('');
+
+    return '<section class="tma-dash__settings-panel" data-settings-panel="provider-emails" hidden>' +
+      '<h2 class="tma-dash__settings-section-title tma-dash__settings-notifications-section-title">Service Provider Emails</h2>' +
+      '<div class="tma-dash__settings-notifications-stack">' +
+      '<div class="tma-dash__settings-notifications-group">' +
+      renderRow({
+        label: 'All service provider emails',
+        desc: 'The bell still shows every change.',
+        switch: true,
+        switchChecked: ids.every(function (id) { return map[id]; }),
+        switchLabel: 'All service provider emails',
+        switchAttrs: 'data-settings-copy-all',
+        chevron: false,
+      }) +
+      '</div>' +
+      groups +
+      '</div>' +
+      '</section>';
+  }
+
+  function bindProviderEmailsPanel(root) {
+    root.querySelectorAll('[data-settings-copy], [data-settings-copy-all]').forEach(function (input) {
+      if (input.dataset.copyBound) return;
+      input.dataset.copyBound = '1';
+      input.addEventListener('change', function () {
+        var kind = input.hasAttribute('data-settings-copy-all') ? null : input.getAttribute('data-settings-copy');
+        setProviderEmail(kind, input.checked);
+        syncProviderEmailsUI(document);
+      });
+    });
+    root.querySelectorAll('[data-settings-action="open-provider-emails"]').forEach(function (btn) {
+      if (btn.dataset.copyBound) return;
+      btn.dataset.copyBound = '1';
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        openProviderEmails(root);
+      });
     });
   }
 
@@ -1373,16 +1631,14 @@
         switchAttrs: 'data-settings-notify="always-email"',
         chevron: false,
       }) +
-      '<hr class="tma-dash__settings-profile-inner-divider" aria-hidden="true" data-settings-staff-only' + (isStaffViewer() ? '' : ' hidden') + '>' +
+      '<hr class="tma-dash__settings-profile-inner-divider" aria-hidden="true" data-settings-provider-emails-row' + (canOpenProviderEmails() ? '' : ' hidden') + '>' +
       renderRow({
-        label: 'Copy me on service provider emails',
-        desc: 'Get a copy of each CIP application email sent to service providers.',
-        switch: true,
-        switchChecked: prefs.providerCopies,
-        switchLabel: 'Copy me on service provider emails',
-        switchAttrs: 'data-settings-notify="provider-copies"',
-        attrs: 'data-settings-staff-only' + (isStaffViewer() ? '' : ' hidden'),
-        chevron: false,
+        label: 'Service provider emails',
+        desc: 'Choose which CIP emails you\u2019re copied on.',
+        action: 'open-provider-emails',
+        value: providerEmailSummary(readProviderEmailPrefs()),
+        valueMuted: true,
+        attrs: 'data-settings-provider-emails-row' + (canOpenProviderEmails() ? '' : ' hidden'),
       }) +
       '</div>' +
       renderToastSettingsGroup() +
@@ -1517,9 +1773,8 @@
       var key = input.getAttribute('data-settings-notify');
       if (key === 'email') input.checked = notifEmailMasterOn();
       else if (key === 'always-email') input.checked = prefs.alwaysEmail;
-      else if (key === 'provider-copies') input.checked = prefs.providerCopies;
     });
-    syncStaffOnlyRows(root);
+    syncProviderEmailsUI(root);
 
     root.querySelectorAll('[data-settings-toast-pref]').forEach(function (input) {
       var key = input.getAttribute('data-settings-toast-pref');
@@ -3626,6 +3881,7 @@
       renderThemePanel() +
       renderTimePanel() +
       renderNotificationsPanel() +
+      renderProviderEmailsPanel() +
       renderPrivacyPanel() +
       renderPaymentPanel() +
       renderPluginsPanel() +
@@ -3642,6 +3898,7 @@
   }
 
   function activateNav(root, id) {
+    if (id === 'provider-emails' && !canOpenProviderEmails()) id = 'notifications';
     closePaymentPayout(root);
     closePaymentSwipes(root);
     root.querySelectorAll('[data-settings-nav]').forEach(function (btn) {
@@ -3663,6 +3920,7 @@
       syncNotificationsPanelUI(root);
       closePickers(root);
     }
+    if (id === 'provider-emails') syncProviderEmailsUI(root);
     if (id === 'privacy') {
       syncPrivacyPanelUI(root);
       closePickers(root);
@@ -5043,6 +5301,7 @@
     bindMobileSelectOverlays(root);
     bindTimePanel(root);
     bindNotificationsPanel(root);
+    bindProviderEmailsPanel(root);
     bindPrivacyPanel(root);
     bindPaymentPanel(root);
     bindAddPaymentMethodPopup(root);
@@ -5088,7 +5347,9 @@
       window.TMACurrentUser.onChange(function () {
         if (!root.isConnected) return;
         hydrateProfileFromCurrentUser(root);
-        syncStaffOnlyRows(root);
+        // Whether the reader is an administrator decides what an untouched
+        // switch shows, and /me can land after the first paint.
+        syncProviderEmailsUI(root);
       });
     }
     if (opts && opts.openChangeEmail) openChangeEmailPopup(root);

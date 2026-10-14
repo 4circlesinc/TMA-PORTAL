@@ -48,6 +48,11 @@ class CipDelayTest extends TestCase
             'account_type' => $type,
         ])->save();
 
+        // Administrators start with provider-email copies off (Cip\Copies); this one has them on.
+        if ($type === Role::ADMINISTRATOR) {
+            $user->forceFill(['preferences' => ['notifyProviderCopies' => true]])->save();
+        }
+
         return $user;
     }
 

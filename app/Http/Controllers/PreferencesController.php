@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Calendar;
 use App\Models\User;
 use App\Support\Calendar\CalendarProvisioner;
+use App\Support\Cip\Copies;
 use App\Support\Notifications\ToastSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,8 +33,9 @@ class PreferencesController extends Controller
         // provider is sent. Administrators are copied on every application
         // and officers on the files they hold, that scope is the notice
         // list's (Cip\Contacts), this only says whether to send the copy.
-        // On by default like every other channel; the bell is unaffected.
-        // Read by Cip\Copies.
+        // The bell is unaffected. Answered per account by payload(): true
+        // while any kind is on (Cip\Copies, which also serves the
+        // per-kind map as `cipCopies`). A write turns every kind on or off.
         'notifyProviderCopies' => true,
         // Theme panel. These used to live only in localStorage, so the look
         // reset on every new browser, they follow the account now.
@@ -94,6 +96,10 @@ class PreferencesController extends Controller
         'sidebarStyle' => ['string', 'in:standard,hover'],
         'notifyAlwaysEmail' => ['boolean'],
         'notifyProviderCopies' => ['boolean'],
+        // Per kind of CIP notice, kind => bool, or null to forget the
+        // choice. Cleaned to the known kinds by Cip\Copies::write.
+        'cipCopies' => ['array'],
+        'cipCopies.*' => ['boolean'],
         'themeMode' => ['string', 'in:system,light,dark'],
         'fontScale' => ['integer', 'between:1,5'],
         'accentColor' => ['string', 'in:indigo,yellow,red,blue,orange,green'],
@@ -203,7 +209,7 @@ class PreferencesController extends Controller
             'notifyProviderCopies', 'dashboardWorkflowStrip',
         ];
         foreach ($data as $key => $value) {
-            if ($key === 'toasts') {
+            if ($key === 'toasts' || $key === 'notifyProviderCopies' || $key === 'cipCopies') {
                 continue;
             }
             if ($key === 'plugins') {
@@ -238,6 +244,16 @@ class PreferencesController extends Controller
                 : $value;
         }
 
+        // The "all" switch first, so a write carrying both lands the single
+        // switches on top of it.
+        if (array_key_exists('notifyProviderCopies', $data) || array_key_exists('cipCopies', $data)) {
+            $current = Copies::write(
+                $current,
+                array_key_exists('notifyProviderCopies', $data) ? (bool) $data['notifyProviderCopies'] : null,
+                is_array($data['cipCopies'] ?? null) ? $data['cipCopies'] : null,
+            );
+        }
+
         $user->forceFill(['preferences' => $current])->save();
 
         if (isset($data['toasts']) && is_array($data['toasts'])) {
@@ -266,6 +282,12 @@ class PreferencesController extends Controller
             array_merge(self::DEFAULTS, array_intersect_key($stored, self::DEFAULTS)),
             ['toasts' => ToastSettings::for($user)]
         );
+
+        // Worked out for the account rather than stored, so an untouched
+        // switch follows the person's role if it changes.
+        $copies = Copies::forUser($user);
+        $payload['cipCopies'] = $copies;
+        $payload['notifyProviderCopies'] = in_array(true, $copies, true);
 
         if (isset($stored['dashboardTiles']) && is_array($stored['dashboardTiles'])) {
             $payload['dashboardTiles'] = array_merge(

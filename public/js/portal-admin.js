@@ -38,6 +38,8 @@
     { id: 'theme', label: 'Theme', icon: 'Palette' },
     { id: 'time', label: 'Time And Language', icon: 'SunHorizon' },
     { id: 'notifications', label: 'Notifications', icon: 'Bell' },
+    // Opened from a row on Notifications as well; gated on cip.view.
+    { id: 'provider-emails', label: 'Service Provider Emails', icon: 'EnvelopeSimple' },
     { id: 'privacy', label: 'Privacy', icon: 'HandPalm' },
   ];
 
@@ -46,6 +48,7 @@
     { id: 'theme', label: 'Theme', icon: 'Palette' },
     { id: 'time', label: 'Time And Language', icon: 'SunHorizon' },
     { id: 'notifications', label: 'Notifications', icon: 'Bell' },
+    { id: 'provider-emails', label: 'Service Provider Emails', icon: 'EnvelopeSimple' },
     { id: 'privacy', label: 'Privacy', icon: 'HandPalm' },
     { id: 'background-ops', label: 'Background Operations', icon: 'ArrowsClockwise' },
     { group: 'reporting-group', label: 'Account And Reporting', icon: 'ChartBar', items: [

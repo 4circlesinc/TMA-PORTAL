@@ -29516,7 +29516,8 @@ button.tma-dash__header-popup-item:focus-visible {
     display: flex;
   }
 
-  .tma-dash__settings-panel[data-settings-panel="notifications"].is-active {
+  .tma-dash__settings-panel[data-settings-panel="notifications"].is-active,
+  .tma-dash__settings-panel[data-settings-panel="provider-emails"].is-active {
     gap: 0;
     padding: 0;
   }
@@ -29546,45 +29547,55 @@ button.tma-dash__header-popup-item:focus-visible {
     color: var(--color-text-secondary);
   }
 
-  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-row {
+  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-row,
+  .tma-dash__settings-panel[data-settings-panel="provider-emails"] .tma-dash__settings-row {
     padding: var(--space-16);
   }
 
-  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-row:hover {
+  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-row:hover,
+  .tma-dash__settings-panel[data-settings-panel="provider-emails"] .tma-dash__settings-row:hover {
     background: transparent;
   }
 
   .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-row-label,
-  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-row-value {
+  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-row-value,
+  .tma-dash__settings-panel[data-settings-panel="provider-emails"] .tma-dash__settings-row-label,
+  .tma-dash__settings-panel[data-settings-panel="provider-emails"] .tma-dash__settings-row-value {
     font-size: var(--text-size-18);
     line-height: var(--text-lh-18);
   }
 
-  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-row-desc {
+  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-row-desc,
+  .tma-dash__settings-panel[data-settings-panel="provider-emails"] .tma-dash__settings-row-desc {
     font-size: var(--text-size-14);
     line-height: var(--text-lh-14);
   }
 
-  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-row:has(.tma-dash__settings-row-desc) {
+  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-row:has(.tma-dash__settings-row-desc),
+  .tma-dash__settings-panel[data-settings-panel="provider-emails"] .tma-dash__settings-row:has(.tma-dash__settings-row-desc) {
     flex-direction: row;
     align-items: flex-start;
     gap: var(--space-16);
   }
 
-  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-row:has(.tma-dash__settings-switch) {
+  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-row:has(.tma-dash__settings-switch),
+  .tma-dash__settings-panel[data-settings-panel="provider-emails"] .tma-dash__settings-row:has(.tma-dash__settings-switch) {
     align-items: flex-start;
   }
 
-  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-row .tma-dash__settings-switch {
+  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-row .tma-dash__settings-switch,
+  .tma-dash__settings-panel[data-settings-panel="provider-emails"] .tma-dash__settings-row .tma-dash__settings-switch {
     flex-shrink: 0;
   }
 
-  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-switch-ui {
+  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-switch-ui,
+  .tma-dash__settings-panel[data-settings-panel="provider-emails"] .tma-dash__settings-switch-ui {
     width: 48px;
     height: 48px;
   }
 
-  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-switch-track {
+  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-switch-track,
+  .tma-dash__settings-panel[data-settings-panel="provider-emails"] .tma-dash__settings-switch-track {
     top: 13px;
     left: 6px;
     width: 36px;
@@ -29592,14 +29603,16 @@ button.tma-dash__header-popup-item:focus-visible {
     border-radius: 11px;
   }
 
-  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-switch-thumb {
+  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-switch-thumb,
+  .tma-dash__settings-panel[data-settings-panel="provider-emails"] .tma-dash__settings-switch-thumb {
     top: 14px;
     left: 8px;
     width: 18px;
     height: 18px;
   }
 
-  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-switch-input:checked + .tma-dash__settings-switch-ui .tma-dash__settings-switch-thumb {
+  .tma-dash__settings-panel[data-settings-panel="notifications"] .tma-dash__settings-switch-input:checked + .tma-dash__settings-switch-ui .tma-dash__settings-switch-thumb,
+  .tma-dash__settings-panel[data-settings-panel="provider-emails"] .tma-dash__settings-switch-input:checked + .tma-dash__settings-switch-ui .tma-dash__settings-switch-thumb {
     transform: translateX(18px);
   }
 
@@ -31004,6 +31017,17 @@ button.tma-dash__header-popup-item:focus-visible {
   .tma-dash__settings-notifications-section-title,
   .tma-dash__settings-plugins-section-title {
     display: block !important;
+  }
+
+  /* Service Provider Emails names the same status twice (Approved before
+     and after post-approval), so its group headings stay on at desktop. */
+  .tma-dash__settings-panel[data-settings-panel="provider-emails"] .tma-dash__settings-notifications-group-label {
+    display: block;
+    margin: 0;
+    padding: var(--space-16) var(--space-12) var(--space-4);
+    font-size: var(--text-size-14);
+    line-height: var(--text-lh-14);
+    color: var(--color-text-secondary);
   }
 
   .tma-dash__settings-plugins-stack {

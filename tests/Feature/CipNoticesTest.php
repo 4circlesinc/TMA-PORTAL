@@ -166,6 +166,9 @@ class CipNoticesTest extends TestCase
         Mail::fake();
 
         $ada = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        // Administrators start with provider-email copies off (Cip\Copies);
+        // Ada has hers on, so the administrators class is heard here.
+        $ada->forceFill(['preferences' => ['notifyProviderCopies' => true]])->save();
         $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
         $gil = $this->user(Role::CLIENT, 'gil@galaxy.example', 'Gil Contact');
         $kim = $this->user(Role::EMPLOYEE, 'kim@dist.example', 'Kim Dist');
@@ -332,6 +335,8 @@ class CipNoticesTest extends TestCase
         Mail::fake();
 
         $ada = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        // Administrators start with provider-email copies off; Ada has hers on.
+        $ada->forceFill(['preferences' => ['notifyProviderCopies' => true]])->save();
         $group = Group::create([
             'uuid' => (string) Str::uuid(),
             'name' => 'CIP Distribution Group',
@@ -360,6 +365,8 @@ class CipNoticesTest extends TestCase
         Mail::fake();
 
         $ada = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        // Administrators start with provider-email copies off; Ada has hers on.
+        $ada->forceFill(['preferences' => ['notifyProviderCopies' => true]])->save();
         $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
         $application = Applications::create($provider, $ada);
         CipPerson::create([
@@ -380,20 +387,24 @@ class CipNoticesTest extends TestCase
     }
 
     /**
-     * Settings › Notifications › Copy me on service provider emails.
+     * Settings › Service Provider Emails, the all switch (the old single
+     * "Copy me on service provider emails" switch, still honoured).
      *
      * The firm's own people are copied on what the provider side is sent, and
      * that copy is theirs to decline: the email stops, the bell does not. An
      * administrator is copied on every application and an officer on the
      * files they hold, so the switch reaches exactly that far. The provider
      * side is the addressee rather than a copy, and the same flag on a
-     * contact's account changes nothing.
+     * contact's account changes nothing. Per-kind switches and the defaults
+     * by role are CipProviderCopiesTest's.
      */
     public function test_a_staff_member_may_decline_the_email_copy_and_keep_the_bell(): void
     {
         Mail::fake();
 
         $ada = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        // Administrators start with copies off; Ada turned hers on.
+        $ada->forceFill(['preferences' => ['notifyProviderCopies' => true]])->save();
         $bob = $this->user(Role::ADMINISTRATOR, 'bob@example.com', 'Bob Admin');
         $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
         $gil = $this->user(Role::CLIENT, 'gil@galaxy.example', 'Gil Contact');

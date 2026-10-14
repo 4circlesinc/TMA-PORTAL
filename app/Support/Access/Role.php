@@ -386,6 +386,7 @@ class Role
         'templates/email' => 'templates.email',
         'templates/letters' => 'templates.view',
         'templates/documents' => 'templates.view',
+        'templates/welcome' => 'templates.view',
         'users' => 'users.view',
         'users/new' => 'users.manage',
         // Also served to CIP service-provider contacts, scoped by FileAccess
@@ -410,6 +411,11 @@ class Role
      * PortalAccessTest, so the two cannot drift apart unnoticed.
      */
     private const SETTINGS_PAGE_CAPABILITIES = [
+        // Personal, but only somebody who works on CIP files is ever copied
+        // on what service providers are sent (Cip\Copies), so the page
+        // follows the module: officers and administrators, and nobody while
+        // FEATURE_CIP is off.
+        'provider-emails' => 'cip.view',
         'background-ops' => 'settings.operations',
         'notification-history' => 'settings.reporting',
         'branding' => 'settings.branding',

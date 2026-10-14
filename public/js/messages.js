@@ -11289,6 +11289,24 @@
     avatarHtml: function (row) {
       return row ? threadIcon(resolveThread(row)) : '';
     },
+    /*
+     * A message as the chat draws it, arriving from `person` ({name, photo}),
+     * for a page that shows one before it is sent (Templates > Welcome
+     * Message). The same formatter as a real bubble: line breaks, lists,
+     * bold, italic and links.
+     */
+    previewBubbleHtml: function (person, body) {
+      var msg = { body: String(body == null ? '' : body), sender: person || {} };
+      return '<div class="tma-dash__messages-bubble-row tma-dash__messages-bubble-row--in">' +
+        renderBubbleAvatar(msg, {}, 'in', true) +
+        '<div class="tma-dash__messages-bubble-main">' +
+        '<div class="tma-dash__messages-bubble tma-dash__messages-bubble--in">' +
+        '<div class="tma-dash__messages-bubble-text"><p class="tma-dash__messages-bubble-line">' +
+        '<span class="tma-dash__messages-bubble-copy">' + renderMessageText(msg) + '</span>' +
+        '</p></div></div></div></div>';
+    },
+    /* Ctrl or Cmd with B and I type *bold* and _italic_ in a textarea. */
+    bindEmphasisKeys: bindEmphasisKeys,
     /** `opts.startCall` = 'audio' | 'video' rings once the thread is open. */
     openDirect: function (userId, opts) {
       var mountEl = document.querySelector('[data-messages]');

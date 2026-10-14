@@ -81,6 +81,7 @@ class LegacyPageController extends Controller
         'templates/email',
         'templates/letters',
         'templates/documents',
+        'templates/welcome',
         'users',
         'users/new',
         'workflows',

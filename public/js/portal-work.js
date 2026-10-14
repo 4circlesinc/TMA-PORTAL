@@ -1160,14 +1160,22 @@
     // hard-refreshed deep link) says which pane this mount is.
     var navId = (opts && opts.navId) || '';
     var path = window.location.pathname || '';
-    TPL.pane = navId === 'templates-email' || path.indexOf('/templates/email') === 0
-      ? 'email'
-      : navId === 'templates-letters' || path.indexOf('/templates/letters') === 0
-        ? 'letters'
-        : navId === 'templates-documents' || path.indexOf('/templates/documents') === 0
-          ? 'documents' : 'system';
+    // The nav id first. During an in-app click the address bar still shows
+    // the page being left, so a click on System Emails while the URL is
+    // /templates/email would reopen Email Templates. The path is only for a
+    // hard refresh, which arrives with no nav id.
+    TPL.pane = navId === 'templates-welcome' || (!navId && path.indexOf('/templates/welcome') === 0)
+      ? 'welcome'
+      : navId === 'templates-email' || (!navId && path.indexOf('/templates/email') === 0)
+        ? 'email'
+        : navId === 'templates-letters' || (!navId && path.indexOf('/templates/letters') === 0)
+          ? 'letters'
+          : navId === 'templates-documents' || (!navId && path.indexOf('/templates/documents') === 0)
+            ? 'documents' : 'system';
     renderTemplates();
-    if (TPL.pane === 'email') {
+    if (TPL.pane === 'welcome') {
+      if (!WTPL.loaded && !WTPL.loading) loadWelcomeMessage();
+    } else if (TPL.pane === 'email') {
       if (!ETPL.loaded && !ETPL.loading) loadEmailTemplates();
     } else if (TPL.pane === 'system' && !TPL.loaded && !TPL.loading) {
       loadTemplates();
@@ -1350,6 +1358,7 @@
   function renderTemplates() {
     var el = TPL.el;
     if (!el) return;
+    if (TPL.pane === 'welcome') { renderWelcomeMessage(); return; }
     if (TPL.pane === 'email') { renderEmailTemplates(); return; }
     if (TPL.pane === 'letters') { renderCipLetters(); return; }
     if (TPL.pane === 'documents') { renderCipDocuments(); return; }
@@ -1816,6 +1825,181 @@
       tplJson('POST', '/system-emails/' + encodeURIComponent(t.key) + '/restore')
         .then(function (d) { apply(d); ui().toast('Restored to the default'); })
         .catch(function (e) { ui().toastError(e.message); });
+    });
+  }
+
+  /* ── Welcome message ────────────────────────────────────────────
+   * What a new person finds in their Messages inbox, from the administrator
+   * chosen to send it. One message, so the page is its editor rather than a
+   * table. Server: TemplatesController welcome*, WelcomeMessage.
+   */
+  var WTPL = { loaded: false, loading: false, saving: false, error: null, data: null, previewSeq: 0 };
+
+  function loadWelcomeMessage() {
+    WTPL.loading = true;
+    WTPL.error = null;
+    tplJson('GET', '/welcome-message')
+      .then(function (d) { WTPL.data = d; WTPL.loaded = true; })
+      .catch(function (e) { WTPL.error = e.message; })
+      .then(function () { WTPL.loading = false; renderTemplates(); });
+  }
+
+  function wtplSender(id) {
+    var found = null;
+    ((WTPL.data && WTPL.data.senders) || []).forEach(function (p) {
+      if (String(p.id) === String(id)) found = p;
+    });
+    return found;
+  }
+
+  function wtplPreviewHtml(text, sender) {
+    var person = sender ? { name: sender.name, photo: sender.photo } : {};
+    if (window.TMAMessages && window.TMAMessages.previewBubbleHtml) {
+      return window.TMAMessages.previewBubbleHtml(person, text);
+    }
+    return '<p class="tma-portal-note">' + ui().esc(text) + '</p>';
+  }
+
+  function renderWelcomeMessage() {
+    var el = TPL.el;
+    if (!el) return;
+
+    if (WTPL.error) {
+      el.innerHTML = '<div class="tma-portal-page tma-portal-page--templates">' +
+        '<p class="tma-portal-note">Couldn’t load the welcome message: ' + ui().esc(WTPL.error) + '</p>' +
+        ui().btn({ label: 'Try again', variant: 'ghost', attrs: ' data-wtpl-retry' }) + '</div>';
+      var retry = el.querySelector('[data-wtpl-retry]');
+      if (retry) retry.addEventListener('click', function () { loadWelcomeMessage(); });
+      return;
+    }
+    if (!WTPL.loaded) {
+      el.innerHTML = '<div class="tma-portal-page tma-portal-page--templates">' + ui().loading() + '</div>';
+      return;
+    }
+
+    var d = WTPL.data;
+    var senders = d.senders || [];
+    var chosen = wtplSender(d.senderId);
+    // Nobody chosen yet: offer the administrator writing it.
+    if (!chosen && d.senderId == null && window.TMACurrentUser && window.TMACurrentUser.get) {
+      var me = window.TMACurrentUser.get();
+      chosen = me ? wtplSender(me.id) : null;
+    }
+    var options = (chosen ? [] : [{ value: '', label: 'Choose an administrator' }]).concat(senders.map(function (p) {
+      return { value: String(p.id), label: p.name + (p.jobTitle ? ' (' + p.jobTitle + ')' : '') };
+    }));
+
+    var tokens = (d.variables || []).map(function (v) {
+      return '<button type="button" class="tma-portal-token-chip" data-wtpl-token="' + ui().esc(v.token) + '"' +
+        ' title="' + ui().esc(v.meaning) + '">{{' + ui().esc(v.token) + '}}</button>';
+    }).join('');
+
+    el.innerHTML =
+      '<div class="tma-portal-page tma-portal-page--templates">' +
+      '<div class="tma-portal-tpl-edit">' +
+      '<div class="tma-portal-tpl-edit__form">' +
+      '<p class="tma-portal-note">Sent once to each new account, in Messages.</p>' +
+      '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Send to new accounts</span>' +
+      ui().toggle(!!d.enabled, 'data-wtpl-enabled', 'Send to new accounts') + '</div>' +
+      ui().field('From', ui().select(options, chosen ? String(chosen.id) : '', 'data-wtpl-sender', 'From')) +
+      ui().field('Message', '<textarea class="tma-portal-textarea" data-wtpl-body rows="12" maxlength="' +
+        ui().esc(String(d.maxLength || 5000)) + '" aria-label="Message">' + ui().esc(d.body || '') + '</textarea>') +
+      '<p class="tma-portal-table__muted">' + tokens + '</p>' +
+      '<div class="tma-portal-form-actions">' +
+      ui().btn({ label: 'Save', attrs: ' data-wtpl-save' }) +
+      ui().btn({ label: 'Restore default', variant: 'ghost', attrs: ' data-wtpl-restore' }) +
+      '</div>' +
+      (d.updatedAt
+        ? '<p class="tma-portal-table__muted">Last edited ' + ui().esc((d.editor ? 'by ' + d.editor + ', ' : '') + tplWhen(d.updatedAt)) + '</p>'
+        : '') +
+      '</div>' +
+      '<div class="tma-portal-tpl-edit__preview">' +
+      '<div class="tma-portal-tpl-edit__subject" data-wtpl-preview-from></div>' +
+      '<div class="tma-portal-tpl-edit__frame tma-portal-tpl-edit__chat" data-wtpl-preview></div>' +
+      '</div>' +
+      '</div>' +
+      '</div>';
+
+    wireWelcomeMessage(el);
+  }
+
+  function wireWelcomeMessage(el) {
+    var timer = null;
+    var body = el.querySelector('[data-wtpl-body]');
+    var senderSelect = el.querySelector('[data-wtpl-sender]');
+    var enabled = el.querySelector('[data-wtpl-enabled]');
+    if (window.TMAMessages && window.TMAMessages.bindEmphasisKeys) window.TMAMessages.bindEmphasisKeys(body);
+
+    function draft() {
+      return {
+        enabled: !!(enabled && enabled.checked),
+        senderId: senderSelect && senderSelect.value ? Number(senderSelect.value) : null,
+        body: body ? body.value : '',
+      };
+    }
+
+    function refreshPreview() {
+      var current = draft();
+      var sender = wtplSender(current.senderId);
+      var from = el.querySelector('[data-wtpl-preview-from]');
+      if (from) from.textContent = sender ? sender.name : '';
+      var seq = ++WTPL.previewSeq;
+      tplJson('POST', '/welcome-message/preview', { body: current.body, senderId: current.senderId })
+        .then(function (r) {
+          if (seq !== WTPL.previewSeq) return;
+          var frame = el.querySelector('[data-wtpl-preview]');
+          if (frame) frame.innerHTML = wtplPreviewHtml(r.text || '', sender);
+        })
+        .catch(function () {});
+    }
+
+    function schedulePreview() {
+      clearTimeout(timer);
+      timer = setTimeout(refreshPreview, 400);
+    }
+
+    if (body) body.addEventListener('input', schedulePreview);
+    if (senderSelect) senderSelect.addEventListener('change', refreshPreview);
+    refreshPreview();
+
+    // mousedown, not click, so the caret is still in the message.
+    el.querySelectorAll('[data-wtpl-token]').forEach(function (b) {
+      b.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        if (!body) return;
+        var token = '{{' + b.getAttribute('data-wtpl-token') + '}}';
+        var start = body.selectionStart != null ? body.selectionStart : body.value.length;
+        var end = body.selectionEnd != null ? body.selectionEnd : start;
+        body.focus();
+        body.setRangeText(token, start, end, 'end');
+        body.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    });
+
+    var restore = el.querySelector('[data-wtpl-restore]');
+    if (restore) restore.addEventListener('click', function () {
+      if (!body) return;
+      body.value = (WTPL.data && WTPL.data.defaultBody) || '';
+      body.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    var save = el.querySelector('[data-wtpl-save]');
+    if (save) save.addEventListener('click', function () {
+      if (WTPL.saving) return;
+      WTPL.saving = true;
+      save.disabled = true;
+      tplJson('PATCH', '/welcome-message', draft())
+        .then(function (d) {
+          WTPL.data = d;
+          renderTemplates();
+          ui().toast('Welcome message saved');
+        })
+        .catch(function (e) { ui().toastError(e.message); })
+        .then(function () {
+          WTPL.saving = false;
+          var again = TPL.el && TPL.el.querySelector('[data-wtpl-save]');
+          if (again) again.disabled = false;
+        });
     });
   }
 

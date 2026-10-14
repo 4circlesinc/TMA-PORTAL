@@ -226,6 +226,8 @@ Avatars: `GET /media/avatars/{uuid}.jpg` and `GET /media/branding/{uuid}.{ext}` 
 | `voice` | `'en-us'` | ≤32 |
 | `sidebarStyle` | `'hover'` | `standard|hover` |
 | `notifyAlwaysEmail` | `false` | boolean |
+| `notifyProviderCopies` | `true` while any `cipCopies` kind is on | boolean; a PUT turns every kind on or off and forgets single choices |
+| `cipCopies` | every kind `true` for staff, `false` for administrators | `{kind: bool|null}`; kinds are CIP status ids plus `comment` (`Cip\Copies::KINDS`), unknown kinds dropped, `null` forgets that choice. Only the choices made are stored; GET returns the full map |
 | `themeMode` | `'light'` | `system|light|dark` (portal ignores device scheme unless `dark` chosen) |
 | `fontScale` | `3` | 1–5 (coerced to int) |
 | `accentColor` | `'indigo'` | `indigo|yellow|red|blue|orange|green` |
@@ -734,7 +736,7 @@ Admin + `FEATURE_CBI` only, else 404. `GET /summary` → `{stages, total, needsR
 
 ### 7. Templates — `/portal/templates` (`routes/web.php:878-893`, `app/Http/Controllers/TemplatesController.php`)
 
-Middleware `capability:templates.view` on system emails; `capability:templates.email` on compose templates. `GET /system-emails` → `{canEdit, fieldLabels, fieldOrder:[subject,preheader,eyebrow,greeting,title,lead,body,quote,button,footNote], htmlFields:[body,footNote], templates:[{key,name,category,when,customized,updatedAt,editor,subjectFixed,fields,defaults,editable,variables:[{token,meaning}]}]}`; `PATCH /{key} {fields{}}`, `POST /{key}/restore`, `POST /{key}/preview {fields?}` → `{subject, html}`. Compose: `GET /email-templates` → `{canShareDefaults, templates:[{id,name,subject,body,bodyHtml,shared,mine,canEdit,updatedAt,editor}]}`; `POST` `{name≤191, subject≤500, body≤20000, shared?}` → 201; `PATCH /{uuid}`; `DELETE /{uuid}` → `{ok:true}`; `POST /preview {subject,body}` → `{subject, html}`.
+Middleware `capability:templates.view` on system emails and the welcome message; `capability:templates.email` on compose templates. `GET /system-emails` → `{canEdit, fieldLabels, fieldOrder:[subject,preheader,eyebrow,greeting,title,lead,body,quote,button,footNote], htmlFields:[body,footNote], templates:[{key,name,category,when,customized,updatedAt,editor,subjectFixed,fields,defaults,editable,variables:[{token,meaning}]}]}`; `PATCH /{key} {fields{}}`, `POST /{key}/restore`, `POST /{key}/preview {fields?}` → `{subject, html}`. Compose: `GET /email-templates` → `{canShareDefaults, templates:[{id,name,subject,body,bodyHtml,shared,mine,canEdit,updatedAt,editor}]}`; `POST` `{name≤191, subject≤500, body≤20000, shared?}` → 201; `PATCH /{uuid}`; `DELETE /{uuid}` → `{ok:true}`; `POST /preview {subject,body}` → `{subject, html}`. Welcome message: `GET /welcome-message` → `{enabled, senderId, body, defaultBody, maxLength:5000, updatedAt, editor, variables:[{token,meaning}], senders:[{id,name,email,jobTitle,photo}]}`; `PATCH /welcome-message` `{enabled*, senderId?, body*≤5000}` (422 when on with no active administrator, or an unknown `{{token}}`); `POST /welcome-message/preview` `{body?, senderId?}` → `{text}`. Off until an administrator switches it on. Sent once as a direct Messages message when an account is first approved; `users.welcomed_at` is claimed either way, so turning it on later does not greet people who already joined.
 
 ### 8. Client onboarding — `/onboarding` (`routes/web.php:1368-1376`, `app/Http/Controllers/ClientOnboardingController.php`)
 
@@ -2144,7 +2146,7 @@ Generated from `php artisan route:list --json` on 6 Sep 2026 (620 routes; `desig
 | POST | `/portal/signatures/{uuid}/remind` | base | `Signatures\\SignatureRequestController@remind` |
 | POST | `/portal/signatures/{uuid}/send` | base | `Signatures\\SignatureRequestController@send` |
 
-### `portal/templates` (9 routes)
+### `portal/templates` (12 routes)
 
 | Method | Path | Middleware | Action |
 |---|---|---|---|
@@ -2157,6 +2159,9 @@ Generated from `php artisan route:list --json` on 6 Sep 2026 (620 routes; `desig
 | PATCH | `/portal/templates/system-emails/{key}` | +capability:templates.view | `TemplatesController@update` |
 | POST | `/portal/templates/system-emails/{key}/preview` | +capability:templates.view | `TemplatesController@preview` |
 | POST | `/portal/templates/system-emails/{key}/restore` | +capability:templates.view | `TemplatesController@restore` |
+| GET | `/portal/templates/welcome-message` | +capability:templates.view | `TemplatesController@welcomeIndex` |
+| PATCH | `/portal/templates/welcome-message` | +capability:templates.view | `TemplatesController@welcomeUpdate` |
+| POST | `/portal/templates/welcome-message/preview` | +capability:templates.view | `TemplatesController@welcomePreview` |
 
 ### `admin/background-ops` (6 routes)
 
