@@ -1277,6 +1277,26 @@ field placement and drawing, and computed CSS only exist in a browser.
   TMA_DB="$DB" TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/security-settings.mjs
   ```
 
+- **`provider-emails-page.mjs`** — Settings → Service Provider Emails. One
+  switch per CIP notice a staff member is copied on. The Notifications row
+  opens the page and says On, Off, or Custom. An untouched page is on for an
+  officer and off for an administrator. A switch saves and survives a reload,
+  All service provider emails moves every row, a client never sees the row,
+  the rail entry, or the page, and a phone width does not scroll sideways.
+
+  Seed `tests/Browser/fixtures/provider-emails-seed.php` on a throwaway
+  database (it clears each account's preferences, so run it before every
+  pass) and serve with `FEATURE_CIP=true`:
+
+  ```sh
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="require 'tests/Browser/fixtures/provider-emails-seed.php';"
+  DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FILES_DISK=local MAIL_MAILER=log CACHE_STORE=array \
+    SESSION_DRIVER=file BROADCAST_CONNECTION=log QUEUE_CONNECTION=sync FEATURE_CIP=true \
+    php artisan serve --host=127.0.0.1 --port=8957 --no-reload &
+  npm run build
+  TMA_BASE_URL=http://127.0.0.1:8957 node tests/Browser/provider-emails-page.mjs
+  ```
+
 - **`clienthub-access.mjs`** — Settings → Client hub management → Client hub
   access, which used to be two localStorage toggles and is now the firm's real
   client-hub capability grid.

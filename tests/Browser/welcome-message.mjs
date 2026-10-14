@@ -200,8 +200,8 @@ try {
   check(await eventually(newbie, 10000, async () => (await row.count()) === 1), 'a conversation with Vernon Francis is in the inbox');
   const rowText = await row.innerText();
   check(/Hi Dana/.test(rowText), `its preview is the welcome (${rowText.replace(/\s+/g, ' ').slice(0, 60)})`);
-  const unread = row.locator('.tma-badge__label, .tma-dash__messages-unread');
-  check((await unread.innerText().catch(() => '')).trim() === '1', 'it is marked unread (1)');
+  const unread = await row.locator('.tma-badge__label, .tma-dash__messages-unread').first().innerText().catch(() => '');
+  check(unread.trim() === '1', `it is marked unread (${JSON.stringify(unread.trim())})`);
   await row.click();
   const got = newbie.locator('.tma-dash__messages-bubble-row--in', { hasText: 'Welcome to the TM Antoine Advisory Portal' }).last();
   check(await eventually(newbie, 8000, async () => (await got.count()) === 1), 'the bubble reads the welcome');

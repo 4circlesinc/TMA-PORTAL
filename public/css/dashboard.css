@@ -28577,6 +28577,12 @@ button.tma-dash__header-popup-item:focus-visible {
   transform: translateX(-50%);
 }
 
+/* display:flex above would otherwise beat the hidden attribute, so the
+   placeholder "Email changed" sat on every settings page. */
+.tma-dash__settings-toast[hidden] {
+  display: none;
+}
+
 .tma-dash__settings-toast img {
   width: 20px;
   height: 20px;
