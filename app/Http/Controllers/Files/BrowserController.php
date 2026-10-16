@@ -185,7 +185,7 @@ class BrowserController extends BaseFilesController
                 'permissions' => FileAccess::folderListingPerms($user, $current),
                 'packageLocked' => Package::locksFolder($current),
             ] : null,
-            'breadcrumb' => $current ? $this->breadcrumb($current) : [],
+            'breadcrumb' => $current ? $this->breadcrumb($user, $current) : [],
             'folders' => $folders->map(fn (Folder $f) => $presenter->folder($f, $withStats))->values(),
             'files' => $files->map(fn (FileItem $f) => $presenter->file($f))->values(),
             'applications' => $applications,
@@ -735,12 +735,26 @@ class BrowserController extends BaseFilesController
         return $map[strtolower($category)] ?? [];
     }
 
-    private function breadcrumb(Folder $folder): array
+    private function breadcrumb(User $user, Folder $folder): array
     {
         FileAccess::warmChains([$folder->id]);
 
-        return FileAccess::lineage($folder->id)
-            ->reverse()
+        $line = FileAccess::lineage($folder->id)->reverse()->values();
+
+        /*
+         * Drop ancestors this reader cannot open. A provider contact's
+         * application sits under the firm's SharePoint drawer; the names
+         * above that folder are the library, and the crumb must not offer
+         * them as a way in.
+         */
+        $start = 0;
+        foreach ($line as $i => $node) {
+            if (! FileAccess::can($user, 'view', $node)) {
+                $start = $i + 1;
+            }
+        }
+
+        return $line->slice($start)
             ->values()
             ->map(fn (Folder $node) => ['id' => $node->uuid, 'name' => FolderProvisioner::displayName($node)])
             ->all();

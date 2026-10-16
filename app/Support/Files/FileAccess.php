@@ -488,8 +488,11 @@ class FileAccess
                 return [];
             }
 
+            $drawers = FolderAccess::drawerIdsFor($user);
+
             return Folder::where('folder_type', Folder::TYPE_CLIENT)
                 ->whereIn('client_id', $reachable)
+                ->when($drawers !== [], fn ($q) => $q->whereNotIn('id', $drawers))
                 ->pluck('id')->all();
         }
 

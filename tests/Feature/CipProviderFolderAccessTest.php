@@ -8,7 +8,9 @@ use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyMember;
+use App\Models\FileItem;
 use App\Models\Folder;
+use App\Models\Share;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
@@ -170,7 +172,7 @@ class CipProviderFolderAccessTest extends TestCase
 
         $this->assertSame('version three',
             $this->fileBody($this->actingAs($gil)->get('/portal/files/files/'.$uuid.'/download')));
-        $this->assertSame(1, \App\Models\FileItem::query()->where('folder_id', $main->id)->whereNull('deleted_at')->count());
+        $this->assertSame(1, FileItem::query()->where('folder_id', $main->id)->whereNull('deleted_at')->count());
     }
 
     public function test_every_contact_at_the_filing_firm_can_open_the_client_tree(): void
@@ -295,7 +297,7 @@ class CipProviderFolderAccessTest extends TestCase
             'uuid' => (string) Str::uuid(), 'name' => 'OLD APPLICANT - PAD 2025', 'parent_id' => $providerFolder->id,
             'owner_id' => $staff->id, 'created_by' => $staff->id,
         ]);
-        $legacyFile = \App\Models\FileItem::create([
+        $legacyFile = FileItem::create([
             'uuid' => (string) Str::uuid(), 'folder_id' => $legacy->id, 'name' => 'Old Passport.pdf',
             'extension' => 'pdf', 'mime_type' => 'application/pdf', 'size' => 10,
             'disk' => 'local', 'storage_path' => 'vault/old.pdf',
@@ -318,8 +320,62 @@ class CipProviderFolderAccessTest extends TestCase
         $this->assertFalse($listed->contains('OLD APPLICANT - PAD 2025'));
         $this->assertFalse($listed->contains('GALAXY'));
 
+        // A historical applicant the firm referred, with a client folder in
+        // the same drawer, but no application in this portal. The referral
+        // used to open that folder. It is the SharePoint caseload, not a
+        // filing the contact works.
+        $historical = Client::create([
+            'uid' => 'old-applicant', 'name' => 'Old Applicant',
+            'referral_type' => Client::REFERRAL_COMPANY,
+            'referred_by_company_id' => $galaxy->company_id,
+            'created_by' => $staff->id, 'data' => [],
+        ]);
+        $historicalFolder = Folder::create([
+            'uuid' => (string) Str::uuid(), 'name' => 'OLD APPLICANT - HUB',
+            'parent_id' => $providerFolder->id,
+            'folder_type' => Folder::TYPE_CLIENT, 'client_id' => $historical->id,
+            'owner_id' => $staff->id, 'created_by' => $staff->id, 'origin' => 'sharepoint',
+        ]);
+        $historical->forceFill(['folder_id' => $historicalFolder->id])->save();
+
+        $this->assertNull(FileAccess::folderRole($gil, $historicalFolder->fresh()));
+        $this->assertFalse(FileAccess::can($gil, 'view', $historicalFolder));
+        $this->assertNotContains($historicalFolder->id, FileAccess::systemVisibleFolderIds($gil));
+
+        $names = collect(
+            $this->actingAs($gil)->getJson('/portal/files/?section=all')->assertOk()->json('folders')
+        )->pluck('name');
+        $this->assertFalse($names->contains('OLD APPLICANT - HUB'));
+        $this->assertTrue($names->contains($clientFolder->fresh()->name));
+
+        $this->actingAs($gil)
+            ->getJson('/portal/files/?section=all&folder='.$historicalFolder->uuid)
+            ->assertForbidden();
+        $this->actingAs($gil)
+            ->getJson('/portal/files/?section=all&folder='.$providerFolder->uuid)
+            ->assertForbidden();
+
+        $crumbs = collect(
+            $this->actingAs($gil)
+                ->getJson('/portal/files/?section=all&folder='.$clientFolder->uuid)
+                ->assertOk()
+                ->json('breadcrumb')
+        )->pluck('name');
+        $this->assertFalse($crumbs->contains('GALAXY'));
+        $this->assertFalse($crumbs->contains('Citizenship Applications'));
+        $this->assertTrue($crumbs->contains($clientFolder->fresh()->name));
+
+        $staffCrumbs = collect(
+            $this->actingAs($staff)
+                ->getJson('/portal/files/?section=all&folder='.$clientFolder->uuid)
+                ->assertOk()
+                ->json('breadcrumb')
+        )->pluck('name');
+        $this->assertTrue($staffCrumbs->contains('GALAXY'));
+        $this->assertTrue($staffCrumbs->contains('Citizenship Applications'));
+
         // The one door that opens it: a staff member sharing it deliberately.
-        \App\Models\Share::create([
+        Share::create([
             'uuid' => (string) Str::uuid(), 'token' => Str::random(40),
             'item_type' => 'folder', 'item_id' => $legacy->id,
             'shared_by' => $staff->id, 'kind' => 'user',

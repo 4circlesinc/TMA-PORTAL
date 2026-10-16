@@ -282,11 +282,12 @@ final class ProviderTransfer
             /*
              * A firm with no company behind it: Private Clients by design,
              * and the ones born from a library folder. There is nobody to
-             * name as the referrer, but the outgoing firm is no longer it,
-             * and folder reach is read from this very column
-             * ({@see FolderAccess}): left alone, the firm that lost the
-             * file went on opening the client's papers as an editor. The
-             * pair {@see Tree::client} writes for such a firm at creation.
+             * name as the referrer, but the outgoing firm is no longer it.
+             * Folder reach follows the application ({@see FolderAccess}),
+             * and this column is what the hub still counts, so leaving the
+             * old firm named here would keep the file on a company page it
+             * has left. The pair {@see Tree::client} writes for such a firm
+             * at creation.
              */
             $patch['referral_type'] = Client::REFERRAL_PRIVATE;
             $patch['referred_by_company_id'] = null;
