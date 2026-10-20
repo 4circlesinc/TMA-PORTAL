@@ -447,7 +447,7 @@
         '<div class="tma-dash__overview-metrics tma-dash__overview-metrics--empty">' +
         '<div class="tma-dash__overview-metric">' +
         '<span class="tma-dash__overview-metric-label">Workspace metrics</span>' +
-        '<p class="tma-dash__overview-metric-value"><strong>No data yet</strong></p>' +
+        '<p class="tma-dash__overview-metric-value">No data yet</p>' +
         '<p class="tma-dash__overview-metric-empty-hint">Metrics appear for staff accounts once activity is recorded.</p>' +
         '</div></div>';
     } else {
@@ -457,7 +457,7 @@
           return (i ? '<span class="tma-dash__overview-metric-divider" aria-hidden="true"></span>' : '') +
             '<div class="tma-dash__overview-metric">' +
             '<span class="tma-dash__overview-metric-label">' + esc(c.label) + '</span>' +
-            '<p class="tma-dash__overview-metric-value"><strong>' + esc(c.value) + '</strong></p>' +
+            '<p class="tma-dash__overview-metric-value">' + esc(c.value) + '</p>' +
             (c.hint ? '<p class="tma-dash__overview-metric-empty-hint">' + esc(c.hint) + '</p>' : '') +
             '</div>';
         }).join('') +
@@ -482,6 +482,23 @@
     return 'in the last ' + days + ' days';
   }
 
+  /* The same face the rest of the portal uses: the person's photo, or the
+     initials tile when they have none. A failed photo falls back to that tile. */
+  function responseFace(p) {
+    var R = window.TMANotifyRender;
+    var name = (p && p.name) || '';
+    var fallback = R && typeof R.initialsUri === 'function' ? R.initialsUri(name, name) : '';
+    var photo = p && p.avatar && R && typeof R.isRealPhoto === 'function' && R.isRealPhoto(p.avatar)
+      ? p.avatar : '';
+    var src = photo || fallback;
+    if (!src) return '';
+    var safe = String(fallback || '').replace(/'/g, '%27');
+    return '<span class="tma-dash__overview-response__avatar">' +
+      '<img src="' + esc(src) + '" alt="" width="32" height="32" decoding="async" ' +
+      "onerror=\"this.onerror=null;this.src='" + safe + "'\">" +
+      '</span>';
+  }
+
   /* Administrators see each person's own average. The home card is the
      reader's replies only; this list is how the firm is compared. */
   function renderTeamResponse() {
@@ -494,6 +511,7 @@
             : 'No replies yet';
           if (p.jobTitle) detail = p.jobTitle + ' · ' + detail;
           return '<div class="tma-dash__overview-response">' +
+            responseFace(p) +
             '<span class="tma-dash__overview-response__meta">' +
             '<span class="tma-dash__overview-response__name">' + esc(p.name) + (p.self ? ' (you)' : '') + '</span>' +
             '<span class="tma-dash__overview-response__detail">' + esc(detail) + '</span>' +
@@ -696,7 +714,7 @@
     return '<div class="tma-dash__overview" data-node-id="32546:96118">' +
       renderTabs(tab) +
       '<div class="tma-dash__overview-grid"' + (tab !== 'Overview' ? ' hidden' : '') + '>' +
-      renderProfile() + renderHero() + renderTeamResponse() + renderRoad() + renderFiles() + renderSignIns() +
+      renderProfile() + renderHero() + renderRoad() + renderFiles() + renderTeamResponse() + renderSignIns() +
       '</div>' +
       renderEmployeesTab(tab) +
       renderUsers(tab) +
@@ -789,7 +807,7 @@
     var grid = container.querySelector('.tma-dash__overview-grid');
     if (!grid) return;
     var scrollY = window.scrollY || 0;
-    grid.innerHTML = renderProfile() + renderHero() + renderTeamResponse() + renderRoad() + renderFiles() + renderSignIns();
+    grid.innerHTML = renderProfile() + renderHero() + renderRoad() + renderFiles() + renderTeamResponse() + renderSignIns();
     try { window.scrollTo(0, scrollY); } catch (e) {}
     bindRoadWheel(container);
     mountProfile(grid);

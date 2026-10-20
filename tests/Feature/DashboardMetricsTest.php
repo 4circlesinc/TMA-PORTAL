@@ -386,6 +386,12 @@ class DashboardMetricsTest extends TestCase
         $this->say($withBen, $client, '6 hours');
         $this->say($withBen, $ben, '5 hours'); // 1h
 
+        $ada->forceFill([
+            'avatar_url' => '/media/avatars/ada.png',
+            'provider_avatar_url' => 'https://example.test/provider-ada.jpg',
+        ])->save();
+        $ben->forceFill(['provider_avatar_url' => 'https://example.test/provider-ben.jpg'])->save();
+
         $payload = $this->metrics($admin);
 
         // The admin's own card is the replies they sent, not the firm's blend.
@@ -404,6 +410,9 @@ class DashboardMetricsTest extends TestCase
         $this->assertSame(0, $byId[$admin->id]['sample']);
         $this->assertTrue($byId[$admin->id]['self']);
         $this->assertFalse($byId[$ada->id]['self']);
+        $this->assertSame('/media/avatars/ada.png', $byId[$ada->id]['avatar']);
+        $this->assertSame('https://example.test/provider-ben.jpg', $byId[$ben->id]['avatar']);
+        $this->assertNull($byId[$admin->id]['avatar']);
     }
 
     public function test_it_counts_cip_applications_waiting_on_updates(): void

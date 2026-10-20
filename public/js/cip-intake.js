@@ -95,14 +95,30 @@
     return (state.options && state.options.dependentAgeCutoff) || 16;
   }
 
+  /*
+   * The day a dependant's age is measured on: the application's creation,
+   * in UTC, which is how Intake and ApplicantType freeze the bracket. A
+   * birthday while a draft sits open must not swap the checklist. A form
+   * that has not been saved yet has no creation time, and today is that day.
+   */
+  function ageReference() {
+    var raw = (state.record && state.record.createdAt) || state.createdAt || '';
+    if (raw) {
+      var parsed = new Date(raw);
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+
+    return new Date();
+  }
+
   function dependentAgeYears(dob) {
     if (!dob) return null;
-    var birth = new Date(dob + 'T00:00:00');
-    if (isNaN(birth.getTime())) return null;
-    var now = new Date();
-    var age = now.getFullYear() - birth.getFullYear();
-    var m = now.getMonth() - birth.getMonth();
-    if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age -= 1;
+    var parts = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dob));
+    if (!parts) return null;
+    var ref = ageReference();
+    var age = ref.getUTCFullYear() - Number(parts[1]);
+    var month = ref.getUTCMonth() + 1 - Number(parts[2]);
+    if (month < 0 || (month === 0 && ref.getUTCDate() < Number(parts[3]))) age -= 1;
 
     return age;
   }
@@ -223,6 +239,9 @@
     filedMeta: {},
     /* The application being edited, or null when this is a new one. */
     applicationId: null,
+    /* When this application was created, once a row exists. Age brackets
+       are measured against it. Null until the first save of a new filing. */
+    createdAt: null,
     /* The draft row the autosave just created, when this form was opened as
        a new filing. Not `applicationId`: that would send Add to the edit
        URL and leave the row at Draft. Filing still posts to create, and
@@ -3364,6 +3383,9 @@
         if (json.draft && json.draft.id && !state.applicationId) {
           state.draftId = json.draft.id;
         }
+        if (json.draft && json.draft.createdAt) {
+          state.createdAt = json.draft.createdAt;
+        }
         /*
          * A draft's number is the server's to say, and it changes with the
          * firm: this save is where a draft that named another firm was
@@ -4278,6 +4300,7 @@
     state.saving = false;
     state.error = '';
     state.applicationId = opts.applicationId || null;
+    state.createdAt = null;
     state.draftId = null;
     /*
      * A new filing names its phase up front. An edit reads it off the

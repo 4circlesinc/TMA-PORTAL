@@ -12,7 +12,9 @@ use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\ApplicantType;
 use App\Support\Cip\Applications;
+use App\Support\Cip\Intake;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Engine;
 use App\Support\Cip\InvestmentType;
@@ -2183,6 +2185,64 @@ class CipApplicationDraftTest extends TestCase
                 ->value('id'),
             'Filing reuses the draft claim rather than ending and rewriting it.',
         );
+    }
+
+    /**
+     * A dependant who has a birthday while the draft sits open keeps the
+     * bracket from the day it was opened.
+     *
+     * Filing measures age against created_at. The form reads that same
+     * instant back as createdAt, so the checklist it shows is the one Add
+     * will demand.
+     */
+    public function test_a_draft_keeps_a_dependants_age_bracket_from_the_day_it_was_opened(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $saved = $this->save($staff, $this->answers($provider))->assertOk()->json('draft');
+        $this->assertNotEmpty($saved['createdAt']);
+
+        $row = CipApplication::query()->where('uuid', $saved['id'])->firstOrFail();
+        $opened = now()->subYears(2);
+        $row->forceFill(['created_at' => $opened])->save();
+
+        $again = $this->save($staff, $this->answers($provider))->assertOk()->json('draft');
+        $this->assertSame(
+            $opened->utc()->format('Y-m-d H:i:s'),
+            \Illuminate\Support\Carbon::parse($again['createdAt'])->utc()->format('Y-m-d H:i:s'),
+        );
+
+        // Fifteen on the day the draft opened, seventeen today.
+        $dob = $opened->copy()->subYears(15)->toDateString();
+        $files = $this->cipRequiredDocumentFiles(
+            ApplicantType::DEPENDENT_UNDER_16,
+            Phase::PRE_APPROVAL,
+            'Female',
+            InvestmentType::REAL_ESTATE,
+        );
+        $photo = Intake::photoRequirement(ApplicantType::DEPENDENT_UNDER_16, Phase::PRE_APPROVAL);
+        if ($photo?->required) {
+            $files['passportPhoto'] = $this->photo();
+        }
+
+        $filing = $this->filing($provider);
+        $filing['draftId'] = $saved['id'];
+        $filing['dependents'] = [array_merge($files, [
+            'firstName' => 'Lina',
+            'lastName' => 'Smith',
+            'dateOfBirth' => $dob,
+            'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+            'gender' => 'Female',
+        ])];
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications', $filing, ['Accept' => 'application/json'])
+            ->assertCreated();
+
+        $child = $row->fresh()->people->firstWhere('role', CipPerson::ROLE_DEPENDENT);
+        $this->assertNotNull($child);
+        $this->assertSame(ApplicantType::DEPENDENT_UNDER_16, ApplicantType::for($child));
     }
 
     /** The whole form, as the wizard posts it. */

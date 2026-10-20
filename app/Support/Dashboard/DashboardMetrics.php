@@ -206,7 +206,7 @@ class DashboardMetrics
             ->whereIn('account_type', Role::STAFF)
             ->where('status', User::STATUS_APPROVED)
             ->orderBy('name')
-            ->get(['id', 'name', 'job_title']);
+            ->get(['id', 'name', 'job_title', 'avatar_url', 'provider_avatar_url']);
 
         return $staff->map(function (User $user) use ($pairs) {
             $card = $this->responseCardFor((int) $user->id, $pairs);
@@ -215,6 +215,7 @@ class DashboardMetrics
                 'id' => (int) $user->id,
                 'name' => $user->name,
                 'jobTitle' => $user->job_title,
+                'avatar' => $user->photoUrl(),
                 'self' => (int) $user->id === (int) $this->user->id,
                 'value' => $card['value'],
                 'seconds' => $card['seconds'] ?? null,

@@ -1408,6 +1408,32 @@ class CipAddOnTest extends TestCase
         ]))->assertUnprocessable();
     }
 
+    /**
+     * The bracket is the one from the day the file was opened.
+     *
+     * Someone who was under the cutoff then, and over it today, is still the
+     * younger type. A brand-new filing has no earlier day, so the same date
+     * of birth filed now is the older type.
+     */
+    public function test_an_add_on_type_follows_the_day_the_file_was_opened(): void
+    {
+        $opened = now()->subYears(2);
+        $dob = $opened->copy()->subYears(15)->toDateString();
+
+        $this->assertNull(AddOn::typeMismatch(
+            AddOn::TYPE_DEPENDENT_UNDER_16,
+            $dob,
+            AddOn::RELATIONSHIP_SON,
+            $opened,
+        ));
+
+        $this->assertNotNull(AddOn::typeMismatch(
+            AddOn::TYPE_DEPENDENT_UNDER_16,
+            $dob,
+            AddOn::RELATIONSHIP_SON,
+        ));
+    }
+
     public function test_the_applications_table_filters_add_ons_onto_their_own_tab(): void
     {
         $staff = $this->staff();

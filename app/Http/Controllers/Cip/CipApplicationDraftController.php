@@ -533,6 +533,12 @@ class CipApplicationDraftController extends Controller
              */
             'previews' => $this->photoPreviews($draft, $dependents),
             'savedAt' => $draft->updated_at?->toIso8601String(),
+            /*
+             * The day a dependant's age is measured against. The form uses
+             * this rather than today, so a birthday while the draft sits
+             * open does not swap the checklist the filing will demand.
+             */
+            'createdAt' => $draft->created_at?->toIso8601String(),
         ];
     }
 }

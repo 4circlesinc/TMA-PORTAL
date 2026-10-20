@@ -1450,6 +1450,7 @@ class Intake
             (string) ($data['addonType'] ?? $application->addon_type),
             $data['dateOfBirth'] ?? null,
             $data['relationship'] ?? null,
+            $application->created_at,
         )) {
             throw new \InvalidArgumentException($mismatch);
         }
@@ -2891,6 +2892,7 @@ class Intake
                 (string) ($data['addonType'] ?? $application->addon_type),
                 $data['dateOfBirth'] ?? null,
                 $data['relationship'] ?? null,
+                $application->created_at,
             )) {
                 throw new \InvalidArgumentException($mismatch);
             }

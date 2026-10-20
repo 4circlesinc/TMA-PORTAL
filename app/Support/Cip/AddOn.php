@@ -414,8 +414,17 @@ class AddOn
     /**
      * Whether this Add-On type, date of birth and relationship can be filed
      * together. Null means they can; a string is the reason they cannot.
+     *
+     * Age is measured on $reference, the application's creation date, the
+     * same day {@see ApplicantType} uses. A filing that has no row yet
+     * leaves it null, and today stands in, because the two are the same day.
      */
-    public static function typeMismatch(?string $type, ?string $dateOfBirth, ?string $relationship): ?string
+    public static function typeMismatch(
+        ?string $type,
+        ?string $dateOfBirth,
+        ?string $relationship,
+        ?Carbon $reference = null,
+    ): ?string
     {
         if ($type === null || $type === '' || ! self::isValidType($type)) {
             return null;
@@ -443,7 +452,7 @@ class AddOn
             return null;
         }
 
-        $under = $birth->copy()->addYears(ApplicantType::cutoff())->isAfter(now());
+        $under = $birth->copy()->addYears(ApplicantType::cutoff())->isAfter($reference ?? now());
         $cutoff = ApplicantType::cutoff();
 
         if ($type === self::TYPE_DEPENDENT_UNDER_16 && ! $under) {
