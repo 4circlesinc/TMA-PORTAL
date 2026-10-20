@@ -476,6 +476,128 @@ class CipApplicationDraftTest extends TestCase
     }
 
     /**
+     * A passport photo stays on the person it was filed for.
+     *
+     * The main applicant, the older child and the younger child each keep
+     * their own face. A later save that repeats one child's id must not
+     * slide the next photo onto somebody else.
+     */
+    public function test_passport_photos_stay_on_the_person_they_were_filed_for(): void
+    {
+        Storage::fake('local');
+        Storage::fake(config('filesystems.avatar_disk', 'public'));
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $first = $this->actingAs($staff)
+            ->post('/portal/cip/applications/draft', $this->answers($provider, [
+                'passportPhoto' => $this->photo(600),
+                'dependents' => [
+                    [
+                        'firstName' => 'Older',
+                        'lastName' => 'Child',
+                        'dateOfBirth' => '2010-01-15',
+                        'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                        'passportPhoto' => $this->photo(620),
+                    ],
+                    [
+                        'firstName' => 'Younger',
+                        'lastName' => 'Child',
+                        'dateOfBirth' => '2015-06-01',
+                        'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                        'passportPhoto' => $this->photo(640),
+                    ],
+                ],
+            ]), ['Accept' => 'application/json'])
+            ->assertOk()
+            ->json('draft');
+
+        $draft = CipApplication::query()->where('uuid', $first['id'])->firstOrFail();
+        $main = $draft->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $older = $draft->people()->where('role', CipPerson::ROLE_DEPENDENT)->orderBy('id')->first();
+        $younger = $draft->people()->where('role', CipPerson::ROLE_DEPENDENT)->orderByDesc('id')->first();
+
+        $this->assertNotNull($main->photo_path);
+        $this->assertNotNull($older->photo_path);
+        $this->assertNotNull($younger->photo_path);
+        $this->assertNotSame($main->photo_path, $older->photo_path);
+        $this->assertNotSame($main->photo_path, $younger->photo_path);
+        $this->assertNotSame($older->photo_path, $younger->photo_path);
+
+        $this->assertStringContainsString($main->uuid, $first['previews']['passportPhoto'] ?? '');
+        $this->assertStringContainsString($older->uuid, $first['previews']['dependents.0.passportPhoto'] ?? '');
+        $this->assertStringContainsString($younger->uuid, $first['previews']['dependents.1.passportPhoto'] ?? '');
+        $this->assertStringNotContainsString($main->uuid, $first['previews']['dependents.0.passportPhoto'] ?? '');
+        $this->assertStringNotContainsString($older->uuid, $first['previews']['dependents.1.passportPhoto'] ?? '');
+
+        $record = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$draft->uuid)
+            ->assertOk()
+            ->json('application');
+
+        $photoUrl = function (CipPerson $person): string {
+            $file = $person->documents()->where('type', 'passport_photo')->first()?->file;
+
+            return (string) $file?->uuid;
+        };
+        $byId = collect($record['dependents'])->keyBy('id');
+        $this->assertNotSame('', $photoUrl($main));
+        $this->assertStringContainsString($photoUrl($main), $record['applicant']['passportPhotoUrl'] ?? '');
+        $this->assertStringContainsString($photoUrl($older), $byId[$older->uuid]['passportPhotoUrl'] ?? '');
+        $this->assertStringContainsString($photoUrl($younger), $byId[$younger->uuid]['passportPhotoUrl'] ?? '');
+        $this->assertNotSame($record['applicant']['passportPhotoUrl'], $byId[$older->uuid]['passportPhotoUrl']);
+        $this->assertNotSame($byId[$older->uuid]['passportPhotoUrl'], $byId[$younger->uuid]['passportPhotoUrl']);
+
+        $mainPhoto = $main->photo_path;
+        $olderPhoto = $older->photo_path;
+        $youngerPhoto = $younger->photo_path;
+
+        // The same child posted twice, with a new face on the repeat, must
+        // not hand that face to the other child.
+        $this->actingAs($staff)
+            ->post('/portal/cip/applications/draft', $this->answers($provider, [
+                'dependents' => [
+                    [
+                        'id' => $older->uuid,
+                        'firstName' => 'Older',
+                        'lastName' => 'Child',
+                        'dateOfBirth' => '2010-01-15',
+                        'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                    ],
+                    [
+                        'id' => $older->uuid,
+                        'firstName' => 'Older',
+                        'lastName' => 'Child',
+                        'dateOfBirth' => '2010-01-15',
+                        'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                        'passportPhoto' => $this->photo(660),
+                    ],
+                    [
+                        'id' => $younger->uuid,
+                        'firstName' => 'Younger',
+                        'lastName' => 'Child',
+                        'dateOfBirth' => '2015-06-01',
+                        'relationship' => CipPerson::RELATIONSHIP_QUALIFIED,
+                    ],
+                ],
+            ]), ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $draft->refresh();
+        $main = $draft->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $older = $draft->people()->where('uuid', $older->uuid)->firstOrFail();
+        $younger = $draft->people()->where('uuid', $younger->uuid)->firstOrFail();
+
+        $this->assertSame($mainPhoto, $main->photo_path);
+        $this->assertNotSame($olderPhoto, $older->photo_path, 'The repeated row replaces that child only.');
+        $this->assertSame($youngerPhoto, $younger->photo_path, 'The other child keeps their own passport photo.');
+        $this->assertNotSame($main->photo_path, $older->photo_path);
+        $this->assertNotSame($older->photo_path, $younger->photo_path);
+        $this->assertSame(2, $draft->people()->where('role', CipPerson::ROLE_DEPENDENT)->count());
+    }
+
+    /**
      * Without the id, a second draft save must still reuse the same person.
      *
      * Uuid is preferred, but concurrent or stale autosaves sometimes omit it.
@@ -1234,13 +1356,13 @@ class CipApplicationDraftTest extends TestCase
     }
 
     /**
-     * Throwing a draft away takes its folder to the recycle bin.
+     * Throwing a draft away puts the application in the recycle bin.
      *
-     * The application is an unfiled form and nobody refers to it, so it goes
-     * outright. The paper is a different question: a reader who deletes the
-     * wrong draft must be able to get the scans back.
+     * The client folder stays, because that folder is the person. The
+     * application's own paper goes with the file, and restoring the file
+     * brings that paper back.
      */
-    public function test_discarding_a_draft_recycles_its_folder(): void
+    public function test_discarding_a_draft_puts_it_in_the_recycle_bin(): void
     {
         Storage::fake('local');
 
@@ -1251,23 +1373,30 @@ class CipApplicationDraftTest extends TestCase
             'passportPhoto' => UploadedFile::fake()->image('face.jpg', 600, 600),
         ]), ['Accept' => 'application/json'])->assertOk();
 
-        $draft = CipApplication::query()->first();
-        $folderId = $draft->folder_id;
-        $this->assertNotNull($folderId, 'A draft holding scans has a folder.');
+        $draft = CipApplication::query()->with('people')->first();
+        $clientFolderId = $draft->folder_id;
+        $personFolderId = $draft->people->first()?->folder_id;
+        $this->assertNotNull($clientFolderId, 'A draft holding scans has a folder.');
+        $this->assertNotNull($personFolderId);
+        $this->assertNotSame($clientFolderId, $personFolderId);
 
         $this->actingAs($staff)
             ->deleteJson('/portal/cip/applications/draft?application='.$draft->uuid)
             ->assertOk();
 
-        // The form is gone outright.
         $this->assertNull(CipApplication::query()->find($draft->id));
+        $this->assertTrue(CipApplication::withTrashed()->find($draft->id)->trashed());
 
-        // The folder is in the bin, not destroyed.
-        $this->assertNull(Folder::query()->find($folderId));
-        $this->assertNotNull(
-            Folder::withTrashed()->find($folderId),
-            'The folder is recoverable from the recycle bin.',
-        );
+        $this->assertNotNull(Folder::query()->find($clientFolderId), 'The client folder stays.');
+        $this->assertNull(Folder::query()->find($personFolderId));
+        $this->assertNotNull(Folder::withTrashed()->find($personFolderId));
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$draft->uuid.'/restore')
+            ->assertOk();
+
+        $this->assertNotNull(CipApplication::query()->find($draft->id));
+        $this->assertNotNull(Folder::query()->find($personFolderId));
     }
 
     /**
@@ -1416,6 +1545,7 @@ class CipApplicationDraftTest extends TestCase
             ->assertJson(['draft' => null]);
 
         $this->assertSame(0, CipApplication::query()->count());
+        $this->assertSame(1, CipApplication::withTrashed()->count());
     }
 
     public function test_start_over_deletes_the_draft(): void
@@ -1429,6 +1559,7 @@ class CipApplicationDraftTest extends TestCase
             ->assertOk();
 
         $this->assertSame(0, CipApplication::query()->count());
+        $this->assertSame(1, CipApplication::withTrashed()->count());
     }
 
     /**

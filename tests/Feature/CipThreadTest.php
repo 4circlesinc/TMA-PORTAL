@@ -6,10 +6,12 @@ use App\Events\CipThreadChanged;
 use App\Events\PortalDataChanged;
 use App\Mail\Postcard;
 use App\Models\CipApplication;
+use App\Models\CipApplicationMessage;
 use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyMember;
+use App\Models\Conversation;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
@@ -722,6 +724,186 @@ class CipThreadTest extends TestCase
         $again = $this->signals(fn () => $this->actingAs($contact)->getJson($path)->assertOk());
 
         $this->assertSame([], $again);
+    }
+
+    public function test_a_provider_message_is_in_the_inbox_of_the_assignee_and_every_admin(): void
+    {
+        Mail::fake();
+
+        [$staff, $contact, $application] = $this->filed();
+        $application->load('client');
+
+        $otherAdmin = $this->user(Role::ADMINISTRATOR, 'bea@example.com', 'Bea Admin');
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+        $bystander = $this->user(Role::REVIEWING_OFFICER, 'sam@example.com', 'Sam Officer');
+        Assignments::assign($application, $officer, $staff);
+
+        $path = '/portal/cip/applications/'.$application->uuid.'/messages';
+
+        $this->actingAs($staff)
+            ->postJson($path, ['body' => 'Keep this in the office.', 'lane' => 'internal'])
+            ->assertCreated();
+        $this->actingAs($contact)
+            ->postJson($path, ['body' => 'Please send the scan.', 'lane' => 'provider'])
+            ->assertCreated();
+
+        $laterAdmin = $this->user(Role::ADMINISTRATOR, 'cleo@example.com', 'Cleo Admin');
+
+        foreach ([$otherAdmin, $officer, $laterAdmin] as $reader) {
+            $row = $this->inboxRow($reader, 'Chen Wei');
+            $this->assertNotNull($row, $reader->name.' should see the case thread');
+            $this->assertTrue($row['caseFile']);
+            $this->assertSame(2, $row['unread']);
+            $this->assertStringContainsString('Please send the scan.', $row['preview']);
+
+            $bodies = collect($this->actingAs($reader)
+                ->getJson('/portal/messaging/conversations/'.$row['id'].'/messages')
+                ->assertOk()
+                ->json('messages'))
+                ->pluck('body');
+
+            $this->assertTrue($bodies->contains('Please send the scan.'));
+            $this->assertTrue($bodies->contains('Keep this in the office.'));
+        }
+
+        $providerRow = $this->inboxRow($contact, 'Chen Wei');
+        $this->assertNotNull($providerRow);
+        $this->assertFalse($providerRow['caseFile']);
+        $this->assertSame(0, $providerRow['unread']);
+
+        $providerBodies = collect($this->actingAs($contact)
+            ->getJson('/portal/messaging/conversations/'.$providerRow['id'].'/messages')
+            ->assertOk()
+            ->json('messages'))
+            ->pluck('body');
+
+        $this->assertTrue($providerBodies->contains('Please send the scan.'));
+        $this->assertFalse($providerBodies->contains('Keep this in the office.'));
+
+        $this->assertNull($this->inboxRow($bystander, 'Chen Wei'));
+
+        $this->assertSame(2, $this->attention($otherAdmin, $application)['messages']);
+
+        // The officer has not opened Messages, so the application is still waiting on them.
+        $this->assertSame(2, $this->attention($officer, $application)['messages']);
+
+        $row = $this->inboxRow($otherAdmin, 'Chen Wei');
+        $this->actingAs($otherAdmin)
+            ->postJson('/portal/messaging/conversations/'.$row['id'].'/read')
+            ->assertOk();
+
+        $this->assertSame(0, $this->inboxRow($otherAdmin, 'Chen Wei')['unread']);
+        $this->assertNull($this->attention($otherAdmin, $application));
+
+        $messages = collect($this->actingAs($staff)->getJson($path)->assertOk()->json('messages'));
+        $provider = $messages->firstWhere('body', 'Please send the scan.');
+        $internal = $messages->firstWhere('body', 'Keep this in the office.');
+
+        $this->assertTrue(collect($provider['seenBy'])->pluck('id')->contains($otherAdmin->id));
+        $this->assertTrue(collect($internal['seenBy'])->pluck('id')->contains($otherAdmin->id));
+
+        $this->actingAs($otherAdmin)
+            ->postJson('/portal/messaging/conversations/'.$row['id'].'/messages', [
+                'body' => 'Noted internally.',
+                'lane' => 'internal',
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('cip_application_messages', [
+            'application_id' => $application->id,
+            'body' => 'Noted internally.',
+            'lane' => 'internal',
+        ]);
+
+        $afterStaff = collect($this->actingAs($otherAdmin)
+            ->getJson('/portal/messaging/conversations/'.$row['id'].'/messages')
+            ->assertOk()
+            ->json('messages'))
+            ->pluck('body');
+        $afterProvider = collect($this->actingAs($contact)
+            ->getJson('/portal/messaging/conversations/'.$row['id'].'/messages')
+            ->assertOk()
+            ->json('messages'))
+            ->pluck('body');
+
+        $this->assertTrue($afterStaff->contains('Noted internally.'));
+        $this->assertFalse($afterProvider->contains('Noted internally.'));
+
+        $this->actingAs($otherAdmin)
+            ->postJson('/portal/messaging/conversations/'.$row['id'].'/messages', [
+                'body' => 'Please also send the birth certificate.',
+                'lane' => 'provider',
+            ])
+            ->assertOk();
+
+        $this->assertTrue(collect($this->actingAs($contact)
+            ->getJson('/portal/messaging/conversations/'.$row['id'].'/messages')
+            ->assertOk()
+            ->json('messages'))
+            ->pluck('body')
+            ->contains('Please also send the birth certificate.'));
+
+        $this->actingAs($contact)
+            ->postJson('/portal/messaging/conversations/'.$row['id'].'/messages', [
+                'body' => 'Trying to write an office note.',
+                'lane' => 'internal',
+            ])
+            ->assertStatus(422);
+
+        $this->assertSame(1, Conversation::query()
+            ->where('client_id', $application->client_id)
+            ->where('subject', Conversation::SUBJECT_PROVIDER)
+            ->count());
+    }
+
+    public function test_opening_messages_copies_file_notes_the_case_group_was_missing(): void
+    {
+        Mail::fake();
+
+        [$staff, $contact, $application] = $this->filed();
+        $path = '/portal/cip/applications/'.$application->uuid.'/messages';
+
+        $this->actingAs($contact)
+            ->postJson($path, ['body' => 'Please send the scan.', 'lane' => 'provider'])
+            ->assertCreated();
+
+        CipApplicationMessage::create([
+            'application_id' => $application->id,
+            'author_id' => $staff->id,
+            'author_name' => $staff->name,
+            'lane' => 'internal',
+            'body' => 'Already on the file.',
+        ]);
+
+        $row = $this->inboxRow($staff, 'Chen Wei');
+        $this->assertNotNull($row);
+
+        $bodies = collect($this->actingAs($staff)
+            ->getJson('/portal/messaging/conversations/'.$row['id'].'/messages')
+            ->assertOk()
+            ->json('messages'))
+            ->pluck('body');
+
+        $this->assertTrue($bodies->contains('Please send the scan.'));
+        $this->assertTrue($bodies->contains('Already on the file.'));
+
+        $hidden = collect($this->actingAs($contact)
+            ->getJson('/portal/messaging/conversations/'.$row['id'].'/messages')
+            ->assertOk()
+            ->json('messages'))
+            ->pluck('body');
+
+        $this->assertFalse($hidden->contains('Already on the file.'));
+    }
+
+    /** @return array<string, mixed>|null */
+    private function inboxRow(User $reader, string $name): ?array
+    {
+        return collect($this->actingAs($reader)
+            ->getJson('/portal/messaging/conversations')
+            ->assertOk()
+            ->json('conversations'))
+            ->firstWhere('name', $name);
     }
 
     /** @return array<string, list<string>> */

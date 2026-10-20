@@ -7,7 +7,9 @@ use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\Assignments as CipAssignments;
+use App\Support\Cip\CipAccess;
 use App\Support\Clients\Assignments;
 use App\Support\Clients\ClientDirectory;
 use Illuminate\Http\JsonResponse;
@@ -27,18 +29,33 @@ class ClientAssignmentController extends Controller
     // The assignment list is employees only now, see assignableStaff. The
     // former ['Administrator', 'Employee'] constant has no other consumer.
 
-    /** Staff assigned to a client, live ones first. */
+    /**
+     * Staff assigned to a client, live ones first.
+     *
+     * Staff read this with the client directory. A service provider reading
+     * an application they filed may read the same list — it is the Assigned
+     * tab on that file — without the directory of people they could add.
+     * Writing an assignment stays with clients.assign.
+     */
     public function index(Request $request, string $uid): JsonResponse
     {
-        $this->authorizeStaff($request);
+        $user = $request->user();
         $client = Client::where('uid', $uid)->firstOrFail();
+        $staff = Role::can($user, 'clients.view');
+        if (! $staff) {
+            abort_unless(CipAccess::canReach($user), 403);
+            abort_unless(
+                in_array((int) $client->id, ApplicationScope::visibleClientIds($user), true),
+                404,
+            );
+        }
 
         return response()->json([
             'assignments' => $this->present($client),
             'history' => $this->presentHistory($client),
-            'assignable' => $this->assignableStaff($client),
-            'roles' => $this->roleOptions(),
-            'levels' => array_keys(ClientAssignment::LEVELS),
+            'assignable' => $staff ? $this->assignableStaff($client) : [],
+            'roles' => $staff ? $this->roleOptions() : [],
+            'levels' => $staff ? array_keys(ClientAssignment::LEVELS) : [],
         ]);
     }
 

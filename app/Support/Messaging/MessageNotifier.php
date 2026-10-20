@@ -8,7 +8,9 @@ use App\Models\ConversationParticipant;
 use App\Models\Message;
 use App\Models\Notification;
 use App\Models\User;
+use App\Support\Access\Role;
 use App\Support\Notifications\Notifier;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -62,19 +64,37 @@ final class MessageNotifier
             return;
         }
 
+        self::surfaceInInbox($conversation, $sender);
+    }
+
+    /**
+     * Put a case thread on the inbox of everyone already in it.
+     *
+     * Used when a service-provider message is copied in before anyone has
+     * the conversation open. Subscribing happens after the row exists, so
+     * the personal channel is the only way the list learns about it.
+     */
+    public static function surfaceInInbox(Conversation $conversation, ?User $except = null, bool $staffOnly = false): void
+    {
         $conversation->activeParticipants()
-            ->where('user_id', '!=', $sender->id)
+            ->when($except, fn ($query) => $query->where('user_id', '!=', $except->id))
             ->with('user')
             ->get()
-            ->each(function (ConversationParticipant $participant) use ($conversation) {
-                if ($participant->user) {
-                    Broadcaster::to(new InboxUpdated(
-                        user: $participant->user,
-                        reason: 'message',
-                        totalUnread: 0,
-                        conversationUuid: $conversation->uuid,
-                    ));
+            ->each(function (ConversationParticipant $participant) use ($conversation, $staffOnly) {
+                if (! $participant->user) {
+                    return;
                 }
+
+                if ($staffOnly && ! Role::isStaff($participant->user)) {
+                    return;
+                }
+
+                Broadcaster::to(new InboxUpdated(
+                    user: $participant->user,
+                    reason: 'message',
+                    totalUnread: 0,
+                    conversationUuid: $conversation->uuid,
+                ));
             });
     }
 
@@ -302,7 +322,7 @@ final class MessageNotifier
      * Who should hear about this: members who are still in the conversation,
      * have not muted it, and did not cause the event themselves.
      *
-     * @return \Illuminate\Support\Collection<int, ConversationParticipant>
+     * @return Collection<int, ConversationParticipant>
      */
     private static function recipients(Conversation $conversation, int ...$excludeUserIds)
     {
@@ -315,7 +335,7 @@ final class MessageNotifier
     /**
      * Everyone still in the conversation but the people given, muted or not.
      *
-     * @return \Illuminate\Support\Collection<int, ConversationParticipant>
+     * @return Collection<int, ConversationParticipant>
      */
     private static function others(Conversation $conversation, int ...$excludeUserIds)
     {

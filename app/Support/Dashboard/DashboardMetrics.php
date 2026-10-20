@@ -370,6 +370,12 @@ class DashboardMetrics
             })
             ->whereNull('messages.deleted_at')
             ->where('messages.type', '!=', Message::TYPE_SYSTEM)
+            ->when(! Role::isStaff($this->user), function ($query) {
+                $query->where(function ($lane) {
+                    $lane->whereNull('messages.lane')
+                        ->orWhere('messages.lane', '!=', Message::LANE_INTERNAL);
+                });
+            })
             ->whereRaw('messages.id > coalesce(cp.last_read_message_id, 0)')
             ->whereRaw('messages.id > coalesce(cp.cleared_before_message_id, 0)')
             ->where(function ($q) {

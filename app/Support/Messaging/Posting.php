@@ -7,6 +7,7 @@ use App\Models\ConversationParticipant;
 use App\Models\Message;
 use App\Models\MessageAttachment;
 use App\Models\User;
+use App\Support\Cip\Threads;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -73,6 +74,11 @@ final class Posting
 
             return $message;
         });
+
+        // Sending reads everything up to this line, including a copy of an
+        // application message. That copy being seen is the application
+        // message being seen.
+        Threads::noteSeenInMessages($author, (int) $conversation->id, (int) $message->id);
 
         return [$message, $mentioned];
     }

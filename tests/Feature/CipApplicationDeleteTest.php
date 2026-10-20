@@ -212,6 +212,8 @@ class CipApplicationDeleteTest extends TestCase
         $application = $this->filing($staff, $this->provider($staff));
         $number = $application->internal_number;
 
+        $application->people->first()->forceFill(['photo_url' => '/media/avatars/chen.jpg'])->save();
+
         $this->actingAs($staff)
             ->deleteJson('/portal/cip/applications/'.$application->uuid)
             ->assertOk();
@@ -220,7 +222,8 @@ class CipApplicationDeleteTest extends TestCase
             ->getJson('/portal/admin/recycle-bin?kind=cip_application')
             ->assertOk()
             ->assertJsonPath('items.0.kind', 'cip_application')
-            ->assertJsonPath('items.0.id', $application->uuid);
+            ->assertJsonPath('items.0.id', $application->uuid)
+            ->assertJsonPath('items.0.meta.avatarUrl', '/media/avatars/chen.jpg');
 
         $recycle = $this->actingAs($staff)
             ->getJson('/portal/files/?section=recycle')
@@ -230,6 +233,7 @@ class CipApplicationDeleteTest extends TestCase
         $this->assertNotEmpty($apps);
         $this->assertSame($application->uuid, $apps[0]['id']);
         $this->assertSame('application', $apps[0]['type']);
+        $this->assertSame('/media/avatars/chen.jpg', $apps[0]['avatarUrl']);
         $this->assertStringContainsString($number, $apps[0]['name']);
         $this->assertFalse(
             collect($recycle->json('folders'))->pluck('name')->contains('Main Applicant'),
@@ -331,7 +335,7 @@ class CipApplicationDeleteTest extends TestCase
         $this->assertNull(CipApplication::withTrashed()->find($application->id)->cip_number);
     }
 
-    public function test_deleting_a_draft_from_the_table_removes_it_outright(): void
+    public function test_deleting_a_draft_from_the_table_lands_in_the_recycle_bin(): void
     {
         Storage::fake('local');
 
@@ -353,6 +357,24 @@ class CipApplicationDeleteTest extends TestCase
             ->deleteJson('/portal/cip/applications/'.$draft->uuid)
             ->assertOk();
 
-        $this->assertNull(CipApplication::withTrashed()->find($draft->id));
+        $this->assertNull(CipApplication::query()->find($draft->id));
+        $trashed = CipApplication::withTrashed()->find($draft->id);
+        $this->assertNotNull($trashed);
+        $this->assertTrue($trashed->trashed());
+        $this->assertSame(Status::DRAFT, $trashed->status);
+
+        $this->actingAs($staff)
+            ->getJson('/portal/admin/recycle-bin?kind=cip_application')
+            ->assertOk()
+            ->assertJsonPath('items.0.id', $draft->uuid);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$draft->uuid.'/restore')
+            ->assertOk();
+
+        $restored = CipApplication::query()->find($draft->id);
+        $this->assertNotNull($restored);
+        $this->assertSame(Status::DRAFT, $restored->status);
+        $this->assertSame('AMARA', $restored->people->firstWhere('role', 'main_applicant')?->first_name);
     }
 }

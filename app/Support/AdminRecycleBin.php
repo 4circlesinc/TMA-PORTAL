@@ -354,7 +354,10 @@ class AdminRecycleBin
     private static function cipApplications(?string $search): Collection
     {
         return CipApplication::onlyTrashed()
-            ->with(['people' => fn ($q) => $q->withTrashed(), 'client'])
+            ->with([
+                'people' => fn ($q) => $q->withTrashed(),
+                'client.user:id,avatar_url,provider_avatar_url',
+            ])
             ->when($search !== '', function ($q) use ($search) {
                 $like = '%'.mb_strtolower($search).'%';
                 $q->where(function ($w) use ($like) {
@@ -374,7 +377,8 @@ class AdminRecycleBin
                 deletedAt: $app->deleted_at,
                 deletedBy: null,
                 meta: [
-                    'icon' => 'Files',
+                    'avatarUrl' => Removal::portrait($app),
+                    'avatarName' => Removal::portraitName($app),
                     'number' => $app->displayNumber(),
                 ],
             ));

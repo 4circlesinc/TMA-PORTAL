@@ -9,6 +9,7 @@ use App\Support\Activity\ActivityLogger;
 use App\Support\Cip\Pages;
 use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
+use App\Support\Messaging\ClientConversations;
 use App\Support\Notifications\Notifier;
 use Illuminate\Support\Facades\DB;
 
@@ -86,6 +87,10 @@ final class Assignments
         } elseif ($previousRole !== $assignment->role || $previousLevel !== $assignment->permission_level) {
             self::announceChanged($client, $assignment, $by, $previousRole, $previousLevel);
         }
+
+        // The case thread is already the file's messages. Holding the client
+        // is what puts those copies in this person's inbox.
+        ClientConversations::joinCaseThread($client, $staff);
 
         return $assignment->fresh();
     }

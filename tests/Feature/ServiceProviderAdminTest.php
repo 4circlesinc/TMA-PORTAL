@@ -499,6 +499,48 @@ class ServiceProviderAdminTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_they_can_open_a_contact_at_their_firm(): void
+    {
+        $tma = $this->user(Role::ADMINISTRATOR);
+        [$company] = $this->providerFirm();
+        [$other] = $this->providerFirm('Bluemina', 'BLU');
+        $spAdmin = $this->user(Role::SERVICE_PROVIDER_ADMIN, ['email' => 'gil@galaxy.example']);
+        $this->attach($company, $spAdmin, $tma);
+
+        $contact = Client::create([
+            'uid' => 'dana-reed',
+            'name' => 'Dana Reed',
+            'email' => 'dana@galaxy.example',
+            'company_id' => $company->id,
+            'data' => [
+                'firstName' => 'Dana',
+                'lastName' => 'Reed',
+                'emails' => [['type' => 'work', 'value' => 'dana@galaxy.example']],
+            ],
+        ]);
+        $stranger = Client::create([
+            'uid' => 'eve-blue',
+            'name' => 'Eve Blue',
+            'company_id' => $other->id,
+            'data' => [],
+        ]);
+
+        $this->actingAs($spAdmin)->getJson('/portal/clients/'.$contact->uid)
+            ->assertOk()
+            ->assertJsonPath('client.id', 'dana-reed')
+            ->assertJsonPath('client.name', 'Dana Reed');
+
+        // A contact is not an application. The filing read has nothing to
+        // return, which is why the detail page must use the record above.
+        $this->actingAs($spAdmin)->getJson('/portal/cip/clients/'.$contact->uid.'/application')
+            ->assertOk()
+            ->assertJsonPath('application', null)
+            ->assertJsonPath('client', null);
+
+        $this->actingAs($spAdmin)->getJson('/portal/clients/'.$stranger->uid)
+            ->assertNotFound();
+    }
+
     public function test_they_can_rename_their_firm_but_not_its_code(): void
     {
         $tma = $this->user(Role::ADMINISTRATOR);

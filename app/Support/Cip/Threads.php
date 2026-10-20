@@ -8,6 +8,7 @@ use App\Models\CipApplicationMessage;
 use App\Models\CipApplicationMessageReaction;
 use App\Models\CipApplicationMessageRead;
 use App\Models\CipApplicationMessageReceipt;
+use App\Models\Message;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Companies\ContactIdentity;
@@ -277,6 +278,13 @@ class Threads
                     ->orWhere('cip_application_messages.author_id', '!=', $viewer->id);
             })
             ->whereRaw('cip_application_messages.id > COALESCE(reads.last_read_id, 0)')
+            // Reading the copy in Messages stamps a receipt without moving the
+            // cursor past an internal note they have not opened on the file.
+            ->whereRaw('NOT EXISTS (
+                SELECT 1 FROM cip_application_message_receipts AS seen_copies
+                WHERE seen_copies.message_id = cip_application_messages.id
+                  AND seen_copies.user_id = ?
+            )', [$viewer->id])
             ->groupBy('cip_applications.client_id')
             ->selectRaw('cip_applications.client_id as client_id, COUNT(*) as n')
             ->pluck('n', 'client_id');
@@ -291,13 +299,141 @@ class Threads
     }
 
     /**
-     * The case group is the same conversation as the service-provider lane.
-     * An internal note never crosses. If the group does not exist yet, the
-     * next time someone opens Message copies whatever is already on the file.
+     * The case group is one conversation for both lanes.
+     *
+     * Internal notes are copied too, tagged so a service provider never sees
+     * them. The copy is filed as the message is written, into the inbox of
+     * every administrator and of the officers holding the file, not only
+     * once somebody opens Messages.
      */
     private static function mirrorToCaseChat(CipApplicationMessage $message): void
     {
         ClientConversations::mirrorProviderMessage($message);
+    }
+
+    /**
+     * Reading the case chat is reading the application message it was copied from.
+     *
+     * The receipt is what the applications list counts, so the unread dot
+     * goes away for this reader without pretending they also opened an
+     * internal note that was never in the inbox. The cursor only advances
+     * through a run of lines that are actually seen.
+     */
+    public static function noteSeenInMessages(User $viewer, int $conversationId, int $through): void
+    {
+        if ($through < 1) {
+            return;
+        }
+
+        $sourceIds = Message::query()
+            ->where('conversation_id', $conversationId)
+            ->whereNotNull('cip_application_message_id')
+            ->where('id', '<=', $through)
+            ->pluck('cip_application_message_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->all();
+
+        if ($sourceIds === []) {
+            return;
+        }
+
+        $byApplication = CipApplicationMessage::query()
+            ->whereIn('id', $sourceIds)
+            ->get(['id', 'application_id'])
+            ->groupBy('application_id');
+
+        foreach ($byApplication as $applicationId => $rows) {
+            self::applyChatSeen(
+                $viewer,
+                (int) $applicationId,
+                $rows->map(fn (CipApplicationMessage $row) => (int) $row->id)->all(),
+            );
+        }
+    }
+
+    /**
+     * @param  list<int>  $sourceIds
+     */
+    private static function applyChatSeen(User $viewer, int $applicationId, array $sourceIds): void
+    {
+        $application = CipApplication::query()->find($applicationId);
+
+        if (! $application || $sourceIds === []) {
+            return;
+        }
+
+        $stampIds = CipApplicationMessage::query()
+            ->where('application_id', $applicationId)
+            ->whereIn('id', $sourceIds)
+            ->whereIn('lane', self::lanesFor($viewer))
+            ->where(function ($query) use ($viewer) {
+                $query->whereNull('author_id')
+                    ->orWhere('author_id', '!=', $viewer->id);
+            })
+            ->pluck('id');
+
+        $inserted = 0;
+        $stamp = now()->toDateTimeString();
+
+        foreach ($stampIds->chunk(400) as $chunk) {
+            $inserted += CipApplicationMessageReceipt::query()->insertOrIgnore($chunk->map(fn ($id) => [
+                'application_id' => $applicationId,
+                'message_id' => $id,
+                'user_id' => $viewer->id,
+                'seen_at' => $stamp,
+            ])->all());
+        }
+
+        $read = CipApplicationMessageRead::query()->firstOrNew([
+            'user_id' => $viewer->id,
+            'application_id' => $applicationId,
+        ]);
+
+        $cursor = (int) $read->last_read_id;
+        $receipts = CipApplicationMessageReceipt::query()
+            ->where('application_id', $applicationId)
+            ->where('user_id', $viewer->id)
+            ->pluck('message_id')
+            ->mapWithKeys(fn ($id) => [(int) $id => true]);
+
+        $covered = array_fill_keys($sourceIds, true);
+        $target = $cursor;
+
+        $fileMessages = CipApplicationMessage::query()
+            ->where('application_id', $applicationId)
+            ->whereIn('lane', self::lanesFor($viewer))
+            ->orderBy('id')
+            ->get(['id', 'author_id']);
+
+        foreach ($fileMessages as $message) {
+            $id = (int) $message->id;
+            $seen = $id <= $cursor
+                || (int) $message->author_id === (int) $viewer->id
+                || isset($covered[$id])
+                || isset($receipts[$id]);
+
+            if (! $seen) {
+                break;
+            }
+
+            $target = $id;
+        }
+
+        $cursorMoved = $target > $cursor;
+
+        if ($inserted === 0 && ! $cursorMoved) {
+            return;
+        }
+
+        // A receipt with the cursor left behind still has to be a reader, or
+        // the face under the message has nobody to hang on.
+        if (! $read->exists || $cursorMoved) {
+            $read->forceFill(['last_read_id' => $target])->save();
+        }
+
+        CipThreadChanged::dispatch($application, 'read');
+        Live::user(Live::CIP, $viewer->id);
     }
 
     /**

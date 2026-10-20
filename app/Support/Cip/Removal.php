@@ -16,14 +16,11 @@ use Illuminate\Support\Facades\DB;
 /**
  * Taking an application off the caseload.
  *
- * Two exits, because a draft and a filed file are not the same kind of
- * record. An unfinished form that somebody threw away is not something
- * anybody should have to find later, so it is removed outright. A numbered
- * application is a file the firm referred to — it is soft-deleted, its
- * people and checklist go with it, and the paper lands in the recycle bin
- * rather than vanishing. The client the application was for is never
- * touched: they may have another filing, and the hub record is a different
- * question from this one.
+ * A draft and a filed file leave the same way. Both are soft-deleted, with
+ * their people and checklist, and both show in the recycle bin so a reader
+ * who removed the wrong one can put it back. The client the application was
+ * for is never touched: they may have another filing, and the hub record is
+ * a different question from this one.
  *
  * The application's folder_id is the client's folder. Recycle that tree and
  * the person disappears from the File Library with the application, which
@@ -32,49 +29,29 @@ use Illuminate\Support\Facades\DB;
  */
 class Removal
 {
-    /** Throw a draft away for good, or archive a filed application. */
+    /** Archive an application, draft or filed, into the recycle bin. */
     public static function delete(CipApplication $application, User $actor): void
     {
-        if ($application->status === Status::DRAFT) {
-            self::discardDraft($application, $actor);
-
-            return;
-        }
-
         self::archive($application, $actor);
     }
 
     /**
-     * Throw a draft away for good.
+     * Take a draft off the form and into the recycle bin.
      *
-     * A hard delete, unlike a filed application, and deliberately: the
-     * recycle bin is for work somebody did, and an abandoned half-filled
-     * form that a reader explicitly discarded is not something anybody
-     * should have to find and empty later.
+     * Start over and an emptied form used to destroy the row. The file had
+     * already been numbered and, once a name was on it, was something the
+     * firm could see. Throwing that away with no way back is how a filing
+     * disappeared between one save and the next. It now archives, the same
+     * as Delete on the table.
      */
     public static function discardDraft(CipApplication $draft, ?User $actor = null): void
     {
-        $providerIds = Contacts::providerUserIds($draft);
-
-        /*
-         * The folder goes to the recycle bin, not with it.
-         *
-         * A draft keeps its scans now, so throwing one away throws away
-         * documents — and a reader who deletes the wrong draft has lost six
-         * passports with no way back. The application and its people are
-         * removed outright, because an unfiled form is not a record anybody
-         * refers to; the paper is soft-deleted, so it can be restored from
-         * the bin like anything else.
-         */
-        foreach (self::foldersOf($draft) as $folder) {
-            FolderTree::softDeleteTree($folder, $actor?->id ?? $draft->created_by);
+        $actor ??= $draft->creator;
+        if (! $actor instanceof User) {
+            return;
         }
 
-        CipDocument::query()->where('application_id', $draft->id)->forceDelete();
-        $draft->people()->forceDelete();
-        $draft->forceDelete();
-
-        Live::staffAnd(Live::CIP, $providerIds);
+        self::archive($draft, $actor);
     }
 
     /** Soft-delete a numbered application; keep the client. */
@@ -98,14 +75,19 @@ class Removal
             $application->people()->delete();
 
             /*
-             * Free the Unit number for another filing.
+             * Free the numbers the unique indexes still hold.
              *
-             * Soft-deleted rows stay in the unique index, so leaving
-             * cip_number set would block the same CIP number forever while
-             * the file sat invisible in the recycle bin. The number rides in
-             * the deleted event above and is put back on restore.
+             * Soft-deleted rows stay in those indexes. Leaving the Unit
+             * number set would block it for a filing nobody can see; it
+             * rides in the deleted event above and is put back on restore.
+             * A draft's submission key is how the open form finds its row,
+             * and leaving that set would make the next save of the same
+             * form collide with a file already in the bin.
              */
-            $application->forceFill(['cip_number' => null])->save();
+            $application->forceFill([
+                'cip_number' => null,
+                'submission_key' => $application->status === Status::DRAFT ? null : $application->submission_key,
+            ])->save();
             $application->delete();
         });
 
@@ -122,8 +104,8 @@ class Removal
     }
 
     /**
-     * Put a numbered file back on the caseload, with its people, checklist
-     * and paper. Drafts never land here: they are discarded outright.
+     * Put a file back on the caseload, with its people, checklist and paper.
+     * A restored draft comes back as a draft.
      */
     public static function restore(CipApplication $application, User $actor): void
     {
@@ -242,7 +224,10 @@ class Removal
         }
 
         return ApplicationScope::query($user, CipApplication::onlyTrashed())
-            ->with(['people' => fn ($q) => $q->withTrashed(), 'client'])
+            ->with([
+                'people' => fn ($q) => $q->withTrashed(),
+                'client.user:id,avatar_url,provider_avatar_url',
+            ])
             ->orderByDesc('deleted_at')
             ->limit(150)
             ->get()
@@ -266,6 +251,57 @@ class Removal
         }
 
         return $number !== '' ? $number : ($applicant !== '' ? $applicant : 'Application');
+    }
+
+    /**
+     * The face the recycle bin draws for this file.
+     *
+     * The same order as the worklist: the passport likeness on the main
+     * applicant, then the hub client's photo, then a live portal login.
+     * A folder mark made a person look like a drawer.
+     */
+    public static function portrait(CipApplication $application): ?string
+    {
+        $application->loadMissing([
+            'people' => fn ($q) => $q->withTrashed(),
+            'client.user',
+        ]);
+
+        $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+
+        if ($main?->photo_url) {
+            return $main->photo_url;
+        }
+
+        if ($main?->photo_path) {
+            return '/portal/cip/people/'.$main->uuid.'/passport-photo?v='
+                .substr(md5($main->photo_path.'|'.($main->updated_at?->getTimestamp() ?? 0)), 0, 8);
+        }
+
+        $client = $application->client;
+
+        if ($client?->photo_url) {
+            return $client->photo_url;
+        }
+
+        if ($client && $client->hasLiveLogin()) {
+            return $client->user?->photoUrl();
+        }
+
+        return null;
+    }
+
+    /** The applicant's name alone, for the initials tile when there is no photo. */
+    public static function portraitName(CipApplication $application): string
+    {
+        $application->loadMissing([
+            'people' => fn ($q) => $q->withTrashed(),
+            'client',
+        ]);
+        $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        $name = trim(($main?->first_name ?? '').' '.($main?->last_name ?? ''));
+
+        return $name !== '' ? $name : (string) ($application->client?->name ?? '');
     }
 
     /**
@@ -419,6 +455,8 @@ class Removal
             'modifiedAt' => optional($application->deleted_at)->toIso8601String(),
             'colour' => null,
             'iconName' => null,
+            'avatarUrl' => self::portrait($application),
+            'applicantName' => self::portraitName($application),
             'fileCount' => null,
             'folderCount' => null,
             'size' => null,
@@ -437,27 +475,4 @@ class Removal
         return $folderId !== null && $folderId !== $clientFolderId;
     }
 
-    /**
-     * Every folder this draft owns, deepest first.
-     *
-     * The application's own folder covers the people inside it, but a person
-     * whose folder was provisioned before the tree existed can sit outside
-     * it, so both are collected rather than assuming the shape.
-     *
-     * @return list<Folder>
-     */
-    private static function foldersOf(CipApplication $draft): array
-    {
-        $ids = $draft->people()->pluck('folder_id')->all();
-        $ids[] = $draft->folder_id;
-        $ids[] = $draft->post_approval_folder_id;
-
-        $ids = array_values(array_unique(array_filter($ids)));
-
-        if ($ids === []) {
-            return [];
-        }
-
-        return Folder::query()->whereIn('id', $ids)->get()->all();
-    }
 }

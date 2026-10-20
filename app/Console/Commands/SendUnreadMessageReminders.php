@@ -51,12 +51,15 @@ class SendUnreadMessageReminders extends Command
     {
         // The newest real (non-system) message from someone else that this
         // participant still hasn't read.
+        $viewer = $participant->user ?? $participant->user()->first();
+
         $message = Message::query()
             ->where('conversation_id', $participant->conversation_id)
             ->where('id', '>', $participant->last_read_message_id ?? 0)
             ->where('id', '>', $participant->cleared_before_message_id ?? 0)
             ->where('type', '!=', Message::TYPE_SYSTEM)
             ->where(fn ($q) => $q->whereNull('user_id')->orWhere('user_id', '!=', $participant->user_id))
+            ->when($viewer, fn ($query) => $query->visibleTo($viewer))
             ->latest('id')
             ->first();
 

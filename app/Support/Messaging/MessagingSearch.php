@@ -123,7 +123,7 @@ class MessagingSearch
                 'activeParticipants.user',
                 'client:id,uid,name,photo_url',
                 'company:id,uid,name',
-                'messages' => fn ($q) => $q->latest('id')->limit(1),
+                'messages' => fn ($q) => $q->visibleTo($user)->latest('id')->limit(1),
             ])
             ->where(function ($q) use ($term, $user) {
                 self::like($q, 'name', $term);
@@ -148,6 +148,7 @@ class MessagingSearch
     {
         return Message::query()
             ->whereIn('conversation_id', $ids)
+            ->visibleTo($user)
             ->whereNotNull('body')
             ->where(fn ($q) => self::like($q, 'body', $term))
             ->with(['sender', 'conversation.activeParticipants.user'])
@@ -208,6 +209,7 @@ class MessagingSearch
     {
         return Message::query()
             ->whereIn('conversation_id', $ids)
+            ->visibleTo($user)
             ->where(fn ($q) => self::like($q, 'body', 'http'))
             ->where(fn ($q) => self::like($q, 'body', $term))
             ->with(['sender', 'conversation.activeParticipants.user'])

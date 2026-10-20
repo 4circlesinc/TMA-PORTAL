@@ -11,6 +11,21 @@
 (function () {
   'use strict';
 
+  // A missing portrait falls back to initials. Inline onerror is blocked by
+  // the page policy, and error events do not bubble, so this listens in the
+  // capture phase for any avatar that carries a fallback.
+  if (!window.__tmaAvatarFallback) {
+    window.__tmaAvatarFallback = true;
+    document.addEventListener('error', function (event) {
+      var img = event.target;
+      if (!img || img.tagName !== 'IMG' || !img.getAttribute) return;
+      var fallback = img.getAttribute('data-fallback');
+      if (!fallback || img.getAttribute('data-fallback-used')) return;
+      img.setAttribute('data-fallback-used', '1');
+      img.src = fallback;
+    }, true);
+  }
+
   function ui() { return window.TMAPortalUI; }
   function net() { return window.TMAFilesNet; }
   function esc(s) { return ui().esc(s); }
@@ -216,6 +231,18 @@
       '</span>';
   }
 
+  function applicationAvatarHtml(item, size) {
+    var name = item.applicantName || item.name || 'Application';
+    var hasHelper = window.TMACurrentUser && window.TMACurrentUser.avatarSrc;
+    var src = hasHelper ? window.TMACurrentUser.avatarSrc(item.avatarUrl, name) : (item.avatarUrl || '');
+    var fallback = hasHelper ? window.TMACurrentUser.avatarSrc('', name) : '';
+    var cls = 'tma-dash__overview-recycle-avatar' + (size >= 40 ? ' tma-dash__overview-recycle-avatar--lg' : '');
+    var fail = (fallback && fallback !== src)
+      ? ' data-fallback="' + esc(fallback) + '"'
+      : '';
+    return '<img class="' + cls + '"' + fail + ' src="' + esc(src) + '" alt="" width="' + size + '" height="' + size + '">';
+  }
+
   function fileIconSrc(item) {
     if (item.type === 'folder' || item.type === 'application') {
       var base = folderLooksEmpty(item) ? 'FolderEmpty' : 'FolderFilled';
@@ -238,7 +265,8 @@
   // A real preview when there is one - the server's image thumbnail, or page
   // one of a PDF painted by TMAFileThumbs - else the type icon.
   function thumbOrIcon(item, size) {
-    if (item.type === 'folder' || item.type === 'application') return folderIconHtml(item, size);
+    if (item.type === 'application') return applicationAvatarHtml(item, size);
+    if (item.type === 'folder') return folderIconHtml(item, size);
     var icon = fileIconSrc(item);
     if (window.TMAFileThumbs) {
       return window.TMAFileThumbs.imgHtml(item, {
@@ -472,7 +500,13 @@
       painted = true;
       state.loading = false;
       state.error = null;
-      state.data = { folders: res.folders || [], files: res.files || [], applications: res.applications || [] };
+      var applications = res.applications || [];
+      // Applications are only on page one. A live refresh that lands on a
+      // later page must not drop the faces already on screen.
+      if (!applications.length && state.page > 1 && state.data && state.data.applications) {
+        applications = state.data.applications;
+      }
+      state.data = { folders: res.folders || [], files: res.files || [], applications: applications };
       state.total = typeof res.total === 'number'
         ? res.total
         : (res.folders || []).length + (res.files || []).length;
@@ -1415,6 +1449,8 @@
       var cls = cardClasses.length ? ' ' + cardClasses.join(' ') : '';
       var thumb = it.type === 'folder'
         ? folderIconHtml(it, 40)
+        : it.type === 'application'
+          ? applicationAvatarHtml(it, 40)
         : (window.TMAFileThumbs
           ? window.TMAFileThumbs.imgHtml(it, {
               // The card sizes its own picture (max 72px tall), so a real

@@ -228,12 +228,22 @@
     return LIST_TABS;
   }
 
+  /*
+   * A Service Provider admin has one firm. "Service providers" is that firm's
+   * page, not a table they then have to open, so a remembered providers tab
+   * must not put the table back under them when they leave the firm.
+   */
+  function listTabForViewer(tab) {
+    if (tab === 'providers' && isProviderAdminViewer()) return 'all_applications';
+    return tab;
+  }
+
   function loadListTab() {
     try {
       var fromUrl = new URLSearchParams(window.location.search || '').get('listTab');
-      if (fromUrl) return listTabOf({ listTab: fromUrl });
+      if (fromUrl) return listTabForViewer(listTabOf({ listTab: fromUrl }));
       var stored = localStorage.getItem(LIST_TAB_KEY);
-      if (stored) return listTabOf({ listTab: stored });
+      if (stored) return listTabForViewer(listTabOf({ listTab: stored }));
       return 'all_applications';
     } catch (e) {
       return 'all_applications';
@@ -1397,7 +1407,12 @@
       var legacy = isLegacyCipPath(p);
       if (rest === '') {
         var home = providerAdminHomeCompanyId();
-        if (home && !clientsListTabInUrl()) {
+        var askedTab = '';
+        try {
+          askedTab = new URLSearchParams(window.location.search || '').get('listTab') || '';
+        } catch (e) { /* a bare path is the list */ }
+        // No list tab, or the Service providers tab: their own firm.
+        if (home && (!clientsListTabInUrl() || askedTab === 'providers')) {
           return { screen: 'company', companyId: home, legacyRedirect: legacy };
         }
         return { screen: 'list', legacyRedirect: legacy };
@@ -7905,9 +7920,28 @@
    * module, and a page of empty person tabs would say less than their phone
    * number does.
    */
+  function profileOffers(state, tabId) {
+    return profileTabsFor(state).some(function (tab) { return tab.id === tabId; });
+  }
+
   function profileTabsFor(state) {
     var app = applicationFor(state.selectedId);
-    if (!isApplicationProfile(app) && !isCipApplicant(state.selectedId)) return PROFILE_TABS;
+    if (!isApplicationProfile(app) && !isCipApplicant(state.selectedId)) {
+      /*
+       * A provider contact is not an applicant. Assigned, Messages and Portal
+       * access are the staff client record; they never finish loading for a
+       * Service Provider admin, so the detail they opened looked broken.
+       * Documents stays when the contact actually has a folder.
+       */
+      if (isProviderAdminViewer()) {
+        var contactTabs = [{ id: 'info', label: 'Contact' }];
+        if (clientFolderUuid(state.selectedId)) {
+          contactTabs.push({ id: 'folders', label: 'Documents' });
+        }
+        return contactTabs;
+      }
+      return PROFILE_TABS;
+    }
 
     var tabs = [
       // The application's own facts, where it has got to, before the people
@@ -7927,8 +7961,13 @@
      * for the tab to read, and an empty tab that can never fill is worse than
      * no tab.
      */
+    /*
+     * Portal access is the client hub's invitation. An application is not
+     * that record, so the tab is not offered on one, for staff or for a
+     * service provider. Assigned stays: it is who is on the file.
+     */
     return tabs
-      .concat(PROFILE_TABS.filter(function (t) { return t.id !== 'info'; }))
+      .concat(PROFILE_TABS.filter(function (t) { return t.id !== 'info' && t.id !== 'access'; }))
       .concat([{ id: 'activity', label: 'Activity' }]);
   }
 
@@ -11862,10 +11901,10 @@
             : '')
         : (isCipApplicant(state.selectedId) ? '' : renderContactInfoPanel(c, listItems, activeTab !== 'info'))) +
       (cipProfile ? renderActivityPanel(state, activeTab !== 'activity') : '') +
-      renderFoldersPanel(c.id, activeTab !== 'folders') +
-      renderAssignedPanel(state, c.id, activeTab !== 'assigned') +
-      renderClientMessagesPanel(state, activeTab !== 'messages') +
-      renderAccessPanel(state, c, activeTab !== 'access') +
+      (profileOffers(state, 'folders') ? renderFoldersPanel(c.id, activeTab !== 'folders') : '') +
+      (profileOffers(state, 'assigned') ? renderAssignedPanel(state, c.id, activeTab !== 'assigned') : '') +
+      (profileOffers(state, 'messages') ? renderClientMessagesPanel(state, activeTab !== 'messages') : '') +
+      (profileOffers(state, 'access') ? renderAccessPanel(state, c, activeTab !== 'access') : '') +
       '</div></div>'
     );
   }
@@ -15934,10 +15973,7 @@
     }
     if (APP_TABLE.deleting[id]) return;
     var label = (app && (app.number || app.applicantName)) || 'this application';
-    var isDraft = app && app.status === 'draft';
-    var confirmMsg = isDraft
-      ? 'Delete ' + label + '? A draft is discarded and does not go to the recycle bin. The client record is kept.'
-      : 'Delete ' + label + '? It goes to the recycle bin. The client record is kept.';
+    var confirmMsg = 'Delete ' + label + '? It goes to the recycle bin. The client record is kept.';
     if (!window.confirm(confirmMsg)) return;
     APP_TABLE.deleting[id] = true;
 
@@ -16246,6 +16282,19 @@
     if (!tabs.length) return;
 
     var select = function (id) {
+      /*
+       * Service providers, for the person who is one, is their firm.
+       * The table of providers is the staff directory; opening it here
+       * showed them a list of one row and made them click through.
+       */
+      if (id === 'providers' && isProviderAdminViewer()) {
+        var home = providerAdminHomeCompanyId();
+        var controller = clientsMountRoot && clientsMountRoot._clientsController;
+        if (home && controller && controller.navigate) {
+          controller.navigate('company', null, { companyId: home });
+          return;
+        }
+      }
       if (state.listTab === id) return;
       moveApplicationPosition(listTabOf(state), id);
       state.listTab = id;
@@ -18312,6 +18361,9 @@
         state.applicationLandedAt = Date.now();
       }
       watchCipThread(state, render);
+      if (isExternalCipUser() && isCipApplicant(id)) {
+        ensureAssignmentsLoaded(state, render, { quiet: true });
+      }
       if (usesPagedClientsFlow(state)) render();
       else render({ detailOnly: true });
 
@@ -18532,13 +18584,21 @@
     };
 
     /*
-     * Provider contacts and private clients never hold clients.view, so the
-     * hub show endpoint 403s and the profile paints as a failed load. The
-     * CIP application they can already open carries the same record.
+     * A provider contact has no citizenship application. The CIP read only
+     * returns a person when a filing exists, so opening one from Provider
+     * contacts answered "You’re not assigned to this client." A Service
+     * Provider admin may read the contact at their firm directly. Everyone
+     * else who is external still has only the filing.
      */
-    var request = isExternalCipUser()
-      ? clientsFetch('/portal/cip/clients/' + encodeURIComponent(id) + '/application')
-      : ClientsAPI.show(id);
+    var cipProfile = function () {
+      return clientsFetch('/portal/cip/clients/' + encodeURIComponent(id) + '/application');
+    };
+    var request = isProviderAdminViewer()
+      ? ClientsAPI.show(id).then(function (res) {
+          if (res && res.client) return res;
+          return cipProfile();
+        }, cipProfile)
+      : (isExternalCipUser() ? cipProfile() : ClientsAPI.show(id));
 
     request.then(function (res) {
       if (stale()) return;
@@ -18650,6 +18710,7 @@
    */
   function ensureAssignmentsLoaded(state, render, opts) {
     if (!state.selectedId) return;
+    if (state.assignmentsLoading && state.assignmentsLoadedFor === state.selectedId) return;
     if (state.assignmentsLoadedFor === state.selectedId && !state.assignmentsLoading) return;
     state.assignmentsLoading = true;
     state.assignmentsLoadedFor = state.selectedId;
@@ -19007,6 +19068,8 @@
           ensureAccessLoaded(state, render);
           ensureAssignmentsLoaded(state, render, { quiet: true });
           ensureConversationsLoaded(state, render, { quiet: true });
+        } else if (profileOffers(state, 'assigned')) {
+          ensureAssignmentsLoaded(state, render, { quiet: true });
         }
         watchCipThread(state, render);
       }

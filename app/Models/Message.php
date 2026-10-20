@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Support\Access\Role;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -12,7 +14,7 @@ use Illuminate\Support\Str;
 #[Fillable([
     'uuid', 'conversation_id', 'user_id', 'type', 'body',
     'reply_to_id', 'edited_at', 'system_event', 'client_nonce',
-    'cip_application_message_id', 'is_announcement', 'is_forwarded',
+    'cip_application_message_id', 'lane', 'is_announcement', 'is_forwarded',
 ])]
 class Message extends Model
 {
@@ -25,6 +27,12 @@ class Message extends Model
     public const TYPE_ATTACHMENT = 'attachment';
 
     public const TYPE_SYSTEM = 'system';
+
+    /** Copied from, or written as, an internal note on the application. */
+    public const LANE_INTERNAL = 'internal';
+
+    /** Copied from, or written as, a service-provider message on the application. */
+    public const LANE_PROVIDER = 'provider';
 
     /** How long after sending the author may still edit a text message. */
     public const EDIT_WINDOW_MINUTES = 15;
@@ -86,6 +94,31 @@ class Message extends Model
     public function isSystem(): bool
     {
         return $this->type === self::TYPE_SYSTEM;
+    }
+
+    public function isInternal(): bool
+    {
+        return $this->lane === self::LANE_INTERNAL;
+    }
+
+    /**
+     * Internal notes share the case thread, and stay invisible to everyone
+     * who is not staff. A null lane is an ordinary chat message.
+     */
+    public function scopeVisibleTo(Builder $query, User $viewer): Builder
+    {
+        if (Role::isStaff($viewer)) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $inner) {
+            $inner->whereNull('lane')->orWhere('lane', '!=', self::LANE_INTERNAL);
+        });
+    }
+
+    public function hiddenFrom(User $viewer): bool
+    {
+        return $this->isInternal() && ! Role::isStaff($viewer);
     }
 
     /**

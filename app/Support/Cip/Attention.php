@@ -263,9 +263,14 @@ final class Attention
                 AND unread_msgs.lane IN ('.$marks.')
                 AND (unread_msgs.author_id IS NULL OR unread_msgs.author_id != ?)
                 AND unread_msgs.id > COALESCE(unread_reads.last_read_id, 0)
+                AND NOT EXISTS (
+                    SELECT 1 FROM cip_application_message_receipts AS seen_copies
+                    WHERE seen_copies.message_id = unread_msgs.id
+                      AND seen_copies.user_id = ?
+                )
         )';
 
-        return [$sql, array_merge([$viewer->id], $lanes, [$viewer->id])];
+        return [$sql, array_merge([$viewer->id], $lanes, [$viewer->id, $viewer->id])];
     }
 
     /**

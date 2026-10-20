@@ -876,8 +876,11 @@
      to judge the scan on, not an avatar disc. */
   function photoField(path) {
     var preview = state.previews[path];
+    // Keyed by the field path so a re-render cannot reuse the main
+    // applicant's photo node for a dependent, or one child for another.
+    var key = ' data-key="cip-photo:' + esc(path) + '"';
     if (fieldsLocked() || packageLocked()) {
-      return '<div class="tma-dash__clients-photo tma-dash__clients-photo--passport is-locked">' +
+      return '<div class="tma-dash__clients-photo tma-dash__clients-photo--passport is-locked"' + key + '>' +
         fieldLabel(path, labelFor(path)) +
         '<div class="tma-dash__clients-photo-wrap">' +
         '<div class="tma-dash__clients-photo-btn"' +
@@ -888,7 +891,7 @@
         '</div></div></div>';
     }
     return '<div class="tma-dash__clients-photo tma-dash__clients-photo--passport' +
-      (state.errors[path] ? ' is-invalid' : '') + '">' +
+      (state.errors[path] ? ' is-invalid' : '') + '"' + key + '>' +
       fieldLabel(path, labelFor(path)) +
       '<input type="file" accept="image/jpeg,image/png,image/webp"' +
       ' class="tma-dash__clients-photo-input" data-cip-photo="' + esc(path) + '" aria-hidden="true">' +
@@ -1493,6 +1496,10 @@
       for (var i = 0; i < deps.length; i++) {
         if (deps[i] && deps[i].id === id) return deps[i];
       }
+
+      // An id that is not on the file must not fall through to whoever
+      // happens to sit at this index. That handed one child another's photo.
+      return null;
     }
 
     return deps[Number(match[1])] || null;
@@ -2145,7 +2152,7 @@
   function confirmDiscard(root) {
     ui().openModal({
       title: 'Start over',
-      body: '<p class="tma-portal-modal__text">This clears the saved draft and empties the form.</p>' +
+      body: '<p class="tma-portal-modal__text">This empties the form. The application goes to the recycle bin, where it can be restored.</p>' +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-draft-keep>Keep it</button>' +
         '<button type="button" class="tma-no-data__btn" data-draft-discard>Start over</button>' +
@@ -3341,16 +3348,19 @@
           return;
         }
         if (json.draft) rememberSavedFiles(pendingFiles);
-        rememberFiled(json.draft);
         /*
-         * Keep the dependent (and sponsor) ids the server just minted.
+         * Keep the dependent (and sponsor) ids the server just minted
+         * before any photo is painted back.
          *
          * Without them every autosave creates the family again and soft-deletes
          * the last one: the new row reuses "Dependent 1" by name and inherits
-         * the wrong passport photo. The response already carries the ids —
-         * restoreDraft reads them; a live autosave used to ignore them.
+         * the wrong passport photo. Photos are then matched by those ids.
+         * Matching by list index put the main applicant's face, or an older
+         * child's, on the wrong row whenever the form order and the saved
+         * order were not the same list.
          */
         rememberPersonIds(json.draft);
+        rememberFiled(json.draft);
         if (json.draft && json.draft.id && !state.applicationId) {
           state.draftId = json.draft.id;
         }
@@ -3539,20 +3549,43 @@
   }
 
   /*
-   * Marks the scans the server has already kept, so a photo sitting on the
-   * draft is not asked for again the moment the reader presses Save.
+   * Where a saved slot belongs on this form.
    *
-   * The local preview wins while they still have one: a blob they just
-   * chose is the picture they are looking at, and swapping it for the
-   * stored URL under them would flicker for no gain.
+   * Main applicant and sponsor paths are already their own. A dependent
+   * path is positional on the server (`dependents.0` is whoever was saved
+   * first), which is not always the row on screen (the file lists children
+   * youngest-first). The person id is the link. A slot whose person is not
+   * on this form is dropped rather than painted onto whoever sits at that
+   * index.
    */
+  function formPathForServerSlot(draft, path) {
+    var match = String(path).match(/^dependents\.(\d+)\.(.+)$/);
+    if (!match) return path;
+
+    var serverId = draft.answers && draft.answers['dependents.' + match[1] + '.id'];
+    if (!serverId) return 'dependents.' + match[1] + '.' + match[2];
+
+    for (var i = 0; i < state.dependents; i++) {
+      if (state.draft['dependents.' + i + '.id'] === serverId) {
+        return 'dependents.' + i + '.' + match[2];
+      }
+    }
+
+    return null;
+  }
+
   function rememberFiled(draft) {
     if (!draft) return;
-    (draft.filed || []).forEach(function (path) { state.filed[path] = true; });
+    (draft.filed || []).forEach(function (path) {
+      var local = formPathForServerSlot(draft, path);
+      if (local) state.filed[local] = true;
+    });
     Object.keys(draft.previews || {}).forEach(function (path) {
       if (!draft.previews[path]) return;
-      if (!state.previews[path]) state.previews[path] = draft.previews[path];
-      state.filed[path] = true;
+      var local = formPathForServerSlot(draft, path);
+      if (!local) return;
+      if (!state.previews[local]) state.previews[local] = draft.previews[path];
+      state.filed[local] = true;
     });
   }
 
@@ -4143,12 +4176,22 @@
         return d.type === 'passport_photo';
       })[0];
       var photoFiled = !!(photoSlot && photoSlot.uploaded);
-      var ownPhoto = person.passportPhotoUrl || null;
+      /*
+       * This person's own passport photo, and nothing else.
+       *
+       * `person.photo` on the main applicant falls back to the client
+       * record's face. Using it here put that picture in the passport
+       * control, and a later save could file it onto a dependent whose
+       * row had been lined up with the wrong index.
+       */
+      var ownPhoto = person.passportPhotoUrl
+        || (photoFiled && photoSlot && (photoSlot.previewUrl || photoSlot.thumbUrl))
+        || (person.role !== 'main_applicant' ? (person.photo || null) : null);
 
-      if (ownPhoto || (photoFiled && person.photo)) {
-        state.previews[prefix + 'passportPhoto'] = ownPhoto || person.photo;
+      if (ownPhoto) {
+        state.previews[prefix + 'passportPhoto'] = ownPhoto;
       }
-      state.filed[prefix + 'passportPhoto'] = photoFiled || !!ownPhoto;
+      state.filed[prefix + 'passportPhoto'] = photoFiled || !!person.passportPhotoUrl;
       docFields(sectionForPath(prefix || 'x')).forEach(function (doc) {
         var slot = (person.documents || []).filter(function (d) {
           return d.type === doc.key;

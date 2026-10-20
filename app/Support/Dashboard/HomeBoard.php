@@ -19,6 +19,7 @@ use App\Support\Messaging\MessagingPresenter;
 use App\Support\Messaging\OrganizationChat;
 use App\Support\Presence\AvailabilityService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -286,7 +287,7 @@ final class HomeBoard
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, MailMessage>  $messages
+     * @param  Collection<int, MailMessage>  $messages
      * @return list<array<string, mixed>>
      */
     private static function mailRows($messages): array
@@ -385,7 +386,7 @@ final class HomeBoard
 
     /**
      * @param  list<int|string>  $conversationIds
-     * @return \Illuminate\Support\Collection<int|string, int>
+     * @return Collection<int|string, int>
      */
     private static function unreadCounts(User $user, array $conversationIds)
     {
@@ -402,6 +403,12 @@ final class HomeBoard
             ->whereIn('messages.conversation_id', $conversationIds)
             ->whereNull('messages.deleted_at')
             ->where('messages.type', '!=', Message::TYPE_SYSTEM)
+            ->when(! Role::isStaff($user), function ($query) {
+                $query->where(function ($lane) {
+                    $lane->whereNull('messages.lane')
+                        ->orWhere('messages.lane', '!=', Message::LANE_INTERNAL);
+                });
+            })
             ->whereRaw('messages.id > coalesce(cp.last_read_message_id, 0)')
             ->whereRaw('messages.id > coalesce(cp.cleared_before_message_id, 0)')
             ->where(function ($q) use ($user) {

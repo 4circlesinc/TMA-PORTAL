@@ -18175,6 +18175,28 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   min-width: 0;
 }
 
+.tma-dash__messages-composer-lanes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.tma-dash__messages-composer-lane-hint {
+  margin: 0;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__messages-bubble-lane {
+  display: block;
+  margin-bottom: 2px;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
 .tma-dash__messages-composer-main {
   display: flex;
   align-items: center;
@@ -36760,6 +36782,13 @@ span.tma-dash__messages-profile-avatar {
   min-height: 0;
   flex: 0 0 24px;
   object-fit: contain;
+}
+
+/* A person's photo in this slot is a circle cropped to the face. The rule
+   above pins every image to the box with contain, which letterboxes a portrait. */
+.tma-dash__overview-recycle-visual img.tma-dash__overview-recycle-avatar {
+  border-radius: 50%;
+  object-fit: cover;
 }
 
 .tma-dash__overview-recycle-avatar,

@@ -41,11 +41,17 @@
     return !!(access && access.isProviderContact && access.isProviderContact());
   }
 
-  /* Sign-ins are the firm's, not yours: SignInActivityController refuses
-     anyone who is not staff. The card is dropped rather than shown erroring,
-     which is what a swallowed 403 looks like. */
+  function isServiceProviderAdmin() {
+    var access = window.TMAPortalAccess;
+    return !!(access && access.isServiceProviderAdmin && access.isServiceProviderAdmin());
+  }
+
+  /* Sign-ins are the firm's, not yours. Staff see the firm's card.
+     A Service Provider admin sees their own contacts. A regular provider
+     contact does not: SignInActivityController refuses them, and a card
+     that only errors is worse than no card. */
   function seesSignIns() {
-    return !isProviderContact();
+    return isServiceProviderAdmin() || !isProviderContact();
   }
 
   function visibleTabs() {

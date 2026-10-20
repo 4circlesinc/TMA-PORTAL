@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\Access\Role;
+use App\Support\Activity\ProviderFirmActivity;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -76,15 +77,19 @@ class ActivityLog extends Model
     /**
      * Scope the log to what a viewer is permitted to see (section 9, section 28).
      *
-     * Administrators see the whole firm's trail. Everyone else sees only the
-     * activity they performed — the privacy-first default; a stray uid must
-     * never expose another person's actions. Broader team visibility can be
-     * layered on here without touching every call site.
+     * Administrators see the whole firm's trail. A Service Provider admin sees
+     * the people, clients and files of their own firm. Everyone else sees
+     * only the activity they performed — the privacy-first default; a stray
+     * uid must never expose another person's actions.
      */
     public function scopeVisibleTo(Builder $query, User $viewer): Builder
     {
         if (Role::can($viewer, 'activity.viewAll')) {
             return $query;
+        }
+
+        if (ProviderFirmActivity::applies($viewer)) {
+            return ProviderFirmActivity::constrainAudit($query, $viewer);
         }
 
         return $query->where('actor_id', $viewer->id);

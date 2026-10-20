@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Access\Role;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -71,6 +72,12 @@ class ConversationParticipant extends Model
             ->where(function ($query) {
                 $query->whereNull('user_id')->orWhere('user_id', '!=', $this->user_id);
             })
+            ->when(
+                ! Role::isStaff($this->relationLoaded('user') ? $this->user : $this->user()->first()),
+                fn ($query) => $query->where(function ($lane) {
+                    $lane->whereNull('lane')->orWhere('lane', '!=', Message::LANE_INTERNAL);
+                })
+            )
             ->count();
     }
 }

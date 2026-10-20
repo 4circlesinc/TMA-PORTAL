@@ -6,6 +6,7 @@ use App\Models\ActivityLog;
 use App\Models\Client;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Activity\ProviderFirmActivity;
 use App\Support\Notifications\NotificationPresenter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,6 +29,10 @@ class ActivityController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
+        if (ProviderFirmActivity::applies($user)) {
+            return response()->json($this->firmPage($request, $user));
+        }
+
         $isAdmin = Role::can($user, 'activity.viewAll');
 
         $query = ActivityLog::query()
@@ -74,8 +79,13 @@ class ActivityController extends Controller
             });
         }
 
+        $new = $newQuery->count();
+        if (ProviderFirmActivity::applies($user)) {
+            $new += ProviderFirmActivity::countNewFiles($user, $seenAt);
+        }
+
         return response()->json([
-            'new' => $newQuery->count(),
+            'new' => $new,
             'failed' => ActivityLog::query()
                 ->visibleTo($user)
                 ->where('status', ActivityLog::STATUS_FAILURE)
@@ -121,6 +131,34 @@ class ActivityController extends Controller
                     ->values()
                 : [],
         ]);
+    }
+
+    /**
+     * A Service Provider admin's page mixes the audit trail with file edits
+     * and uploads. The cursor is opaque; a numeric audit id is not comparable
+     * across the two tables.
+     *
+     * @return array{items: list<array<string, mixed>>, nextCursor: ?string, isAdmin: bool}
+     */
+    private function firmPage(Request $request, User $user): array
+    {
+        $limit = min(max((int) $request->query('limit', self::PAGE), 1), 100);
+        $cursor = ProviderFirmActivity::cursor($request->query('cursor'));
+
+        $logs = ActivityLog::query()->with(['actor', 'client'])->visibleTo($user);
+        $this->applyFilters($logs, $request, false);
+        ProviderFirmActivity::olderThan($logs, 'log', $cursor);
+        $logRows = $logs->orderByDesc('created_at')->orderByDesc('id')->limit($limit + 1)->get();
+
+        $fileRows = collect();
+        if (ProviderFirmActivity::wantsFiles($request)) {
+            $files = ProviderFirmActivity::files($user);
+            ProviderFirmActivity::applyFileFilters($files, $request);
+            ProviderFirmActivity::olderThan($files, 'file', $cursor);
+            $fileRows = $files->orderByDesc('created_at')->orderByDesc('id')->limit($limit + 1)->get();
+        }
+
+        return ProviderFirmActivity::merge($logRows, $fileRows, $limit);
     }
 
     private function applyFilters($query, Request $request, bool $isAdmin): void

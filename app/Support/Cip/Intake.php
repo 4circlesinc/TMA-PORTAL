@@ -2155,6 +2155,13 @@ class Intake
                     $person->delete();
                 }
 
+                /*
+                 * Keep this slot. Dropping it used to shift every later row
+                 * left, so the next child's passport photo was filed onto
+                 * this person.
+                 */
+                $unique[] = $duplicateOf;
+
                 continue;
             }
 
@@ -2370,7 +2377,9 @@ class Intake
      * requires it, and the person's likeness, because that is the profile
      * picture every list draws. One upload, recorded in both places.
      *
-     * @param  list<string>  $dependentUuids  dependents in the order the form sent them
+     * Each photo is filed onto the person that form row names. A row is never
+     * paired by its position alone: collapsing a duplicate used to shorten
+     * the person list and slide the next child's photo onto someone else.
      */
     private static function fileUploads(CipApplication $application, array $data, User $creator, array $dependentUuids = []): void
     {
@@ -2386,16 +2395,52 @@ class Intake
             self::fileDocuments($sponsor, $data['sponsor'] ?? [], $creator);
         }
 
-        $rows = array_values($data['dependents'] ?? []);
-        foreach ($dependentUuids as $index => $uuid) {
-            $person = $application->people->firstWhere('uuid', $uuid);
-            $row = $rows[$index] ?? [];
+        foreach (array_values($data['dependents'] ?? []) as $index => $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+
+            $person = self::dependentForRow($application, $row, $dependentUuids[$index] ?? null);
             if (! $person) {
                 continue;
             }
+
             self::filePhoto($person, $row['passportPhoto'] ?? null, $creator);
             self::fileDocuments($person, $row, $creator);
         }
+    }
+
+    /**
+     * The dependent this form row is filing scans for.
+     *
+     * The uuid on the row wins. The uuid captured when the row was synced
+     * wins next, so two children who share a name still keep their own
+     * photos. Name is only the fallback for a row that arrived without one.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private static function dependentForRow(CipApplication $application, array $row, ?string $syncedUuid): ?CipPerson
+    {
+        $application->loadMissing('people');
+
+        foreach ([$row['id'] ?? null, $syncedUuid] as $uuid) {
+            $uuid = trim((string) $uuid);
+            if ($uuid === '') {
+                continue;
+            }
+
+            $person = $application->people->first(
+                fn (CipPerson $p) => $p->uuid === $uuid && $p->role === CipPerson::ROLE_DEPENDENT,
+            );
+            if ($person) {
+                return $person;
+            }
+        }
+
+        return self::matchDependentByIdentity(
+            $application->people->where('role', CipPerson::ROLE_DEPENDENT),
+            $row,
+        );
     }
 
     /**

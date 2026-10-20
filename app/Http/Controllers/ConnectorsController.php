@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\SharePointConnection;
+use App\Support\Cip\CipAccess;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -17,6 +18,8 @@ class ConnectorsController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        abort_if(CipAccess::isProviderContact($request->user()), 403);
+
         $account = $request->user()->connectedAccounts()
             ->where('provider', 'microsoft')
             ->first();

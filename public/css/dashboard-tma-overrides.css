@@ -2060,6 +2060,14 @@ body::-webkit-scrollbar,
     object-fit: contain;
   }
 
+  /* An application in the bin is a person. The mark beside the name is their
+     photo, circled, not a folder squeezed into the same box. */
+  .tma-portal-table.tma-portal-files-table td.tma-portal-cell--name
+    .tma-portal-avatar-cell img.tma-dash__overview-recycle-avatar {
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
   /* Whatever the mark did, the name stops at the row's edge. */
   .tma-portal-table.tma-portal-files-table td.tma-portal-cell--name .tma-portal-avatar-cell {
     max-width: 100%;

@@ -11,6 +11,8 @@ use App\Events\MessageReacted;
 use App\Events\MessageSent;
 use App\Events\MessageUpdated;
 use App\Events\UserTyping;
+use App\Models\CipApplication;
+use App\Models\CipApplicationMessage;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\LinkPreview;
@@ -23,6 +25,7 @@ use App\Models\UserBlock;
 use App\Models\WorkDay;
 use App\Support\Access\ContactScope;
 use App\Support\Access\Role;
+use App\Support\Cip\Threads;
 use App\Support\Files\FileValidationException;
 use App\Support\Messaging\AttachmentIntake;
 use App\Support\Messaging\Broadcaster;
@@ -33,10 +36,10 @@ use App\Support\Messaging\MessageNotifier;
 use App\Support\Messaging\MessagingPresenter;
 use App\Support\Messaging\MessagingSearch;
 use App\Support\Messaging\MessagingSettings;
-use App\Support\Messaging\Posting;
-use App\Support\Messaging\ReadReceipts;
 use App\Support\Messaging\OrganizationChat;
+use App\Support\Messaging\Posting;
 use App\Support\Messaging\PresenceService;
+use App\Support\Messaging\ReadReceipts;
 use App\Support\Messaging\TabCounts;
 use App\Support\Notifications\Push;
 use App\Support\Presence\AvailabilityService;
@@ -81,14 +84,29 @@ class MessagingController extends Controller
         $conversations = Conversation::query()
             ->forUser($user)
             ->listedInInbox()
+            ->when(! Role::isStaff($user), function ($query) {
+                // A case thread that so far holds only internal notes is not
+                // this person's correspondence.
+                $query->where(function ($inner) {
+                    $inner->where(function ($subject) {
+                        $subject->whereNull('subject')
+                            ->orWhere('subject', '!=', Conversation::SUBJECT_PROVIDER);
+                    })->orWhereHas('messages', function ($messages) {
+                        $messages->where('type', '!=', Message::TYPE_SYSTEM)
+                            ->where(function ($lane) {
+                                $lane->whereNull('lane')->orWhere('lane', '!=', Message::LANE_INTERNAL);
+                            });
+                    });
+                });
+            })
             ->with([
                 // presence comes along so PresenceService does not fetch it one
                 // subject at a time while presenting the list.
                 'activeParticipants.user.presence',
                 'client:id,uid,name,photo_url',
                 'company:id,uid,name',
-                // Only the newest message is needed for the list preview.
-                'messages' => fn ($q) => $q->latest('id')->limit(1)->with(['sender', 'attachments']),
+                // Only the newest message this viewer may see, for the preview.
+                'messages' => fn ($q) => $q->visibleTo($user)->latest('id')->limit(1)->with(['sender', 'attachments']),
             ])
             ->orderByDesc('last_message_at')
             ->get();
@@ -217,6 +235,12 @@ class MessagingController extends Controller
             // thread nobody had written in, which became obvious once calls
             // started writing one line per call.
             ->where('messages.type', '!=', Message::TYPE_SYSTEM)
+            ->when(! Role::isStaff($user), function ($query) {
+                $query->where(function ($lane) {
+                    $lane->whereNull('messages.lane')
+                        ->orWhere('messages.lane', '!=', Message::LANE_INTERNAL);
+                });
+            })
             // Anything past this participant's read high-water mark…
             ->whereRaw('messages.id > coalesce(cp.last_read_message_id, 0)')
             // …and past anything they cleared, so a cleared chat cannot come
@@ -272,6 +296,7 @@ class MessagingController extends Controller
 
         $base = fn () => $conversation->messages()
             ->withTrashed()
+            ->visibleTo($user)
             ->with(['sender', 'attachments', 'reactions.user', 'stars', 'mentions', 'replyTo.sender', 'replyTo.attachments'])
             // Respect this participant's own "clear chat" marker. It is
             // personal: the other side still sees everything.
@@ -319,10 +344,10 @@ class MessagingController extends Controller
         $hasMore = $page->count() > self::MESSAGE_PAGE;
         $messages = $page->take(self::MESSAGE_PAGE)->reverse()->values();
 
-        // The row summary only needs the newest message. Without this the
-        // presenter's preview would lazily pull the conversation's entire
-        // history just to look at its last entry.
-        $conversation->load(['messages' => fn ($q) => $q->latest('id')->limit(1)]);
+        // The row summary only needs the newest message this viewer may see.
+        // Without this the presenter's preview would lazily pull the
+        // conversation's entire history just to look at its last entry.
+        $conversation->load(['messages' => fn ($q) => $q->visibleTo($user)->latest('id')->limit(1)]);
 
         $seen = ReadReceipts::forMessages($messages, $conversation, $user);
 
@@ -357,6 +382,9 @@ class MessagingController extends Controller
             'attachments.*' => ['string'],
             // Marks the message for the whole group. Its admins only.
             'announcement' => ['nullable', 'boolean'],
+            // Case groups only. Omitted keeps the whole group, which is how a
+            // message typed here has always behaved.
+            'lane' => ['nullable', 'in:internal,provider'],
         ]);
 
         $body = trim((string) ($data['body'] ?? ''));
@@ -412,6 +440,21 @@ class MessagingController extends Controller
             // one exception is answering somebody privately.
             $replyTo = $conversation->messages()->where('uuid', $data['replyTo'])->first()
                 ?? $this->privateReplySource($conversation, $user, $data['replyTo']);
+
+            if ($replyTo?->hiddenFrom($user)) {
+                $replyTo = null;
+            }
+        }
+
+        if ($conversation->isProviderCase() && $staged->isEmpty() && ! $announcement && $body !== '') {
+            $lane = $this->caseLane($user, $data['lane'] ?? null);
+
+            // Long lines stay a plain chat message, the same send as before.
+            // An internal note has nowhere else to go, so it keeps the file's
+            // own length limit rather than spilling onto the provider's side.
+            if ($lane === CipApplicationMessage::LANE_INTERNAL || mb_strlen($body) <= Threads::MAX_LENGTH) {
+                return $this->fileOnApplication($conversation, $user, $lane, $body, $replyTo, $data['nonce'] ?? null);
+            }
         }
 
         [$message, $mentioned] = Posting::write($conversation, $user, [
@@ -501,7 +544,7 @@ class MessagingController extends Controller
             ->whereRaw('lower(body) like ?', ['%http%'])
             ->count();
 
-        $conversation->load(['messages' => fn ($q) => $q->latest('id')->limit(1)]);
+        $conversation->load(['messages' => fn ($q) => $q->visibleTo($user)->latest('id')->limit(1)]);
 
         $memberUsers = $conversation->isGroup()
             ? $conversation->activeParticipants->map(fn (ConversationParticipant $p) => $p->user)->filter()
@@ -1337,6 +1380,10 @@ class MessagingController extends Controller
             'reminder_tier' => 0,
         ])->save();
 
+        // A copy of an application message is the same line. Seen here means
+        // the applications list no longer calls it unread for this reader.
+        Threads::noteSeenInMessages($user, (int) $conversation->id, (int) $participant->last_read_message_id);
+
         // Only tell the room if this user publishes read receipts. Their own
         // unread badge still clears either way.
         if (MessagingSettings::get($user, 'readReceipts')) {
@@ -1848,14 +1895,93 @@ class MessagingController extends Controller
     /** Same guard, reached through the message's conversation. */
     private function messageFor(Request $request, string $uuid): Message
     {
-        return Message::query()
+        $message = Message::query()
             ->whereHas('conversation', fn ($q) => $q->forUser($request->user()))
             ->with('conversation.activeParticipants.user')
             ->where('uuid', $uuid)
             ->firstOrFail();
+
+        abort_if($message->hiddenFrom($request->user()), 404);
+
+        return $message;
     }
 
-    /** A blocked pair may not exchange messages in their direct thread. */
+    /**
+     * Which side of the application a case-group send belongs on.
+     *
+     * Leaving the lane off keeps the message with the whole group. Asking
+     * for an internal note is staff only.
+     */
+    private function caseLane(User $user, ?string $lane): string
+    {
+        if ($lane === CipApplicationMessage::LANE_INTERNAL && ! Role::isStaff($user)) {
+            throw ValidationException::withMessages([
+                'lane' => 'Internal notes are staff only.',
+            ]);
+        }
+
+        if ($lane === null || $lane === '') {
+            return CipApplicationMessage::LANE_PROVIDER;
+        }
+
+        return $lane;
+    }
+
+    /**
+     * A text send in the case group is the same message as the one on the file.
+     */
+    private function fileOnApplication(
+        Conversation $conversation,
+        User $user,
+        string $lane,
+        string $body,
+        ?Message $replyTo,
+        ?string $nonce,
+    ): JsonResponse {
+        $application = $conversation->cip_application_id
+            ? CipApplication::query()->find($conversation->cip_application_id)
+            : null;
+
+        if (! $application && $conversation->client_id) {
+            $application = CipApplication::query()
+                ->where('client_id', $conversation->client_id)
+                ->latest('id')
+                ->first();
+        }
+
+        if (! $application) {
+            throw ValidationException::withMessages([
+                'body' => 'This conversation is no longer attached to an application.',
+            ]);
+        }
+
+        $replyUuid = null;
+
+        if ($replyTo?->cip_application_message_id) {
+            $replyUuid = CipApplicationMessage::query()
+                ->whereKey($replyTo->cip_application_message_id)
+                ->value('uuid');
+        }
+
+        $filed = Threads::create($application, $user, $body, $lane, $replyUuid);
+
+        $copy = Message::query()
+            ->where('cip_application_message_id', $filed->id)
+            ->firstOrFail();
+
+        $copy->forceFill([
+            'client_nonce' => $nonce,
+            'reply_to_id' => $copy->reply_to_id ?: $replyTo?->id,
+        ])->save();
+
+        $copy->load(Posting::RELATIONS);
+        $copy->setRelation('conversation', $conversation);
+
+        return response()->json([
+            'message' => MessagingPresenter::message($copy, $user, $conversation),
+        ]);
+    }
+
     /**
      * The message a private reply answers.
      *
@@ -1896,6 +2022,7 @@ class MessagingController extends Controller
         return $inGroup ? $quoted : null;
     }
 
+    /** A blocked pair may not exchange messages in their direct thread. */
     private function assertNotBlocked(Conversation $conversation, User $user): void
     {
         if ($conversation->isGroup()) {

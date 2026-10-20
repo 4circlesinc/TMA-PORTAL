@@ -8,6 +8,18 @@
 (function () {
   'use strict';
 
+  if (!window.__tmaAvatarFallback) {
+    window.__tmaAvatarFallback = true;
+    document.addEventListener('error', function (event) {
+      var img = event.target;
+      if (!img || img.tagName !== 'IMG' || !img.getAttribute) return;
+      var fallback = img.getAttribute('data-fallback');
+      if (!fallback || img.getAttribute('data-fallback-used')) return;
+      img.setAttribute('data-fallback-used', '1');
+      img.src = fallback;
+    }, true);
+  }
+
   var ROOT = window.__TMA_SITE_ROOT || '';
   var BASE = ROOT + '/portal/admin/recycle-bin';
   var ICON = 'images/icons/phosphor/';
@@ -122,21 +134,26 @@
     var px = size || 24;
     var iconPx = px >= 40 ? 40 : 16;
 
-    if (kind === 'folder' || kind === 'cip_application') {
+    if (kind === 'folder') {
       var html = window.TMAFolderIcons
         ? window.TMAFolderIcons.html('FolderFilled', meta.colour, meta.iconName, px)
         : '<img src="' + ICON + 'Folder.svg" alt="" width="' + px + '" height="' + px + '">';
       return { html: html, tone: '' };
     }
 
-    // Accounts and clients are both people: show the face, falling back to the
-    // same initials tile the rest of the portal draws.
-    if (kind === 'client' || kind === 'user') {
+    // Accounts, clients, and applications are people: show the face, falling
+    // back to the same initials tile the rest of the portal draws.
+    if (kind === 'client' || kind === 'user' || kind === 'cip_application') {
       var photo = meta.avatarUrl;
-      var src = avatarSrc(photo, item.name);
+      var who = meta.avatarName || item.name;
+      var src = avatarSrc(photo, who);
+      var fallback = avatarSrc('', who);
+      var fail = (fallback && fallback !== src)
+        ? ' data-fallback="' + esc(fallback) + '"'
+        : '';
       return {
         html: '<img class="tma-dash__overview-recycle-avatar' + (px >= 40 ? ' tma-dash__overview-recycle-avatar--lg' : '') +
-          '" src="' + esc(src) + '" alt="" width="' + px + '" height="' + px + '">',
+          '"' + fail + ' src="' + esc(src) + '" alt="" width="' + px + '" height="' + px + '">',
         tone: '',
       };
     }

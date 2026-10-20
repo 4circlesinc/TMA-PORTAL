@@ -12,6 +12,7 @@ use App\Models\MessageReaction;
 use App\Models\User;
 use App\Models\UserBlock;
 use App\Models\WorkDay;
+use App\Support\Access\Role;
 use App\Support\Files\Vault;
 use App\Support\Presence\AvailabilityService;
 use App\Support\UserTime;
@@ -315,6 +316,8 @@ class MessagingPresenter
             'isDefault' => (bool) $conversation->is_default,
             // Membership is the staff list: nobody is added or removed by hand.
             'autoJoin' => (bool) $conversation->auto_join,
+            // Staff writing in the case group choose internal or service provider.
+            'caseFile' => $conversation->isProviderCase() && Role::isStaff($viewer),
             'canManage' => $conversation->isManageableBy($viewer),
             'canLeave' => $conversation->isLeavableBy($viewer),
             // Drives Block vs Unblock in the conversation menu.
@@ -355,7 +358,10 @@ class MessagingPresenter
             ] : null,
             'sentAt' => $message->created_at->toIso8601String(),
             'time' => UserTime::format($message->created_at, $viewer, 'g:i A'),
-            'replyTo' => $message->replyTo ? self::replyStub($message->replyTo, $message, $viewer) : null,
+            'lane' => $deleted ? null : $message->lane,
+            'replyTo' => $message->replyTo && ! $message->replyTo->hiddenFrom($viewer)
+                ? self::replyStub($message->replyTo, $message, $viewer)
+                : null,
             // Marked for the whole group by one of its admins.
             'announcement' => ! $deleted && (bool) $message->is_announcement,
             // Passed on from another conversation by whoever sent it here.

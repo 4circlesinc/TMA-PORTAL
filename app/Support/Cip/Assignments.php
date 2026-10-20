@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Clients\Assignments as ClientAssignments;
+use App\Support\Messaging\ClientConversations;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -31,7 +32,7 @@ use Illuminate\Support\Facades\DB;
  * administrator reassign at any time, and a file that has reached assessment
  * feedback has not gone back to the beginning because it changed hands.
  *
- * Sibling to {@see \App\Support\Clients\Assignments}, which does the same job
+ * Sibling to {@see ClientAssignments}, which does the same job
  * for a client in the hub. The two should read alike.
  */
 class Assignments
@@ -438,6 +439,12 @@ class Assignments
         if ($announce && ! $shared && $fromStatus !== Status::NEW) {
             $application = $application->fresh();
             Notices::announce($application, $application->status, $actor);
+        }
+
+        $application->loadMissing('client');
+
+        if ($application->client) {
+            ClientConversations::joinCaseThread($application->client, $officer);
         }
 
         return $assignment;

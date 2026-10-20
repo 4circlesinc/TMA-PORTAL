@@ -59,10 +59,9 @@ use Illuminate\Support\Str;
  * draft IS the application and a second home would only have to be moved
  * later.
  *
- * The folder question is answered at the other end instead. Discarding a
- * draft removes the form outright — nobody refers to an unfiled one — and
- * soft-deletes its folder, so the paper sits in the recycle bin and a reader
- * who threw away the wrong draft can get it back.
+ * Throwing a draft away archives it. The row, its people and its paper go
+ * to the recycle bin, and a reader who threw away the wrong draft can put
+ * the application back. The client record stays.
  */
 class CipApplicationDraftController extends Controller
 {

@@ -3,6 +3,7 @@
 namespace App\Support\Access;
 
 use App\Models\User;
+use App\Support\Cip\CipAccess;
 use App\Support\Clients\ClientHubSettings;
 
 /**
@@ -440,8 +441,11 @@ class Role
         'geo-access' => 'settings.security',
         'alert-settings' => 'settings.security',
         'device-security' => 'settings.security',
-        // "Connectors" stays open, it is where anyone links their own
-        // Microsoft account (Outlook, Calendar, OneDrive).
+        // "Connectors" stays open for staff and private clients: it is where
+        // they link their own Microsoft account. Service provider contacts
+        // are closed in canViewSettingsPage, not by listing a capability
+        // here — an unlisted page is personal, and a listed one would close
+        // it for employees too.
         'storage-usage' => 'settings.storage',
         'permissions' => 'settings.advanced',
         'default-folders' => 'files.settings',
@@ -463,6 +467,10 @@ class Role
     /** May this user open the given account settings section? */
     public static function canViewSettingsPage(?User $user, string $page): bool
     {
+        if ($page === 'connectors' && $user !== null && CipAccess::isProviderContact($user)) {
+            return false;
+        }
+
         $capability = self::SETTINGS_PAGE_CAPABILITIES[$page] ?? null;
 
         return $capability === null || self::can($user, $capability);

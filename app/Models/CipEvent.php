@@ -204,9 +204,10 @@ class CipEvent extends Model
     /**
      * The application was taken off the caseload.
      *
-     * Its own action rather than a missing row: a numbered file that somebody
+     * Its own action rather than a missing row: a file that somebody
      * deleted is still a file the firm referred to, and the audit has to say
-     * who removed it. Drafts are removed outright and never write this.
+     * who removed it. Drafts write it too, because a draft is restored from
+     * the same bin.
      */
     public const ACTION_DELETED = 'deleted';
 

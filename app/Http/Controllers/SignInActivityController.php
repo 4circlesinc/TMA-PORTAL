@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AuthEvent;
 use App\Support\Access\Role;
+use App\Support\Activity\ProviderFirmActivity;
 use App\Support\Notifications\NotificationPresenter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,8 +18,9 @@ use Illuminate\Http\Request;
  * their own rows, which is the opposite of what a "who signed in" card is for.
  *
  * Staff-gated, not administrator-gated: employees see the firm's sign-ins too.
- * Clients never do, they have no business seeing when staff sign in, and the
- * Overview page is closed to them anyway ({@see Role::PAGE_CAPABILITIES}).
+ * A Service Provider admin sees sign-ins and sign-outs of the people at their
+ * own firm. A regular provider contact does not, and neither does a private
+ * client.
  *
  * IP and device stay out of the payload. The audit trail serialises those for
  * administrators only, and this endpoint has a wider audience; the full table,
@@ -33,12 +35,17 @@ class SignInActivityController extends Controller
 
     public function __invoke(Request $request): JsonResponse
     {
-        Role::authorizeStaff($request->user());
+        $user = $request->user();
+        $firm = ProviderFirmActivity::applies($user);
+        if (! $firm) {
+            Role::authorizeStaff($user);
+        }
 
         $limit = min(max((int) $request->query('limit', self::LIMIT), 1), 50);
 
         $events = AuthEvent::with('user')
-            ->whereIn('event', self::EVENTS)
+            ->whereIn('event', $firm ? ['login', 'logout'] : self::EVENTS)
+            ->when($firm, fn ($query) => $query->whereIn('user_id', ProviderFirmActivity::memberUserIds($user)))
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->limit($limit)
@@ -67,6 +74,7 @@ class SignInActivityController extends Controller
 
         return match ($event->event) {
             'login' => $name ? $name.' signed in' : 'Someone signed in',
+            'logout' => $name ? $name.' signed out' : 'Someone signed out',
             'lockout' => $name
                 ? $name.' was locked out after too many attempts'
                 : 'An account was locked out after too many attempts',

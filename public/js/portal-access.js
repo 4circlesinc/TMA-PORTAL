@@ -568,7 +568,10 @@
     can: can,
     fitNavSpacing: fitNavSpacing,
     holds: holds,
-    canSettingsPage: function (pageId) { return can(SETTINGS_CAPABILITIES[pageId]); },
+    canSettingsPage: function (pageId) {
+      if (pageId === 'connectors' && providerContact) return false;
+      return can(SETTINGS_CAPABILITIES[pageId]);
+    },
     settingsCapabilities: function () { return SETTINGS_CAPABILITIES; },
     apply: apply,
     ready: function () { return readyPromise; },

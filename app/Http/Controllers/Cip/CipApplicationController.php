@@ -1921,10 +1921,9 @@ class CipApplicationController extends Controller
     /**
      * Take an application off the caseload.
      *
-     * A draft is discarded outright, the way the wizard already does. A
-     * numbered file is soft-deleted so the audit still names it, and the
-     * client it was for is left standing — deleting an application is not
-     * deleting the person.
+     * Draft or filed, the file is soft-deleted so it can be restored from
+     * the recycle bin. The client it was for is left standing — deleting an
+     * application is not deleting the person.
      *
      * Already gone is success, not 404. A second click, a retry after the
      * first write landed, and a live echo that refetches while the first
@@ -1944,7 +1943,7 @@ class CipApplicationController extends Controller
         return response()->json(['status' => 'ok']);
     }
 
-    /** Put a numbered file back on the caseload from the recycle bin. */
+    /** Put a file back on the caseload from the recycle bin. */
     public function restore(Request $request, string $uuid): JsonResponse
     {
         $application = $this->removalTarget($request, $uuid);

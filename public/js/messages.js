@@ -3773,6 +3773,13 @@
           'Announcement</span>'
         : '';
 
+    var laneHtml =
+      row && row.caseFile && msg.lane && !msg.deleted
+        ? '<span class="tma-dash__messages-bubble-lane">' +
+          (msg.lane === 'internal' ? 'Internal' : 'Service provider') +
+          '</span>'
+        : '';
+
     // Passed on from another conversation by whoever sent it here.
     var forwardedHtml =
       msg.forwarded && !msg.deleted
@@ -3792,6 +3799,7 @@
       (msg.pending ? ' tma-dash__messages-bubble--pending' : '') +
       '">' +
       senderHtml +
+      laneHtml +
       announcementHtml +
       forwardedHtml +
       renderQuotedReply(msg) +
@@ -4267,6 +4275,41 @@
     );
   }
 
+  function caseLane(state, conversationId) {
+    if (!state.caseLaneById) state.caseLaneById = {};
+    return state.caseLaneById[conversationId] || 'internal';
+  }
+
+  function renderCaseLanes(state) {
+    var thread = state.selectedId ? findThread(state.selectedId) : null;
+    if (!thread || !thread.caseFile || state.editing || state.recording) return '';
+
+    var lane = caseLane(state, state.selectedId);
+    var hint = lane === 'internal'
+      ? 'Only staff can see this. It stays off the service provider’s side.'
+      : 'The service provider can see this, on the file and in Messages.';
+
+    function option(value, label) {
+      return (
+        '<label class="tma-portal-radio">' +
+        '<input type="radio" name="messages-case-lane" value="' + value + '" data-messages-case-lane' +
+        (lane === value ? ' checked' : '') + '>' +
+        '<span class="tma-portal-radio__dot" aria-hidden="true"></span> ' + label +
+        '</label>'
+      );
+    }
+
+    return (
+      '<div class="tma-dash__messages-composer-lanes">' +
+      '<div class="tma-portal-radio-row" role="radiogroup" aria-label="Who this message is for">' +
+      option('internal', 'Internal') +
+      option('provider', 'Service provider') +
+      '</div>' +
+      '<p class="tma-dash__messages-composer-lane-hint" data-messages-case-lane-hint>' + esc(hint) + '</p>' +
+      '</div>'
+    );
+  }
+
   function renderComposer(state) {
     var draft = getComposerDraft(state);
     var editing = !!state.editing;
@@ -4275,6 +4318,7 @@
       '<div class="tma-dash__messages-composer-wrap' +
       (editing ? ' tma-dash__messages-composer-wrap--editing' : '') +
       '">' +
+      renderCaseLanes(state) +
       renderMentionMenu(state) +
       renderEmojiPicker(state) +
       (editing
@@ -4458,6 +4502,20 @@
     var emojiBtn = composer.querySelector('[data-messages-composer-emoji]');
     var sendBtn = composer.querySelector('[data-messages-composer-send]');
     var picker = composer.querySelector('[data-messages-emoji-picker]');
+
+    composer.querySelectorAll('[data-messages-case-lane]').forEach(function (laneInput) {
+      MORPH.on(laneInput, 'change', function () {
+        if (!state.selectedId) return;
+        if (!state.caseLaneById) state.caseLaneById = {};
+        state.caseLaneById[state.selectedId] = laneInput.value;
+        var hint = composer.querySelector('[data-messages-case-lane-hint]');
+        if (hint) {
+          hint.textContent = laneInput.value === 'internal'
+            ? 'Only staff can see this. It stays off the service provider’s side.'
+            : 'The service provider can see this, on the file and in Messages.';
+        }
+      });
+    });
 
     if (input) {
       syncComposerInputState(input);
@@ -6749,6 +6807,13 @@
     // Nothing to send at all.
     if (!text.trim() && !ready.length) return;
 
+    var thread = findThread(conversationId);
+    var lane = thread && thread.caseFile ? caseLane(state, conversationId) : null;
+    if (lane === 'internal' && ready.length) {
+      showMessagesToast(root, 'An internal note can’t include files.');
+      return;
+    }
+
     // Hold the send while uploads are still running, rather than silently
     // dropping the files that haven't finished.
     if (queued.some(function (item) { return item.status === 'uploading'; })) {
@@ -6803,6 +6868,7 @@
       starred: false,
       status: null,
       pending: true,
+      lane: lane,
       can: { edit: false, delete: false },
     };
 
@@ -6827,12 +6893,15 @@
 
     render({ chatToBottom: true });
 
-    window.TMAMessagingAPI.send(conversationId, {
+    var payload = {
       body: text,
       replyTo: replyTo,
       nonce: nonce,
       attachments: attachmentIds,
-    })
+    };
+    if (lane) payload.lane = lane;
+
+    window.TMAMessagingAPI.send(conversationId, payload)
       .then(function (data) {
         var bucket = threadBucket(conversationId);
         var confirmed = data.message;
@@ -7510,7 +7579,13 @@
         window.TMAMessagingAPI.markDelivered(conversationId).catch(function () {});
         if (!document.hidden) markConversationRead(root, state, render, conversationId);
 
-        notifyNewMessage(root, conversationId, payload);
+        // An internal note shares the case channel. Someone who cannot see it
+        // gets a page that does not contain the message, and should not be
+        // told that something arrived.
+        var arrived = !payload || !payload.messageId || (data.messages || []).some(function (m) {
+          return m.id === payload.messageId;
+        });
+        if (arrived) notifyNewMessage(root, conversationId, payload);
       })
       .catch(function () {
         // The event is only the doorbell, and it rings once. Ask again
@@ -8780,6 +8855,11 @@
     var file = new File([rec.blob], 'voice-note.' + extension, { type: rec.mimeType });
 
     var conversationId = state.selectedId;
+    var voiceThread = findThread(conversationId);
+    if (voiceThread && voiceThread.caseFile && caseLane(state, conversationId) === 'internal') {
+      showMessagesToast(root, 'An internal note can’t include a voice message.');
+      return;
+    }
     var durationMs = rec.durationMs;
     var waveform = rec.waveform;
 

@@ -7,9 +7,12 @@ use App\Events\MessageSent;
 use App\Events\MessageUpdated;
 use App\Models\CallRecording;
 use App\Models\CipApplication;
+use App\Models\CipApplicationAssignment;
 use App\Models\CipApplicationMessage;
-use App\Models\ClientAssignment;
+use App\Models\CipApplicationMessageRead;
+use App\Models\CipApplicationMessageReceipt;
 use App\Models\Client;
+use App\Models\ClientAssignment;
 use App\Models\Company;
 use App\Models\CompanyMember;
 use App\Models\Conversation;
@@ -201,36 +204,43 @@ class ClientConversations
     }
 
     /**
-     * The firm's side of a case thread the provider opened.
+     * Who at the firm belongs in the case thread, whoever opened it.
      *
-     * Section 24's thread already answers "who at the firm is this provider
-     * talking to" for its own messages — administrators plus the officers
-     * actually holding the file — so the group uses the same rule rather than
-     * inventing a second one. Staff who open it themselves are added by being
-     * the actor, and anyone assigned later joins on their next visit through
-     * the ordinary attach path.
+     * Every administrator, plus the officers actually holding the file.
+     * A provider message on the application is correspondence for that
+     * whole group, so it has to be in their inbox without any one of them
+     * having clicked Message first. The person who opened it is added by
+     * the caller when they are not already in this set.
      *
      * @return Collection<int, User>
      */
-    private static function firmSideFor(Client $client, User $actor): Collection
+    private static function firmSideFor(Client $client): Collection
     {
-        if (Role::isStaff($actor)) {
-            return collect();
-        }
-
         $admins = User::query()
             ->where('account_type', Role::ADMINISTRATOR)
             ->where('status', User::STATUS_APPROVED)
             ->get();
 
+        $applicationIds = CipApplication::query()
+            ->where('client_id', $client->id)
+            ->select('id');
+
         // whereIn + subquery, the ClientScope convention: the assignment index
         // answers directly rather than a correlated EXISTS per user row.
+        // The hub assignment and the CIP assignment are the same hold, written
+        // from either screen; a file named on only one of them still counts.
         $officers = User::query()
             ->where('status', User::STATUS_APPROVED)
-            ->whereIn('id', ClientAssignment::query()
-                ->select('user_id')
-                ->live()
-                ->where('client_id', $client->id))
+            ->where(function ($query) use ($client, $applicationIds) {
+                $query->whereIn('id', ClientAssignment::query()
+                    ->select('user_id')
+                    ->live()
+                    ->where('client_id', $client->id))
+                    ->orWhereIn('id', CipApplicationAssignment::query()
+                        ->select('user_id')
+                        ->live()
+                        ->whereIn('application_id', $applicationIds));
+            })
             ->get();
 
         return $admins->concat($officers)->unique('id')->values();
@@ -253,7 +263,7 @@ class ClientConversations
         }
 
         $application = self::applicationFor($client);
-        $staff = self::firmSideFor($client, $actor);
+        $staff = self::firmSideFor($client);
 
         return DB::transaction(function () use ($client, $actor, $company, $members, $application, $staff) {
             $conversation = Conversation::query()
@@ -445,6 +455,11 @@ class ClientConversations
      */
     public static function attachLogin(User $user): void
     {
+        // An administrator, the officer holding the file, or the provider
+        // firm should already be in the case thread before the inbox is
+        // drawn, including messages that landed before they had a login.
+        self::provisionCaseThreads($user);
+
         $clientIds = Client::query()->where('user_id', $user->id)->pluck('id');
 
         if ($clientIds->isNotEmpty()) {
@@ -625,14 +640,15 @@ class ClientConversations
     }
 
     /**
-     * Copy the file's service-provider messages into this case group.
+     * Copy the file's messages into this case group.
      *
-     * Internal notes stay on the file. A message already copied is left
-     * where it is, so opening the group again does not repeat it. People
-     * who had already read the chat stay caught up; the history is there
-     * when they scroll, without a badge for words that were already on the file.
+     * Internal notes are copied and tagged, so staff see them and the
+     * service provider does not. A message already copied is left where it
+     * is, so opening the group again does not repeat it. A copy is unread
+     * in the inbox until that person has read it, on the file or here.
+     * Reading it here is what clears it on the application.
      */
-    public static function syncProviderFile(Conversation $conversation): void
+    public static function syncProviderFile(Conversation $conversation, ?User $except = null): void
     {
         $applicationId = $conversation->cip_application_id;
 
@@ -647,11 +663,12 @@ class ClientConversations
             return;
         }
 
-        $previousMax = (int) $conversation->messages()->max('id');
+        $hadCorrespondence = $conversation->messages()
+            ->where('type', '!=', Message::TYPE_SYSTEM)
+            ->exists();
 
         $rows = CipApplicationMessage::query()
             ->where('application_id', $applicationId)
-            ->where('lane', CipApplicationMessage::LANE_PROVIDER)
             ->orderBy('id')
             ->get();
 
@@ -659,30 +676,82 @@ class ClientConversations
             self::copyProviderMessage($conversation, $row, false);
         }
 
-        self::keepCaughtUpReaders($conversation, $previousMax);
+        self::alignFileReads($conversation);
         self::touchLastMessage($conversation);
+
+        // The first real copy is what puts the thread in the inbox. People
+        // are not subscribed to a conversation they have never been shown.
+        // A thread that so far holds only internal notes is staff's to see.
+        $hasCopy = $conversation->messages()->where('type', '!=', Message::TYPE_SYSTEM)->exists();
+        $providerCanSee = $conversation->messages()
+            ->where('type', '!=', Message::TYPE_SYSTEM)
+            ->where(fn ($query) => $query->whereNull('lane')->orWhere('lane', '!=', Message::LANE_INTERNAL))
+            ->exists();
+
+        if (! $hadCorrespondence && $hasCopy) {
+            MessageNotifier::surfaceInInbox($conversation, $except, ! $providerCanSee);
+        }
     }
 
     /**
-     * A service-provider message just landed on the file. If the case group
-     * already exists, it lands there too. Opening the group later copies
-     * anything that arrived before the group did.
+     * A service-provider message just landed on the file.
+     *
+     * The case group is created if nobody has opened Message yet, with every
+     * administrator and the officers holding the file already in it, and the
+     * copy is unread for anyone who has not read that line on the application.
      */
     public static function mirrorProviderMessage(CipApplicationMessage $message): void
     {
-        if ($message->lane !== CipApplicationMessage::LANE_PROVIDER) {
+        if (! in_array($message->lane, CipApplicationMessage::LANES, true)) {
             return;
         }
 
-        $message->loadMissing('application');
-        $clientId = $message->application?->client_id;
+        $message->loadMissing('application.client', 'author');
+        $application = $message->application;
+        $client = $application?->client;
 
-        if (! $clientId) {
+        if (! $application || ! $client) {
+            return;
+        }
+
+        $alreadyCopied = Message::query()
+            ->where('cip_application_message_id', $message->id)
+            ->exists();
+
+        $conversation = self::openCaseRecord($client, $application, $message->author);
+        self::syncProviderFile($conversation, $message->author);
+
+        if ($alreadyCopied) {
+            return;
+        }
+
+        $copy = Message::query()
+            ->where('cip_application_message_id', $message->id)
+            ->first();
+
+        if (! $copy) {
+            return;
+        }
+
+        $copy->setRelation('conversation', $conversation);
+        Broadcaster::to(new MessageSent($copy));
+    }
+
+    /**
+     * Put this person in the case thread, when the file already has one.
+     *
+     * Assigning an officer after the conversation exists is the same join as
+     * opening Message: the history is there, and lines they have not read on
+     * the application stay unread in the inbox.
+     */
+    public static function joinCaseThread(Client $client, User $user): void
+    {
+        if ($user->status !== User::STATUS_APPROVED) {
             return;
         }
 
         $conversation = Conversation::query()
-            ->where('client_id', $clientId)
+            ->where('client_id', $client->id)
             ->where('subject', Conversation::SUBJECT_PROVIDER)
             ->first();
 
@@ -690,12 +759,14 @@ class ClientConversations
             return;
         }
 
-        $conversation->cip_application_id ??= $message->application_id;
-        $copied = self::copyProviderMessage($conversation, $message, true);
-
-        if ($copied) {
-            self::touchLastMessage($conversation);
-        }
+        self::ensureMember(
+            $conversation,
+            $user,
+            Role::isStaff($user)
+                ? ConversationParticipant::ROLE_ADMIN
+                : ConversationParticipant::ROLE_MEMBER
+        );
+        self::alignFileReads($conversation);
     }
 
     /**
@@ -748,7 +819,13 @@ class ClientConversations
 
     private static function copyProviderMessage(Conversation $conversation, CipApplicationMessage $source, bool $broadcast): bool
     {
-        if (Message::query()->where('cip_application_message_id', $source->id)->exists()) {
+        $existing = Message::query()->where('cip_application_message_id', $source->id)->first();
+
+        if ($existing) {
+            if ($existing->lane === null) {
+                $existing->forceFill(['lane' => $source->lane])->save();
+            }
+
             return false;
         }
 
@@ -763,6 +840,7 @@ class ClientConversations
             'body' => $source->body,
             'reply_to_id' => $replyToId,
             'cip_application_message_id' => $source->id,
+            'lane' => $source->lane,
         ]);
         $copy->timestamps = false;
         $copy->created_at = $source->created_at ?? now();
@@ -778,41 +856,364 @@ class ClientConversations
     }
 
     /**
-     * A backfill must not turn old file messages into a pile of unread chat.
-     * Anyone already caught up, and anyone whose chat had no real messages
-     * yet, keeps a cursor at the end. A person who still had unread chat
-     * keeps that unread.
+     * Catch the inbox up to what each person has already read on the file.
+     *
+     * A service-provider line they have not seen stays unread here, which is
+     * the badge on Messages. Their own words, a file cursor that already
+     * covers the line, or a receipt from reading it in either place, do not
+     * come back as new. The cursor cannot skip a message, so it stops at the
+     * first line that is still unread.
      */
-    private static function keepCaughtUpReaders(Conversation $conversation, int $previousMax): void
+    private static function alignFileReads(Conversation $conversation): void
     {
-        $newMax = (int) $conversation->messages()->max('id');
+        $applicationId = $conversation->cip_application_id;
 
-        if ($newMax <= $previousMax) {
+        if (! $applicationId) {
             return;
         }
 
-        $hadChat = Message::query()
+        $copies = Message::query()
             ->where('conversation_id', $conversation->id)
-            ->where('type', '!=', Message::TYPE_SYSTEM)
-            ->whereNull('cip_application_message_id')
-            ->where('id', '<=', $previousMax)
-            ->exists();
+            ->whereNotNull('cip_application_message_id')
+            ->orderBy('id')
+            ->get(['id', 'user_id', 'cip_application_message_id']);
 
-        $query = ConversationParticipant::query()->where('conversation_id', $conversation->id);
-
-        if ($hadChat) {
-            $query->where('last_read_message_id', '>=', $previousMax);
-        } else {
-            $query->where(function ($inner) use ($previousMax) {
-                $inner->whereNull('last_read_message_id')
-                    ->orWhere('last_read_message_id', '>=', $previousMax);
-            });
+        if ($copies->isEmpty()) {
+            return;
         }
 
-        $query->update([
-            'last_read_message_id' => $newMax,
-            'last_read_at' => now(),
-        ]);
+        $sourceIds = $copies->pluck('cip_application_message_id')->all();
+
+        $fileCursor = CipApplicationMessageRead::query()
+            ->where('application_id', $applicationId)
+            ->pluck('last_read_id', 'user_id');
+
+        $receipts = CipApplicationMessageReceipt::query()
+            ->whereIn('message_id', $sourceIds)
+            ->get(['message_id', 'user_id'])
+            ->groupBy('user_id');
+
+        $participants = ConversationParticipant::query()
+            ->where('conversation_id', $conversation->id)
+            ->whereNull('left_at')
+            ->get();
+
+        foreach ($participants as $participant) {
+            $cursor = (int) ($participant->last_read_message_id ?? 0);
+            $cipCursor = (int) ($fileCursor[$participant->user_id] ?? 0);
+            $seen = ($receipts->get($participant->user_id) ?? collect())
+                ->mapWithKeys(fn (CipApplicationMessageReceipt $row) => [(int) $row->message_id => true]);
+
+            $pending = Message::query()
+                ->where('conversation_id', $conversation->id)
+                ->where('id', '>', $cursor)
+                ->where('type', '!=', Message::TYPE_SYSTEM)
+                ->orderBy('id')
+                ->get(['id', 'user_id', 'cip_application_message_id']);
+
+            $target = $cursor;
+
+            foreach ($pending as $row) {
+                if (! $row->cip_application_message_id) {
+                    break;
+                }
+
+                $readOnFile = (int) $row->user_id === (int) $participant->user_id
+                    || (int) $row->cip_application_message_id <= $cipCursor
+                    || isset($seen[(int) $row->cip_application_message_id]);
+
+                if (! $readOnFile) {
+                    break;
+                }
+
+                $target = (int) $row->id;
+            }
+
+            if ($target <= $cursor) {
+                continue;
+            }
+
+            $participant->forceFill([
+                'last_read_message_id' => $target,
+                'last_read_at' => $participant->last_read_at ?? now(),
+            ])->save();
+        }
+    }
+
+    /**
+     * The case group for this applicant, created the first time a
+     * service-provider message needs a copy in Messages.
+     */
+    private static function openCaseRecord(Client $client, CipApplication $application, ?User $actor): Conversation
+    {
+        $company = self::providerCompany($client);
+
+        return DB::transaction(function () use ($client, $application, $actor, $company) {
+            $conversation = Conversation::query()
+                ->where('client_id', $client->id)
+                ->where('subject', Conversation::SUBJECT_PROVIDER)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $conversation) {
+                $conversation = Conversation::create([
+                    'type' => Conversation::TYPE_GROUP,
+                    'name' => $client->name,
+                    'description' => $company
+                        ? 'Conversation with '.$company->name.' about '.$client->name
+                        : 'Conversation about '.$client->name,
+                    'created_by' => $actor?->id,
+                    'client_id' => $client->id,
+                    'company_id' => $company?->id,
+                    'cip_application_id' => $application->id,
+                    'subject' => Conversation::SUBJECT_PROVIDER,
+                ]);
+
+                if ($actor) {
+                    self::systemMessage($conversation, 'case_opened', [
+                        'actorName' => $actor->name,
+                        'clientName' => $client->name,
+                        'companyName' => $company?->name,
+                    ]);
+                }
+            } else {
+                $conversation->forceFill([
+                    'name' => $client->name,
+                    'company_id' => $company?->id ?? $conversation->company_id,
+                    'cip_application_id' => $application->id ?? $conversation->cip_application_id,
+                ])->save();
+            }
+
+            self::refreshProviderMembers($conversation, $client, $actor);
+
+            return $conversation;
+        });
+    }
+
+    /**
+     * Administrators, the officers holding the file, the provider firm, and
+     * the author when they are none of those.
+     */
+    private static function refreshProviderMembers(Conversation $conversation, Client $client, ?User $actor): void
+    {
+        $company = self::providerCompany($client);
+
+        if ($company) {
+            foreach (self::providerContacts($company)->filter(fn (User $user) => $user->isApproved()) as $member) {
+                self::ensureMember($conversation, $member, ConversationParticipant::ROLE_MEMBER);
+            }
+        }
+
+        foreach (self::firmSideFor($client) as $member) {
+            self::ensureMember($conversation, $member, ConversationParticipant::ROLE_ADMIN);
+        }
+
+        if ($actor) {
+            self::ensureMember(
+                $conversation,
+                $actor,
+                Role::isStaff($actor)
+                    ? ConversationParticipant::ROLE_ADMIN
+                    : ConversationParticipant::ROLE_MEMBER
+            );
+        }
+    }
+
+    /**
+     * Case threads this login should already be able to open.
+     *
+     * Administrators see every application's provider messages. An officer
+     * sees the files they hold. A provider contact sees their own firm's.
+     * Threads that already exist only gain the missing member; threads that
+     * were never opened are created from the messages already on the file.
+     */
+    private static function provisionCaseThreads(User $user): void
+    {
+        if ($user->status !== User::STATUS_APPROVED) {
+            return;
+        }
+
+        if (Role::isAdmin($user)) {
+            self::createMissingCaseThreads(null);
+            self::joinMissingProviderThreads($user, null);
+            self::copyUnmirroredFileMessages(null);
+
+            return;
+        }
+
+        $clientIds = [];
+
+        if (Role::isStaff($user)) {
+            $clientIds = ClientAssignment::query()
+                ->live()
+                ->where('user_id', $user->id)
+                ->pluck('client_id')
+                ->all();
+
+            $fromFile = CipApplicationAssignment::query()
+                ->live()
+                ->where('user_id', $user->id)
+                ->whereHas('application', fn ($query) => $query->whereNotNull('client_id'))
+                ->with('application:id,client_id')
+                ->get()
+                ->pluck('application.client_id')
+                ->filter()
+                ->all();
+
+            $clientIds = array_values(array_unique([...$clientIds, ...$fromFile]));
+        }
+
+        $companyIds = CompanyMember::query()
+            ->active()
+            ->where('user_id', $user->id)
+            ->pluck('company_id');
+
+        if ($companyIds->isNotEmpty()) {
+            $firmClients = CipApplication::query()
+                ->whereNotNull('client_id')
+                ->whereHas('provider', fn ($query) => $query->whereIn('company_id', $companyIds))
+                ->pluck('client_id')
+                ->all();
+
+            $clientIds = array_values(array_unique([...$clientIds, ...$firmClients]));
+        }
+
+        if ($clientIds === []) {
+            return;
+        }
+
+        self::createMissingCaseThreads($clientIds);
+        self::joinMissingProviderThreads($user, $clientIds);
+        self::copyUnmirroredFileMessages($clientIds);
+    }
+
+    /**
+     * Messages already on a file, into a case group that already exists.
+     *
+     * A group opened before these lines were copied would otherwise keep
+     * showing the old history. Opening Messages fills in whatever is missing,
+     * and stamps the lane on copies that were written before the lane existed.
+     *
+     * @param  list<int>|null  $clientIds  Null is every applicant.
+     */
+    private static function copyUnmirroredFileMessages(?array $clientIds): void
+    {
+        $applicationIds = CipApplicationMessage::query()
+            ->whereIn('lane', CipApplicationMessage::LANES)
+            ->whereNotExists(function ($query) {
+                $query->selectRaw('1')
+                    ->from('messages')
+                    ->whereColumn('messages.cip_application_message_id', 'cip_application_messages.id');
+            })
+            ->whereHas('application', function ($query) use ($clientIds) {
+                $query->whereNotNull('client_id');
+
+                if ($clientIds !== null) {
+                    $query->whereIn('client_id', $clientIds);
+                }
+            })
+            ->distinct()
+            ->pluck('application_id');
+
+        CipApplication::query()
+            ->whereIn('id', $applicationIds)
+            ->with(['client', 'provider.company'])
+            ->get()
+            ->each(function (CipApplication $application) {
+                if (! $application->client) {
+                    return;
+                }
+
+                $conversation = self::openCaseRecord($application->client, $application, null);
+                self::syncProviderFile($conversation);
+            });
+
+        self::stampCopiedLanes($clientIds);
+    }
+
+    /**
+     * @param  list<int>|null  $clientIds
+     */
+    private static function stampCopiedLanes(?array $clientIds): void
+    {
+        $copies = Message::query()
+            ->whereNull('lane')
+            ->whereNotNull('cip_application_message_id')
+            ->when($clientIds !== null, function ($query) use ($clientIds) {
+                $query->whereHas('conversation', fn ($conversation) => $conversation->whereIn('client_id', $clientIds));
+            })
+            ->get(['id', 'cip_application_message_id']);
+
+        if ($copies->isEmpty()) {
+            return;
+        }
+
+        $lanes = CipApplicationMessage::query()
+            ->whereIn('id', $copies->pluck('cip_application_message_id'))
+            ->pluck('lane', 'id');
+
+        foreach ($copies as $copy) {
+            $lane = $lanes[$copy->cip_application_message_id] ?? null;
+
+            if (! in_array($lane, CipApplicationMessage::LANES, true)) {
+                continue;
+            }
+
+            $copy->forceFill(['lane' => $lane])->save();
+        }
+    }
+
+    /**
+     * @param  list<int>|null  $clientIds  Null is every applicant.
+     */
+    private static function createMissingCaseThreads(?array $clientIds): void
+    {
+        $existing = Conversation::query()
+            ->where('subject', Conversation::SUBJECT_PROVIDER)
+            ->whereNotNull('client_id')
+            ->when($clientIds !== null, fn ($query) => $query->whereIn('client_id', $clientIds))
+            ->pluck('client_id');
+
+        $applications = CipApplication::query()
+            ->whereNotNull('client_id')
+            ->when($clientIds !== null, fn ($query) => $query->whereIn('client_id', $clientIds))
+            ->when($existing->isNotEmpty(), fn ($query) => $query->whereNotIn('client_id', $existing))
+            ->whereHas('messages')
+            ->with(['client', 'provider.company'])
+            ->orderByDesc('id')
+            ->get()
+            ->unique('client_id');
+
+        foreach ($applications as $application) {
+            if (! $application->client) {
+                continue;
+            }
+
+            $conversation = self::openCaseRecord($application->client, $application, null);
+            self::syncProviderFile($conversation);
+        }
+    }
+
+    /**
+     * @param  list<int>|null  $clientIds  Null is every case thread.
+     */
+    private static function joinMissingProviderThreads(User $user, ?array $clientIds): void
+    {
+        $role = Role::isStaff($user)
+            ? ConversationParticipant::ROLE_ADMIN
+            : ConversationParticipant::ROLE_MEMBER;
+
+        Conversation::query()
+            ->where('subject', Conversation::SUBJECT_PROVIDER)
+            ->when($clientIds !== null, fn ($query) => $query->whereIn('client_id', $clientIds))
+            ->whereDoesntHave('participants', function ($query) use ($user) {
+                $query->where('user_id', $user->id)->whereNull('left_at');
+            })
+            ->get()
+            ->each(function (Conversation $conversation) use ($user, $role) {
+                self::ensureMember($conversation, $user, $role);
+                self::alignFileReads($conversation);
+            });
     }
 
     private static function touchLastMessage(Conversation $conversation): void

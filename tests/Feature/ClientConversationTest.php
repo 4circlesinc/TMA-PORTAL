@@ -594,7 +594,7 @@ class ClientConversationTest extends TestCase
             ->pluck('body');
 
         $this->assertTrue($asStaff->contains('Please send the scan.'));
-        $this->assertFalse($asStaff->contains('Keep this in the office.'));
+        $this->assertTrue($asStaff->contains('Keep this in the office.'));
 
         $asProvider = collect($this->actingAs($fx['providerUser'])
             ->getJson('/portal/messaging/conversations/'.$opened['id'].'/messages')
