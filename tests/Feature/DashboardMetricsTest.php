@@ -332,6 +332,80 @@ class DashboardMetricsTest extends TestCase
         $this->assertSame(1, $card['sample']);
     }
 
+    public function test_each_person_averages_only_the_replies_they_sent(): void
+    {
+        $ada = $this->staff('ada@example.com', 'Reviewing Officer');
+        $ben = $this->staff('ben@example.com', 'Reviewing Officer');
+        $client = $this->client();
+
+        $withAda = $this->conversation($ada, $client);
+        $this->say($withAda, $client, '5 hours');
+        $this->say($withAda, $ada, '4 hours'); // Ada, after 1h
+
+        $withBen = $this->conversation($ben, $client);
+        $this->say($withBen, $client, '6 hours');
+        $this->say($withBen, $ben, '3 hours'); // Ben, after 3h
+
+        $adaCard = $this->metrics($ada)['cards']['clientResponse'];
+        $benCard = $this->metrics($ben)['cards']['clientResponse'];
+
+        $this->assertSame(3600, $adaCard['seconds']);
+        $this->assertSame(1, $adaCard['sample']);
+        $this->assertSame(10800, $benCard['seconds']);
+        $this->assertSame(1, $benCard['sample']);
+        $this->assertArrayNotHasKey('teamResponse', $this->metrics($ada));
+    }
+
+    public function test_a_colleagues_reply_in_a_shared_thread_is_not_counted_as_yours(): void
+    {
+        $ada = $this->staff('ada@example.com', 'Reviewing Officer');
+        $ben = $this->staff('ben@example.com', 'Reviewing Officer');
+        $client = $this->client();
+        $shared = $this->conversation($ada, $ben, $client);
+
+        $this->say($shared, $client, '5 hours');
+        $this->say($shared, $ben, '4 hours'); // Ben answered; the wait is his
+        $this->say($shared, $ada, '3 hours'); // Ada's later note is not a new wait
+
+        $this->assertSame(3600, $this->metrics($ben)['cards']['clientResponse']['seconds']);
+        $this->assertSame(0, $this->metrics($ada)['cards']['clientResponse']['sample']);
+    }
+
+    public function test_an_admin_overview_lists_every_staff_members_own_average(): void
+    {
+        $admin = $this->staff('admin@example.com');
+        $ada = $this->staff('ada@example.com', 'Reviewing Officer');
+        $ben = $this->staff('ben@example.com', 'Reviewing Officer');
+        $client = $this->client();
+
+        $withAda = $this->conversation($ada, $client);
+        $this->say($withAda, $client, '5 hours');
+        $this->say($withAda, $ada, '3 hours'); // 2h
+
+        $withBen = $this->conversation($ben, $client);
+        $this->say($withBen, $client, '6 hours');
+        $this->say($withBen, $ben, '5 hours'); // 1h
+
+        $payload = $this->metrics($admin);
+
+        // The admin's own card is the replies they sent, not the firm's blend.
+        $this->assertSame(0, $payload['cards']['clientResponse']['sample']);
+        $this->assertSame('-', $payload['cards']['clientResponse']['value']);
+
+        $byId = collect($payload['teamResponse'])->keyBy('id');
+
+        $this->assertCount(3, $byId);
+        $this->assertSame(7200, $byId[$ada->id]['seconds']);
+        $this->assertSame('2h', $byId[$ada->id]['value']);
+        $this->assertSame(1, $byId[$ada->id]['sample']);
+        $this->assertSame(3600, $byId[$ben->id]['seconds']);
+        $this->assertSame('1h', $byId[$ben->id]['value']);
+        $this->assertSame('-', $byId[$admin->id]['value']);
+        $this->assertSame(0, $byId[$admin->id]['sample']);
+        $this->assertTrue($byId[$admin->id]['self']);
+        $this->assertFalse($byId[$ada->id]['self']);
+    }
+
     public function test_it_counts_cip_applications_waiting_on_updates(): void
     {
         config(['services.cip.enabled' => true]);

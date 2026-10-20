@@ -308,9 +308,32 @@
       });
   }
 
+  /* Same window as the home KPI row. The head picker stores the label; the
+     default matches portal-home.js so the two pages never count different months. */
+  function metricsPeriod() {
+    var map = { 'Today': 'today', 'This week': 'week', 'This month': 'month', 'This year': 'year' };
+    var label = '';
+    try { label = localStorage.getItem('tma.today') || ''; } catch (e) {}
+    return map[label] || 'month';
+  }
+
   function loadMetrics() {
-    return apiGet('/portal/dashboard/metrics').then(function (j) {
+    return apiGet('/portal/dashboard/metrics?period=' + encodeURIComponent(metricsPeriod())).then(function (j) {
       METRICS = j;
+    });
+  }
+
+  function reloadMetrics() {
+    var container = OVERVIEW_CONTAINER;
+    if (!container || !container.isConnected) return Promise.resolve();
+    return loadMetrics().then(function () {
+      if (METRICS) {
+        OVERVIEW_REAL = true;
+        keepOverviewWarm();
+      }
+      var current = container.querySelector('[role="tab"][aria-selected="true"]');
+      var tab = (current && current.getAttribute('data-overview-tab')) || 'Overview';
+      if (tab === 'Overview') remountOverviewGrid(container, 'Overview');
     });
   }
 
@@ -447,6 +470,45 @@
       metricsHtml +
       '</div>' +
       '</section>';
+  }
+
+  function metricsWindowPhrase() {
+    var key = METRICS && METRICS.period;
+    if (key === 'today') return 'today';
+    if (key === 'week') return 'this week';
+    if (key === 'month') return 'this month';
+    if (key === 'year') return 'this year';
+    var days = (METRICS && METRICS.windowDays) || 30;
+    return 'in the last ' + days + ' days';
+  }
+
+  /* Administrators see each person's own average. The home card is the
+     reader's replies only; this list is how the firm is compared. */
+  function renderTeamResponse() {
+    if (!isAdminUser() || !METRICS || !Array.isArray(METRICS.teamResponse)) return '';
+    var people = METRICS.teamResponse;
+    var rows = people.length
+      ? people.map(function (p) {
+          var detail = p.sample
+            ? (p.sample === 1 ? '1 reply' : p.sample + ' replies')
+            : 'No replies yet';
+          if (p.jobTitle) detail = p.jobTitle + ' · ' + detail;
+          return '<div class="tma-dash__overview-response">' +
+            '<span class="tma-dash__overview-response__meta">' +
+            '<span class="tma-dash__overview-response__name">' + esc(p.name) + (p.self ? ' (you)' : '') + '</span>' +
+            '<span class="tma-dash__overview-response__detail">' + esc(detail) + '</span>' +
+            '</span>' +
+            '<span class="tma-dash__overview-response__value">' + esc(p.value == null ? '-' : p.value) + '</span>' +
+            '</div>';
+        }).join('')
+      : '<p class="tma-dash__overview-empty">No staff yet.</p>';
+
+    return '<section class="tma-dash__overview-block tma-dash__overview-block--responses" data-overview-responses>' +
+      '<div class="tma-dash__overview-block-head">' +
+      '<h3 class="tma-dash__overview-block-title">Avg. response to clients</h3>' +
+      '</div>' +
+      '<p class="tma-dash__overview-response-note">Each person\'s own average ' + esc(metricsWindowPhrase()) + '.</p>' +
+      '<div class="tma-dash__overview-responses">' + rows + '</div></section>';
   }
 
   function renderWeek() {
@@ -634,7 +696,7 @@
     return '<div class="tma-dash__overview" data-node-id="32546:96118">' +
       renderTabs(tab) +
       '<div class="tma-dash__overview-grid"' + (tab !== 'Overview' ? ' hidden' : '') + '>' +
-      renderProfile() + renderHero() + renderRoad() + renderFiles() + renderSignIns() +
+      renderProfile() + renderHero() + renderTeamResponse() + renderRoad() + renderFiles() + renderSignIns() +
       '</div>' +
       renderEmployeesTab(tab) +
       renderUsers(tab) +
@@ -727,7 +789,7 @@
     var grid = container.querySelector('.tma-dash__overview-grid');
     if (!grid) return;
     var scrollY = window.scrollY || 0;
-    grid.innerHTML = renderProfile() + renderHero() + renderRoad() + renderFiles() + renderSignIns();
+    grid.innerHTML = renderProfile() + renderHero() + renderTeamResponse() + renderRoad() + renderFiles() + renderSignIns();
     try { window.scrollTo(0, scrollY); } catch (e) {}
     bindRoadWheel(container);
     mountProfile(grid);
@@ -1088,5 +1150,6 @@
       var container = document.querySelector('[data-overview]');
       if (container) refreshOverviewData(container);
     },
+    reloadMetrics: reloadMetrics,
   };
 })();

@@ -2934,6 +2934,9 @@
         if (window.TMAPortalHome && window.TMAPortalHome.setMetricsPeriod) {
           window.TMAPortalHome.setMetricsPeriod();
         }
+        if (window.TMAOverview && window.TMAOverview.reloadMetrics) {
+          window.TMAOverview.reloadMetrics();
+        }
       });
     }
 

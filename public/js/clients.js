@@ -970,6 +970,32 @@
 
   /* The one firm a Service Provider admin belongs to, from boot, /me, or the
      companies listing once it has arrived. */
+  function providerAdminFirmName() {
+    if (!isProviderAdminViewer()) return '';
+    var boot = window.TMABootProviderCompany;
+    if (boot && boot.name) return String(boot.name);
+    var me = window.TMACurrentUser && TMACurrentUser.get && TMACurrentUser.get();
+    if (me && me.serviceProvider && me.serviceProvider.name) return String(me.serviceProvider.name);
+    var id = providerAdminHomeCompanyId();
+    if (!id) return '';
+    for (var i = 0; i < COMPANIES.length; i++) {
+      if (String(COMPANIES[i].id) === String(id) && COMPANIES[i].name) return String(COMPANIES[i].name);
+    }
+    return '';
+  }
+
+  /* Staff see a directory called Service providers. A Service Provider admin
+     has one firm, and the tab opens that firm, so it is named for the firm. */
+  function listTabLabel(tab) {
+    if (isProviderAdminViewer()) {
+      if (tab.id === 'providers') return providerAdminFirmName() || 'Service provider';
+      // Their own people. "Provider contacts" is the staff directory's name.
+      if (tab.id === 'people') return isClientsMobile() ? 'Users' : 'Provider users';
+    }
+    if (isClientsMobile() && tab.shortLabel) return tab.shortLabel;
+    return tab.label;
+  }
+
   function providerAdminHomeCompanyId() {
     if (!isProviderAdminViewer()) return null;
     var boot = window.TMABootProviderCompany;
@@ -3058,7 +3084,7 @@
         var count = loading ? null : (phaseKey
           ? ((APP_TABLE.phaseCounts && APP_TABLE.phaseCounts[phaseKey]) || 0)
           : tab.id === 'providers'
-            ? providerRowEntries(state).length
+            ? (isProviderAdminViewer() ? null : providerRowEntries(state).length)
             : tab.id === 'people'
               ? peopleRowEntries(state).length
               : null);
@@ -3069,7 +3095,7 @@
           ' tabindex="' + (active ? '0' : '-1') + '"' +
           ' data-clients-list-tab="' + esc(tab.id) + '">' +
           '<span class="tma-tab__label">' +
-          esc(isClientsMobile() && tab.shortLabel ? tab.shortLabel : tab.label) +
+          esc(listTabLabel(tab)) +
           (count === null ? '' : tabCountChip(count)) + '</span>' +
           '<span class="tma-tab__indicator" aria-hidden="true"></span>' +
           '</button>'
@@ -5443,7 +5469,7 @@
       '<div class="tma-dash__ctable tma-dash__ctable--clients tma-dash__ctable--noselect' +
       (people ? ' tma-dash__ctable--people' : ' tma-dash__ctable--providers') +
       '" role="table" aria-label="' +
-      (people ? 'Provider contacts' : 'Service providers') + '">' +
+      (people ? (isProviderAdminViewer() ? 'Provider users' : 'Provider contacts') : 'Service providers') + '">' +
       '<div class="tma-dash__ctr tma-dash__ctr--head" role="row">' +
       // No checkbox column on these tabs. Bulk actions post to the clients
       // endpoint, and a company is deleted from its own profile.
@@ -7158,7 +7184,7 @@
       companyCard('Access', renderCompanyMembersBlock(state, company), {
         half: true, count: (state.companyMembers || []).length,
       }) +
-      companyCard('Provider contacts', renderCompanyPeople(company), {
+      companyCard(isProviderAdminViewer() ? 'Provider users' : 'Provider contacts', renderCompanyPeople(company), {
         half: true, count: (company.people || []).length,
       }) +
       companyCard('Assigned staff', renderCompanyStaffBlock(state, company), {

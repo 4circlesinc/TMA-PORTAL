@@ -50,12 +50,14 @@ class DashboardMetricsController extends Controller
         $metrics = new DashboardMetrics($user, $period);
 
         if ($metrics->isStaff()) {
-            // Keyed per user and period: an administrator sees organization
-            // scope and everyone else their own, and "today" and "this year"
-            // are different numbers, so one shared entry would show the wrong ones.
-            // Soft: the row is measured from Postgres if the cache is away.
+            // Keyed per user and period: response time is that person's own
+            // replies (an administrator also receives the team list), the
+            // other cards are organization-wide for an administrator, and
+            // "today" and "this year" are different numbers. One shared entry
+            // would show the wrong ones. Soft: the row is measured from
+            // Postgres if the cache is away.
             $payload = SoftCache::remember(
-                "dashboard-metrics.week-monday.{$user->id}.{$period->key}",
+                "dashboard-metrics.own-response.{$user->id}.{$period->key}",
                 self::TTL_SECONDS,
                 fn () => $metrics->toArray(),
             );

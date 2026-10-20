@@ -23,9 +23,11 @@ use Illuminate\Support\Facades\DB;
  * The four KPI cards on the portal home, computed from real activity.
  *
  * Scope follows the reader: an administrator sees the whole firm, an employee
- * sees their own work. Service-provider contacts get a different four cards
- * for their CIP book and what is waiting on them. Other client accounts never
- * see these cards at all.
+ * sees their own work. The response-time card is the exception — it is always
+ * that person's own replies, and an administrator also gets each colleague's
+ * average for the overview. Service-provider contacts get a different four
+ * cards for their CIP book and what is waiting on them. Other client accounts
+ * never see these cards at all.
  *
  * Every card reports the chosen Period against the stretch before it (or a
  * live backlog with the longest wait). Where there is nothing to measure the
@@ -90,7 +92,7 @@ class DashboardMetrics
     {
         $timelines = $this->buildTimelines();
 
-        return [
+        $payload = [
             'scope' => $this->isAdministrator() ? 'organization' : 'personal',
             'period' => $this->period->key,
             'windowDays' => $this->period->days,
@@ -101,6 +103,12 @@ class DashboardMetrics
                 'awaitingSignature' => $this->awaitingSignatureCard(),
             ],
         ];
+
+        if ($this->isAdministrator()) {
+            $payload['teamResponse'] = $this->teamResponse($timelines);
+        }
+
+        return $payload;
     }
 
     /**
@@ -130,10 +138,26 @@ class DashboardMetrics
     /** @return array<string, mixed> */
     private function clientResponseCard(Timelines $timelines): array
     {
+        return $this->responseCardFor((int) $this->user->id, $timelines->responsePairs());
+    }
+
+    /**
+     * One person's average, from the replies they sent. A colleague answering
+     * the same thread does not move this number.
+     *
+     * @param  list<array{askedAt: \Carbon\CarbonInterface, seconds: int, staffId: int}>  $pairs
+     * @return array<string, mixed>
+     */
+    private function responseCardFor(int $staffId, array $pairs): array
+    {
         $current = [];
         $prior = [];
 
-        foreach ($timelines->responsePairs() as $pair) {
+        foreach ($pairs as $pair) {
+            if ((int) $pair['staffId'] !== $staffId) {
+                continue;
+            }
+
             if ($pair['askedAt'] >= $this->period->windowStart) {
                 $current[] = $pair['seconds'];
             } elseif ($pair['askedAt'] >= $this->period->priorStart && $pair['askedAt'] < $this->period->priorEnd) {
@@ -147,7 +171,7 @@ class DashboardMetrics
                 'delta' => 'No replies yet',
                 'deltaUp' => false,
                 'sample' => 0,
-                'hint' => 'Average time to answer a client, across portal messages and email.',
+                'hint' => 'Your average time to answer a client, across portal messages and email.',
             ];
         }
 
@@ -162,9 +186,42 @@ class DashboardMetrics
             // time is an improvement, and shows a down arrow.
             'deltaUp' => $priorAverage !== null && $average > $priorAverage,
             'sample' => count($current),
-            'hint' => Format::plural(count($current), 'client reply', 'client replies')
+            'hint' => 'Your average, from '.Format::plural(count($current), 'client reply', 'client replies')
                 .' '.$this->period->phrase().', across portal messages and email.',
         ];
+    }
+
+    /**
+     * Every staff member's own average, for the administrator overview.
+     * Someone with no replies in the window is listed as such, so a quiet
+     * desk is visible rather than missing.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function teamResponse(Timelines $timelines): array
+    {
+        $pairs = $timelines->responsePairs();
+
+        $staff = User::query()
+            ->whereIn('account_type', Role::STAFF)
+            ->where('status', User::STATUS_APPROVED)
+            ->orderBy('name')
+            ->get(['id', 'name', 'job_title']);
+
+        return $staff->map(function (User $user) use ($pairs) {
+            $card = $this->responseCardFor((int) $user->id, $pairs);
+
+            return [
+                'id' => (int) $user->id,
+                'name' => $user->name,
+                'jobTitle' => $user->job_title,
+                'self' => (int) $user->id === (int) $this->user->id,
+                'value' => $card['value'],
+                'seconds' => $card['seconds'] ?? null,
+                'sample' => $card['sample'],
+                'delta' => $card['delta'],
+            ];
+        })->all();
     }
 
     /* ── card 2: new CIP applications ──────────────────────────────── */
@@ -519,7 +576,7 @@ class DashboardMetrics
             if ($key = $this->clients->keyForUser($userId)) {
                 $timelines->addClient($thread, $at, $key);
             } elseif (isset($staff[$userId])) {
-                $timelines->addStaff($thread, $at);
+                $timelines->addStaff($thread, $at, $userId);
             }
         }
     }
@@ -582,7 +639,8 @@ class DashboardMetrics
         foreach ($outbound as $mail) {
             $timelines->addStaff(
                 $this->mailThreadKey((int) $mail->user_id, $mail->thread_id),
-                CarbonImmutable::instance($mail->sent_at)
+                CarbonImmutable::instance($mail->sent_at),
+                (int) $mail->user_id,
             );
         }
     }

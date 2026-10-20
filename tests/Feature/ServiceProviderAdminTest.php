@@ -6,6 +6,7 @@ use App\Mail\Postcard;
 use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\Company;
+use App\Models\Folder;
 use App\Models\CompanyMember;
 use App\Models\CompanyStaffAssignment;
 use App\Models\Invitation;
@@ -670,5 +671,24 @@ class ServiceProviderAdminTest extends TestCase
             ->assertJsonPath('assignments.0.notes', 'internal note');
         $this->assertIsArray($asAdmin->json('assignable'));
         $this->assertNotSame([], $asAdmin->json('roles'));
+    }
+
+    public function test_inviting_a_contact_does_not_file_them_under_citizenship_applications(): void
+    {
+        $tma = $this->user(Role::ADMINISTRATOR);
+        [$company] = $this->providerFirm();
+        $spAdmin = $this->user(Role::SERVICE_PROVIDER_ADMIN, ['email' => 'gil@galaxy.example']);
+        $this->attach($company, $spAdmin, $tma);
+
+        $this->actingAs($spAdmin)->postJson("/portal/companies/{$company->uid}/members", [
+            'name' => 'Dana Reed',
+            'email' => 'dana@galaxy.example',
+        ])->assertCreated();
+
+        $client = Client::query()->where('email', 'dana@galaxy.example')->first();
+
+        $this->assertNotNull($client);
+        $this->assertNull($client->folder_id);
+        $this->assertFalse(Folder::query()->where('client_id', $client->id)->exists());
     }
 }

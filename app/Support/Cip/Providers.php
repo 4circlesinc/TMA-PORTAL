@@ -29,8 +29,14 @@ class Providers
      * A name with too little in it to make three letters still gets a code:
      * two is enough to be a prefix, and 'SP' catches a name with no letters
      * at all rather than returning something empty.
+     *
+     * $reserved holds codes this caller is about to issue and has not saved
+     * yet, so a second name in the same pass does not get handed the first
+     * name's code.
+     *
+     * @param  array<int, string>  $reserved
      */
-    public static function suggestCode(string $name): string
+    public static function suggestCode(string $name, array $reserved = []): string
     {
         $squash = strtoupper((string) preg_replace('/[^A-Za-z0-9]/', '', $name));
 
@@ -55,7 +61,7 @@ class Providers
                 continue;
             }
 
-            if (! self::codeTaken($candidate)) {
+            if (! self::codeTaken($candidate, $reserved)) {
                 return $candidate;
             }
         }
@@ -65,7 +71,7 @@ class Providers
         $stem = substr($squash, 0, 3);
         for ($i = 2; $i < 1000; $i++) {
             $candidate = substr($stem, 0, max(1, 8 - strlen((string) $i))).$i;
-            if (! self::codeTaken($candidate)) {
+            if (! self::codeTaken($candidate, $reserved)) {
                 return $candidate;
             }
         }
@@ -80,10 +86,18 @@ class Providers
      * application numbers and names a folder in the library long after its
      * provider is retired.
      */
-    public static function codeTaken(string $code): bool
+    public static function codeTaken(string $code, array $reserved = []): bool
     {
+        $code = strtoupper(trim($code));
+
+        foreach ($reserved as $held) {
+            if (strtoupper(trim((string) $held)) === $code) {
+                return true;
+            }
+        }
+
         return CipProvider::withTrashed()
-            ->whereRaw('UPPER(code) = ?', [strtoupper(trim($code))])
+            ->whereRaw('UPPER(code) = ?', [$code])
             ->exists();
     }
 

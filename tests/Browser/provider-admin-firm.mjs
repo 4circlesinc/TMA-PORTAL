@@ -133,10 +133,15 @@ try {
 
   await page.goto(`http://127.0.0.1:${port}/citizenship-applications?listTab=all_applications`)
   await page.waitForSelector('[data-clients-list-tab="providers"]')
+  const providerTab = (await page.locator('[data-clients-list-tab="providers"]').innerText()).replace(/\s+/g, ' ').trim()
+  if (providerTab !== 'Galaxy') throw new Error('provider admin tab should be the firm name, got: ' + providerTab)
   await page.click('[data-clients-list-tab="providers"]')
   await page.waitForFunction(() => location.pathname === '/citizenship-applications/companies/gal-firm')
 
   await page.goto(`http://127.0.0.1:${port}/citizenship-applications?listTab=people`)
+  await page.waitForSelector('[data-clients-list-tab="people"]')
+  const peopleTab = (await page.locator('[data-clients-list-tab="people"]').innerText()).replace(/\s+/g, ' ').trim()
+  if (!peopleTab.startsWith('Provider users')) throw new Error('provider admin people tab should say Provider users, got: ' + peopleTab)
   await page.waitForSelector('[data-clients-row="dana-reed"]')
   await page.click('[data-clients-row="dana-reed"]')
   await page.waitForFunction(() => location.pathname === '/citizenship-applications/dana-reed')

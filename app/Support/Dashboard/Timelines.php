@@ -24,19 +24,31 @@ final class Timelines
 
     private const STAFF = 'staff';
 
-    /** @var array<string, list<array{actor: string, at: CarbonInterface, client: ?string, seq: int}>> */
+    /** @var array<string, list<array{actor: string, at: CarbonInterface, client: ?string, staff: ?int, seq: int}>> */
     private array $threads = [];
 
     private int $seq = 0;
 
     public function addClient(string $thread, CarbonInterface $at, string $clientKey): void
     {
-        $this->threads[$thread][] = ['actor' => self::CLIENT, 'at' => $at, 'client' => $clientKey, 'seq' => $this->seq++];
+        $this->threads[$thread][] = [
+            'actor' => self::CLIENT,
+            'at' => $at,
+            'client' => $clientKey,
+            'staff' => null,
+            'seq' => $this->seq++,
+        ];
     }
 
-    public function addStaff(string $thread, CarbonInterface $at): void
+    public function addStaff(string $thread, CarbonInterface $at, int $staffId): void
     {
-        $this->threads[$thread][] = ['actor' => self::STAFF, 'at' => $at, 'client' => null, 'seq' => $this->seq++];
+        $this->threads[$thread][] = [
+            'actor' => self::STAFF,
+            'at' => $at,
+            'client' => null,
+            'staff' => $staffId,
+            'seq' => $this->seq++,
+        ];
     }
 
     public function isEmpty(): bool
@@ -45,9 +57,11 @@ final class Timelines
     }
 
     /**
-     * Every completed wait: when the client asked, and how long they waited.
+     * Every completed wait: when the client asked, how long they waited, and
+     * which staff member answered. The reply belongs to the person who sent
+     * it, so two people in one thread do not share a response time.
      *
-     * @return list<array{askedAt: CarbonInterface, seconds: int}>
+     * @return list<array{askedAt: CarbonInterface, seconds: int, staffId: int}>
      */
     public function responsePairs(): array
     {
@@ -63,10 +77,14 @@ final class Timelines
                     continue;
                 }
 
-                if ($askedAt !== null) {
+                if ($askedAt !== null && $event['staff'] !== null) {
                     // Carbon returns a float here; seconds is the resolution
                     // any of this is meaningful at.
-                    $pairs[] = ['askedAt' => $askedAt, 'seconds' => (int) $askedAt->diffInSeconds($event['at'])];
+                    $pairs[] = [
+                        'askedAt' => $askedAt,
+                        'seconds' => (int) $askedAt->diffInSeconds($event['at']),
+                        'staffId' => (int) $event['staff'],
+                    ];
                     $askedAt = null;
                 }
             }
@@ -116,8 +134,8 @@ final class Timelines
      * a timestamp must stay in the order they were sent, or a reply can sort
      * ahead of the question it answers and register as a zero-second response.
      *
-     * @param  list<array{actor: string, at: CarbonInterface, client: ?string, seq: int}>  $events
-     * @return list<array{actor: string, at: CarbonInterface, client: ?string, seq: int}>
+     * @param  list<array{actor: string, at: CarbonInterface, client: ?string, staff: ?int, seq: int}>  $events
+     * @return list<array{actor: string, at: CarbonInterface, client: ?string, staff: ?int, seq: int}>
      */
     private function ordered(array $events): array
     {

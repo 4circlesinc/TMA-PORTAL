@@ -10,7 +10,6 @@ use App\Models\User;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Cip\Pages;
 use App\Support\Clients\ClientDirectory;
-use App\Support\Files\FolderProvisioner;
 use App\Support\Invitations\Invitations;
 use App\Support\People\PersonName;
 use App\Support\Mail\Deliveries;
@@ -106,8 +105,10 @@ final class CompanyMembers
             ClientConversations::attachLogin($member->user);
         }
 
-        // Portal access is a contact at the firm: Provider contacts reads the
+        // Portal access is a contact at the firm: Provider users reads the
         // company people list, which is clients — not memberships alone.
+        // A contact is not an applicant, so this does not file a folder
+        // under Citizenship Applications.
         self::ensureContact($member->fresh() ?? $member, $by);
 
         return $member->fresh();
@@ -196,7 +197,6 @@ final class CompanyMembers
                 'created_by' => $by?->id ?? $member->added_by,
             ]);
             $created = true;
-            FolderProvisioner::provisionClientFolder($client, $by);
         } else {
             $patch = [];
             if ($client->company_id !== $company->id) {
