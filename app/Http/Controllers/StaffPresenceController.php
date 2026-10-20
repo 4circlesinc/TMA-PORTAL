@@ -21,11 +21,16 @@ class StaffPresenceController extends Controller
 {
     public function __invoke(Request $request): JsonResponse
     {
-        return response()->json(self::payload($request->user()));
+        // The Overview → Employees tab asks for the firm only. The home
+        // presence board stays everyone with a live login.
+        return response()->json(self::payload(
+            $request->user(),
+            $request->query('scope') === 'firm',
+        ));
     }
 
     /** @return array<string, mixed> */
-    public static function payload(?User $viewer): array
+    public static function payload(?User $viewer, bool $firmOnly = false): array
     {
         if ($viewer === null || ! Role::can($viewer, 'presence.view')) {
             return ['staff' => false, 'employees' => []];
@@ -54,6 +59,7 @@ class StaffPresenceController extends Controller
          */
         $users = User::query()
             ->where('status', User::STATUS_APPROVED)
+            ->when($firmOnly, fn ($query) => $query->whereIn('account_type', Role::STAFF))
             ->select([
                 'id', 'name', 'first_name', 'job_title', 'account_type',
                 'avatar_url', 'provider_avatar_url', 'status',

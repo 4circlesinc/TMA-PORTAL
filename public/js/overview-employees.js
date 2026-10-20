@@ -107,7 +107,7 @@
           ? window.TMANoData.render({
               illustrationName: 'Illustration14',
               title: 'No people yet',
-              subtitle: 'Approved accounts will show up here with presence.',
+              subtitle: 'People who work at the firm show up here with presence.',
               showButton: false,
             })
           : '<p class="tma-dash__overview-empty">No people yet.</p>';
@@ -127,7 +127,7 @@
 
     function reload() {
       paint();
-      fetch(ROOT + '/portal/dashboard/staff', {
+      fetch(ROOT + '/portal/dashboard/staff?scope=firm', {
         credentials: 'same-origin',
         headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       })

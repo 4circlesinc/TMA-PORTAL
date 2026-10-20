@@ -65,6 +65,28 @@ class StaffHeadcountTest extends TestCase
         $this->assertCount(6, $ids);
     }
 
+    public function test_the_employees_tab_lists_only_the_firms_users(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $officer = $this->user(Role::REVIEWING_OFFICER, ['name' => 'Officer Onboard']);
+        $legacy = $this->user('Reviewing Officer', ['name' => 'Officer Legacy']);
+        $parked = $this->user(Role::EMPLOYEE, ['name' => 'Parked Employee']);
+        $client = $this->user(Role::CLIENT, ['name' => 'A Client']);
+        $provider = $this->user(Role::SERVICE_PROVIDER_ADMIN, ['name' => 'A Provider']);
+
+        $ids = collect(
+            $this->actingAs($admin)->getJson('/portal/dashboard/staff?scope=firm')->assertOk()->json('employees')
+        )->pluck('id');
+
+        $this->assertTrue($ids->contains($officer->id));
+        $this->assertTrue($ids->contains($legacy->id));
+        $this->assertTrue($ids->contains($admin->id));
+        $this->assertTrue($ids->contains($parked->id));
+        $this->assertFalse($ids->contains($client->id));
+        $this->assertFalse($ids->contains($provider->id));
+        $this->assertCount(4, $ids);
+    }
+
     public function test_the_presence_board_keeps_work_plans_to_staff(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
