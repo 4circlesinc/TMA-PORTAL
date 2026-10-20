@@ -1034,6 +1034,33 @@
     return !!(mine && member && member.email && String(member.email).toLowerCase() === mine);
   }
 
+  /* A service provider admin may delete the other users at their firm.
+     Their own row stays: the server refuses that, and a button that only
+     fails is worse than no button. */
+  function canRemoveProviderUser(person) {
+    if (!isProviderAdminViewer() || !person || !person.id) return false;
+    return !isOwnCompanyMember(person);
+  }
+
+  function providerUserById(id) {
+    for (var i = 0; i < COMPANIES.length; i++) {
+      var people = (COMPANIES[i] && COMPANIES[i].people) || [];
+      for (var j = 0; j < people.length; j++) {
+        if (people[j] && people[j].id === id) return people[j];
+      }
+    }
+    var item = directoryItemFor(id);
+    return item ? { id: id, name: item.name, email: item.email || '' } : { id: id };
+  }
+
+  function providerUserRemoveButton(person) {
+    if (!canRemoveProviderUser(person)) return '';
+    var name = (person && person.name) || 'user';
+    return '<button type="button" class="tma-dash__clients-row-remove" data-clients-delete-person="' +
+      esc(person.id) + '" aria-label="Delete ' + esc(name) + '">' +
+      '<img src="' + ICONS.Trash + '" alt=""></button>';
+  }
+
   /*
    * Which profiles are actually in hand.
    *
@@ -2764,7 +2791,7 @@
       '<button type="button" class="tma-dash__clients-company-link tma-dash__cc-truncate" data-clients-open-company="' +
       esc(company.id) + '">' + esc(company.name || 'Service provider') + '</button></div>' +
       '<div class="tma-dash__cc tma-dash__cc--contact"><span class="tma-dash__cc-truncate">' +
-      esc(contact) + '</span></div></div>'
+      esc(contact) + '</span>' + providerUserRemoveButton(person) + '</div></div>'
     );
   }
 
@@ -7237,9 +7264,9 @@
     return clientsEmpty('No applications', 'Illustration07');
   }
 
-  function companyPersonRow(p) {
+  function companyPersonRow(p, removable) {
     var cardPerson = providerContactCardPerson(p);
-    return (
+    var row = (
       '<button type="button" class="tma-dash__clients-row" data-clients-row="' + esc(p.id) + '">' +
       '<span class="tma-people tma-people--contact" data-tma-people="' +
       esc(JSON.stringify([cardPerson])) + '">' +
@@ -7248,10 +7275,17 @@
       (p.email ? '<span class="tma-dash__clients-row-meta">' + esc(p.email) + '</span>' : '') +
       '</span></button>'
     );
+    if (!removable) return row;
+    var remove = providerUserRemoveButton(p);
+    if (!remove) return row;
+    return '<div class="tma-dash__clients-person">' + row + remove + '</div>';
   }
 
   function renderCompanyPeople(company) {
-    var people = company.people || [];
+    var removed = (clientsMountState && clientsMountState.removedIds) || {};
+    var people = (company.people || []).filter(function (p) {
+      return p && p.id && !removed[p.id];
+    });
     var form = canManageCompanyAccess()
       ? '<div class="tma-dash__clients-assign-form">' +
         '<button type="button" class="tma-dash__clients-assign-btn" data-clients-add-person>' +
@@ -7259,7 +7293,7 @@
       : '';
     var list = people.length
       ? '<div class="tma-dash__clients-company-people">' +
-        people.map(companyPersonRow).join('') + '</div>'
+        people.map(function (p) { return companyPersonRow(p, true); }).join('') + '</div>'
       : clientsEmpty('No contacts yet', 'Illustration04');
 
     return form + list;
@@ -12189,6 +12223,15 @@
       });
     }
 
+    MORPH.unwired(root, '[data-clients-delete-person]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var id = btn.getAttribute('data-clients-delete-person');
+        if (id) deleteProviderUser(state, render, id);
+      });
+    });
+
     bind('[data-clients-row]', 'client', 'data-clients-row');
     // Section 8's table draws its own rows, so they carry their own hook, but the
     // menu, its actions and its permissions are the ones every other row uses.
@@ -12199,7 +12242,8 @@
   function wireDirectoryRows(root, state, navigate) {
     MORPH.unwired(root, '[data-clients-row]').forEach(function (row) {
       row.addEventListener('click', function (e) {
-        if (e.target.closest('[data-clients-check]') || e.target.closest('[data-clients-search-wrap]')) return;
+        if (e.target.closest('[data-clients-check]') || e.target.closest('[data-clients-search-wrap]') ||
+            e.target.closest('[data-clients-delete-person]')) return;
         e.preventDefault();
         var id = row.getAttribute('data-clients-row');
         if (!id) return;
@@ -13015,12 +13059,15 @@
       ];
     }
     if ((kind === 'client' || kind === 'person') && isProviderAdminViewer()) {
-      return [
+      var providerItems = [
         { act: 'open', label: 'Open', icon: 'ArrowUpRight' },
         { act: 'edit', label: 'Edit', icon: 'PencilSimple' },
-        { sep: true },
-        { act: 'delete', label: 'Delete', icon: 'Trash', danger: true },
       ];
+      if (canRemoveProviderUser(providerUserById(clientUid))) {
+        providerItems.push({ sep: true });
+        providerItems.push({ act: 'delete', label: 'Delete', icon: 'Trash', danger: true });
+      }
+      return providerItems;
     }
 
     var items = [
@@ -15706,6 +15753,10 @@
     }
     if (act === 'edit') return navigate('edit', id);
     if (act === 'delete') {
+      if (isProviderAdminViewer()) {
+        deleteProviderUser(state, ctx.render, id);
+        return;
+      }
       var item = directoryItemFor(id);
       var name = (item && item.name) || 'this client';
       if (!window.confirm('Delete ' + name + '?')) return;
@@ -16191,6 +16242,51 @@
         render({ forceFull: true });
       });
     }
+  }
+
+  /*
+   * A service provider admin deletes one user at a time, through the contact
+   * record. The bulk endpoint is staff-only, and it does not park the login.
+   * This path does both: the person leaves Provider users, and their account
+   * goes to the recycle bin.
+   */
+  function deleteProviderUser(state, render, id) {
+    if (!id || !canRemoveProviderUser(providerUserById(id))) return;
+    var person = providerUserById(id);
+    var name = (person && person.name) || 'this user';
+    if (!window.confirm('Delete ' + name + '? Their portal access is removed.')) return;
+
+    state.removedIds = state.removedIds || {};
+    state.removedIds[id] = true;
+    render({ forceFull: true });
+
+    ClientsAPI.remove(id).then(function () {
+      // The row was only hidden. Drop it from the shared list once the
+      // server has actually removed them, so a later count is not still
+      // counting a person the firm no longer has.
+      COMPANIES.forEach(function (company) {
+        if (!company || !company.people) return;
+        var next = company.people.filter(function (p) { return !p || p.id !== id; });
+        if (next.length === company.people.length) return;
+        company.people = next;
+        if (company.peopleCount) company.peopleCount -= 1;
+      });
+      clientsToast(name + ' removed', 'positive');
+      if (state.companyId) {
+        refreshCompanyRecord(state.companyId).then(function () {
+          if (state.screen === 'company') render({ forceFull: true });
+        });
+      } else {
+        render({ forceFull: true });
+      }
+    }).catch(function (err) {
+      // They are still in COMPANIES. Clearing the hide is what puts the
+      // row back on the Provider users list, where there is no company
+      // record to reload.
+      delete state.removedIds[id];
+      render({ forceFull: true });
+      clientsToast((err && err.message) || 'Could not delete ' + name, 'negative');
+    });
   }
 
   function deleteSelectedClients(state, render) {

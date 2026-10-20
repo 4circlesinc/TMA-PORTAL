@@ -55,15 +55,24 @@ function serve() {
   window.__calls = [];
   var FIRM = ${JSON.stringify(FIRM)};
   var CONTACT = ${JSON.stringify(CONTACT)};
-  window.fetch = function (url) {
+  window.fetch = function (url, opts) {
     var u = String(url);
-    window.__calls.push(u);
+    window.__calls.push(((opts && opts.method) || 'GET') + ' ' + u);
     function ok(body) {
       return Promise.resolve({
         ok: true,
         status: 200,
         headers: { get: function () { return 'application/json'; } },
         text: function () { return Promise.resolve(JSON.stringify(body)); },
+      });
+    }
+    if ((opts && opts.method) === 'DELETE' && window.__failDelete && u.indexOf('/portal/clients/') !== -1) {
+      window.__failDelete = false;
+      return Promise.resolve({
+        ok: false,
+        status: 422,
+        headers: { get: function () { return 'application/json'; } },
+        text: function () { return Promise.resolve(JSON.stringify({ message: 'Could not delete that user' })); },
       });
     }
     if (u.indexOf('/members') !== -1) return ok({ members: [] });
@@ -125,6 +134,7 @@ page.on('pageerror', (err) => { console.error('PAGE', err.message) })
 try {
   await page.goto(`http://127.0.0.1:${port}/citizenship-applications?listTab=providers`)
   await page.waitForFunction(() => location.pathname === '/citizenship-applications/companies/gal-firm')
+  await page.waitForSelector('[data-clients-delete-person="dana-reed"]')
   await page.waitForSelector('.tma-dash__clients-profile-name')
   const firmName = await page.locator('.tma-dash__clients-profile-name').innerText()
   if (!firmName.includes('Galaxy')) throw new Error('firm page did not name Galaxy: ' + firmName)
@@ -155,6 +165,23 @@ try {
   if (!asked.some((u) => u.indexOf('/portal/clients/dana-reed') !== -1)) {
     throw new Error('detail did not read the contact record: ' + asked.join(', '))
   }
+
+  await page.goto(`http://127.0.0.1:${port}/citizenship-applications?listTab=people`)
+  await page.waitForSelector('[data-clients-delete-person="dana-reed"]')
+  await page.evaluate(() => { window.__failDelete = true })
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.click('[data-clients-delete-person="dana-reed"]')
+  await page.waitForFunction(() => window.__calls.some((u) => u.indexOf('DELETE /portal/clients/dana-reed') === 0))
+  await page.waitForSelector('[data-clients-row="dana-reed"]')
+
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.click('[data-clients-delete-person="dana-reed"]')
+  await page.waitForFunction(() => window.__calls.some((u) => u.indexOf('DELETE /portal/clients/dana-reed') === 0))
+  const deleted = await page.evaluate(() => window.__calls)
+  if (deleted.some((u) => u.indexOf('bulk-delete') !== -1)) {
+    throw new Error('provider admin delete used bulk-delete: ' + deleted.join(', '))
+  }
+  await page.waitForFunction(() => !document.querySelector('[data-clients-row="dana-reed"]'))
 
   const staffList = await page.evaluate(() => {
     window.TMABootServiceProviderAdmin = false

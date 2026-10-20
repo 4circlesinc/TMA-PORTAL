@@ -19637,6 +19637,28 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   gap: var(--space-4);
 }
 
+.tma-dash__clients-person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.tma-dash__clients-person > .tma-dash__clients-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.tma-dash__ctable--people .tma-dash__cc--contact {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.tma-dash__ctable--people .tma-dash__cc--contact .tma-dash__cc-truncate {
+  flex: 1;
+  min-width: 0;
+}
+
 .tma-dash__clients-company-notes {
   margin: 0 0 var(--space-16);
   color: var(--color-text-secondary);

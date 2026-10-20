@@ -593,14 +593,12 @@ class ServiceProviderAdminTest extends TestCase
             'name' => 'Dana Reed',
         ]);
         $this->attach($company, $person, $tma);
-        $client = Client::create([
-            'uid' => 'dana-reed',
-            'name' => 'Dana Reed',
-            'email' => $person->email,
-            'company_id' => $company->id,
-            'user_id' => $person->id,
-            'data' => [],
-        ]);
+        $client = Client::query()->where('email', $person->email)->first();
+        $this->assertNotNull($client);
+
+        $this->actingAs($spAdmin)
+            ->postJson('/portal/clients/bulk-delete', ['uids' => [$client->uid]])
+            ->assertForbidden();
 
         $this->actingAs($spAdmin)->deleteJson("/portal/clients/{$client->uid}")->assertOk();
 
