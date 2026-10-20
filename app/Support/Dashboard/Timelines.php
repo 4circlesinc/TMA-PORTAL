@@ -61,7 +61,7 @@ final class Timelines
      * which staff member answered. The reply belongs to the person who sent
      * it, so two people in one thread do not share a response time.
      *
-     * @return list<array{askedAt: CarbonInterface, seconds: int, staffId: int}>
+     * @return list<array{askedAt: CarbonInterface, repliedAt: CarbonInterface, seconds: int, staffId: int}>
      */
     public function responsePairs(): array
     {
@@ -82,6 +82,7 @@ final class Timelines
                     // any of this is meaningful at.
                     $pairs[] = [
                         'askedAt' => $askedAt,
+                        'repliedAt' => $event['at'],
                         'seconds' => (int) $askedAt->diffInSeconds($event['at']),
                         'staffId' => (int) $event['staff'],
                     ];

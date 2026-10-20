@@ -387,7 +387,7 @@ class DashboardMetricsTest extends TestCase
     /** "11 replies this month" means replies sent this month, not questions asked then. */
     public function test_a_reply_counts_in_the_month_it_was_sent(): void
     {
-        Carbon::setTestNow('2026-10-20 12:00:00');
+        CarbonImmutable::setTestNow('2026-10-20 12:00:00');
 
         try {
             $staff = $this->staff();
@@ -405,7 +405,7 @@ class DashboardMetricsTest extends TestCase
 
             $this->assertSame(1, $card['sample']);
         } finally {
-            Carbon::setTestNow();
+            CarbonImmutable::setTestNow();
         }
     }
 

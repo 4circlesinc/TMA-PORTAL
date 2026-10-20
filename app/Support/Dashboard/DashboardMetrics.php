@@ -145,7 +145,7 @@ class DashboardMetrics
      * One person's average, from the replies they sent. A colleague answering
      * the same thread does not move this number.
      *
-     * @param  list<array{askedAt: \Carbon\CarbonInterface, seconds: int, staffId: int}>  $pairs
+     * @param  list<array{askedAt: \Carbon\CarbonInterface, repliedAt: \Carbon\CarbonInterface, seconds: int, staffId: int}>  $pairs
      * @return array<string, mixed>
      */
     private function responseCardFor(int $staffId, array $pairs): array
@@ -158,9 +158,12 @@ class DashboardMetrics
                 continue;
             }
 
-            if ($pair['askedAt'] >= $this->period->windowStart) {
+            // The reply belongs to the stretch in which it was sent. A question
+            // asked last month and answered today is one of today's replies.
+            $sent = $pair['repliedAt'];
+            if ($sent >= $this->period->windowStart && $sent <= $this->period->now) {
                 $current[] = $pair['seconds'];
-            } elseif ($pair['askedAt'] >= $this->period->priorStart && $pair['askedAt'] < $this->period->priorEnd) {
+            } elseif ($sent >= $this->period->priorStart && $sent < $this->period->priorEnd) {
                 $prior[] = $pair['seconds'];
             }
         }
