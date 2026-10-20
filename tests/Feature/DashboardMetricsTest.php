@@ -332,6 +332,83 @@ class DashboardMetricsTest extends TestCase
         $this->assertSame(1, $card['sample']);
     }
 
+    /**
+     * Inviting a provider contact files a client row for them. That row used
+     * to put their address in the applicant directory, so answering the firm
+     * was counted as a reply to a client.
+     */
+    public function test_a_provider_contacts_directory_row_does_not_count_as_a_client_reply(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $staff = $this->staff();
+        $applicant = $this->client('dana@example.com');
+        $contact = $this->client('gil@galaxy.example');
+
+        $company = Company::create(['uid' => 'galaxy-dir', 'name' => 'Galaxy Directory']);
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'user_id' => $contact->id,
+            'name' => $contact->name,
+            'email' => $contact->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+        CipProvider::create([
+            'name' => 'Galaxy Directory', 'code' => 'GXD', 'company_id' => $company->id,
+        ]);
+
+        $chat = $this->conversation($staff, $contact);
+        $this->say($chat, $contact, '5 hours');
+        $this->say($chat, $staff, '1 hour');
+
+        $account = $this->mailbox($staff);
+        $this->mail($staff, $account, [
+            'from_email' => $contact->email,
+            'thread_id' => 'provider-mail',
+            'sent_at' => now()->subHours(8),
+        ]);
+        $this->mail($staff, $account, [
+            'folder' => 'sent',
+            'from_email' => $staff->email,
+            'thread_id' => 'provider-mail',
+            'sent_at' => now()->subHours(7),
+        ]);
+
+        $person = $this->conversation($staff, $applicant);
+        $this->say($person, $applicant, '3 hours');
+        $this->say($person, $staff, '2 hours');
+
+        $card = $this->metrics($staff)['cards']['clientResponse'];
+
+        $this->assertSame(1, $card['sample']);
+        $this->assertSame(3600, $card['seconds']);
+    }
+
+    /** "11 replies this month" means replies sent this month, not questions asked then. */
+    public function test_a_reply_counts_in_the_month_it_was_sent(): void
+    {
+        Carbon::setTestNow('2026-10-20 12:00:00');
+
+        try {
+            $staff = $this->staff();
+            $client = $this->client();
+
+            $answeredNow = $this->conversation($staff, $client);
+            $this->say($answeredNow, $client, '22 days');
+            $this->say($answeredNow, $staff, '18 days');
+
+            $answeredLastMonth = $this->conversation($staff, $client);
+            $this->say($answeredLastMonth, $client, '28 days');
+            $this->say($answeredLastMonth, $staff, '25 days');
+
+            $card = $this->metrics($staff, 'month')['cards']['clientResponse'];
+
+            $this->assertSame(1, $card['sample']);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
     public function test_each_person_averages_only_the_replies_they_sent(): void
     {
         $ada = $this->staff('ada@example.com', 'Reviewing Officer');

@@ -57,7 +57,7 @@ class DashboardMetricsController extends Controller
             // would show the wrong ones. Soft: the row is measured from
             // Postgres if the cache is away.
             $payload = SoftCache::remember(
-                "dashboard-metrics.own-response.v2.{$user->id}.{$period->key}",
+                "dashboard-metrics.own-response.v3.{$user->id}.{$period->key}",
                 self::TTL_SECONDS,
                 fn () => $metrics->toArray(),
             );
