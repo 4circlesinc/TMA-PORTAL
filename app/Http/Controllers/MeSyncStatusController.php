@@ -39,6 +39,7 @@ class MeSyncStatusController extends Controller
             'calendar' => $this->guard(fn () => $this->calendar($user)),
             'onedrive' => $this->guard(fn () => $this->withImportPause($this->onedrive($user), ImportPause::onedrive())),
             'smartsheet' => $this->guard(fn () => $this->withImportPause($this->smartsheet($user), ImportPause::smartsheet())),
+            'libraries' => $this->guard(fn () => $this->libraries($user)),
         ]);
     }
 
@@ -277,6 +278,44 @@ class MeSyncStatusController extends Controller
             ['state' => 'done', 'synced' => $synced],
             $connection->paused_at !== null,
         );
+    }
+
+    /**
+     * Firm SharePoint libraries. One card while any of them is actually
+     * walking Graph, so a switched-on library that is sitting idle does not
+     * pin a toast, and a live run is visible from any page.
+     *
+     * @return array{state: string, name?: string, synced?: int, total?: int|null}
+     */
+    private function libraries($user): array
+    {
+        if (! Role::can($user, 'settings.operations')) {
+            return ['state' => 'off'];
+        }
+
+        $running = SharePointConnection::query()
+            ->with('folder:id,name')
+            ->where('drive_kind', '!=', 'onedrive')
+            ->where('sync_enabled', true)
+            ->get()
+            ->filter(fn (SharePointConnection $connection) => $connection->effectiveStatus() === SharePointConnection::STATUS_SYNCING)
+            ->values();
+
+        if ($running->isEmpty()) {
+            return ['state' => 'off'];
+        }
+
+        $connection = $running->first();
+        $synced = $connection->items()->count();
+        $total = ($connection->items()->where('item_type', 'folder')->sum('child_count')
+            + (int) $connection->root_child_count) ?: null;
+
+        return [
+            'state' => 'syncing',
+            'name' => $connection->folder?->name ?: ($connection->site_name ?: $connection->drive_name),
+            'synced' => $synced,
+            'total' => $total,
+        ];
     }
 
     /**

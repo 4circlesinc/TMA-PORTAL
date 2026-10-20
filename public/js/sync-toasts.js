@@ -28,12 +28,16 @@
       syncing: 'Importing documents…',
       icon: '/images/icons/phosphor/Smart_sheet.svg',
     },
+    libraries: {
+      label: 'SharePoint',
+      syncing: 'Syncing SharePoint…',
+      icon: '/images/icons/brands/SharePoint40.svg',
+    },
   };
 
-  /* Restored by request for email and calendar only (2026-08-31): the file
-     and Smartsheet imports stay silent — their home is Settings → Background
-     Operations — and the mailbox page's own stall panel stays retired. */
-  var SHOWN = { email: 1, calendar: 1 };
+  /* File-library toasts show only while a run is actually walking Graph.
+     Smartsheet stays on the Background Operations page. */
+  var SHOWN = { email: 1, calendar: 1, libraries: 1 };
 
   var host = null;
   var cards = {}; // key -> { el, minimized, dismissed, doneTimer }
@@ -63,6 +67,7 @@
       return key === 'smartsheet' ? 'Documents imported' : (svc.label + ' synced');
     }
     if (s.state === 'error') return svc.label + ' sync problem';
+    if (key === 'libraries' && s.name) return 'Syncing ' + s.name + '…';
     return svc.syncing;
   }
 
@@ -277,6 +282,7 @@
      covers mailbox/calendar first-connect must not kill that card mid-run. */
   function shouldKeepPolling(data) {
     if (data.smartsheet && data.smartsheet.state === 'syncing') return true;
+    if (data.libraries && data.libraries.state === 'syncing') return true;
     if (anyPaused(data)) return true;
     if (anyPending()) return true;
     return anySyncing(data) && Date.now() - startedAt < MAX_LIFETIME_MS;

@@ -205,19 +205,26 @@
           var rounded = t.kind === 'smartsheet' ? ' style="border-radius:6px"' : '';
           // One switch is the whole story: on = syncing (turning it on also
           // catches the source up immediately), off = paused.
+          var progress = t.progress ? '<br>' + esc(t.progress) : '';
           return '<div class="tma-portal-connector">' +
             '<span class="tma-portal-connector__logo"><img src="' + icon + '" alt=""' + rounded + '></span>' +
             '<div class="tma-portal-connector__body">' +
             '<span class="tma-portal-connector__name">' + esc(t.name) +
-            (t.paused ? ' <span class="tma-portal-status tma-portal-status--pending">Paused</span>' : '') + '</span>' +
-            '<span class="tma-portal-connector__desc">' + esc(t.detail || '') + '</span></div>' +
+            (t.paused ? ' <span class="tma-portal-status tma-portal-status--pending">Paused</span>' : '') +
+            (!t.paused && t.state === 'syncing' ? ' <span class="tma-portal-status tma-portal-status--action">Syncing</span>' : '') +
+            '</span>' +
+            '<span class="tma-portal-connector__desc">' + esc(t.detail || '') + progress + '</span></div>' +
             '<div class="tma-portal-connector__actions" style="display:flex;align-items:center">' +
             ui().toggle(!t.paused, 'data-ops-import-switch="' + esc(t.id) + '"', 'Sync ' + t.name) +
             '</div></div>';
         }).join('') + '</div>' + connectLibraryRow();
       }
 
+      var pollTimer = null;
+      var expectUntil = 0;
+
       function load() {
+        if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
         secApi('GET', '/admin/background-ops').then(function (r) { return r.json(); }).then(function (d) {
           var pauseBlock = importsSection(d);
 
@@ -228,6 +235,7 @@
               ui().section('Imports', pauseBlock);
             wirePause();
             wireConnectLibrary();
+            armPoll(d);
             return;
           }
 
@@ -308,9 +316,19 @@
               });
             });
           }
+          armPoll(d);
         }).catch(function () {
           root.innerHTML = '<p class="tma-portal-note">Couldn\'t load background operations. Refresh to try again.</p>';
         });
+      }
+
+      function armPoll(d) {
+        var live = ((d.imports && d.imports.targets) || []).some(function (t) {
+          return t.state === 'syncing';
+        });
+        if ((live || Date.now() < expectUntil) && document.contains(root)) {
+          pollTimer = setTimeout(load, 5000);
+        }
       }
 
       function wirePause() {
@@ -328,7 +346,13 @@
                   return;
                 }
                 // Switching a source on also catches it up right away.
-                if (active) secApi('POST', '/admin/background-ops/imports-run', { target: target });
+                if (active) {
+                  expectUntil = Date.now() + 60000;
+                  secApi('POST', '/admin/background-ops/imports-run', { target: target });
+                  if (window.TMASyncToasts && window.TMASyncToasts.watch) {
+                    window.TMASyncToasts.watch(target.indexOf('library:') === 0 ? 'libraries' : target);
+                  }
+                }
                 ui().toast(active ? 'Syncing' : 'Sync paused');
                 load();
               })

@@ -84,6 +84,38 @@ class BackgroundOperationsTest extends TestCase
         ]);
     }
 
+    public function test_a_library_that_is_syncing_says_so_on_the_imports_list(): void
+    {
+        $admin = $this->user('Administrator');
+        $lib = $this->library($admin);
+        $lib->forceFill([
+            'status' => SharePointConnection::STATUS_SYNCING,
+            'last_synced_at' => now(),
+        ])->save();
+
+        $row = collect($this->actingAs($admin)->getJson('/admin/background-ops')
+            ->assertOk()
+            ->json('imports.targets'))
+            ->firstWhere('id', 'library:'.$lib->uuid);
+
+        $this->assertSame('syncing', $row['state']);
+        $this->assertStringStartsWith('Syncing', $row['progress']);
+    }
+
+    public function test_a_library_that_has_never_run_says_it_is_waiting(): void
+    {
+        $admin = $this->user('Administrator');
+        $lib = $this->library($admin);
+
+        $row = collect($this->actingAs($admin)->getJson('/admin/background-ops')
+            ->assertOk()
+            ->json('imports.targets'))
+            ->firstWhere('id', 'library:'.$lib->uuid);
+
+        $this->assertSame('waiting', $row['state']);
+        $this->assertSame('Waiting for the next sync', $row['progress']);
+    }
+
     public function test_an_admin_can_start_a_library_sync_now(): void
     {
         Queue::fake();

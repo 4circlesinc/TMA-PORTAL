@@ -60,6 +60,37 @@ class MeSyncStatusTest extends TestCase
         ], $attributes));
     }
 
+    public function test_a_live_library_sync_is_reported_for_the_toast(): void
+    {
+        $user = $this->user();
+        SharePointConnection::create([
+            'uuid' => (string) Str::uuid(), 'site_id' => 'site-lib', 'drive_id' => 'drive-lib',
+            'drive_name' => 'Documents', 'drive_kind' => 'site', 'site_name' => 'Citizenship Applications',
+            'created_by' => $user->id, 'status' => SharePointConnection::STATUS_SYNCING,
+            'last_synced_at' => now(), 'sync_enabled' => true,
+        ]);
+
+        $this->actingAs($user)->getJson('/me/sync-status')
+            ->assertOk()
+            ->assertJsonPath('libraries.state', 'syncing')
+            ->assertJsonPath('libraries.name', 'Citizenship Applications');
+    }
+
+    public function test_an_idle_library_does_not_pin_a_toast(): void
+    {
+        $user = $this->user();
+        SharePointConnection::create([
+            'uuid' => (string) Str::uuid(), 'site_id' => 'site-idle', 'drive_id' => 'drive-idle',
+            'drive_name' => 'Documents', 'drive_kind' => 'site', 'site_name' => 'Citizenship Applications',
+            'created_by' => $user->id, 'status' => SharePointConnection::STATUS_IDLE,
+            'last_success_at' => now()->subHour(), 'sync_enabled' => true,
+        ]);
+
+        $this->actingAs($user)->getJson('/me/sync-status')
+            ->assertOk()
+            ->assertJsonPath('libraries.state', 'off');
+    }
+
     public function test_a_run_still_holding_the_lock_reports_syncing(): void
     {
         $user = $this->user();

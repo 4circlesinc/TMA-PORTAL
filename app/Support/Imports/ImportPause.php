@@ -3,6 +3,8 @@
 namespace App\Support\Imports;
 
 use App\Models\SharePointConnection;
+use App\Models\SharePointItem;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -164,10 +166,16 @@ class ImportPause
     /**
      * Rows for the Background Operations page, one switch per import source.
      *
-     * @return list<array{id: string, kind: string, name: string, detail: string, paused: bool}>
+     * @return list<array{id: string, kind: string, name: string, detail: string, paused: bool, state: string, progress: string}>
      */
     public static function catalogue(): array
     {
+        $libraries = SharePointConnection::query()
+            ->with('folder:id,uuid,name')
+            ->orderBy('id')
+            ->get();
+        $counts = self::itemCounts($libraries->pluck('id'));
+
         $rows = [];
 
         if (config('services.smartsheet.cbi_enabled')) {
@@ -177,8 +185,13 @@ class ImportPause
                 'name' => 'Smartsheet documents',
                 'detail' => 'Copy Smartsheet attachments into client folders (CBI).',
                 'paused' => self::smartsheet(),
+                'state' => 'idle',
+                'progress' => '',
             ];
         }
+
+        $drives = $libraries->where('drive_kind', 'onedrive')->values();
+        $driveLine = self::groupProgress($drives, $counts);
 
         $rows[] = [
             'id' => self::TARGET_ONEDRIVE,
@@ -186,18 +199,15 @@ class ImportPause
             'name' => 'OneDrive',
             'detail' => 'Personal OneDrive sync for staff who connected Microsoft.',
             'paused' => self::onedrive(),
+            'state' => $driveLine['state'],
+            'progress' => $driveLine['progress'],
         ];
 
-        $libraries = SharePointConnection::query()
-            ->with('folder:id,uuid,name')
-            ->where('drive_kind', '!=', 'onedrive')
-            ->orderBy('id')
-            ->get();
-
-        foreach ($libraries as $connection) {
+        foreach ($libraries->where('drive_kind', '!=', 'onedrive') as $connection) {
             $name = $connection->folder?->name
                 ?: ($connection->site_name ?: $connection->drive_name)
                 ?: 'SharePoint library';
+            $line = self::connectionProgress($connection, $counts->get($connection->id));
 
             $rows[] = [
                 'id' => 'library:'.$connection->uuid,
@@ -205,10 +215,92 @@ class ImportPause
                 'name' => $name,
                 'detail' => trim(($connection->site_name ?: '').' · '.($connection->drive_name ?: 'Documents'), ' ·'),
                 'paused' => self::library((string) $connection->uuid),
+                'state' => $line['state'],
+                'progress' => $line['progress'],
             ];
         }
 
         return $rows;
+    }
+
+    /**
+     * @param  Collection<int, int>  $ids
+     * @return Collection<int, object>
+     */
+    private static function itemCounts(Collection $ids): Collection
+    {
+        if ($ids->isEmpty()) {
+            return collect();
+        }
+
+        return SharePointItem::query()
+            ->whereIn('connection_id', $ids)
+            ->selectRaw('connection_id, count(*) as items, coalesce(sum(case when item_type = ? then child_count else 0 end), 0) as folder_children', ['folder'])
+            ->groupBy('connection_id')
+            ->get()
+            ->keyBy(fn ($row) => (int) $row->connection_id);
+    }
+
+    /**
+     * @param  Collection<int, SharePointConnection>  $connections
+     * @param  Collection<int, object>  $counts
+     * @return array{state: string, progress: string}
+     */
+    private static function groupProgress(Collection $connections, Collection $counts): array
+    {
+        if ($connections->isEmpty()) {
+            return ['state' => 'idle', 'progress' => 'No drives connected'];
+        }
+
+        $running = $connections->first(
+            fn (SharePointConnection $c) => $c->effectiveStatus() === SharePointConnection::STATUS_SYNCING
+        );
+        if ($running) {
+            return self::connectionProgress($running, $counts->get($running->id));
+        }
+
+        $newest = $connections
+            ->filter(fn (SharePointConnection $c) => $c->last_success_at !== null)
+            ->sortByDesc(fn (SharePointConnection $c) => $c->last_success_at)
+            ->first();
+
+        if ($newest) {
+            return self::connectionProgress($newest, $counts->get($newest->id));
+        }
+
+        return ['state' => 'waiting', 'progress' => 'Waiting for the next sync'];
+    }
+
+    /**
+     * @return array{state: string, progress: string}
+     */
+    private static function connectionProgress(SharePointConnection $connection, ?object $count): array
+    {
+        $synced = (int) ($count->items ?? 0);
+        $total = (int) ($count->folder_children ?? 0) + (int) $connection->root_child_count;
+        $amount = number_format($synced).($total > 0 ? ' of '.number_format($total) : '').' items';
+
+        if ($connection->status === SharePointConnection::STATUS_ERROR) {
+            $error = trim((string) $connection->last_error);
+
+            return [
+                'state' => 'error',
+                'progress' => $error !== '' ? $error : 'Sync failed',
+            ];
+        }
+
+        if ($connection->effectiveStatus() === SharePointConnection::STATUS_SYNCING) {
+            return ['state' => 'syncing', 'progress' => 'Syncing… '.$amount];
+        }
+
+        if ($connection->last_success_at !== null) {
+            return [
+                'state' => 'idle',
+                'progress' => 'Synced '.$connection->last_success_at->diffForHumans(),
+            ];
+        }
+
+        return ['state' => 'waiting', 'progress' => 'Waiting for the next sync'];
     }
 
     private static function persist(array $all, ?int $userId): void
