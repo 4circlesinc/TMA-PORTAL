@@ -294,6 +294,14 @@ class Synchroniser
             });
 
             /*
+             * Names the portal changed after the folder was already in
+             * SharePoint. Delta never reports those, because SharePoint
+             * itself did not change, so the two sides stay apart until this
+             * pass renames the remote item to the portal's name.
+             */
+            self::pushDivergentFolderNames($connection);
+
+            /*
              * A pass only counts as SUCCESS if Graph handed back a deltaLink —
              * meaning the walk reached the end. A mid-walk resume point stored
              * in delta_link is not the same thing; treating it as complete
@@ -335,6 +343,37 @@ class Synchroniser
         }
 
         return $stats;
+    }
+
+    /**
+     * Rename SharePoint folders whose portal name has moved on.
+     *
+     * A filing folder is created as "Application IGA26-00005" and later
+     * named for the applicant. The remote copy used to keep the number,
+     * and the next create of that name came back as "Application IGA26-00005 1".
+     */
+    private static function pushDivergentFolderNames(SharePointConnection $connection): void
+    {
+        if (! $connection->pushesBack()) {
+            return;
+        }
+
+        SharePointItem::query()
+            ->where('connection_id', $connection->id)
+            ->where('item_type', 'folder')
+            ->whereNotNull('folder_id')
+            ->with('folder')
+            ->orderBy('id')
+            ->chunkById(200, function ($items): void {
+                foreach ($items as $item) {
+                    $folder = $item->folder;
+                    if (! $folder || strcasecmp((string) $item->name, $folder->name) === 0) {
+                        continue;
+                    }
+
+                    Pusher::pushFolder($folder);
+                }
+            });
     }
 
     /**

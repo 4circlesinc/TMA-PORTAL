@@ -25,4 +25,21 @@ class FolderSharePointObserver
 
         PushFolderToSharePoint::dispatch($folder->id)->afterCommit();
     }
+
+    /**
+     * A rename has to reach SharePoint too.
+     *
+     * Created only mirrored the first name. The filing folder is minted as
+     * "Application {number}" and renamed to the applicant once that name
+     * exists; without this, SharePoint keeps the number and the portal
+     * shows the person.
+     */
+    public function updated(Folder $folder): void
+    {
+        if (Pusher::isSuspended() || ! $folder->wasChanged('name')) {
+            return;
+        }
+
+        PushFolderToSharePoint::dispatch($folder->id)->afterCommit();
+    }
 }

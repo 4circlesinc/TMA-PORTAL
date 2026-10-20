@@ -215,6 +215,40 @@ class Pusher
             return ['status' => 'not-linked'];
         }
 
+        /*
+         * A folder SharePoint already has is renamed there, not created again.
+         *
+         * The portal names a new filing "Application IGA26-00005" and later
+         * renames that folder to the applicant. Creating a second folder for
+         * the new name left SharePoint on the old one, and Graph's conflict
+         * rule then stored the next copy as "Application IGA26-00005 1".
+         */
+        $mapping = SharePointItem::query()
+            ->where('connection_id', $connection->id)
+            ->where('folder_id', $folder->id)
+            ->where('item_type', 'folder')
+            ->first();
+
+        if ($mapping && strcasecmp((string) $mapping->name, $folder->name) !== 0) {
+            try {
+                $result = Drive::rename($connection->drive_id, $mapping->graph_item_id, $folder->name);
+                $mapping->update([
+                    'name' => $result['name'] ?? $folder->name,
+                    'etag' => $result['eTag'] ?? $mapping->etag,
+                    'sync_status' => SharePointItem::SYNCED,
+                    'last_error' => null,
+                    'last_synced_at' => now(),
+                ]);
+
+                return ['status' => 'renamed'];
+            } catch (\Throwable $e) {
+                self::markFailure($mapping, $e->getMessage());
+                Synchroniser::log($connection, 'push-failed', 'error', $mapping->graph_item_id, $e->getMessage());
+
+                return ['status' => 'failed', 'reason' => $e->getMessage()];
+            }
+        }
+
         return self::graphParentFor($connection, $folder)
             ? ['status' => 'ok']
             : ['status' => 'no-parent'];

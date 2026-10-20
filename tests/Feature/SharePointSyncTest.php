@@ -759,6 +759,95 @@ class SharePointSyncTest extends TestCase
         $this->assertSame('folder', SharePointItem::where('folder_id', $client->id)->value('item_type'));
     }
 
+    /**
+     * Renaming a folder SharePoint already has updates that item.
+     *
+     * A second create is what left the library showing "Application
+     * IGA26-00005" while the portal had moved on to the applicant's name,
+     * and the next copy arrived as "Application IGA26-00005 1".
+     */
+    public function test_renaming_a_mapped_folder_renames_it_in_sharepoint(): void
+    {
+        $client = Pusher::suspend(function () {
+            $folder = Folder::create([
+                'uuid' => (string) Str::uuid(), 'name' => 'Application IGA26-00005',
+                'parent_id' => $this->connection->folder_id,
+                'owner_id' => $this->owner->id, 'created_by' => $this->owner->id,
+            ]);
+            SharePointItem::create([
+                'connection_id' => $this->connection->id,
+                'graph_item_id' => 'g-client',
+                'graph_parent_id' => 'root-1',
+                'item_type' => 'folder',
+                'folder_id' => $folder->id,
+                'name' => 'Application IGA26-00005',
+                'sync_status' => SharePointItem::SYNCED,
+            ]);
+
+            return $folder;
+        });
+
+        $this->remoteItem = [
+            'id' => 'g-client',
+            'name' => 'VERNON FRANCIS',
+            'eTag' => 'e-renamed',
+        ];
+        $client->forceFill(['name' => 'VERNON FRANCIS'])->save();
+
+        $result = Pusher::pushFolder($client->fresh());
+
+        $this->assertContains($result['status'], ['renamed', 'ok']);
+        $this->assertSame('VERNON FRANCIS', SharePointItem::where('graph_item_id', 'g-client')->value('name'));
+        $this->assertSame(1, SharePointItem::where('folder_id', $client->id)->count());
+        Http::assertSent(function (Request $request) {
+            return $request->method() === 'PATCH'
+                && str_contains($request->url(), '/items/g-client')
+                && ($request->data()['name'] ?? null) === 'VERNON FRANCIS';
+        });
+        Http::assertNotSent(function (Request $request) {
+            return $request->method() === 'POST'
+                && ($request->data()['name'] ?? null) === 'VERNON FRANCIS';
+        });
+    }
+
+    /** A later sync catches a rename that happened while SharePoint was quiet. */
+    public function test_a_sync_pushes_a_portal_folder_rename_sharepoint_never_saw(): void
+    {
+        Pusher::suspend(function () {
+            $folder = Folder::create([
+                'uuid' => (string) Str::uuid(), 'name' => 'Application IGA26-00005',
+                'parent_id' => $this->connection->folder_id,
+                'owner_id' => $this->owner->id, 'created_by' => $this->owner->id,
+            ]);
+            SharePointItem::create([
+                'connection_id' => $this->connection->id,
+                'graph_item_id' => 'g-quiet',
+                'graph_parent_id' => 'root-1',
+                'item_type' => 'folder',
+                'folder_id' => $folder->id,
+                'name' => 'Application IGA26-00005',
+                'sync_status' => SharePointItem::SYNCED,
+            ]);
+            $folder->forceFill(['name' => 'VERNON FRANCIS'])->save();
+        });
+
+        $this->remoteItem = [
+            'id' => 'g-quiet',
+            'name' => 'VERNON FRANCIS',
+            'eTag' => 'e-quiet',
+        ];
+        $this->fakeGraph([]);
+
+        Synchroniser::sync($this->connection->fresh());
+
+        $this->assertSame('VERNON FRANCIS', SharePointItem::where('graph_item_id', 'g-quiet')->value('name'));
+        Http::assertSent(function (Request $request) {
+            return $request->method() === 'PATCH'
+                && str_contains($request->url(), '/items/g-quiet')
+                && ($request->data()['name'] ?? null) === 'VERNON FRANCIS';
+        });
+    }
+
     /** Inbound writes must not bounce straight back out. */
     public function test_pushes_are_suspended_while_inbound_sync_runs(): void
     {
