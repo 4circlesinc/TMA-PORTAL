@@ -182,6 +182,12 @@ try {
   check(metrics.allShrinkZero, 'every swipe row has flex-shrink: 0');
   check(metrics.minHeight >= 48, `shortest row is ${Math.round(metrics.minHeight)}px (≥ 48)`);
 
+  const bodyDisplay = await page.$eval('[data-messages-list-body]', (el) => getComputedStyle(el).display);
+  check(
+    bodyDisplay === 'block' || bodyDisplay === 'flow-root',
+    `list body is a block scrollport (got ${bodyDisplay}), not a flex column that can crush rows`
+  );
+
   const shot = process.argv[2];
   if (shot) await page.screenshot({ path: shot, fullPage: false });
 } finally {

@@ -17271,25 +17271,24 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   color: var(--color-text-placeholder);
 }
 
+/*
+ * Inbox scrollport. Keep this a block (like Email's list body), not a flex
+ * column: mobile conversation rows sit in a swipe wrap with overflow: hidden,
+ * and a flex item with non-visible overflow gets an automatic minimum size of
+ * 0 — flex-shrink then crushes every row while the Favorites / Chats labels
+ * (no overflow clip) stay, which is the blank phone inbox. A block scrollport
+ * cannot do that. The flex-shrink: 0 rules below are belt-and-suspenders if a
+ * later change puts display:flex back on this element.
+ */
 .tma-dash__messages-list-body {
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
   overflow-x: hidden;
   overflow-y: auto;
+  overflow-anchor: none;
   scrollbar-width: thin;
 }
 
-/*
- * Scrollable flex columns shrink items that have overflow other than visible
- * (the automatic minimum size becomes 0). Mobile conversation rows sit in a
- * swipe wrap with overflow: hidden, so without this they collapse to nothing
- * while the Favorites / Chats group labels — which do not clip — stay visible.
- * Email's list body is not a flex column, which is why its swipe rows never
- * hit the same trap.
- */
 .tma-dash__messages-list-body > * {
   flex-shrink: 0;
 }
@@ -18761,14 +18760,19 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
     display: flex;
   }
 
+  /*
+   * Stop the inbox column at the app tab bar so the Messages foot (Chats /
+   * Calls / …) and the New message button sit above it, not under it. The
+   * scrollport only needs a short pad for the floating compose control.
+   */
   .tma-dash--messages-mobile .tma-dash__messages-layout--mobile:not(.tma-dash__messages-layout--mobile-reading) .tma-dash__messages-list {
     flex: 1 1 auto;
     flex-basis: 0;
     width: 100%;
     max-width: none;
     max-height: none;
-    height: calc(100vh - var(--dash-mobile-header-h) - env(safe-area-inset-bottom, 0px));
-    height: calc(100dvh - var(--dash-mobile-header-h) - env(safe-area-inset-bottom, 0px));
+    height: calc(100vh - var(--dash-mobile-header-h) - var(--dash-tabbar-clearance, 72px) - env(safe-area-inset-bottom, 0px));
+    height: calc(100dvh - var(--dash-mobile-header-h) - var(--dash-tabbar-clearance, 72px) - env(safe-area-inset-bottom, 0px));
     min-height: 0;
     gap: 0;
     display: flex;
@@ -18784,8 +18788,15 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
     flex: 1 1 auto;
     min-height: 0;
     padding: 0;
-    padding-bottom: calc(var(--dash-tabbar-clearance) + var(--space-8) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: var(--space-72, 72px);
     background: var(--color-white);
+  }
+
+  .tma-dash--messages-mobile .tma-dash__messages-list-foot {
+    margin-bottom: 0;
+    border-radius: 0;
+    background: var(--color-bg-card);
+    border-top: 0.5px solid var(--color-overlay-8, var(--color-overlay-4));
   }
 
   .tma-dash__messages-row-swipe {
