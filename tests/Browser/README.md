@@ -2815,6 +2815,16 @@ node tests/Browser/messaging-mobile-list.mjs
 TMA_BROWSER=webkit node tests/Browser/messaging-mobile-list.mjs
 ```
 
+- **`messaging-mobile-bottom-nav.mjs`** — on the phone Messages inbox the
+  portal Home/Mail/Profile dock hides and the Messages section bar
+  (Chats / Calls / Media / Settings) becomes the fixed bottom dock, with
+  conversation rows and the compose button clear of it.
+
+```sh
+node tests/Browser/messaging-mobile-bottom-nav.mjs
+TMA_BROWSER=webkit node tests/Browser/messaging-mobile-bottom-nav.mjs
+```
+
 - **`messaging-phase1.mjs`** — the Phase 1 rework: three-state delivery,
   message tool placement, the right-click menu, closing a chat, the
   repositioned inbox toolbar, and the conversation menu. Runs **two contexts**,
