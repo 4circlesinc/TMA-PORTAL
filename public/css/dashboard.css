@@ -17282,6 +17282,18 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   scrollbar-width: thin;
 }
 
+/*
+ * Scrollable flex columns shrink items that have overflow other than visible
+ * (the automatic minimum size becomes 0). Mobile conversation rows sit in a
+ * swipe wrap with overflow: hidden, so without this they collapse to nothing
+ * while the Favorites / Chats group labels — which do not clip — stay visible.
+ * Email's list body is not a flex column, which is why its swipe rows never
+ * hit the same trap.
+ */
+.tma-dash__messages-list-body > * {
+  flex-shrink: 0;
+}
+
 .tma-dash__messages-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -18780,6 +18792,7 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
     position: relative;
     overflow: hidden;
     width: 100%;
+    flex-shrink: 0;
   }
 
   .tma-dash__messages-row-swipe-actions {
