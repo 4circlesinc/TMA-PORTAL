@@ -2802,6 +2802,18 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
 node tests/Browser/messaging-toolbar.mjs
 ```
 
+- **`messaging-mobile-list.mjs`** — phone inbox layout: Favorites / Chats
+  group labels must not sit over a blank column. The list body is a flex
+  column; mobile rows live in a swipe wrap with `overflow: hidden`, which
+  drops the flex automatic minimum size to 0 and lets `flex-shrink` collapse
+  every conversation while the labels (no overflow clip) stay. The fixture
+  loads live `dashboard.css` at a 390×844 viewport and asserts each swipe
+  row keeps `flex-shrink: 0` and a real height. No portal seed required.
+
+```sh
+node tests/Browser/messaging-mobile-list.mjs
+```
+
 - **`messaging-phase1.mjs`** — the Phase 1 rework: three-state delivery,
   message tool placement, the right-click menu, closing a chat, the
   repositioned inbox toolbar, and the conversation menu. Runs **two contexts**,
