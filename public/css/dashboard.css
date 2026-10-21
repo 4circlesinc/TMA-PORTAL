@@ -18762,18 +18762,32 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   }
 
   /*
-   * Stop the inbox column at the app tab bar so the Messages foot (Chats /
-   * Calls / …) and the New message button sit above it, not under it. The
-   * scrollport only needs a short pad for the floating compose control.
+   * On the phone inbox the portal dock yields to the Messages section bar
+   * (Chats / Calls / Media / Settings). Two docks at once buried the Messages
+   * foot under the Home/Mail/Profile tab bar; reading a thread already hides
+   * the portal dock, and leaving Messages restores it.
    */
+  .tma-dash--messages-mobile:not(.tma-dash--messages-mobile-reading) {
+    --dash-messages-foot-block-h: calc(var(--space-4) + 48px + var(--space-4));
+    --dash-messages-foot-clearance: calc(var(--dash-messages-foot-block-h) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .tma-dash--messages-mobile:not(.tma-dash--messages-mobile-reading) .tma-dash__tabbar {
+    display: none !important;
+  }
+
+  .tma-dash--messages-mobile:not(.tma-dash--messages-mobile-reading) .tma-dash__mmenu {
+    bottom: var(--dash-messages-foot-clearance);
+  }
+
   .tma-dash--messages-mobile .tma-dash__messages-layout--mobile:not(.tma-dash__messages-layout--mobile-reading) .tma-dash__messages-list {
     flex: 1 1 auto;
     flex-basis: 0;
     width: 100%;
     max-width: none;
     max-height: none;
-    height: calc(100vh - var(--dash-mobile-header-h) - var(--dash-tabbar-clearance, 72px) - env(safe-area-inset-bottom, 0px));
-    height: calc(100dvh - var(--dash-mobile-header-h) - var(--dash-tabbar-clearance, 72px) - env(safe-area-inset-bottom, 0px));
+    height: calc(100vh - var(--dash-mobile-header-h) - var(--dash-messages-foot-clearance, 72px));
+    height: calc(100dvh - var(--dash-mobile-header-h) - var(--dash-messages-foot-clearance, 72px));
     min-height: 0;
     gap: 0;
     display: flex;
@@ -18789,15 +18803,54 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
     flex: 1 1 auto;
     min-height: 0;
     padding: 0;
-    padding-bottom: var(--space-72, 72px);
+    padding-bottom: calc(56px + var(--space-16));
     background: var(--color-white);
   }
 
-  .tma-dash--messages-mobile .tma-dash__messages-list-foot {
-    margin-bottom: 0;
-    border-radius: 0;
-    background: var(--color-bg-card);
-    border-top: 0.5px solid var(--color-overlay-8, var(--color-overlay-4));
+  .tma-dash--messages-mobile:not(.tma-dash--messages-mobile-reading) .tma-dash__messages-list-foot {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 45;
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin: 0;
+    padding: var(--space-4) var(--space-8) calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+    border-radius: var(--radius-20) var(--radius-20) 0 0;
+    background: var(--color-white);
+    border: none;
+    border-top: 0.5px solid var(--color-overlay-4);
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.06);
+  }
+
+  .tma-dash--messages-mobile:not(.tma-dash--messages-mobile-reading) .tma-dash__messages-nav-btn {
+    min-height: 48px;
+    padding: var(--space-6) var(--space-4);
+    border-radius: var(--radius-12);
+  }
+
+  .tma-dash--messages-mobile:not(.tma-dash--messages-mobile-reading) .tma-dash__messages-nav-btn img {
+    width: 22px;
+    height: 22px;
+  }
+
+  .tma-dash--messages-mobile:not(.tma-dash--messages-mobile-reading) .tma-dash__messages-nav-label {
+    font-size: 11px;
+    line-height: 14px;
+  }
+
+  .tma-dash--messages-mobile:not(.tma-dash--messages-mobile-reading) .tma-dash__messages-fab {
+    position: fixed;
+    right: max(var(--dash-mobile-gutter, var(--space-16)), env(safe-area-inset-right, 0px));
+    bottom: calc(var(--dash-messages-foot-clearance) + var(--space-16));
+    z-index: 46;
+  }
+
+  /* Keep Bespoke clear of the Messages dock while the inbox is open. */
+  .tma-dash--messages-mobile:not(.tma-dash--messages-mobile-reading) .tma-bespoke {
+    bottom: calc(var(--dash-messages-foot-clearance) + var(--space-16));
   }
 
   .tma-dash__messages-row-swipe {
