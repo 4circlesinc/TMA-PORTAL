@@ -2812,6 +2812,7 @@ node tests/Browser/messaging-toolbar.mjs
 
 ```sh
 node tests/Browser/messaging-mobile-list.mjs
+TMA_BROWSER=webkit node tests/Browser/messaging-mobile-list.mjs
 ```
 
 - **`messaging-phase1.mjs`** — the Phase 1 rework: three-state delivery,

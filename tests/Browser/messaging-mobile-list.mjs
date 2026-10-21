@@ -11,7 +11,7 @@
  *
  *   node tests/Browser/messaging-mobile-list.mjs [screenshot.png]
  */
-import { chromium } from 'playwright';
+import { chromium, webkit } from 'playwright';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -116,7 +116,8 @@ await new Promise((resolveListen) => server.listen(0, '127.0.0.1', resolveListen
 const { port } = server.address();
 const url = `http://127.0.0.1:${port}/`;
 
-const browser = await chromium.launch();
+const engine = process.env.TMA_BROWSER === 'webkit' ? webkit : chromium;
+const browser = await engine.launch();
 const page = await browser.newPage({
   viewport: { width: 390, height: 844 },
   deviceScaleFactor: 2,

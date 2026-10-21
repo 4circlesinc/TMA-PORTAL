@@ -17286,6 +17286,7 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   overflow-x: hidden;
   overflow-y: auto;
   overflow-anchor: none;
+  -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
 }
 
