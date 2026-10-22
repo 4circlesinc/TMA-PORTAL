@@ -6094,10 +6094,20 @@
       track._swipeBound = true;
 
       var startX = 0;
+      var startY = 0;
       var startOffset = 0;
       var dragging = false;
       var moved = false;
       var wheelEndTimer = null;
+      /*
+       * Same axis gate as bubble swipe-to-reply. The inbox used to treat any
+       * lift with |dx| ≤ 6 as a tap, so a vertical scroll left moved=false and
+       * pointerup opened the chat under the thumb. DEAD_ZONE keeps a real tap
+       * from committing a swipe; AXIS_RATIO requires horizontal to clearly
+       * dominate before we capture the gesture.
+       */
+      var DEAD_ZONE = 8;
+      var AXIS_RATIO = 1.3;
 
       function swipeMaxWidth() {
         return wrap.offsetWidth || 0;
@@ -6260,7 +6270,12 @@
         dragging = true;
         moved = false;
         startX = e.clientX;
+        startY = e.clientY;
         startOffset = getCurrentOffset();
+        // A prior scroll on this row left swipeMoved set so the synthetic
+        // click after lift could not open the chat. Clear it for a fresh
+        // gesture so a real tap still works.
+        delete wrap.dataset.swipeMoved;
         wrap.classList.add('is-dragging');
         track.setPointerCapture(e.pointerId);
       });
@@ -6269,9 +6284,32 @@
         'pointermove',
         function (e) {
           if (!dragging) return;
-          var delta = e.clientX - startX;
-          if (Math.abs(delta) > 6) moved = true;
-          setOffset(startOffset + delta);
+          var dx = e.clientX - startX;
+          var dy = e.clientY - startY;
+
+          if (!moved) {
+            if (Math.abs(dx) < DEAD_ZONE && Math.abs(dy) < DEAD_ZONE) return;
+
+            if (Math.abs(dx) < Math.abs(dy) * AXIS_RATIO) {
+              // A scroll, not a swipe. Give the pointer back so the list
+              // actually scrolls; holding capture here left the gesture dead
+              // and the later pointerup opened the row as a "tap".
+              dragging = false;
+              wrap.classList.remove('is-dragging');
+              if (listBody) listBody.classList.remove('is-swipe-dragging');
+              if (track.hasPointerCapture(e.pointerId)) {
+                track.releasePointerCapture(e.pointerId);
+              }
+              wrap.dataset.swipeMoved = '1';
+              return;
+            }
+
+            moved = true;
+            if (listBody) listBody.classList.add('is-swipe-dragging');
+          }
+
+          e.preventDefault();
+          setOffset(startOffset + dx);
         },
         { passive: false }
       );
@@ -6281,6 +6319,9 @@
       }
 
       function endDrag(e) {
+        // Scroll abort already set swipeMoved and released capture; a late
+        // click after lift must not open the conversation (cleared on the
+        // next pointerdown).
         if (!dragging) return;
         dragging = false;
         clearWheelEndTimer();

@@ -2815,6 +2815,18 @@ node tests/Browser/messaging-mobile-list.mjs
 TMA_BROWSER=webkit node tests/Browser/messaging-mobile-list.mjs
 ```
 
+- **`inbox-scroll-tap.mjs`** — phone inbox row gestures: a vertical scroll
+  must not open the conversation/mail under the finger. Mirrors the
+  Messages / Email swipe axis gate (`DEAD_ZONE` / `AXIS_RATIO`) and checks
+  that a stationary tap still opens, a scroll does not, a tap after a
+  scroll still opens, and a horizontal swipe is not treated as a tap.
+  No portal seed required.
+
+```sh
+node tests/Browser/inbox-scroll-tap.mjs
+TMA_BROWSER=webkit node tests/Browser/inbox-scroll-tap.mjs
+```
+
 - **`messaging-phase1.mjs`** — the Phase 1 rework: three-state delivery,
   message tool placement, the right-click menu, closing a chat, the
   repositioned inbox toolbar, and the conversation menu. Runs **two contexts**,

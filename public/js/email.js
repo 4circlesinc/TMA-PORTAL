@@ -12268,9 +12268,17 @@
       if (!track) return;
 
       var startX = 0;
+      var startY = 0;
       var startOffset = 0;
       var dragging = false;
       var moved = false;
+      /*
+       * Same axis gate as Messages inbox / bubble swipe. Only |dx| used to
+       * count as movement, so a vertical scroll left moved=false and
+       * pointerup opened the message under the thumb.
+       */
+      var DEAD_ZONE = 8;
+      var AXIS_RATIO = 1.3;
 
       function swipeMaxWidth() {
         return wrap.offsetWidth || 0;
@@ -12382,18 +12390,46 @@
         dragging = true;
         moved = false;
         startX = e.clientX;
+        startY = e.clientY;
         var match = /translateX\((-?\d+(?:\.\d+)?)px\)/.exec(track.style.transform || '');
         startOffset = match ? parseFloat(match[1]) : 0;
+        // A prior scroll left swipeMoved set so the synthetic click after
+        // lift could not open the mail. Clear it for a fresh gesture.
+        delete wrap.dataset.swipeMoved;
         wrap.classList.add('is-dragging');
         track.setPointerCapture(e.pointerId);
       });
 
-      track.addEventListener('pointermove', function (e) {
-        if (!dragging) return;
-        var delta = e.clientX - startX;
-        if (Math.abs(delta) > 6) moved = true;
-        setOffset(startOffset + delta);
-      });
+      track.addEventListener(
+        'pointermove',
+        function (e) {
+          if (!dragging) return;
+          var dx = e.clientX - startX;
+          var dy = e.clientY - startY;
+
+          if (!moved) {
+            if (Math.abs(dx) < DEAD_ZONE && Math.abs(dy) < DEAD_ZONE) return;
+
+            if (Math.abs(dx) < Math.abs(dy) * AXIS_RATIO) {
+              // A scroll, not a swipe. Release capture so the list scrolls,
+              // and mark the row so pointerup/click cannot open the mail.
+              dragging = false;
+              wrap.classList.remove('is-dragging');
+              if (track.hasPointerCapture(e.pointerId)) {
+                track.releasePointerCapture(e.pointerId);
+              }
+              wrap.dataset.swipeMoved = '1';
+              return;
+            }
+
+            moved = true;
+          }
+
+          e.preventDefault();
+          setOffset(startOffset + dx);
+        },
+        { passive: false }
+      );
 
       function openEmailRowFromSwipe(wrap, id) {
         if (!id) return;
@@ -12402,6 +12438,7 @@
       }
 
       function endDrag(e) {
+        // Scroll abort already set swipeMoved and released capture.
         if (!dragging) return;
         dragging = false;
         wrap.classList.remove('is-dragging');
