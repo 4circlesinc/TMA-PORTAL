@@ -16,6 +16,7 @@ use App\Support\Cip\Providers;
 use App\Support\Clients\ClientDirectory;
 use App\Support\Companies\CompanyAccess;
 use App\Support\Companies\CompanyMembers;
+use App\Support\Companies\CompanyMerge;
 use App\Support\Realtime\Live;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
@@ -583,6 +584,31 @@ class CompaniesController extends Controller
             'clientId' => $contact->uid,
             'fromId' => $from->uid,
             'toId' => $to->uid,
+        ]);
+    }
+
+    /**
+     * Fold another service provider into this one.
+     *
+     * `companyId` is the duplicate. This firm keeps its name and its CIP code.
+     */
+    public function merge(Request $request, string $uid): JsonResponse
+    {
+        abort_unless(Role::can($request->user(), 'clients.manage'), 403, 'Only staff can merge service providers.');
+
+        $keeper = CompanyScope::findOrFail($request->user(), $uid);
+        $data = $request->validate([
+            'companyId' => ['required', 'string', 'max:96'],
+        ]);
+        $duplicate = CompanyScope::findOrFail($request->user(), $data['companyId']);
+        $name = $duplicate->name;
+
+        CompanyMerge::absorb($keeper, $duplicate, $request->user());
+
+        return response()->json([
+            'message' => $name.' was merged into '.$keeper->name.'.',
+            'companyId' => $keeper->uid,
+            'removedId' => $duplicate->uid,
         ]);
     }
 

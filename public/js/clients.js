@@ -819,6 +819,12 @@
         method: 'POST', json: { companyId: companyId },
       });
     },
+    /* Fold `companyId` into this firm. The other firm is removed. */
+    merge: function (keeperUid, companyId) {
+      return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(keeperUid) + '/merge', {
+        method: 'POST', json: { companyId: companyId },
+      });
+    },
   };
 
   /*
@@ -829,6 +835,9 @@
    * personId -> { toId, person }
    */
   var pendingContactMoves = {};
+  // Firms just merged away. A company list that was already loading still
+  // names them, and must not put the duplicate back on screen.
+  var pendingRemovedCompanies = {};
   // Bumped when a contact is transferred. Directory lists that started
   // before that still resolve, and their answer is the firm as it was.
   var companiesListGeneration = 0;
@@ -838,6 +847,21 @@
       return String(a.name || '').localeCompare(String(b.name || ''));
     });
     applyPendingContactMoves(!!confirmMoves);
+    applyPendingCompanyRemovals(records, !!confirmMoves);
+  }
+
+  function applyPendingCompanyRemovals(records, confirmMoves) {
+    var present = {};
+    (records || []).forEach(function (company) {
+      if (company && company.id) present[String(company.id)] = true;
+    });
+    Object.keys(pendingRemovedCompanies).forEach(function (id) {
+      if (confirmMoves && !present[id]) delete pendingRemovedCompanies[id];
+    });
+    if (!Object.keys(pendingRemovedCompanies).length) return;
+    COMPANIES = COMPANIES.filter(function (company) {
+      return company && !pendingRemovedCompanies[String(company.id)];
+    });
   }
 
   /* A directory answer from before the transfer is not painted. The lists
@@ -1200,6 +1224,19 @@
       if (!other || !other.id || other.id === company.id) continue;
       if (other.status === 'archived') continue;
       return true;
+    }
+    return false;
+  }
+
+  /* Staff, and only when there is another firm to fold in. */
+  function canMergeCompanies() {
+    if (!canManageClients() || isProviderAdminViewer()) return false;
+    var firms = 0;
+    for (var i = 0; i < COMPANIES.length; i++) {
+      var company = COMPANIES[i];
+      if (!company || !company.id || company.status === 'archived') continue;
+      firms++;
+      if (firms > 1) return true;
     }
     return false;
   }
@@ -6805,6 +6842,11 @@
         '<img src="' + ICONS.PencilSimple + '" alt=""><span>Edit</span></button>' +
         '<button type="button" class="tma-dash__clients-message-btn" data-clients-add-person>' +
         '<img src="' + ICONS.Plus + '" alt=""><span>Add person</span></button>';
+      if (canMergeCompanies()) {
+        staffActions +=
+          '<button type="button" class="tma-dash__clients-edit-btn" data-clients-merge-company>' +
+          '<img src="images/icons/phosphor/ArrowsLeftRight.svg" alt=""><span>Merge</span></button>';
+      }
       if (isClientsAdmin()) {
         staffActions +=
           '<button type="button" class="tma-dash__clients-edit-btn" data-clients-delete-company aria-label="Delete service provider">' +
@@ -13353,6 +13395,13 @@
     // current-user store (which is not always populated by the time a row
     // is right-clicked).
     if (canAssignClients()) items.push({ act: 'assign', label: 'Assign to', icon: 'UserPlus', submenu: true });
+    if (kind === 'company' && canMergeCompanies()) {
+      items.push({
+        act: 'merge-company',
+        label: 'Merge a duplicate into this one',
+        icon: 'ArrowsLeftRight',
+      });
+    }
     items.push({ sep: true });
     if (kind !== 'application' || !app || app.canDelete !== false) {
       items.push({ act: 'delete', label: 'Delete', icon: 'Trash', danger: true });
@@ -15990,6 +16039,10 @@
         state.focusMemberEmail = true;
         return navigate('company', null, { companyId: id });
       }
+      if (act === 'merge-company') {
+        openCompanyMergePicker(id);
+        return;
+      }
       if (act === 'delete') {
         resolveCompany(id).then(function (company) {
           if (!company) { clientsToast('Could not open this service provider', 'negative'); return; }
@@ -16158,6 +16211,158 @@
     // After the drop has finished, so it cannot take the corrected pages too.
     Promise.resolve(dropped).catch(function () {}).then(function () {
       corrected.forEach(function (entry) { storeApplicationPage(entry.storeKey, entry.page); });
+    });
+  }
+
+  /*
+   * Fold another service provider into the one the reader is on.
+   *
+   * This firm stays. The other firm's contacts, portal access, applications
+   * and library folder move here, and that firm is removed.
+   */
+  function openCompanyMergePicker(keeperId) {
+    var keeper = companyFor(keeperId);
+    if (!keeper || !canMergeCompanies()) {
+      clientsToast('Only staff can merge service providers', 'negative');
+      return;
+    }
+
+    var existing = document.querySelector('[data-company-merge]');
+    if (existing) existing.remove();
+
+    var selectedId = '';
+    var wrap = document.createElement('div');
+    wrap.className = 'tma-dash__settings-popup';
+    wrap.setAttribute('data-company-merge', '');
+    wrap.setAttribute('role', 'dialog');
+    wrap.setAttribute('aria-modal', 'true');
+    wrap.setAttribute('aria-label', 'Merge a duplicate service provider');
+    wrap.innerHTML =
+      '<div class="tma-dash__settings-popup-backdrop" aria-hidden="true"></div>' +
+      '<div class="tma-dash__settings-change-card tma-users-dialog tma-users-picker">' +
+      '<h3 class="tma-dash__settings-change-title">Merge a duplicate into ' + esc(keeper.name || 'this service provider') + '</h3>' +
+      '<p class="tma-dash__settings-change-text">Contacts, portal access, applications, and the library folder move onto <strong>' +
+      esc(keeper.name || 'this firm') + '</strong>. This firm keeps its name' +
+      (keeper.cipCode ? ' and CIP code ' + esc(keeper.cipCode) : '') +
+      '. The other firm is removed.</p>' +
+      '<input type="search" class="tma-users-picker-search" data-company-merge-search placeholder="Search service providers" autocomplete="off">' +
+      '<div class="tma-users-picker-list" data-company-merge-list></div>' +
+      '<p class="tma-dash__settings-change-text" data-company-merge-error hidden style="color: var(--color-red);"></p>' +
+      '<div class="tma-users-delete-actions">' +
+      '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-company-merge-cancel>Cancel</button>' +
+      '<button type="button" class="tma-no-data__btn" data-company-merge-confirm disabled>Merge into this firm</button>' +
+      '</div></div>';
+    document.body.appendChild(wrap);
+
+    function onEsc(ev) {
+      if (ev.key !== 'Escape') return;
+      close();
+    }
+    function close() {
+      wrap.remove();
+      document.removeEventListener('keydown', onEsc);
+    }
+    function choices(term) {
+      var q = String(term || '').toLowerCase().trim();
+      var shown = [];
+      COMPANIES.forEach(function (company) {
+        if (!company || !company.id || String(company.id) === String(keeper.id)) return;
+        if (company.status === 'archived') return;
+        var hay = (company.name || '') + ' ' + (company.cipCode || '');
+        if (q && hay.toLowerCase().indexOf(q) === -1) return;
+        shown.push(company);
+      });
+      return shown;
+    }
+    function paintList(term) {
+      var list = wrap.querySelector('[data-company-merge-list]');
+      var confirm = wrap.querySelector('[data-company-merge-confirm]');
+      var shown = choices(term);
+      if (!shown.length) {
+        list.innerHTML = '<p class="tma-user-info-panel__field-label">No other service providers to merge.</p>';
+        confirm.disabled = true;
+        return;
+      }
+      list.innerHTML = shown.map(function (company) {
+        var on = selectedId === company.id;
+        var meta = company.cipCode ? esc(company.cipCode) : '';
+        return '<button type="button" class="tma-users-picker-item"' + (on ? ' data-selected' : '') +
+          ' data-company-merge-id="' + esc(company.id) + '">' +
+          '<img src="' + ICONS.Buildings + '" alt="" width="16" height="16">' +
+          '<span class="tma-users-picker-item-copy"><strong>' + esc(company.name || 'Service provider') + '</strong>' +
+          (meta ? '<span>' + meta + '</span>' : '') + '</span></button>';
+      }).join('');
+      confirm.disabled = !selectedId;
+    }
+
+    wrap.querySelector('[data-company-merge-cancel]').addEventListener('click', close);
+    wrap.querySelector('.tma-dash__settings-popup-backdrop').addEventListener('click', close);
+    document.addEventListener('keydown', onEsc);
+    wrap.querySelector('[data-company-merge-list]').addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-company-merge-id]');
+      if (!btn) return;
+      selectedId = btn.getAttribute('data-company-merge-id') || '';
+      paintList(wrap.querySelector('[data-company-merge-search]').value);
+    });
+    wrap.querySelector('[data-company-merge-search]').addEventListener('input', function (e) {
+      paintList(e.target.value);
+    });
+    wrap.querySelector('[data-company-merge-confirm]').addEventListener('click', function () {
+      if (!selectedId) return;
+      var confirm = wrap.querySelector('[data-company-merge-confirm]');
+      confirm.disabled = true;
+      var chosen = companyFor(selectedId);
+      var chosenName = (chosen && chosen.name) || 'That service provider';
+      CompaniesAPI.merge(keeper.id, selectedId).then(function (json) {
+        close();
+        settleCompanyMerge(keeper.id, selectedId);
+        clientsToast((json && json.message) || (chosenName + ' was merged into ' + (keeper.name || 'this firm')), 'positive');
+      }).catch(function (err) {
+        var msg = (err && err.message) || 'Could not merge these service providers';
+        var box = wrap.querySelector('[data-company-merge-error]');
+        if (box) {
+          box.textContent = msg;
+          box.hidden = false;
+        }
+        confirm.disabled = false;
+        clientsToast(msg, 'negative');
+      });
+    });
+
+    paintList('');
+    var search = wrap.querySelector('[data-company-merge-search]');
+    if (search) search.focus();
+  }
+
+  function settleCompanyMerge(keeperId, removedId) {
+    companiesListGeneration += 1;
+    pendingRemovedCompanies[String(removedId)] = true;
+    hydrateCompanies(COMPANIES.filter(function (company) {
+      return company && String(company.id) !== String(removedId);
+    }));
+
+    if (window.TMABoot && window.TMABoot.forget) {
+      window.TMABoot.forget('GET ' + COMPANIES_BASE);
+    }
+    publishCompanies();
+
+    var ctx = clientsMenuCtx;
+    var state = ctx && ctx.state;
+    if (state && String(state.companyId) === String(removedId)) {
+      state.companyId = keeperId;
+      state.companyPanelsFor = null;
+      state.companyPanelsEpoch = (state.companyPanelsEpoch || 0) + 1;
+    } else if (state && String(state.companyId) === String(keeperId)) {
+      state.companyPanelsFor = null;
+      state.companyPanelsEpoch = (state.companyPanelsEpoch || 0) + 1;
+    }
+
+    if (ctx && ctx.render) ctx.render({ forceFull: true });
+    else repaintClients({ forceFull: true });
+
+    refreshCompanyRecord(keeperId).then(function () {
+      if (!ctx || !ctx.render) return;
+      ctx.render({ forceFull: true });
     });
   }
 
@@ -17702,6 +17907,13 @@
     if (editCompanyBtn) {
       editCompanyBtn.addEventListener('click', function () {
         navigate('edit-company', null, { companyId: state.companyId });
+      });
+    }
+
+    var mergeCompanyBtn = unwiredClientsChrome(root, '[data-clients-merge-company]');
+    if (mergeCompanyBtn) {
+      mergeCompanyBtn.addEventListener('click', function () {
+        if (state.companyId) openCompanyMergePicker(state.companyId);
       });
     }
 

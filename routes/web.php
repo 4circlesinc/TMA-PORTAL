@@ -1053,6 +1053,10 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/{uid}/contacts/{client}/transfer', [CompaniesController::class, 'transferContact'])
             ->name('contacts.transfer');
 
+        // Fold a duplicate firm into this one: contacts, access, code, and folder.
+        Route::post('/{uid}/merge', [CompaniesController::class, 'merge'])
+            ->name('merge');
+
         // The firm's own staff looking after the company.
         Route::get('/{uid}/staff', [CompanyStaffController::class, 'index'])->name('staff.index');
         // What an assignment would cover, before it is made.
