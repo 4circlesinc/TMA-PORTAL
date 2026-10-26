@@ -19292,8 +19292,19 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
 
 .tma-dash__clients-card-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-8);
+}
+
+.tma-dash__clients-card-action {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.tma-dash__clients-card-head .tma-dash__clients-card-count + .tma-dash__clients-card-action {
+  margin-left: 0;
 }
 
 .tma-dash__clients-card-head--person {

@@ -7490,6 +7490,9 @@
       }) +
       companyCard(isProviderAdminViewer() ? 'Provider users' : 'Provider contacts', renderCompanyPeople(company), {
         half: true, count: visibleCompanyPeople(company).length,
+        action: canManageCompanyAccess()
+          ? '<button type="button" class="tma-dash__clients-assign-btn" data-clients-add-person>Add contact</button>'
+          : '',
       }) +
       companyCard('Assigned staff', renderCompanyStaffBlock(state, company), {
         half: true, count: (state.companyStaff || []).length,
@@ -7508,6 +7511,7 @@
       '<header class="tma-dash__clients-card-head">' +
       '<h3 class="tma-dash__clients-card-title">' + esc(title) + '</h3>' +
       (opts.count ? '<span class="tma-dash__clients-card-count">' + opts.count.toLocaleString() + '</span>' : '') +
+      (opts.action ? '<span class="tma-dash__clients-card-action">' + opts.action + '</span>' : '') +
       '</header>' + body + '</section>'
     );
   }
@@ -7657,17 +7661,12 @@
 
   function renderCompanyPeople(company) {
     var people = visibleCompanyPeople(company);
-    var form = canManageCompanyAccess()
-      ? '<div class="tma-dash__clients-assign-form">' +
-        '<button type="button" class="tma-dash__clients-assign-btn" data-clients-add-person>' +
-        'Add contact</button></div>'
-      : '';
     var list = people.length
       ? '<div class="tma-dash__clients-company-people">' +
         people.map(function (p) { return companyPersonRow(p, true); }).join('') + '</div>'
       : clientsEmpty('No contacts yet', 'Illustration04');
 
-    return form + list;
+    return list;
   }
 
   /*
