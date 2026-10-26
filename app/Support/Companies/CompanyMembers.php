@@ -336,7 +336,8 @@ final class CompanyMembers
 
         // Invitation acceptance links the login onto the contact row.
         self::ensureContact($member, $by);
-        $member = $member->fresh() ?? $member;
+        $member = $member->fresh(['location']) ?? $member;
+        $office = $member->location?->name;
 
         [$invitation] = Invitations::issue([
             'type' => Invitation::TYPE_COMPANY_MEMBER,
@@ -348,6 +349,7 @@ final class CompanyMembers
             'access' => [
                 'companyRole' => $member->roleLabel(),
                 'companyMemberUuid' => $member->uuid,
+                'office' => $office,
             ],
             'invited_by' => $by->id,
         ]);
@@ -813,6 +815,8 @@ final class CompanyMembers
         $user = $member->user;
         $provider = self::isProvider($company);
         $role = $member->roleLabel();
+        $office = $member->location?->name;
+        $at = $office ? ' at '.$office : '';
 
         Notifier::send([
             'user' => $user,
@@ -820,8 +824,8 @@ final class CompanyMembers
             'type' => 'company.member_added',
             'title' => 'You were added to '.$company->name,
             'message' => $provider
-                ? 'You now have access to '.$company->name.'’s applications as '.$role.'.'
-                : 'You now have access to '.$company->name.' as '.$role.'.',
+                ? 'You now have access to '.$company->name.'’s applications'.$at.' as '.$role.'.'
+                : 'You now have access to '.$company->name.$at.' as '.$role.'.',
             'subject' => $company,
             // "Open company" means this company, not the applications list.
             'action_url' => Pages::company($company->uid),
@@ -840,6 +844,7 @@ final class CompanyMembers
                 $role,
                 $by->name,
                 $provider,
+                $office,
             ),
             $user->email,
             $company,
@@ -900,6 +905,13 @@ final class CompanyMembers
         ?string $previousCompany,
     ): void {
         $role = $asAdmin ? 'Service Provider admin' : 'service provider contact';
+        $office = CompanyMember::query()
+            ->where('company_id', $company->id)
+            ->where('user_id', $user->id)
+            ->with('location')
+            ->first()
+            ?->location
+            ?->name;
 
         Notifier::send([
             'user' => $user,
@@ -910,7 +922,7 @@ final class CompanyMembers
                 : 'You were added to '.$company->name,
             'message' => $switched
                 ? 'Your service provider has been switched to '.$company->name.'. You are a '.$role.' there.'
-                : 'You have been added to '.$company->name.' as a '.$role.'.',
+                : 'You have been added to '.$company->name.($office ? ' at '.$office : '').' as a '.$role.'.',
             'subject' => $company,
             'action_url' => Pages::company($company->uid),
             'email' => false,
@@ -929,6 +941,7 @@ final class CompanyMembers
                 self::portalUrl($company),
                 $by->name,
                 $previousCompany,
+                $switched ? null : $office,
             ),
             $user->email,
             $company,

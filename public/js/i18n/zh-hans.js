@@ -123,6 +123,7 @@ window.TMAI18nDict = {
     "Company": "公司", "No company": "无公司", "Contact": "联系人",
     "Finance contact": "财务联系人", "Assigned staff": "指派的员工",
     "Offices": "办事处", "Add branch": "添加分行", "Branch name": "分行名称",
+    "Office": "办事处", "Choose an office": "请选择办事处",
     "Branch": "分行", "No users yet": "还没有用户", "No offices yet": "还没有办事处",
     "Branch added": "已添加分行", "Branch removed": "已移除分行",
     "Name the branch": "请填写分行名称",

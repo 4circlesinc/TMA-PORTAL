@@ -7773,6 +7773,20 @@
     return (m && (m.notificationAddress || m.email)) || '';
   }
 
+  /* The office this invitation is for. One office is already chosen. More
+     than one asks, because Add used to put everyone on the main office. */
+  function renderInviteOfficeSelect(state) {
+    var locations = officesInOrder(state.companyLocations);
+    if (!locations.length) return '';
+    var ask = locations.length > 1;
+    return '<select class="tma-dash__clients-field-select" data-company-member-office aria-label="Office">' +
+      (ask ? '<option value="">Choose an office</option>' : '') +
+      locations.map(function (loc) {
+        return '<option value="' + esc(loc.id) + '">' + esc(loc.name) + '</option>';
+      }).join('') +
+      '</select>';
+  }
+
   /* Who at the company can reach its records, and how far each has got. */
   function renderCompanyMembersBlock(state, company) {
     var members = (state.companyMembers || []).filter(function (m) {
@@ -7794,6 +7808,7 @@
           (isProviderAdminViewer() ? 'Contact email' : 'Email address') +
           '" data-company-member-email aria-label="' +
           (isProviderAdminViewer() ? 'Contact email' : 'Member email') + '">' +
+        renderInviteOfficeSelect(state) +
         '<button type="button" class="tma-dash__clients-assign-btn" data-company-member-add>' +
           (isProviderAdminViewer() ? 'Add contact' : 'Add') +
         '</button>' +
@@ -18226,6 +18241,12 @@
           clientsToast('Enter an email address', 'negative');
           return;
         }
+        var officeEl = root.querySelector('[data-company-member-office]');
+        var locationId = officeEl ? officeEl.value : '';
+        if (officeEl && !locationId) {
+          clientsToast('Choose an office', 'negative');
+          return;
+        }
         memberAdd.disabled = true;
         CompanyMembersAPI.add(state.companyId, {
           email: email,
@@ -18234,6 +18255,7 @@
           // Access is the invite surface. Add used to only park the row, and
           // the list then said Invited even though no mail had gone out.
           invite: true,
+          locationId: locationId || null,
         }).then(function (res) {
           var sent = !!(res && res.invitation);
           var added = isProviderAdminViewer() ? 'Contact added' : 'Member added';

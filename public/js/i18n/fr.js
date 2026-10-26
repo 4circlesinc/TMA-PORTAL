@@ -123,6 +123,7 @@ window.TMAI18nDict = {
     "Company": "Entreprise", "No company": "Sans entreprise", "Contact": "Contact",
     "Finance contact": "Contact financier", "Assigned staff": "Personnel assigné",
     "Offices": "Bureaux", "Add branch": "Ajouter une succursale", "Branch name": "Nom de la succursale",
+    "Office": "Bureau", "Choose an office": "Choisissez un bureau",
     "Branch": "Succursale", "No users yet": "Aucun utilisateur pour l'instant", "No offices yet": "Aucun bureau pour l'instant",
     "Branch added": "Succursale ajoutée", "Branch removed": "Succursale retirée",
     "Name the branch": "Nommez la succursale",

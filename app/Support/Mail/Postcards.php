@@ -389,6 +389,7 @@ class Postcards
         ?\DateTimeInterface $expiresAt = null,
         bool $hasAccount = false,
         bool $isProvider = false,
+        ?string $office = null,
     ): Postcard {
         return self::postcard($hasAccount ? 'company-member-invite-existing' : 'company-member-invite', [
             'name' => $name,
@@ -396,12 +397,14 @@ class Postcards
             'role' => $companyRole,
             'inviter' => $inviter,
             'isProvider' => $isProvider,
+            'office' => $office,
             'url' => $url,
         ], [
             'url' => $url,
             'details' => array_values(array_filter(array_merge(
                 [
                     ['Company', e($companyName)],
+                    $office ? ['Office', e($office)] : null,
                     ['Your role', e($companyRole)],
                     $inviter ? ['Invited by', e($inviter)] : null,
                 ],
@@ -418,6 +421,7 @@ class Postcards
         string $companyRole,
         ?string $addedBy = null,
         bool $isProvider = false,
+        ?string $office = null,
     ): Postcard {
         return self::postcard('company-member-added', [
             'name' => $name,
@@ -425,11 +429,13 @@ class Postcards
             'role' => $companyRole,
             'addedBy' => $addedBy,
             'isProvider' => $isProvider,
+            'office' => $office,
             'url' => $url,
         ], [
             'url' => $url,
             'details' => array_values(array_filter([
                 ['Company', e($companyName)],
+                $office ? ['Office', e($office)] : null,
                 ['Your role', e($companyRole)],
                 $addedBy ? ['Added by', e($addedBy)] : null,
             ])),
@@ -450,6 +456,7 @@ class Postcards
         string $url,
         ?string $by = null,
         ?string $previousCompany = null,
+        ?string $office = null,
     ): Postcard {
         $key = match (true) {
             $asAdmin && $switched => 'service-provider-admin-switched',
@@ -465,11 +472,13 @@ class Postcards
             'addedBy' => $switched ? null : $by,
             'switchedBy' => $switched ? $by : null,
             'previousCompany' => $previousCompany,
+            'office' => $office,
             'url' => $url,
         ], [
             'url' => $url,
             'details' => array_values(array_filter([
                 ['Company', e($companyName)],
+                $office ? ['Office', e($office)] : null,
                 ['Your role', e($role)],
                 $previousCompany ? ['Previous firm', e($previousCompany)] : null,
                 $by ? [$switched ? 'Switched by' : 'Added by', e($by)] : null,

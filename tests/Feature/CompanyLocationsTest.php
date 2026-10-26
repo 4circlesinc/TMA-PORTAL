@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Mail\Postcard;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyLocation;
@@ -12,6 +13,7 @@ use App\Support\Companies\CompanyLocations;
 use App\Support\Companies\CompanyMembers;
 use App\Support\Companies\CompanyRoles;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
@@ -237,5 +239,31 @@ class CompanyLocationsTest extends TestCase
 
         $this->assertNotNull($moved);
         $this->assertSame($main->id, $moved->location_id);
+    }
+
+    public function test_an_invitation_names_the_office_the_person_was_asked_to_join(): void
+    {
+        Mail::fake();
+
+        $admin = $this->admin();
+        $company = Company::create(['uid' => 'igraphics', 'name' => 'iGraphics']);
+        $branch = CompanyLocations::addBranch($company, 'Tiget', $admin);
+
+        $this->actingAs($admin)->postJson('/portal/companies/igraphics/members', [
+            'email' => 'd@igraphics.test',
+            'name' => 'User D',
+            'role' => 'member',
+            'invite' => true,
+            'locationId' => $branch->uid,
+        ])->assertCreated();
+
+        $this->assertSame($branch->id, CompanyMember::where('email', 'd@igraphics.test')->value('location_id'));
+
+        Mail::assertSent(Postcard::class, function (Postcard $mail) {
+            $body = json_encode($mail->payload);
+
+            return str_contains($mail->subjectLine, 'iGraphics')
+                && str_contains((string) $body, 'Tiget');
+        });
     }
 }
