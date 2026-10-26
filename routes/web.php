@@ -42,6 +42,7 @@ use App\Http\Controllers\ClientInviteController;
 use App\Http\Controllers\ClientOnboardingController;
 use App\Http\Controllers\ClientsController;
 use App\Http\Controllers\CompaniesController;
+use App\Http\Controllers\CompanyLocationController;
 use App\Http\Controllers\CompanyMemberController;
 use App\Http\Controllers\CompanyStaffController;
 use App\Http\Controllers\ConnectorsController;
@@ -1039,6 +1040,11 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/{uid}', [CompaniesController::class, 'show'])->name('show');
         Route::patch('/{uid}', [CompaniesController::class, 'update'])->name('update');
         Route::delete('/{uid}', [CompaniesController::class, 'destroy'])->name('destroy');
+
+        // Main office and branches. Users with portal access sit on one of these.
+        Route::get('/{uid}/locations', [CompanyLocationController::class, 'index'])->name('locations.index');
+        Route::post('/{uid}/locations', [CompanyLocationController::class, 'store'])->name('locations.store');
+        Route::delete('/{uid}/locations/{location}', [CompanyLocationController::class, 'destroy'])->name('locations.destroy');
 
         // The people at the company who may reach its records.
         Route::get('/{uid}/members', [CompanyMemberController::class, 'index'])->name('members.index');

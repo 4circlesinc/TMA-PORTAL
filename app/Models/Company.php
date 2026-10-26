@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\Access\Role;
+use App\Support\Companies\CompanyLocations;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -51,6 +52,13 @@ class Company extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::created(function (Company $company) {
+            CompanyLocations::ensureMain($company);
+        });
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
@@ -74,6 +82,12 @@ class Company extends Model
     public function members(): HasMany
     {
         return $this->hasMany(CompanyMember::class);
+    }
+
+    /** The main office and any branches. */
+    public function locations(): HasMany
+    {
+        return $this->hasMany(CompanyLocation::class);
     }
 
     /** The CIP numbering registry row, when this company is a service provider. */

@@ -9,6 +9,7 @@ use App\Models\Invitation;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Companies\CompanyAccess;
+use App\Support\Companies\CompanyLocations;
 use App\Support\Companies\CompanyMembers;
 use App\Support\Companies\CompanyRoles;
 use App\Support\Companies\NotificationEmail;
@@ -34,6 +35,7 @@ class CompanyMemberController extends Controller
         abort_unless(CompanyAccess::canViewMembers($request->user(), $company), 403);
 
         return response()->json([
+            'locations' => CompanyLocations::records($company),
             'members' => $this->present($company),
             'removed' => CompanyMember::where('company_id', $company->id)
                 ->where('status', CompanyMember::STATUS_REMOVED)
@@ -58,6 +60,7 @@ class CompanyMemberController extends Controller
             'role' => [$asProviderAdmin ? 'nullable' : 'required', Rule::in(CompanyRoles::all())],
             'primary' => ['sometimes', 'boolean'],
             'clientUid' => ['nullable', 'string', 'max:96'],
+            'locationId' => ['nullable', 'string', 'max:96'],
             'invite' => ['sometimes', 'boolean'],
             'abilities' => ['nullable', 'array'],
         ]);
@@ -84,6 +87,7 @@ class CompanyMemberController extends Controller
             'name' => $data['name'] ?? $client?->name,
             'email' => $email,
             'job_title' => $data['jobTitle'] ?? null,
+            'location_uid' => $data['locationId'] ?? null,
             'role' => $asProviderAdmin ? CompanyRoles::MEMBER : $data['role'],
             'is_primary' => $asProviderAdmin ? false : $request->boolean('primary'),
             'client_id' => $client?->id,
@@ -140,6 +144,7 @@ class CompanyMemberController extends Controller
             'jobTitle' => ['nullable', 'string', 'max:120'],
             'role' => ['nullable', Rule::in(CompanyRoles::all())],
             'primary' => ['sometimes', 'boolean'],
+            'locationId' => ['nullable', 'string', 'max:96'],
             'abilities' => ['nullable', 'array'],
         ]);
 
@@ -192,6 +197,10 @@ class CompanyMemberController extends Controller
         if ($request->boolean('primary')) {
             CompanyMembers::makePrimary($company, $member);
             $member = $member->fresh();
+        }
+
+        if (array_key_exists('locationId', $data)) {
+            $member = CompanyLocations::place($company, $member, $data['locationId']);
         }
 
         return response()->json([
@@ -301,7 +310,7 @@ class CompanyMemberController extends Controller
     {
         $members = CompanyMember::current()
             ->where('company_id', $company->id)
-            ->with(['user', 'client'])
+            ->with(['user', 'client', 'location'])
             ->orderByDesc('is_primary')
             ->get();
 

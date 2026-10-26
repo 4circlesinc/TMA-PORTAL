@@ -751,6 +751,18 @@
     },
   };
 
+  var CompanyLocationsAPI = {
+    add: function (uid, payload) {
+      return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid) + '/locations', {
+        method: 'POST', json: payload,
+      });
+    },
+    remove: function (uid, locationId) {
+      return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid) +
+        '/locations/' + encodeURIComponent(locationId), { method: 'DELETE' });
+    },
+  };
+
   var CompanyStaffAPI = {
     list: function (uid) {
       return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid) + '/staff');
@@ -7462,6 +7474,9 @@
       // identifies the company; the pairs below are the four things you do
       // with it.
       companyCard('Details', renderCompanyDetails(company), {}) +
+      companyCard('Offices', renderCompanyOffices(state, company), {
+        count: (state.companyLocations || []).length,
+      }) +
       (holdsClientDirectory()
         ? companyCard('Clients referred', renderCompanyReferredBlock(company), {
             half: true, count: company.referredCount || 0,
@@ -7548,6 +7563,96 @@
     return (company && company.people || []).filter(function (p) {
       return p && p.id && !removed[p.id] && contactListedOn(p.id, company.id);
     });
+  }
+
+  function officesInOrder(locations) {
+    return (locations || []).slice().sort(function (a, b) {
+      if (a.kind === 'main_office') return -1;
+      if (b.kind === 'main_office') return 1;
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
+  }
+
+  function membersAtOffice(members, office, locations) {
+    var main = null;
+    for (var i = 0; i < locations.length; i++) {
+      if (locations[i] && locations[i].kind === 'main_office') main = locations[i];
+    }
+    return members.filter(function (m) {
+      if (m.locationId === office.id) return true;
+      return !!(main && office.id === main.id && !m.locationId);
+    });
+  }
+
+  function renderOfficeUser(member, locations, canManage) {
+    var move = canManage && locations.length > 1
+      ? '<select class="tma-dash__clients-field-select" data-company-member-location="' +
+        esc(member.id) + '" aria-label="Office or branch">' +
+        locations.map(function (loc) {
+          return '<option value="' + esc(loc.id) + '"' +
+            (loc.id === member.locationId ? ' selected' : '') + '>' +
+            esc(loc.name) + '</option>';
+        }).join('') +
+        '</select>'
+      : '';
+    return '<div class="tma-dash__clients-assigned">' +
+      '<span class="tma-dash__clients-assigned-icon" aria-hidden="true">' + staffAvatarHtml(member) + '</span>' +
+      '<span class="tma-dash__clients-assigned-main">' +
+      '<span class="tma-dash__clients-assigned-title">' + esc(member.name || member.email || 'User') + '</span>' +
+      (member.email ? '<span class="tma-dash__clients-assigned-meta">' + esc(member.email) + '</span>' : '') +
+      '</span>' + move + '</div>';
+  }
+
+  /*
+   * The firm, then its main office, then each branch, then the users on that
+   * location. Portal access stays with the service provider; the office says
+   * where the person works.
+   */
+  function renderCompanyOffices(state, company) {
+    var locations = officesInOrder(state.companyLocations);
+    var members = (state.companyMembers || []).filter(function (m) {
+      return m && !memberMovedAway(m, company && company.id);
+    });
+    var loading = !!state.companyMembersLoading && !locations.length;
+    var canManage = canManageCompanyAccess();
+
+    var form = canManage && !loading
+      ? '<div class="tma-dash__clients-assign-form" data-key="company-branch-form">' +
+        '<input class="tma-dash__clients-field-input" type="text" placeholder="Branch name"' +
+        ' data-company-branch-name aria-label="Branch name" maxlength="120">' +
+        '<button type="button" class="tma-dash__clients-assign-btn" data-company-branch-add>' +
+        'Add branch</button></div>'
+      : '';
+
+    if (loading) {
+      return form + '<div class="tma-dash__clients-assigned-empty">Loading…</div>';
+    }
+    if (state.companyMembersError && !locations.length) {
+      return form + clientsEmpty(state.companyMembersError, 'Illustration07');
+    }
+    if (!locations.length) {
+      return form + clientsEmpty('No offices yet', 'Illustration07');
+    }
+
+    var groups = locations.map(function (loc) {
+      var people = membersAtOffice(members, loc, locations);
+      var title = loc.kind === 'main_office'
+        ? '<h4 class="tma-dash__clients-office-title">' + esc(loc.name) + '</h4>'
+        : '<span class="tma-dash__clients-office-kind">Branch</span>' +
+          '<h4 class="tma-dash__clients-office-title">' + esc(loc.name) + '</h4>';
+      var remove = canManage && loc.kind !== 'main_office'
+        ? '<button type="button" class="tma-dash__clients-row-remove" data-company-branch-remove="' +
+          esc(loc.id) + '" aria-label="Remove branch"><img src="' + ICONS.Trash + '" alt=""></button>'
+        : '';
+      var list = people.length
+        ? people.map(function (m) { return renderOfficeUser(m, locations, canManage); }).join('')
+        : '<div class="tma-dash__clients-assigned-empty">No users yet</div>';
+      return '<section class="tma-dash__clients-office">' +
+        '<div class="tma-dash__clients-office-head">' + title + remove + '</div>' +
+        list + '</section>';
+    }).join('');
+
+    return form + '<div class="tma-dash__clients-offices" data-key="company-offices">' + groups + '</div>';
   }
 
   function renderCompanyPeople(company) {
@@ -7740,6 +7845,7 @@
           else meta.push('No invite sent');
           // Said on the row too: the reader who cannot change it sees no select.
           if (m.notificationEmail) meta.push('Notification email');
+          if (m.locationName) meta.push(m.locationName);
           return '<div class="tma-dash__clients-assigned">' +
             '<span class="tma-dash__clients-assigned-icon" aria-hidden="true">' + staffAvatarHtml(m) + '</span>' +
             '<span class="tma-dash__clients-assigned-main">' +
@@ -18217,6 +18323,58 @@
       });
     });
 
+    var branchAdd = MORPH.unwiredOne(root, '[data-company-branch-add]');
+    if (branchAdd) {
+      branchAdd.addEventListener('click', function () {
+        var nameEl = root.querySelector('[data-company-branch-name]');
+        var name = nameEl && nameEl.value ? nameEl.value.trim() : '';
+        if (!name) {
+          clientsToast('Name the branch', 'negative');
+          return;
+        }
+        branchAdd.disabled = true;
+        CompanyLocationsAPI.add(state.companyId, { name: name }).then(function (res) {
+          clientsToast('Branch added', 'positive');
+          if (nameEl) nameEl.value = '';
+          branchAdd.disabled = false;
+          if (res && res.locations) state.companyLocations = res.locations;
+          render();
+        }).catch(function (err) {
+          branchAdd.disabled = false;
+          clientsToast((err && err.message) || 'Could not add that branch', 'negative');
+        });
+      });
+    }
+
+    MORPH.unwired(root, '[data-company-branch-remove]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (!window.confirm('Remove this branch? Its users move to the main office.')) return;
+        CompanyLocationsAPI.remove(state.companyId, btn.getAttribute('data-company-branch-remove'))
+          .then(function () {
+            clientsToast('Branch removed', 'positive');
+            refreshCompanyPanels();
+          }).catch(function (err) {
+            clientsToast((err && err.message) || 'Could not remove that branch', 'negative');
+          });
+      });
+    });
+
+    MORPH.unwired(root, '[data-company-member-location]').forEach(function (select) {
+      select.addEventListener('change', function () {
+        var memberId = select.getAttribute('data-company-member-location');
+        select.disabled = true;
+        CompanyMembersAPI.update(state.companyId, memberId, { locationId: select.value })
+          .then(function (res) {
+            if (res && res.members) state.companyMembers = res.members;
+            clientsToast('Office updated', 'positive');
+            render();
+          }).catch(function (err) {
+            clientsToast((err && err.message) || 'Could not move that user', 'negative');
+            render();
+          });
+      });
+    });
+
     /* -------------------------------------------- company staff */
 
     var staffAdd = MORPH.unwiredOne(root, '[data-company-staff-add]');
@@ -19004,6 +19162,10 @@
     if (state.companyPanelsFor === state.companyId) return;
     state.companyPanelsFor = state.companyId;
     var epoch = state.companyPanelsEpoch || 0;
+    if (state.companyLocationsFor !== state.companyId) {
+      state.companyLocations = [];
+      state.companyLocationsFor = state.companyId;
+    }
     state.companyMembersLoading = true;
     state.companyMembersError = null;
     state.companyStaffLoading = true;
@@ -19019,12 +19181,15 @@
     CompanyMembersAPI.list(state.companyId).then(function (d) {
       if (stale()) return;
       state.companyMembers = (d && d.members) || [];
+      state.companyLocations = (d && d.locations) || [];
+      state.companyLocationsFor = state.companyId;
       state.companyMembersLoading = false;
       state.companyMembersError = null;
       redraw();
     }).catch(function (err) {
       if (stale()) return;
       state.companyMembers = [];
+      state.companyLocations = [];
       state.companyMembersLoading = false;
       state.companyMembersError = (err && err.message) || 'Could not load portal access.';
       redraw();
@@ -19712,6 +19877,8 @@
       conversationsLoadedFor: null,
       messageMenuOpen: false,
       companyMembers: [],
+      companyLocations: [],
+      companyLocationsFor: null,
       companyStaff: [],
       companyStaffAssignable: [],
       companyMembersLoading: false,

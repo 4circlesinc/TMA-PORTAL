@@ -522,11 +522,17 @@ class CompaniesController extends Controller
             unset($data['cipCode'], $data['status']);
         }
 
+        $previousName = $company->name;
+
         if (array_key_exists('name', $data)) {
             $company->name = $data['name'];
         }
         $company->forceFill($this->profileColumns($data));
         $company->save();
+
+        if (array_key_exists('name', $data) && $previousName !== $company->name) {
+            \App\Support\Companies\CompanyLocations::followCompanyName($company, $previousName);
+        }
 
         if (array_key_exists('cipCode', $data)) {
             Providers::syncCode($company, $data['cipCode']);

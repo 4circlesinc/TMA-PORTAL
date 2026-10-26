@@ -59,9 +59,14 @@ final class CompanyMembers
             ->first() ?? new CompanyMember;
 
         $userId = self::liveUserId($existingUser, $member);
+        $locationId = CompanyLocations::idFor(
+            $company,
+            isset($attrs['location_uid']) ? (string) $attrs['location_uid'] : null,
+        );
 
         $member->forceFill(array_merge([
             'company_id' => $company->id,
+            'location_id' => $locationId,
             'user_id' => $userId,
             'client_id' => $attrs['client_id'] ?? $member->client_id,
             'name' => $attrs['name'] ?? $member->name,

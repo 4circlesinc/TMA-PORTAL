@@ -19349,6 +19349,62 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   font-variant-numeric: tabular-nums;
 }
 
+/* Service provider offices: main office, then each branch, then its users. */
+.tma-dash__clients-offices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding-bottom: var(--space-16);
+}
+
+.tma-dash__clients-office {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.tma-dash__clients-office + .tma-dash__clients-office {
+  padding-top: var(--space-16);
+  border-top: 1px solid var(--color-overlay-4);
+}
+
+.tma-dash__clients-office-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.tma-dash__clients-office-kind {
+  flex-shrink: 0;
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__clients-office-title {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__clients-office-head .tma-dash__clients-row-remove {
+  margin-left: auto;
+}
+
+.tma-dash__clients-assigned .tma-dash__clients-field-select {
+  flex: 0 1 200px;
+  width: auto;
+  max-width: 220px;
+  margin-left: auto;
+}
+
 /*
  * A person's editable details, and the CIP number card above them.
  *

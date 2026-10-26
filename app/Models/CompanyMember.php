@@ -19,7 +19,7 @@ use Illuminate\Support\Str;
  * check {@see self::isActive()} *and* that there is a user behind it.
  */
 #[Fillable([
-    'uuid', 'company_id', 'user_id', 'client_id', 'name', 'email', 'job_title',
+    'uuid', 'company_id', 'location_id', 'user_id', 'client_id', 'name', 'email', 'job_title',
     'role', 'is_primary', 'status', 'added_by', 'removed_at', 'removed_by',
     ...CompanyRoles::ABILITIES,
 ])]
@@ -68,6 +68,11 @@ class CompanyMember extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
+    }
+
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(CompanyLocation::class, 'location_id');
     }
 
     public function user(): BelongsTo
@@ -151,11 +156,16 @@ class CompanyMember extends Model
             $abilities[Str::camel($ability)] = (bool) $this->{$ability};
         }
 
+        $location = $this->location;
+
         return [
             'id' => $this->uuid,
             'name' => $this->displayName(),
             'email' => $this->displayEmail(),
             'jobTitle' => $this->job_title,
+            'locationId' => $location?->uid,
+            'locationName' => $location?->name,
+            'locationKind' => $location?->kind,
             'role' => $this->role,
             'roleLabel' => $this->roleLabel(),
             'primary' => $this->is_primary,
