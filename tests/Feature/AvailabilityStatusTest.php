@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Models\UserLocation;
+use App\Models\UserPresence;
 use App\Models\UserPresenceState;
 use App\Models\UserStatusSchedule;
 use App\Support\Presence\AvailabilityService;
@@ -256,5 +257,125 @@ class AvailabilityStatusTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('primary.status', AvailabilityStatus::IN_OFFICE);
+    }
+
+    public function test_a_manual_pick_replaces_do_not_disturb(): void
+    {
+        $user = $this->user();
+
+        AvailabilityService::setManual($user, AvailabilityStatus::DO_NOT_DISTURB);
+        $presence = AvailabilityService::setManual($user, AvailabilityStatus::IN_OFFICE);
+
+        $this->assertSame(AvailabilityStatus::IN_OFFICE, $presence->primary_status);
+        $this->assertDatabaseMissing('user_presence_states', [
+            'user_id' => $user->id,
+            'status' => AvailabilityStatus::DO_NOT_DISTURB,
+        ]);
+    }
+
+    public function test_manual_working_remote_overrides_an_office_geofence(): void
+    {
+        $user = $this->user();
+
+        UserLocation::create([
+            'user_id' => $user->id,
+            'type' => UserLocation::TYPE_OFFICE,
+            'latitude' => 45.5017,
+            'longitude' => -73.5673,
+            'radius_m' => 200,
+            'enabled' => true,
+        ]);
+
+        AvailabilityService::applyLocation($user, ['lat' => 45.5018, 'lng' => -73.5674]);
+        $presence = AvailabilityService::setManual($user, AvailabilityStatus::WORKING_REMOTE);
+
+        $this->assertSame(AvailabilityStatus::WORKING_REMOTE, $presence->primary_status);
+    }
+
+    public function test_a_live_call_still_beats_a_manual_status(): void
+    {
+        $user = $this->user();
+
+        AvailabilityService::setOnCall($user, true);
+        $presence = AvailabilityService::setManual($user, AvailabilityStatus::DO_NOT_DISTURB);
+
+        $this->assertSame(AvailabilityStatus::ON_CALL, $presence->primary_status);
+    }
+
+    public function test_duration_without_a_start_is_accepted(): void
+    {
+        $user = $this->user();
+
+        $this->actingAs($user)
+            ->putJson('/me/availability/status', [
+                'status' => AvailabilityStatus::DO_NOT_DISTURB,
+                'startsAt' => null,
+                'expiresAt' => now()->addMinutes(30)->toIso8601String(),
+            ])
+            ->assertOk()
+            ->assertJsonPath('primary.status', AvailabilityStatus::DO_NOT_DISTURB);
+    }
+
+    public function test_switching_away_from_do_not_disturb_through_the_api(): void
+    {
+        $user = $this->user();
+
+        $this->actingAs($user)
+            ->putJson('/me/availability/status', [
+                'status' => AvailabilityStatus::DO_NOT_DISTURB,
+                'expiresAt' => now()->addHour()->toIso8601String(),
+            ])
+            ->assertOk();
+
+        $this->putJson('/me/availability/status', [
+            'status' => AvailabilityStatus::AT_MEETING,
+            'expiresAt' => now()->addMinutes(30)->toIso8601String(),
+        ])
+            ->assertOk()
+            ->assertJsonPath('primary.status', AvailabilityStatus::AT_MEETING);
+    }
+
+    public function test_a_future_status_is_kept_until_it_starts(): void
+    {
+        $user = $this->user();
+
+        AvailabilityService::setManual($user, AvailabilityStatus::AT_MEETING, [
+            'startsAt' => now()->addHour()->toIso8601String(),
+            'expiresAt' => now()->addHours(2)->toIso8601String(),
+        ]);
+
+        $this->assertDatabaseHas('user_presence_states', [
+            'user_id' => $user->id,
+            'status' => AvailabilityStatus::AT_MEETING,
+        ]);
+
+        $presence = UserPresence::where('user_id', $user->id)->first();
+        $this->assertNotNull($presence);
+        $this->assertNotSame(AvailabilityStatus::AT_MEETING, $presence->primary_status);
+    }
+
+    public function test_status_message_survives_a_recompute(): void
+    {
+        $user = $this->user();
+
+        AvailabilityService::setManual($user, AvailabilityStatus::DO_NOT_DISTURB);
+        $presence = AvailabilityService::setMessage($user, 'Back at 3');
+
+        $this->assertSame('Back at 3', $presence->status_message);
+        $this->assertSame('Back at 3', AvailabilityService::recompute($user)->status_message);
+    }
+
+    public function test_a_message_without_a_manual_status_sticks(): void
+    {
+        $user = $this->user();
+
+        $this->actingAs($user)
+            ->putJson('/me/availability/message', ['message' => 'At my desk'])
+            ->assertOk()
+            ->assertJsonPath('primary.message', 'At my desk');
+
+        $this->getJson('/me/availability')
+            ->assertOk()
+            ->assertJsonPath('primary.message', 'At my desk');
     }
 }

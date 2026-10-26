@@ -162,17 +162,24 @@ class AvailabilityService
     private static function syncPrimary(User $user, ?UserPresence $presence = null, bool $applySchedules = false): UserPresence
     {
         self::purgeExpired($user);
+        self::collapseManual($user);
         if ($applySchedules) {
             self::applySchedules($user);
         }
 
         $presence = $presence ?? UserPresence::firstOrCreate(['user_id' => $user->id]);
         $online = $presence->isOnline();
-        $primary = self::resolvePrimary($user, $online);
+        $primary = self::resolvePrimary($user, $online, $presence->status_message);
 
+        /*
+         * Compare the message to the stored value. setMessage writes the new
+         * text onto this instance before recompute; comparing the dirty
+         * attribute to itself would skip the save and the message would vanish
+         * on the next read.
+         */
         $changed = $presence->primary_status !== $primary['status']
             || $presence->status_source !== $primary['source']
-            || $presence->status_message !== $primary['message']
+            || $presence->getOriginal('status_message') !== $primary['message']
             || (string) $presence->status_expires_at !== (string) ($primary['expiresAt'] ?? null);
 
         if ($changed) {
@@ -207,7 +214,11 @@ class AvailabilityService
 
             self::forgetPrimedStates();
 
-            return self::recompute($user);
+            $presence = UserPresence::firstOrCreate(['user_id' => $user->id]);
+            $presence->status_message = self::cleanMessage($opts['message'] ?? null);
+            $presence->save();
+
+            return self::recompute($user, $presence);
         }
 
         self::setState(
@@ -216,7 +227,7 @@ class AvailabilityService
             AvailabilityStatus::SOURCE_MANUAL,
             isset($opts['expiresAt']) ? Carbon::parse($opts['expiresAt']) : null,
             isset($opts['startsAt']) ? Carbon::parse($opts['startsAt']) : now(),
-            $opts['message'] ?? null,
+            self::cleanMessage($opts['message'] ?? null),
         );
 
         return UserPresence::where('user_id', $user->id)->first();
@@ -283,12 +294,38 @@ class AvailabilityService
     /** Optional custom status message without changing primary status. */
     public static function setMessage(User $user, ?string $message): UserPresence
     {
-        $presence = UserPresence::firstOrCreate(['user_id' => $user->id]);
-        $presence->status_message = $message ? mb_substr(trim($message), 0, 140) : null;
-        $presence->save();
-        self::announce($user, self::payloadFromPresence($presence, $presence->isOnline()));
+        $message = self::cleanMessage($message);
 
-        return $presence;
+        $manual = UserPresenceState::where('user_id', $user->id)
+            ->where('source', AvailabilityStatus::SOURCE_MANUAL)
+            ->get()
+            ->filter(fn (UserPresenceState $state) => $state->isActive())
+            ->sort(fn (UserPresenceState $a, UserPresenceState $b) => self::manualRecency($a, $b))
+            ->first();
+
+        if ($manual) {
+            $manual->status_message = $message;
+            $manual->save();
+            self::forgetPrimedStates();
+
+            return self::recompute($user);
+        }
+
+        $presence = UserPresence::firstOrCreate(['user_id' => $user->id]);
+        $presence->status_message = $message;
+
+        return self::recompute($user, $presence);
+    }
+
+    private static function cleanMessage(?string $message): ?string
+    {
+        if ($message === null) {
+            return null;
+        }
+
+        $message = trim($message);
+
+        return $message === '' ? null : mb_substr($message, 0, 140);
     }
 
     /**
@@ -409,15 +446,54 @@ class AvailabilityService
             return;
         }
 
+        // A start in the future is a status the user asked to begin later.
+        // isActive() ignores it until then. Deleting it here made the custom
+        // range in the menu vanish the moment it was saved.
         UserPresenceState::where('user_id', $user->id)
             ->whereNotNull('expires_at')
             ->where('expires_at', '<', now())
             ->delete();
+    }
+
+    /**
+     * The menu is one choice. Two active manual statuses stack, and the
+     * priority list then keeps Do Not Disturb on screen after the user
+     * picked something else. Keep the manual status that started most recently.
+     */
+    private static function collapseManual(User $user): void
+    {
+        $primed = self::primed($user);
+        if ($primed !== null && $primed === []) {
+            return;
+        }
+
+        $manuals = UserPresenceState::where('user_id', $user->id)
+            ->where('source', AvailabilityStatus::SOURCE_MANUAL)
+            ->get()
+            ->filter(fn (UserPresenceState $state) => $state->isActive());
+
+        if ($manuals->count() < 2) {
+            return;
+        }
+
+        $keep = $manuals->sort(fn (UserPresenceState $a, UserPresenceState $b) => self::manualRecency($a, $b))->first();
 
         UserPresenceState::where('user_id', $user->id)
-            ->whereNotNull('starts_at')
-            ->where('starts_at', '>', now())
+            ->where('source', AvailabilityStatus::SOURCE_MANUAL)
+            ->where('id', '!=', $keep->id)
+            ->where(function ($query) {
+                $query->whereNull('starts_at')->orWhere('starts_at', '<=', now());
+            })
             ->delete();
+
+        self::forgetPrimedStates();
+    }
+
+    private static function manualRecency(UserPresenceState $a, UserPresenceState $b): int
+    {
+        $start = ($b->starts_at?->getTimestamp() ?? 0) <=> ($a->starts_at?->getTimestamp() ?? 0);
+
+        return $start !== 0 ? $start : ($b->id <=> $a->id);
     }
 
     private static function applySchedules(User $user): void
@@ -441,34 +517,41 @@ class AvailabilityService
         }
     }
 
-    /** @return array{status: string, source: ?string, message: ?string, label: string, icon: string, startedAt: ?Carbon, expiresAt: ?Carbon} */
-    private static function resolvePrimary(User $user, bool $online): array
+    /**
+     * @return array{status: string, source: ?string, message: ?string, label: string, icon: string, startedAt: ?Carbon, expiresAt: ?Carbon}
+     */
+    private static function resolvePrimary(User $user, bool $online, ?string $automaticMessage = null): array
     {
         /*
          * The primed rows answer this without a query. They are pre-purge,
          * which changes nothing: isActive() below rejects exactly what
          * purgeExpired deletes, so the surviving set is the same either way.
+         * collapseManual forgets the prime when it actually deletes a row.
          */
         $primed = self::primed($user);
         $rows = $primed !== null ? collect($primed) : UserPresenceState::where('user_id', $user->id)->get();
 
-        $states = $rows
-            ->filter(fn ($s) => $s->isActive())
-            ->sortBy(fn ($s) => AvailabilityStatus::priorityOf($s->status));
+        $active = $rows->filter(fn ($s) => $s->isActive());
 
-        if ($states->isNotEmpty()) {
-            /** @var UserPresenceState $winner */
-            $winner = $states->first();
+        // A live call is a fact about the session, not a menu choice.
+        $call = $active->first(fn ($s) => $s->status === AvailabilityStatus::ON_CALL
+            && $s->source === AvailabilityStatus::SOURCE_CALL);
+        if ($call) {
+            return self::payloadFromState($call);
+        }
 
-            return [
-                'status' => $winner->status,
-                'source' => $winner->source,
-                'message' => $winner->status_message,
-                'label' => AvailabilityStatus::label($winner->status),
-                'icon' => AvailabilityStatus::ICONS[$winner->status] ?? 'gray',
-                'startedAt' => $winner->starts_at ?? $winner->created_at,
-                'expiresAt' => $winner->expires_at,
-            ];
+        // What the user just picked wins over a geofence or an older manual status.
+        $manual = $active
+            ->filter(fn ($s) => $s->source === AvailabilityStatus::SOURCE_MANUAL)
+            ->sort(fn (UserPresenceState $a, UserPresenceState $b) => self::manualRecency($a, $b))
+            ->first();
+        if ($manual) {
+            return self::payloadFromState($manual);
+        }
+
+        $winner = $active->sortBy(fn ($s) => AvailabilityStatus::priorityOf($s->status))->first();
+        if ($winner) {
+            return self::payloadFromState($winner);
         }
 
         $status = $online ? AvailabilityStatus::ONLINE : AvailabilityStatus::OFFLINE;
@@ -476,11 +559,25 @@ class AvailabilityService
         return [
             'status' => $status,
             'source' => $online ? AvailabilityStatus::SOURCE_AUTOMATIC : AvailabilityStatus::SOURCE_SYSTEM,
-            'message' => null,
+            'message' => $automaticMessage,
             'label' => AvailabilityStatus::label($status),
             'icon' => AvailabilityStatus::ICONS[$status],
             'startedAt' => null,
             'expiresAt' => null,
+        ];
+    }
+
+    /** @return array{status: string, source: ?string, message: ?string, label: string, icon: string, startedAt: ?Carbon, expiresAt: ?Carbon} */
+    private static function payloadFromState(UserPresenceState $state): array
+    {
+        return [
+            'status' => $state->status,
+            'source' => $state->source,
+            'message' => $state->status_message,
+            'label' => AvailabilityStatus::label($state->status),
+            'icon' => AvailabilityStatus::ICONS[$state->status] ?? 'gray',
+            'startedAt' => $state->starts_at ?? $state->created_at,
+            'expiresAt' => $state->expires_at,
         ];
     }
 

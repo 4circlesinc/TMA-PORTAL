@@ -22,18 +22,21 @@ class AvailabilityController extends Controller
     /** Set or clear a manual / timed status. */
     public function updateStatus(Request $request): JsonResponse
     {
+        /*
+         * A duration from the menu sends expiresAt and leaves startsAt empty.
+         * after:startsAt then compares against null and rejects every timed
+         * status (30 minutes, 1 hour, today) with a 422.
+         */
+        $expiresAfter = $request->filled('startsAt') ? 'startsAt' : 'now';
+
         $data = $request->validate([
             'status' => ['required', 'string', Rule::in(array_keys(AvailabilityStatus::LABELS))],
             'message' => ['nullable', 'string', 'max:140'],
             'startsAt' => ['nullable', 'date'],
-            'expiresAt' => ['nullable', 'date', 'after:startsAt'],
+            'expiresAt' => ['nullable', 'date', 'after:'.$expiresAfter],
         ]);
 
         $user = $request->user();
-
-        if ($data['message'] ?? null) {
-            AvailabilityService::setMessage($user, $data['message']);
-        }
 
         AvailabilityService::setManual($user, $data['status'], [
             'startsAt' => $data['startsAt'] ?? null,

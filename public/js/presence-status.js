@@ -143,7 +143,7 @@
     var link = document.createElement('link');
     link.id = 'tma-presence-css-link';
     link.rel = 'stylesheet';
-    link.href = (ROOT || '') + 'css/presence.css?v=14';
+    link.href = (ROOT || '') + 'css/presence.css?v=15';
     document.head.appendChild(link);
   }
 
@@ -517,13 +517,37 @@
     });
   }
 
-  function paintHeader() {
-    ensureSlots();
-    var p = primary();
+  /*
+   * The menu's resting choice is Available. The server calls that same
+   * state Online, which left the pill saying a word the menu does not have.
+   */
+  function shown(p) {
+    p = p || primary();
     var slug = p.status || 'online';
     var label = p.label || meta(slug).label;
     var icon = p.icon || meta(slug).icon;
-    var title = p.message ? label + ': ' + p.message : label;
+    if (slug === 'online') {
+      slug = 'available';
+      label = meta('available').label;
+      icon = meta('available').icon;
+    }
+    return {
+      status: slug,
+      label: label,
+      icon: icon,
+      source: p.source,
+      message: p.message || '',
+      expiresAt: p.expiresAt || null,
+    };
+  }
+
+  function paintHeader() {
+    ensureSlots();
+    var view = shown();
+    var slug = view.status;
+    var label = view.label;
+    var icon = view.icon;
+    var title = view.message ? label + ': ' + view.message : label;
 
     /*
      * Rewriting the pill costs a fresh <img> for the status icon, and the
@@ -606,10 +630,25 @@
   /** @deprecated */
   function ensureHeaderSlot() { ensureSlots(); }
 
+  function messageDraft(host) {
+    var el = host && host.querySelector('[data-presence-message]');
+    return el ? el.value.trim() : '';
+  }
+
+  function saveMessage(host) {
+    var next = messageDraft(host);
+    var prev = String(shown().message || '');
+    if (next === prev) return Promise.resolve();
+    return api('PUT', '/me/availability/message', { message: next || null })
+      .then(applyPayload)
+      .catch(function () { toast('Could not update status.', false); });
+  }
+
   function closePopover() {
     popoverOpen = false;
     pendingStatus = null;
     var host = document.querySelector('[data-presence-popover-host]');
+    if (host && host.getAttribute('data-presence-committed') !== '1') saveMessage(host);
     if (host) host.remove();
     document.querySelectorAll('[data-presence-indicator]').forEach(function (el) {
       el.setAttribute('aria-expanded', 'false');
@@ -636,11 +675,25 @@
       return '<button type="button" class="tma-presence-popover__pill" data-presence-duration="' + d.key + '">' + esc(d.label) + '</button>';
     }).join('');
     return '<div class="tma-presence-popover__duration" data-presence-duration-panel hidden>' +
+      '<div class="tma-presence-popover__duration-label">Clear after</div>' +
       '<div class="tma-presence-popover__duration-row">' + pills + '</div>' +
       '<div style="padding:8px 0 0;display:none" data-presence-custom-range>' +
       '<input type="datetime-local" data-presence-starts style="margin-bottom:6px">' +
       '<input type="datetime-local" data-presence-ends>' +
       '</div></div>';
+  }
+
+  function placePopover(host, anchor) {
+    var rect = anchor.getBoundingClientRect();
+    var margin = 8;
+    host.style.maxHeight = Math.max(160, window.innerHeight - margin * 2) + 'px';
+    var height = host.offsetHeight;
+    var top = rect.bottom + 6;
+    if (top + height > window.innerHeight - margin) {
+      top = Math.max(margin, rect.top - height - 6);
+    }
+    host.style.top = top + 'px';
+    host.style.left = Math.max(margin, Math.min(rect.left, window.innerWidth - host.offsetWidth - margin)) + 'px';
   }
 
   function openPopover(anchor) {
@@ -649,6 +702,7 @@
     popoverOpen = true;
     anchor.setAttribute('aria-expanded', 'true');
     var p = primary();
+    var view = shown(p);
     var host = document.createElement('div');
     host.setAttribute('data-presence-popover-host', '');
     host.className = 'tma-popover tma-presence-popover';
@@ -657,20 +711,20 @@
 
     var items = MANUAL_PICKS.map(function (slug) {
       var m = meta(slug);
-      var active = p.status === slug ? ' is-active' : '';
+      var active = (p.status === slug || (slug === 'available' && p.status === 'online')) ? ' is-active' : '';
       return '<button type="button" class="tma-presence-popover__item' + active + '" data-presence-set="' + esc(slug) + '">' +
         iconHtml(m.icon, 10) + '<span>' + esc(m.label) + '</span></button>';
     }).join('');
 
     host.innerHTML =
       '<div class="tma-presence-popover__section tma-presence-popover__section--now">' +
-      '<div class="tma-presence-popover__current"><span class="tma-presence-popover__current-icon">' + iconHtml(p.icon, 12) + '</span>' +
+      '<div class="tma-presence-popover__current"><span class="tma-presence-popover__current-icon">' + iconHtml(view.icon, 12) + '</span>' +
       '<div class="tma-presence-popover__current-meta">' +
-      '<div class="tma-presence-popover__current-title">' + esc(p.label || meta(p.status).label) + '</div>' +
-      '<div class="tma-presence-popover__current-sub">' + esc(sourceLabel(p.source)) +
-      (p.expiresAt ? ' · until ' + esc(new Date(p.expiresAt).toLocaleString()) : '') +
+      '<div class="tma-presence-popover__current-title">' + esc(view.label) + '</div>' +
+      '<div class="tma-presence-popover__current-sub">' + esc(sourceLabel(view.source)) +
+      (view.expiresAt ? ' · until ' + esc(new Date(view.expiresAt).toLocaleString()) : '') +
       '</div></div></div>' +
-      '<div class="tma-presence-popover__message"><input type="text" maxlength="140" placeholder="Add a status message…" data-presence-message aria-label="Status message" value="' + esc(p.message || '') + '"></div>' +
+      '<div class="tma-presence-popover__message"><input type="text" maxlength="140" placeholder="Add a status message…" data-presence-message aria-label="Status message" value="' + esc(view.message || '') + '"></div>' +
       '</div>' +
       '<div class="tma-presence-popover__section tma-presence-popover__section--pick">' + items +
       durationSectionHtml('at_meeting') + '</div>' +
@@ -679,18 +733,33 @@
       '</div>';
 
     document.body.appendChild(host);
-    var rect = anchor.getBoundingClientRect();
-    host.style.top = Math.min(rect.bottom + 6, window.innerHeight - host.offsetHeight - 8) + 'px';
-    host.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - host.offsetWidth - 8)) + 'px';
+    placePopover(host, anchor);
+
+    var msgInput = host.querySelector('[data-presence-message]');
+    if (msgInput) {
+      msgInput.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        saveMessage(host);
+      });
+    }
 
     host.addEventListener('click', function (e) {
+      e.stopPropagation();
       var set = e.target.closest('[data-presence-set]');
       if (set) {
         var slug = set.getAttribute('data-presence-set');
         if (TIMED[slug]) {
           pendingStatus = slug;
+          host.querySelectorAll('[data-presence-set]').forEach(function (btn) {
+            btn.classList.toggle('is-pending', btn.getAttribute('data-presence-set') === slug);
+          });
           var panel = host.querySelector('[data-presence-duration-panel]');
-          if (panel) panel.hidden = false;
+          if (panel) {
+            panel.hidden = false;
+            placePopover(host, anchor);
+            panel.scrollIntoView({ block: 'nearest' });
+          }
           return;
         }
         commitStatus(slug, host);
@@ -730,11 +799,15 @@
     opts = opts || {};
     var msgEl = host && host.querySelector('[data-presence-message]');
     var message = msgEl ? msgEl.value.trim() : '';
+    if (host) host.setAttribute('data-presence-committed', '1');
     setStatus(slug, {
       message: message || null,
       startsAt: opts.startsAt || null,
       expiresAt: opts.expiresAt || null,
-    }).then(function () { closePopover(); }).catch(function () { toast('Could not update status.', false); });
+    }).then(function () { closePopover(); }).catch(function () {
+      if (host) host.removeAttribute('data-presence-committed');
+      toast('Could not update status.', false);
+    });
   }
 
   function closeSettingsModal() {
@@ -1115,9 +1188,18 @@
 
   function scheduleExpiry() {
     if (expiryTimer) clearTimeout(expiryTimer);
+    var times = [];
     var p = primary();
-    if (!p.expiresAt) return;
-    var ms = new Date(p.expiresAt).getTime() - Date.now();
+    if (p.expiresAt) times.push(new Date(p.expiresAt).getTime());
+    ((state && state.states) || []).forEach(function (row) {
+      ['startsAt', 'expiresAt'].forEach(function (key) {
+        if (!row[key]) return;
+        var at = new Date(row[key]).getTime();
+        if (at > Date.now()) times.push(at);
+      });
+    });
+    if (!times.length) return;
+    var ms = Math.min.apply(null, times) - Date.now();
     if (ms <= 0) { load(); return; }
     expiryTimer = setTimeout(function () { load(); }, Math.min(ms + 500, 86400000));
   }
