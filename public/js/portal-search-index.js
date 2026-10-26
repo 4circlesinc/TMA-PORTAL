@@ -727,15 +727,21 @@
       .then(function (data) {
         return ((data && data.companies) || []).map(function (company) {
           var code = company.cipCode || '';
+          var where = company.id
+            ? '/citizenship-applications/companies/' + encodeURIComponent(company.id)
+            : '/citizenship-applications?listTab=providers';
+          var note = code ? ('Service provider · ' + code) : 'Service provider';
+          if (company.retired) note += ' · retired';
+          else if (!company.id) note += ' · not linked to a firm';
           return {
             type: 'user',
             label: company.name,
             title: company.name,
-            subtitle: code ? ('Service provider · ' + code) : 'Service provider',
+            subtitle: note,
             companyId: company.id,
             navId: 'clients',
             view: 'clients',
-            href: '/citizenship-applications/companies/' + encodeURIComponent(company.id),
+            href: where,
             keywords: [company.name, code, company.email, 'provider', 'service provider', 'cip']
               .filter(Boolean),
           };

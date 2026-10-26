@@ -798,6 +798,9 @@
       return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid));
     },
     create: function (payload) { return clientsFetch(COMPANIES_BASE, { method: 'POST', json: payload }); },
+    search: function (term) {
+      return clientsFetch(COMPANIES_BASE + '/search?q=' + encodeURIComponent(term) + '&limit=25');
+    },
     // What code a provider of this name would be given.
     suggestCode: function (name) {
       return clientsFetch(COMPANIES_BASE + '/suggest-code?name=' + encodeURIComponent(name));
@@ -1928,9 +1931,44 @@
      most of the directory and the request would answer nothing. */
   var SEARCH_MIN_LENGTH = 2;
 
+  /*
+   * Code matches the registry answered for the providers tab.
+   *
+   * The table is companies, and a CIP code can belong to a provider that has
+   * no company row — retired, or never linked. The local list cannot find
+   * that code. This holds the firms the server named for the term on screen.
+   */
+  var PROVIDER_SEARCH = null;
+
+  function rememberProviderSearch(term, companies) {
+    var byId = {};
+    var extras = [];
+    var held = {};
+    COMPANIES.forEach(function (company) {
+      if (company && company.id) held[String(company.id)] = true;
+    });
+    (companies || []).forEach(function (company) {
+      if (!company) return;
+      if (company.id && held[String(company.id)]) byId[String(company.id)] = company;
+      else extras.push(company);
+    });
+    PROVIDER_SEARCH = {
+      term: String(term || '').trim().toLowerCase(),
+      byId: byId,
+      extras: extras,
+    };
+  }
+
+  function providerSearchFor(query) {
+    if (!PROVIDER_SEARCH) return null;
+    if (PROVIDER_SEARCH.term !== String(query || '').trim().toLowerCase()) return null;
+    return PROVIDER_SEARCH;
+  }
+
   function clearSearchHits() {
     SEARCH_HITS = null;
     SEARCH_HITS_TERM = '';
+    PROVIDER_SEARCH = null;
   }
 
   function contactMatchesSearch(item, query) {
@@ -2720,14 +2758,39 @@
     var rows = [];
     var search = state && state.search;
     var removed = (state && state.removedIds) || {};
+    var hits = providerSearchFor(search);
+    var seen = {};
 
     COMPANIES.forEach(function (company) {
       if (!company || !company.id) return;
-      if (!companyMatchesSearch(company, search)) return;
+      var hit = hits && hits.byId[String(company.id)];
+      if (!companyMatchesSearch(company, search) && !hit) return;
       var key = 'company:' + company.id;
       if (removed[key]) return;
-      rows.push({ kind: 'company', key: key, id: company.id, name: company.name || 'Service provider', company: company });
+      seen[String(company.id)] = true;
+      var shown = company;
+      if (hit && hit.cipCode && hit.cipCode !== company.cipCode) {
+        shown = Object.assign({}, company, { cipCode: hit.cipCode });
+      }
+      rows.push({ kind: 'company', key: key, id: company.id, name: shown.name || 'Service provider', company: shown });
     });
+
+    if (hits) {
+      hits.extras.forEach(function (company) {
+        if (!company) return;
+        var id = company.id || ('code:' + (company.cipCode || company.name || ''));
+        if (company.id && seen[String(company.id)]) return;
+        var key = 'company:' + id;
+        if (removed[key]) return;
+        rows.push({
+          kind: 'company',
+          key: key,
+          id: company.id || id,
+          name: company.name || company.cipCode || 'Service provider',
+          company: company,
+        });
+      });
+    }
 
     return rows;
   }
@@ -2860,14 +2923,16 @@
   function renderCompanyTableRow(company, index) {
     var contact = company.email || company.phone || '-';
     var people = companyRowSummary(company);
+    var type = company.retired ? 'Retired' : (company.id ? 'Company' : 'CIP provider');
     return (
-      '<div class="tma-dash__ctr tma-dash__ctr--body" data-clients-open-company="' + esc(company.id) +
-      '" data-row-index="' + index + '" role="row">' +
+      '<div class="tma-dash__ctr tma-dash__ctr--body"' +
+      (company.id ? ' data-clients-open-company="' + esc(company.id) + '"' : '') +
+      ' data-row-index="' + index + '" role="row">' +
       // No checkbox cell either, the head has none to line up with, and an
       // empty one only indents the name away from its own column heading.
       '<div class="tma-dash__cc tma-dash__cc--user">' + companyAvatarMarkup(company) +
       '<span class="tma-dash__cc-truncate">' + esc(company.name || 'Service provider') + '</span></div>' +
-      '<div class="tma-dash__cc tma-dash__cc--type"><span class="tma-dash__cc-truncate">Company</span></div>' +
+      '<div class="tma-dash__cc tma-dash__cc--type"><span class="tma-dash__cc-truncate">' + esc(type) + '</span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--code"><span class="tma-dash__cc-truncate">' +
       esc(company.cipCode || '-') + '</span></div>' +
       // Its own name belongs in the first column, not repeated here; what the
@@ -3129,6 +3194,9 @@
     var providers = onProvidersTab(state);
 
     if (searching) {
+      if (state.searchLoading && providers) {
+        return clientsEmpty('Searching…', 'Illustration19');
+      }
       return clientsEmpty('No results for “' + state.search.trim() + '”', 'Illustration19');
     }
     if (filtered) return clientsEmpty('No matches', 'Illustration19');
@@ -16924,6 +16992,21 @@
     refreshDirectoryFromSearch(root, state);
 
     var seq = ++searchSeq;
+    if (onProvidersTab(state)) {
+      CompaniesAPI.search(term).then(function (res) {
+        if (seq !== searchSeq) return;
+        rememberProviderSearch(term, (res && res.companies) || []);
+        state.searchLoading = false;
+        refreshDirectoryFromSearch(root, state);
+      }).catch(function () {
+        if (seq !== searchSeq) return;
+        PROVIDER_SEARCH = null;
+        state.searchLoading = false;
+        refreshDirectoryFromSearch(root, state);
+      });
+      return;
+    }
+
     ClientsAPI.search(term).then(function (res) {
       if (seq !== searchSeq) return; // a later keystroke owns the field now
       var hits = {};

@@ -573,6 +573,51 @@ class CompaniesTest extends TestCase
             ->assertJsonPath('companies.0.cipCode', 'NWD');
     }
 
+    public function test_provider_search_finds_a_code_the_company_list_does_not_hold(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $staff = $this->staff();
+
+        // A registry row with no company. The providers table lists companies,
+        // so the code exists and the table has nowhere to show it.
+        \App\Models\CipProvider::create([
+            'name' => 'Gulf Coast Capital',
+            'code' => 'GCC',
+            'active' => true,
+        ]);
+
+        $this->actingAs($staff)->getJson('/portal/companies/search?q=gcc')
+            ->assertOk()
+            ->assertJsonCount(1, 'companies')
+            ->assertJsonPath('companies.0.name', 'Gulf Coast Capital')
+            ->assertJsonPath('companies.0.cipCode', 'GCC')
+            ->assertJsonPath('companies.0.id', null);
+
+        $company = Company::create(['uid' => 'retired-gcc', 'name' => 'Retired Gulf']);
+        $provider = \App\Support\Cip\Providers::syncCode($company, 'GUL');
+        $company->delete();
+
+        $this->actingAs($staff)->getJson('/portal/companies/search?q=gul')
+            ->assertOk()
+            ->assertJsonPath('companies.0.name', 'Retired Gulf')
+            ->assertJsonPath('companies.0.cipCode', 'GUL')
+            ->assertJsonPath('companies.0.retired', true);
+
+        $this->assertNotNull($provider);
+
+        // The firm is still in the list, but the code lives on a retired
+        // registration, so the company row itself has no code to match.
+        $live = Company::create(['uid' => 'held-gcc', 'name' => 'Held Gulf']);
+        $registration = \App\Support\Cip\Providers::syncCode($live, 'HGC');
+        $registration->delete();
+
+        $this->actingAs($staff)->getJson('/portal/companies/search?q=hgc')
+            ->assertOk()
+            ->assertJsonPath('companies.0.name', 'Held Gulf')
+            ->assertJsonPath('companies.0.cipCode', 'HGC')
+            ->assertJsonPath('companies.0.id', 'held-gcc');
+    }
+
     public function test_provider_search_needs_two_characters(): void
     {
         $staff = $this->staff();

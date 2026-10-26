@@ -151,8 +151,17 @@ class Providers
             ->exists();
 
         if ($taken) {
+            $holder = CipProvider::withTrashed()
+                ->with(['company' => fn ($q) => $q->withTrashed()])
+                ->where('code', $code)
+                ->when($provider, fn ($q) => $q->whereKeyNot($provider->id))
+                ->first();
+            $name = $holder?->company?->name ?: $holder?->name;
+
             throw ValidationException::withMessages([
-                'cipCode' => 'That CIP code is already in use.',
+                'cipCode' => $name
+                    ? 'That CIP code is already in use by '.$name.'.'
+                    : 'That CIP code is already in use.',
             ]);
         }
 

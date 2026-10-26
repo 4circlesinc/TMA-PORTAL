@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\Company;
@@ -351,25 +352,77 @@ class CompaniesController extends Controller
         $prefix = mb_strtolower(addcslashes($term, '\\%_')).'%';
 
         $companies = CompanyScope::query($request->user())
-            ->with('cipProvider:id,company_id,code')
+            ->with(['cipProvider' => fn ($q) => $q->withTrashed()->select('id', 'company_id', 'code')])
             ->where(function (Builder $q) use ($anywhere, $prefix) {
                 $q->whereRaw('LOWER(companies.name) LIKE ?', [$anywhere])
                     ->orWhereRaw('LOWER(companies.email) LIKE ?', [$anywhere])
                     ->orWhereHas('cipProvider', fn (Builder $p) => $p
+                        ->withTrashed()
                         ->whereRaw('LOWER(cip_providers.code) LIKE ?', [$prefix]));
             })
             ->orderBy('name')
             ->limit($limit)
             ->get(['id', 'uid', 'name', 'email']);
 
-        return response()->json([
-            'companies' => $companies->map(fn (Company $c) => [
-                'id' => $c->uid,
-                'name' => $c->name,
-                'email' => $c->email,
-                'cipCode' => $c->cipProvider?->code,
-            ])->values()->all(),
-        ]);
+        /*
+         * A code can outlive the company row that wore it. The registry keeps
+         * it — retired, or never linked to a firm — and the providers table
+         * only lists companies, so typing the code found nobody. These rows
+         * are that holder, named, so the search and the "already in use"
+         * answer point at the same firm.
+         */
+        $holders = CipProvider::withTrashed()
+            ->with(['company' => fn ($q) => $q->withTrashed()])
+            ->whereRaw('LOWER(code) LIKE ?', [$prefix])
+            ->orderBy('name')
+            ->limit($limit)
+            ->get();
+
+        $codeForCompany = [];
+        foreach ($holders as $provider) {
+            if ($provider->company_id && ! isset($codeForCompany[$provider->company_id])) {
+                $codeForCompany[$provider->company_id] = $provider->code;
+            }
+        }
+
+        $rows = [];
+        $seenCompany = [];
+        foreach ($companies as $company) {
+            $seenCompany[$company->id] = true;
+            $rows[] = [
+                'id' => $company->uid,
+                'name' => $company->name,
+                'email' => $company->email,
+                'cipCode' => $codeForCompany[$company->id] ?? $company->cipProvider?->code,
+            ];
+        }
+
+        if (CompanyScope::seesEveryCompany($request->user())) {
+            foreach ($holders as $provider) {
+                if (count($rows) >= $limit) {
+                    break;
+                }
+                $company = $provider->company;
+                if ($company && isset($seenCompany[$company->id])) {
+                    continue;
+                }
+                if ($company && ! $company->trashed()) {
+                    continue;
+                }
+                $rows[] = [
+                    'id' => null,
+                    'name' => $company?->name ?: $provider->name,
+                    'email' => $company?->email,
+                    'cipCode' => $provider->code,
+                    'retired' => $provider->trashed() || ($company?->trashed() ?? false),
+                ];
+                if ($company) {
+                    $seenCompany[$company->id] = true;
+                }
+            }
+        }
+
+        return response()->json(['companies' => $rows]);
     }
 
     /**
