@@ -784,7 +784,16 @@
   };
 
   var CompaniesAPI = {
-    list: function () { return sharedGet(COMPANIES_BASE); },
+    list: function () {
+      // Captured when this call starts, not when it lands. A list already
+      // on its way when a contact is transferred keeps the generation it
+      // left with, so its answer cannot be treated as the one from after.
+      var generation = companiesListGeneration;
+      return sharedGet(COMPANIES_BASE).then(function (data) {
+        if (!data || typeof data !== 'object') return data;
+        return Object.assign({}, data, { _listGeneration: generation });
+      });
+    },
     get: function (uid) {
       return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid));
     },
@@ -809,9 +818,102 @@
     },
   };
 
-  function hydrateCompanies(records) {
+  /*
+   * A contact just moved to another firm, kept until a company list that
+   * was already on its way — the one from opening the page — cannot paint
+   * them back onto the firm they left.
+   *
+   * personId -> { toId, person }
+   */
+  var pendingContactMoves = {};
+  // Bumped when a contact is transferred. Directory lists that started
+  // before that still resolve, and their answer is the firm as it was.
+  var companiesListGeneration = 0;
+
+  function hydrateCompanies(records, confirmMoves) {
     COMPANIES = (records || []).slice().sort(function (a, b) {
       return String(a.name || '').localeCompare(String(b.name || ''));
+    });
+    applyPendingContactMoves(!!confirmMoves);
+  }
+
+  /* A directory answer from before the transfer is not painted. The lists
+     on screen already show the move, and this answer would put it back. */
+  function takeCompaniesList(payload) {
+    if (companiesListGeneration && (!payload || payload._listGeneration !== companiesListGeneration)) {
+      publishCompanies();
+      return false;
+    }
+    var records = payload && payload.companies;
+    if (!records) return false;
+    hydrateCompanies(records, true);
+    publishCompanies();
+    return true;
+  }
+
+  function publishCompanies() {
+    if (!window.TMAStore || !window.TMAStore.put) return;
+    try { window.TMAStore.put('clients:companies', { companies: COMPANIES }); } catch (e) { /* ignore */ }
+  }
+
+  /* The firm a just-moved contact is listed under. Until a directory from
+     after the move says the same, every older list still names the old firm. */
+  function contactListedOn(personId, companyId) {
+    var move = pendingContactMoves[String(personId)];
+    if (!move) return true;
+    return String(companyId) === String(move.toId);
+  }
+
+  /* Keep a transferred contact off the firm they left, on every company list
+     that arrives after the move, including one fetched before it. */
+  function applyPendingContactMoves(confirmMoves) {
+    Object.keys(pendingContactMoves).forEach(function (personId) {
+      var move = pendingContactMoves[personId];
+      var held = move.person;
+      // True only when this payload already lists them on the new firm.
+      // A list fetched before the move does not, and must not clear the
+      // guard or the next one would put them back where they were.
+      var listedOnDestination = false;
+
+      COMPANIES.forEach(function (company) {
+        if (!company || !company.people) return;
+        var keep = [];
+        var dropped = false;
+        company.people.forEach(function (p) {
+          if (!p || String(p.id) !== personId) {
+            keep.push(p);
+            return;
+          }
+          held = p;
+          if (String(company.id) === String(move.toId)) {
+            listedOnDestination = true;
+            keep.push(p);
+          } else {
+            dropped = true;
+          }
+        });
+        if (dropped) {
+          company.people = keep;
+          company.peopleCount = keep.length;
+        }
+      });
+
+      if (held && !listedOnDestination) {
+        COMPANIES.forEach(function (company) {
+          if (!company || String(company.id) !== String(move.toId)) return;
+          var people = company.people || [];
+          var already = false;
+          for (var i = 0; i < people.length; i++) {
+            if (people[i] && String(people[i].id) === personId) already = true;
+          }
+          if (!already) {
+            company.people = people.concat([held]);
+            company.peopleCount = company.people.length;
+          }
+        });
+      }
+
+      if (confirmMoves && listedOnDestination) delete pendingContactMoves[personId];
     });
   }
 
@@ -2646,6 +2748,7 @@
       if (!company || !company.id) return;
       (company.people || []).forEach(function (person) {
         if (!person || !person.id) return;
+        if (!contactListedOn(person.id, company.id)) return;
         if (!personMatchesSearch(person, company, search)) return;
         var key = 'person:' + person.id;
         if (removed[key] || removed[person.id]) return;
@@ -7256,10 +7359,12 @@
         : '') +
       // The count says there is more than the six rows on show.
       companyCard('Access', renderCompanyMembersBlock(state, company), {
-        half: true, count: (state.companyMembers || []).length,
+        half: true, count: (state.companyMembers || []).filter(function (m) {
+          return m && !memberMovedAway(m, company.id);
+        }).length,
       }) +
       companyCard(isProviderAdminViewer() ? 'Provider users' : 'Provider contacts', renderCompanyPeople(company), {
-        half: true, count: (company.people || []).length,
+        half: true, count: visibleCompanyPeople(company).length,
       }) +
       companyCard('Assigned staff', renderCompanyStaffBlock(state, company), {
         half: true, count: (state.companyStaff || []).length,
@@ -7325,14 +7430,18 @@
     var transfer = providerContactTransferButton(p);
     var remove = removable ? providerUserRemoveButton(p) : '';
     if (!transfer && !remove) return row;
-    return '<div class="tma-dash__clients-person">' + row + transfer + remove + '</div>';
+    return '<div class="tma-dash__clients-person" data-clients-row="' + esc(p.id) + '">' + row + transfer + remove + '</div>';
+  }
+
+  function visibleCompanyPeople(company) {
+    var removed = (clientsMountState && clientsMountState.removedIds) || {};
+    return (company && company.people || []).filter(function (p) {
+      return p && p.id && !removed[p.id] && contactListedOn(p.id, company.id);
+    });
   }
 
   function renderCompanyPeople(company) {
-    var removed = (clientsMountState && clientsMountState.removedIds) || {};
-    var people = (company.people || []).filter(function (p) {
-      return p && p.id && !removed[p.id];
-    });
+    var people = visibleCompanyPeople(company);
     var form = canManageCompanyAccess()
       ? '<div class="tma-dash__clients-assign-form">' +
         '<button type="button" class="tma-dash__clients-assign-btn" data-clients-add-person>' +
@@ -7429,6 +7538,21 @@
     return 'Service provider member';
   }
 
+  /* A contact moved off this firm still sits in an access list that was
+     loaded before the move. Hide them here until that list is read again. */
+  function memberMovedAway(member, companyId) {
+    var ids = Object.keys(pendingContactMoves);
+    var email = member.email ? String(member.email).toLowerCase() : '';
+    for (var i = 0; i < ids.length; i++) {
+      var move = pendingContactMoves[ids[i]];
+      if (!move || String(move.toId) === String(companyId)) continue;
+      if (member.clientUid && String(member.clientUid) === ids[i]) return true;
+      var movedEmail = move.person && move.person.email ? String(move.person.email).toLowerCase() : '';
+      if (email && movedEmail && email === movedEmail) return true;
+    }
+    return false;
+  }
+
   /* Where a member's notices are written to: the row's own address before
      the login's, so not always the one the row shows. */
   function companyMemberNotifyAddress(m) {
@@ -7437,7 +7561,9 @@
 
   /* Who at the company can reach its records, and how far each has got. */
   function renderCompanyMembersBlock(state, company) {
-    var members = state.companyMembers || [];
+    var members = (state.companyMembers || []).filter(function (m) {
+      return m && !memberMovedAway(m, company && company.id);
+    });
     var loading = !!state.companyMembersLoading;
     var canManage = canManageCompanyAccess();
 
@@ -16095,47 +16221,45 @@
     if (search) search.focus();
   }
 
-  /* Drop the contact off the firm they left and put them on the one they joined,
-     then read both firms again so the lists match what was saved. */
+  /* Drop the contact off the firm they left and put them on the one they joined.
+     The lists on screen change with that, before either firm is read again. */
   function settleContactTransfer(personId, fromId, toId) {
+    companiesListGeneration += 1;
     var moved = null;
     COMPANIES.forEach(function (company) {
-      if (!company || company.id !== fromId || !company.people) return;
-      var next = [];
+      if (!company || !company.people) return;
       company.people.forEach(function (p) {
-        if (p && p.id === personId) moved = p;
-        else next.push(p);
+        if (p && String(p.id) === String(personId)) moved = p;
       });
-      if (moved) {
-        company.people = next;
-        if (company.peopleCount) company.peopleCount = Math.max(0, company.peopleCount - 1);
-      }
     });
-    if (moved) {
-      COMPANIES.forEach(function (company) {
-        if (!company || company.id !== toId) return;
-        var people = company.people || [];
-        var already = false;
-        for (var i = 0; i < people.length; i++) {
-          if (people[i] && people[i].id === personId) already = true;
-        }
-        if (!already) {
-          company.people = people.concat([moved]);
-          company.peopleCount = (company.peopleCount || 0) + 1;
-        }
-      });
-      hydrateCompanies(COMPANIES);
-    }
+    pendingContactMoves[String(personId)] = { toId: String(toId), person: moved };
+    hydrateCompanies(COMPANIES);
 
     var ctx = clientsMenuCtx;
+    var state = ctx && ctx.state;
+    if (state) {
+      state.companyPanelsEpoch = (state.companyPanelsEpoch || 0) + 1;
+      if (String(state.companyId) === String(fromId) || String(state.companyId) === String(toId)) {
+        state.companyPanelsFor = null;
+      }
+    }
+
+    if (window.TMABoot && window.TMABoot.forget) {
+      window.TMABoot.forget('GET ' + COMPANIES_BASE);
+    }
+    publishCompanies();
+
     if (ctx && ctx.render) ctx.render({ forceFull: true });
+    else repaintClients({ forceFull: true });
+
     Promise.all([
       refreshCompanyRecord(fromId),
       refreshCompanyRecord(toId),
     ]).then(function () {
       if (!ctx || !ctx.state || !ctx.render) return;
       if (ctx.state.screen === 'company' &&
-          (ctx.state.companyId === fromId || ctx.state.companyId === toId)) {
+          (String(ctx.state.companyId) === String(fromId) || String(ctx.state.companyId) === String(toId))) {
+        ctx.state.companyPanelsEpoch = (ctx.state.companyPanelsEpoch || 0) + 1;
         ctx.state.companyPanelsFor = null;
       }
       ctx.render({ forceFull: true });
@@ -17342,7 +17466,7 @@
           if (isProviderAdminViewer()) {
             var firmId = state.companyId || (draft && draft.companyId) || providerAdminHomeCompanyId();
             CompaniesAPI.list().then(function (payload) {
-              hydrateCompanies((payload && payload.companies) || COMPANIES);
+              takeCompaniesList(payload);
               if (firmId) navigate('company', null, { companyId: firmId });
               else navigate('detail', savedId);
             }).catch(function () {
@@ -18584,6 +18708,7 @@
     if (!state.companyId) return;
     if (state.companyPanelsFor === state.companyId) return;
     state.companyPanelsFor = state.companyId;
+    var epoch = state.companyPanelsEpoch || 0;
     state.companyMembersLoading = true;
     state.companyMembersError = null;
     state.companyStaffLoading = true;
@@ -18592,7 +18717,9 @@
       if (usesPagedClientsFlow(state)) render();
       else render({ detailOnly: true });
     };
-    var stale = function () { return state.companyPanelsFor !== state.companyId; };
+    var stale = function () {
+      return state.companyPanelsFor !== state.companyId || (state.companyPanelsEpoch || 0) !== epoch;
+    };
 
     CompanyMembersAPI.list(state.companyId).then(function (d) {
       if (stale()) return;
@@ -19550,6 +19677,11 @@
       MORPH.patch(root, renderDetailPage(state));
       wireEvents(root, state, 'detail', navigate, render);
       fitCompanyMembersList(root, membersScroll);
+      // A transfer clears companyPanelsFor so Access reloads on this paint,
+      // rather than the next time the firm page is opened.
+      if (state.screen === 'company' && state.companyId) {
+        ensureCompanyPanelsLoaded(state, render);
+      }
     }
 
     function navigate(screen, contactId, navOpts) {
@@ -19861,7 +19993,7 @@
       };
 
       var paintCompanies = function (companies) {
-        hydrateCompanies((companies && companies.companies) || []);
+        if (!takeCompaniesList(companies)) return;
         if (!staffDirectory) {
           state.loadState = 'ready';
           state.loadError = null;
@@ -19956,14 +20088,16 @@
         var companies = results[1];
 
         if (clients && clients.clients) hydrateClients(clients.clients);
-        if (companies && companies.companies) hydrateCompanies(companies.companies);
+        if (companies && companies.companies) takeCompaniesList(companies);
         // The store learns what the signal fetched. A colleague's write
         // invalidates nothing in THIS tab, the clientsFetch seam only sees
         // our own writes, so without this the store would serve their
         // yesterday's directory to tomorrow's reload.
         if (window.TMAStore) {
           if (clients) window.TMAStore.put('clients:directory', clients);
-          if (companies) window.TMAStore.put('clients:companies', companies);
+          if (companies && (!companiesListGeneration || companies._listGeneration === companiesListGeneration)) {
+            window.TMAStore.put('clients:companies', { companies: COMPANIES });
+          }
         }
         if (!clients && !companies) return;
 
