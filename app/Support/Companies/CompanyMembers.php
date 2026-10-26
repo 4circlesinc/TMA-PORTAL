@@ -19,6 +19,7 @@ use App\Support\Notifications\Notifier;
 use App\Support\Realtime\Live;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -491,6 +492,167 @@ final class CompanyMembers
         }
 
         return $member->fresh();
+    }
+
+    /**
+     * Move a provider contact onto a different service provider.
+     *
+     * The contact row is what Provider contacts lists. Portal access is a
+     * membership of that same firm, so it goes with them, and so does an
+     * invitation that has not been accepted yet. Nothing is emailed: this is
+     * how a contact filed on the wrong firm is put on the right one, and they
+     * should not hear that they joined a firm they were never meant to be at.
+     */
+    public static function transferContact(Client $client, Company $from, Company $to, User $by): Client
+    {
+        abort_unless(
+            (int) $client->company_id === (int) $from->id,
+            422,
+            'This contact is not at that service provider.',
+        );
+        abort_if(
+            (int) $from->id === (int) $to->id,
+            422,
+            'This contact is already at that service provider.',
+        );
+        abort_if($to->isArchived(), 422, 'That service provider is archived.');
+        abort_if(
+            $client->cipApplications()->exists(),
+            422,
+            'This person has a citizenship application. Change the service provider on the application instead.',
+        );
+
+        $client = DB::transaction(function () use ($client, $from, $to, $by) {
+            $data = is_array($client->data) ? $client->data : [];
+            $work = is_array($data['work'] ?? null) ? $data['work'] : [];
+            $work['company'] = $to->name;
+            $data['work'] = $work;
+
+            $client->forceFill([
+                'company_id' => $to->id,
+                'company' => $to->name,
+                'data' => $data,
+            ])->save();
+
+            self::moveMemberships($client, $from, $to, $by);
+
+            ActivityLogger::log([
+                'actor' => $by,
+                'type' => 'company.contact_transferred',
+                'module' => 'clients',
+                'description' => $by->name.' moved '.$client->contactDisplayName().' from '.$from->name.' to '.$to->name,
+                'subject' => $client,
+                'old' => ['companyUid' => $from->uid, 'company' => $from->name],
+                'new' => ['companyUid' => $to->uid, 'company' => $to->name],
+            ]);
+
+            return $client->fresh() ?? $client;
+        });
+
+        Cache::forget('companies.directory');
+        ClientDirectory::flush();
+        Live::staff(Live::CLIENTS);
+        Live::staff(Live::COMPANIES);
+
+        return $client;
+    }
+
+    /**
+     * Portal access at the firm this contact is leaving, handed to the firm
+     * they are joining. A login keeps its old row as history. An invite that
+     * never became an account is retargeted first, so accepting the link they
+     * already have puts them on the right firm.
+     */
+    private static function moveMemberships(Client $client, Company $from, Company $to, User $by): void
+    {
+        $email = $client->email ? Str::lower(trim($client->email)) : null;
+
+        $members = CompanyMember::query()
+            ->current()
+            ->where('company_id', $from->id)
+            ->where(function ($q) use ($client, $email) {
+                $q->where('client_id', $client->id);
+                if ($client->user_id) {
+                    $q->orWhere(function ($q) use ($client) {
+                        $q->where('user_id', $client->user_id)
+                            ->where(function ($q) use ($client) {
+                                $q->whereNull('client_id')->orWhere('client_id', $client->id);
+                            });
+                    });
+                }
+                if ($email) {
+                    $q->orWhere(function ($q) use ($email, $client) {
+                        $q->whereRaw('LOWER(email) = ?', [$email])
+                            ->where(function ($q) use ($client) {
+                                $q->whereNull('client_id')->orWhere('client_id', $client->id);
+                            });
+                    });
+                }
+            })
+            ->get();
+
+        foreach ($members as $member) {
+            $flags = [];
+            foreach (CompanyRoles::ABILITIES as $ability) {
+                $flags[$ability] = (bool) $member->{$ability};
+            }
+
+            $moved = self::add($to, array_merge([
+                'email' => $member->displayEmail() ?: $client->email,
+                'name' => $member->name ?: $client->name,
+                'job_title' => $member->job_title,
+                'role' => $member->role ?: CompanyRoles::MEMBER,
+                'client_id' => $client->id,
+            ], $flags), $by, notify: false);
+
+            self::retargetInvitations($from, $to, $member, $moved, $client);
+
+            if ((int) $moved->id !== (int) $member->id) {
+                self::remove($from, $member, $by, notify: false);
+            }
+        }
+    }
+
+    /**
+     * Point a still-open invitation at the membership on the new firm.
+     *
+     * Done before the old membership is removed: removing somebody who never
+     * signed in cancels the invitation that is still addressed to that firm.
+     */
+    private static function retargetInvitations(
+        Company $from,
+        Company $to,
+        CompanyMember $leaving,
+        CompanyMember $moved,
+        Client $client,
+    ): void {
+        $emails = array_values(array_unique(array_filter([
+            Str::lower(trim((string) $leaving->email)),
+            Str::lower(trim((string) $leaving->displayEmail())),
+            Str::lower(trim((string) $client->email)),
+        ])));
+
+        Invitation::query()
+            ->where('type', Invitation::TYPE_COMPANY_MEMBER)
+            ->where('company_id', $from->id)
+            ->whereIn('status', Invitation::LIVE_STATUSES)
+            ->where(function ($q) use ($emails, $client, $leaving) {
+                $q->where('client_id', $client->id)
+                    ->orWhere('access->companyMemberUuid', $leaving->uuid);
+                foreach ($emails as $email) {
+                    $q->orWhereRaw('LOWER(email) = ?', [$email]);
+                }
+            })
+            ->get()
+            ->each(function (Invitation $invitation) use ($to, $moved, $client) {
+                $access = $invitation->access ?? [];
+                $access['companyMemberUuid'] = $moved->uuid;
+                $invitation->forceFill([
+                    'company_id' => $to->id,
+                    'client_id' => $client->id,
+                    'access' => $access,
+                ])->save();
+            });
     }
 
     /**

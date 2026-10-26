@@ -501,6 +501,38 @@ class CompaniesController extends Controller
         ]);
     }
 
+    /**
+     * Move one provider contact onto a different service provider.
+     *
+     * Staff only. A Service Provider admin has a single firm, and handing a
+     * contact to some other firm is not theirs to do.
+     */
+    public function transferContact(Request $request, string $uid, string $client): JsonResponse
+    {
+        abort_unless(
+            Role::can($request->user(), 'clients.manage'),
+            403,
+            'Only staff can transfer a contact.',
+        );
+
+        $from = CompanyScope::findOrFail($request->user(), $uid);
+        $data = $request->validate([
+            'companyId' => ['required', 'string', 'max:96'],
+        ]);
+        $to = CompanyScope::findOrFail($request->user(), $data['companyId']);
+
+        $contact = Client::query()->where('uid', $client)->firstOrFail();
+
+        $contact = CompanyMembers::transferContact($contact, $from, $to, $request->user());
+
+        return response()->json([
+            'message' => $contact->contactDisplayName().' now belongs to '.$to->name.'.',
+            'clientId' => $contact->uid,
+            'fromId' => $from->uid,
+            'toId' => $to->uid,
+        ]);
+    }
+
     public function destroy(Request $request, string $uid): JsonResponse
     {
         $this->authorizeStaff($request);

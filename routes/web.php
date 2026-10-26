@@ -1049,6 +1049,10 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // The one member the firm's email notifications go to; null is everyone.
         Route::put('/{uid}/notification-email', [CompanyMemberController::class, 'notificationEmail'])->name('members.notification-email');
 
+        // A provider contact filed on the wrong firm. Portal access moves with them.
+        Route::post('/{uid}/contacts/{client}/transfer', [CompaniesController::class, 'transferContact'])
+            ->name('contacts.transfer');
+
         // The firm's own staff looking after the company.
         Route::get('/{uid}/staff', [CompanyStaffController::class, 'index'])->name('staff.index');
         // What an assignment would cover, before it is made.

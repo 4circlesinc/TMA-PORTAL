@@ -19726,6 +19726,10 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   min-width: 0;
 }
 
+.tma-dash__clients-transfer-btn {
+  flex-shrink: 0;
+}
+
 .tma-dash__clients-company-notes {
   margin: 0 0 var(--space-16);
   color: var(--color-text-secondary);

@@ -800,6 +800,13 @@
       return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid) +
         (withPeople ? '?withPeople=1' : ''), { method: 'DELETE' });
     },
+    /* A contact filed on the wrong firm. `companyId` is the firm they should be on. */
+    transferContact: function (fromUid, clientUid, companyId) {
+      return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(fromUid) +
+        '/contacts/' + encodeURIComponent(clientUid) + '/transfer', {
+        method: 'POST', json: { companyId: companyId },
+      });
+    },
   };
 
   function hydrateCompanies(records) {
@@ -1059,6 +1066,45 @@
     return '<button type="button" class="tma-dash__clients-row-remove" data-clients-delete-person="' +
       esc(person.id) + '" aria-label="Delete ' + esc(name) + '">' +
       '<img src="' + ICONS.Trash + '" alt=""></button>';
+  }
+
+  /* The firm this provider contact is listed under, if the directory has it. */
+  function companyHoldingPerson(id) {
+    if (!id) return null;
+    for (var i = 0; i < COMPANIES.length; i++) {
+      var people = (COMPANIES[i] && COMPANIES[i].people) || [];
+      for (var j = 0; j < people.length; j++) {
+        if (people[j] && String(people[j].id) === String(id)) return COMPANIES[i];
+      }
+    }
+    return null;
+  }
+
+  /*
+   * Staff who can edit the directory, and only when there is another firm to
+   * move them to. A Service Provider admin has one firm; transferring off it
+   * is not theirs to do.
+   */
+  function canTransferProviderContact(person) {
+    if (!canManageClients() || isProviderAdminViewer()) return false;
+    if (!person || !person.id) return false;
+    var company = companyHoldingPerson(person.id);
+    if (!company) return false;
+    for (var i = 0; i < COMPANIES.length; i++) {
+      var other = COMPANIES[i];
+      if (!other || !other.id || other.id === company.id) continue;
+      if (other.status === 'archived') continue;
+      return true;
+    }
+    return false;
+  }
+
+  function providerContactTransferButton(person) {
+    if (!canTransferProviderContact(person)) return '';
+    var name = (person && person.name) || 'contact';
+    return '<button type="button" class="tma-dash__clients-edit-btn tma-dash__clients-transfer-btn"' +
+      ' data-clients-transfer-person="' + esc(person.id) + '"' +
+      ' aria-label="Transfer ' + esc(name) + ' to another service provider">Transfer</button>';
   }
 
   /*
@@ -2791,7 +2837,8 @@
       '<button type="button" class="tma-dash__clients-company-link tma-dash__cc-truncate" data-clients-open-company="' +
       esc(company.id) + '">' + esc(company.name || 'Service provider') + '</button></div>' +
       '<div class="tma-dash__cc tma-dash__cc--contact"><span class="tma-dash__cc-truncate">' +
-      esc(contact) + '</span>' + providerUserRemoveButton(person) + '</div></div>'
+      esc(contact) + '</span>' + providerContactTransferButton(person) +
+      providerUserRemoveButton(person) + '</div></div>'
     );
   }
 
@@ -7275,10 +7322,10 @@
       (p.email ? '<span class="tma-dash__clients-row-meta">' + esc(p.email) + '</span>' : '') +
       '</span></button>'
     );
-    if (!removable) return row;
-    var remove = providerUserRemoveButton(p);
-    if (!remove) return row;
-    return '<div class="tma-dash__clients-person">' + row + remove + '</div>';
+    var transfer = providerContactTransferButton(p);
+    var remove = removable ? providerUserRemoveButton(p) : '';
+    if (!transfer && !remove) return row;
+    return '<div class="tma-dash__clients-person">' + row + transfer + remove + '</div>';
   }
 
   function renderCompanyPeople(company) {
@@ -12232,6 +12279,15 @@
       });
     });
 
+    MORPH.unwired(root, '[data-clients-transfer-person]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var id = btn.getAttribute('data-clients-transfer-person');
+        if (id) openContactTransferPicker(id);
+      });
+    });
+
     bind('[data-clients-row]', 'client', 'data-clients-row');
     // Section 8's table draws its own rows, so they carry their own hook, but the
     // menu, its actions and its permissions are the ones every other row uses.
@@ -12243,7 +12299,8 @@
     MORPH.unwired(root, '[data-clients-row]').forEach(function (row) {
       row.addEventListener('click', function (e) {
         if (e.target.closest('[data-clients-check]') || e.target.closest('[data-clients-search-wrap]') ||
-            e.target.closest('[data-clients-delete-person]')) return;
+            e.target.closest('[data-clients-delete-person]') ||
+            e.target.closest('[data-clients-transfer-person]')) return;
         e.preventDefault();
         var id = row.getAttribute('data-clients-row');
         if (!id) return;
@@ -13089,6 +13146,13 @@
     }
     if (kind === 'application' && canTransferProvider(app)) {
       items.push({ act: 'transfer-provider', label: 'Change service provider', icon: 'Buildings' });
+    }
+    if ((kind === 'client' || kind === 'person') && canTransferProviderContact({ id: clientUid })) {
+      items.push({
+        act: 'transfer-contact',
+        label: 'Transfer to another service provider',
+        icon: 'ArrowsLeftRight',
+      });
     }
     // Assigning staff is `clients.assign`, the same capability the server
     // enforces, read through the access mirror rather than guessed from the
@@ -15716,6 +15780,11 @@
       kind = 'client';
     }
 
+    if (act === 'transfer-contact') {
+      openContactTransferPicker(id);
+      return;
+    }
+
     if (kind === 'company') {
       if (act === 'open') return navigate('company', null, { companyId: id });
       if (act === 'edit') return navigate('edit-company', null, { companyId: id });
@@ -15895,6 +15964,181 @@
     // After the drop has finished, so it cannot take the corrected pages too.
     Promise.resolve(dropped).catch(function () {}).then(function () {
       corrected.forEach(function (entry) { storeApplicationPage(entry.storeKey, entry.page); });
+    });
+  }
+
+  /*
+   * A provider contact filed on the wrong firm.
+   *
+   * The contact row is what Provider contacts lists, and portal access is a
+   * membership of that same firm, so both move. The dialog is the confirm:
+   * picking a firm and pressing Transfer is the whole decision.
+   */
+  function openContactTransferPicker(personId) {
+    var person = providerUserById(personId);
+    var from = companyHoldingPerson(personId);
+    if (!from || !canTransferProviderContact({ id: personId })) {
+      clientsToast('Only staff can transfer a contact to another service provider', 'negative');
+      return;
+    }
+
+    var existing = document.querySelector('[data-contact-transfer]');
+    if (existing) existing.remove();
+
+    var name = (person && person.name) || 'This contact';
+    var selectedId = '';
+    var wrap = document.createElement('div');
+    wrap.className = 'tma-dash__settings-popup';
+    wrap.setAttribute('data-contact-transfer', '');
+    wrap.setAttribute('role', 'dialog');
+    wrap.setAttribute('aria-modal', 'true');
+    wrap.setAttribute('aria-label', 'Transfer to another service provider');
+    wrap.innerHTML =
+      '<div class="tma-dash__settings-popup-backdrop" aria-hidden="true"></div>' +
+      '<div class="tma-dash__settings-change-card tma-users-dialog tma-users-picker">' +
+      '<h3 class="tma-dash__settings-change-title">Transfer to another service provider</h3>' +
+      '<p class="tma-dash__settings-change-text">Move <strong>' + esc(name) +
+      '</strong> from <strong>' + esc(from.name || 'this service provider') + '</strong> to another firm.</p>' +
+      '<p class="tma-dash__settings-change-text">' +
+      esc(from.name || 'The current firm') + ' will no longer list them.' +
+      (person && person.hasLogin ? ' Their portal access moves with them.' : '') +
+      '</p>' +
+      '<input type="search" class="tma-users-picker-search" data-contact-transfer-search placeholder="Search service providers" autocomplete="off">' +
+      '<div class="tma-users-picker-list" data-contact-transfer-list></div>' +
+      '<p class="tma-dash__settings-change-text" data-contact-transfer-error hidden style="color: var(--color-red);"></p>' +
+      '<div class="tma-users-delete-actions">' +
+      '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-contact-transfer-cancel>Cancel</button>' +
+      '<button type="button" class="tma-no-data__btn" data-contact-transfer-confirm disabled>Transfer contact</button>' +
+      '</div></div>';
+    document.body.appendChild(wrap);
+
+    function onEsc(ev) {
+      if (ev.key !== 'Escape') return;
+      close();
+    }
+    function close() {
+      wrap.remove();
+      document.removeEventListener('keydown', onEsc);
+    }
+    function choices(term) {
+      var q = String(term || '').toLowerCase().trim();
+      var shown = [];
+      COMPANIES.forEach(function (company) {
+        if (!company || !company.id || company.id === from.id) return;
+        if (company.status === 'archived') return;
+        var hay = (company.name || '') + ' ' + (company.cipCode || '');
+        if (q && hay.toLowerCase().indexOf(q) === -1) return;
+        shown.push(company);
+      });
+      return shown;
+    }
+    function paintList(term) {
+      var list = wrap.querySelector('[data-contact-transfer-list]');
+      var confirm = wrap.querySelector('[data-contact-transfer-confirm]');
+      var shown = choices(term);
+      if (!shown.length) {
+        list.innerHTML = '<p class="tma-user-info-panel__field-label">No other service providers to choose.</p>';
+        confirm.disabled = true;
+        return;
+      }
+      list.innerHTML = shown.map(function (company) {
+        var on = selectedId === company.id;
+        var meta = company.cipCode ? esc(company.cipCode) : '';
+        return '<button type="button" class="tma-users-picker-item"' + (on ? ' data-selected' : '') +
+          ' data-contact-transfer-id="' + esc(company.id) + '">' +
+          '<img src="' + ICONS.Buildings + '" alt="" width="16" height="16">' +
+          '<span class="tma-users-picker-item-copy"><strong>' + esc(company.name || 'Service provider') + '</strong>' +
+          (meta ? '<span>' + meta + '</span>' : '') + '</span></button>';
+      }).join('');
+      confirm.disabled = !selectedId;
+    }
+
+    wrap.querySelector('[data-contact-transfer-cancel]').addEventListener('click', close);
+    wrap.querySelector('.tma-dash__settings-popup-backdrop').addEventListener('click', close);
+    document.addEventListener('keydown', onEsc);
+    wrap.querySelector('[data-contact-transfer-list]').addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-contact-transfer-id]');
+      if (!btn) return;
+      selectedId = btn.getAttribute('data-contact-transfer-id');
+      var input = wrap.querySelector('[data-contact-transfer-search]');
+      paintList(input ? input.value : '');
+    });
+    wrap.querySelector('[data-contact-transfer-search]').addEventListener('input', function () {
+      paintList(this.value);
+    });
+    wrap.querySelector('[data-contact-transfer-confirm]').addEventListener('click', function () {
+      if (!selectedId) return;
+      var chosen = null;
+      COMPANIES.forEach(function (company) {
+        if (company && company.id === selectedId) chosen = company;
+      });
+      var toName = (chosen && chosen.name) || 'the new service provider';
+      this.disabled = true;
+      CompaniesAPI.transferContact(from.id, personId, selectedId).then(function (json) {
+        close();
+        settleContactTransfer(personId, from.id, selectedId);
+        clientsToast((json && json.message) || (name + ' now belongs to ' + toName), 'positive');
+      }).catch(function (err) {
+        var msg = (err && err.message) || 'Could not transfer this contact';
+        var box = wrap.querySelector('[data-contact-transfer-error]');
+        if (box) {
+          box.textContent = msg;
+          box.hidden = false;
+        }
+        wrap.querySelector('[data-contact-transfer-confirm]').disabled = false;
+        clientsToast(msg, 'negative');
+      });
+    });
+
+    paintList('');
+    var search = wrap.querySelector('[data-contact-transfer-search]');
+    if (search) search.focus();
+  }
+
+  /* Drop the contact off the firm they left and put them on the one they joined,
+     then read both firms again so the lists match what was saved. */
+  function settleContactTransfer(personId, fromId, toId) {
+    var moved = null;
+    COMPANIES.forEach(function (company) {
+      if (!company || company.id !== fromId || !company.people) return;
+      var next = [];
+      company.people.forEach(function (p) {
+        if (p && p.id === personId) moved = p;
+        else next.push(p);
+      });
+      if (moved) {
+        company.people = next;
+        if (company.peopleCount) company.peopleCount = Math.max(0, company.peopleCount - 1);
+      }
+    });
+    if (moved) {
+      COMPANIES.forEach(function (company) {
+        if (!company || company.id !== toId) return;
+        var people = company.people || [];
+        var already = false;
+        for (var i = 0; i < people.length; i++) {
+          if (people[i] && people[i].id === personId) already = true;
+        }
+        if (!already) {
+          company.people = people.concat([moved]);
+          company.peopleCount = (company.peopleCount || 0) + 1;
+        }
+      });
+      hydrateCompanies(COMPANIES);
+    }
+
+    var ctx = clientsMenuCtx;
+    if (ctx && ctx.render) ctx.render({ forceFull: true });
+    Promise.all([
+      refreshCompanyRecord(fromId),
+      refreshCompanyRecord(toId),
+    ]).then(function () {
+      if (!ctx || !ctx.state || !ctx.render) return;
+      if (ctx.state.screen === 'company' &&
+          (ctx.state.companyId === fromId || ctx.state.companyId === toId)) {
+        ctx.state.companyPanelsFor = null;
+      }
+      ctx.render({ forceFull: true });
     });
   }
 
