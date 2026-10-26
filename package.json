@@ -16,5 +16,8 @@
     },
     "dependencies": {
         "playwright": "^1.61.1"
+    },
+    "allowScripts": {
+        "esbuild": true
     }
 }

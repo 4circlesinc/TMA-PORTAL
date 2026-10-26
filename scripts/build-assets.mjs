@@ -151,12 +151,51 @@ async function main() {
     for (const failure of failures) console.log(`  ${failure}`)
   }
 
-  // Anything in public/js or public/css the shell never loads is dead weight
-  // worth knowing about, but it is not this script's job to delete it.
+  const corpus = await referenceCorpus()
+
+  // The shell is the bundle. Other pages load their own files (auth, signing,
+  // the CBI preview, a script injected from PHP). A file nobody names is the
+  // only thing worth printing.
   for (const [dir, used] of [['js', jsFiles], ['css', cssFiles]]) {
     const all = (await readdir(join(PUBLIC, dir))).filter((f) => f.endsWith(`.${dir}`))
-    const unused = all.filter((f) => !used.includes(f))
-    if (unused.length) console.log(`\n${unused.length} ${dir} file(s) in public/${dir} the shell never loads.`)
+    const unused = all.filter((f) => !used.includes(f) && !corpus.includes(`${dir}/${f}`))
+    if (unused.length) {
+      console.log(`\n${unused.length} ${dir} file(s) nothing in the app references:`)
+      for (const file of unused) console.log(`  ${dir}/${file}`)
+    }
+  }
+}
+
+/** Text of the places a public asset can be named, outside the bundle. */
+async function referenceCorpus() {
+  const chunks = []
+  const roots = ['app', 'routes', 'resources', 'public', 'design'].map((dir) => join(ROOT, dir))
+
+  for (const root of roots) {
+    await collectText(root, chunks)
+  }
+
+  return chunks.join('\n')
+}
+
+async function collectText(dir, chunks) {
+  let entries
+
+  try {
+    entries = await readdir(dir, { withFileTypes: true })
+  } catch {
+    return
+  }
+
+  for (const entry of entries) {
+    if (entry.name === 'build' || entry.name === 'node_modules' || entry.name === 'vendor') continue
+    const path = join(dir, entry.name)
+    if (entry.isDirectory()) {
+      await collectText(path, chunks)
+      continue
+    }
+    if (!/\.(php|html|js|css|blade\.php|mjs|json)$/.test(entry.name)) continue
+    chunks.push(await readFile(path, 'utf8'))
   }
 }
 

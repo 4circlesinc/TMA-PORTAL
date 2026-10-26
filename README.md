@@ -30,7 +30,16 @@ Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
    - `APP_KEY` - run `php artisan key:generate --show` locally and paste the value
    - `APP_ENV=production`
    - `APP_DEBUG=false`
-5. **Build command:** `composer install --no-dev --optimize-autoloader`
+5. **Build command:**
+
+    ```bash
+    unset npm_config_store_dir NPM_CONFIG_STORE_DIR
+    composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+    npm ci --audit false
+    npm run build
+    ```
+
+    The `unset` drops a pnpm store path the build image exports. npm 11 treats that variable as an unknown setting and the deploy finishes with a warning.
 6. **Deploy command:** `php artisan migrate --force` (optional until you add migrations)
 7. Deploy.
 

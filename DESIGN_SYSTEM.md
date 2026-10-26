@@ -705,7 +705,7 @@ The app shell's primary navigation mirrors the client-portal feature set replica
 |-------|----------|-------|
 | Shared data store | `public/js/portal-data.js` | `window.TMAPortalData` - seed data + persistence (`tma.portal.v1`); business constants: deleted-project retention **45 days**, File Box retention **180 days**, trial limits (3 employees, 5 signature requests) |
 | View dispatcher + UI helpers | `public/js/portal-views.js` | `window.TMAPortalViews.register(view, mountFn)` + `window.TMAPortalUI` (buttons reuse the no-data CTA recipe, toggle reuses `tma-dash__settings-switch`, tabs reuse `tma-tab-group--underline`, modals reuse `tma-dash__settings-change-card` chrome, toasts via `TMAToast`) |
-| Page modules | `public/js/portal-{home,projects,folders,work,people,admin}.js` | One module per area; mounted into `.tma-dash__view [data-portal-mount]` on `activate()`. (`portal-inbox.js` exists on disk but is not loaded - the sidebar uses the original Email client instead.) |
+| Page modules | `public/js/portal-{home,projects,folders,work,people,admin}.js` | One module per area; mounted into `.tma-dash__view [data-portal-mount]` on `activate()`. The sidebar Email client is the inbox; there is no separate inbox module. |
 | Page CSS | `public/css/portal.css` | `tma-portal-*` classes; tokens/theme variables only - no new palettes |
 | Routing | `dashboard.js` | Generic fallback: any sidebar leaf's `href` deep-links (e.g. `/projects/all`, `/people/employees`, `/account-settings`); no per-route hardcoding needed for portal views |
 
