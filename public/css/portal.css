@@ -3347,7 +3347,8 @@
   z-index: 1;
 }
 
-.tma-portal-chat-row__avatar.is-online::after {
+.tma-portal-chat-row__avatar.is-online::after,
+.tma-portal-chat-row__avatar.is-presence::after {
   content: "";
   position: absolute;
   right: 0;
@@ -3355,7 +3356,7 @@
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #22a06b;
+  background: var(--presence-dot, #22a06b);
   box-shadow: 0 0 0 2px var(--color-bg-card, #fff);
 }
 
@@ -3559,7 +3560,8 @@
  * said "in office". Green is online. Grey is offline. Nothing else.
  */
 .tma-portal-employee__avatar.is-online::after,
-.tma-portal-employee__avatar.is-offline::after {
+.tma-portal-employee__avatar.is-offline::after,
+.tma-portal-employee__avatar.is-presence::after {
   content: "";
   position: absolute;
   right: 0;
@@ -3567,7 +3569,7 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #22a06b;
+  background: var(--presence-dot, #22a06b);
   box-shadow: 0 0 0 2px var(--color-bg-card, #fff);
 }
 
@@ -3731,8 +3733,12 @@
 :root[data-theme="dark"] .tma-portal-employee__avatar.is-online::after,
 .tma-dash[data-theme="dark"] .tma-portal-employee__avatar.is-offline::after,
 :root[data-theme="dark"] .tma-portal-employee__avatar.is-offline::after,
+.tma-dash[data-theme="dark"] .tma-portal-employee__avatar.is-presence::after,
+:root[data-theme="dark"] .tma-portal-employee__avatar.is-presence::after,
 .tma-dash[data-theme="dark"] .tma-portal-chat-row__avatar.is-online::after,
-:root[data-theme="dark"] .tma-portal-chat-row__avatar.is-online::after {
+:root[data-theme="dark"] .tma-portal-chat-row__avatar.is-online::after,
+.tma-dash[data-theme="dark"] .tma-portal-chat-row__avatar.is-presence::after,
+:root[data-theme="dark"] .tma-portal-chat-row__avatar.is-presence::after {
   box-shadow: 0 0 0 2px var(--color-bg-card, #1a1a1a);
 }
 .tma-dash[data-theme="dark"] .tma-portal-employee__badge--online,

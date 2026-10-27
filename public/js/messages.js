@@ -688,6 +688,23 @@
     return padClusterWithSelf(pool, 2).slice(0, GROUP_CLUSTER_MAX);
   }
 
+  function presenceDotColor(presence) {
+    if (window.TMAPresence && window.TMAPresence.dotColor) return window.TMAPresence.dotColor(presence);
+    return presence && presence.online ? '#22c55e' : '#98a2b3';
+  }
+
+  function presenceDotSlug(presence) {
+    if (window.TMAPresence && window.TMAPresence.dotSlug) return window.TMAPresence.dotSlug(presence);
+    return presence && presence.online ? 'online' : 'offline';
+  }
+
+  function statusDotHtml(presence) {
+    var slug = presenceDotSlug(presence);
+    if (slug === 'offline') return '';
+    return '<span class="tma-dash__messages-row-status-dot" style="background:' +
+      presenceDotColor(presence) + '" aria-hidden="true"></span>';
+  }
+
   function renderGroupClusterFace(member) {
     var face = member.photo
       ? '<img class="tma-dash__messages-cluster-img" src="' + esc(member.photo) + '" alt="" loading="lazy">'
@@ -696,7 +713,7 @@
     return (
       '<span class="tma-dash__messages-cluster-face" title="' + esc(member.name || '') + '">' +
       face +
-      (member.online ? '<span class="tma-dash__messages-row-online-dot" aria-hidden="true"></span>' : '') +
+      statusDotHtml(member) +
       '</span>'
     );
   }
@@ -739,25 +756,21 @@
     return renderInitialAvatar(row.name);
   }
 
-  function isThreadOnline(row) {
-    return !!(threadPresence(row).online && isDirectThread(row));
-  }
-
   function renderInboxThreadIcon(row) {
     var item = resolveThread(row);
     if (!isDirectThread(row)) {
       return threadIcon(item);
     }
     var icon = threadIcon(item);
-    var online = isThreadOnline(row);
+    var presence = threadPresence(row);
+    var slug = presenceDotSlug(presence);
     return (
       '<span class="tma-dash__messages-row-avatar-wrap tma-dash__messages-row-avatar-wrap--' +
-      (online ? 'online' : 'offline') +
+      (slug === 'offline' ? 'offline' : 'online') +
       '">' +
       icon +
-      '<span class="tma-dash__messages-row-' +
-      (online ? 'online' : 'offline') +
-      '-dot" aria-hidden="true"></span>' +
+      '<span class="tma-dash__messages-row-status-dot" style="background:' +
+      presenceDotColor(presence) + '" aria-hidden="true"></span>' +
       '</span>'
     );
   }
@@ -7445,24 +7458,31 @@
       if (!member) return;
 
       var wasOnline = !!member.online;
-      if (wasOnline === online) return;
-
-      member.online = online;
-      if (online) {
-        member.lastSeenAt = new Date().toISOString();
-      } else if (payload.lastSeenAt) {
-        member.lastSeenAt = payload.lastSeenAt;
+      var statusChanged = !!(payload.status && member.status !== payload.status);
+      if (payload.status) {
+        member.status = payload.status;
+        member.statusIcon = payload.icon || member.statusIcon || null;
       }
+      if (wasOnline === online && !statusChanged) return;
 
-      if (!row.presence) row.presence = {};
-      var count = parseInt(row.presence.onlineCount, 10) || 0;
-      count = online ? count + 1 : Math.max(0, count - 1);
-      row.presence.onlineCount = count;
-      row.presence.label = count > 0
-        ? (count === 1 ? '1 online' : count + ' online')
-        : (parseInt(row.memberCount, 10) === 1
-          ? '1 member'
-          : (parseInt(row.memberCount, 10) || 0) + ' members');
+      if (wasOnline !== online) {
+        member.online = online;
+        if (online) {
+          member.lastSeenAt = new Date().toISOString();
+        } else if (payload.lastSeenAt) {
+          member.lastSeenAt = payload.lastSeenAt;
+        }
+
+        if (!row.presence) row.presence = {};
+        var count = parseInt(row.presence.onlineCount, 10) || 0;
+        count = online ? count + 1 : Math.max(0, count - 1);
+        row.presence.onlineCount = count;
+        row.presence.label = count > 0
+          ? (count === 1 ? '1 online' : count + ' online')
+          : (parseInt(row.memberCount, 10) === 1
+            ? '1 member'
+            : (parseInt(row.memberCount, 10) || 0) + ' members');
+      }
 
       row.members.sort(function (a, b) {
         var ao = a.online ? 0 : 1;

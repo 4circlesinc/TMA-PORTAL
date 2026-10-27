@@ -734,7 +734,9 @@
       var sub = lastSeenLabel(p);
 
       return '<div class="tma-portal-employee" data-key="employee-' + ui().esc(p.id) + '">' +
-        '<span class="tma-portal-employee__avatar' + (p.online ? ' is-online' : ' is-offline') + '">' +
+        '<span class="tma-portal-employee__avatar is-presence" style="--presence-dot:' +
+        (window.TMAPresence && window.TMAPresence.dotColor ? window.TMAPresence.dotColor(p) : (p.online ? '#22c55e' : '#98a2b3')) +
+        '">' +
         '<img src="' + ui().esc(avatarSrcFor(p)) + '" alt="" width="36" height="36" loading="lazy">' +
         '</span>' +
         '<span class="tma-portal-employee__meta">' +
@@ -943,7 +945,12 @@
   }
 
   function chatAvatarHtml(c) {
-    var online = !!(c.presence && c.presence.online);
+    var dot = window.TMAPresence && window.TMAPresence.dotSlug
+      ? window.TMAPresence.dotSlug(c.presence)
+      : ((c.presence && c.presence.online) ? 'online' : 'offline');
+    var dotColor = window.TMAPresence && window.TMAPresence.dotColor
+      ? window.TMAPresence.dotColor(c.presence)
+      : '#22c55e';
     // A group with a picture of its own is that picture, as in Messages.
     if (c.type === 'group' && !c.photo) {
       var members = (c.members || []).slice();
@@ -964,7 +971,8 @@
           '</span>';
       }
     }
-    return '<span class="tma-portal-chat-row__avatar' + (online ? ' is-online' : '') + '">' +
+    var presenceClass = dot === 'offline' ? '' : ' is-presence" style="--presence-dot:' + dotColor;
+    return '<span class="tma-portal-chat-row__avatar' + presenceClass + '">' +
       '<img src="' + ui().esc(chatAvatarSrc(c)) + '" alt="" width="32" height="32" loading="lazy">' +
       '</span>';
   }

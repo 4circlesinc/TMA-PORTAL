@@ -17413,7 +17413,8 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   text-transform: uppercase;
 }
 
-.tma-dash__messages-cluster-face .tma-dash__messages-row-online-dot {
+.tma-dash__messages-cluster-face .tma-dash__messages-row-online-dot,
+.tma-dash__messages-cluster-face .tma-dash__messages-row-status-dot {
   right: -4%;
   bottom: -4%;
   width: 40%;
@@ -17444,7 +17445,8 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
 }
 
 .tma-dash__messages-row-online-dot,
-.tma-dash__messages-row-offline-dot {
+.tma-dash__messages-row-offline-dot,
+.tma-dash__messages-row-status-dot {
   position: absolute;
   right: 0;
   bottom: 0;

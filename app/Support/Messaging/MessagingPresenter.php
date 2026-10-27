@@ -15,6 +15,7 @@ use App\Models\WorkDay;
 use App\Support\Access\Role;
 use App\Support\Files\Vault;
 use App\Support\Presence\AvailabilityService;
+use App\Support\Presence\AvailabilityStatus;
 use App\Support\UserTime;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -185,13 +186,11 @@ class MessagingPresenter
                 ->first(fn (User $u) => in_array($u->id, $firmUserIds, true));
 
             if ($contact) {
-                $faces[] = [
+                $faces[] = array_merge([
                     'id' => $contact->id,
                     'name' => $contact->name,
                     'photo' => $contact->avatar_url,
-                    'online' => (bool) $contact->presence?->isOnline(),
-                    'lastSeenAt' => $contact->presence?->last_seen_at?->toIso8601String(),
-                ];
+                ], self::facePresence($contact));
             }
         }
 
@@ -209,14 +208,30 @@ class MessagingPresenter
             ])
             ->take(5)
             ->values()
-            ->map(fn (User $u) => [
+            ->map(fn (User $u) => array_merge([
                 'id' => $u->id,
                 'name' => $u->name,
                 'photo' => $u->avatar_url,
-                'online' => (bool) $u->presence?->isOnline(),
-                'lastSeenAt' => $u->presence?->last_seen_at?->toIso8601String(),
-            ])
+            ], self::facePresence($u)))
             ->all();
+    }
+
+    /**
+     * Avatar badge for one face in a group. The stored status wins over the
+     * green "connected" bit, so Out of Office stays amber while they are online.
+     *
+     * @return array{online: bool, lastSeenAt: ?string, status: ?string, statusIcon: ?string}
+     */
+    private static function facePresence(User $user): array
+    {
+        $status = $user->presence?->primary_status;
+
+        return [
+            'online' => (bool) $user->presence?->isOnline(),
+            'lastSeenAt' => $user->presence?->last_seen_at?->toIso8601String(),
+            'status' => $status,
+            'statusIcon' => $status ? (AvailabilityStatus::ICONS[$status] ?? null) : null,
+        ];
     }
 
     private static function memberCountLabel(int $count): string

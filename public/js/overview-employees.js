@@ -45,7 +45,9 @@
     var badgeLabel = p.statusLabel || (p.online ? 'Online' : 'Offline');
     var workLabel = work && work.label ? work.label : '';
     return '<div class="tma-dash__overview-employee" data-employee-id="' + esc(p.id) + '">' +
-      '<span class="tma-portal-employee__avatar' + (p.online ? ' is-online' : ' is-offline') + '">' +
+      '<span class="tma-portal-employee__avatar is-presence" style="--presence-dot:' +
+      (window.TMAPresence && window.TMAPresence.dotColor ? window.TMAPresence.dotColor(p) : (p.online ? '#22c55e' : '#98a2b3')) +
+      '">' +
       '<img src="' + esc(avatarSrc(p)) + '" alt="" width="40" height="40" loading="lazy">' +
       '</span>' +
       '<span class="tma-dash__overview-employee__meta">' +

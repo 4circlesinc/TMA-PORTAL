@@ -122,6 +122,48 @@
     return '<span class="tma-presence__dot" style="background:' + color + ';width:' + size + 'px;height:' + size + 'px"></span>';
   }
 
+  /*
+   * Avatar badge. Being connected stays green only for Available / Online.
+   * Out of Office, a call, and the rest keep their own colour while the
+   * person is still online.
+   */
+  var DOT_COLOR = {
+    online: '#22c55e',
+    offline: '#98a2b3',
+    on_call: '#ef4444',
+    dnd: '#ef4444',
+    meeting: '#6366f1',
+    office: '#22c55e',
+    remote: '#0ea5e9',
+    away: '#f59e0b',
+  };
+
+  function dotSlug(presence) {
+    var status = presence && presence.status;
+    if (status === 'available' || status === 'online') return 'online';
+    if (status === 'on_call') return 'on_call';
+    if (status === 'do_not_disturb') return 'dnd';
+    if (status === 'at_meeting') return 'meeting';
+    if (status === 'in_office') return 'office';
+    if (status === 'working_remote') return 'remote';
+    if (status === 'away') return 'away';
+    if (status === 'offline') return 'offline';
+    var icon = presence && presence.statusIcon;
+    if (icon === 'red') return 'on_call';
+    if (icon === 'dnd') return 'dnd';
+    if (icon === 'calendar') return 'meeting';
+    if (icon === 'office') return 'office';
+    if (icon === 'home') return 'remote';
+    if (icon === 'away') return 'away';
+    if (icon === 'green') return 'online';
+    if (icon === 'gray') return 'offline';
+    return presence && presence.online ? 'online' : 'offline';
+  }
+
+  function dotColor(presence) {
+    return DOT_COLOR[dotSlug(presence)] || DOT_COLOR.offline;
+  }
+
   function labelFor(p) {
     if (!p) return 'Offline · Last seen recently';
     if (p.statusLabel || p.status) {
@@ -143,7 +185,7 @@
     var link = document.createElement('link');
     link.id = 'tma-presence-css-link';
     link.rel = 'stylesheet';
-    link.href = (ROOT || '') + 'css/presence.css?v=15';
+    link.href = (ROOT || '') + 'css/presence.css?v=16';
     document.head.appendChild(link);
   }
 
@@ -1403,6 +1445,8 @@
     onChange: function (fn) { listeners.push(fn); if (state) fn(state); },
     paint: paintHeader,
     iconHtml: iconHtml,
+    dotSlug: dotSlug,
+    dotColor: dotColor,
     meta: meta,
     wire: wire,
     startLocationChecks: startLocationChecks,
