@@ -17744,8 +17744,17 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   color: var(--color-text-primary);
 }
 
+.tma-dash__messages-chat-name-row {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .tma-dash__messages-chat-name-link {
-  display: inline-block;
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -17755,6 +17764,24 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   color: inherit;
   text-decoration: none;
   cursor: pointer;
+}
+
+.tma-dash__messages-chat-role {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-size-12);
+  font-weight: 400;
+  line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__messages-chat-role::before {
+  content: "·";
+  margin: 0 var(--space-4);
+  color: var(--color-text-tertiary, #98a2b3);
 }
 
 .tma-dash__messages-chat-name-link:hover {
@@ -18664,6 +18691,11 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .tma-dash--messages-mobile-reading .tma-dash__messages-chat-name-row .tma-dash__messages-chat-name-link {
+    flex: 1 1 auto;
+    width: auto;
   }
 
   .tma-dash--messages-mobile-reading .tma-dash__messages-chat-presence,

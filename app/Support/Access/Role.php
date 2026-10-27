@@ -506,6 +506,21 @@ class Role
         return self::ACCOUNT_TYPE_ALIASES[$type] ?? $type;
     }
 
+    /**
+     * The short name shown beside someone in a chat: Admin, CRO, Client.
+     */
+    public static function short(?User $user): ?string
+    {
+        return match (self::of($user)) {
+            self::ADMINISTRATOR => 'Admin',
+            self::REVIEWING_OFFICER => 'CRO',
+            self::EMPLOYEE => 'Employee',
+            self::CLIENT => 'Client',
+            self::SERVICE_PROVIDER_ADMIN => 'Provider',
+            default => null,
+        };
+    }
+
     public static function isAdmin(?User $user): bool
     {
         return self::of($user) === self::ADMINISTRATOR;

@@ -188,6 +188,7 @@ class ClientConversationTest extends TestCase
 
         $this->assertSame('direct', $body['type']);
         $this->assertSame('Private', $body['subtitle']);
+        $this->assertSame('Client', $body['counterpartRole']);
         $this->assertSame('person', $body['subject']);
         $this->assertSame($login->name, $body['name']);
     }

@@ -567,23 +567,34 @@
     return n === 1 ? '1 member' : n + ' members';
   }
 
+  function counterpartRole(row) {
+    if (!row || row.type === 'group') return '';
+    return row.counterpartRole || '';
+  }
+
   function renderContactName(row) {
     // Opens the messaging profile *inside* the chat column, never the client
     // record, which is a separate, permissioned action in that panel.
+    // The role sits on this same line. "Private" used to be a third line
+    // under the status, which is not a role.
+    var role = counterpartRole(row);
     return (
+      '<span class="tma-dash__messages-chat-name-row">' +
       '<button type="button" class="tma-dash__messages-chat-name ' +
       'tma-dash__messages-chat-name-link" data-messages-open-profile ' +
-      'aria-label="Conversation info">' + esc(threadDisplayName(row)) + '</button>'
+      'aria-label="Conversation info">' + esc(threadDisplayName(row)) + '</button>' +
+      (role ? '<span class="tma-dash__messages-chat-role">' + esc(role) + '</span>' : '') +
+      '</span>'
     );
   }
 
   function renderChatContactText(row) {
     row = resolveThread(row);
-    // Name, then presence right beneath it (Office/Teams placement), then the
-    // subtitle as the optional third line.
+    // Name (and role) then presence. A case thread still names the firm
+    // underneath. A direct chat does not grow a "Private" line.
     var html = renderContactName(row);
     html += renderPresence(row);
-    if (row.subtitle) {
+    if (row.type === 'group' && row.subtitle && row.subtitle !== 'Private') {
       html += '<span class="tma-dash__messages-chat-subtitle">' + esc(row.subtitle) + '</span>';
     }
     return html;
@@ -1192,11 +1203,14 @@
       '<span class="tma-dash__messages-row-text">' +
       '<span class="tma-dash__messages-row-name">' +
       '<span class="tma-dash__messages-row-name-text">' + esc(item.name) + '</span>' +
-      (item.subtitle
-        ? '<span class="tma-dash__messages-row-about">' + esc(item.subtitle) + '</span>'
-        : (item.type === 'group' && item.memberCount
-          ? '<span class="tma-dash__messages-row-about">' + esc(groupCountLabel(item)) + '</span>'
-          : '')) +
+      (function () {
+        var about = counterpartRole(item);
+        if (!about && item.subtitle && item.subtitle !== 'Private') about = item.subtitle;
+        if (!about && item.type === 'group' && item.memberCount) about = groupCountLabel(item);
+        return about
+          ? '<span class="tma-dash__messages-row-about">' + esc(about) + '</span>'
+          : '';
+      })() +
       (pinned
         ? '<img class="tma-dash__messages-row-pin" src="' + ICONS.StarFilled + '" alt="" width="12" height="12" aria-hidden="true">'
         : '') +

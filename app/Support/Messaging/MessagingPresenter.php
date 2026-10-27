@@ -308,6 +308,8 @@ class MessagingPresenter
             'markedUnread' => $participant?->marked_unread_at !== null,
             'draft' => $participant?->draft,
             'role' => $participant?->role,
+            // Account type of the other person in a direct chat (Admin, CRO, …).
+            'counterpartRole' => $counterpart ? Role::short($counterpart) : null,
             'presence' => $counterpart
                 ? AvailabilityService::forViewer($counterpart, $viewer)
                 : self::groupPresence($others, $conversation->activeParticipants->count()),
