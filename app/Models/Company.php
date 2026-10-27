@@ -214,7 +214,7 @@ class Company extends Model
      * Same labels the Users directory uses for external people. No login means
      * no account type to show — the contact row still exists in the firm.
      */
-    private static function contactAccountTypeLabel(?User $login): ?string
+    public static function contactAccountTypeLabel(?User $login): ?string
     {
         if ($login === null) {
             return null;

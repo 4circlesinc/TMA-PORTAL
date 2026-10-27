@@ -584,12 +584,23 @@ class CompaniesController extends Controller
         $contact = Client::query()->where('uid', $client)->firstOrFail();
 
         $contact = CompanyMembers::transferContact($contact, $from, $to, $request->user());
+        $contact->loadMissing('user');
+        $login = $contact->hasLiveLogin() ? $contact->user : null;
 
         return response()->json([
             'message' => $contact->contactDisplayName().' now belongs to '.$to->name.'.',
             'clientId' => $contact->uid,
             'fromId' => $from->uid,
             'toId' => $to->uid,
+            'person' => [
+                'id' => $contact->uid,
+                'name' => $contact->contactDisplayName(),
+                'email' => $contact->contactEmail(),
+                'hasLogin' => $login !== null,
+                'userId' => $login?->id,
+                'photo' => $contact->photo_url ?: $login?->photoUrl(),
+                'accountType' => Company::contactAccountTypeLabel($login),
+            ],
         ]);
     }
 

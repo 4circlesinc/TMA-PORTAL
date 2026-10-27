@@ -39,37 +39,57 @@ final class CompanyMembers
      */
     public static function add(Company $company, array $attrs, User $by, bool $notify = true): CompanyMember
     {
-        $email = isset($attrs['email']) ? Str::lower(trim($attrs['email'])) : null;
+        $rawEmail = isset($attrs['email']) ? trim((string) $attrs['email']) : '';
+        $email = $rawEmail !== '' ? Str::lower($rawEmail) : null;
         $role = $attrs['role'] ?? CompanyRoles::MEMBER;
+        $postedName = isset($attrs['name']) ? trim((string) $attrs['name']) : '';
 
-        $existingUser = $email ? User::where('email', $email)->first() : null;
+        $existingUser = $email
+            ? User::query()->whereRaw('LOWER(email) = ?', [$email])->first()
+            : null;
+        // A transfer hands over the login it already has. The address on the
+        // contact can differ from the account, and looking up by address
+        // alone used to miss it and file the person with no account.
+        if (! $existingUser && ! empty($attrs['user_id'])) {
+            $existingUser = User::query()->find($attrs['user_id']);
+            if ($existingUser && ! $email) {
+                $email = Str::lower((string) $existingUser->email);
+            }
+        }
 
         // Re-adding somebody who was removed revives their row rather than
-        // stacking a second membership.
-        $member = CompanyMember::where('company_id', $company->id)
-            ->where(function ($q) use ($email, $existingUser) {
-                if ($existingUser) {
-                    $q->orWhere('user_id', $existingUser->id);
-                }
-                if ($email) {
-                    $q->orWhereRaw('LOWER(email) = ?', [$email]);
-                }
-            })
-            ->latest('id')
-            ->first() ?? new CompanyMember;
+        // stacking a second membership. With no address and no login there
+        // is nothing to match on: an empty lookup used to take the firm's
+        // newest member and write this person over them.
+        $member = null;
+        if ($existingUser || $email) {
+            $member = CompanyMember::where('company_id', $company->id)
+                ->where(function ($q) use ($email, $existingUser) {
+                    if ($existingUser) {
+                        $q->orWhere('user_id', $existingUser->id);
+                    }
+                    if ($email) {
+                        $q->orWhereRaw('LOWER(email) = ?', [$email]);
+                    }
+                })
+                ->latest('id')
+                ->first();
+        }
+        $member ??= new CompanyMember;
 
         $userId = self::liveUserId($existingUser, $member);
         $locationId = CompanyLocations::idFor(
             $company,
             isset($attrs['location_uid']) ? (string) $attrs['location_uid'] : null,
         );
+        $name = $postedName !== '' ? $postedName : ($member->name ?: $existingUser?->name);
 
         $member->forceFill(array_merge([
             'company_id' => $company->id,
             'location_id' => $locationId,
             'user_id' => $userId,
             'client_id' => $attrs['client_id'] ?? $member->client_id,
-            'name' => $attrs['name'] ?? $member->name,
+            'name' => $name,
             'email' => $email ?? $member->email,
             'job_title' => $attrs['job_title'] ?? $member->job_title,
             'role' => $role,
@@ -227,14 +247,16 @@ final class CompanyMembers
                 }
             }
             $profile = $client->data ?? [];
-            $profileFirst = trim((string) ($profile['firstName'] ?? ''));
-            if (PersonName::looksLikeEmail($profileFirst)) {
+            $profileFirst = is_array($profile) ? trim((string) ($profile['firstName'] ?? '')) : '';
+            if (is_array($profile) && PersonName::looksLikeEmail($profileFirst)) {
                 $parsed = PersonName::split($profileFirst, $email ?: $profileFirst);
-                $profile['firstName'] = $parsed['first'];
-                if (trim((string) ($profile['lastName'] ?? '')) === '' && $parsed['last'] !== '') {
-                    $profile['lastName'] = $parsed['last'];
+                if ($parsed['first'] !== '') {
+                    $profile['firstName'] = $parsed['first'];
+                    if (trim((string) ($profile['lastName'] ?? '')) === '' && $parsed['last'] !== '') {
+                        $profile['lastName'] = $parsed['last'];
+                    }
+                    $patch['data'] = $profile;
                 }
-                $patch['data'] = $profile;
             }
             $stored = trim((string) $client->name);
             $emailKeyStored = strtolower(trim((string) ($client->email ?? '')));
@@ -530,16 +552,22 @@ final class CompanyMembers
         );
 
         $client = DB::transaction(function () use ($client, $from, $to, $by) {
-            $data = is_array($client->data) ? $client->data : [];
-            $work = is_array($data['work'] ?? null) ? $data['work'] : [];
-            $work['company'] = $to->name;
-            $data['work'] = $work;
-
-            $client->forceFill([
+            $fill = [
                 'company_id' => $to->id,
                 'company' => $to->name,
-                'data' => $data,
-            ])->save();
+            ];
+            // Only a profile we can read is updated. Replacing anything else
+            // with a fresh array wiped the person's name, email and the rest
+            // of the account down to the company line.
+            $data = $client->data;
+            if (is_array($data)) {
+                $work = is_array($data['work'] ?? null) ? $data['work'] : [];
+                $work['company'] = $to->name;
+                $data['work'] = $work;
+                $fill['data'] = $data;
+            }
+
+            $client->forceFill($fill)->save();
 
             self::moveMemberships($client, $from, $to, $by);
 
@@ -605,11 +633,12 @@ final class CompanyMembers
             }
 
             $moved = self::add($to, array_merge([
-                'email' => $member->displayEmail() ?: $client->email,
-                'name' => $member->name ?: $client->name,
+                'email' => $member->email ?: ($member->displayEmail() ?: $client->email),
+                'name' => $member->name ?: ($member->user?->name ?: $client->name),
                 'job_title' => $member->job_title,
                 'role' => $member->role ?: CompanyRoles::MEMBER,
                 'client_id' => $client->id,
+                'user_id' => $member->user_id,
             ], $flags), $by, notify: false);
 
             self::retargetInvitations($from, $to, $member, $moved, $client);
@@ -685,20 +714,25 @@ final class CompanyMembers
         $alreadyHere = $previous->first(fn (CompanyMember $member) => $member->company_id === $company->id);
         $leaving = $previous->filter(fn (CompanyMember $member) => $member->company_id !== $company->id);
 
-        foreach ($leaving as $member) {
-            $from = $member->company ?? Company::query()->find($member->company_id);
-            if ($from) {
-                self::remove($from, $member, $by, notify: false);
+        // Leave and arrive together. Removing first and then failing to add
+        // used to leave the account on no firm at all.
+        DB::transaction(function () use ($leaving, $alreadyHere, $company, $user, $by) {
+            foreach ($leaving as $member) {
+                $from = $member->company ?? Company::query()->find($member->company_id);
+                if ($from) {
+                    self::remove($from, $member, $by, notify: false);
+                }
             }
-        }
 
-        if (! $alreadyHere) {
-            self::add($company, [
-                'email' => $user->email,
-                'name' => $user->name,
-                'role' => CompanyRoles::MEMBER,
-            ], $by, notify: false);
-        }
+            if (! $alreadyHere) {
+                self::add($company, [
+                    'email' => $user->email,
+                    'name' => $user->name,
+                    'user_id' => $user->id,
+                    'role' => CompanyRoles::MEMBER,
+                ], $by, notify: false);
+            }
+        });
 
         $switched = $leaving->isNotEmpty();
         if (! $switched && $alreadyHere) {

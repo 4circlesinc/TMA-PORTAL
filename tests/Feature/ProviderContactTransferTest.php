@@ -290,4 +290,144 @@ class ProviderContactTransferTest extends TestCase
 
         $this->assertSame($galaxy->id, Client::where('uid', 'sarah-cheng')->value('company_id'));
     }
+
+    public function test_transfer_keeps_the_account_and_does_not_blank_another_person(): void
+    {
+        $staff = $this->staff();
+        $galaxy = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy Partners']);
+        $igraphix = Company::create(['uid' => 'igraphix', 'name' => 'iGraphix']);
+
+        $login = User::factory()->create([
+            'name' => 'Maya Contact',
+            'first_name' => 'Maya',
+            'last_name' => 'Contact',
+            'email' => 'maya.login@galaxy.example',
+            'status' => 'approved',
+            'account_type' => 'Client',
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+        ]);
+
+        $client = Client::create([
+            'uid' => 'maya-contact',
+            'name' => 'Maya Contact',
+            'company_id' => $galaxy->id,
+            'company' => 'Galaxy Partners',
+            'email' => 'maya.card@galaxy.example',
+            'user_id' => $login->id,
+            'data' => [
+                'firstName' => 'Maya',
+                'lastName' => 'Contact',
+                'emails' => [['type' => 'work', 'value' => 'maya.card@galaxy.example']],
+                'work' => ['company' => 'Galaxy Partners', 'jobTitle' => 'Advisor'],
+            ],
+        ]);
+
+        CompanyMember::create([
+            'company_id' => $galaxy->id,
+            'user_id' => $login->id,
+            'client_id' => $client->id,
+            'name' => 'Maya Contact',
+            'email' => 'maya.card@galaxy.example',
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+            'added_by' => $staff->id,
+        ]);
+
+        $neighbourLogin = User::factory()->create([
+            'name' => 'Neighbour Kept',
+            'first_name' => 'Neighbour',
+            'last_name' => 'Kept',
+            'email' => 'neighbour@igraphix.example',
+            'status' => 'approved',
+            'account_type' => 'Client',
+            'email_verified_at' => now(),
+        ]);
+        $neighbour = Client::create([
+            'uid' => 'neighbour-kept',
+            'name' => 'Neighbour Kept',
+            'company_id' => $igraphix->id,
+            'email' => 'neighbour@igraphix.example',
+            'user_id' => $neighbourLogin->id,
+            'data' => ['firstName' => 'Neighbour', 'lastName' => 'Kept'],
+        ]);
+        CompanyMember::create([
+            'company_id' => $igraphix->id,
+            'user_id' => $neighbourLogin->id,
+            'client_id' => $neighbour->id,
+            'name' => 'Neighbour Kept',
+            'email' => 'neighbour@igraphix.example',
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+            'added_by' => $staff->id,
+        ]);
+
+        $nameless = Client::create([
+            'uid' => 'no-address',
+            'name' => 'No Address',
+            'company_id' => $galaxy->id,
+            'data' => ['firstName' => 'No', 'lastName' => 'Address'],
+        ]);
+
+        $moved = $this->actingAs($staff)
+            ->postJson('/portal/companies/galaxy/contacts/maya-contact/transfer', [
+                'companyId' => 'igraphix',
+            ])
+            ->assertOk()
+            ->json();
+
+        $this->assertSame('Maya Contact', $moved['person']['name']);
+        $this->assertSame('maya.card@galaxy.example', $moved['person']['email']);
+        $this->assertSame('Service Provider Contact', $moved['person']['accountType']);
+        $this->assertTrue($moved['person']['hasLogin']);
+
+        $client->refresh();
+        $this->assertSame($igraphix->id, $client->company_id);
+        $this->assertSame('Maya Contact', $client->name);
+        $this->assertSame('maya.card@galaxy.example', $client->email);
+        $this->assertSame($login->id, $client->user_id);
+        $this->assertSame('Maya', $client->data['firstName']);
+        $this->assertSame('Contact', $client->data['lastName']);
+        $this->assertSame('Advisor', $client->data['work']['jobTitle']);
+        $this->assertSame('iGraphix', $client->data['work']['company']);
+
+        $login->refresh();
+        $this->assertSame('Maya', $login->first_name);
+        $this->assertSame('Contact', $login->last_name);
+        $this->assertSame('Maya Contact', $login->name);
+        $this->assertSame('maya.login@galaxy.example', $login->email);
+        $this->assertSame('Client', $login->account_type);
+
+        $membership = CompanyMember::query()
+            ->where('company_id', $igraphix->id)
+            ->where('user_id', $login->id)
+            ->first();
+        $this->assertNotNull($membership);
+        $this->assertSame('Maya Contact', $membership->name);
+        $this->assertSame('maya.card@galaxy.example', $membership->email);
+        $this->assertSame(CompanyMember::STATUS_ACTIVE, $membership->status);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/companies/galaxy/contacts/no-address/transfer', [
+                'companyId' => 'igraphix',
+            ])
+            ->assertOk();
+
+        $neighbour->refresh();
+        $neighbourLogin->refresh();
+        $this->assertSame('Neighbour Kept', $neighbour->name);
+        $this->assertSame('neighbour@igraphix.example', $neighbour->email);
+        $this->assertSame($neighbourLogin->id, $neighbour->user_id);
+        $this->assertSame('Neighbour', $neighbour->data['firstName']);
+        $this->assertSame('Neighbour Kept', CompanyMember::query()
+            ->where('user_id', $neighbourLogin->id)
+            ->where('company_id', $igraphix->id)
+            ->value('name'));
+
+        $nameless->refresh();
+        $this->assertSame('No Address', $nameless->name);
+        $this->assertSame('No', $nameless->data['firstName']);
+        $this->assertSame($igraphix->id, $nameless->company_id);
+    }
 }

@@ -923,10 +923,10 @@
             keep.push(p);
             return;
           }
-          held = p;
+          held = fillMovedPerson(p, move.person);
           if (String(company.id) === String(move.toId)) {
             listedOnDestination = true;
-            keep.push(p);
+            keep.push(held);
           } else {
             dropped = true;
           }
@@ -7582,9 +7582,50 @@
     for (var i = 0; i < locations.length; i++) {
       if (locations[i] && locations[i].kind === 'main_office') main = locations[i];
     }
+    var known = {};
+    for (var j = 0; j < locations.length; j++) {
+      if (locations[j] && locations[j].id) known[locations[j].id] = true;
+    }
     return members.filter(function (m) {
-      if (m.locationId === office.id) return true;
-      return !!(main && office.id === main.id && !m.locationId);
+      if (m.locationId && known[m.locationId]) return m.locationId === office.id;
+      // No office, or one this firm no longer has: keep them on the main
+      // office. Dropping them here is how a move looked like it did nothing
+      // and the person vanished.
+      return !!(main && office.id === main.id);
+    });
+  }
+
+  /* A later list must not paint a moved person with an empty name or account
+     over the card we already had. */
+  function fillMovedPerson(next, prev) {
+    if (!next && !prev) return null;
+    if (!next) return prev;
+    if (!prev) return next;
+    var out = Object.assign({}, prev, next);
+    if ((!next.name || next.name === 'Contact') && prev.name && prev.name !== 'Contact') out.name = prev.name;
+    if (!next.email && prev.email) out.email = prev.email;
+    if (!next.accountType && prev.accountType) out.accountType = prev.accountType;
+    if (!next.photo && prev.photo) out.photo = prev.photo;
+    if (!next.hasLogin && prev.hasLogin) out.hasLogin = prev.hasLogin;
+    if (!next.userId && prev.userId) out.userId = prev.userId;
+    return out;
+  }
+
+  function mergeOfficeMembers(current, incoming) {
+    var byId = {};
+    (current || []).forEach(function (m) {
+      if (m && m.id) byId[String(m.id)] = m;
+    });
+    return (incoming || []).map(function (m) {
+      if (!m || !m.id) return m;
+      var prev = byId[String(m.id)];
+      if (!prev) return m;
+      var out = Object.assign({}, prev, m);
+      if (!m.name && prev.name) out.name = prev.name;
+      if (!m.email && prev.email) out.email = prev.email;
+      if (!m.accountType && prev.accountType) out.accountType = prev.accountType;
+      if (!m.avatar && prev.avatar) out.avatar = prev.avatar;
+      return out;
     });
   }
 
@@ -7599,7 +7640,7 @@
         }).join('') +
         '</select>'
       : '';
-    return '<div class="tma-dash__clients-assigned">' +
+    return '<div class="tma-dash__clients-assigned" data-key="office-user-' + esc(member.id) + '">' +
       '<span class="tma-dash__clients-assigned-icon" aria-hidden="true">' + staffAvatarHtml(member) + '</span>' +
       '<span class="tma-dash__clients-assigned-main">' +
       '<span class="tma-dash__clients-assigned-title">' + esc(member.name || member.email || 'User') + '</span>' +
@@ -7651,7 +7692,7 @@
       var list = people.length
         ? people.map(function (m) { return renderOfficeUser(m, locations, canManage); }).join('')
         : '<div class="tma-dash__clients-assigned-empty">No users yet</div>';
-      return '<section class="tma-dash__clients-office">' +
+      return '<section class="tma-dash__clients-office" data-key="office-' + esc(loc.id) + '">' +
         '<div class="tma-dash__clients-office-head">' + title + remove + '</div>' +
         list + '</section>';
     }).join('');
@@ -16595,7 +16636,7 @@
       this.disabled = true;
       CompaniesAPI.transferContact(from.id, personId, selectedId).then(function (json) {
         close();
-        settleContactTransfer(personId, from.id, selectedId);
+        settleContactTransfer(personId, from.id, selectedId, json && json.person);
         clientsToast((json && json.message) || (name + ' now belongs to ' + toName), 'positive');
       }).catch(function (err) {
         var msg = (err && err.message) || 'Could not transfer this contact';
@@ -16616,7 +16657,7 @@
 
   /* Drop the contact off the firm they left and put them on the one they joined.
      The lists on screen change with that, before either firm is read again. */
-  function settleContactTransfer(personId, fromId, toId) {
+  function settleContactTransfer(personId, fromId, toId, person) {
     companiesListGeneration += 1;
     var moved = null;
     COMPANIES.forEach(function (company) {
@@ -16625,7 +16666,10 @@
         if (p && String(p.id) === String(personId)) moved = p;
       });
     });
-    pendingContactMoves[String(personId)] = { toId: String(toId), person: moved };
+    pendingContactMoves[String(personId)] = {
+      toId: String(toId),
+      person: fillMovedPerson(person, moved),
+    };
     hydrateCompanies(COMPANIES);
 
     var ctx = clientsMenuCtx;
@@ -18383,13 +18427,28 @@
     MORPH.unwired(root, '[data-company-member-location]').forEach(function (select) {
       select.addEventListener('change', function () {
         var memberId = select.getAttribute('data-company-member-location');
-        select.disabled = true;
-        CompanyMembersAPI.update(state.companyId, memberId, { locationId: select.value })
+        var locationId = select.value;
+        var previous = (state.companyMembers || []).map(function (m) { return Object.assign({}, m); });
+        var loc = null;
+        (state.companyLocations || []).forEach(function (l) {
+          if (l && String(l.id) === String(locationId)) loc = l;
+        });
+        state.companyMembers = (state.companyMembers || []).map(function (m) {
+          if (!m || String(m.id) !== String(memberId)) return m;
+          return Object.assign({}, m, {
+            locationId: locationId,
+            locationName: loc ? loc.name : m.locationName,
+            locationKind: loc ? loc.kind : m.locationKind,
+          });
+        });
+        render();
+        CompanyMembersAPI.update(state.companyId, memberId, { locationId: locationId })
           .then(function (res) {
-            if (res && res.members) state.companyMembers = res.members;
+            if (res && res.members) state.companyMembers = mergeOfficeMembers(state.companyMembers, res.members);
             clientsToast('Office updated', 'positive');
             render();
           }).catch(function (err) {
+            state.companyMembers = previous;
             clientsToast((err && err.message) || 'Could not move that user', 'negative');
             render();
           });
