@@ -178,6 +178,119 @@ class CipApplicationScopeTest extends TestCase
             ->assertOk();
     }
 
+    public function test_a_firm_sees_applications_on_an_unlinked_provider_of_the_same_name(): void
+    {
+        $staff = $this->user(Role::EMPLOYEE);
+        $company = Company::create(['uid' => 'gcc-firm', 'name' => 'Global Citizen Consultants']);
+        $contact = $this->user(Role::CLIENT);
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'user_id' => $contact->id,
+            'name' => $contact->name,
+            'email' => $contact->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+
+        // The company was given a code. Nothing was ever filed on that row.
+        CipProvider::create([
+            'name' => 'Global Citizen Consultants',
+            'code' => 'GCC',
+            'company_id' => $company->id,
+        ]);
+
+        // The book still sits on the folder-born provider, which was never linked.
+        $files = CipProvider::create([
+            'name' => 'GLOBAL CITIZEN CONSULTANTS',
+            'code' => 'GLO',
+            'company_id' => null,
+        ]);
+        $theirs = Applications::create($files, $staff);
+
+        $other = CipProvider::create([
+            'name' => 'Global Citizen Solutions',
+            'code' => 'GCS',
+            'company_id' => null,
+        ]);
+        Applications::create($other, $staff);
+
+        $this->assertSame(
+            [$theirs->id],
+            ApplicationScope::query($contact)->pluck('id')->all(),
+        );
+
+        $this->actingAs($contact)
+            ->getJson('/portal/cip/applications')
+            ->assertOk()
+            ->assertJsonPath('total', 1);
+    }
+
+    public function test_a_firm_sees_applications_filed_on_a_duplicate_company_of_the_same_name(): void
+    {
+        $staff = $this->user(Role::EMPLOYEE);
+        $people = Company::create(['uid' => 'gcc-people', 'name' => 'Global Citizen Consultants']);
+        $files = Company::create(['uid' => 'gcc-files', 'name' => 'GLOBAL CITIZEN CONSULTANTS']);
+        $contact = $this->user(Role::SERVICE_PROVIDER_ADMIN);
+        CompanyMember::create([
+            'company_id' => $people->id,
+            'user_id' => $contact->id,
+            'name' => $contact->name,
+            'email' => $contact->email,
+            'role' => 'admin',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+
+        $provider = CipProvider::create([
+            'name' => 'GLOBAL CITIZEN CONSULTANTS',
+            'code' => 'GLO',
+            'company_id' => $files->id,
+        ]);
+        $theirs = Applications::create($provider, $staff);
+
+        $stranger = Company::create(['uid' => 'other-firm', 'name' => 'Another Firm']);
+        $elsewhere = CipProvider::create([
+            'name' => 'Another Firm',
+            'code' => 'ANO',
+            'company_id' => $stranger->id,
+        ]);
+        Applications::create($elsewhere, $staff);
+
+        $this->assertSame(
+            [$theirs->id],
+            ApplicationScope::query($contact)->pluck('id')->all(),
+        );
+    }
+
+    public function test_a_firm_sees_a_provider_that_still_carries_its_name(): void
+    {
+        $staff = $this->user(Role::EMPLOYEE);
+        $company = Company::create(['uid' => 'gcc-live', 'name' => 'Global Citizen Consultants']);
+        $contact = $this->user(Role::CLIENT);
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'user_id' => $contact->id,
+            'name' => $contact->name,
+            'email' => $contact->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+        CipProvider::create([
+            'name' => 'Global Citizen Consultants',
+            'code' => 'GCC',
+            'company_id' => $company->id,
+        ]);
+
+        $holder = Company::create(['uid' => 'gcc-old', 'name' => 'Archived Holdings']);
+        $provider = CipProvider::create([
+            'name' => 'GLOBAL CITIZEN CONSULTANTS',
+            'code' => 'GLO',
+            'company_id' => $holder->id,
+        ]);
+        $theirs = Applications::create($provider, $staff);
+
+        $this->assertSame([$theirs->id], ApplicationScope::query($contact)->pluck('id')->all());
+    }
+
     public function test_the_dark_module_shows_nobody_anything(): void
     {
         $staff = $this->user(Role::EMPLOYEE);

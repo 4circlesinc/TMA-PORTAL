@@ -4,7 +4,6 @@ namespace App\Support\Cip;
 
 use App\Models\CipApplication;
 use App\Models\CipProvider;
-use App\Models\CompanyMember;
 use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
@@ -109,17 +108,16 @@ final class FolderAccess
             return [[], []];
         }
 
-        $companyIds = CompanyMember::query()
-            ->active()
-            ->where('user_id', $user->id)
-            ->pluck('company_id');
+        $providerIds = ApplicationScope::providerIdsFor($user);
 
-        if ($companyIds->isEmpty()) {
+        if ($providerIds === []) {
             return [[], []];
         }
 
-        $providers = CipProvider::query()
-            ->whereIn('company_id', $companyIds)
+        // withTrashed: a retired duplicate can still be the row the filings
+        // point at. The same ids ApplicationScope already decided are this firm's.
+        $providers = CipProvider::withTrashed()
+            ->whereIn('id', $providerIds)
             ->get(['id', 'company_id', 'folder_id']);
 
         if ($providers->isEmpty()) {

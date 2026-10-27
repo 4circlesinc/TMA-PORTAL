@@ -5,6 +5,7 @@ namespace App\Support\Cip;
 use App\Models\CipApplication;
 use App\Models\CipProvider;
 use App\Models\Client;
+use App\Models\Company;
 use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Access\Role;
@@ -30,6 +31,9 @@ class ApplicationScope
 {
     /** @var array<int, list<int>> */
     private static array $visibleClientIds = [];
+
+    /** @var array<int, list<int>> */
+    private static array $providerIds = [];
 
     /** An application query already narrowed to what this account may see. */
     public static function query(?User $user, ?Builder $base = null): Builder
@@ -66,23 +70,124 @@ class ApplicationScope
          * unqualified one here made the whole query ambiguous the moment
          * somebody did.
          */
-        return $query->where(function (Builder $q) use ($user) {
-            $q->whereIn(
-                'cip_applications.provider_id',
-                CipProvider::query()
-                    ->select('id')
-                    ->whereIn(
-                        'company_id',
-                        CompanyMember::query()
-                            ->select('company_id')
-                            ->active()
-                            ->where('user_id', $user->id)
-                    )
-            )->orWhereIn(
+        $providerIds = self::providerIdsFor($user);
+
+        return $query->where(function (Builder $q) use ($user, $providerIds) {
+            if ($providerIds !== []) {
+                $q->whereIn('cip_applications.provider_id', $providerIds);
+            }
+
+            $q->orWhereIn(
                 'cip_applications.client_id',
                 Client::query()->select('id')->where('user_id', $user->id)
             );
         });
+    }
+
+    /**
+     * Provider rows whose applications this account's firm may see.
+     *
+     * The row linked to the membership is the usual one. It is not the only
+     * one. A company that was given a CIP code keeps an empty provider, while
+     * the files stay on the folder-born provider of the same name, which was
+     * never linked. A second company row of the same name does the same: the
+     * people sit on one, the applications on the other. Either way the firm
+     * opens All Applications and is told it has none.
+     *
+     * A provider already linked to a differently named firm stays that firm's.
+     * Private-client filings stay on PRI. Memoised: one listing asks this
+     * from the table, the tab counts and the filter menu.
+     *
+     * @return list<int>
+     */
+    public static function providerIdsFor(?User $user): array
+    {
+        if ($user === null) {
+            return [];
+        }
+
+        $uid = (int) $user->id;
+        if (array_key_exists($uid, self::$providerIds)) {
+            return self::$providerIds[$uid];
+        }
+
+        return self::$providerIds[$uid] = self::resolveProviderIds($user);
+    }
+
+    /**
+     * @return list<int>
+     */
+    private static function resolveProviderIds(User $user): array
+    {
+        $companies = Company::query()
+            ->whereIn(
+                'id',
+                CompanyMember::query()
+                    ->select('company_id')
+                    ->active()
+                    ->where('user_id', $user->id)
+            )
+            ->get(['id', 'name']);
+
+        if ($companies->isEmpty()) {
+            return [];
+        }
+
+        $companyIds = $companies->map(fn (Company $company) => (int) $company->id)->all();
+        $keys = $companies
+            ->map(fn (Company $company) => ProviderMerge::key($company->name))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $ids = [];
+
+        $providers = CipProvider::withTrashed()
+            ->leftJoin('companies', 'companies.id', '=', 'cip_providers.company_id')
+            ->where('cip_providers.code', '!=', CipProvider::PRIVATE_CLIENT_CODE)
+            ->get([
+                'cip_providers.id',
+                'cip_providers.name',
+                'cip_providers.company_id',
+                'companies.name as firm_name',
+            ]);
+
+        foreach ($providers as $provider) {
+            $companyId = $provider->company_id !== null ? (int) $provider->company_id : null;
+
+            if ($companyId !== null && in_array($companyId, $companyIds, true)) {
+                $ids[] = (int) $provider->id;
+
+                continue;
+            }
+
+            if ($companyId === null) {
+                foreach ($companies as $company) {
+                    if (ProviderMerge::matches($provider, $company->name)) {
+                        $ids[] = (int) $provider->id;
+                        break;
+                    }
+                }
+
+                continue;
+            }
+
+            // The other company row may have been renamed, or the provider
+            // may still carry the firm's name after it was linked elsewhere.
+            // Either name is the firm. A different name stays where it is.
+            $names = [
+                ProviderMerge::key((string) $provider->firm_name),
+                ProviderMerge::key((string) $provider->name),
+            ];
+            foreach ($names as $firm) {
+                if ($firm !== '' && $keys->contains($firm)) {
+                    $ids[] = (int) $provider->id;
+                    break;
+                }
+            }
+        }
+
+        return array_values(array_unique($ids));
     }
 
     /**
@@ -120,6 +225,7 @@ class ApplicationScope
     public static function forget(): void
     {
         self::$visibleClientIds = [];
+        self::$providerIds = [];
     }
 
     /** Resolve one application by uuid within the viewer's slice, or 404. */

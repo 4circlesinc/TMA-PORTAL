@@ -8,7 +8,6 @@ use App\Models\CipDocumentRequirement;
 use App\Models\CipEvent;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
-use App\Models\CompanyMember;
 use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\User;
@@ -2762,10 +2761,15 @@ class Intake
         }
 
         if (CipAccess::isProviderContact($user)) {
+            $ids = ApplicationScope::providerIdsFor($user);
+
             return self::oneFirmEach(CipProvider::query()
                 ->where('active', true)
-                ->whereIn('company_id', CompanyMember::query()
-                    ->select('company_id')->active()->where('user_id', $user->id))
+                ->when(
+                    $ids === [],
+                    fn ($q) => $q->whereRaw('1 = 0'),
+                    fn ($q) => $q->whereIn('id', $ids),
+                )
                 ->orderBy('name')
                 ->orderBy('id')
                 ->get());
