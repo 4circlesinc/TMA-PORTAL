@@ -13,9 +13,10 @@ use Illuminate\Support\Facades\DB;
  * Where one person stands in the post-approval lane.
  *
  * The same lane the application walks, in the same words: Post-Approval,
- * Approved, Updates Required, Apply for COR, Pending COR, Apply for NIC,
- * Pending NIC, Apply for Passport, Pending Passport, Ready for Delivery,
- * Closed. A person's chip and the application's chip used to come from two
+ * Approved, Updates Required, Apply for COR, Pending COR, COR Received,
+ * Apply for NIC, Pending NIC, NIC Received, Apply for Passport, Pending
+ * Passport, Passport Received, Passport Delivered, Closed. A person's chip
+ * and the application's chip used to come from two
  * vocabularies nothing connected, which is how a file standing at Approved
  * showed its main applicant as Not started.
  *
@@ -65,17 +66,33 @@ class PersonStatus
 
     public const PENDING_COR = Status::PENDING_COR;
 
+    public const COR_RECEIVED = Status::COR_RECEIVED;
+
     public const APPLY_FOR_NIC = Status::APPLY_FOR_NIC;
 
     public const PENDING_NIC = Status::PENDING_NIC;
+
+    public const NIC_RECEIVED = Status::NIC_RECEIVED;
 
     public const APPLY_FOR_PASSPORT = Status::APPLY_FOR_PASSPORT;
 
     public const PENDING_PASSPORT = Status::PENDING_PASSPORT;
 
-    public const READY_FOR_DELIVERY = Status::READY_FOR_DELIVERY;
+    public const PASSPORT_RECEIVED = Status::PASSPORT_RECEIVED;
+
+    public const PASSPORT_DELIVERED = Status::PASSPORT_DELIVERED;
 
     public const CLOSED = Status::CLOSED;
+
+    /**
+     * A person's own move from NIC Received to Apply for Passport.
+     *
+     * Not a date the Unit records. The NIC received date already landed
+     * them on NIC Received; starting the passport application is the next
+     * status, and it has to stick when {@see settle()} reads their dates
+     * back, so it is stored beside those dates.
+     */
+    private const START_PASSPORT = 'start_passport';
 
     /** `post_approval_apart`: this person was refused, the file was not. */
     public const APART_DENIED = 'denied';
@@ -94,11 +111,14 @@ class PersonStatus
         self::UPDATE_REQUIRED,
         self::APPLY_FOR_COR,
         self::PENDING_COR,
+        self::COR_RECEIVED,
         self::APPLY_FOR_NIC,
         self::PENDING_NIC,
+        self::NIC_RECEIVED,
         self::APPLY_FOR_PASSPORT,
         self::PENDING_PASSPORT,
-        self::READY_FOR_DELIVERY,
+        self::PASSPORT_RECEIVED,
+        self::PASSPORT_DELIVERED,
         self::CLOSED,
     ];
 
@@ -128,12 +148,15 @@ class PersonStatus
         self::POST_APPROVED => 1,
         self::APPLY_FOR_COR => 2,
         self::PENDING_COR => 3,
-        self::APPLY_FOR_NIC => 4,
-        self::PENDING_NIC => 5,
-        self::APPLY_FOR_PASSPORT => 6,
-        self::PENDING_PASSPORT => 7,
-        self::READY_FOR_DELIVERY => 8,
-        self::CLOSED => 9,
+        self::COR_RECEIVED => 4,
+        self::APPLY_FOR_NIC => 5,
+        self::PENDING_NIC => 6,
+        self::NIC_RECEIVED => 7,
+        self::APPLY_FOR_PASSPORT => 8,
+        self::PENDING_PASSPORT => 9,
+        self::PASSPORT_RECEIVED => 10,
+        self::PASSPORT_DELIVERED => 11,
+        self::CLOSED => 12,
     ];
 
     /** The steps that are still collecting documents, and for which pack. */
@@ -156,10 +179,11 @@ class PersonStatus
      */
     private const OWN_STEPS = [
         Stages::NIC_SUBMITTED => ['from' => self::APPLY_FOR_NIC, 'to' => self::PENDING_NIC, 'about' => Pack::NIC, 'pack' => Pack::NIC],
-        Stages::NIC_RECEIVED => ['from' => self::PENDING_NIC, 'to' => self::APPLY_FOR_PASSPORT, 'about' => Pack::NIC, 'pack' => null],
+        Stages::NIC_RECEIVED => ['from' => self::PENDING_NIC, 'to' => self::NIC_RECEIVED, 'about' => Pack::NIC, 'pack' => null],
+        self::START_PASSPORT => ['from' => self::NIC_RECEIVED, 'to' => self::APPLY_FOR_PASSPORT, 'about' => Pack::PASSPORT, 'pack' => null, 'dated' => false],
         Stages::PASSPORT_SUBMITTED => ['from' => self::APPLY_FOR_PASSPORT, 'to' => self::PENDING_PASSPORT, 'about' => Pack::PASSPORT, 'pack' => Pack::PASSPORT],
-        Stages::PASSPORT_RECEIVED => ['from' => self::PENDING_PASSPORT, 'to' => self::READY_FOR_DELIVERY, 'about' => Pack::PASSPORT, 'pack' => null],
-        Stages::PASSPORT_DELIVERED => ['from' => self::READY_FOR_DELIVERY, 'to' => self::CLOSED, 'about' => Pack::PASSPORT, 'pack' => null],
+        Stages::PASSPORT_RECEIVED => ['from' => self::PENDING_PASSPORT, 'to' => self::PASSPORT_RECEIVED, 'about' => Pack::PASSPORT, 'pack' => null],
+        Stages::PASSPORT_DELIVERED => ['from' => self::PASSPORT_RECEIVED, 'to' => self::PASSPORT_DELIVERED, 'about' => Pack::PASSPORT, 'pack' => null],
     ];
 
     public static function isValid(?string $status): bool
@@ -745,6 +769,11 @@ class PersonStatus
             };
         }
 
+        // A file recorded before Passport Received had this name.
+        if ($status === Status::READY_FOR_DELIVERY) {
+            return self::PASSPORT_RECEIVED;
+        }
+
         return isset(self::RANK[$status]) ? $status : null;
     }
 
@@ -1014,6 +1043,21 @@ class PersonStatus
                 return $application;
             }
 
+            $step = self::OWN_STEPS[$key];
+
+            // NIC Received → Apply for Passport records no Unit date. The
+            // file follows its people the way a dated step does, through
+            // the ordinary transition.
+            if (($step['dated'] ?? true) === false) {
+                try {
+                    $application = Engine::apply($application, $step['to'], null);
+                } catch (\InvalidArgumentException|AuthorizationException) {
+                    return $application;
+                }
+
+                continue;
+            }
+
             $latest = $people
                 ->map(fn (CipPerson $person) => self::dates($person)[$key] ?? null)
                 ->filter()
@@ -1095,7 +1139,7 @@ class PersonStatus
 
         // The decision and the Certificate of Registration belong to the
         // file: one letter, one package, confirmed and locked once.
-        if (in_array($to, [self::POST_APPROVAL, self::POST_APPROVED, self::PENDING_COR, self::APPLY_FOR_NIC], true)) {
+        if (in_array($to, [self::POST_APPROVAL, self::POST_APPROVED, self::PENDING_COR, self::COR_RECEIVED, self::APPLY_FOR_NIC], true)) {
             return Status::label($to).' is recorded on the application, for everyone on it.';
         }
 
@@ -1135,7 +1179,7 @@ class PersonStatus
             'tone' => self::tone($status),
         ];
 
-        if ($stage !== null) {
+        if ($stage !== null && (self::OWN_STEPS[$stage]['dated'] ?? true)) {
             $item['stage'] = $stage;
             $item['dateLabel'] = Stages::dateLabel($stage) ?? 'Date';
         }

@@ -68,14 +68,14 @@ class Stages
         ],
         self::COR_RECEIVED => [
             'from' => Status::PENDING_COR,
-            'to' => Status::APPLY_FOR_NIC,
+            'to' => Status::COR_RECEIVED,
             'subject' => 'COR RECEIVED',
             'column' => 'cor_received_at',
             'action' => CipEvent::ACTION_COR_RECEIVED,
             'label' => 'COR received',
             'button' => 'Record COR received',
             'dateLabel' => 'COR received date',
-            'note' => 'The application will move to Apply for NIC.',
+            'note' => 'The application will move to COR Received.',
         ],
         self::NIC_SUBMITTED => [
             'from' => Status::APPLY_FOR_NIC,
@@ -89,14 +89,14 @@ class Stages
         ],
         self::NIC_RECEIVED => [
             'from' => Status::PENDING_NIC,
-            'to' => Status::APPLY_FOR_PASSPORT,
+            'to' => Status::NIC_RECEIVED,
             'subject' => 'NIC RECEIVED',
             'column' => 'nic_received_at',
             'action' => CipEvent::ACTION_NIC_RECEIVED,
             'label' => 'NIC received',
             'button' => 'Record NIC received',
             'dateLabel' => 'NIC received date',
-            'note' => 'The application will move to Apply for Passport.',
+            'note' => 'The application will move to NIC Received.',
         ],
         self::PASSPORT_SUBMITTED => [
             'from' => Status::APPLY_FOR_PASSPORT,
@@ -110,24 +110,25 @@ class Stages
         ],
         self::PASSPORT_RECEIVED => [
             'from' => Status::PENDING_PASSPORT,
-            'to' => Status::READY_FOR_DELIVERY,
+            'to' => Status::PASSPORT_RECEIVED,
             'subject' => 'PASSPORT RECEIVED',
             'column' => 'passport_received_at',
             'action' => CipEvent::ACTION_PASSPORT_RECEIVED,
             'label' => 'Passport received',
             'button' => 'Record passport received',
             'dateLabel' => 'Passport received date',
-            'note' => 'The application will move to Ready for Delivery.',
+            'note' => 'The application will move to Passport Received.',
         ],
         self::PASSPORT_DELIVERED => [
-            'from' => Status::READY_FOR_DELIVERY,
-            'to' => Status::CLOSED,
+            'from' => Status::PASSPORT_RECEIVED,
+            'to' => Status::PASSPORT_DELIVERED,
+            'subject' => 'PASSPORT DELIVERED',
             'column' => 'passport_delivered_at',
             'action' => CipEvent::ACTION_PASSPORT_DELIVERED,
             'label' => 'Passport delivered',
             'button' => 'Record passport delivered',
             'dateLabel' => 'Passport delivered date',
-            'note' => 'The application will move to Closed.',
+            'note' => 'The application will move to Passport Delivered.',
         ],
     ];
 
@@ -390,6 +391,11 @@ class Stages
         }
 
         $date ??= Carbon::now();
+        /*
+         * Already standing on this step: correct the day and move nothing.
+         * A later status is a different step, and pressing this one again
+         * from there is refused.
+         */
         $already = $application->status === $step['to'];
 
         if (! $already

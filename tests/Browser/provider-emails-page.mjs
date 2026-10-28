@@ -26,8 +26,9 @@ const LOG = process.env.TMA_LOG || 'storage/logs/laravel.log';
 const KINDS = [
   'new', 'review_application', 'assessment_feedback', 'update_required', 'ready_to_submit',
   'pending_review', 'non_compliant', 'background_check', 'dd_query', 'delayed', 'granted', 'denied',
-  'post_approval', 'apply_for_cor', 'pending_cor', 'apply_for_nic', 'pending_nic', 'apply_for_passport',
-  'pending_passport', 'ready_for_delivery', 'post_approved', 'post_denied', 'closed',
+  'post_approval', 'apply_for_cor', 'pending_cor', 'cor_received', 'apply_for_nic', 'pending_nic',
+  'nic_received', 'apply_for_passport', 'pending_passport', 'passport_received', 'passport_delivered',
+  'post_approved', 'post_denied', 'closed',
   'new_appeal', 'appeal_ready', 'appeal_submitted', 'comment',
 ];
 

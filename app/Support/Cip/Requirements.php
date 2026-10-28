@@ -523,7 +523,7 @@ class Requirements
         }
 
         if ($application->phase === Phase::POST_APPROVAL) {
-            return ! in_array($application->status, [Status::CLOSED, Status::DENIED], true);
+            return ! in_array($application->status, [Status::CLOSED, Status::PASSPORT_DELIVERED, Status::DENIED], true);
         }
 
         if ($application->isLocked()) {

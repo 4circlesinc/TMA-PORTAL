@@ -158,12 +158,12 @@ class Milestones
         self::DD_QUERY_RECEIVED => Status::DD_QUERY,
         self::DECISION => Status::GRANTED,
         self::COR_SUBMITTED => Status::PENDING_COR,
-        self::COR_RECEIVED => Status::APPLY_FOR_NIC,
+        self::COR_RECEIVED => Status::COR_RECEIVED,
         self::NIC_SUBMITTED => Status::PENDING_NIC,
-        self::NIC_RECEIVED => Status::APPLY_FOR_PASSPORT,
+        self::NIC_RECEIVED => Status::NIC_RECEIVED,
         self::PASSPORT_SUBMITTED => Status::PENDING_PASSPORT,
-        self::PASSPORT_RECEIVED => Status::READY_FOR_DELIVERY,
-        self::PASSPORT_DELIVERED => Status::CLOSED,
+        self::PASSPORT_RECEIVED => Status::PASSPORT_RECEIVED,
+        self::PASSPORT_DELIVERED => Status::PASSPORT_DELIVERED,
     ];
 
     /**

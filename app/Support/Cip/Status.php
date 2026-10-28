@@ -49,14 +49,27 @@ class Status
 
     public const PENDING_COR = 'pending_cor';
 
+    public const COR_RECEIVED = 'cor_received';
+
     public const APPLY_FOR_NIC = 'apply_for_nic';
 
     public const PENDING_NIC = 'pending_nic';
+
+    public const NIC_RECEIVED = 'nic_received';
 
     public const APPLY_FOR_PASSPORT = 'apply_for_passport';
 
     public const PENDING_PASSPORT = 'pending_passport';
 
+    public const PASSPORT_RECEIVED = 'passport_received';
+
+    public const PASSPORT_DELIVERED = 'passport_delivered';
+
+    /**
+     * Replaced by {@see self::PASSPORT_RECEIVED}. Kept so a row or an audit
+     * event written before that rename still resolves. {@see listed()} leaves
+     * it out, so no picker offers it.
+     */
     public const READY_FOR_DELIVERY = 'ready_for_delivery';
 
     public const CLOSED = 'closed';
@@ -113,10 +126,14 @@ class Status
         self::POST_APPROVAL,
         self::APPLY_FOR_COR,
         self::PENDING_COR,
+        self::COR_RECEIVED,
         self::APPLY_FOR_NIC,
         self::PENDING_NIC,
+        self::NIC_RECEIVED,
         self::APPLY_FOR_PASSPORT,
         self::PENDING_PASSPORT,
+        self::PASSPORT_RECEIVED,
+        self::PASSPORT_DELIVERED,
         self::READY_FOR_DELIVERY,
         self::CLOSED,
         self::POST_APPROVED,
@@ -147,10 +164,14 @@ class Status
         self::POST_APPROVAL,
         self::APPLY_FOR_COR,
         self::PENDING_COR,
+        self::COR_RECEIVED,
         self::APPLY_FOR_NIC,
         self::PENDING_NIC,
+        self::NIC_RECEIVED,
         self::APPLY_FOR_PASSPORT,
         self::PENDING_PASSPORT,
+        self::PASSPORT_RECEIVED,
+        self::PASSPORT_DELIVERED,
         self::READY_FOR_DELIVERY,
         self::POST_APPROVED,
         self::POST_DENIED,
@@ -178,10 +199,14 @@ class Status
         self::POST_APPROVAL,
         self::APPLY_FOR_COR,
         self::PENDING_COR,
+        self::COR_RECEIVED,
         self::APPLY_FOR_NIC,
         self::PENDING_NIC,
+        self::NIC_RECEIVED,
         self::APPLY_FOR_PASSPORT,
         self::PENDING_PASSPORT,
+        self::PASSPORT_RECEIVED,
+        self::PASSPORT_DELIVERED,
         self::READY_FOR_DELIVERY,
         self::CLOSED,
         self::DENIED,
@@ -207,10 +232,14 @@ class Status
         self::POST_APPROVAL => 'Post-Approval',
         self::APPLY_FOR_COR => 'Apply for COR',
         self::PENDING_COR => 'Pending COR',
+        self::COR_RECEIVED => 'COR Received',
         self::APPLY_FOR_NIC => 'Apply for NIC',
         self::PENDING_NIC => 'Pending NIC',
+        self::NIC_RECEIVED => 'NIC Received',
         self::APPLY_FOR_PASSPORT => 'Apply for Passport',
         self::PENDING_PASSPORT => 'Pending Passport',
+        self::PASSPORT_RECEIVED => 'Passport Received',
+        self::PASSPORT_DELIVERED => 'Passport Delivered',
         self::READY_FOR_DELIVERY => 'Ready for Delivery',
         self::POST_APPROVED => 'Approved',
         self::POST_DENIED => 'Denied',
@@ -244,10 +273,14 @@ class Status
         self::POST_APPROVAL => 'POST APPROVAL',
         self::APPLY_FOR_COR => 'APPLY FOR COR',
         self::PENDING_COR => 'PENDING COR',
+        self::COR_RECEIVED => 'COR RECEIVED',
         self::APPLY_FOR_NIC => 'APPLY FOR NIC',
         self::PENDING_NIC => 'PENDING NIC',
+        self::NIC_RECEIVED => 'NIC RECEIVED',
         self::APPLY_FOR_PASSPORT => 'APPLY FOR PASSPORT',
         self::PENDING_PASSPORT => 'PENDING PASSPORT',
+        self::PASSPORT_RECEIVED => 'PASSPORT RECEIVED',
+        self::PASSPORT_DELIVERED => 'PASSPORT DELIVERED',
         self::READY_FOR_DELIVERY => 'READY FOR DELIVERY',
         self::POST_APPROVED => 'APPROVED',
         self::POST_DENIED => 'DENIED',
@@ -284,10 +317,14 @@ class Status
         self::POST_APPROVAL => 'action',
         self::APPLY_FOR_COR => 'emerald',
         self::PENDING_COR => 'slate',
+        self::COR_RECEIVED => 'forest',
         self::APPLY_FOR_NIC => 'lime',
         self::PENDING_NIC => 'navy',
+        self::NIC_RECEIVED => 'iris',
         self::APPLY_FOR_PASSPORT => 'gold',
         self::PENDING_PASSPORT => 'plum',
+        self::PASSPORT_RECEIVED => 'mint',
+        self::PASSPORT_DELIVERED => 'ink',
         self::READY_FOR_DELIVERY => 'mint',
         // The lane's own colours: read as approved and denied, but not the
         // same dots the pre-approval pair wears — see CipBucketTest, which
@@ -389,7 +426,9 @@ class Status
      *
      * DRAFT is still valid so old events resolve, but nothing files into it,
      * so offering it next to New Applications would be two ticks for one
-     * queue.
+     * queue. READY_FOR_DELIVERY is the same kind of leftover: Passport
+     * Received replaced it, and a picker that offered both would be two
+     * names for the passport sitting in the office.
      *
      * @return list<string>
      */
@@ -397,7 +436,7 @@ class Status
     {
         return array_values(array_filter(
             self::ALL,
-            fn (string $status) => $status !== self::DRAFT,
+            fn (string $status) => ! in_array($status, [self::DRAFT, self::READY_FOR_DELIVERY], true),
         ));
     }
 

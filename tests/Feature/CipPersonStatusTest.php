@@ -226,6 +226,7 @@ class CipPersonStatusTest extends TestCase
         Confirmation::confirm($application->fresh(), $this->contactOn($application, $staff));
         Stages::record($application->fresh(), $staff, Stages::COR_SUBMITTED, Carbon::parse('2026-08-20'));
         Stages::record($application->fresh(), $staff, Stages::COR_RECEIVED, Carbon::parse('2026-08-21'));
+        Engine::apply($application->fresh(), Status::APPLY_FOR_NIC, $staff);
 
         return $this->reread($application);
     }
@@ -457,6 +458,12 @@ class CipPersonStatusTest extends TestCase
         Stages::record($application->fresh(), $staff, Stages::NIC_RECEIVED, Carbon::parse('2026-08-23'));
         [$application, $main, $spouse, $child] = $this->reread($application);
         foreach ([$main, $spouse, $child] as $person) {
+            $this->assertSame(PersonStatus::NIC_RECEIVED, $person->post_approval_status);
+        }
+
+        Engine::apply($application->fresh(), Status::APPLY_FOR_PASSPORT, $staff);
+        [$application, $main, $spouse, $child] = $this->reread($application);
+        foreach ([$main, $spouse, $child] as $person) {
             $this->assertSame(PersonStatus::APPLY_FOR_PASSPORT, $person->post_approval_status);
             $this->ready($application, $person, $staff, Pack::PASSPORT);
         }
@@ -466,9 +473,9 @@ class CipPersonStatusTest extends TestCase
         Stages::record($application->fresh(), $staff, Stages::PASSPORT_DELIVERED, Carbon::parse('2026-08-26'));
 
         [$application, $main, $spouse, $child] = $this->reread($application);
-        $this->assertSame(Status::CLOSED, $application->status);
+        $this->assertSame(Status::PASSPORT_DELIVERED, $application->status);
         foreach ([$main, $spouse, $child] as $person) {
-            $this->assertSame(PersonStatus::CLOSED, $person->post_approval_status);
+            $this->assertSame(PersonStatus::PASSPORT_DELIVERED, $person->post_approval_status);
         }
     }
 
@@ -592,7 +599,8 @@ class CipPersonStatusTest extends TestCase
 
         $this->ready($application, $main, $staff, Pack::NIC);
         $this->move($staff, $main, PersonStatus::PENDING_NIC, ['date' => '2026-08-22'])->assertOk();
-        $this->move($staff, $main, PersonStatus::APPLY_FOR_PASSPORT, ['date' => '2026-08-25'])
+        $this->move($staff, $main, PersonStatus::NIC_RECEIVED, ['date' => '2026-08-25'])->assertOk();
+        $this->move($staff, $main, PersonStatus::APPLY_FOR_PASSPORT)
             ->assertOk()
             ->assertJsonPath('application.applicant.status', PersonStatus::APPLY_FOR_PASSPORT)
             ->assertJsonPath('application.status', Status::APPLY_FOR_NIC);
@@ -843,11 +851,12 @@ class CipPersonStatusTest extends TestCase
         // A step recorded for them alone, taken back.
         $this->ready($application, $main, $staff, Pack::NIC);
         $this->move($staff, $main, PersonStatus::PENDING_NIC, ['date' => '2026-08-22'])->assertOk();
-        $this->move($staff, $main, PersonStatus::APPLY_FOR_PASSPORT, ['date' => '2026-08-25'])->assertOk();
+        $this->move($staff, $main, PersonStatus::NIC_RECEIVED, ['date' => '2026-08-25'])->assertOk();
+        $this->move($staff, $main, PersonStatus::APPLY_FOR_PASSPORT)->assertOk();
 
         $body = $this->actingAs($staff)->getJson('/portal/cip/applications/'.$application->uuid)->json('application');
         $this->assertSame(
-            [PersonStatus::APPLY_FOR_NIC, PersonStatus::PENDING_NIC],
+            [PersonStatus::APPLY_FOR_NIC, PersonStatus::PENDING_NIC, PersonStatus::NIC_RECEIVED],
             array_column($body['applicant']['availableStatusOverrides'], 'value'),
         );
 
@@ -888,7 +897,7 @@ class CipPersonStatusTest extends TestCase
         $this->assertSame(PersonStatus::APPLY_FOR_NIC, $spouse->fresh()->post_approval_status);
 
         // NIC received is not theirs to record while that stands.
-        $this->move($staff, $main, PersonStatus::APPLY_FOR_PASSPORT, ['date' => '2026-08-25'])->assertStatus(422);
+        $this->move($staff, $main, PersonStatus::NIC_RECEIVED, ['date' => '2026-08-25'])->assertStatus(422);
 
         // Replaced and accepted: back where their own date had put them.
         $this->file($main->fresh(), $r3->fresh(), $staff);
@@ -1136,7 +1145,8 @@ class CipPersonStatusTest extends TestCase
         $this->ready($application, $main, $staff, Pack::NIC);
         $this->ready($application, $spouse, $staff, Pack::NIC);
         $this->move($staff, $main, PersonStatus::PENDING_NIC, ['date' => '2026-08-22'])->assertOk();
-        $this->move($staff, $main, PersonStatus::APPLY_FOR_PASSPORT, ['date' => '2026-08-25'])->assertOk();
+        $this->move($staff, $main, PersonStatus::NIC_RECEIVED, ['date' => '2026-08-25'])->assertOk();
+        $this->move($staff, $main, PersonStatus::APPLY_FOR_PASSPORT)->assertOk();
 
         $epp = $this->slots($application, $main->fresh(), Pack::PASSPORT)->firstWhere('type', PassportRequirements::EPP_FORM);
         $this->file($main->fresh(), $epp, $staff);
@@ -1148,6 +1158,7 @@ class CipPersonStatusTest extends TestCase
         // The rest of the family catches up through the application's own dates.
         Stages::record($application->fresh(), $staff, Stages::NIC_SUBMITTED, Carbon::parse('2026-08-26'));
         Stages::record($application->fresh(), $staff, Stages::NIC_RECEIVED, Carbon::parse('2026-08-28'));
+        Engine::apply($application->fresh(), Status::APPLY_FOR_PASSPORT, $staff);
 
         $this->assertSame(Status::UPDATE_REQUIRED, $application->fresh()->status);
         $this->assertSame(PersonStatus::UPDATE_REQUIRED, $main->fresh()->post_approval_status);
@@ -1165,6 +1176,7 @@ class CipPersonStatusTest extends TestCase
         $this->ready($application, $spouse, $staff, Pack::NIC);
         Stages::record($application->fresh(), $staff, Stages::NIC_SUBMITTED, Carbon::parse('2026-08-22'));
         Stages::record($application->fresh(), $staff, Stages::NIC_RECEIVED, Carbon::parse('2026-08-23'));
+        Engine::apply($application->fresh(), Status::APPLY_FOR_PASSPORT, $staff);
 
         [$application, $main, $spouse, $child] = $this->reread($application);
         $people = [$main, $spouse, $child];
@@ -1175,8 +1187,8 @@ class CipPersonStatusTest extends TestCase
 
         $walk = [
             PersonStatus::PENDING_PASSPORT => '2026-09-01',
-            PersonStatus::READY_FOR_DELIVERY => '2026-09-10',
-            PersonStatus::CLOSED => '2026-09-12',
+            PersonStatus::PASSPORT_RECEIVED => '2026-09-10',
+            PersonStatus::PASSPORT_DELIVERED => '2026-09-12',
         ];
 
         // The first two all the way; the file stays for the third.
@@ -1184,7 +1196,7 @@ class CipPersonStatusTest extends TestCase
             foreach ($walk as $to => $date) {
                 $this->move($staff, $person, $to, ['date' => $date])->assertOk();
             }
-            $this->assertSame(PersonStatus::CLOSED, $person->fresh()->post_approval_status);
+            $this->assertSame(PersonStatus::PASSPORT_DELIVERED, $person->fresh()->post_approval_status);
             // Closed by a delivery date, not set apart.
             $this->assertNull($person->fresh()->post_approval_apart);
         }
@@ -1195,7 +1207,7 @@ class CipPersonStatusTest extends TestCase
         }
 
         $fresh = $application->fresh();
-        $this->assertSame(Status::CLOSED, $fresh->status);
+        $this->assertSame(Status::PASSPORT_DELIVERED, $fresh->status);
         $this->assertSame('2026-09-21', $fresh->passport_submitted_at->toDateString());
         $this->assertSame('2026-09-22', $fresh->passport_delivered_at->toDateString());
     }

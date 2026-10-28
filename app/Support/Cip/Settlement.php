@@ -134,7 +134,7 @@ class Settlement
          * word for that without stamping the application as changed today,
          * which would float every old file to the top of "newest movement".
          */
-        if ($application->status === Status::CLOSED) {
+        if (in_array($application->status, [Status::CLOSED, Status::PASSPORT_DELIVERED], true)) {
             // Asked of the model being touched, not the one doing the
             // touching: that is where Eloquent looks.
             CipApplication::withoutTouching($settle);

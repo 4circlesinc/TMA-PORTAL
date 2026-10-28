@@ -1430,7 +1430,9 @@ class CipPostApprovalTest extends TestCase
             ])->assertOk();
 
         $application = $application->fresh();
-        $this->assertSame(Status::APPLY_FOR_NIC, $application->status);
+        $this->assertSame(Status::COR_RECEIVED, $application->status);
+        Engine::apply($application, Status::APPLY_FOR_NIC, $staff);
+        $application = $application->fresh();
 
         // The NIC checklist materialised on arrival and stands pending, so
         // the file may NOT move on: required documents come first, and the
@@ -1479,12 +1481,12 @@ class CipPostApprovalTest extends TestCase
         // The subject names a receipt for what arrived, as section 22's
         // examples do: COR RECEIVED, not the status the file moves on to.
         $hops = [
-            [Stages::COR_RECEIVED, Status::APPLY_FOR_NIC, ' - COR RECEIVED - ', 'corReceivedAt'],
+            [Stages::COR_RECEIVED, Status::COR_RECEIVED, ' - COR RECEIVED - ', 'corReceivedAt'],
             [Stages::NIC_SUBMITTED, Status::PENDING_NIC, ' - PENDING NIC - ', 'nicSubmittedAt'],
-            [Stages::NIC_RECEIVED, Status::APPLY_FOR_PASSPORT, ' - NIC RECEIVED - ', 'nicReceivedAt'],
+            [Stages::NIC_RECEIVED, Status::NIC_RECEIVED, ' - NIC RECEIVED - ', 'nicReceivedAt'],
             [Stages::PASSPORT_SUBMITTED, Status::PENDING_PASSPORT, ' - PENDING PASSPORT - ', 'passportSubmittedAt'],
-            [Stages::PASSPORT_RECEIVED, Status::READY_FOR_DELIVERY, ' - PASSPORT RECEIVED - ', 'passportReceivedAt'],
-            [Stages::PASSPORT_DELIVERED, Status::CLOSED, ' - FILE CLOSED - ', 'passportDeliveredAt'],
+            [Stages::PASSPORT_RECEIVED, Status::PASSPORT_RECEIVED, ' - PASSPORT RECEIVED - ', 'passportReceivedAt'],
+            [Stages::PASSPORT_DELIVERED, Status::PASSPORT_DELIVERED, ' - PASSPORT DELIVERED - ', 'passportDeliveredAt'],
         ];
 
         foreach ($hops as [$stage, $status, $subject, $dateKey]) {
@@ -1508,6 +1510,14 @@ class CipPostApprovalTest extends TestCase
 
             $this->assertSame($status, $body['status'], $stage.' did not land on '.$status);
             $this->assertSame('2026-08-21', $body[$dateKey]);
+
+            // A receipt lands on its own status. The next pack starts when
+            // the file is moved on, which is not another date.
+            if ($status === Status::COR_RECEIVED) {
+                Engine::apply($application->fresh(), Status::APPLY_FOR_NIC, $staff);
+            } elseif ($status === Status::NIC_RECEIVED) {
+                Engine::apply($application->fresh(), Status::APPLY_FOR_PASSPORT, $staff);
+            }
             $this->assertSame(CipApplication::DECISION_GRANTED, $application->fresh()->decision);
 
             Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($subject) {
@@ -1520,8 +1530,8 @@ class CipPostApprovalTest extends TestCase
             ->assertOk()
             ->json('application');
 
-        $this->assertSame(Status::CLOSED, $closed['status']);
-        $this->assertSame('Closed', $closed['statusLabel']);
+        $this->assertSame(Status::PASSPORT_DELIVERED, $closed['status']);
+        $this->assertSame('Passport Delivered', $closed['statusLabel']);
         $this->assertNull($closed['stageAction']);
         $this->assertSame(Phase::POST_APPROVAL, $application->fresh()->phase);
     }
@@ -1784,7 +1794,7 @@ class CipPostApprovalTest extends TestCase
         $person = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
         $keys = $person->documents()->pluck('type')->all();
 
-        $this->assertSame(Status::APPLY_FOR_NIC, $application->status);
+        $this->assertSame(Status::COR_RECEIVED, $application->status);
         $this->assertTrue(Pack::hasReachedNic($application));
         $this->assertContains(NicRequirements::R3_FORM, $keys);
         $this->assertContains(NicRequirements::CERTIFIED_PASSPORT_BIO_PAGE, $keys);
@@ -2085,7 +2095,7 @@ class CipPostApprovalTest extends TestCase
         $person = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
         $keys = $person->documents()->pluck('type')->all();
 
-        $this->assertSame(Status::APPLY_FOR_PASSPORT, $application->status);
+        $this->assertSame(Status::NIC_RECEIVED, $application->status);
         $this->assertTrue(Pack::hasReachedPassport($application));
         $this->assertContains(PassportRequirements::EPP_FORM, $keys);
         $this->assertContains(PassportRequirements::ORIGINAL_BIRTH_CERTIFICATE, $keys);
@@ -2342,8 +2352,8 @@ class CipPostApprovalTest extends TestCase
             ->assertOk()
             ->json('application');
 
-        $this->assertSame(Status::READY_FOR_DELIVERY, $recorded['status']);
-        $this->assertSame('Ready for Delivery', $recorded['statusLabel']);
+        $this->assertSame(Status::PASSPORT_RECEIVED, $recorded['status']);
+        $this->assertSame('Passport Received', $recorded['statusLabel']);
         $this->assertSame('mint', $recorded['statusTone']);
         $this->assertSame('2026-08-25', $recorded['passportReceivedAt']);
         $this->assertSame(Stages::PASSPORT_DELIVERED, $recorded['stageAction']['key']);
@@ -2361,7 +2371,7 @@ class CipPostApprovalTest extends TestCase
 
         $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
-                'status' => Status::READY_FOR_DELIVERY,
+                'status' => Status::PASSPORT_RECEIVED,
             ])
             ->assertStatus(422);
 
@@ -2392,9 +2402,9 @@ class CipPostApprovalTest extends TestCase
             ->assertOk()
             ->json('application');
 
-        $this->assertSame(Status::CLOSED, $recorded['status']);
-        $this->assertSame('Closed', $recorded['statusLabel']);
-        $this->assertSame('stone', $recorded['statusTone']);
+        $this->assertSame(Status::PASSPORT_DELIVERED, $recorded['status']);
+        $this->assertSame('Passport Delivered', $recorded['statusLabel']);
+        $this->assertSame('ink', $recorded['statusTone']);
         $this->assertSame('2026-08-26', $recorded['passportDeliveredAt']);
         $this->assertNull($recorded['stageAction']);
         $this->assertSame([], $recorded['availableTransitions']);
@@ -2409,7 +2419,7 @@ class CipPostApprovalTest extends TestCase
         ]);
 
         Mail::assertQueued(Postcard::class, function (Postcard $mail) {
-            return str_contains((string) $mail->subjectLine, 'FILE CLOSED');
+            return str_contains((string) $mail->subjectLine, 'PASSPORT DELIVERED');
         });
     }
 
@@ -2420,11 +2430,11 @@ class CipPostApprovalTest extends TestCase
 
         $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
-                'status' => Status::CLOSED,
+                'status' => Status::PASSPORT_DELIVERED,
             ])
             ->assertStatus(422);
 
-        $this->assertSame(Status::READY_FOR_DELIVERY, $application->fresh()->status);
+        $this->assertSame(Status::PASSPORT_RECEIVED, $application->fresh()->status);
         $this->assertNull($application->fresh()->passport_delivered_at);
         $this->assertFalse($application->fresh()->isClosed());
     }
@@ -2452,7 +2462,7 @@ class CipPostApprovalTest extends TestCase
             ->assertJsonPath('message', Confirmation::CLOSED_MESSAGE);
 
         $this->assertFalse($epp->fresh()->isFilled());
-        $this->assertSame(Status::CLOSED, $application->fresh()->status);
+        $this->assertSame(Status::PASSPORT_DELIVERED, $application->fresh()->status);
     }
 
     public function test_apply_for_cor_is_not_offered_before_post_approval(): void
@@ -2855,12 +2865,12 @@ class CipPostApprovalTest extends TestCase
 
         $walk = [
             [Stages::COR_SUBMITTED, Status::PENDING_COR],
-            [Stages::COR_RECEIVED, Status::APPLY_FOR_NIC],
+            [Stages::COR_RECEIVED, Status::COR_RECEIVED],
             [Stages::NIC_SUBMITTED, Status::PENDING_NIC],
-            [Stages::NIC_RECEIVED, Status::APPLY_FOR_PASSPORT],
+            [Stages::NIC_RECEIVED, Status::NIC_RECEIVED],
             [Stages::PASSPORT_SUBMITTED, Status::PENDING_PASSPORT],
-            [Stages::PASSPORT_RECEIVED, Status::READY_FOR_DELIVERY],
-            [Stages::PASSPORT_DELIVERED, Status::CLOSED],
+            [Stages::PASSPORT_RECEIVED, Status::PASSPORT_RECEIVED],
+            [Stages::PASSPORT_DELIVERED, Status::PASSPORT_DELIVERED],
         ];
 
         foreach ($walk as [$key, $to]) {
@@ -2905,6 +2915,12 @@ class CipPostApprovalTest extends TestCase
 
             Stages::record($application->fresh(), $staff, $key, Carbon::parse('2026-08-21'));
             $this->assertSame($to, $application->fresh()->status);
+
+            if ($to === Status::COR_RECEIVED) {
+                Engine::apply($application->fresh(), Status::APPLY_FOR_NIC, $staff);
+            } elseif ($to === Status::NIC_RECEIVED) {
+                Engine::apply($application->fresh(), Status::APPLY_FOR_PASSPORT, $staff);
+            }
         }
     }
 
@@ -3004,17 +3020,17 @@ class CipPostApprovalTest extends TestCase
 
         $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
-                'status' => Status::CLOSED, 'note' => 'Closing it.',
+                'status' => Status::PASSPORT_DELIVERED, 'note' => 'Closing it.',
             ])
             ->assertStatus(422);
-        $this->assertSame(Status::READY_FOR_DELIVERY, $application->fresh()->status);
+        $this->assertSame(Status::PASSPORT_RECEIVED, $application->fresh()->status);
 
         $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
                 'stage' => Stages::PASSPORT_DELIVERED, 'date' => '2026-08-27',
             ])
             ->assertOk()
-            ->assertJsonPath('application.status', Status::CLOSED)
+            ->assertJsonPath('application.status', Status::PASSPORT_DELIVERED)
             ->assertJsonPath('application.passportDeliveredAt', '2026-08-27');
 
         // Its day can still be corrected the way every step's can.
@@ -3034,7 +3050,13 @@ class CipPostApprovalTest extends TestCase
     public function test_a_service_provider_cannot_rewrite_a_recorded_date(): void
     {
         $staff = $this->staff();
-        [$application] = $this->intoApplyForNic($staff);
+        [$application] = $this->corFile($staff);
+        $this->fileRequiredCor($application, $staff);
+        $this->approveRequiredCor($application, $staff);
+        Confirmation::confirm($application->fresh(), $this->contactOn($application, $staff));
+        Stages::record($application->fresh(), $staff, Stages::COR_SUBMITTED, Carbon::parse('2026-08-20'));
+        Stages::record($application->fresh(), $staff, Stages::COR_RECEIVED, Carbon::parse('2026-08-21'));
+        $application = $application->fresh();
         $contact = $this->contactOn($application, $staff);
 
         $this->actingAs($contact)
@@ -3054,7 +3076,7 @@ class CipPostApprovalTest extends TestCase
             ])
             ->assertOk();
         $this->assertSame('2026-08-22', $application->fresh()->cor_received_at->toDateString());
-        $this->assertSame(Status::APPLY_FOR_NIC, $application->fresh()->status);
+        $this->assertSame(Status::COR_RECEIVED, $application->fresh()->status);
     }
 
     /**
@@ -3156,6 +3178,7 @@ class CipPostApprovalTest extends TestCase
         Confirmation::confirm($application->fresh(), $this->contactOn($application, $staff));
         Stages::record($application->fresh(), $staff, Stages::COR_SUBMITTED, Carbon::parse('2026-08-20'));
         Stages::record($application->fresh(), $staff, Stages::COR_RECEIVED, Carbon::parse('2026-08-21'));
+        Engine::apply($application->fresh(), Status::APPLY_FOR_NIC, $staff);
 
         $application = $application->fresh(['people.documents.requirement']);
         $person = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
@@ -3173,6 +3196,7 @@ class CipPostApprovalTest extends TestCase
         $this->approveRequiredCor($application->fresh(), $staff);
         Stages::record($application->fresh(), $staff, Stages::NIC_SUBMITTED, Carbon::parse('2026-08-22'));
         Stages::record($application->fresh(), $staff, Stages::NIC_RECEIVED, Carbon::parse('2026-08-23'));
+        Engine::apply($application->fresh(), Status::APPLY_FOR_PASSPORT, $staff);
 
         $application = $application->fresh(['people.documents.requirement']);
         $person = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);

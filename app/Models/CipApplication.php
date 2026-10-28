@@ -94,7 +94,7 @@ class CipApplication extends Model
 
     public function isClosed(): bool
     {
-        return $this->status === Status::CLOSED;
+        return in_array($this->status, [Status::CLOSED, Status::PASSPORT_DELIVERED], true);
     }
 
     public function isPostApproval(): bool

@@ -217,10 +217,14 @@ class Pack
         }
 
         return in_array($application->status, [
+            Status::COR_RECEIVED,
             Status::APPLY_FOR_NIC,
             Status::PENDING_NIC,
+            Status::NIC_RECEIVED,
             Status::APPLY_FOR_PASSPORT,
             Status::PENDING_PASSPORT,
+            Status::PASSPORT_RECEIVED,
+            Status::PASSPORT_DELIVERED,
             Status::READY_FOR_DELIVERY,
             Status::CLOSED,
         ], true);
@@ -233,8 +237,11 @@ class Pack
         }
 
         return in_array($application->status, [
+            Status::NIC_RECEIVED,
             Status::APPLY_FOR_PASSPORT,
             Status::PENDING_PASSPORT,
+            Status::PASSPORT_RECEIVED,
+            Status::PASSPORT_DELIVERED,
             Status::READY_FOR_DELIVERY,
             Status::CLOSED,
         ], true);

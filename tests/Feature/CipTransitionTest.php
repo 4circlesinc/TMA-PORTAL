@@ -55,8 +55,8 @@ class CipTransitionTest extends TestCase
      */
     private const OWNED_ELSEWHERE = [
         'new', 'pending_review', 'non_compliant', 'dd_query', 'background_check', 'delayed', 'granted', 'denied',
-        'pending_cor', 'apply_for_nic', 'pending_nic', 'apply_for_passport',
-        'pending_passport', 'ready_for_delivery', 'closed',
+        'pending_cor', 'cor_received', 'pending_nic', 'nic_received',
+        'pending_passport', 'passport_received', 'passport_delivered', 'closed',
     ];
 
     private const EDGES = [
@@ -85,12 +85,14 @@ class CipTransitionTest extends TestCase
         [Status::DELAYED, Status::DENIED],
         [Status::GRANTED, Status::POST_APPROVAL],
         [Status::APPLY_FOR_COR, Status::PENDING_COR],
-        [Status::PENDING_COR, Status::APPLY_FOR_NIC],
+        [Status::PENDING_COR, Status::COR_RECEIVED],
+        [Status::COR_RECEIVED, Status::APPLY_FOR_NIC],
         [Status::APPLY_FOR_NIC, Status::PENDING_NIC],
-        [Status::PENDING_NIC, Status::APPLY_FOR_PASSPORT],
+        [Status::PENDING_NIC, Status::NIC_RECEIVED],
+        [Status::NIC_RECEIVED, Status::APPLY_FOR_PASSPORT],
         [Status::APPLY_FOR_PASSPORT, Status::PENDING_PASSPORT],
-        [Status::PENDING_PASSPORT, Status::READY_FOR_DELIVERY],
-        [Status::READY_FOR_DELIVERY, Status::CLOSED],
+        [Status::PENDING_PASSPORT, Status::PASSPORT_RECEIVED],
+        [Status::PASSPORT_RECEIVED, Status::PASSPORT_DELIVERED],
     ];
 
     protected function setUp(): void
@@ -204,6 +206,10 @@ class CipTransitionTest extends TestCase
             }
 
             $application = $this->at($this->application($admin), $from);
+
+            if (Status::inLane($from) || Status::inLane($to)) {
+                $application->forceFill(['phase' => Phase::POST_APPROVAL])->save();
+            }
 
             $this->actingAs($admin)
                 ->postJson($this->statusUrl($application), ['status' => $to])
@@ -424,7 +430,7 @@ class CipTransitionTest extends TestCase
         );
         $this->assertNotContains(Status::PENDING_COR, Engine::availableTransitions($apply, $admin));
         $this->assertNotContains(Status::PENDING_COR, Engine::availableOverrides($apply, $admin));
-        $this->assertNotContains(Status::CLOSED, Engine::availableOverrides($apply, $admin));
+        $this->assertNotContains(Status::PASSPORT_DELIVERED, Engine::availableOverrides($apply, $admin));
     }
 
     /**
@@ -449,13 +455,13 @@ class CipTransitionTest extends TestCase
         );
         $this->assertContains(
             Status::CLOSED,
-            Engine::availableOverrides($denied->fresh(), $admin),
+            Engine::availableTransitions($denied->fresh(), $admin),
             'It still has to be closable.',
         );
 
         // A file actually working the lane keeps its stage button, and Closed
         // stays the verb's rather than the picker's.
-        $working = $this->at($this->application($admin), Status::READY_FOR_DELIVERY);
+        $working = $this->at($this->application($admin), Status::PASSPORT_RECEIVED);
         $working->forceFill(['phase' => Phase::POST_APPROVAL])->save();
 
         $this->assertSame(
@@ -463,7 +469,7 @@ class CipTransitionTest extends TestCase
             Stages::payload($working->fresh(), $admin)['label'] ?? null,
         );
         $this->assertNotContains(
-            Status::CLOSED,
+            Status::PASSPORT_DELIVERED,
             Engine::availableOverrides($working->fresh(), $admin),
         );
     }

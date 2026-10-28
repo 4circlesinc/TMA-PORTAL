@@ -202,6 +202,12 @@ class Buckets
             'statuses' => [Status::PENDING_COR],
             'scope' => self::SCOPE_ALL,
         ],
+        'cor_received' => [
+            'label' => 'COR Received',
+            'short' => 'COR Received',
+            'statuses' => [Status::COR_RECEIVED],
+            'scope' => self::SCOPE_ALL,
+        ],
         'apply_for_nic' => [
             'label' => 'Apply for NIC',
             'short' => 'Apply NIC',
@@ -212,6 +218,12 @@ class Buckets
             'label' => 'Pending NIC',
             'short' => 'Pend. NIC',
             'statuses' => [Status::PENDING_NIC],
+            'scope' => self::SCOPE_ALL,
+        ],
+        'nic_received' => [
+            'label' => 'NIC Received',
+            'short' => 'NIC Received',
+            'statuses' => [Status::NIC_RECEIVED],
             'scope' => self::SCOPE_ALL,
         ],
         'apply_for_passport' => [
@@ -226,10 +238,16 @@ class Buckets
             'statuses' => [Status::PENDING_PASSPORT],
             'scope' => self::SCOPE_ALL,
         ],
-        'ready_for_delivery' => [
-            'label' => 'Ready for Delivery',
-            'short' => 'Delivery',
-            'statuses' => [Status::READY_FOR_DELIVERY],
+        'passport_received' => [
+            'label' => 'Passport Received',
+            'short' => 'Pass. Recvd',
+            'statuses' => [Status::PASSPORT_RECEIVED],
+            'scope' => self::SCOPE_ALL,
+        ],
+        'passport_delivered' => [
+            'label' => 'Passport Delivered',
+            'short' => 'Pass. Deliv',
+            'statuses' => [Status::PASSPORT_DELIVERED],
             'scope' => self::SCOPE_ALL,
         ],
         'denied' => [
@@ -294,9 +312,10 @@ class Buckets
      * @var list<string>
      */
     private const POST_APPROVAL_PIPELINE = [
-        'post_approval', 'apply_for_cor', 'pending_cor', 'apply_for_nic',
-        'pending_nic', 'apply_for_passport', 'pending_passport',
-        'ready_for_delivery', 'update_required', 'post_approved', 'post_denied',
+        'post_approval', 'apply_for_cor', 'pending_cor', 'cor_received',
+        'apply_for_nic', 'pending_nic', 'nic_received', 'apply_for_passport',
+        'pending_passport', 'passport_received', 'passport_delivered',
+        'update_required', 'post_approved', 'post_denied',
     ];
 
     /**

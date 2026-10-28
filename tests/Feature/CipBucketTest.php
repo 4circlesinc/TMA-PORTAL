@@ -195,9 +195,9 @@ class CipBucketTest extends TestCase
         $this->assertSame('Pre-Approval Applications', $body['phases'][Phase::PRE_APPROVAL]['label']);
         $this->assertSame('Post-Approval Applications', $body['phases'][Phase::POST_APPROVAL]['label']);
         $this->assertSame([
-            'Post-Approval', 'Apply for COR', 'Pending COR', 'Apply for NIC', 'Pending NIC',
-            'Apply for Passport', 'Pending Passport', 'Ready for Delivery', 'Updates Required',
-            'Approved', 'Denied',
+            'Post-Approval', 'Apply for COR', 'Pending COR', 'COR Received', 'Apply for NIC',
+            'Pending NIC', 'NIC Received', 'Apply for Passport', 'Pending Passport',
+            'Passport Received', 'Passport Delivered', 'Updates Required', 'Approved', 'Denied',
         ], array_column($body['phases'][Phase::POST_APPROVAL]['buckets'], 'label'));
         $this->assertSame([
             'New Add-On Applications', 'Review Applications', 'Assessment Feedback',
@@ -266,9 +266,9 @@ class CipBucketTest extends TestCase
             array_column($body['buckets'], 'scope'),
         );
         $this->assertSame([
-            'Post-Approval', 'Apply for COR', 'Pending COR', 'Apply for NIC', 'Pending NIC',
-            'Apply for Passport', 'Pending Passport', 'Ready for Delivery', 'Updates Required',
-            'Approved', 'Denied',
+            'Post-Approval', 'Apply for COR', 'Pending COR', 'COR Received', 'Apply for NIC',
+            'Pending NIC', 'NIC Received', 'Apply for Passport', 'Pending Passport',
+            'Passport Received', 'Passport Delivered', 'Updates Required', 'Approved', 'Denied',
         ], array_column($body['phases']['post_approval']['buckets'], 'label'));
         $this->assertSame([
             'Draft Add-Ons', 'New Add-On Applications', 'Review Applications',
@@ -509,7 +509,7 @@ class CipBucketTest extends TestCase
         $vocabulary = [
             'success', 'danger', 'pending', 'action', 'neutral',
             'sky', 'indigo', 'violet', 'amber', 'teal', 'orange', 'rose', 'cyan', 'azure', 'copper', 'emerald',
-            'slate', 'lime', 'navy', 'gold', 'plum', 'mint', 'stone',
+            'slate', 'lime', 'navy', 'gold', 'plum', 'mint', 'forest', 'iris', 'ink', 'stone',
             // The appeal lane.
             'clay', 'sand', 'moss',
             // The post-approval lane's own outcomes.

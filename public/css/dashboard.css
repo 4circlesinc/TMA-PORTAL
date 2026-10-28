@@ -40156,6 +40156,9 @@ span.tma-dash__messages-profile-avatar {
 .tma-portal-cip__dot--gold, .tma-portal-cip__tone--gold { --tma-cip-tone: var(--tma-status-gold, #b45309); }
 .tma-portal-cip__dot--plum, .tma-portal-cip__tone--plum { --tma-cip-tone: var(--tma-status-plum, #6b21a8); }
 .tma-portal-cip__dot--mint, .tma-portal-cip__tone--mint { --tma-cip-tone: var(--tma-status-mint, #0f766e); }
+.tma-portal-cip__dot--forest, .tma-portal-cip__tone--forest { --tma-cip-tone: var(--tma-status-forest, #14532d); }
+.tma-portal-cip__dot--iris, .tma-portal-cip__tone--iris { --tma-cip-tone: var(--tma-status-iris, #4338ca); }
+.tma-portal-cip__dot--ink, .tma-portal-cip__tone--ink { --tma-cip-tone: var(--tma-status-ink, #1e293b); }
 .tma-portal-cip__dot--clay, .tma-portal-cip__tone--clay { --tma-cip-tone: var(--tma-status-clay, #b91c1c); }
 .tma-portal-cip__dot--sand, .tma-portal-cip__tone--sand { --tma-cip-tone: var(--tma-status-sand, #a16207); }
 .tma-portal-cip__dot--moss, .tma-portal-cip__tone--moss { --tma-cip-tone: var(--tma-status-moss, #4d7c0f); }

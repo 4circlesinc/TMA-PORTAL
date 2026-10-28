@@ -278,8 +278,8 @@ class CipProviderCopiesTest extends TestCase
     public function test_every_status_a_notice_can_announce_has_a_switch(): void
     {
         foreach (Status::ALL as $status) {
-            if ($status === Status::DRAFT) {
-                $this->assertNotContains($status, Copies::KINDS, 'a draft is never announced');
+            if (in_array($status, [Status::DRAFT, Status::READY_FOR_DELIVERY], true)) {
+                $this->assertNotContains($status, Copies::KINDS, $status.' is never announced');
 
                 continue;
             }

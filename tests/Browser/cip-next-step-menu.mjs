@@ -187,8 +187,8 @@ try {
   const lane = (await menu.locator('.tma-portal-context-menu__label').allInnerTexts()).map(t => t.trim());
   console.log(`      lane: ${lane.join(' › ')}`);
   check(await pressable('pending_cor') === 1, 'Pending COR can be pressed');
-  check(await greyed('Apply for NIC') === 1 && await greyed('Pending NIC') === 1 && await greyed('Ready for Delivery') === 1, 'the steps after it stay greyed');
-  check(lane.indexOf('Pending COR') > -1 && lane.indexOf('Apply for NIC') === lane.indexOf('Pending COR') + 1, 'in the lane\'s own order');
+  check(await greyed('COR Received') === 1 && await greyed('Apply for NIC') === 1 && await greyed('Passport Delivered') === 1, 'the steps after it stay greyed');
+  check(lane.indexOf('Pending COR') > -1 && lane.indexOf('COR Received') === lane.indexOf('Pending COR') + 1, 'in the lane\'s own order');
   check(await note() === '', 'and nothing is said to be waiting');
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/next-step-pressable.png` });
   await menu.locator('[data-cip-status-to="pending_cor"]').click();
@@ -212,18 +212,35 @@ try {
   await park();
   await page.waitForTimeout(2500);
 
-  step(4, 'Pending COR: Apply for NIC is the row to press on the application\'s chip');
+  step(4, 'Pending COR: COR Received is the row to press on the application\'s chip');
   check(/Record COR received/.test(await bar()), `the strip offers Record COR received ("${await bar()}")`);
   await openMenu(fileChip());
-  check(await pressable('apply_for_nic') === 1, 'Apply for NIC can be pressed');
-  check(await pressable('pending_nic') === 0 && await greyed('Pending NIC') === 1, 'Pending NIC, the step after, is greyed');
+  check(await pressable('cor_received') === 1, 'COR Received can be pressed');
+  check(await pressable('apply_for_nic') === 0 && await greyed('Apply for NIC') === 1, 'Apply for NIC, the step after, is greyed');
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/next-step-file-menu.png` });
-  await menu.locator('[data-cip-status-to="apply_for_nic"]').click();
+  await menu.locator('[data-cip-status-to="cor_received"]').click();
   await modal.waitFor({ timeout: 5000 });
   check((await modal.locator('.tma-portal-modal__title').innerText()).trim() === 'Record COR received', 'it opens Record COR received');
   await modal.locator('[data-cip-stage-date]').fill('2026-10-09');
   await modal.locator('[data-cip-stage-cor]').fill('COR-2026-0099');
   await modal.locator('[data-cip-save-stage]').click();
+  await page.waitForFunction(() => !document.querySelector('.tma-portal-modal'), null, { timeout: 15000 });
+  await page.waitForFunction(
+    () => {
+      const chip = [...document.querySelectorAll('[data-cip-status-chip]')].find(n => n.offsetParent);
+
+      return chip && chip.textContent.trim().toLowerCase() === 'cor received';
+    },
+    null,
+    { timeout: 15000 },
+  );
+  check(true, 'the application reads COR Received');
+  await openMenu(fileChip());
+  check(await pressable('apply_for_nic') === 1, 'Apply for NIC can be pressed once the COR is in');
+  await menu.locator('[data-cip-status-to="apply_for_nic"]').click();
+  await modal.waitFor({ timeout: 5000 });
+  check((await modal.locator('.tma-portal-modal__title').innerText()).trim() === 'Change status', 'moving on to Apply for NIC asks for no date');
+  await modal.locator('[data-cip-save-status]').click();
   await page.waitForFunction(() => !document.querySelector('.tma-portal-modal'), null, { timeout: 15000 });
   await page.waitForFunction(
     () => {

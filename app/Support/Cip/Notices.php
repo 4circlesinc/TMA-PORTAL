@@ -38,7 +38,7 @@ class Notices
      *
      * `$token` replaces the status in the second place when the notice has a
      * name of its own: section 22's examples say COR RECEIVED for the email
-     * sent as the COR arrives, where the status by then is Apply for NIC.
+     * sent as the COR arrives, which is the COR Received status.
      *
      * @param  array{number:string, applicant:string, familySize:int, addOn?:bool}  $facts
      */
@@ -556,13 +556,15 @@ class Notices
             Status::POST_APPROVED => 'The post-approval application has been approved.',
             Status::POST_DENIED => 'The post-approval application has been denied.',
             Status::POST_APPROVAL => 'Stage 1 (Certificate of Registration) documents are now required. Soft copies only.',
+            Status::COR_RECEIVED => 'The Certificate of Registration has been received.',
             Status::APPLY_FOR_NIC => 'Stage 2 (National Insurance Card) documents are now required. Soft copies only, one PDF per person aged 16 and over.',
+            Status::NIC_RECEIVED => 'The National Insurance Card has been received.',
             Status::APPLY_FOR_PASSPORT => 'Stage 3 (passport) documents are now required. Hard copy originals only, sent to T.M. Antoine Partners by courier.',
             Status::PENDING_PASSPORT => 'The passport application has been submitted. The file now waits for the passport.',
+            Status::PASSPORT_RECEIVED => 'The passport has been received.',
+            Status::PASSPORT_DELIVERED => 'The passport has been delivered.',
             Status::READY_FOR_DELIVERY => 'The passport has been received and is ready for delivery.',
-            Status::CLOSED => $application->passport_delivered_at === null
-                ? 'This file is closed.'
-                : 'The passport has been delivered. This file is closed.',
+            Status::CLOSED => 'This file is closed.',
             Status::DENIED => 'The Unit has denied this application.',
             default => $facts['applicant'].' now stands at '.Status::label($to).'.',
         };

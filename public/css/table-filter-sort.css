@@ -714,6 +714,9 @@
 .tma-filter-popover__dot--gold   { background: var(--tma-status-gold, #b45309); }
 .tma-filter-popover__dot--plum   { background: var(--tma-status-plum, #6b21a8); }
 .tma-filter-popover__dot--mint   { background: var(--tma-status-mint, #0f766e); }
+.tma-filter-popover__dot--forest { background: var(--tma-status-forest, #14532d); }
+.tma-filter-popover__dot--iris   { background: var(--tma-status-iris, #4338ca); }
+.tma-filter-popover__dot--ink    { background: var(--tma-status-ink, #1e293b); }
 .tma-filter-popover__dot--clay   { background: var(--tma-status-clay, #b91c1c); }
 .tma-filter-popover__dot--sand   { background: var(--tma-status-sand, #a16207); }
 .tma-filter-popover__dot--moss   { background: var(--tma-status-moss, #4d7c0f); }

@@ -1303,7 +1303,8 @@ Documents not written in English MUST be translated. The translation must be ori
 
 Open the application in the portal to upload the COR documents.',
             'cip-status-pending-cor' => 'The Certificate of Registration package for {{applicant}} has been submitted. The file now waits for the COR. You do not need to send anything further unless you are asked.',
-            'cip-status-apply-for-nic' => 'The Certificate of Registration has been received. Stage 2 is applying for the National Insurance Card (NIC). The National Insurance Corporation requires **soft copies only**. Send one PDF for each family member aged 16 and over, with the documents in the order listed below.
+            'cip-status-cor-received' => 'The Certificate of Registration for {{applicant}} has been received. The file now stands at COR Received. Stage 2 (the National Insurance Card) begins when the file moves to Apply for NIC.',
+            'cip-status-apply-for-nic' => 'Stage 2 is applying for the National Insurance Card (NIC). The National Insurance Corporation requires **soft copies only**. Send one PDF for each family member aged 16 and over, with the documents in the order listed below.
 
 1. **Completed R3 Form** (required): filled out by every applicant aged 16 and over with their accurate information and signed on the line "Signature of applicant". The Notary or Attorney-at-Law signs and stamps the line "Signature of Witness" and writes their name out.
 2. **Certified copy of passport bio data page** (required): certified as a true copy of the original by the Notary or Attorney-at-Law.
@@ -1320,7 +1321,8 @@ Documents not written in English MUST be translated. The translation must be ori
 
 Open the application to upload them on each person’s Documents tab.',
             'cip-status-pending-nic' => 'The NIC application for {{applicant}} has been submitted. The file now waits for the National Insurance Card. You do not need to send anything further unless you are asked.',
-            'cip-status-apply-for-passport' => 'The National Insurance Card has been received. Stage 3 is applying for the passport. The passport office accepts **hard copy original documents only**. Track scans on each person’s Documents tab, then send the physical copies to T.M. Antoine Partners by courier: TaylorMarc Court, Rodney Bay, Gros Islet, Saint Lucia.
+            'cip-status-nic-received' => 'The National Insurance Card for {{applicant}} has been received. The file now stands at NIC Received. Stage 3 (the passport) begins when the file moves to Apply for Passport.',
+            'cip-status-apply-for-passport' => 'Stage 3 is applying for the passport. The passport office accepts **hard copy original documents only**. Track scans on each person’s Documents tab, then send the physical copies to T.M. Antoine Partners by courier: TaylorMarc Court, Rodney Bay, Gros Islet, Saint Lucia.
 
 Please send:
 
@@ -1334,8 +1336,10 @@ Please send:
 
 Children receive a passport and owe the same originals except marriage and divorce certificates. There is no sponsor checklist at this stage.',
             'cip-status-pending-passport' => 'The passport application for {{applicant}} has been submitted. The file now waits for the passport. You do not need to send anything further unless you are asked.',
+            'cip-status-passport-received' => 'The passport for {{applicant}} has been received. Arrange collection or courier with T.M. Antoine Partners.',
+            'cip-status-passport-delivered' => 'The passport for {{applicant}} has been delivered. No further documents can be uploaded on this application.',
             'cip-status-ready-for-delivery' => 'The passport for {{applicant}} has been received and the file is ready for delivery. Arrange collection or courier with T.M. Antoine Partners.',
-            'cip-status-closed' => 'The passport has been delivered. {{applicant}}’s file is closed. No further documents can be uploaded on this application.',
+            'cip-status-closed' => '{{applicant}}’s file is closed. No further documents can be uploaded on this application.',
         ];
         $statuses = [];
         foreach ([
@@ -1345,12 +1349,16 @@ Children receive a passport and owe the same originals except marriage and divor
             'cip-status-background-check' => ['Background Check', 'Background Check', 'Sent when a file moves to Background Check.'],
             'cip-status-post-approval' => ['Post-Approval', 'Post-Approval', 'Sent when an approved file is moved to Post-Approval and Stage 1 COR documents are requested.'],
             'cip-status-pending-cor' => ['Pending COR', 'Pending COR', 'Sent when the COR package is submitted and the file waits for the Certificate of Registration.'],
-            'cip-status-apply-for-nic' => ['Apply for NIC', 'Apply for NIC', 'Sent when the COR has been received and Stage 2 (NIC) begins.'],
+            'cip-status-cor-received' => ['COR Received', 'COR Received', 'Sent when the Certificate of Registration has been received.'],
+            'cip-status-apply-for-nic' => ['Apply for NIC', 'Apply for NIC', 'Sent when the file moves to Apply for NIC and Stage 2 begins.'],
             'cip-status-pending-nic' => ['Pending NIC', 'Pending NIC', 'Sent when the NIC application is submitted and the file waits for the card.'],
-            'cip-status-apply-for-passport' => ['Apply for Passport', 'Apply for Passport', 'Sent when the NIC has been received and Stage 3 (passport) begins.'],
+            'cip-status-nic-received' => ['NIC Received', 'NIC Received', 'Sent when the National Insurance Card has been received.'],
+            'cip-status-apply-for-passport' => ['Apply for Passport', 'Apply for Passport', 'Sent when the file moves to Apply for Passport and Stage 3 begins.'],
             'cip-status-pending-passport' => ['Pending Passport', 'Pending Passport', 'Sent when the passport application is submitted and the file waits for the passport.'],
+            'cip-status-passport-received' => ['Passport Received', 'Passport Received', 'Sent when the passport has been received.'],
+            'cip-status-passport-delivered' => ['Passport Delivered', 'Passport Delivered', 'Sent when the passport has been delivered.'],
             'cip-status-ready-for-delivery' => ['Ready for Delivery', 'Ready for Delivery', 'Sent when the passport has been received and is ready to deliver.'],
-            'cip-status-closed' => ['File Closed', 'Closed', 'Sent when the passport has been delivered and the file is closed.'],
+            'cip-status-closed' => ['File Closed', 'Closed', 'Sent when a file is closed.'],
         ] as $key => [$name, $label, $moment]) {
             $statuses[$key] = [
                 'name' => $name,

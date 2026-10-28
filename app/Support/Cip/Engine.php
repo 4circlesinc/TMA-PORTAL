@@ -74,13 +74,15 @@ class Engine
         Status::POST_APPROVED => [Status::UPDATE_REQUIRED, Status::APPLY_FOR_COR],
         Status::POST_DENIED => [Status::CLOSED, Status::NEW_APPEAL],
         Status::APPLY_FOR_COR => [Status::UPDATE_REQUIRED, Status::POST_APPROVED, Status::PENDING_COR],
-        Status::PENDING_COR => [Status::APPLY_FOR_NIC],
+        Status::PENDING_COR => [Status::COR_RECEIVED],
+        Status::COR_RECEIVED => [Status::APPLY_FOR_NIC],
         Status::APPLY_FOR_NIC => [Status::PENDING_NIC, Status::UPDATE_REQUIRED],
-        Status::PENDING_NIC => [Status::APPLY_FOR_PASSPORT],
+        Status::PENDING_NIC => [Status::NIC_RECEIVED],
+        Status::NIC_RECEIVED => [Status::APPLY_FOR_PASSPORT],
         Status::APPLY_FOR_PASSPORT => [Status::PENDING_PASSPORT, Status::UPDATE_REQUIRED],
-        Status::PENDING_PASSPORT => [Status::READY_FOR_DELIVERY],
+        Status::PENDING_PASSPORT => [Status::PASSPORT_RECEIVED],
+        Status::PASSPORT_RECEIVED => [Status::PASSPORT_DELIVERED],
         Status::DENIED => [Status::NEW_APPEAL],
-        Status::READY_FOR_DELIVERY => [Status::CLOSED],
 
         /*
          * The appeal lane. It opens from either decision — a denial is the
@@ -114,11 +116,14 @@ class Engine
         Status::READY_TO_SUBMIT => 'cip.review',
         Status::APPLY_FOR_COR => 'cip.review',
         Status::PENDING_COR => 'cip.compliance',
+        Status::COR_RECEIVED => 'cip.compliance',
         Status::APPLY_FOR_NIC => 'cip.compliance',
         Status::PENDING_NIC => 'cip.compliance',
+        Status::NIC_RECEIVED => 'cip.compliance',
         Status::APPLY_FOR_PASSPORT => 'cip.compliance',
         Status::PENDING_PASSPORT => 'cip.compliance',
-        Status::READY_FOR_DELIVERY => 'cip.compliance',
+        Status::PASSPORT_RECEIVED => 'cip.compliance',
+        Status::PASSPORT_DELIVERED => 'cip.compliance',
         Status::CLOSED => 'cip.compliance',
         Status::PENDING_REVIEW => 'cip.compliance',
         Status::NON_COMPLIANT => 'cip.compliance',
@@ -235,6 +240,7 @@ class Engine
                 && self::allows($actor, $application, $to)
                 && self::checklistAllows($application, $to, $forListing)
                 && (! Stages::owns($to) || self::returnIsOpen($application, $to))
+                && ! (self::returnsFromUpdates($application, $to) && Review::hasSentBack($application))
                 && ! Delay::owns($to),
         ));
     }
@@ -779,7 +785,10 @@ class Engine
                 PostApproval::prepare($application, $actor);
             }
 
-            if (in_array($to, [Status::APPLY_FOR_NIC, Status::APPLY_FOR_PASSPORT], true)) {
+            // A receipt opens the next pack's slots while the file rests on
+            // that receipt. Apply for NIC / Apply for Passport open them
+            // again, which is a no-op once they exist.
+            if (in_array($to, [Status::COR_RECEIVED, Status::APPLY_FOR_NIC, Status::NIC_RECEIVED, Status::APPLY_FOR_PASSPORT], true)) {
                 Requirements::materialiseApplication($application);
             }
 
@@ -802,7 +811,7 @@ class Engine
              */
             PersonStatus::settle($application);
 
-            if ($to === Status::CLOSED) {
+            if ($to === Status::CLOSED || $to === Status::PASSPORT_DELIVERED) {
                 Package::forget();
             }
 

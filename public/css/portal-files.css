@@ -1330,6 +1330,9 @@
   --tma-status-gold: #b45309;
   --tma-status-plum: #6b21a8;
   --tma-status-mint: #0f766e;
+  --tma-status-forest: #14532d;
+  --tma-status-iris: #4338ca;
+  --tma-status-ink: #1e293b;
   --tma-status-stone: #57534e;
   /* The appeal lane. Three distinct hues, deliberately not reusing the
      queue colours above: a file being appealed must not read as a file
@@ -1361,6 +1364,9 @@
 .tma-portal-status--gold   { background: var(--tma-status-gold); }
 .tma-portal-status--plum   { background: var(--tma-status-plum); }
 .tma-portal-status--mint   { background: var(--tma-status-mint); }
+.tma-portal-status--forest { background: var(--tma-status-forest); }
+.tma-portal-status--iris   { background: var(--tma-status-iris); }
+.tma-portal-status--ink    { background: var(--tma-status-ink); }
 .tma-portal-status--stone  { background: var(--tma-status-stone); }
 .tma-portal-status--clay   { background: var(--tma-status-clay); }
 .tma-portal-status--sand   { background: var(--tma-status-sand); }

@@ -3575,11 +3575,14 @@
     { value: 'post_approval', label: 'Post-Approval', tone: 'action', lane: 'post_approval' },
     { value: 'apply_for_cor', label: 'Apply for COR', tone: 'emerald', lane: 'post_approval' },
     { value: 'pending_cor', label: 'Pending COR', tone: 'slate', lane: 'post_approval' },
+    { value: 'cor_received', label: 'COR Received', tone: 'forest', lane: 'post_approval' },
     { value: 'apply_for_nic', label: 'Apply for NIC', tone: 'lime', lane: 'post_approval' },
     { value: 'pending_nic', label: 'Pending NIC', tone: 'navy', lane: 'post_approval' },
+    { value: 'nic_received', label: 'NIC Received', tone: 'iris', lane: 'post_approval' },
     { value: 'apply_for_passport', label: 'Apply for Passport', tone: 'gold', lane: 'post_approval' },
     { value: 'pending_passport', label: 'Pending Passport', tone: 'plum', lane: 'post_approval' },
-    { value: 'ready_for_delivery', label: 'Ready for Delivery', tone: 'mint', lane: 'post_approval' },
+    { value: 'passport_received', label: 'Passport Received', tone: 'mint', lane: 'post_approval' },
+    { value: 'passport_delivered', label: 'Passport Delivered', tone: 'ink', lane: 'post_approval' },
     /* The post-approval lane decides with its own pair: same two answers,
        its own rules and its own letters. See Status::outcomesFor. */
     { value: 'post_approved', label: 'Approved', tone: 'laurel', lane: 'post_approval' },
@@ -3603,11 +3606,14 @@
     { value: 'update_required', label: 'Updates Required', tone: 'amber' },
     { value: 'apply_for_cor', label: 'Apply for COR', tone: 'emerald' },
     { value: 'pending_cor', label: 'Pending COR', tone: 'slate' },
+    { value: 'cor_received', label: 'COR Received', tone: 'forest' },
     { value: 'apply_for_nic', label: 'Apply for NIC', tone: 'lime' },
     { value: 'pending_nic', label: 'Pending NIC', tone: 'navy' },
+    { value: 'nic_received', label: 'NIC Received', tone: 'iris' },
     { value: 'apply_for_passport', label: 'Apply for Passport', tone: 'gold' },
     { value: 'pending_passport', label: 'Pending Passport', tone: 'plum' },
-    { value: 'ready_for_delivery', label: 'Ready for Delivery', tone: 'mint' },
+    { value: 'passport_received', label: 'Passport Received', tone: 'mint' },
+    { value: 'passport_delivered', label: 'Passport Delivered', tone: 'ink' },
     { value: 'closed', label: 'Closed', tone: 'stone' },
   ];
 
@@ -9202,12 +9208,12 @@
 
   var CIP_STAGES = {
     cor_submitted: { label: 'Record COR submission', dateLabel: 'COR submission date', note: 'The application will move to Pending COR.' },
-    cor_received: { label: 'Record COR received', dateLabel: 'COR received date', note: 'The application will move to Apply for NIC.' },
+    cor_received: { label: 'Record COR received', dateLabel: 'COR received date', note: 'The application will move to COR Received.' },
     nic_submitted: { label: 'Record NIC submission', dateLabel: 'NIC submission date', note: 'The application will move to Pending NIC.' },
-    nic_received: { label: 'Record NIC received', dateLabel: 'NIC received date', note: 'The application will move to Apply for Passport.' },
+    nic_received: { label: 'Record NIC received', dateLabel: 'NIC received date', note: 'The application will move to NIC Received.' },
     passport_submitted: { label: 'Record passport application', dateLabel: 'Passport application date', note: 'The application will move to Pending Passport.' },
-    passport_received: { label: 'Record passport received', dateLabel: 'Passport received date', note: 'The application will move to Ready for Delivery.' },
-    passport_delivered: { label: 'Record passport delivered', dateLabel: 'Passport delivered date', note: 'The application will move to Closed.' },
+    passport_received: { label: 'Record passport received', dateLabel: 'Passport received date', note: 'The application will move to Passport Received.' },
+    passport_delivered: { label: 'Record passport delivered', dateLabel: 'Passport delivered date', note: 'The application will move to Passport Delivered.' },
   };
 
   function renderStageAction(app) {
@@ -14914,12 +14920,12 @@
 
     var stageByStatus = {
       pending_cor: 'cor_submitted',
-      apply_for_nic: 'cor_received',
+      cor_received: 'cor_received',
       pending_nic: 'nic_submitted',
-      apply_for_passport: 'nic_received',
+      nic_received: 'nic_received',
       pending_passport: 'passport_submitted',
-      ready_for_delivery: 'passport_received',
-      closed: 'passport_delivered',
+      passport_received: 'passport_received',
+      passport_delivered: 'passport_delivered',
     };
     /*
      * Closed is the exception on a denied file. Every other dated status
