@@ -36435,17 +36435,31 @@ span.tma-dash__messages-profile-avatar {
 .tma-dash__rb-footer { box-sizing: border-box; min-height: var(--rb-footer-h); }
 
 /* Inner 230px ≈ outer 262px — below the 280px default, not at it.
-   Title and time stack. Line-clamp on a flex child reported a one-line
-   height, so the time painted on the next row. A plain block plus an
-   explicit floor keeps the next row below this one. */
+   Title and time stack, and the section grows with them. The rail is a
+   fixed-height flex column, so a section could shrink back down to the
+   single-line reservation and the next heading painted over the overflow. */
 @container dash-rightbar (max-width: 230px) {
+  .tma-dash__rb-section[data-rb-section="notifications"],
+  .tma-dash__rb-section[data-rb-section="activities"],
+  .tma-dash__rb-section[data-rb-section="applications"] {
+    flex-shrink: 0;
+    height: auto;
+    min-height: min-content;
+  }
+  .tma-dash__rb-section[data-rb-section="notifications"] .tma-dash__rb-body,
+  .tma-dash__rb-section[data-rb-section="activities"] .tma-dash__rb-body,
+  .tma-dash__rb-section[data-rb-section="applications"] .tma-dash__rb-body {
+    flex-shrink: 0;
+    height: auto;
+    min-height: min-content;
+    overflow: visible;
+  }
   .tma-dash__notice,
   .tma-dash__activity {
     align-items: start;
     height: auto;
-    overflow: hidden;
+    overflow: visible;
     padding-right: var(--space-8);
-    min-height: calc(2 * 1.4 * var(--text-size-14) + 1.35 * var(--text-size-12) + 2 * var(--space-8) + 6px);
   }
   .tma-dash__notice-body {
     display: flex;
@@ -36455,7 +36469,7 @@ span.tma-dash__messages-profile-avatar {
     align-self: stretch;
     justify-content: flex-start;
     gap: 2px;
-    overflow: hidden;
+    overflow: visible;
     width: 100%;
     height: auto;
     min-height: min-content;
