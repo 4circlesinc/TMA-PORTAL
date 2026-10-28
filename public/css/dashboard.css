@@ -10031,6 +10031,14 @@
   z-index: 2;
 }
 
+/* Label vs icon mode follows this bar's own width, not the viewport.
+   Sidebars can leave a narrow toolbar inside a wide window. The popped-out
+   message window (.tma-dash__email-detail-tools) keeps its labels. */
+.tma-dash__email-toolbar:not(.tma-dash__email-detail-tools) {
+  container-type: inline-size;
+  container-name: email-toolbar;
+}
+
 /* Desktop + browser: toast must never participate in the shell grid. */
 .tma-dash__email-toast {
   position: fixed !important;
@@ -10120,7 +10128,17 @@
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  /* Shrink and scroll instead of painting labels over Sync. Do not grow —
+     Sync stays immediately after the last action. */
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tma-dash__email-toolbar-actions::-webkit-scrollbar {
+  display: none;
 }
 
 .tma-dash__email-toolbar-btn.tma-dash__tool-btn {
@@ -10130,6 +10148,7 @@
   gap: var(--space-6);
   display: inline-flex;
   align-items: center;
+  flex: 0 0 auto;
   border-radius: var(--radius-8);
   color: var(--color-text-secondary);
   font: inherit;
@@ -10192,6 +10211,21 @@
 .tma-dash__email-toolbar-end .tma-dash__email-detail-nav-count {
   min-width: 4.25rem;
   font-variant-numeric: tabular-nums;
+}
+
+/* Icon-only once the bar itself cannot hold every label. ~15 labeled
+   tools need roughly a thousand pixels; below that they used to overlap
+   Sync and Settings. Tooltips still carry the names. */
+@container email-toolbar (max-width: 1040px) {
+  .tma-dash__email-toolbar-btn-label {
+    display: none;
+  }
+
+  .tma-dash__email-toolbar-btn.tma-dash__tool-btn {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+  }
 }
 
 @media (max-width: 1100px) {
@@ -36400,20 +36434,30 @@ span.tma-dash__messages-profile-avatar {
 .tma-dash__rb-section[data-rb-section="applications"] .tma-dash__rb-skel { box-sizing: border-box; min-height: var(--rb-contact-h); }
 .tma-dash__rb-footer { box-sizing: border-box; min-height: var(--rb-footer-h); }
 
-/* Inner 230px ≈ outer 262px — below the 280px default, not at it. */
+/* Inner 230px ≈ outer 262px — below the 280px default, not at it.
+   Titles wrap onto their own line and the time sits under them. The row
+   has to grow with that stack: a flex-wrap title inside an overflow-hidden
+   body kept the single-line height, so the time painted on the next row. */
 @container dash-rightbar (max-width: 230px) {
   .tma-dash__notice,
   .tma-dash__activity {
+    align-items: start;
+    height: auto;
     padding-right: var(--space-8);
   }
   .tma-dash__notice-body {
-    flex-wrap: wrap;
-    align-items: flex-start;
-    gap: 2px 8px;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: center;
+    gap: 2px;
+    overflow: visible;
+    height: auto;
   }
   .tma-dash__notice .tma-dash__notice-title,
   .tma-dash__activity .tma-dash__notice-title {
-    flex: 1 1 100%;
+    flex: none;
+    width: 100%;
     white-space: normal;
     overflow: hidden;
     overflow-wrap: break-word;
@@ -36425,8 +36469,12 @@ span.tma-dash__messages-profile-avatar {
   }
   .tma-dash__notice .tma-dash__notice-meta,
   .tma-dash__activity .tma-dash__notice-meta {
-    flex: 0 1 auto;
+    flex: none;
+    align-self: flex-start;
     max-width: 100%;
+  }
+  .tma-dash__contact {
+    align-items: start;
   }
   .tma-dash__contact-name {
     white-space: normal;
