@@ -87,9 +87,18 @@
   window.TMAMessagingAPI = {
     newNonce: uuid,
 
-    /* The chat list, the viewer, and their messaging settings. */
+    /* The chat list, the viewer, and their messaging settings.
+       unavailable means the server kept the response from being a 500 and
+       the list already on screen stays. */
     conversations: function () {
-      return api(BASE + '/conversations');
+      return api(BASE + '/conversations').then(function (data) {
+        if (data && data.unavailable) {
+          var err = new Error('Conversations are unavailable');
+          err.unavailable = true;
+          throw err;
+        }
+        return data;
+      });
     },
 
     /* Open (or reuse) a direct thread with one person. */

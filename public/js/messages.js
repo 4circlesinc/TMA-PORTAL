@@ -6736,6 +6736,9 @@
       })
       .catch(function (err) {
         STORE.loaded = true;
+        // The server answered that the list could not be built. Rows already
+        // on screen stay; an empty first load still says so.
+        if (err && err.unavailable && (STORE.threads || []).length) return;
         // Rows already on screen, the warm snapshot, or a previous answer —
         // beat an error card: they are the last known truth, and replacing
         // them with "could not be loaded" because a refresh failed is the

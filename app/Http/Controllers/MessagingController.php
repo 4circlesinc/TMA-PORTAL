@@ -28,6 +28,7 @@ use App\Support\Access\Role;
 use App\Support\Cip\Threads;
 use App\Support\Files\FileValidationException;
 use App\Support\Messaging\AttachmentIntake;
+use Throwable;
 use App\Support\Messaging\Broadcaster;
 use App\Support\Messaging\ClientConversations;
 use App\Support\Messaging\LinkPreviewService;
@@ -73,10 +74,33 @@ class MessagingController extends Controller
         // Self-healing firm-wide chat: made if the firm has none, and kept
         // in line with the staff list, so someone approved since the last
         // load is already in. Outside accounts are kept out, and dropped if
-        // they were already in.
-        OrganizationChat::syncMembership();
-        ClientConversations::attachLogin($user);
+        // they were already in. Repairing membership writes rows; a lock or
+        // a bad copy must not turn the inbox into a 500.
+        try {
+            OrganizationChat::syncMembership();
+            ClientConversations::attachLogin($user);
+        } catch (Throwable $e) {
+            report($e);
+        }
 
+        try {
+            return $this->conversationIndex($request, $user);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'conversations' => [],
+                'unavailable' => true,
+            ]);
+        }
+    }
+
+    /**
+     * The inbox payload. Separated so a failure here can answer without a 500
+     * and the page can keep the list it already has.
+     */
+    private function conversationIndex(Request $request, User $user): JsonResponse
+    {
         $membershipIds = Conversation::query()
             ->forUser($user)
             ->pluck('id');
@@ -143,10 +167,19 @@ class MessagingController extends Controller
         $workStatuses = WorkDay::publicStatusesForUsers($people);
 
         $rows = $conversations
-            ->map(fn (Conversation $c) => MessagingPresenter::conversation(
-                $c, $user, $participants->get($c->id), (int) ($unread[$c->id] ?? 0),
-                $latestReactions, $workStatuses, true, isset($mentioned[$c->id])
-            ))
+            ->map(function (Conversation $c) use ($user, $participants, $unread, $latestReactions, $workStatuses, $mentioned) {
+                try {
+                    return MessagingPresenter::conversation(
+                        $c, $user, $participants->get($c->id), (int) ($unread[$c->id] ?? 0),
+                        $latestReactions, $workStatuses, true, isset($mentioned[$c->id])
+                    );
+                } catch (Throwable $e) {
+                    report($e);
+
+                    return null;
+                }
+            })
+            ->filter()
             // Pinned conversations sort above the rest but keep recency within
             // each band, which is the order the list expects to render.
             ->sortBy([

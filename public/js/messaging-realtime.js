@@ -368,6 +368,13 @@
   Realtime.prototype.open = function () {
     var self = this;
 
+    // Safari logs every WebSocket() attempt while the machine is offline.
+    // Wait for the online event (ensureAlive) instead of opening one now.
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      this.scheduleRetry();
+      return;
+    }
+
     // Whatever path opens a socket, the tab is no longer parked.
     this.parked = false;
 

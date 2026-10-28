@@ -21,6 +21,7 @@ use App\Support\Presence\AvailabilityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * One payload for the portal home.
@@ -76,40 +77,50 @@ final class HomeBoard
 
         $out = [];
 
+        // One tile must not take the board down. A throw used to be a 500
+        // for every tile, and the home page polled that failure.
+        $take = function (string $key, callable $load) use (&$out): void {
+            try {
+                $out[$key] = $load();
+            } catch (Throwable $e) {
+                report($e);
+            }
+        };
+
         if (in_array('metrics', $want, true)) {
-            $out['metrics'] = DashboardMetricsController::payload($request);
+            $take('metrics', fn () => DashboardMetricsController::payload($request));
         }
 
         if (in_array('staff', $want, true)) {
-            $out['staff'] = StaffPresenceController::payload($user);
+            $take('staff', fn () => StaffPresenceController::payload($user));
         }
 
         if (in_array('work', $want, true)) {
-            $out['work'] = DashboardWorkController::payload($request);
+            $take('work', fn () => DashboardWorkController::payload($request));
         }
 
         if (in_array('cip', $want, true)) {
-            $out['cip'] = CipDashboardController::payload($user);
+            $take('cip', fn () => CipDashboardController::payload($user));
         }
 
         if (in_array('mail', $want, true)) {
-            $out['mail'] = Role::can($user, 'mail.use')
+            $take('mail', fn () => Role::can($user, 'mail.use')
                 ? self::mail($user)
-                : ['connected' => false, 'messages' => [], 'inboxUnread' => 0];
+                : ['connected' => false, 'messages' => [], 'inboxUnread' => 0]);
         }
 
         if (in_array('chats', $want, true)) {
-            $out['chats'] = self::chats($user);
+            $take('chats', fn () => self::chats($user));
         }
 
         if (in_array('pending', $want, true)) {
-            $out['pendingUsers'] = Role::isAdmin($user)
+            $take('pendingUsers', fn () => Role::isAdmin($user)
                 ? User::query()->where('status', 'pending')->count()
-                : 0;
+                : 0);
         }
 
         if (in_array('files', $want, true)) {
-            $out['files'] = self::files($request);
+            $take('files', fn () => self::files($request));
         }
 
         return $out;
@@ -326,8 +337,14 @@ final class HomeBoard
      */
     private static function chats(User $user): array
     {
-        OrganizationChat::syncMembership();
-        ClientConversations::attachLogin($user);
+        // Membership is repaired on read. A lock, a bad row, or a copy that
+        // cannot be written has to leave the list readable.
+        try {
+            OrganizationChat::syncMembership();
+            ClientConversations::attachLogin($user);
+        } catch (Throwable $e) {
+            report($e);
+        }
 
         $conversations = Conversation::query()
             ->forUser($user)
@@ -360,18 +377,27 @@ final class HomeBoard
         AvailabilityService::primeStates($people->pluck('id'));
 
         $rows = $conversations
-            ->map(fn (Conversation $c) => MessagingPresenter::conversation(
-                $c,
-                $user,
-                $participants->get($c->id),
-                (int) ($unread[$c->id] ?? 0),
-                collect(),
-                [],
-                true,
-                // The card does not mark mentions; saying so here keeps the
-                // presenter from asking once a row.
-                false,
-            ))
+            ->map(function (Conversation $c) use ($user, $participants, $unread) {
+                try {
+                    return MessagingPresenter::conversation(
+                        $c,
+                        $user,
+                        $participants->get($c->id),
+                        (int) ($unread[$c->id] ?? 0),
+                        collect(),
+                        [],
+                        true,
+                        // The card does not mark mentions; saying so here keeps the
+                        // presenter from asking once a row.
+                        false,
+                    );
+                } catch (Throwable $e) {
+                    report($e);
+
+                    return null;
+                }
+            })
+            ->filter()
             ->reject(fn (array $row) => ! empty($row['archived']))
             ->sortBy([
                 fn ($a, $b) => ($b['pinned'] <=> $a['pinned']),
