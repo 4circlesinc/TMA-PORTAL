@@ -36435,43 +36435,54 @@ span.tma-dash__messages-profile-avatar {
 .tma-dash__rb-footer { box-sizing: border-box; min-height: var(--rb-footer-h); }
 
 /* Inner 230px ≈ outer 262px — below the 280px default, not at it.
-   Titles wrap onto their own line and the time sits under them. The row
-   has to grow with that stack: a flex-wrap title inside an overflow-hidden
-   body kept the single-line height, so the time painted on the next row. */
+   Title and time stack. Line-clamp on a flex child reported a one-line
+   height, so the time painted on the next row. A plain block plus an
+   explicit floor keeps the next row below this one. */
 @container dash-rightbar (max-width: 230px) {
   .tma-dash__notice,
   .tma-dash__activity {
     align-items: start;
     height: auto;
+    overflow: hidden;
     padding-right: var(--space-8);
+    min-height: calc(2 * 1.4 * var(--text-size-14) + 1.35 * var(--text-size-12) + 2 * var(--space-8) + 6px);
   }
   .tma-dash__notice-body {
+    display: flex;
     flex-direction: column;
     flex-wrap: nowrap;
     align-items: stretch;
-    justify-content: center;
+    align-self: stretch;
+    justify-content: flex-start;
     gap: 2px;
-    overflow: visible;
+    overflow: hidden;
+    width: 100%;
     height: auto;
+    min-height: min-content;
   }
   .tma-dash__notice .tma-dash__notice-title,
   .tma-dash__activity .tma-dash__notice-title {
-    flex: none;
+    display: block;
+    flex: 0 0 auto;
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
     white-space: normal;
     overflow: hidden;
     overflow-wrap: break-word;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    text-overflow: ellipsis;
+    text-overflow: unset;
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+    -webkit-box-orient: initial;
   }
   .tma-dash__notice .tma-dash__notice-meta,
   .tma-dash__activity .tma-dash__notice-meta {
-    flex: none;
+    display: block;
+    position: static;
+    flex: 0 0 auto;
     align-self: flex-start;
     max-width: 100%;
+    white-space: nowrap;
   }
   .tma-dash__contact {
     align-items: start;
