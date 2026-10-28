@@ -36378,7 +36378,8 @@ span.tma-dash__messages-profile-avatar {
      1.35 are the line-height tokens above, restated as factors because the
      em values only resolve inside the text they size. */
   --rb-title-h: calc(1.4 * var(--text-size-14) + 2 * var(--space-8));
-  --rb-row-h: calc(var(--dash-icon-lg) + 2 * var(--space-8));
+  /* One title line plus the time under it. A second title line grows past this. */
+  --rb-row-h: calc(1.4 * var(--text-size-14) + 1.35 * var(--text-size-12) + 2px + 2 * var(--space-8));
   --rb-contact-h: calc(1.4 * var(--text-size-14) + 1.35 * var(--text-size-12) + 2 * var(--space-4));
   --rb-footer-h: 46px;
 }
@@ -36434,77 +36435,70 @@ span.tma-dash__messages-profile-avatar {
 .tma-dash__rb-section[data-rb-section="applications"] .tma-dash__rb-skel { box-sizing: border-box; min-height: var(--rb-contact-h); }
 .tma-dash__rb-footer { box-sizing: border-box; min-height: var(--rb-footer-h); }
 
-/* Inner 230px ≈ outer 262px — below the 280px default, not at it.
-   Title and time stack, and the section grows with them. The rail is a
-   fixed-height flex column, so a section could shrink back down to the
-   single-line reservation and the next heading painted over the overflow. */
-@container dash-rightbar (max-width: 230px) {
-  .tma-dash__rb-section[data-rb-section="notifications"],
-  .tma-dash__rb-section[data-rb-section="activities"],
-  .tma-dash__rb-section[data-rb-section="applications"] {
-    flex-shrink: 0;
-    height: auto;
-    min-height: min-content;
-  }
-  .tma-dash__rb-section[data-rb-section="notifications"] .tma-dash__rb-body,
-  .tma-dash__rb-section[data-rb-section="activities"] .tma-dash__rb-body,
-  .tma-dash__rb-section[data-rb-section="applications"] .tma-dash__rb-body {
-    flex-shrink: 0;
-    height: auto;
-    min-height: min-content;
-    overflow: visible;
-  }
-  .tma-dash__notice,
-  .tma-dash__activity {
-    align-items: start;
-    height: auto;
-    overflow: visible;
-    padding-right: var(--space-8);
-  }
-  .tma-dash__notice-body {
-    display: flex;
-    flex-direction: column;
-    flex-wrap: nowrap;
-    align-items: stretch;
-    align-self: stretch;
-    justify-content: flex-start;
-    gap: 2px;
-    overflow: visible;
-    width: 100%;
-    height: auto;
-    min-height: min-content;
-  }
-  .tma-dash__notice .tma-dash__notice-title,
-  .tma-dash__activity .tma-dash__notice-title {
-    display: block;
-    flex: 0 0 auto;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-    white-space: normal;
-    overflow: hidden;
-    overflow-wrap: break-word;
-    text-overflow: unset;
-    -webkit-line-clamp: unset;
-    line-clamp: unset;
-    -webkit-box-orient: initial;
-  }
-  .tma-dash__notice .tma-dash__notice-meta,
-  .tma-dash__activity .tma-dash__notice-meta {
-    display: block;
-    position: static;
-    flex: 0 0 auto;
-    align-self: flex-start;
-    max-width: 100%;
-    white-space: nowrap;
-  }
-  .tma-dash__contact {
-    align-items: start;
-  }
-  .tma-dash__contact-name {
-    white-space: normal;
-    overflow-wrap: break-word;
-  }
+/* Right rail rows always stack: the full title, then the time under it.
+   A side-by-side row ellipsized the title ("Calendar sync …") whenever the
+   panel was wider than the narrow breakpoint. The rail is a fixed-height
+   flex column, so a section must not shrink back to a one-line slot or the
+   next heading paints over the overflow. */
+.tma-dash__rightbar .tma-dash__rb-section[data-rb-section="notifications"],
+.tma-dash__rightbar .tma-dash__rb-section[data-rb-section="activities"],
+.tma-dash__rightbar .tma-dash__rb-section[data-rb-section="applications"] {
+  flex-shrink: 0;
+  height: auto;
+  min-height: min-content;
+}
+.tma-dash__rightbar .tma-dash__rb-section[data-rb-section="notifications"] .tma-dash__rb-body,
+.tma-dash__rightbar .tma-dash__rb-section[data-rb-section="activities"] .tma-dash__rb-body,
+.tma-dash__rightbar .tma-dash__rb-section[data-rb-section="applications"] .tma-dash__rb-body {
+  flex-shrink: 0;
+  height: auto;
+  min-height: min-content;
+  overflow: visible;
+}
+.tma-dash__rightbar .tma-dash__notice,
+.tma-dash__rightbar .tma-dash__activity {
+  align-items: start;
+  height: auto;
+  overflow: visible;
+}
+.tma-dash__rightbar .tma-dash__notice-body {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  align-self: stretch;
+  justify-content: flex-start;
+  gap: 2px;
+  overflow: visible;
+  width: 100%;
+  height: auto;
+  min-height: min-content;
+}
+.tma-dash__rightbar .tma-dash__notice .tma-dash__notice-title,
+.tma-dash__rightbar .tma-dash__activity .tma-dash__notice-title {
+  display: block;
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  white-space: normal;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  text-overflow: unset;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+  -webkit-box-orient: initial;
+}
+.tma-dash__rightbar .tma-dash__notice .tma-dash__notice-meta,
+.tma-dash__rightbar .tma-dash__activity .tma-dash__notice-meta {
+  display: block;
+  position: static;
+  flex: 0 0 auto;
+  align-self: flex-start;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ── Overview → Notifications: full inbox ── */
