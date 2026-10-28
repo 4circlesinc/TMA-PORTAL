@@ -2,9 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Models\CipProvider;
+use App\Models\Company;
+use App\Models\CompanyMember;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
+use App\Models\Message;
 use App\Models\User;
+use App\Models\UserPresence;
 use App\Support\Access\Role;
 use App\Support\Messaging\OrganizationChat;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -178,6 +183,77 @@ class OrganizationChatTest extends TestCase
             ->assertStatus(422);
 
         $this->assertTrue($this->inChat($officer, OrganizationChat::current()));
+    }
+
+    public function test_a_provider_admin_can_open_home_and_conversations(): void
+    {
+        config(['services.cip.enabled' => true]);
+        $admin = $this->user(Role::SERVICE_PROVIDER_ADMIN, 'gcc@example.com');
+        $company = Company::create(['uid' => 'gcc-firm', 'name' => 'Global Citizen Consultants']);
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'user_id' => $admin->id,
+            'name' => $admin->name,
+            'email' => $admin->email,
+            'role' => 'admin',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+        CipProvider::create([
+            'name' => 'GLOBAL CITIZEN CONSULTANTS',
+            'code' => 'GLO',
+            'company_id' => null,
+        ]);
+        CipProvider::create([
+            'name' => str_repeat('é', 180).' Holdings',
+            'code' => 'LONG',
+            'company_id' => null,
+        ]);
+
+        $this->actingAs($admin)->getJson('/portal/dashboard/home')->assertOk();
+        $this->actingAs($admin)->getJson('/portal/messaging/conversations')->assertOk();
+    }
+
+    public function test_a_chat_with_someone_who_has_no_role_still_loads(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $unassigned = $this->user(Role::CLIENT, 'pending@example.com');
+        $unassigned->forceFill(['account_type' => null])->save();
+
+        $conversation = Conversation::create([
+            'type' => Conversation::TYPE_DIRECT,
+            'created_by' => $admin->id,
+            'last_message_at' => now(),
+        ]);
+        foreach ([$admin, $unassigned] as $member) {
+            ConversationParticipant::create([
+                'conversation_id' => $conversation->id,
+                'user_id' => $member->id,
+                'role' => 'member',
+                'joined_at' => now(),
+            ]);
+        }
+        Message::create([
+            'conversation_id' => $conversation->id,
+            'user_id' => $unassigned->id,
+            'type' => Message::TYPE_TEXT,
+            'body' => 'Hello',
+        ]);
+        UserPresence::create([
+            'user_id' => $unassigned->id,
+            'last_seen_at' => now(),
+            'online_until' => now()->addMinute(),
+            'primary_status' => 'out_of_office',
+        ]);
+
+        $this->actingAs($admin)->getJson('/portal/dashboard/home')->assertOk();
+
+        $row = collect($this->actingAs($admin)->getJson('/portal/messaging/conversations')
+            ->assertOk()
+            ->json('conversations'))
+            ->firstWhere('id', $conversation->uuid);
+
+        $this->assertNotNull($row);
+        $this->assertNull($row['counterpartRole']);
     }
 
     public function test_the_dashboard_puts_staff_in_the_firm_chat_too(): void

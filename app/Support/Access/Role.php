@@ -503,6 +503,12 @@ class Role
     {
         $type = $user?->account_type;
 
+        // A person can sit in a chat before anyone has given them a role.
+        // PHP 8.5 deprecates using null as an array key, including under ??.
+        if (! is_string($type) || $type === '') {
+            return null;
+        }
+
         return self::ACCOUNT_TYPE_ALIASES[$type] ?? $type;
     }
 
