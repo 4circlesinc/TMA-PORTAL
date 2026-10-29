@@ -5098,6 +5098,12 @@
     return officer && officer.accountType ? String(officer.accountType) : '';
   }
 
+  function openApplicationAssignMenu(button, applicationId) {
+    if (!button || !applicationId || button.hasAttribute('data-open')) return;
+    button.setAttribute('data-open', 'true');
+    openAssignMenu(button, applicationId);
+  }
+
   function openAssignMenu(button, applicationId) {
     if (!window.TMAFileActions || !window.TMAFileActions.menu) return;
 
@@ -5120,33 +5126,48 @@
          * because they are already there and a click that appears to work and
          * changes nothing is what made this feel broken.
          */
+        /*
+         * Firm users sit on the main office. Branch users sit on a branch,
+         * and naming one of them is what limits the file to that branch.
+         * Staff stay their own tab: a service provider does not assign them.
+         */
         function assignTab(person) {
-          return person && person.role === 'service_provider_contact' ? 'provider' : 'staff';
+          if (!person || person.role !== 'service_provider_contact') return 'staff';
+          return person.locationKind === 'branch' ? 'branch' : 'firm';
         }
 
-        var items = live.map(function (a) {
-          held[String(a.userId)] = true;
+        function assignMeta(person) {
+          return [personRoleLabel(person), person && person.locationName]
+            .filter(Boolean).join(' · ');
+        }
 
-          return {
+        var providerViewer = isServiceProviderAdmin() && !isClientsAdmin();
+        var items = [];
+
+        live.forEach(function (a) {
+          held[String(a.userId)] = true;
+          if (providerViewer && assignTab(a) === 'staff') return;
+          items.push({
             tab: assignTab(a),
             label: a.name || a.email || 'Somebody',
-            meta: personRoleLabel(a),
+            meta: assignMeta(a),
             face: personFace(a),
             on: true,
             remove: a.canRemove === false
               ? undefined
               : function () { changeAssignment(applicationId, 'DELETE', a.userId); },
-          };
+          });
         });
 
         free.forEach(function (o) {
           // The column and this menu share the client list: somebody already
           // named in the cell must not also appear as a person to add.
           if (held[String(o.id)]) return;
+          if (providerViewer && assignTab(o) === 'staff') return;
           items.push({
             tab: assignTab(o),
             label: o.name || o.email,
-            meta: personRoleLabel(o),
+            meta: assignMeta(o),
             face: personFace(o),
             fn: function () { changeAssignment(applicationId, 'POST', o.id); },
           });
@@ -5155,11 +5176,16 @@
         // The people, as the menu's own rows, not file actions for a fake
         // file that we then overwrite. That swap measured a narrow menu and
         // placed it, then grew it off the right of the Assigned To column.
-        var tabs = [
-          { id: 'staff', label: 'Staff' },
-          { id: 'provider', label: 'Service provider' },
-        ];
-        if (isServiceProviderAdmin() && !isClientsAdmin()) tabs.reverse();
+        var tabs = providerViewer
+          ? [
+            { id: 'firm', label: 'Firm users' },
+            { id: 'branch', label: 'Branch users' },
+          ]
+          : [
+            { id: 'staff', label: 'Staff' },
+            { id: 'firm', label: 'Firm users' },
+            { id: 'branch', label: 'Branch users' },
+          ];
 
         window.TMAFileActions.menu(
           box.left,
@@ -11650,7 +11676,14 @@
     var loading = !!state.assignmentsLoading;
     var admin = isClientsAdmin();
     var assignForm = '';
-    if (admin && !hidden) {
+    var cipApp = cipApplicationForClient(contactId);
+    if (cipApp && cipApp.id && canAssignApplications() && !hidden) {
+      assignForm =
+        '<div class="tma-dash__clients-assign-form">' +
+        '<button type="button" class="tma-dash__clients-assign-btn" data-cip-assign="' +
+        esc(cipApp.id) + '">Assign</button>' +
+        '</div>';
+    } else if (admin && !hidden) {
       var unassigned = assignable.filter(function (s) {
         return !items.some(function (a) { return String(a.userId) === String(s.id); });
       });
@@ -13561,7 +13594,11 @@
     // enforces, read through the access mirror rather than guessed from the
     // current-user store (which is not always populated by the time a row
     // is right-clicked).
-    if (canAssignClients()) items.push({ act: 'assign', label: 'Assign to', icon: 'UserPlus', submenu: true });
+    if (kind === 'application' && canAssignApplications() && extra && extra.applicationId) {
+      items.push({ act: 'assign-application', label: 'Assign to', icon: 'UserPlus', submenu: true });
+    } else if (canAssignClients()) {
+      items.push({ act: 'assign', label: 'Assign to', icon: 'UserPlus', submenu: true });
+    }
     if (kind === 'company' && canMergeCompanies()) {
       items.push({
         act: 'merge-company',
@@ -13679,6 +13716,7 @@
       e.stopPropagation();
       var act = btn.getAttribute('data-clients-ctx-act');
       // The parent row only opens its submenu; it is not an action itself.
+      if (act === 'assign-application') { openApplicationAssignMenu(btn, extra.applicationId); return; }
       if (act === 'assign') { openClientsAssignSub(btn, kind, id); return; }
       if (act === 'status') { openCipStatusSub(btn, kind, id, extra); return; }
       closeClientsContextMenu();
@@ -13691,7 +13729,8 @@
       var btn = e.target.closest('[data-clients-ctx-act]');
       if (!btn) return;
       var act = btn.getAttribute('data-clients-ctx-act');
-      if (act === 'assign') openClientsAssignSub(btn, kind, id);
+      if (act === 'assign-application') openApplicationAssignMenu(btn, extra.applicationId);
+      else if (act === 'assign') openClientsAssignSub(btn, kind, id);
       else if (act === 'status') openCipStatusSub(btn, kind, id, extra);
       else closeClientsCtxSub();
     });

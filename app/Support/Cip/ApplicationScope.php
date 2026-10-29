@@ -6,6 +6,7 @@ use App\Models\CipApplication;
 use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\Company;
+use App\Models\CompanyLocation;
 use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Access\Role;
@@ -20,8 +21,10 @@ use Illuminate\Database\Eloquent\Builder;
  * does not hide the rest of the caseload. External accounts see exactly their
  * slice: a Service Provider contact (an active member of the firm a provider
  * is linked to) sees their firm's applications; a private client sees the
- * applications on their own client record. A parked Employee cannot reach the
- * portal and sees nothing here either.
+ * applications on their own client record. A contact who sits on a branch
+ * sees only the applications assigned to that branch. The main office and a
+ * service provider admin still see the firm's book. A parked Employee cannot
+ * reach the portal and sees nothing here either.
  *
  * Use {@see self::query()} anywhere applications are listed, counted or
  * fetched; {@see self::findOrFail()} answers 404, never 403, so existence
@@ -34,6 +37,13 @@ class ApplicationScope
 
     /** @var array<int, list<int>> */
     private static array $providerIds = [];
+
+    /**
+     * Per company: whether this person reads the firm book, and which offices.
+     *
+     * @var array<int, array<int, array{firm: bool, mains: list<int>, branches: list<int>}>>
+     */
+    private static array $officeRules = [];
 
     /** An application query already narrowed to what this account may see. */
     public static function query(?User $user, ?Builder $base = null): Builder
@@ -70,18 +80,167 @@ class ApplicationScope
          * unqualified one here made the whole query ambiguous the moment
          * somebody did.
          */
-        $providerIds = self::providerIdsFor($user);
-
-        return $query->where(function (Builder $q) use ($user, $providerIds) {
-            if ($providerIds !== []) {
-                $q->whereIn('cip_applications.provider_id', $providerIds);
-            }
+        return $query->where(function (Builder $q) use ($user) {
+            $q->where(function (Builder $firm) use ($user) {
+                self::limitProvidersAndOffices($firm, $user);
+            });
 
             $q->orWhereIn(
                 'cip_applications.client_id',
                 Client::query()->select('id')->where('user_id', $user->id)
             );
         });
+    }
+
+    /**
+     * The firm's providers, and for a branch contact only that branch.
+     *
+     * A service provider admin reads every application the firm can. A
+     * contact on the main office reads the firm book: applications nobody
+     * has sent to a branch, plus any that sit on the main office. A contact
+     * on a branch reads only what was assigned to that branch. Their own
+     * client record stays visible either way; that match is the caller's.
+     */
+    private static function limitProvidersAndOffices(Builder $query, User $user): void
+    {
+        $providerIds = self::providerIdsFor($user);
+
+        if ($providerIds === []) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
+        if (Role::isServiceProviderAdmin($user)) {
+            $query->whereIn('cip_applications.provider_id', $providerIds);
+
+            return;
+        }
+
+        $providers = CipProvider::withTrashed()
+            ->whereIn('id', $providerIds)
+            ->get(['id', 'company_id']);
+
+        $rules = self::officeRules($user);
+        $byCompany = [];
+        foreach ($providers as $provider) {
+            $byCompany[(int) ($provider->company_id ?? 0)][] = (int) $provider->id;
+        }
+
+        $query->where(function (Builder $outer) use ($byCompany, $rules) {
+            $first = true;
+            foreach ($byCompany as $companyId => $ids) {
+                $rule = $companyId === 0
+                    ? self::unlinkedOfficeRule($rules)
+                    : ($rules[$companyId] ?? self::unlinkedOfficeRule($rules));
+                $method = $first ? 'where' : 'orWhere';
+                $first = false;
+                $outer->{$method}(function (Builder $one) use ($ids, $rule) {
+                    $one->whereIn('cip_applications.provider_id', $ids);
+                    self::applyOfficeRule($one, $rule);
+                });
+            }
+
+            if ($first) {
+                $outer->whereRaw('1 = 0');
+            }
+        });
+    }
+
+    /**
+     * @param  array{firm: bool, mains: list<int>, branches: list<int>}  $rule
+     */
+    private static function applyOfficeRule(Builder $query, array $rule): void
+    {
+        if ($rule['firm']) {
+            $query->where(function (Builder $q) use ($rule) {
+                $q->whereNull('cip_applications.location_id');
+                $ids = array_values(array_unique(array_merge($rule['mains'], $rule['branches'])));
+                if ($ids !== []) {
+                    $q->orWhereIn('cip_applications.location_id', $ids);
+                }
+            });
+
+            return;
+        }
+
+        $ids = array_values(array_unique($rule['branches']));
+        if ($ids === []) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
+        $query->whereIn('cip_applications.location_id', $ids);
+    }
+
+    /**
+     * A provider that is not linked to this person's company still belongs
+     * to the firm when the names match. It follows the same office rule as
+     * the seats they actually hold.
+     *
+     * @param  array<int, array{firm: bool, mains: list<int>, branches: list<int>}>  $rules
+     * @return array{firm: bool, mains: list<int>, branches: list<int>}
+     */
+    private static function unlinkedOfficeRule(array $rules): array
+    {
+        $firm = false;
+        $mains = [];
+        $branches = [];
+        foreach ($rules as $rule) {
+            $firm = $firm || $rule['firm'];
+            $mains = array_merge($mains, $rule['mains']);
+            $branches = array_merge($branches, $rule['branches']);
+        }
+
+        if ($rules === []) {
+            $firm = true;
+        }
+
+        return [
+            'firm' => $firm,
+            'mains' => array_values(array_unique($mains)),
+            'branches' => array_values(array_unique($branches)),
+        ];
+    }
+
+    /**
+     * @return array<int, array{firm: bool, mains: list<int>, branches: list<int>}>
+     */
+    private static function officeRules(User $user): array
+    {
+        $uid = (int) $user->id;
+        if (array_key_exists($uid, self::$officeRules)) {
+            return self::$officeRules[$uid];
+        }
+
+        $rules = [];
+        $members = CompanyMember::query()
+            ->active()
+            ->where('user_id', $user->id)
+            ->with('location')
+            ->get();
+
+        foreach ($members as $member) {
+            $companyId = (int) $member->company_id;
+            $rules[$companyId] ??= ['firm' => false, 'mains' => [], 'branches' => []];
+            $location = $member->location;
+
+            if (! $location instanceof CompanyLocation || $location->isMain()) {
+                $rules[$companyId]['firm'] = true;
+                if ($location instanceof CompanyLocation && $location->isMain()) {
+                    $rules[$companyId]['mains'][] = (int) $location->id;
+                }
+
+                continue;
+            }
+
+            if ($location->kind === CompanyLocation::KIND_BRANCH) {
+                $rules[$companyId]['branches'][] = (int) $location->id;
+            }
+        }
+
+        return self::$officeRules[$uid] = $rules;
     }
 
     /**
@@ -226,6 +385,7 @@ class ApplicationScope
     {
         self::$visibleClientIds = [];
         self::$providerIds = [];
+        self::$officeRules = [];
     }
 
     /** Resolve one application by uuid within the viewer's slice, or 404. */

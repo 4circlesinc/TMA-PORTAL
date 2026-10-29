@@ -2,7 +2,6 @@
 
 namespace App\Support\Cip;
 
-use App\Models\CipApplication;
 use App\Models\CipProvider;
 use App\Models\Folder;
 use App\Models\User;
@@ -124,10 +123,12 @@ final class FolderAccess
             return [[], []];
         }
 
-        $clients = CipApplication::query()
-            ->whereIn('provider_id', $providers->pluck('id'))
-            ->whereNotNull('client_id')
-            ->pluck('client_id')
+        // The same office limit as the application list. A branch does not
+        // open another branch's client folder by sharing the firm's provider.
+        $clients = ApplicationScope::query($user)
+            ->whereIn('cip_applications.provider_id', $providers->pluck('id'))
+            ->whereNotNull('cip_applications.client_id')
+            ->pluck('cip_applications.client_id')
             ->map(fn ($id) => (int) $id)
             ->unique()
             ->values()

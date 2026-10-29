@@ -130,6 +130,12 @@ class CipApplication extends Model
         return $this->belongsTo(CipProvider::class, 'provider_id');
     }
 
+    /** The office that may see this file. Null is the firm's own book. */
+    public function location(): BelongsTo
+    {
+        return $this->belongsTo(CompanyLocation::class, 'location_id');
+    }
+
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);

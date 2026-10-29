@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\Assignments;
+use App\Support\Cip\OfficeAssignment;
 use App\Support\Cip\CipAccess;
 use App\Support\Clients\Assignments as ClientAssignments;
 use App\Support\Realtime\Live;
@@ -62,6 +63,7 @@ class CipAssignmentController extends Controller
                 $request->user(),
                 Assignments::SERVICE_PROVIDER_CONTACT,
             );
+            OfficeAssignment::place($application, $contact);
 
             Live::staffAnd(Live::CIP, [$contact->id]);
             Live::staffAnd(Live::CLIENTS, [$contact->id]);
@@ -193,6 +195,10 @@ class CipAssignmentController extends Controller
             }
         }
 
+        if ($removingContact) {
+            OfficeAssignment::followHolders($application->fresh());
+        }
+
         Live::staffAnd(Live::CIP, [$userId]);
         Live::staffAnd(Live::CLIENTS, [$userId]);
 
@@ -200,6 +206,30 @@ class CipAssignmentController extends Controller
     }
 
     /* ── internals ─────────────────────────────────── */
+
+    /**
+     * Which office each person sits on, so the picker can split the firm
+     * from its branches.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<array<string, mixed>>
+     */
+    private function withOffices(CipApplication $application, array $rows, string $idKey): array
+    {
+        $application->loadMissing('provider');
+        $offices = OfficeAssignment::forUsers(
+            $application->provider?->company_id,
+            array_map(fn (array $row) => (int) ($row[$idKey] ?? 0), $rows),
+        );
+
+        foreach ($rows as &$row) {
+            $office = $offices[(int) ($row[$idKey] ?? 0)] ?? null;
+            $row['locationKind'] = $office['kind'] ?? null;
+            $row['locationName'] = $office['name'] ?? null;
+        }
+
+        return $rows;
+    }
 
     /** The application, if this reader may see it at all. */
     private function application(Request $request, string $uuid): CipApplication
@@ -302,7 +332,7 @@ class CipAssignmentController extends Controller
              * Two records meant staff added in one place were invisible in
              * the other.
              */
-            'assignments' => self::holders($application, $request->user()),
+            'assignments' => $this->withOffices($application, self::holders($application, $request->user()), 'userId'),
             'canAssign' => $canAssign || $canAssignContact,
             /*
              * Only somebody who may actually hand the file over is shown the
@@ -310,7 +340,7 @@ class CipAssignmentController extends Controller
              * application. Section 8's table tells them that already, but reading
              * off every officer who could have had it is not theirs.
              */
-            'assignable' => array_merge(
+            'assignable' => $this->withOffices($application, array_merge(
                 $canAssign
                     ? Assignments::assignable($application)->map(fn (User $u) => [
                         'id' => $u->id,
@@ -326,7 +356,7 @@ class CipAssignmentController extends Controller
                     ])->values()->all()
                     : [],
                 $contacts,
-            ),
+            ), 'id'),
             'roles' => collect(Assignments::ROLES)
                 ->map(fn (string $label, string $value) => ['value' => $value, 'label' => $label])
                 ->values()->all(),
