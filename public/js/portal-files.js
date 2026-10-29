@@ -7974,7 +7974,8 @@
         e.preventDefault();
         e.stopPropagation();
         var take = list[parseInt(off.getAttribute('data-ctx-off'), 10)];
-        closeContextMenu();
+        // Assigning keeps the menu open so more than one person can be named.
+        if (!take || !take.keepOpen) closeContextMenu();
         if (take && take.remove) take.remove();
         return;
       }
@@ -7985,9 +7986,48 @@
       var picked = list[parseInt(b.getAttribute('data-ctx'), 10)];
       if (picked && picked.submenu) { openCtxSub(b, picked); return; }
       var fn = picked && picked.fn;
-      closeContextMenu();
+      if (!picked || !picked.keepOpen) closeContextMenu();
       if (fn) fn();
     });
+  }
+
+  /*
+   * Swap the rows of an open menu without closing it.
+   *
+   * Used when naming more than one person on a file: each pick updates the
+   * list in place, the chosen ones stay ticked, and the open tab is kept.
+   */
+  function replaceMenuContent(list, tabs) {
+    if (!ctxEl) return;
+    var active = ctxEl.querySelector('[data-ctx-tab][aria-selected="true"]');
+    var activeId = active ? active.getAttribute('data-ctx-tab') : null;
+    ctxEl._picksBound = false;
+    ctxEl.innerHTML = tabs && tabs.length
+      ? menuWithTabs(list, tabs)
+      : (list || []).map(menuItemHtml).join('');
+    if (activeId) {
+      var match = false;
+      ctxEl.querySelectorAll('[data-ctx-tab]').forEach(function (b) {
+        var on = b.getAttribute('data-ctx-tab') === activeId;
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+        if (on) match = true;
+      });
+      ctxEl.querySelectorAll('[data-ctx-panel]').forEach(function (panel) {
+        panel.hidden = panel.getAttribute('data-ctx-panel') !== activeId;
+      });
+      if (!match) {
+        var first = ctxEl.querySelector('[data-ctx-tab]');
+        if (first) {
+          first.setAttribute('aria-selected', 'true');
+          var firstId = first.getAttribute('data-ctx-tab');
+          ctxEl.querySelectorAll('[data-ctx-panel]').forEach(function (panel) {
+            panel.hidden = panel.getAttribute('data-ctx-panel') !== firstId;
+          });
+        }
+      }
+    }
+    bindMenuPicks(ctxEl, list || []);
+    if (ctxEl._anchor) placeMenu(ctxEl, ctxEl._anchor.x, ctxEl._anchor.y);
   }
 
   function menuWithTabs(list, tabs) {
@@ -8438,6 +8478,19 @@
      * Preview/Download for an application uuid.
      */
     close: function () { closeContextMenu(); },
+
+    /** True while a context menu from this module is on screen. */
+    isOpen: function () { return !!ctxEl; },
+
+    /**
+     * Refresh an open menu's rows without closing it.
+     *
+     * CIP assignment uses this so naming one person leaves the list up for
+     * the next, with the ones already on the file still marked.
+     */
+    replace: function (list, tabs) {
+      replaceMenuContent(list, tabs);
+    },
 
     menu: function (x, y, item, onChange, list, tabs) {
       externalItems = item ? [item] : [];

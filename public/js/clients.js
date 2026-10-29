@@ -5098,10 +5098,106 @@
     return officer && officer.accountType ? String(officer.accountType) : '';
   }
 
+  var ASSIGN_MENU_TABS = [
+    { id: 'staff', label: 'Staff' },
+    { id: 'firm', label: 'Firm users' },
+    { id: 'branch', label: 'Branch users' },
+  ];
+
+  /* Where the assign menu was opened from, so naming one person can refresh
+     the same list without closing it. */
+  var cipAssignMenu = null;
+
   function openApplicationAssignMenu(button, applicationId) {
     if (!button || !applicationId || button.hasAttribute('data-open')) return;
     button.setAttribute('data-open', 'true');
     openAssignMenu(button, applicationId, true);
+  }
+
+  function assignPersonTab(person) {
+    if (!person || person.role !== 'service_provider_contact') return 'staff';
+    return person.locationKind === 'branch' ? 'branch' : 'firm';
+  }
+
+  function assignPersonMeta(person) {
+    return [personRoleLabel(person), person && person.locationName]
+      .filter(Boolean).join(' · ');
+  }
+
+  /*
+   * One list of people, not two.
+   *
+   * The ones already on the file come first, ticked, with an × to take them
+   * off. Everyone else is still offered. Each pick keeps the menu open so
+   * more than one person can be named in the same pass.
+   *
+   * Firm users sit on the main office. Branch users sit on a branch, and
+   * naming one of them is what limits the file to that branch.
+   */
+  function buildAssignMenuItems(applicationId, json) {
+    var free = (json && json.assignable) || [];
+    var live = (json && json.assignments) || [];
+    var held = {};
+    var items = [];
+
+    live.forEach(function (a) {
+      held[String(a.userId)] = true;
+      items.push({
+        tab: assignPersonTab(a),
+        label: a.name || a.email || 'Somebody',
+        meta: assignPersonMeta(a),
+        face: personFace(a),
+        on: true,
+        keepOpen: true,
+        remove: a.canRemove === false
+          ? undefined
+          : function () { changeAssignment(applicationId, 'DELETE', a.userId); },
+      });
+    });
+
+    free.forEach(function (o) {
+      if (held[String(o.id)]) return;
+      items.push({
+        tab: assignPersonTab(o),
+        label: o.name || o.email,
+        meta: assignPersonMeta(o),
+        face: personFace(o),
+        keepOpen: true,
+        fn: function () { changeAssignment(applicationId, 'POST', o.id); },
+      });
+    });
+
+    return items;
+  }
+
+  function showAssignMenu(button, applicationId, beside, json, refresh) {
+    var items = buildAssignMenuItems(applicationId, json);
+    cipAssignMenu = { button: button, applicationId: applicationId, beside: !!beside };
+
+    // Only refresh when this assign menu is still the one on screen. Another
+    // file menu must not be rewritten with assignment rows.
+    if (refresh
+        && window.TMAFileActions.isOpen
+        && window.TMAFileActions.isOpen()
+        && window.TMAFileActions.replace) {
+      window.TMAFileActions.replace(items, ASSIGN_MENU_TABS);
+      return;
+    }
+
+    if (!button || !button.isConnected) return;
+    var box = button.getBoundingClientRect();
+    // Beside Assign to the list hangs off that row. From the Assigned
+    // column it hangs under the button that opened it.
+    var x = beside ? box.right + 2 : box.left;
+    var y = beside ? box.top - 4 : box.bottom + 4;
+    window.TMAFileActions.menu(
+      x,
+      y,
+      { id: applicationId, type: 'application' },
+      null,
+      items,
+      ASSIGN_MENU_TABS
+    );
   }
 
   function openAssignMenu(button, applicationId, beside) {
@@ -5109,82 +5205,7 @@
 
     clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/assignments')
       .then(function (json) {
-        if (!button.isConnected) return;
-        var box = button.getBoundingClientRect();
-        var free = (json && json.assignable) || [];
-        var live = (json && json.assignments) || [];
-        var held = {};
-
-        /*
-         * One list of people, not two.
-         *
-         * It used to be "End Rita" rows above a separate list of everybody
-         * else, which made the same colleague read as two different things
-         * depending on whether they held the file. It is a list of who could
-         * be on this: the ones who already are come first, ticked, with an ×
-         * to take it off them, and clicking the row itself does nothing,
-         * because they are already there and a click that appears to work and
-         * changes nothing is what made this feel broken.
-         */
-        /*
-         * Firm users sit on the main office. Branch users sit on a branch,
-         * and naming one of them is what limits the file to that branch.
-         */
-        function assignTab(person) {
-          if (!person || person.role !== 'service_provider_contact') return 'staff';
-          return person.locationKind === 'branch' ? 'branch' : 'firm';
-        }
-
-        function assignMeta(person) {
-          return [personRoleLabel(person), person && person.locationName]
-            .filter(Boolean).join(' · ');
-        }
-
-        var items = [];
-
-        live.forEach(function (a) {
-          held[String(a.userId)] = true;
-          items.push({
-            tab: assignTab(a),
-            label: a.name || a.email || 'Somebody',
-            meta: assignMeta(a),
-            face: personFace(a),
-            on: true,
-            remove: a.canRemove === false
-              ? undefined
-              : function () { changeAssignment(applicationId, 'DELETE', a.userId); },
-          });
-        });
-
-        free.forEach(function (o) {
-          // The column and this menu share the client list: somebody already
-          // named in the cell must not also appear as a person to add.
-          if (held[String(o.id)]) return;
-          items.push({
-            tab: assignTab(o),
-            label: o.name || o.email,
-            meta: assignMeta(o),
-            face: personFace(o),
-            fn: function () { changeAssignment(applicationId, 'POST', o.id); },
-          });
-        });
-
-        // Beside Assign to the list hangs off that row. From the Assigned
-        // column it hangs under the button that opened it.
-        var x = beside ? box.right + 2 : box.left;
-        var y = beside ? box.top - 4 : box.bottom + 4;
-        window.TMAFileActions.menu(
-          x,
-          y,
-          { id: applicationId, type: 'application' },
-          null,
-          items,
-          [
-            { id: 'staff', label: 'Staff' },
-            { id: 'firm', label: 'Firm users' },
-            { id: 'branch', label: 'Branch users' },
-          ]
-        );
+        showAssignMenu(button, applicationId, beside, json, false);
       })
       .catch(function () { clientsToast('Could not load the officers.', 'negative'); });
   }
@@ -5199,6 +5220,18 @@
     })
       .then(function (json) {
         clientsToast(method === 'DELETE' ? 'Assignment ended' : 'Assigned', 'positive');
+        // Keep the same menu up: the person just named (or removed) is
+        // refreshed in place so another can be chosen straight after.
+        if (cipAssignMenu && cipAssignMenu.applicationId === applicationId
+            && window.TMAFileActions && window.TMAFileActions.replace) {
+          showAssignMenu(
+            cipAssignMenu.button,
+            applicationId,
+            cipAssignMenu.beside,
+            json,
+            true
+          );
+        }
         // The first assignment moves the application into review, so the
         // buckets and the row both have to be read again rather than patched.
         var row = applicationRowById(applicationId);
