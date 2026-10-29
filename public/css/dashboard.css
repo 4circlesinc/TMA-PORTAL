@@ -40430,16 +40430,11 @@ span.tma-dash__messages-profile-avatar {
 /*
  * Somebody already on the file, in the assign menu.
  *
- * Not a button: they are already there, and a click that appears to work and
- * changes nothing is exactly what made this feel broken. The row is greyed,
- * the face carries a tick, and a remove control takes them off.
+ * Same padding and face slot as every other person row — the tick sits on
+ * the photo and must not widen the row, or the chosen person reads as
+ * indented.
  */
 .tma-portal-context-menu__item--on {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  padding: var(--space-6) var(--space-12);
-  border-radius: var(--radius-8);
   background: var(--color-bg-subtle, rgba(0, 0, 0, 0.04));
   color: var(--color-text-secondary);
   cursor: default;
@@ -40458,36 +40453,45 @@ span.tma-dash__messages-profile-avatar {
   opacity: 0.7;
 }
 
+/* Same 24px face column as an unchosen row. min/max lock the tick out of
+   the flex size calculation (min-width: auto was growing the slot). */
 .tma-portal-context-menu__face-wrap {
   position: relative;
+  display: block;
   flex: 0 0 24px;
   width: 24px;
   height: 24px;
+  min-width: 24px;
+  max-width: 24px;
+  overflow: visible;
 }
 
 .tma-portal-context-menu__face-wrap .tma-portal-context-menu__face,
 .tma-portal-context-menu__face-wrap .tma-portal-context-menu__avatar {
+  display: block;
   width: 24px;
   height: 24px;
 }
 
 .tma-portal-context-menu__face-tick {
   position: absolute;
-  right: -3px;
-  bottom: -3px;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
   display: grid;
   place-items: center;
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--color-accent, #111);
   border: 1.5px solid var(--color-white, #fff);
   box-sizing: border-box;
+  pointer-events: none;
 }
 
 .tma-portal-context-menu__face-tick img {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   filter: brightness(0) invert(1);
 }
 
@@ -40520,14 +40524,6 @@ span.tma-dash__messages-profile-avatar {
 .tma-portal-context-menu__off:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: -2px;
-}
-
-/* Keep the remove control on screen: long job titles used to push it
-   past the menu's clipped edge. */
-.tma-portal-context-menu--tabs .tma-portal-context-menu__item--on .tma-portal-context-menu__meta {
-  flex: 1 1 auto;
-  min-width: 0;
-  margin-left: var(--space-8);
 }
 
 

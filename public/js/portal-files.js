@@ -7841,12 +7841,15 @@
       face = '<span class="tma-portal-context-menu__icon"></span>';
     }
 
-    // Already on the file: tick on the photo so the row reads as chosen,
-    // not as another person still waiting to be named.
-    if (it.on) {
+    // Same face slot for every person row. The tick sits on the photo and
+    // must not change the column width, or a chosen row shifts right.
+    if (it.face || it.avatar || it.on) {
       return '<span class="tma-portal-context-menu__face-wrap">' + face +
-        '<span class="tma-portal-context-menu__face-tick" aria-hidden="true">' +
-        '<img src="images/icons/phosphor/Check.svg" width="10" height="10" alt=""></span></span>';
+        (it.on
+          ? '<span class="tma-portal-context-menu__face-tick" aria-hidden="true">' +
+            '<img src="images/icons/phosphor/Check.svg" width="10" height="10" alt=""></span>'
+          : '') +
+        '</span>';
     }
 
     return face;
