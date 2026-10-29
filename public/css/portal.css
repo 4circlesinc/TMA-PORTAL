@@ -720,7 +720,11 @@
 .tma-portal-context-menu--tabs {
   overflow: hidden;
   padding: 0;
-  min-width: 320px;
+  /* One width for every tab. The list used to size the menu, so Staff,
+     Firm users and Branch users jumped each time the panel changed. */
+  width: 480px;
+  min-width: 480px;
+  max-width: 480px;
 }
 
 .tma-portal-context-menu__tabs {
@@ -733,6 +737,8 @@
 
 .tma-portal-context-menu__tab {
   flex: 1 1 0;
+  width: 0;
+  min-width: 0;
   margin: 0;
   padding: var(--space-8) var(--space-12);
   border: 0;
@@ -740,7 +746,24 @@
   background: transparent;
   font: 500 var(--text-size-13, 13px) / 1.2 var(--font-family);
   color: var(--color-text-secondary);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
+}
+
+.tma-portal-context-menu--tabs .tma-portal-context-menu__item {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tma-portal-context-menu--tabs .tma-portal-context-menu__label,
+.tma-portal-context-menu--tabs .tma-portal-context-menu__meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tma-portal-context-menu__tab[aria-selected="true"] {

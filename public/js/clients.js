@@ -5131,7 +5131,7 @@
          * and naming one of them is what limits the file to that branch.
          */
         function assignTab(person) {
-          if (!person || person.role !== 'service_provider_contact') return '';
+          if (!person || person.role !== 'service_provider_contact') return 'staff';
           return person.locationKind === 'branch' ? 'branch' : 'firm';
         }
 
@@ -5144,10 +5144,8 @@
 
         live.forEach(function (a) {
           held[String(a.userId)] = true;
-          var tab = assignTab(a);
-          if (!tab) return;
           items.push({
-            tab: tab,
+            tab: assignTab(a),
             label: a.name || a.email || 'Somebody',
             meta: assignMeta(a),
             face: personFace(a),
@@ -5162,10 +5160,8 @@
           // The column and this menu share the client list: somebody already
           // named in the cell must not also appear as a person to add.
           if (held[String(o.id)]) return;
-          var tab = assignTab(o);
-          if (!tab) return;
           items.push({
-            tab: tab,
+            tab: assignTab(o),
             label: o.name || o.email,
             meta: assignMeta(o),
             face: personFace(o),
@@ -5184,6 +5180,7 @@
           null,
           items,
           [
+            { id: 'staff', label: 'Staff' },
             { id: 'firm', label: 'Firm users' },
             { id: 'branch', label: 'Branch users' },
           ]
@@ -11669,13 +11666,18 @@
     var loading = !!state.assignmentsLoading;
     var admin = isClientsAdmin();
     var assignForm = '';
+    var headAction = '';
     var cipApp = cipApplicationForClient(contactId);
+    /*
+     * An application opens the people menu from the heading. A lone Assign
+     * button under the count looked like a dead end with nobody to choose.
+     * A client without a file keeps the picker-and-button row.
+     */
     if (cipApp && cipApp.id && canAssignApplications() && !hidden) {
-      assignForm =
-        '<div class="tma-dash__clients-assign-form">' +
-        '<button type="button" class="tma-dash__clients-assign-btn" data-cip-assign="' +
-        esc(cipApp.id) + '">Assign</button>' +
-        '</div>';
+      headAction =
+        '<button type="button" class="tma-dash__clients-message-btn" data-cip-assign="' +
+        esc(cipApp.id) + '" aria-haspopup="menu">' +
+        '<img src="' + ICONS.Plus + '" alt=""><span>Assign someone</span></button>';
     } else if (admin && !hidden) {
       var unassigned = assignable.filter(function (s) {
         return !items.some(function (a) { return String(a.userId) === String(s.id); });
@@ -11699,7 +11701,7 @@
       '<div class="tma-dash__clients-assigned-head">' +
       '<span class="tma-dash__clients-assigned-count">' +
       (loading ? 'Loading…' : (items.length + ' assigned staff member' + (items.length === 1 ? '' : 's'))) +
-      '</span></div>' +
+      '</span>' + headAction + '</div>' +
       assignForm +
       (loading
         ? '<div class="tma-dash__clients-assigned-empty">Loading assigned staff…</div>'

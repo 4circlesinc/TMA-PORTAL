@@ -135,6 +135,7 @@ window.TMAI18nDict = {
     "Could not remove that branch": "无法移除该分行",
     "Could not move that user": "无法移动该用户",
     "No staff assigned": "尚未指派员工",
+    "Assign someone": "指派人员",
     "Previously assigned": "曾经指派", "Portal access": "门户访问权限",
     "Company access": "公司访问权限", "Create company": "创建公司",
     "Create person": "创建联系人", "Import clients": "导入客户",

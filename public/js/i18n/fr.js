@@ -135,6 +135,7 @@ window.TMAI18nDict = {
     "Could not remove that branch": "Impossible de retirer cette succursale",
     "Could not move that user": "Impossible de déplacer cet utilisateur",
     "No staff assigned": "Aucun personnel assigné",
+    "Assign someone": "Assigner quelqu’un",
     "Previously assigned": "Précédemment assigné", "Portal access": "Accès au portail",
     "Company access": "Accès de l'entreprise", "Create company": "Créer une entreprise",
     "Create person": "Créer une personne", "Import clients": "Importer des clients",
