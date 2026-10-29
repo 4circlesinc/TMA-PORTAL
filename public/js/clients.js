@@ -5101,10 +5101,10 @@
   function openApplicationAssignMenu(button, applicationId) {
     if (!button || !applicationId || button.hasAttribute('data-open')) return;
     button.setAttribute('data-open', 'true');
-    openAssignMenu(button, applicationId);
+    openAssignMenu(button, applicationId, true);
   }
 
-  function openAssignMenu(button, applicationId) {
+  function openAssignMenu(button, applicationId, beside) {
     if (!window.TMAFileActions || !window.TMAFileActions.menu) return;
 
     clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/assignments')
@@ -5129,10 +5129,9 @@
         /*
          * Firm users sit on the main office. Branch users sit on a branch,
          * and naming one of them is what limits the file to that branch.
-         * Staff stay their own tab: a service provider does not assign them.
          */
         function assignTab(person) {
-          if (!person || person.role !== 'service_provider_contact') return 'staff';
+          if (!person || person.role !== 'service_provider_contact') return '';
           return person.locationKind === 'branch' ? 'branch' : 'firm';
         }
 
@@ -5141,14 +5140,14 @@
             .filter(Boolean).join(' · ');
         }
 
-        var providerViewer = isServiceProviderAdmin() && !isClientsAdmin();
         var items = [];
 
         live.forEach(function (a) {
           held[String(a.userId)] = true;
-          if (providerViewer && assignTab(a) === 'staff') return;
+          var tab = assignTab(a);
+          if (!tab) return;
           items.push({
-            tab: assignTab(a),
+            tab: tab,
             label: a.name || a.email || 'Somebody',
             meta: assignMeta(a),
             face: personFace(a),
@@ -5163,9 +5162,10 @@
           // The column and this menu share the client list: somebody already
           // named in the cell must not also appear as a person to add.
           if (held[String(o.id)]) return;
-          if (providerViewer && assignTab(o) === 'staff') return;
+          var tab = assignTab(o);
+          if (!tab) return;
           items.push({
-            tab: assignTab(o),
+            tab: tab,
             label: o.name || o.email,
             meta: assignMeta(o),
             face: personFace(o),
@@ -5173,27 +5173,20 @@
           });
         });
 
-        // The people, as the menu's own rows, not file actions for a fake
-        // file that we then overwrite. That swap measured a narrow menu and
-        // placed it, then grew it off the right of the Assigned To column.
-        var tabs = providerViewer
-          ? [
-            { id: 'firm', label: 'Firm users' },
-            { id: 'branch', label: 'Branch users' },
-          ]
-          : [
-            { id: 'staff', label: 'Staff' },
-            { id: 'firm', label: 'Firm users' },
-            { id: 'branch', label: 'Branch users' },
-          ];
-
+        // Beside Assign to the list hangs off that row. From the Assigned
+        // column it hangs under the button that opened it.
+        var x = beside ? box.right + 2 : box.left;
+        var y = beside ? box.top - 4 : box.bottom + 4;
         window.TMAFileActions.menu(
-          box.left,
-          box.bottom + 4,
+          x,
+          y,
           { id: applicationId, type: 'application' },
           null,
           items,
-          tabs
+          [
+            { id: 'firm', label: 'Firm users' },
+            { id: 'branch', label: 'Branch users' },
+          ]
         );
       })
       .catch(function () { clientsToast('Could not load the officers.', 'negative'); });
@@ -13669,6 +13662,8 @@
     if (clientsCtxEl && clientsCtxEl.parentNode) clientsCtxEl.parentNode.removeChild(clientsCtxEl);
     clientsCtxEl = null;
     clientsCtxAnchor = null;
+    disarmClientsCtxHover();
+    if (window.TMAFileActions && window.TMAFileActions.close) window.TMAFileActions.close();
     document.removeEventListener('click', onClientsCtxDocClick);
     document.removeEventListener('keydown', onClientsCtxKey);
     document.removeEventListener('scroll', onClientsCtxScroll, true);
@@ -13697,6 +13692,31 @@
     if (e.key === 'Escape') closeClientsContextMenu();
   }
 
+  var clientsCtxHoverReady = false;
+  var clientsCtxHoverArm = null;
+
+  /* The right-click that opened the menu is not a hover. Submenus wait
+     until the pointer has actually moved, and not in the same instant. */
+  function disarmClientsCtxHover() {
+    clientsCtxHoverReady = false;
+    if (!clientsCtxHoverArm) return;
+    document.removeEventListener('mousemove', clientsCtxHoverArm, true);
+    clientsCtxHoverArm = null;
+  }
+
+  function armClientsCtxHover(onReady) {
+    disarmClientsCtxHover();
+    var openedAt = Date.now();
+    clientsCtxHoverArm = function (e) {
+      if (Date.now() - openedAt < 280) return;
+      clientsCtxHoverReady = true;
+      document.removeEventListener('mousemove', clientsCtxHoverArm, true);
+      clientsCtxHoverArm = null;
+      if (onReady) onReady(e);
+    };
+    document.addEventListener('mousemove', clientsCtxHoverArm, true);
+  }
+
   function openClientsContextMenu(kind, id, x, y, extra) {
     closeClientsContextMenu();
     extra = extra || {};
@@ -13708,6 +13728,16 @@
     clientsCtxEl.innerHTML = items.map(ctxItemHtml).join('');
     document.body.appendChild(clientsCtxEl);
     placeCtxMenu(clientsCtxEl, x, y);
+    // The menu can land under the pointer. A hover that comes from that,
+    // before the pointer has moved, is the right-click itself, not a choice.
+    armClientsCtxHover(function (e) {
+      var btn = e.target && e.target.closest && e.target.closest('[data-clients-ctx-act]');
+      if (!btn || !clientsCtxEl || !clientsCtxEl.contains(btn)) return;
+      var act = btn.getAttribute('data-clients-ctx-act');
+      if (act === 'assign-application') openApplicationAssignMenu(btn, extra.applicationId);
+      else if (act === 'assign') openClientsAssignSub(btn, kind, id);
+      else if (act === 'status') openCipStatusSub(btn, kind, id, extra);
+    });
 
     clientsCtxEl.addEventListener('click', function (e) {
       var btn = e.target.closest('[data-clients-ctx-act]');
@@ -13716,7 +13746,9 @@
       e.stopPropagation();
       var act = btn.getAttribute('data-clients-ctx-act');
       // The parent row only opens its submenu; it is not an action itself.
-      if (act === 'assign-application') { openApplicationAssignMenu(btn, extra.applicationId); return; }
+      // Assign to opens from the pointer resting on it, not from the click
+      // that raised this menu.
+      if (act === 'assign-application') return;
       if (act === 'assign') { openClientsAssignSub(btn, kind, id); return; }
       if (act === 'status') { openCipStatusSub(btn, kind, id, extra); return; }
       closeClientsContextMenu();
@@ -13726,13 +13758,17 @@
     // Hovering the parent opens the list; hovering any other row closes it,
     // so two submenus can never be open at once.
     clientsCtxEl.addEventListener('mouseover', function (e) {
+      if (!clientsCtxHoverReady) return;
       var btn = e.target.closest('[data-clients-ctx-act]');
       if (!btn) return;
       var act = btn.getAttribute('data-clients-ctx-act');
       if (act === 'assign-application') openApplicationAssignMenu(btn, extra.applicationId);
       else if (act === 'assign') openClientsAssignSub(btn, kind, id);
       else if (act === 'status') openCipStatusSub(btn, kind, id, extra);
-      else closeClientsCtxSub();
+      else {
+        closeClientsCtxSub();
+        if (window.TMAFileActions && window.TMAFileActions.close) window.TMAFileActions.close();
+      }
     });
 
     setTimeout(function () {

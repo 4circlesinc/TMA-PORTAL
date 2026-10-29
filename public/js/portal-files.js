@@ -8437,6 +8437,8 @@
      * when the caller is not a file (CIP Assigned To) so this does not build
      * Preview/Download for an application uuid.
      */
+    close: function () { closeContextMenu(); },
+
     menu: function (x, y, item, onChange, list, tabs) {
       externalItems = item ? [item] : [];
       externalOnChange = onChange || null;
