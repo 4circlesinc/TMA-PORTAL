@@ -1699,7 +1699,7 @@ Route::get('/desktop/releases', [DesktopReleasesController::class, 'index'])
     ->name('desktop.releases');
 
 Route::get('/desktop/download/{platform}', [DesktopReleasesController::class, 'download'])
-    ->where('platform', 'mac|windows|android')
+    ->where('platform', 'mac|windows|android|ios')
     ->name('desktop.download');
 
 // The Android app: the page a phone lands on from the QR code (the download

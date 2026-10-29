@@ -62,6 +62,19 @@ class PushNotificationsTest extends TestCase
         $this->assertSame(0, DeviceToken::query()->count());
     }
 
+    public function test_an_iphone_registers_its_token(): void
+    {
+        $ann = $this->user();
+
+        $this->actingAs($ann)->postJson('/me/devices', ['platform' => 'ios', 'token' => 'iphone-tok', 'appVersion' => '0.1.0', 'deviceName' => 'iPhone 16'])
+            ->assertCreated();
+        $this->actingAs($ann)->postJson('/me/devices', ['platform' => 'ios-sandbox', 'token' => 'iphone-debug', 'deviceName' => 'iPhone Simulator'])
+            ->assertCreated();
+
+        $this->assertSame('ios', DeviceToken::query()->where('token', 'iphone-tok')->value('platform'));
+        $this->assertSame('ios-sandbox', DeviceToken::query()->where('token', 'iphone-debug')->value('platform'));
+    }
+
     public function test_a_notification_reaches_the_phone_with_the_websocket_record(): void
     {
         $ann = $this->user();

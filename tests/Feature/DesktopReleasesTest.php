@@ -88,7 +88,8 @@ class DesktopReleasesTest extends TestCase
             ->assertOk()
             ->assertJsonPath('mac.available', false)
             ->assertJsonPath('windows.available', false)
-            ->assertJsonPath('android.available', false);
+            ->assertJsonPath('android.available', false)
+            ->assertJsonPath('ios.available', false);
     }
 
     /**

@@ -17,7 +17,7 @@ class DeviceTokenController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'platform' => ['required', 'string', 'in:android'],
+            'platform' => ['required', 'string', 'in:android,ios,ios-sandbox'],
             'token' => ['required', 'string', 'max:512'],
             'appVersion' => ['nullable', 'string', 'max:32'],
             'deviceName' => ['nullable', 'string', 'max:120'],

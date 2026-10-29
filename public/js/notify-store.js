@@ -582,6 +582,7 @@
        * push would be the same alert twice. The phone's shade is FCM's.
        */
       if (window.TMADesktop && window.TMADesktop.isAndroid) return;
+      if (window.TMADesktop && window.TMADesktop.isIOS && window.TMADesktop.pushEnabled) return;
       if (permission() !== 'granted') return;
       if (!backgrounded()) return;
       // The per-module Desktop column in Settings → Notifications.

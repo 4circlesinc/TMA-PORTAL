@@ -71,4 +71,11 @@ android/*.jks
 android/.idea/
 android/.kotlin/
 android/app/google-services.json
+
+# iOS app (ios/)
+ios/build/
+ios/DerivedData/
+ios/**/xcuserdata/
+ios/**/*.xcuserstate
+ios/*.ipa
 tests/Browser/.state/

@@ -196,4 +196,17 @@ return [
         'credentials' => env('FCM_CREDENTIALS_JSON'),
     ],
 
+    /*
+    | Apple Push Notification service for the iOS app. All empty means no
+    | APNs send is attempted. Debug builds register as ios-sandbox and App
+    | Store builds as ios; the sender picks the host from the device row.
+    | APNS_PRIVATE_KEY is the .p8 contents or a path to the file.
+    */
+    'apns' => [
+        'key_id' => env('APNS_KEY_ID'),
+        'team_id' => env('APNS_TEAM_ID'),
+        'bundle_id' => env('APNS_BUNDLE_ID', 'com.tmantoinelaw.portal'),
+        'private_key' => env('APNS_PRIVATE_KEY'),
+    ],
+
 ];

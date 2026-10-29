@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Storage;
  * from the same manifests, so the portal can link at /desktop/download/mac and
  * keep working after every release.
  *
- * macOS, Windows and Android each resolve from their own manifest. A platform
+ * macOS, Windows, Android and iOS each resolve from their own manifest. A platform
  * with nothing published reports itself unavailable rather than handing out a
  * dead link, and turns itself on the day its latest-*.yml lands in the bucket.
  */
@@ -26,6 +26,7 @@ class DesktopReleasesController extends Controller
         'mac' => 'latest-mac.yml',
         'windows' => 'latest.yml',
         'android' => 'latest-android.yml',
+        'ios' => 'latest-ios.yml',
     ];
 
     /** Installer first, archive last, whatever a person double-clicks. */
@@ -33,6 +34,7 @@ class DesktopReleasesController extends Controller
         'mac' => ['dmg', 'pkg', 'zip'],
         'windows' => ['exe', 'msi', 'zip'],
         'android' => ['apk'],
+        'ios' => ['ipa'],
     ];
 
     /**
@@ -47,6 +49,7 @@ class DesktopReleasesController extends Controller
         'mac' => '11',
         'windows' => '10',
         'android' => '8',
+        'ios' => '16',
     ];
 
     private const TTL = 300;

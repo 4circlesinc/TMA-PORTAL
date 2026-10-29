@@ -16,6 +16,7 @@ class DeviceName
 
         $platform = match (true) {
             str_contains($agent, 'iPhone') => 'iPhone',
+            str_contains($agent, 'iPad') => 'iPad',
             str_contains($agent, 'Android') => 'Android',
             str_contains($agent, 'Macintosh') => 'Mac',
             str_contains($agent, 'Windows') => 'Windows',

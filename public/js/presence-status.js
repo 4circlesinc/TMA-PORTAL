@@ -328,6 +328,9 @@
     if (window.TMADesktop && window.TMADesktop.isAndroid) {
       return 'Location is blocked for this app. Allow location for TM ANTOINE Portal in Android settings, then try again.';
     }
+    if (window.TMADesktop && window.TMADesktop.isIOS) {
+      return 'Location is blocked for this app. Allow Location for TM ANTOINE Portal in Settings, then try again.';
+    }
     if (isDesktopShell()) {
       return 'Location is blocked for this app. Allow Location for TM ANTOINE Portal in System Settings, then quit and reopen the app.';
     }

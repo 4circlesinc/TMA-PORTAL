@@ -12,6 +12,10 @@ class DeviceToken extends Model
 {
     public const PLATFORM_ANDROID = 'android';
 
+    public const PLATFORM_IOS = 'ios';
+
+    public const PLATFORM_IOS_SANDBOX = 'ios-sandbox';
+
     protected function casts(): array
     {
         return ['last_seen_at' => 'datetime'];

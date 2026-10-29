@@ -1497,7 +1497,7 @@
   }
 
   function isAndroidShell() {
-    return !!(window.TMADesktop && window.TMADesktop.isAndroid);
+    return !!(window.TMADesktop && (window.TMADesktop.isAndroid || window.TMADesktop.isIOS));
   }
 
   function slideControl(action, kind, label, icon) {
