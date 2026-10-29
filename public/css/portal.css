@@ -766,6 +766,10 @@
   text-overflow: ellipsis;
 }
 
+.tma-portal-context-menu--tabs .tma-portal-context-menu__off {
+  flex: 0 0 auto;
+}
+
 .tma-portal-context-menu__tab[aria-selected="true"] {
   background: var(--color-bg-subtle, rgba(0, 0, 0, 0.06));
   color: var(--color-text-primary);

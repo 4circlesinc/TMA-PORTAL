@@ -5136,12 +5136,30 @@
    */
   function buildAssignMenuItems(applicationId, json) {
     var free = (json && json.assignable) || [];
-    var live = (json && json.assignments) || [];
+    var live = ((json && json.assignments) || []).slice();
     var held = {};
     var items = [];
+    var seen = {};
+
+    // Anyone already named on the Assigned tab is held, even if this
+    // response's assignable list still offers them.
+    var state = clientsMountState;
+    if (state && state.selectedId && Array.isArray(state.assignments)) {
+      live.forEach(function (a) {
+        if (a && a.userId != null) seen[String(a.userId)] = true;
+      });
+      state.assignments.forEach(function (a) {
+        if (!a || a.userId == null || seen[String(a.userId)]) return;
+        seen[String(a.userId)] = true;
+        live.push(a);
+      });
+    }
 
     live.forEach(function (a) {
-      held[String(a.userId)] = true;
+      if (!a || a.userId == null) return;
+      var id = String(a.userId);
+      if (held[id]) return;
+      held[id] = true;
       items.push({
         tab: assignPersonTab(a),
         label: a.name || a.email || 'Somebody',
@@ -5220,26 +5238,47 @@
     })
       .then(function (json) {
         clientsToast(method === 'DELETE' ? 'Assignment ended' : 'Assigned', 'positive');
-        // Keep the same menu up: the person just named (or removed) is
-        // refreshed in place so another can be chosen straight after.
-        if (cipAssignMenu && cipAssignMenu.applicationId === applicationId
-            && window.TMAFileActions && window.TMAFileActions.replace) {
-          showAssignMenu(
-            cipAssignMenu.button,
-            applicationId,
-            cipAssignMenu.beside,
-            json,
-            true
-          );
-        }
         // The first assignment moves the application into review, so the
         // buckets and the row both have to be read again rather than patched.
-        var row = applicationRowById(applicationId);
-        afterCipAssignmentChanged(row && row.clientUid, json);
+        var held = applicationRowById(applicationId) || applicationHeldById(applicationId);
+        var clientUid = (held && held.clientUid)
+          || (clientsMountState && clientsMountState.selectedId)
+          || null;
+        afterCipAssignmentChanged(clientUid, json, applicationId);
       })
       .catch(function (err) {
         clientsToast((err && err.message) || 'Could not change the assignment.', 'negative');
       });
+  }
+
+  /* Faces for the table cell and overview, from the assignment write's list. */
+  function assigneesFromPayload(assignments) {
+    return (assignments || []).map(function (a) {
+      var name = a.name || a.email || 'Somebody';
+
+      return {
+        name: name,
+        first: String(name).trim().split(/\s+/)[0] || name,
+        email: a.email,
+        avatar: a.avatar,
+        userId: a.userId,
+        roles: a.personRole || a.roleLabel
+          ? [a.personRole || a.roleLabel]
+          : (a.roles || []),
+      };
+    });
+  }
+
+  function patchAssignedPeople(applicationId, clientUid, assignments) {
+    var people = assigneesFromPayload(assignments);
+    var row = applicationRowById(applicationId);
+    if (row) row.assignedTo = people;
+
+    if (clientUid && APPLICATIONS[clientUid]) {
+      rememberApplication(clientUid, Object.assign({}, APPLICATIONS[clientUid], {
+        assignedTo: people,
+      }));
+    }
   }
 
   function cipApplicationForClient(clientUid) {
@@ -5261,7 +5300,7 @@
         method: 'POST',
         json: { userId: userId },
       }).then(function (json) {
-        afterCipAssignmentChanged(clientUid, json);
+        afterCipAssignmentChanged(clientUid, json, app.id);
 
         return json;
       });
@@ -5277,7 +5316,7 @@
         '/portal/cip/applications/' + encodeURIComponent(app.id) + '/assignments/' + encodeURIComponent(userId),
         { method: 'DELETE' }
       ).then(function (json) {
-        afterCipAssignmentChanged(clientUid, json);
+        afterCipAssignmentChanged(clientUid, json, app.id);
 
         return json;
       });
@@ -5286,22 +5325,63 @@
     return ClientsAPI.unassign(clientUid, userId);
   }
 
-  function afterCipAssignmentChanged(clientUid, json) {
+  function afterCipAssignmentChanged(clientUid, json, applicationId) {
+    var state = (clientsMenuCtx && clientsMenuCtx.state) || clientsMountState;
+    var render = (clientsMenuCtx && clientsMenuCtx.render) || repaintClients;
+    var appId = applicationId
+      || (json && json.applicationId)
+      || (cipAssignMenu && cipAssignMenu.applicationId)
+      || (clientUid && applicationFor(clientUid) && applicationFor(clientUid).id)
+      || null;
+
+    // Write the new holders into the screens that already show them, before
+    // any paint. Updating after the paint left the Assigned tab and the
+    // faces cell on the previous list until a full reload.
+    if (json && appId) {
+      patchAssignedPeople(appId, clientUid, json.assignments || []);
+    }
+
+    if (state && json && clientUid && state.selectedId === clientUid) {
+      if (json.assignments) state.assignments = json.assignments;
+      if (json.assignable) state.assignable = json.assignable;
+      state.assignPick = '';
+      state.assignmentsLoading = false;
+      state.assignmentsLoadedFor = clientUid;
+    }
+
     forgetApplicationTable();
     forgetBuckets();
 
     if (clientUid) {
-      refreshAfterCipMove(clientUid);
-    } else {
-      repaintClients({ forceFull: true });
+      // Keep the patched holders; only drop timeline so status moves catch up.
+      delete TIMELINE[clientUid];
+      if (state && state.applicationFreshFor === clientUid) state.applicationFreshFor = null;
+      rememberCipApplicant(clientUid);
+      if (state) ensureApplicationLoaded(state, render);
     }
 
-    var state = (clientsMenuCtx && clientsMenuCtx.state) || clientsMountState;
-    if (!state || !clientUid || state.selectedId !== clientUid || !json) return;
+    if (state && clientUid && state.selectedId === clientUid) {
+      if (usesPagedClientsFlow(state)) render();
+      else render({ detailOnly: true });
+    } else if (state && onApplicationsTable(state)) {
+      render({ forceFull: true });
+    } else {
+      render({ forceFull: true });
+    }
 
-    if (json.assignments) state.assignments = json.assignments;
-    if (json.assignable) state.assignable = json.assignable;
-    state.assignPick = '';
+    // Menu last: a paint above must not leave it showing the old ticks.
+    if (appId && json && cipAssignMenu && cipAssignMenu.applicationId === appId
+        && window.TMAFileActions && window.TMAFileActions.isOpen
+        && window.TMAFileActions.isOpen()
+        && window.TMAFileActions.replace) {
+      showAssignMenu(
+        cipAssignMenu.button,
+        appId,
+        cipAssignMenu.beside,
+        json,
+        true
+      );
+    }
   }
 
   function familyTitle(a) {

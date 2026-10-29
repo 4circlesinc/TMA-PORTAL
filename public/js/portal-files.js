@@ -7831,14 +7831,25 @@
   }
 
   function menuFaceHtml(it) {
-    if (it.avatar) return it.avatar;
-    if (it.face) {
-      return '<img class="tma-portal-context-menu__face" src="' + esc(it.face) + '" alt="" width="24" height="24">';
+    var face;
+    if (it.avatar) face = it.avatar;
+    else if (it.face) {
+      face = '<img class="tma-portal-context-menu__face" src="' + esc(it.face) + '" alt="" width="24" height="24">';
+    } else if (it.icon) {
+      face = '<img class="tma-portal-context-menu__icon" src="images/icons/phosphor/' + it.icon + '.svg" alt="" width="16" height="16">';
+    } else {
+      face = '<span class="tma-portal-context-menu__icon"></span>';
     }
-    if (it.icon) {
-      return '<img class="tma-portal-context-menu__icon" src="images/icons/phosphor/' + it.icon + '.svg" alt="" width="16" height="16">';
+
+    // Already on the file: tick on the photo so the row reads as chosen,
+    // not as another person still waiting to be named.
+    if (it.on) {
+      return '<span class="tma-portal-context-menu__face-wrap">' + face +
+        '<span class="tma-portal-context-menu__face-tick" aria-hidden="true">' +
+        '<img src="images/icons/phosphor/Check.svg" width="10" height="10" alt=""></span></span>';
     }
-    return '<span class="tma-portal-context-menu__icon"></span>';
+
+    return face;
   }
 
   function menuItemHtml(it, i) {
@@ -7849,21 +7860,20 @@
     }
     /*
      * Somebody already on the record is not a thing to click, they are a
-     * thing to take off. The row is inert and carries an × of its own, so
-     * the only click that does nothing is the one that would have changed
-     * nothing anyway.
+     * thing to take off. The row is inert, greyed, ticked on the face, and
+     * carries a remove control of its own.
      */
     if (it.on) {
       return '<div class="tma-portal-context-menu__item tma-portal-context-menu__item--person' +
-        ' tma-portal-context-menu__item--on">' +
+        ' tma-portal-context-menu__item--on" aria-checked="true">' +
         menuFaceHtml(it) +
         '<span class="tma-portal-context-menu__label">' + esc(it.label) + '</span>' +
         (it.meta ? '<span class="tma-portal-context-menu__meta">' + esc(it.meta) + '</span>' : '') +
         (it.remove
           ? '<button type="button" class="tma-portal-context-menu__off" data-ctx-off="' + i + '"' +
-            ' title="Take this off ' + esc(it.label) + '"' +
-            ' aria-label="Take this off ' + esc(it.label) + '">' +
-            '<img src="images/icons/tma/Close-12.svg" width="8" height="8" alt=""></button>'
+            ' title="Remove ' + esc(it.label) + '"' +
+            ' aria-label="Remove ' + esc(it.label) + '">' +
+            '<img src="images/icons/phosphor/Trash.svg" width="14" height="14" alt=""></button>'
           : '') +
         '</div>';
     }
