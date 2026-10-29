@@ -5167,9 +5167,6 @@
         face: personFace(a),
         on: true,
         keepOpen: true,
-        remove: a.canRemove === false
-          ? undefined
-          : function () { changeAssignment(applicationId, 'DELETE', a.userId); },
       });
     });
 
@@ -11539,7 +11536,7 @@
       '<span class="tma-dash__clients-assigned-meta">' + esc(line) +
       (person.email ? ' · ' + esc(person.email) : '') + '</span>' +
       '</span>' +
-      (isClientsAdmin()
+      ((isClientsAdmin() || (canAssignApplications() && person.canRemove !== false))
         ? '<button type="button" class="tma-dash__clients-row-remove" data-clients-unassign="' +
           esc(String(person.userId)) + '" aria-label="End assignment">' +
           '<img src="' + ICONS.Trash + '" alt=""></button>'
@@ -11821,7 +11818,6 @@
         : (items.length
           ? '<div class="tma-dash__clients-assigned-list">' + items.map(renderAssignedStaffRow).join('') + '</div>'
           : '<div class="tma-dash__clients-assigned-empty">No staff assigned to this client yet.</div>')) +
-      (loading ? '' : renderAssignmentHistory(state.assignmentHistory)) +
       '</div>'
     );
   }
