@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\CipApplicationMessage;
 use App\Models\CipDocument;
 use App\Models\CipEvent;
 use App\Models\CipPerson;
+use App\Models\Client;
 use App\Models\FileItem;
 use App\Models\CipProvider;
 use App\Models\Company;
@@ -16,7 +18,10 @@ use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\Milestones;
 use App\Support\Cip\Status;
 use App\Support\Cip\Timeline;
+use Illuminate\Broadcasting\BroadcastException;
+use Illuminate\Contracts\Broadcasting\Broadcaster;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -78,6 +83,66 @@ class CipLifecycleTest extends TestCase
             ->assertJsonPath('application.status', Status::BACKGROUND_CHECK);
 
         $this->assertSame('2026-02-18', $application->fresh()->accepted_at?->toDateString());
+    }
+
+    public function test_a_dead_realtime_server_does_not_fail_an_acceptance_that_carries_a_message(): void
+    {
+        $probe = new \stdClass;
+        $probe->called = false;
+
+        Broadcast::extend('failing', function () use ($probe) {
+            return new class($probe) implements Broadcaster
+            {
+                public function __construct(private object $probe) {}
+
+                public function auth($request)
+                {
+                    return true;
+                }
+
+                public function validAuthenticationResponse($request, $result)
+                {
+                    return $result;
+                }
+
+                public function broadcast(array $channels, $event, array $payload = [])
+                {
+                    $this->probe->called = true;
+
+                    throw new BroadcastException('Reverb is down');
+                }
+            };
+        });
+        config([
+            'broadcasting.default' => 'failing',
+            'broadcasting.connections.failing' => ['driver' => 'failing'],
+        ]);
+        $this->app->make(\Illuminate\Broadcasting\BroadcastManager::class)->purge('failing');
+
+        $ada = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $company = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy', 'created_by' => $ada->id]);
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL', 'company_id' => $company->id]);
+        $client = Client::create([
+            'uid' => 'chen-wei', 'name' => 'Chen Wei', 'email' => 'chen@example.com',
+            'created_by' => $ada->id, 'data' => [],
+        ]);
+        $application = Applications::create($provider, $ada, ['client_id' => $client->id]);
+
+        $this->actingAs($ada)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/acceptance', [
+                'acceptedAt' => '2026-10-28',
+                'override' => true,
+                'note' => 'IT HAS BEEN MADE COMPLIANT',
+                'message' => 'Following the review of the submitted addendums, the application has now been classified as being COMPLIANT and will now move on to the next stage of the processing cycle.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::BACKGROUND_CHECK);
+
+        $this->assertTrue($probe->called);
+        $this->assertSame('2026-10-28', $application->fresh()->accepted_at?->toDateString());
+        $this->assertTrue(
+            CipApplicationMessage::query()->where('application_id', $application->id)->exists()
+        );
     }
 
     public function test_chen_wei_walks_from_new_applications_to_the_decision_letter(): void

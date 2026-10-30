@@ -56,6 +56,15 @@ class Threads
             : [CipApplicationMessage::LANE_PROVIDER];
     }
 
+    /**
+     * Tell open threads to refetch. A dead realtime server must not fail
+     * the write that just landed, including a status change filing its note.
+     */
+    private static function signal(CipApplication $application, string $action): void
+    {
+        Broadcaster::signal(new CipThreadChanged($application, $action));
+    }
+
     public static function create(CipApplication $application, User $author, string $body, string $lane, ?string $replyTo = null): CipApplicationMessage
     {
         $body = trim($body);
@@ -91,7 +100,7 @@ class Threads
         self::markRead($application, $author, $message->id);
         self::announce($application, $message, $author);
         self::mirrorToCaseChat($message);
-        CipThreadChanged::dispatch($application, 'created');
+        self::signal($application, 'created');
         Live::staff(Live::CIP);
         Live::users(Live::CIP, self::recipientUserIds($application, $message, $author));
 
@@ -127,7 +136,7 @@ class Threads
         $author = $message->author ?? $actor;
         self::announce($application, $message, $author);
         self::mirrorToCaseChat($message);
-        CipThreadChanged::dispatch($application, 'shared');
+        self::signal($application, 'shared');
         Live::staff(Live::CIP);
         Live::users(Live::CIP, self::recipientUserIds($application, $message, $author));
 
@@ -183,7 +192,7 @@ class Threads
 
         // The signal, but not the letter: screens showing this thread should
         // repaint, and the status change's own notice is the email.
-        CipThreadChanged::dispatch($application, 'created');
+        self::signal($application, 'created');
         Live::staff(Live::CIP);
         Live::users(Live::CIP, self::recipientUserIds($application, $message, $author));
 
@@ -239,7 +248,7 @@ class Threads
         // The other side of the file is looking at the thread and needs the
         // new face. A caught-up reopen writes nothing, so it does not loop.
         if ($wrote) {
-            CipThreadChanged::dispatch($application, 'read');
+            self::signal($application, 'read');
         }
 
         // Unread belongs to this reader. The file's channel only reaches tabs
@@ -432,7 +441,7 @@ class Threads
             $read->forceFill(['last_read_id' => $target])->save();
         }
 
-        CipThreadChanged::dispatch($application, 'read');
+        self::signal($application, 'read');
         Live::user(Live::CIP, $viewer->id);
     }
 
@@ -474,7 +483,7 @@ class Threads
         ])->save();
 
         ClientConversations::reflectFileEdit($message);
-        CipThreadChanged::dispatch($application, 'edited');
+        self::signal($application, 'edited');
 
         return $message;
     }

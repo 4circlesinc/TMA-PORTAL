@@ -813,7 +813,7 @@ class ClientConversations
         $file->load('application');
 
         if ($file->application) {
-            CipThreadChanged::dispatch($file->application, 'edited');
+            Broadcaster::signal(new CipThreadChanged($file->application, 'edited'));
         }
     }
 

@@ -47,4 +47,25 @@ class Broadcaster
             ]);
         }
     }
+
+    /**
+     * Dispatch a ShouldBroadcastNow event to everyone on its channel.
+     *
+     * This is what Dispatchable::dispatch does, so listeners and Event::fake
+     * still see it. The broadcast runs inside the request. Reverb being down
+     * throws after the row is saved, and a status change that filed a
+     * covering note was failing the whole save. The row is the durable part;
+     * the websocket is only how open screens find out sooner.
+     */
+    public static function signal(object $event): void
+    {
+        try {
+            event($event);
+        } catch (Throwable $e) {
+            Log::warning('Messaging broadcast failed; message was still saved.', [
+                'event' => $event::class,
+                'reason' => $e->getMessage(),
+            ]);
+        }
+    }
 }

@@ -9,6 +9,8 @@ use App\Support\Activity\ActivityLogger;
 use App\Support\Companies\ContactIdentity;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * The one path an application's status travels, a FROM→TO map plus a
@@ -845,17 +847,37 @@ class Engine
             && ($meta['reason'] ?? null) === 'checklist';
 
         if (($enteringPost || $to !== Status::POST_APPROVAL) && ! $backToCollecting) {
-            Notices::announce(
-                $application,
-                $to,
-                $actor,
-                is_string($meta['message'] ?? null) ? $meta['message'] : null,
-                // COR RECEIVED, not APPLY FOR NIC: section 22 names a
-                // receipt for what arrived. Only when a date verb made the
-                // move; the checklist's own return to Apply for NIC is not
-                // the COR arriving a second time.
-                Stages::subject(is_string($meta['stage'] ?? null) ? $meta['stage'] : null),
-            );
+            try {
+                /*
+                 * Its own savepoint. Acceptance, a query, and an appeal
+                 * hold an outer transaction that still has the covering
+                 * note to write. A notice that fails a query and swallows
+                 * it aborts that transaction on Postgres, and the next
+                 * statement comes back as a server error for a status that
+                 * did land. Rolling the savepoint back leaves the status
+                 * write usable. A notice that throws outright is the same
+                 * answer: the status happened, the letter can be missed.
+                 */
+                DB::transaction(function () use ($application, $to, $actor, $meta) {
+                    Notices::announce(
+                        $application,
+                        $to,
+                        $actor,
+                        is_string($meta['message'] ?? null) ? $meta['message'] : null,
+                        // COR RECEIVED, not APPLY FOR NIC: section 22 names a
+                        // receipt for what arrived. Only when a date verb made the
+                        // move; the checklist's own return to Apply for NIC is not
+                        // the COR arriving a second time.
+                        Stages::subject(is_string($meta['stage'] ?? null) ? $meta['stage'] : null),
+                    );
+                });
+            } catch (Throwable $e) {
+                Log::error('CIP status notice failed after the status was saved.', [
+                    'application' => $application->getKey(),
+                    'status' => $to,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         /*
