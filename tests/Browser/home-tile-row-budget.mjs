@@ -182,8 +182,19 @@ await page.evaluate(() => {
     if (note) note.remove();
     for (let i = 0; i < 12; i++) scroller.appendChild(make());
   });
+  // The packer sizes each card to the rows it had. Filling the lists has to
+  // pack again, or an empty card that hugged its note stays too short and
+  // the rows just injected are cut. Nudge the grid so the resize watcher
+  // measures the filled lists, then put the width back.
+  const grid = document.querySelector('.tma-portal-home-grid');
+  if (grid) grid.style.width = (grid.clientWidth + 24) + 'px';
 });
-await page.waitForTimeout(1200);
+await page.waitForTimeout(400);
+await page.evaluate(() => {
+  const grid = document.querySelector('.tma-portal-home-grid');
+  if (grid) grid.style.width = '';
+});
+await page.waitForTimeout(800);
 
 const out = await page.evaluate(() => {
   const r = (n) => Math.round(n * 100) / 100;

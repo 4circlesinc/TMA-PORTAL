@@ -2892,13 +2892,15 @@
 .tma-portal-home-grid.is-packed > [data-tile-id="favorites"] > .tma-portal-panel__body {
   --tma-file-row-h: calc(58px + var(--space-12));
   max-height: 100%;
-  max-height: calc(
+  /* The packer publishes the exact row stack. The round() is the fallback
+     for a card that has not been measured yet. */
+  max-height: var(--tma-tile-list-space, calc(
     round(
       down,
       var(--tma-tile-body-space, 100%) + var(--space-12),
       var(--tma-file-row-h)
     ) - var(--space-12)
-  );
+  ));
 }
 
 @media (max-width: 1100px) {
@@ -3004,14 +3006,14 @@
   flex: 1 1 auto;
   min-height: 0;
   max-height: calc(5 * var(--tma-road-item-row) + 4 * var(--space-8));
-  max-height: min(
+  max-height: var(--tma-tile-list-space, min(
     calc(5 * var(--tma-road-item-row) + 4 * var(--space-8)),
     round(
       down,
       var(--tma-tile-body-space, 100%) + var(--space-8),
       calc(var(--tma-road-item-row) + var(--space-8))
     ) - var(--space-8)
-  );
+  ));
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -3127,9 +3129,9 @@
     16px + max(36px, calc(16.9px + var(--text-lh-12) + 2px)) + 2px
   );
   max-height: none;
-  max-height: calc(
+  max-height: var(--tma-tile-list-space, calc(
     round(down, var(--tma-tile-body-space, 100%) + 2px, var(--tma-employee-row-h)) - 2px
-  );
+  ));
   /* Back to scrolling itself: with a max-height of its own, handing the
      overflow up to the body would just move the cut row somewhere else. */
   overflow-y: auto;
@@ -3181,7 +3183,7 @@
      it and the rounding never happens. The plain 100% above is the fallback
      for anything without round() or without a packed board. */
   max-height: 100%;
-  max-height: round(down, var(--tma-tile-body-space, 100%), var(--tma-work-row-h));
+  max-height: var(--tma-tile-list-space, round(down, var(--tma-tile-body-space, 100%), var(--tma-work-row-h)));
   overflow-x: hidden;
   overflow-y: auto;
   /* Sizing the box to whole rows only settles where the list *rests*. Scroll
@@ -3239,7 +3241,7 @@
   -ms-overflow-style: none;
   /* The masonry's measurement, for the reason the work list above gives. */
   max-height: 100%;
-  max-height: round(down, var(--tma-tile-body-space, 100%), var(--tma-chat-row-h));
+  max-height: var(--tma-tile-list-space, round(down, var(--tma-tile-body-space, 100%), var(--tma-chat-row-h)));
   /* And snapped to the row, for the other reason it gives. */
   scroll-snap-type: y proximity;
   min-height: 0;

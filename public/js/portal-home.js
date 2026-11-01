@@ -211,33 +211,16 @@
   var LIBRARY_DEFER_MS = 3000;
 
   /*
-   * Each tile's height, decided here rather than by what arrives.
+   * Skeleton heights. The packed card is measured (see measureTile): a list
+   * ends on a whole row, and a card that is not a list is as tall as what it
+   * draws. These numbers are only the box the skeleton holds while the rows
+   * are not there yet to measure. They used to be the packed height too, and
+   * a slot a few pixels short of a row made round() drop that whole row and
+   * leave it as a blank band under the ones still showing.
    *
-   * The skeleton and the tile it becomes are the same height, so the pack
-   * done over skeletons is the pack the data lands in. A list longer than
-   * its slot scrolls inside the tile (the packed panel body already does),
-   * the way People has always worked; a shorter one keeps the slot. In
-   * pixels: a 70px panel frame (padding, head, gap) plus the rows, which are
-   * 58px each with the panel's 12px gap in Recent Files and Favorites. People
-   * is six 52px rows and their 2px gaps. Shortcuts is the one tile measured,
-   * because its height is its capability count, and its loading tile is the
-   * real tile with the glass taken out.
-   *
-   * Requests and Comments are four rows of the work list, 66.6px each and
-   * gapless: 70 + 4 x 66.6 is 337. They were 358, carried over from a row
-   * assumed to be 72px, and the 21px of difference was not nothing — the
-   * stylesheet rounds those lists down to whole rows, so the remainder came
-   * out as a band of empty card under the last one, and the fifth row it was
-   * almost tall enough for was sliced through the avatar. The 66.6 lives in
-   * the stylesheet as --tma-work-row-h; these two move together.
-   *
-   * Recent Email shares that row, but the type is fluid and at the top of
-   * the clamp the row is 68px and the title line is 20, so the chrome is 72
-   * rather than 70. 337 was then a few pixels short of four rows. round()
-   * does not lose a few pixels: it drops the whole fourth message and leaves
-   * a blank band, which is the empty card under the three that were showing.
-   * 72 + 4 x 68 is 344; the extra 4px is so a fractional title line cannot
-   * do that again.
+   * In pixels, at the width these were tuned for: a ~70px frame plus the
+   * rows. Recent Files is six file rows, Favorites four, People six, Email
+   * and the two work lists four, Messages five, the road five items.
    */
   var TILE_SLOT = {
     recentFiles: 478,
@@ -248,11 +231,21 @@
     comments: 337,
     employees: 392,
     cipStatus: 300,
-    // 148 of chrome (title, week strip, padding) plus the five road items
-    // the list is sized for: 5 x 31.25 and the 8px gaps between them. It was
-    // 328, which is 8px short of the five it promised, so the list overflowed
-    // the block around it and the fifth item was cut by that edge.
     road: 337,
+  };
+
+  /* How many rows a list shows before it scrolls, and where those rows live.
+     The cap is the window; fewer rows than that and the card shrinks to the
+     rows it has, so a short list does not sit in a tall empty card. */
+  var LIST_FIT = {
+    recentFiles: { cap: 6, row: '.tma-portal-file-row:not(.tma-portal-file-row--skeleton)', list: '.tma-portal-panel__body' },
+    favorites: { cap: 4, row: '.tma-portal-file-row:not(.tma-portal-file-row--skeleton)', list: '.tma-portal-panel__body' },
+    email: { cap: 4, row: '.tma-portal-email-row', list: '.tma-portal-email-list' },
+    messages: { cap: 5, row: '.tma-portal-chat-row', list: '.tma-portal-chat-list' },
+    requests: { cap: 4, row: '.tma-portal-request-row', list: '.tma-portal-work-list' },
+    comments: { cap: 4, row: '.tma-portal-comment-row', list: '.tma-portal-work-list' },
+    employees: { cap: 6, row: '.tma-portal-employee:not(.tma-portal-employee--skeleton)', list: '.tma-portal-employees--scroll' },
+    road: { cap: 5, row: '.tma-dash__overview-road-item', list: '.tma-dash__overview-road-list' },
   };
 
   var renderQueued = null;
@@ -2628,7 +2621,7 @@
           (prefer === (preferX != null && Math.abs(best.x - preferX) < 1) &&
             (y < best.y || (y === best.y && x < best.x)))
         ) {
-          best = { id: item.id, x: x, y: y, w: w, h: h };
+          best = { id: item.id, x: x, y: y, w: w, h: h, listSpace: item.listSpace || 0 };
         }
       });
       placed.push(best);
@@ -2636,21 +2629,139 @@
     return placed;
   }
 
+  function px(value) {
+    var n = parseFloat(value);
+    return isFinite(n) ? n : 0;
+  }
+
+  /* Padding, headings and gaps around `target`, not including target itself.
+     A stretched ancestor is not added: only the pieces that stay when the
+     card hugs its content. */
+  function chromeOutside(root, target) {
+    if (!root || root === target) return 0;
+    var cs = getComputedStyle(root);
+    var total = px(cs.paddingTop) + px(cs.paddingBottom);
+    var gap = px(cs.rowGap);
+    var kids = [];
+    Array.prototype.forEach.call(root.children, function (child) {
+      var ccs = getComputedStyle(child);
+      if (ccs.display === 'none' || ccs.position === 'absolute' || ccs.position === 'fixed') return;
+      kids.push(child);
+    });
+    kids.forEach(function (child) {
+      var ccs = getComputedStyle(child);
+      var margin = px(ccs.marginTop) + px(ccs.marginBottom);
+      if (child === target) {
+        total += margin;
+        return;
+      }
+      if (target && child.contains(target)) {
+        total += chromeOutside(child, target) + margin;
+        return;
+      }
+      total += child.getBoundingClientRect().height + margin;
+    });
+    if (kids.length > 1) total += gap * (kids.length - 1);
+    return total;
+  }
+
+  /* The height of an element's children, ignoring a flex parent that has
+     been stretched taller than those children. */
+  function stackedHeight(el) {
+    var cs = getComputedStyle(el);
+    var h = px(cs.paddingTop) + px(cs.paddingBottom);
+    var gap = px(cs.rowGap);
+    var n = 0;
+    Array.prototype.forEach.call(el.children, function (child) {
+      var ccs = getComputedStyle(child);
+      if (ccs.display === 'none' || ccs.position === 'absolute' || ccs.position === 'fixed') return;
+      h += child.getBoundingClientRect().height + px(ccs.marginTop) + px(ccs.marginBottom);
+      n += 1;
+    });
+    if (n > 1) h += gap * (n - 1);
+    return h;
+  }
+
+  /* A list tile: the card is the frame plus a whole number of rows, capped
+     at the window that list is meant to show. Returns null when there is
+     nothing to measure yet (a skeleton, or a row that has not been laid out). */
+  function fitListTile(node) {
+    var spec = LIST_FIT[node.getAttribute('data-tile-id')];
+    if (!spec) return null;
+    var list = node.querySelector(spec.list);
+    if (!list) return null;
+    var rows = list.querySelectorAll(spec.row);
+    if (!rows.length) return null;
+    var count = Math.min(spec.cap, rows.length);
+    var gap = px(getComputedStyle(list).rowGap);
+    var stack = 0;
+    for (var i = 0; i < count; i++) {
+      var rowH = rows[i].getBoundingClientRect().height;
+      if (rowH < 8) return null;
+      stack += rowH;
+      if (i) stack += gap;
+    }
+    var listSpace = Math.ceil(stack + px(getComputedStyle(list).paddingTop) + px(getComputedStyle(list).paddingBottom));
+    return {
+      height: Math.ceil(chromeOutside(node, list) + listSpace),
+      listSpace: listSpace,
+    };
+  }
+
+  /* Shortcuts, the CIP card, and a list that has a note instead of rows.
+     The card ends where the content ends. */
+  function hugTile(node) {
+    var card = node.querySelector('.tma-portal-cip-card, .tma-portal-shortcuts');
+    if (card) {
+      var cardH = card.getBoundingClientRect().height;
+      if (cardH < 8) return null;
+      return { height: Math.ceil(chromeOutside(node, card) + cardH), listSpace: 0 };
+    }
+    var listSpec = LIST_FIT[node.getAttribute('data-tile-id')];
+    var list = listSpec && node.querySelector(listSpec.list);
+    if (list) {
+      var inner = stackedHeight(list);
+      if (inner < 8) return null;
+      var listSpace = Math.ceil(inner);
+      return {
+        height: Math.ceil(chromeOutside(node, list) + listSpace),
+        listSpace: listSpace,
+      };
+    }
+    var body = node.querySelector('.tma-portal-panel__body');
+    if (!body) return null;
+    var stacked = stackedHeight(body);
+    if (stacked < 8) return null;
+    return { height: Math.ceil(chromeOutside(node, body) + stacked), listSpace: 0 };
+  }
+
   /*
-   * A tile's height for the pack.
+   * A tile's height for the pack, and the list height that goes with it.
    *
-   * The slot when the tile has one, which is every tile but Shortcuts. A
-   * tile without a slot is measured once, in whatever state the grid is in:
-   * unpacked, its box is its natural height; packed, its body's scroll
-   * height plus the frame around it says the same thing without tearing
-   * the board down to ask. The answer is kept on the grid, because the
-   * structure it measures does not change between renders.
+   * Measured from the rows on screen, so a fluid title line or a wider
+   * viewport cannot leave the card a few pixels short of a row — which is
+   * a whole row cut off and a blank band under the rest, because the lists
+   * round down. A card that is not a list (Shortcuts, CIP) is as tall as
+   * its content. The slot is only the skeleton, before there are rows.
    */
-  function tileHeight(grid, node, packed) {
+  function measureTile(grid, node, packed) {
     var id = node.getAttribute('data-tile-id');
-    if (TILE_SLOT[id]) return TILE_SLOT[id];
+    var busy = node.getAttribute('aria-busy') === 'true';
+    if (busy && TILE_SLOT[id] && id !== 'cipStatus') {
+      return { height: TILE_SLOT[id], listSpace: 0 };
+    }
+
+    var fit = fitListTile(node);
+    if (fit) return fit;
+
+    var hugged = hugTile(node);
+    if (hugged && (id === 'cipStatus' || id === 'shortcuts' || !TILE_SLOT[id])) return hugged;
+    if (hugged && TILE_SLOT[id] && !(LIST_FIT[id] && node.querySelector(LIST_FIT[id].row))) return hugged;
+
+    if (TILE_SLOT[id]) return { height: TILE_SLOT[id], listSpace: 0 };
+
     var known = grid._slots && grid._slots[id];
-    if (known) return known;
+    if (known) return { height: known, listSpace: 0 };
 
     var h;
     if (!packed) {
@@ -2664,7 +2775,7 @@
     h = Math.max(120, Math.ceil(h));
     grid._slots = grid._slots || {};
     grid._slots[id] = h;
-    return h;
+    return { height: h, listSpace: 0 };
   }
 
   /*
@@ -2731,7 +2842,7 @@
     });
   }
 
-  function layoutHomeMasonry(grid) {
+  function layoutHomeMasonry(grid, pass) {
     if (!grid) return;
     var width = grid.clientWidth || grid.offsetWidth;
     if (width < 40) return;
@@ -2747,40 +2858,29 @@
     var gap = TILE_GAP;
     var packed = grid.classList.contains('is-packed');
 
-    // Heights are decided before anything is read from the DOM, so the
-    // board is never dropped back to the CSS grid to be measured: that
-    // teardown was a forced reflow per render, and what it measured was
-    // whatever had arrived so far.
+    // Read every card before writing any of them. Dropping is-packed to
+    // measure would paint a frame of the CSS grid and shift the board.
     var items = nodes.map(function (node) {
       var id = node.getAttribute('data-tile-id');
       var span = node.getAttribute('data-tile-span') || 'third';
       var frac = tileWidthFrac(span, cols);
       var wPx = fractionToPx(frac, width, gap, cols);
-      return { id: id, wPx: wPx, h: tileHeight(grid, node, packed), node: node };
+      var measured = measureTile(grid, node, packed);
+      return { id: id, wPx: wPx, h: measured.height, listSpace: measured.listSpace, node: node };
     });
 
-    var packed = packHomeTiles(items, width, gap);
+    var placed = packHomeTiles(items, width, gap);
 
-    // Stretch the bottom card in each column so column bottoms line up
-    // (Favorites / People meet What's on the road?).
+    // Cards keep the height of their content. Stretching the short column's
+    // last card down to the tallest column left a blank band under that card
+    // and, where the list then rounded down, cut off the last row.
     var maxBottom = 0;
-    packed.forEach(function (p) {
+    placed.forEach(function (p) {
       if (p.y + p.h > maxBottom) maxBottom = p.y + p.h;
-    });
-    var bottomByCol = {};
-    packed.forEach(function (p) {
-      var key = String(Math.round(p.x));
-      var prev = bottomByCol[key];
-      if (!prev || p.y + p.h > prev.y + prev.h) bottomByCol[key] = p;
-    });
-    Object.keys(bottomByCol).forEach(function (key) {
-      var p = bottomByCol[key];
-      var nextH = Math.max(p.h, maxBottom - p.y);
-      if (nextH > p.h) p.h = nextH;
     });
 
     var byId = {};
-    packed.forEach(function (p) { byId[p.id] = p; });
+    placed.forEach(function (p) { byId[p.id] = p; });
 
     nodes.forEach(function (node) {
       var id = node.getAttribute('data-tile-id');
@@ -2790,18 +2890,30 @@
       node.style.top = p.y + 'px';
       node.style.width = p.w + 'px';
       node.style.height = p.h + 'px';
+      // The skeleton's min-height would otherwise hold a short card open.
+      node.style.minHeight = p.h + 'px';
+      if (p.listSpace) node.style.setProperty('--tma-tile-list-space', p.listSpace + 'px');
+      else node.style.removeProperty('--tma-tile-list-space');
     });
 
     publishBodySpace(nodes, byId);
 
     grid.style.height = maxBottom + 'px';
     grid.classList.add('is-packed');
+    // Width is applied above. The road card's padding and title are container
+    // queries, so they are only the size we measured once that width is on
+    // the card. One more pass, and then it matches.
+    if ((pass || 0) < 1 && tileMetricsDrifted(grid)) {
+      layoutHomeMasonry(grid, 1);
+      return;
+    }
     grid._masonryWidth = width;
     grid._masonrySig = masonrySignature(grid);
   }
 
   /* What the pack depends on: which tiles, in what order, at what width.
-     Heights are slots, so they are not part of it. */
+     A content change that does not move those still repacks, through
+     tileMetricsDrifted, because the card is now as tall as its rows. */
   function masonrySignature(grid) {
     var ids = Array.prototype.map.call(
       grid.querySelectorAll('[data-tile-id]'),
@@ -2820,6 +2932,20 @@
    * the board is left alone until settleBoot() renders once more. A hidden
    * view measures 0px wide and is skipped; the return to it packs.
    */
+  /* True when a card's content no longer fits the height it was packed at.
+     Row counts and the CIP card change without the tile set or the width
+     changing, and those are what the signature is. */
+  function tileMetricsDrifted(grid) {
+    var nodes = grid.querySelectorAll('[data-tile-id]');
+    var packed = grid.classList.contains('is-packed');
+    for (var i = 0; i < nodes.length; i++) {
+      var want = measureTile(grid, nodes[i], packed).height;
+      var have = parseFloat(nodes[i].style.height) || 0;
+      if (Math.abs(want - have) > 1) return true;
+    }
+    return false;
+  }
+
   function packHome(root) {
     var grid = root.querySelector('.tma-portal-home-grid');
     if (!grid) return;
@@ -2827,7 +2953,7 @@
     if (width < 40) return;
     var packed = grid.classList.contains('is-packed');
     if (packed && bootOpen()) return;
-    if (packed && grid._masonrySig === masonrySignature(grid)) return;
+    if (packed && grid._masonrySig === masonrySignature(grid) && !tileMetricsDrifted(grid)) return;
     layoutHomeMasonry(grid);
     watchHomeWidth(grid);
   }
