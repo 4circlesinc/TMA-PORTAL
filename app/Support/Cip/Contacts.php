@@ -5,6 +5,7 @@ namespace App\Support\Cip;
 use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
+use App\Models\CompanyLocation;
 use App\Models\CompanyMember;
 use App\Models\User;
 use App\Support\Access\Role;
@@ -199,18 +200,21 @@ class Contacts
         $recipients = [];
 
         if ($application->provider) {
-            foreach (self::providerContacts($application->provider) as $recipient) {
+            foreach (self::providerContacts($application->provider, $application) as $recipient) {
                 $recipients[mb_strtolower($recipient['email'])] = $recipient;
             }
         }
 
-        // A private client is their own provider side. Nobody at the firm
-        // means nobody on its standing list: a mailbox that is there only
-        // because the firm chose an invited member does not make the client
-        // any less the one to tell.
+        // A private client is their own provider side. That is a firm with
+        // nobody on its standing list, not a branch whose own people happen
+        // to be absent from this file. A mailbox that is there only because
+        // the firm chose an invited member does not make the client any less
+        // the one to tell.
         $standing = array_filter($recipients, fn (array $row) => ! ($row['invited'] ?? false));
+        $firm = $application->provider ? self::providerContacts($application->provider) : [];
+        $firmStanding = array_filter($firm, fn (array $row) => ! ($row['invited'] ?? false));
 
-        if ($standing === [] && $application->client) {
+        if ($standing === [] && $firmStanding === [] && $application->client) {
             $email = $application->client->user?->email ?: $application->client->email;
 
             if ($email) {
@@ -236,10 +240,17 @@ class Contacts
      * A firm that chose one notification email ({@see NotificationEmail})
      * still gets the whole list back; every row but the chosen one carries
      * `mail => false`, which the two delivery loops read before they send.
+     * That choice only narrows people who hear this application. A branch
+     * that was not assigned the file is not on the list at all, so the
+     * choice cannot hand it a notice meant for another office.
+     *
+     * Pass the application when the list is for one file. Without one, the
+     * standing list is everyone at the firm, which is what a copied firm
+     * receives and what the Access card previews.
      *
      * @return list<array{email:string, name:?string, userId:?int, mail?:false, invited?:true}>
      */
-    public static function providerContacts(CipProvider $provider): array
+    public static function providerContacts(CipProvider $provider, ?CipApplication $application = null): array
     {
         $provider->loadMissing('company');
         $recipients = [];
@@ -250,7 +261,11 @@ class Contacts
         $chosenKey = null;
 
         if ($company) {
-            foreach ($company->members()->where('status', CompanyMember::STATUS_ACTIVE)->get() as $member) {
+            foreach ($company->members()->where('status', CompanyMember::STATUS_ACTIVE)->with(['user', 'location'])->get() as $member) {
+                if (! self::hearsOffice($member, $application)) {
+                    continue;
+                }
+
                 $email = $member->email ?: $member->user?->email;
 
                 if ($email) {
@@ -269,7 +284,8 @@ class Contacts
 
         // Chosen and still only invited: a shared mailbox that never signs
         // in is not an active member, and is where the firm wants its mail.
-        if ($chosen && $chosenKey === null) {
+        // A branch mailbox only stands in for the applications on its branch.
+        if ($chosen && $chosenKey === null && self::hearsOffice($chosen, $application)) {
             $email = (string) NotificationEmail::addressOf($chosen);
             $chosenKey = mb_strtolower($email);
             $recipients[$chosenKey] ??= [
@@ -280,29 +296,29 @@ class Contacts
             ];
         }
 
-        // The registry's own contact address, where it is nobody already on
-        // the list, a firm may route notices to a mailbox no member owns.
-        $contact = $provider->contact_email;
+        // The registry contact and the firm's own mailbox are the main
+        // office's addresses. A file sitting on a branch is that branch's
+        // notice, not a second copy to the main office.
+        if (self::firmBook($application)) {
+            $contact = $provider->contact_email;
 
-        if ($contact && ! isset($recipients[mb_strtolower($contact)])) {
-            $recipients[mb_strtolower($contact)] = [
-                'email' => $contact,
-                'name' => $provider->contact_name,
-                'userId' => null,
-            ];
-        }
+            if ($contact && ! isset($recipients[mb_strtolower($contact)])) {
+                $recipients[mb_strtolower($contact)] = [
+                    'email' => $contact,
+                    'name' => $provider->contact_name,
+                    'userId' => null,
+                ];
+            }
 
-        // The company's own mailbox, when it is not already a member or the
-        // registry contact, that is the service provider email on the firm
-        // record, and CIP notices have to reach it too.
-        $firmEmail = $company?->email;
+            $firmEmail = $company?->email;
 
-        if ($firmEmail && ! isset($recipients[mb_strtolower($firmEmail)])) {
-            $recipients[mb_strtolower($firmEmail)] = [
-                'email' => $firmEmail,
-                'name' => $company->name,
-                'userId' => null,
-            ];
+            if ($firmEmail && ! isset($recipients[mb_strtolower($firmEmail)])) {
+                $recipients[mb_strtolower($firmEmail)] = [
+                    'email' => $firmEmail,
+                    'name' => $company->name,
+                    'userId' => null,
+                ];
+            }
         }
 
         // Everyone else stays on the list without the email: the bell and
@@ -312,6 +328,51 @@ class Contacts
         }
 
         return array_values($recipients);
+    }
+
+    /**
+     * Whether this member hears a notice about this application.
+     *
+     * No application means the standing list, and everyone is on it. A
+     * service provider admin reads the firm's whole book, so they hear
+     * every file. A branch hears only the files assigned to that branch.
+     * The main office, and a member not placed on an office yet, hears the
+     * firm book: files nobody has sent to a branch.
+     */
+    private static function hearsOffice(CompanyMember $member, ?CipApplication $application): bool
+    {
+        if ($application === null) {
+            return true;
+        }
+
+        $member->loadMissing(['user', 'location']);
+
+        if (Role::isServiceProviderAdmin($member->user)) {
+            return true;
+        }
+
+        $location = $member->location;
+        if ($location instanceof CompanyLocation && $location->kind === CompanyLocation::KIND_BRANCH) {
+            return $application->location_id !== null
+                && (int) $application->location_id === (int) $location->id;
+        }
+
+        return self::firmBook($application);
+    }
+
+    /**
+     * A file still on the firm book: not assigned, or assigned to the main
+     * office. A branch assignment is not.
+     */
+    private static function firmBook(?CipApplication $application): bool
+    {
+        if ($application === null || $application->location_id === null) {
+            return true;
+        }
+
+        $application->loadMissing('location');
+
+        return $application->location?->isMain() === true;
     }
 
     /**

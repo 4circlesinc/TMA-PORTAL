@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Mail\Postcard;
 use App\Models\CipApplication;
 use App\Models\CipProvider;
 use App\Models\Client;
@@ -12,8 +13,12 @@ use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
 use App\Support\Cip\ApplicationScope;
+use App\Support\Cip\Contacts;
 use App\Support\Cip\FolderAccess;
+use App\Support\Cip\Notices;
+use App\Support\Cip\Status;
 use App\Support\Companies\CompanyLocations;
+use App\Support\Companies\NotificationEmail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -135,6 +140,111 @@ class CipBranchAssignmentTest extends TestCase
         $this->assertSame($this->north->id, $northFile->location_id);
         $this->assertSees($this->northUser, [$northFile]);
         $this->assertSees($this->firmUser, [$firmFile, $southFile]);
+    }
+
+    public function test_a_branch_is_notified_only_for_applications_assigned_to_it(): void
+    {
+        $firmFile = $this->application('firm-notice');
+        $mainFile = $this->application('main-notice');
+        $northFile = $this->application('north-notice');
+        $southFile = $this->application('south-notice');
+        $mainFile->forceFill(['location_id' => $this->main->id])->save();
+        $northFile->forceFill(['location_id' => $this->north->id])->save();
+        $southFile->forceFill(['location_id' => $this->south->id])->save();
+
+        $this->assertEqualsCanonicalizing(
+            ['gil@gcc.example', 'firm@gcc.example'],
+            $this->providerEmails($firmFile),
+        );
+        $this->assertEqualsCanonicalizing(
+            ['gil@gcc.example', 'firm@gcc.example'],
+            $this->providerEmails($mainFile),
+        );
+        $this->assertEqualsCanonicalizing(
+            ['gil@gcc.example', 'north@gcc.example'],
+            $this->providerEmails($northFile),
+        );
+        $this->assertEqualsCanonicalizing(
+            ['gil@gcc.example', 'south@gcc.example'],
+            $this->providerEmails($southFile),
+        );
+
+        $firmMember = CompanyMember::query()->where('user_id', $this->firmUser->id)->firstOrFail();
+        NotificationEmail::choose($this->company, $firmMember, $this->admin);
+        $northSide = collect(Contacts::providerSide($northFile->fresh()));
+        $this->assertFalse($northSide->contains(fn (array $row) => $row['email'] === 'firm@gcc.example'));
+        $this->assertArrayNotHasKey('mail', $northSide->firstWhere('email', 'north@gcc.example'));
+
+        Notices::announce($northFile, Status::NEW, $this->admin);
+
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('north@gcc.example'));
+        Mail::assertNotQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('south@gcc.example'));
+        Mail::assertNotQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('firm@gcc.example'));
+        $this->assertDatabaseHas('portal_notifications', [
+            'user_id' => $this->northUser->id,
+            'subject_id' => $northFile->id,
+            'subject_type' => CipApplication::class,
+        ]);
+        $this->assertDatabaseMissing('portal_notifications', [
+            'user_id' => $this->southUser->id,
+            'subject_id' => $northFile->id,
+        ]);
+        $this->assertDatabaseMissing('portal_notifications', [
+            'user_id' => $this->firmUser->id,
+            'subject_id' => $northFile->id,
+        ]);
+    }
+
+    public function test_an_empty_branch_does_not_make_the_applicant_the_provider_side(): void
+    {
+        $company = Company::create(['uid' => 'empty-branch', 'name' => 'Empty Branch Co', 'email' => 'office@empty.example']);
+        $provider = CipProvider::create([
+            'name' => 'EMPTY BRANCH CO',
+            'code' => 'EBC',
+            'company_id' => $company->id,
+            'contact_email' => 'notices@empty.example',
+        ]);
+        $north = CompanyLocations::addBranch($company, 'North', $this->admin);
+        $south = CompanyLocations::addBranch($company, 'South', $this->admin);
+        $northUser = $this->user(Role::CLIENT, 'only-north@empty.example', 'Only North');
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'location_id' => $north->id,
+            'user_id' => $northUser->id,
+            'name' => $northUser->name,
+            'email' => $northUser->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+
+        $application = Applications::create($provider, $this->admin);
+        $client = Client::create([
+            'uid' => 'empty-applicant',
+            'name' => 'Empty Applicant',
+            'email' => 'applicant@empty.example',
+            'referral_type' => Client::REFERRAL_COMPANY,
+            'referred_by_company_id' => $company->id,
+            'data' => [],
+            'created_by' => $this->admin->id,
+        ]);
+        $application->forceFill([
+            'client_id' => $client->id,
+            'location_id' => $south->id,
+        ])->save();
+
+        $this->assertSame([], array_column(Contacts::providerSide($application->fresh()), 'email'));
+
+        $application->forceFill(['location_id' => null])->save();
+        $this->assertEqualsCanonicalizing(
+            ['notices@empty.example', 'office@empty.example'],
+            array_column(Contacts::providerSide($application->fresh()), 'email'),
+        );
+    }
+
+    /** @return list<string> */
+    private function providerEmails(CipApplication $application): array
+    {
+        return array_column(Contacts::providerSide($application->fresh()), 'email');
     }
 
     private function user(string $type, string $email, string $name): User
