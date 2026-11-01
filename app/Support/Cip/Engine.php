@@ -750,6 +750,12 @@ class Engine
         $certificateId = (int) ($meta['corCertificateFileId'] ?? 0);
         unset($meta['corCertificateFileId']);
 
+        // Named on the status dialog, and refused before the row moves, so a
+        // typo does not leave the file on a status whose copy never went out.
+        // Only the dialog's own route, and only its first write: a checklist
+        // that then moves the file does not mail the same addresses again.
+        $copies = StatusCopies::take();
+
         $enteringPost = $to === Status::POST_APPROVAL
             && ($application->phase ?? Phase::PRE_APPROVAL) !== Phase::POST_APPROVAL;
 
@@ -865,7 +871,7 @@ class Engine
                  * write usable. A notice that throws outright is the same
                  * answer: the status happened, the letter can be missed.
                  */
-                DB::transaction(function () use ($application, $to, $actor, $meta, $certificateId) {
+                DB::transaction(function () use ($application, $to, $actor, $meta, $certificateId, $copies) {
                     Notices::announce(
                         $application,
                         $to,
@@ -877,6 +883,7 @@ class Engine
                         // the COR arriving a second time.
                         Stages::subject(is_string($meta['stage'] ?? null) ? $meta['stage'] : null),
                         $certificateId > 0 ? FileItem::query()->find($certificateId) : null,
+                        $copies,
                     );
                 });
             } catch (Throwable $e) {

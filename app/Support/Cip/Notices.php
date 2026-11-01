@@ -79,6 +79,7 @@ class Notices
         ?string $message = null,
         ?string $token = null,
         ?FileItem $attachment = null,
+        array $copies = [],
     ): void {
         if ($to === Status::DRAFT) {
             return;
@@ -106,6 +107,7 @@ class Notices
             self::bellMessage($application, $to, $facts),
             $to,
             path: $path,
+            copies: $copies,
         );
     }
 
@@ -331,10 +333,13 @@ class Notices
         string $kind,
         ?string $skipMailbox = null,
         ?string $path = null,
+        array $copies = [],
     ): void {
         $path ??= Contacts::path($application);
+        $told = [];
 
         foreach (Contacts::notices($application) as $recipient) {
+            $told[mb_strtolower($recipient['email'])] = true;
             if ($skipMailbox !== null && mb_strtolower($recipient['email']) === mb_strtolower($skipMailbox)) {
                 continue;
             }
@@ -357,6 +362,30 @@ class Notices
 
             Notifier::send([
                 'user' => $user,
+                'actor' => $actor,
+                'type' => $type,
+                'title' => $title,
+                'message' => $message,
+                'subject' => $application,
+                'action_url' => $path,
+                'email' => false,
+            ]);
+        }
+
+        foreach ($copies as $email) {
+            if (isset($told[mb_strtolower($email)])) {
+                continue;
+            }
+
+            Deliveries::send($card(null), $email, $application, $template);
+
+            $copied = User::query()->whereRaw('lower(email) = ?', [mb_strtolower($email)])->first();
+            if ($copied === null) {
+                continue;
+            }
+
+            Notifier::send([
+                'user' => $copied,
                 'actor' => $actor,
                 'type' => $type,
                 'title' => $title,

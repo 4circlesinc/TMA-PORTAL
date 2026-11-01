@@ -13545,6 +13545,7 @@
       '</p>' +
       (correcting ? '' : cipStatusAttachmentHtml(cipAttachmentPlace(app))) +
       (!correcting && opts.override ? cipOverrideFieldsHtml() : '') +
+      (correcting ? '' : cipStatusCcHtml()) +
       '<div class="tma-portal-modal__foot">' +
       '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-number>Cancel</button>' +
       '<button type="button" class="tma-no-data__btn" data-cip-save-number>' +
@@ -13590,6 +13591,8 @@
             if (reason === null) return;
             extra = { override: true, note: reason };
           }
+
+          if (!correcting && !cipRememberStatusCc(el)) return;
 
           save.disabled = true;
           save.textContent = 'Saving…';
@@ -14629,6 +14632,7 @@
             '</div>'
           : '') +
         cipStatusAttachmentHtml(place) +
+        cipStatusCcHtml() +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-person-status>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-person-status>Change status</button>' +
@@ -14651,6 +14655,7 @@
             clientsToast('Enter the ' + String(step.dateLabel || 'date').toLowerCase() + '.', 'negative');
             return;
           }
+          if (!cipRememberStatusCc(el)) return;
           cipPendingStatusFile = file;
           ui.closeModal();
           changeCipPersonStatus(to, extra, clientUid, label, true, date);
@@ -14869,7 +14874,75 @@
     });
   }
 
+  var cipPendingStatusCc = null;
+
+  function cipStatusCcHtml() {
+    return '<div class="tma-dash__clients-field">' +
+      '<label class="tma-dash__clients-field-label" for="cip-status-cc">CC <span class="tma-dash__clients-checklist-optional">Optional</span></label>' +
+      '<input type="text" id="cip-status-cc" class="tma-dash__clients-field-input" data-cip-status-cc' +
+      ' placeholder="name@firm.com, other@firm.com" autocomplete="off">' +
+      '</div>';
+  }
+
+  function cipStatusCcList(root) {
+    var input = root && root.querySelector('[data-cip-status-cc]');
+    if (!input || !input.value) return [];
+
+    return String(input.value).split(/[,;\s]+/).map(function (part) {
+      return part.trim();
+    }).filter(Boolean);
+  }
+
+  function cipStatusCcValue(root) {
+    var list = cipStatusCcList(root);
+    var email = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    var i;
+    for (i = 0; i < list.length; i++) {
+      if (!email.test(list[i])) {
+        clientsToast(list[i] + ' is not an email address.', 'negative');
+        return null;
+      }
+    }
+
+    return list;
+  }
+
+  function cipRememberStatusCc(root) {
+    var list = cipStatusCcValue(root);
+    if (list === null) return false;
+    cipPendingStatusCc = list;
+
+    return true;
+  }
+
+  function cipApplyStatusCc(fields, root) {
+    var list;
+    if (root && root.querySelector('[data-cip-status-cc]')) {
+      list = cipStatusCcValue(root);
+      if (list === null) return null;
+    } else {
+      list = cipPendingStatusCc || [];
+    }
+    cipPendingStatusCc = null;
+    fields = fields || {};
+    if (!list.length) return fields;
+
+    var next = {};
+    var key;
+    for (key in fields) {
+      if (Object.prototype.hasOwnProperty.call(fields, key)) next[key] = fields[key];
+    }
+    next.cc = list.join(', ');
+
+    return next;
+  }
+
   function cipPostWithAttachment(url, fields, root) {
+    fields = cipApplyStatusCc(fields, root);
+    if (fields === null) {
+      return Promise.reject({ message: 'Enter a valid email address for each CC.' });
+    }
+
     var file = cipStatusFile(root) || cipPendingStatusFile;
     cipPendingStatusFile = null;
     if (!file) {
@@ -14926,6 +14999,7 @@
         '<p class="tma-portal-modal__text">Move this file to ' + esc(label || 'the next status') + '. The Activity tab keeps the reason.</p>' +
         cipOverrideFieldsHtml() +
         cipStatusAttachmentHtml(cipAttachmentPlace(cipSourceFor(extra, clientUid) || applicationFor(clientUid))) +
+        cipStatusCcHtml() +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-override>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-override>Change status</button>' +
@@ -14948,6 +15022,7 @@
             clientsToast('Upload a PDF or an image.', 'negative');
             return;
           }
+          if (!cipRememberStatusCc(el)) return;
           cipPendingStatusFile = file;
           ui.closeModal();
           changeCipStatus(to, extra, clientUid, label, reason, true);
@@ -14970,6 +15045,7 @@
       body:
         '<p class="tma-portal-modal__text">Move this file to ' + esc(label || 'the next status') + '.</p>' +
         cipStatusAttachmentHtml(cipAttachmentPlace(app)) +
+        cipStatusCcHtml() +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-status>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-status>Change status</button>' +
@@ -14986,6 +15062,7 @@
             clientsToast('Upload a PDF or an image.', 'negative');
             return;
           }
+          if (!cipRememberStatusCc(el)) return;
           cipPendingStatusFile = file;
           ui.closeModal();
           changeCipStatus(to, extra, clientUid, label, note, true);
@@ -15220,6 +15297,7 @@
         'The application will move to Non-compliant. Response documents go in Additional Documents.</p>' +
         (override ? cipOverrideFieldsHtml() : '') +
         cipStatusAttachmentHtml(cipAttachmentPlace(applicationFor(clientUid))) +
+        cipStatusCcHtml() +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-query>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-query>Record query</button>' +
@@ -15313,6 +15391,7 @@
         'The application will move to DD Query. Response documents go in DD Query Responses.</p>' +
         (override ? cipOverrideFieldsHtml() : '') +
         cipStatusAttachmentHtml(cipAttachmentPlace(applicationFor(clientUid))) +
+        cipStatusCcHtml() +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-dd-query>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-dd-query>Record DD query</button>' +
@@ -15399,6 +15478,7 @@
         '<p class="tma-portal-modal__text">' +
         'The application will move to New Appeal. Appeal papers go in Appeal Documents.</p>' +
         cipStatusAttachmentHtml(cipAttachmentPlace(applicationFor(clientUid))) +
+        cipStatusCcHtml() +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-req>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-req>Start appeal</button>' +
@@ -15468,6 +15548,7 @@
         'The application will move to New Appeal. Appeal papers go in Appeal Documents, ' +
         'which is the only folder open for uploads while the appeal runs.</p>' +
         (override ? cipOverrideFieldsHtml() : '') +
+        cipStatusCcHtml() +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-appeal>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-appeal>Lodge appeal</button>' +
@@ -15487,7 +15568,10 @@
             return;
           }
 
+          var cc = cipStatusCcValue(el);
+          if (cc === null) return;
           var body = { appealLodgedAt: date };
+          if (cc.length) body.cc = cc.join(', ');
           var messageEl = el.querySelector('[data-cip-appeal-message]');
           var message = messageEl && messageEl.value ? messageEl.value.trim() : '';
           if (message) body.message = message;
@@ -15550,6 +15634,7 @@
         '<p class="tma-portal-modal__text">' +
         'The service provider will be asked to confirm the appeal is ready on their end.</p>' +
         (override ? cipOverrideFieldsHtml() : '') +
+        cipStatusCcHtml() +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-ready>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-ready>Mark ready</button>' +
@@ -15562,7 +15647,10 @@
         if (!save) return;
 
         save.addEventListener('click', function () {
+          var cc = cipStatusCcValue(el);
+          if (cc === null) return;
           var body = {};
+          if (cc.length) body.cc = cc.join(', ');
           var messageEl = el.querySelector('[data-cip-appeal-ready-message]');
           var message = messageEl && messageEl.value ? messageEl.value.trim() : '';
           if (message) body.message = message;
@@ -15625,6 +15713,7 @@
         'The appeal will move to Appeal Submitted.</p>' +
         (override ? cipOverrideFieldsHtml() : '') +
         cipStatusAttachmentHtml(cipAttachmentPlace(applicationFor(clientUid))) +
+        cipStatusCcHtml() +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-sub>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-sub>Record submission</button>' +
@@ -15724,6 +15813,7 @@
             '<input type="checkbox" class="tma-dash__check" data-cip-email-certificate checked>' +
             '<span>Email the certificate to the service provider</span></label>'
           : '') +
+        cipStatusCcHtml() +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-stage>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-stage>' + esc(saveLabel) + '</button>' +
@@ -15808,6 +15898,7 @@
         'The application will move to Background check.</p>' +
         (override ? cipOverrideFieldsHtml() : '') +
         cipStatusAttachmentHtml(cipAttachmentPlace(applicationFor(clientUid))) +
+        cipStatusCcHtml() +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-accept>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-accept>Record acceptance</button>' +
@@ -16026,6 +16117,7 @@
         // A file attached to a status change is filed in the application's
         // folders, and a filing has none yet: its own form takes the papers.
         (collecting ? '' : cipStatusAttachmentHtml(cipAttachmentPlace(held))) +
+        (collecting ? '' : cipStatusCcHtml()) +
         (opts.override ? cipOverrideFieldsHtml() : '') +
         '<p class="tma-portal-modal__text">' +
         (collecting
@@ -16132,6 +16224,9 @@
             return;
           }
 
+          var cc = cipStatusCcValue(el);
+          if (cc === null) return;
+
           save.disabled = true;
           save.textContent = 'Recording…';
 
@@ -16143,6 +16238,7 @@
           if (letterFile) form.append('decisionLetter', letterFile);
           var attached = cipStatusFile(el);
           if (attached) form.append('attachment', attached);
+          if (cc.length) form.append('cc', cc.join(', '));
 
           clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/decision', {
             method: 'POST',
@@ -16187,6 +16283,7 @@
         '<p class="tma-portal-modal__text">' +
         'Would you like to place this applicant in Post-Approval?</p>' +
         cipStatusAttachmentHtml(cipAttachmentPlace(applicationFor(clientUid))) +
+        cipStatusCcHtml() +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-decline-post>Not now</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-confirm-post>Move to post-approval</button>' +
@@ -16209,7 +16306,7 @@
           confirm.textContent = 'Moving…';
 
           cipPendingStatusFile = cipStatusFile(el);
-          cipPostWithAttachment('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/post-approval', {})
+          cipPostWithAttachment('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/post-approval', {}, el)
             .then(function () {
               ui.closeModal();
               clientsToast('Moved to post-approval.', 'positive');

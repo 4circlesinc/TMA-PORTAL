@@ -2,15 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Mail\Postcard;
 use App\Models\CipApplication;
 use App\Models\CipDocument;
 use App\Models\CipEvent;
 use App\Models\CipPerson;
-use App\Models\FileItem;
 use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyMember;
+use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
@@ -23,6 +24,7 @@ use App\Support\Cip\Status;
 use App\Support\Cip\Tree;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
@@ -363,6 +365,49 @@ class CipTransitionTest extends TestCase
             ->postJson($this->statusUrl($application), ['status' => Status::REVIEW_APPLICATION])
             ->assertOk()
             ->assertJsonPath('application.status', Status::REVIEW_APPLICATION);
+    }
+
+    public function test_a_status_change_copies_the_notice_to_the_addresses_named_on_it(): void
+    {
+        Mail::fake();
+
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $application = $this->application($admin);
+
+        $this->actingAs($admin)
+            ->postJson($this->statusUrl($application), [
+                'status' => Status::REVIEW_APPLICATION,
+                'cc' => 'copy@outside.example; '.$admin->email,
+            ])
+            ->assertOk();
+
+        $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
+
+        $outside = collect(Mail::queued(Postcard::class))->filter(
+            fn (Postcard $mail) => $mail->hasTo('copy@outside.example'),
+        );
+        $this->assertCount(1, $outside);
+
+        $adminMail = collect(Mail::queued(Postcard::class))->filter(
+            fn (Postcard $mail) => $mail->hasTo($admin->email),
+        );
+        $this->assertLessThanOrEqual(1, $adminMail->count());
+    }
+
+    public function test_a_status_change_refuses_an_address_that_is_not_an_email(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $application = $this->application($admin);
+
+        $this->actingAs($admin)
+            ->postJson($this->statusUrl($application), [
+                'status' => Status::REVIEW_APPLICATION,
+                'cc' => 'not-an-email',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('cc');
+
+        $this->assertNotSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
     }
 
     public function test_the_available_transitions_are_the_readers_own(): void
