@@ -545,33 +545,31 @@
     }),
     makeStandardTemplate({
       id: 'message-reminder-1', name: 'Unread message (1 hour)', category: 'Reminders',
-      subject: 'You have a new message from Tanya', preview: 'Tanya sent you a message an hour ago.',
+      subject: 'Reminder: unread message from Tanya in Tax team', preview: 'An unread message from Tanya is waiting in Tax team.',
       spec: {
-        title: 'You have a new message',
-        lead: 'Tanya sent you a message about an hour ago and it’s still unread.',
+        title: 'Unread message in Tax team',
+        lead: 'Tanya sent you a message about an hour ago in Tax team and it’s still unread.',
         body: renderQuote('Hi Marcus, just checking in on the statement whenever you get a moment.'),
         button: 'Read the message',
       },
     }),
     makeStandardTemplate({
       id: 'message-reminder-2', name: 'Still waiting (~20 hours)', category: 'Reminders',
-      subject: 'Still waiting to hear from you', preview: 'Your message from Tanya is still unread.',
+      subject: 'Reminder: Tanya’s message in Tax team is still unread', preview: 'Tanya’s message in Tax team is still unread.',
       spec: {
-        title: 'Still waiting to hear from you',
-        lead: 'We reached out yesterday and haven’t heard back.',
-        body: '<p>Your message from Tanya is still waiting in the portal.</p>' +
-          renderQuote('Hi Marcus, just checking in on the statement whenever you get a moment.'),
+        title: 'Tax team still has an unread message',
+        lead: 'Tanya’s message in Tax team is still unread.',
+        body: renderQuote('Hi Marcus, just checking in on the statement whenever you get a moment.'),
         button: 'Read and reply',
       },
     }),
     makeStandardTemplate({
       id: 'message-reminder-3', name: 'Final reminder (24 hours)', category: 'Reminders',
-      subject: 'A message from us is still waiting for you', preview: 'One last reminder about your unread message.',
+      subject: 'Final reminder: unread message from Tanya in Tax team', preview: 'One last reminder: Tanya’s message in Tax team is still unread.',
       spec: {
-        title: 'A message from us is still waiting for you',
-        lead: 'It’s been a full day and we haven’t heard back.',
-        body: '<p>We don’t want anything important to slip through, so here’s one last reminder.</p>' +
-          renderQuote('Hi Marcus, just checking in on the statement whenever you get a moment.') +
+        title: 'Final reminder: unread message in Tax team',
+        lead: 'It’s been a full day, and Tanya’s message in Tax team is still unread.',
+        body: renderQuote('Hi Marcus, just checking in on the statement whenever you get a moment.') +
           '<p>If now isn’t a good time, the message will be waiting whenever you’re ready.</p>',
         button: 'Open the conversation',
       },

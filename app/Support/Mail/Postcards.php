@@ -634,8 +634,11 @@ class Postcards
 
     // ----------------------------------------------------------- message reminders
 
-    /** $tier: 1 (~1h), 2 (~20h), 3 (~24h, final). */
-    public static function messageReminder(int $tier, string $from, ?string $preview, string $url): Postcard
+    /**
+     * $tier: 1 (~1h), 2 (~20h), 3 (~24h, final).
+     * $group is the conversation's name when the unread message is in a group.
+     */
+    public static function messageReminder(int $tier, string $from, ?string $preview, string $url, ?string $group = null): Postcard
     {
         $key = match ($tier) {
             2 => 'message-reminder-2',
@@ -643,7 +646,11 @@ class Postcards
             default => 'message-reminder-1',
         };
 
-        return self::postcard($key, ['from' => $from, 'url' => $url], [
+        return self::postcard($key, [
+            'from' => $from,
+            'group' => $group !== null && trim($group) !== '' ? $group : null,
+            'url' => $url,
+        ], [
             'url' => $url,
             'quote' => $preview ?: null,
         ]);

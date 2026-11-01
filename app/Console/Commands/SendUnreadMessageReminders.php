@@ -4,8 +4,10 @@ namespace App\Console\Commands;
 
 use App\Models\ConversationParticipant;
 use App\Models\Message;
+use App\Models\User;
 use App\Support\Companies\NotificationEmail;
 use App\Support\Mail\Postcards;
+use App\Support\Messaging\MessagingPresenter;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -60,6 +62,11 @@ class SendUnreadMessageReminders extends Command
             ->where('type', '!=', Message::TYPE_SYSTEM)
             ->where(fn ($q) => $q->whereNull('user_id')->orWhere('user_id', '!=', $participant->user_id))
             ->when($viewer, fn ($query) => $query->visibleTo($viewer))
+            ->with([
+                'sender',
+                'conversation.client',
+                'conversation.activeParticipants.user',
+            ])
             ->latest('id')
             ->first();
 
@@ -93,6 +100,7 @@ class SendUnreadMessageReminders extends Command
                 $message->sender?->name ?? 'A colleague',
                 $this->preview($message),
                 url('/social/messages'),
+                $this->groupLabel($message, $user),
             ));
         }
 
@@ -110,6 +118,22 @@ class SendUnreadMessageReminders extends Command
         }
 
         return 0;
+    }
+
+    /**
+     * What a group reminder is about. A direct message has no group, so the
+     * subject names the sender alone.
+     */
+    private function groupLabel(Message $message, User $viewer): ?string
+    {
+        $conversation = $message->conversation;
+        if (! $conversation || ! $conversation->isGroup()) {
+            return null;
+        }
+
+        $name = trim(MessagingPresenter::title($conversation, $viewer));
+
+        return $name !== '' ? $name : null;
     }
 
     private function preview(Message $message): ?string
