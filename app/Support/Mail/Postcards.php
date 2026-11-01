@@ -1118,6 +1118,7 @@ class Postcards
         ?string $recipientName = null,
         ?string $subject = null,
         bool $plain = false,
+        ?FileItem $attachment = null,
     ): Postcard {
         $subject ??= Notices::line($facts, $status);
         $label = Status::label($status);
@@ -1131,10 +1132,7 @@ class Postcards
             $key = 'cip-status';
         }
 
-        return self::postcard($key, self::cipVars($facts, $recipientName) + [
-            'status' => $label,
-            'url' => $url,
-        ], [
+        $extras = [
             'subject' => $subject,
             'url' => $url,
             'details' => [
@@ -1144,7 +1142,17 @@ class Postcards
                 ['Status', $label],
                 ['Family size', 'F'.$facts['familySize']],
             ],
-        ]);
+        ];
+
+        if ($attachment !== null) {
+            $extras['attachment'] = $attachment;
+            $extras['files'] = [[$attachment->name, 'Certificate of Registration']];
+        }
+
+        return self::postcard($key, self::cipVars($facts, $recipientName) + [
+            'status' => $label,
+            'url' => $url,
+        ], $extras);
     }
 
     /**

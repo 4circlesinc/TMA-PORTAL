@@ -23,6 +23,7 @@ use App\Support\Cip\CipAccess;
 use App\Support\Cip\Confirmation;
 use App\Support\Cip\Copies;
 use App\Support\Cip\CorRequirements;
+use App\Support\Cip\Decision;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
@@ -45,6 +46,7 @@ use Database\Seeders\CipDocumentRequirementSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -894,7 +896,7 @@ class CipPostApprovalTest extends TestCase
         $staff = $this->staff();
         [$application, $person, $oath] = $this->corFile($staff);
 
-        \App\Support\Cip\Decision::record(
+        Decision::record(
             $application->fresh(),
             $staff,
             Status::POST_APPROVED,
@@ -978,7 +980,7 @@ class CipPostApprovalTest extends TestCase
         $this->approveRequiredCor($application, $staff);
         $this->assertSame(Status::APPLY_FOR_COR, $application->fresh()->status);
 
-        $decided = \App\Support\Cip\Decision::record(
+        $decided = Decision::record(
             $application->fresh(),
             $staff,
             Status::POST_APPROVED,
@@ -1001,7 +1003,7 @@ class CipPostApprovalTest extends TestCase
         $before = $decisions();
         Mail::fake();
 
-        $again = \App\Support\Cip\Decision::record(
+        $again = Decision::record(
             $application->fresh(),
             $staff,
             Status::POST_APPROVED,
@@ -1347,6 +1349,107 @@ class CipPostApprovalTest extends TestCase
         Mail::assertQueued(Postcard::class, function (Postcard $mail) {
             return str_contains((string) $mail->subjectLine, 'PENDING COR');
         });
+    }
+
+    public function test_the_cor_certificate_is_emailed_to_the_service_provider_when_asked(): void
+    {
+        Mail::fake();
+
+        $staff = $this->staff();
+        [$application] = $this->corFile($staff);
+        $this->fileRequiredCor($application, $staff);
+        $this->approveRequiredCor($application, $staff);
+        $contact = $this->contactOn($application, $staff);
+        Confirmation::confirm($application->fresh(), $contact);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                'stage' => Stages::COR_SUBMITTED,
+                'date' => '2026-08-20',
+            ])
+            ->assertOk();
+
+        Mail::fake();
+
+        $this->actingAs($staff)->post('/portal/cip/applications/'.$application->uuid.'/stage', [
+            'stage' => Stages::COR_RECEIVED,
+            'date' => '2026-08-21',
+            'corNumber' => 'COR-9',
+            'emailCertificate' => '1',
+            'attachment' => UploadedFile::fake()->createWithContent('certificate.pdf', '%PDF-1.4 certificate'),
+        ], [
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])->assertOk();
+
+        $this->assertSame(Status::COR_RECEIVED, $application->fresh()->status);
+        $this->assertNotNull(FileItem::query()->where('name', 'certificate.pdf')->first());
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($contact) {
+            return $mail->hasTo($contact->email)
+                && $mail->attachment !== null
+                && $mail->attachment->name === 'certificate.pdf';
+        });
+    }
+
+    public function test_a_cor_certificate_stays_off_the_email_unless_the_user_sends_it(): void
+    {
+        Mail::fake();
+
+        $staff = $this->staff();
+        [$application] = $this->corFile($staff);
+        $this->fileRequiredCor($application, $staff);
+        $this->approveRequiredCor($application, $staff);
+        Confirmation::confirm($application->fresh(), $this->contactOn($application, $staff));
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                'stage' => Stages::COR_SUBMITTED,
+                'date' => '2026-08-20',
+            ])
+            ->assertOk();
+
+        Mail::fake();
+
+        $this->actingAs($staff)->post('/portal/cip/applications/'.$application->uuid.'/stage', [
+            'stage' => Stages::COR_RECEIVED,
+            'date' => '2026-08-21',
+            'corNumber' => 'COR-10',
+            'attachment' => UploadedFile::fake()->createWithContent('certificate.pdf', '%PDF-1.4 certificate'),
+        ], [
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])->assertOk();
+
+        $this->assertNotNull(FileItem::query()->where('name', 'certificate.pdf')->first());
+        $queued = Mail::queued(Postcard::class);
+        $this->assertNotEmpty($queued);
+        foreach ($queued as $mail) {
+            $this->assertNull($mail->attachment);
+        }
+    }
+
+    public function test_a_refused_cor_step_does_not_keep_a_certificate_it_was_asked_to_email(): void
+    {
+        $staff = $this->staff();
+        [$application] = $this->corFile($staff);
+
+        $this->actingAs($staff)->post('/portal/cip/applications/'.$application->uuid.'/stage', [
+            'stage' => Stages::COR_RECEIVED,
+            'date' => '2026-08-21',
+            'corNumber' => 'COR-11',
+            'emailCertificate' => '1',
+            'attachment' => UploadedFile::fake()->createWithContent('certificate.pdf', '%PDF-1.4 certificate'),
+        ], [
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])->assertStatus(422);
+
+        $this->assertNull(FileItem::query()->where('name', 'certificate.pdf')->first());
+        $this->assertDatabaseMissing('cip_events', [
+            'application_id' => $application->id,
+            'action' => CipEvent::ACTION_STATUS_ATTACHMENT,
+        ]);
     }
 
     public function test_the_cor_submission_cannot_be_recorded_before_confirm(): void
@@ -2541,7 +2644,7 @@ class CipPostApprovalTest extends TestCase
 
         $postRoot = Folder::find($application->fresh()->post_approval_folder_id);
         $orphan = Folder::create([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'uuid' => (string) Str::uuid(),
             'name' => 'Dependent 8',
             'folder_type' => Folder::TYPE_USER,
             'parent_id' => $postRoot->id,
@@ -2934,7 +3037,7 @@ class CipPostApprovalTest extends TestCase
         $staff = $this->staff();
         [$application] = $this->corFile($staff);
 
-        \App\Support\Cip\Decision::record(
+        Decision::record(
             $application->fresh(),
             $staff,
             Status::POST_DENIED,
@@ -3103,7 +3206,7 @@ class CipPostApprovalTest extends TestCase
         Confirmation::confirm($application->fresh(), $contact);
 
         Mail::fake();
-        $asked = fn () => \Illuminate\Support\Facades\DB::table('portal_notifications')
+        $asked = fn () => DB::table('portal_notifications')
             ->where('type', 'cip.apply-for-cor')->count();
         $before = $asked();
 
@@ -3116,7 +3219,7 @@ class CipPostApprovalTest extends TestCase
 
         // The bell is an ordinary change of status too, with no confirm link.
         $this->assertSame($before, $asked(), 'No second bell asks for a confirmation already given.');
-        $bell = \Illuminate\Support\Facades\DB::table('portal_notifications')
+        $bell = DB::table('portal_notifications')
             ->where('user_id', $contact->id)->where('type', 'cip.status')->latest('id')->first();
         $this->assertNotNull($bell);
         $this->assertStringNotContainsString('confirm=1', (string) $bell->action_url);

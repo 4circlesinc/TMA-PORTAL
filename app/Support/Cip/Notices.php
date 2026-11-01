@@ -7,6 +7,7 @@ use App\Models\CipApplication;
 use App\Models\CipDocument;
 use App\Models\CipPerson;
 use App\Models\CipPersonChangeRequest;
+use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Companies\NotificationEmail;
 use App\Support\Mail\Deliveries;
@@ -77,6 +78,7 @@ class Notices
         ?User $actor,
         ?string $message = null,
         ?string $token = null,
+        ?FileItem $attachment = null,
     ): void {
         if ($to === Status::DRAFT) {
             return;
@@ -96,7 +98,7 @@ class Notices
 
         self::fanOut(
             $application,
-            fn (?string $name) => self::postcard($application, $facts, $to, $url, $actor, $initials, $name, $message, $token),
+            fn (?string $name) => self::postcard($application, $facts, $to, $url, $actor, $initials, $name, $message, $token, $attachment),
             $confirmed ? 'cip-status' : self::template($to),
             $confirmed ? 'cip.status' : self::bellType($to),
             $actor,
@@ -390,6 +392,7 @@ class Notices
         ?string $recipientName = null,
         ?string $message = null,
         ?string $token = null,
+        ?FileItem $attachment = null,
     ): Postcard {
         $subject = self::line($facts, $to, $actor, $initials, $token);
 
@@ -434,6 +437,9 @@ class Notices
             Status::BACKGROUND_CHECK => Postcards::cipBackgroundCheck(
                 $facts, $url, $application->accepted_at?->toDateString(), $recipientName, $actor, $subject,
                 $message,
+            ),
+            Status::COR_RECEIVED => Postcards::cipStatus(
+                $facts, $to, $url, $recipientName, $subject, attachment: $attachment,
             ),
             Status::DELAYED => Postcards::cipDelayed(
                 $facts, $url, $application->accepted_at?->toDateString(), self::daysDelayed($application), $recipientName, $subject,

@@ -105,7 +105,7 @@ class Postcard extends Mailable implements ShouldQueue
 
         return [
             Attachment::fromData(fn () => $bytes, $this->attachment->name)
-                ->withMime('application/pdf'),
+                ->withMime($this->attachment->mime_type ?: 'application/pdf'),
         ];
     }
 

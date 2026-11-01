@@ -6,6 +6,7 @@ use App\Models\CipApplication;
 use App\Models\CipEvent;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -75,7 +76,7 @@ class Stages
             'label' => 'COR received',
             'button' => 'Record COR received',
             'dateLabel' => 'COR received date',
-            'note' => 'The application will move to COR Received.',
+            'note' => 'The application will move to COR Received. The certificate can be emailed to the service provider.',
         ],
         self::NIC_SUBMITTED => [
             'from' => Status::APPLY_FOR_NIC,
@@ -337,6 +338,7 @@ class Stages
         string $key,
         ?Carbon $date = null,
         ?string $corNumber = null,
+        ?UploadedFile $certificate = null,
     ): CipApplication {
         $step = self::STEPS[$key] ?? null;
 
@@ -407,7 +409,12 @@ class Stages
             ));
         }
 
-        return DB::transaction(function () use ($application, $actor, $step, $date, $already, $key, $corNumber) {
+        return DB::transaction(function () use ($application, $actor, $step, $date, $already, $key, $corNumber, $certificate) {
+            $stored = null;
+            if ($key === self::COR_RECEIVED && $certificate !== null && $actor !== null) {
+                $stored = StatusAttachment::keep($application, $certificate, $actor);
+            }
+
             $fill = [$step['column'] => $date->startOfDay()];
             if ($key === self::COR_RECEIVED) {
                 $number = trim((string) $corNumber);
@@ -423,7 +430,11 @@ class Stages
             ];
 
             if (! $already) {
-                Engine::apply($application, $step['to'], $actor, $meta);
+                $notice = $meta;
+                if ($stored !== null) {
+                    $notice['corCertificateFileId'] = $stored->id;
+                }
+                Engine::apply($application, $step['to'], $actor, $notice);
             }
 
             Engine::record($application, $step['action'], $actor, $meta);

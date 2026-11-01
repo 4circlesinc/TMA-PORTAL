@@ -4,10 +4,12 @@ namespace App\Support\Cip;
 
 use App\Models\CipApplication;
 use App\Models\CipEvent;
+use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Companies\ContactIdentity;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -743,6 +745,11 @@ class Engine
     /** The row and the audit, once the move has already been allowed. */
     private static function write(CipApplication $application, string $to, ?User $actor, array $meta, array $extra = []): CipApplication
     {
+        // The COR certificate rides on the notice only. The status event
+        // keeps the date, not the file.
+        $certificateId = (int) ($meta['corCertificateFileId'] ?? 0);
+        unset($meta['corCertificateFileId']);
+
         $enteringPost = $to === Status::POST_APPROVAL
             && ($application->phase ?? Phase::PRE_APPROVAL) !== Phase::POST_APPROVAL;
 
@@ -858,7 +865,7 @@ class Engine
                  * write usable. A notice that throws outright is the same
                  * answer: the status happened, the letter can be missed.
                  */
-                DB::transaction(function () use ($application, $to, $actor, $meta) {
+                DB::transaction(function () use ($application, $to, $actor, $meta, $certificateId) {
                     Notices::announce(
                         $application,
                         $to,
@@ -869,6 +876,7 @@ class Engine
                         // move; the checklist's own return to Apply for NIC is not
                         // the COR arriving a second time.
                         Stages::subject(is_string($meta['stage'] ?? null) ? $meta['stage'] : null),
+                        $certificateId > 0 ? FileItem::query()->find($certificateId) : null,
                     );
                 });
             } catch (Throwable $e) {
@@ -902,7 +910,7 @@ class Engine
      * the Unit's grant and its day, read off the trail, or nothing for a
      * file that was filed straight into the lane.
      *
-     * @return array{0: ?string, 1: ?\Illuminate\Support\Carbon}
+     * @return array{0: ?string, 1: ?Carbon}
      */
     public static function decisionBeforeLane(CipApplication $application): array
     {
@@ -919,7 +927,7 @@ class Engine
 
         $day = $grant->meta['decidedAt'] ?? null;
 
-        return [Status::GRANTED, $day ? \Illuminate\Support\Carbon::parse($day) : $grant->created_at];
+        return [Status::GRANTED, $day ? Carbon::parse($day) : $grant->created_at];
     }
 
     private static function checklistRefusal(string $to): string

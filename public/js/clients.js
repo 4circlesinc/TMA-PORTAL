@@ -9334,7 +9334,7 @@
 
   var CIP_STAGES = {
     cor_submitted: { label: 'Record COR submission', dateLabel: 'COR submission date', note: 'The application will move to Pending COR.' },
-    cor_received: { label: 'Record COR received', dateLabel: 'COR received date', note: 'The application will move to COR Received.' },
+    cor_received: { label: 'Record COR received', dateLabel: 'COR received date', note: 'The application will move to COR Received. The certificate can be emailed to the service provider.' },
     nic_submitted: { label: 'Record NIC submission', dateLabel: 'NIC submission date', note: 'The application will move to Pending NIC.' },
     nic_received: { label: 'Record NIC received', dateLabel: 'NIC received date', note: 'The application will move to NIC Received.' },
     passport_submitted: { label: 'Record passport application', dateLabel: 'Passport application date', note: 'The application will move to Pending Passport.' },
@@ -14753,15 +14753,19 @@
     return 'the Main Applicant folder';
   }
 
-  function cipStatusAttachmentHtml(place) {
+  function cipStatusAttachmentHtml(place, opts) {
+    opts = opts || {};
+    var label = opts.label || 'Attach a file';
+    var meta = opts.meta || ('Saved in ' + place + '.');
+
     return '<div class="tma-portal-drop" data-cip-status-drop>' +
-      '<span class="tma-portal-field__label">Attach a file <span class="tma-dash__clients-checklist-optional">Optional</span></span>' +
+      '<span class="tma-portal-field__label">' + esc(label) + ' <span class="tma-dash__clients-checklist-optional">Optional</span></span>' +
       '<input type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,application/pdf,image/jpeg,image/png,image/webp,image/heic"' +
       ' class="tma-dash__clients-photo-input" data-cip-status-file aria-hidden="true">' +
       '<button type="button" class="tma-portal-drop__zone" data-cip-status-file-btn>' +
       '<img src="' + ICON + 'UploadSimple.svg" alt="" width="20" height="20">' +
       '<span class="tma-portal-drop__hint">Drop a file here, or choose one</span>' +
-      '<span class="tma-portal-drop__meta">Saved in ' + esc(place) + '.</span>' +
+      '<span class="tma-portal-drop__meta">' + esc(meta) + '</span>' +
       '</button>' +
       '<ul class="tma-portal-drop__files" data-cip-status-file-list hidden></ul>' +
       '</div>';
@@ -15711,7 +15715,15 @@
             '</div>'
           : '') +
         '<p class="tma-portal-modal__text">' + esc(meta.note || '') + '</p>' +
-        cipStatusAttachmentHtml(cipAttachmentPlace(app)) +
+        cipStatusAttachmentHtml(cipAttachmentPlace(app), key === 'cor_received' ? {
+          label: 'Certificate of Registration',
+          meta: 'Saved in ' + cipAttachmentPlace(app) + '. Tick below to email it to the service provider.'
+        } : null) +
+        (key === 'cor_received'
+          ? '<label class="tma-portal-check-row">' +
+            '<input type="checkbox" class="tma-dash__check" data-cip-email-certificate checked>' +
+            '<span>Email the certificate to the service provider</span></label>'
+          : '') +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-stage>Cancel</button>' +
         '<button type="button" class="tma-no-data__btn" data-cip-save-stage>' + esc(saveLabel) + '</button>' +
@@ -15740,6 +15752,10 @@
               return;
             }
             payload.corNumber = corNumber;
+            var sendCertificate = el.querySelector('[data-cip-email-certificate]');
+            if (sendCertificate && sendCertificate.checked && cipStatusFile(el)) {
+              payload.emailCertificate = true;
+            }
           }
 
           save.disabled = true;

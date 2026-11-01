@@ -68,6 +68,19 @@ class StatusAttachment
             return null;
         }
 
+        return self::keep($application, $upload, $actor, $person);
+    }
+
+    /**
+     * File the upload and note it. The COR certificate is kept inside the
+     * same transaction as the status change, so a refused step keeps neither.
+     */
+    public static function keep(
+        CipApplication $application,
+        UploadedFile $upload,
+        User $actor,
+        ?CipPerson $person = null,
+    ): FileItem {
         $person = self::subject($application, $person);
         $file = self::store($application, $person, $upload, $actor);
 

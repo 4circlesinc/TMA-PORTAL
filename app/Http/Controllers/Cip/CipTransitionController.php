@@ -647,6 +647,10 @@ class CipTransitionController extends Controller
             'date.required' => 'Enter the date for this step.',
         ]);
 
+        $emailCertificate = $data['stage'] === Stages::COR_RECEIVED
+            && $request->boolean('emailCertificate')
+            && $request->hasFile('attachment');
+
         try {
             $application = Stages::record(
                 $application,
@@ -654,12 +658,17 @@ class CipTransitionController extends Controller
                 $data['stage'],
                 Carbon::parse($data['date']),
                 $data['corNumber'] ?? null,
+                $emailCertificate ? $request->file('attachment') : null,
             );
         } catch (\InvalidArgumentException $e) {
             NotReady::abort($e);
         }
 
-        StatusAttachment::storeIfPresent($request, $application, $user);
+        // A certificate the user asked to email is filed with the status
+        // change. Anything else is filed only after that change has landed.
+        if (! $emailCertificate) {
+            StatusAttachment::storeIfPresent($request, $application, $user);
+        }
         Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
 
         return response()->json(['application' => $this->record($application, $user)]);
