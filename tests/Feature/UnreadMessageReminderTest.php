@@ -87,6 +87,34 @@ class UnreadMessageReminderTest extends TestCase
         });
     }
 
+    public function test_a_thread_named_after_the_reader_speaks_to_them(): void
+    {
+        Mail::fake();
+        $sender = $this->user('firm@example.com', 'iGraphix Marketing & Co.');
+        $reader = $this->user('vernon@example.com', 'Vernon Francis');
+        $colleague = $this->user('omar@example.com', 'Omar Shah');
+        $conversation = $this->conversation(
+            [$sender, $reader, $colleague],
+            Conversation::TYPE_GROUP,
+            'Vernon Francis',
+        );
+        $this->leaveUnread($conversation, $sender, 'testing');
+
+        $this->artisan('messaging:send-unread-reminders')->assertSuccessful();
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($reader) {
+            return $mail->hasTo($reader->email)
+                && $mail->subjectLine === 'Reminder: unread message from iGraphix Marketing & Co.'
+                && ($mail->payload['title'] ?? null) === 'Unread message from iGraphix Marketing & Co.'
+                && ($mail->payload['lead'] ?? null) === 'It arrived about an hour ago.';
+        });
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($colleague) {
+            return $mail->hasTo($colleague->email)
+                && $mail->subjectLine === 'Reminder: unread message from iGraphix Marketing & Co. in Vernon Francis';
+        });
+    }
+
     public function test_a_direct_reminder_names_the_sender(): void
     {
         Mail::fake();
@@ -106,18 +134,18 @@ class UnreadMessageReminderTest extends TestCase
 
     public function test_later_reminders_keep_naming_the_group(): void
     {
-        $this->assertSame(
-            "Reminder: Dana Reed's message in Tax team is still unread",
-            Postcards::messageReminder(2, 'Dana Reed', 'Hello', 'https://portal.test/messages', 'Tax team')->subjectLine,
-        );
+        $group = Postcards::messageReminder(2, 'Dana Reed', 'Hello', 'https://portal.test/messages', 'Tax team');
+        $this->assertSame("Reminder: Dana Reed's message in Tax team is still unread", $group->subjectLine);
+        $this->assertSame('Tax team still has an unread message', $group->payload['title']);
+        $this->assertSame('Dana Reed sent it.', $group->payload['lead']);
+
         $this->assertSame(
             'Final reminder: unread message from Dana Reed in Tax team',
             Postcards::messageReminder(3, 'Dana Reed', 'Hello', 'https://portal.test/messages', 'Tax team')->subjectLine,
         );
-        $this->assertSame(
-            "Reminder: Dana Reed's message is still unread",
-            Postcards::messageReminder(2, 'Dana Reed', null, 'https://portal.test/messages')->subjectLine,
-        );
+        $direct = Postcards::messageReminder(2, 'Dana Reed', 'Hello', 'https://portal.test/messages');
+        $this->assertSame("Reminder: Dana Reed's message is still unread", $direct->subjectLine);
+        $this->assertSame("Here's what they sent.", $direct->payload['lead']);
         $this->assertSame(
             'Final reminder: unread message from Dana Reed',
             Postcards::messageReminder(3, 'Dana Reed', null, 'https://portal.test/messages')->subjectLine,

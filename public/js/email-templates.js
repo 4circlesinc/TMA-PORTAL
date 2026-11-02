@@ -548,7 +548,7 @@
       subject: 'Reminder: unread message from Tanya in Tax team', preview: 'An unread message from Tanya is waiting in Tax team.',
       spec: {
         title: 'Unread message in Tax team',
-        lead: 'Tanya sent you a message about an hour ago in Tax team and it’s still unread.',
+        lead: 'Tanya sent it about an hour ago.',
         body: renderQuote('Hi Marcus, just checking in on the statement whenever you get a moment.'),
         button: 'Read the message',
       },
@@ -558,7 +558,7 @@
       subject: 'Reminder: Tanya’s message in Tax team is still unread', preview: 'Tanya’s message in Tax team is still unread.',
       spec: {
         title: 'Tax team still has an unread message',
-        lead: 'Tanya’s message in Tax team is still unread.',
+        lead: 'Tanya sent it.',
         body: renderQuote('Hi Marcus, just checking in on the statement whenever you get a moment.'),
         button: 'Read and reply',
       },
@@ -568,7 +568,7 @@
       subject: 'Final reminder: unread message from Tanya in Tax team', preview: 'One last reminder: Tanya’s message in Tax team is still unread.',
       spec: {
         title: 'Final reminder: unread message in Tax team',
-        lead: 'It’s been a full day, and Tanya’s message in Tax team is still unread.',
+        lead: 'It’s been a full day. Tanya sent it.',
         body: renderQuote('Hi Marcus, just checking in on the statement whenever you get a moment.') +
           '<p>If now isn’t a good time, the message will be waiting whenever you’re ready.</p>',
         button: 'Open the conversation',

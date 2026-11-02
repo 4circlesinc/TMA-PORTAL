@@ -132,8 +132,17 @@ class SendUnreadMessageReminders extends Command
         }
 
         $name = trim(MessagingPresenter::title($conversation, $viewer));
+        if ($name === '') {
+            return null;
+        }
 
-        return $name !== '' ? $name : null;
+        // A thread titled with the reader's own name is their case, so the
+        // letter speaks to them instead of announcing them to themselves.
+        if (mb_strtolower($name) === mb_strtolower(trim((string) $viewer->name))) {
+            return null;
+        }
+
+        return $name;
     }
 
     private function preview(Message $message): ?string
