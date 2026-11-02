@@ -14876,29 +14876,302 @@
 
   var cipPendingStatusCc = null;
 
+  var CIP_CC_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  var cipCcCard = null;
+  var cipCcCardEmail = '';
+  var cipCcKnown = {};
+
   function cipStatusCcHtml() {
     return '<div class="tma-dash__clients-field">' +
-      '<label class="tma-dash__clients-field-label" for="cip-status-cc">CC <span class="tma-dash__clients-checklist-optional">Optional</span></label>' +
-      '<input type="text" id="cip-status-cc" class="tma-dash__clients-field-input" data-cip-status-cc' +
-      ' placeholder="name@firm.com, other@firm.com" autocomplete="off">' +
+      '<label class="tma-dash__clients-field-label" for="cip-status-cc">CC</label>' +
+      '<div class="tma-cip-cc" data-cip-status-cc-box>' +
+      '<input type="text" id="cip-status-cc" class="tma-cip-cc__input" data-cip-status-cc' +
+      ' placeholder="name@firm.com" autocomplete="off" enterkeyhint="done">' +
+      '</div>' +
       '</div>';
   }
 
-  function cipStatusCcList(root) {
-    var input = root && root.querySelector('[data-cip-status-cc]');
-    if (!input || !input.value) return [];
-
-    return String(input.value).split(/[,;\s]+/).map(function (part) {
+  function cipStatusCcParts(value) {
+    return String(value || '').split(/[,;\s]+/).map(function (part) {
       return part.trim();
     }).filter(Boolean);
   }
 
+  function cipStatusCcList(root) {
+    if (!root) return [];
+    var list = [];
+    root.querySelectorAll('[data-cip-cc-email]').forEach(function (tag) {
+      var email = tag.getAttribute('data-cip-cc-email');
+      if (email) list.push(email);
+    });
+    var input = root.querySelector('[data-cip-status-cc]');
+    if (input) cipStatusCcParts(input.value).forEach(function (part) { list.push(part); });
+
+    return list;
+  }
+
+  function cipCcBox(input) {
+    return input && input.closest('[data-cip-status-cc-box]');
+  }
+
+  function cipCcHas(box, email) {
+    var want = String(email).toLowerCase();
+    var found = false;
+    box.querySelectorAll('[data-cip-cc-email]').forEach(function (tag) {
+      if (String(tag.getAttribute('data-cip-cc-email')).toLowerCase() === want) found = true;
+    });
+
+    return found;
+  }
+
+  function cipCcPlaceholder(box, input) {
+    if (!input) return;
+    input.placeholder = box.querySelector('[data-cip-cc-email]') ? '' : 'name@firm.com';
+  }
+
+  function cipCcAddTag(box, email) {
+    var input = box.querySelector('[data-cip-status-cc]');
+    var tag = document.createElement('span');
+    tag.className = 'tma-cip-cc__tag';
+    tag.setAttribute('data-cip-cc-tag', '');
+    tag.setAttribute('data-cip-cc-email', email);
+    tag.setAttribute('role', 'button');
+    tag.setAttribute('tabindex', '0');
+    tag.innerHTML = '<span class="tma-cip-cc__tag-text">' + esc(email) + '</span>' +
+      '<button type="button" class="tma-cip-cc__remove" data-cip-cc-remove aria-label="Remove ' + esc(email) + '">' +
+      '<img src="' + ICON + 'X.svg" alt="" width="12" height="12">' +
+      '</button>';
+    box.insertBefore(tag, input);
+    cipCcPlaceholder(box, input);
+  }
+
+  function cipCcCommit(input) {
+    var box = cipCcBox(input);
+    if (!box) return;
+    var parts = cipStatusCcParts(input.value);
+    if (!parts.length) {
+      input.value = '';
+      return;
+    }
+
+    var kept = [];
+    var told = false;
+    parts.forEach(function (part) {
+      if (!CIP_CC_EMAIL.test(part)) {
+        if (!told) {
+          clientsToast(part + ' is not an email address.', 'negative');
+          told = true;
+        }
+        kept.push(part);
+        return;
+      }
+      if (cipCcHas(box, part)) return;
+      if (box.querySelectorAll('[data-cip-cc-email]').length >= 10) {
+        if (!told) {
+          clientsToast('CC up to 10 addresses.', 'negative');
+          told = true;
+        }
+        kept.push(part);
+        return;
+      }
+      cipCcAddTag(box, part);
+    });
+    input.value = kept.join(', ');
+    cipCcPlaceholder(box, input);
+  }
+
+  function cipCcFace(person) {
+    var photo = person.photo || '';
+    if (photo && /^(https?:|\/(storage|media)\/|data:)/.test(photo)) return photo;
+    var cu = window.TMACurrentUser;
+    if (cu && cu.initialsFor) return cu.initialsFor(person.name || person.email, person.email);
+
+    return '';
+  }
+
+  function cipCcPerson(email) {
+    var known = cipCcKnown[email.toLowerCase()];
+    if (known) return known;
+    var local = email.split('@')[0] || email;
+
+    return { name: local, email: email, photo: '' };
+  }
+
+  function cipCcPaintCard(person) {
+    if (!cipCcCard) return;
+    var src = cipCcFace(person);
+    cipCcCard.innerHTML =
+      '<div class="tma-cip-cc-card__head">' +
+      (src ? '<img class="tma-cip-cc-card__avatar" src="' + esc(src) + '" alt="">' : '') +
+      '<div class="tma-cip-cc-card__ident">' +
+      '<span class="tma-cip-cc-card__name">' + esc(person.name || person.email) + '</span>' +
+      '<span class="tma-cip-cc-card__email">' + esc(person.email) + '</span>' +
+      '</div></div>' +
+      '<button type="button" class="tma-cip-cc-card__copy" data-cip-cc-copy>' +
+      '<img src="' + ICON + 'Copy.svg" alt="" width="16" height="16">' +
+      '<span>Copy email</span></button>';
+  }
+
+  function cipCcPlaceCard(anchor) {
+    if (!cipCcCard) return;
+    var rect = anchor.getBoundingClientRect();
+    var w = cipCcCard.offsetWidth || 260;
+    var h = cipCcCard.offsetHeight || 120;
+    var left = Math.min(Math.max(8, rect.left), window.innerWidth - w - 8);
+    var top = rect.bottom + 8;
+    if (top + h > window.innerHeight - 8) top = Math.max(8, rect.top - h - 8);
+    cipCcCard.style.left = Math.round(left) + 'px';
+    cipCcCard.style.top = Math.round(top) + 'px';
+  }
+
+  function cipCcCloseCard() {
+    cipCcCardEmail = '';
+    if (cipCcCard) cipCcCard.removeAttribute('data-open');
+  }
+
+  function cipCcRemember(email, person) {
+    cipCcKnown[email.toLowerCase()] = person;
+    if (cipCcCardEmail.toLowerCase() !== email.toLowerCase()) return;
+    cipCcPaintCard(person);
+    var tag = document.querySelector('[data-cip-cc-email="' + CSS.escape(email) + '"]');
+    if (tag) cipCcPlaceCard(tag);
+  }
+
+  function cipCcLookup(email) {
+    var key = email.toLowerCase();
+    if (cipCcKnown[key]) return;
+    var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
+    if (me && me.email && String(me.email).toLowerCase() === key) {
+      cipCcRemember(email, { name: me.name || email, email: me.email, photo: me.avatar || me.photo || '' });
+      return;
+    }
+    clientsFetch('/portal/messaging/contacts?q=' + encodeURIComponent(email)).then(function (data) {
+      var people = (data && data.contacts) || [];
+      var i;
+      for (i = 0; i < people.length; i++) {
+        if (String(people[i].email || '').toLowerCase() === key) {
+          cipCcRemember(email, {
+            name: people[i].name || email,
+            email: people[i].email,
+            photo: people[i].photo || '',
+          });
+          return;
+        }
+      }
+      cipCcKnown[key] = cipCcPerson(email);
+    }).catch(function () {
+      cipCcKnown[key] = cipCcPerson(email);
+    });
+  }
+
+  function cipCcOpenCard(tag) {
+    var email = tag.getAttribute('data-cip-cc-email');
+    if (!email) return;
+    if (!cipCcCard) {
+      cipCcCard = document.createElement('div');
+      cipCcCard.className = 'tma-cip-cc-card';
+      cipCcCard.setAttribute('role', 'dialog');
+      cipCcCard.setAttribute('aria-label', 'Email address');
+      document.body.appendChild(cipCcCard);
+      cipCcCard.addEventListener('click', function (e) {
+        var copy = e.target.closest('[data-cip-cc-copy]');
+        if (!copy) return;
+        var address = cipCcCardEmail;
+        if (!address) return;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(address).then(function () {
+            clientsToast('Email address copied.', 'positive');
+          }).catch(function () {
+            clientsToast('Could not copy that email address.', 'failure');
+          });
+          return;
+        }
+        clientsToast('Could not copy that email address.', 'failure');
+      });
+    }
+    cipCcCardEmail = email;
+    cipCcPaintCard(cipCcPerson(email));
+    cipCcCard.setAttribute('data-open', '');
+    cipCcPlaceCard(tag);
+    cipCcLookup(email);
+  }
+
+  function cipCcWire() {
+    document.addEventListener('keydown', function (e) {
+      var input = e.target && e.target.matches && e.target.matches('[data-cip-status-cc]') ? e.target : null;
+      if (!input) {
+        if (e.key === 'Escape') cipCcCloseCard();
+        return;
+      }
+      if (e.key === 'Enter' || e.key === ',' || e.key === ';' || e.key === ' ') {
+        e.preventDefault();
+        cipCcCommit(input);
+        return;
+      }
+      if (e.key === 'Backspace' && input.value === '') {
+        var box = cipCcBox(input);
+        var tags = box ? box.querySelectorAll('[data-cip-cc-email]') : [];
+        var last = tags.length ? tags[tags.length - 1] : null;
+        if (!last) return;
+        if (cipCcCardEmail && last.getAttribute('data-cip-cc-email') === cipCcCardEmail) cipCcCloseCard();
+        last.remove();
+        cipCcPlaceholder(box, input);
+      }
+    });
+
+    document.addEventListener('paste', function (e) {
+      var input = e.target && e.target.matches && e.target.matches('[data-cip-status-cc]') ? e.target : null;
+      if (!input) return;
+      var text = e.clipboardData ? e.clipboardData.getData('text') : '';
+      if (!text || !/[,;\s]/.test(text)) return;
+      e.preventDefault();
+      input.value = (input.value ? input.value + ' ' : '') + text;
+      cipCcCommit(input);
+    });
+
+    document.addEventListener('focusout', function (e) {
+      var input = e.target && e.target.matches && e.target.matches('[data-cip-status-cc]') ? e.target : null;
+      if (!input || !String(input.value).trim()) return;
+      cipCcCommit(input);
+    });
+
+    document.addEventListener('click', function (e) {
+      var remove = e.target.closest && e.target.closest('[data-cip-cc-remove]');
+      if (remove) {
+        e.preventDefault();
+        e.stopPropagation();
+        var gone = remove.closest('[data-cip-cc-tag]');
+        var box = remove.closest('[data-cip-status-cc-box]');
+        if (gone && cipCcCardEmail && gone.getAttribute('data-cip-cc-email') === cipCcCardEmail) cipCcCloseCard();
+        if (gone) gone.remove();
+        if (box) cipCcPlaceholder(box, box.querySelector('[data-cip-status-cc]'));
+        return;
+      }
+      var hit = e.target.closest && e.target.closest('[data-cip-cc-tag]');
+      if (hit) {
+        e.preventDefault();
+        cipCcOpenCard(hit);
+        return;
+      }
+      if (cipCcCard && cipCcCard.hasAttribute('data-open') && !cipCcCard.contains(e.target)) cipCcCloseCard();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var hit = e.target && e.target.closest && e.target.closest('[data-cip-cc-tag]');
+      if (!hit || (e.target.closest && e.target.closest('[data-cip-cc-remove]'))) return;
+      e.preventDefault();
+      cipCcOpenCard(hit);
+    });
+  }
+
+  cipCcWire();
+
   function cipStatusCcValue(root) {
     var list = cipStatusCcList(root);
-    var email = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     var i;
     for (i = 0; i < list.length; i++) {
-      if (!email.test(list[i])) {
+      if (!CIP_CC_EMAIL.test(list[i])) {
         clientsToast(list[i] + ' is not an email address.', 'negative');
         return null;
       }

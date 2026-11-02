@@ -7626,3 +7626,144 @@ body:has(.tma-dash.is-sidebar-collapsed) .tma-sync-pill {
 :root[data-theme="dark"] .tma-portal-star:not(.is-starred) svg {
   fill: rgba(255, 255, 255, 0.75);
 }
+
+/* CC addresses on a status change. Each finished address is a tag; the
+   card answers who it is and copies the address. */
+.tma-cip-cc {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 6px 8px;
+  border: 0.5px solid var(--color-border-medium);
+  border-radius: var(--radius-12);
+  background: var(--color-bg-input);
+}
+
+.tma-cip-cc:focus-within { border-color: var(--color-text-secondary); }
+
+.tma-cip-cc__input {
+  flex: 1 1 140px;
+  min-width: 8em;
+  border: 0;
+  padding: 4px;
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-size-14);
+  line-height: 20px;
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.tma-cip-cc__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 2px 2px 2px 10px;
+  border-radius: 999px;
+  background: var(--color-overlay-4);
+  color: var(--color-text-primary);
+  font-size: var(--text-size-13, 13px);
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.tma-cip-cc__tag:hover,
+.tma-cip-cc__tag:focus-visible { background: var(--color-hover); }
+
+.tma-cip-cc__tag-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+
+.tma-cip-cc__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.tma-cip-cc__remove img { width: 12px; height: 12px; opacity: 0.7; }
+.tma-cip-cc__remove:hover { background: var(--color-overlay-4); }
+
+.tma-cip-cc-card {
+  position: fixed;
+  z-index: 640;
+  display: none;
+  flex-direction: column;
+  gap: var(--space-12);
+  width: 280px;
+  padding: var(--space-16);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14);
+}
+
+.tma-cip-cc-card[data-open] { display: flex; }
+
+.tma-cip-cc-card__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  min-width: 0;
+}
+
+.tma-cip-cc-card__avatar {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.tma-cip-cc-card__ident {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tma-cip-cc-card__name {
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.tma-cip-cc-card__email {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-cip-cc-card__copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  width: 100%;
+  padding: var(--space-8) var(--space-12);
+  border: 0;
+  border-radius: var(--radius-12);
+  background: var(--color-overlay-4);
+  font: inherit;
+  font-size: var(--text-size-13, 13px);
+  line-height: 20px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.tma-cip-cc-card__copy:hover { background: var(--color-hover); }
+.tma-cip-cc-card__copy img { width: 16px; height: 16px; }
