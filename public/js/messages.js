@@ -47,6 +47,7 @@
     User: ICON + 'User.svg',
     ThreadsLogo: ICON + 'ThreadsLogo.svg',
     CaretLeft: ICON + 'CaretLeft.svg',
+    FolderOpen: ICON + 'FolderOpen.svg',
     PushPin: ICON + 'PushPin.svg',
     Star: ICON + 'Star.svg',
     StarFilled: ICON + 'StarFilled.svg',
@@ -565,6 +566,42 @@
     var n = parseInt(row.memberCount, 10) || 0;
     if (!n) return '';
     return n === 1 ? '1 member' : n + ' members';
+  }
+
+  /*
+   * A provider case is the group filed against one application. The client
+   * uid is how /citizenship-applications/{uid} opens that file.
+   */
+  function applicationForThread(row) {
+    row = resolveThread(row);
+    if (!row || row.type !== 'group' || row.subject !== 'provider') return null;
+    var about = row.about;
+    if (!about || !about.clientUid) return null;
+    return about;
+  }
+
+  function openApplication(row) {
+    var about = applicationForThread(row);
+    if (!about || !window.TMADashboard || !window.TMADashboard.navigate) return false;
+    window.TMADashboard.navigate({
+      navId: 'clients',
+      view: 'clients',
+      title: about.clientName || row.name || 'Application',
+      crumb: 'CIP Applications',
+      clientsScreen: 'detail',
+      contactId: about.clientUid,
+    });
+    return true;
+  }
+
+  function renderOpenApplicationButton(row) {
+    if (!applicationForThread(row)) return '';
+    return (
+      '<button type="button" class="tma-dash__messages-open-app" data-messages-open-application ' +
+      'aria-label="Open application">' +
+      '<img src="' + esc(ICONS.FolderOpen) + '" alt="">' +
+      '<span>Open application</span></button>'
+    );
   }
 
   function counterpartRole(row) {
@@ -5341,7 +5378,9 @@
       '<div class="tma-dash__messages-profile-section tma-dash__messages-profile-actions">' +
       (info.can.openClientRecord
         ? '<button type="button" class="tma-dash__messages-profile-action" ' +
-          'data-messages-open-client>Open client record</button>'
+          'data-messages-open-client>' +
+          (applicationForThread(row) ? 'Open application' : 'Open client record') +
+          '</button>'
         : '') +
       '<button type="button" class="tma-dash__messages-profile-action" ' +
       'data-messages-profile-clear>Clear messages</button>' +
@@ -5384,6 +5423,7 @@
       '</span>' +
       '</div>' +
       '<div class="tma-dash__messages-chat-actions">' +
+      renderOpenApplicationButton(row) +
       [
         { icon: 'Phone', label: 'Voice call', attr: ' data-messages-call="audio"' },
         { icon: 'VideoCamera', label: 'Video call', attr: ' data-messages-call="video"' },
@@ -9903,6 +9943,10 @@
       { action: 'clear', label: 'Clear messages', danger: true },
     ];
 
+    if (applicationForThread(row)) {
+      items.unshift({ action: 'application', label: 'Open application' });
+    }
+
     // The group's admins speak to all of it, now or at a set time.
     if (row.type === 'group' && row.canManage) {
       items.unshift({ action: 'announce', label: 'New announcement' });
@@ -9975,6 +10019,13 @@
 
     if (action === 'announce') {
       openAnnouncement(root, state, render, conversationId);
+      return;
+    }
+
+    if (action === 'application') {
+      if (!openApplication(row)) {
+        showMessagesToast(root, 'This conversation is no longer attached to an application.');
+      }
       return;
     }
 
@@ -10629,6 +10680,12 @@
     if (openClient) {
       openClient.addEventListener('click', function () {
         var row = findThread(state.selectedId);
+        if (applicationForThread(row)) {
+          if (!openApplication(row)) {
+            showMessagesToast(root, 'This conversation is no longer attached to an application.');
+          }
+          return;
+        }
         var uid = row && row.about && row.about.clientUid;
         if (uid && window.TMADashboard && window.TMADashboard.navigate) {
           window.TMADashboard.navigate({
@@ -10641,6 +10698,15 @@
           });
         } else {
           showMessagesToast(root, 'No client record is linked to this conversation');
+        }
+      });
+    }
+
+    var openApplicationBtn = MORPH.unwiredOne(root, '[data-messages-open-application]');
+    if (openApplicationBtn) {
+      openApplicationBtn.addEventListener('click', function () {
+        if (!openApplication(findThread(state.selectedId))) {
+          showMessagesToast(root, 'This conversation is no longer attached to an application.');
         }
       });
     }
