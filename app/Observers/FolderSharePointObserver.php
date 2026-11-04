@@ -27,16 +27,20 @@ class FolderSharePointObserver
     }
 
     /**
-     * A rename has to reach SharePoint too.
+     * A rename or a move has to reach SharePoint too.
      *
      * Created only mirrored the first name. The filing folder is minted as
      * "Application {number}" and renamed to the applicant once that name
      * exists; without this, SharePoint keeps the number and the portal
      * shows the person.
+     *
+     * Moves were never mirrored at all: a client transferred to another
+     * service provider (or folded in by a firm merge) kept its SharePoint
+     * folder under the old provider, and its later uploads went there.
      */
     public function updated(Folder $folder): void
     {
-        if (Pusher::isSuspended() || ! $folder->wasChanged('name')) {
+        if (Pusher::isSuspended() || ! $folder->wasChanged(['name', 'parent_id'])) {
             return;
         }
 

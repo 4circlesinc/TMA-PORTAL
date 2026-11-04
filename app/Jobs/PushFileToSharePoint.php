@@ -3,12 +3,14 @@
 namespace App\Jobs;
 
 use App\Models\FileItem;
+use App\Models\SharePointItem;
 use App\Support\SharePoint\Pusher;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Push one portal file to its linked SharePoint library.
@@ -25,7 +27,30 @@ class PushFileToSharePoint implements ShouldQueue
 
     public array $backoff = [30, 120, 300];
 
-    public function __construct(public int $fileId, public string $action = 'content') {}
+    /**
+     * A 2 GB upload goes up in 5 MB chunks and can outlast the worker's
+     * 300-second default. Killed there, the push recorded nothing at all and
+     * the file simply never appeared. The queue's retry_after (1830 s) is
+     * already set above this.
+     */
+    public int $timeout = 1800;
+
+    /** Re-dispatches this push gets when no mapping exists to count failures. */
+    public const FIRST_PUSH_ATTEMPTS = 5;
+
+    /** Minutes to wait before each of those re-dispatches. */
+    private const FIRST_PUSH_DELAYS = [1, 5, 15, 60];
+
+    /**
+     * Which attempt at a first push this is. A plain property with a default,
+     * not a promoted one, so jobs queued before it existed still unserialise.
+     */
+    public int $attempt = 1;
+
+    public function __construct(public int $fileId, public string $action = 'content', int $attempt = 1)
+    {
+        $this->attempt = $attempt;
+    }
 
     public function handle(): void
     {
@@ -43,7 +68,7 @@ class PushFileToSharePoint implements ShouldQueue
 
         // Graph asked us to slow down — reschedule rather than burn a retry.
         if (($result['status'] ?? null) === 'throttled') {
-            self::dispatch($this->fileId, $this->action)
+            self::dispatch($this->fileId, $this->action, $this->attempt)
                 ->delay(now()->addSeconds($result['retryAfter'] ?? 30));
         }
 
@@ -56,12 +81,37 @@ class PushFileToSharePoint implements ShouldQueue
          * failure_count; past three, RetrySharePointFailures owns it with
          * longer spacing and a final cap.
          */
-        if (($result['status'] ?? null) === 'failed') {
-            $failures = (int) \App\Models\SharePointItem::query()
+        if (in_array($result['status'] ?? null, ['failed', 'no-parent'], true)) {
+            $failures = (int) SharePointItem::query()
                 ->where('file_id', $this->fileId)->max('failure_count');
             if ($failures > 0 && $failures < 3) {
                 self::dispatch($this->fileId, $this->action)
                     ->delay(now()->addSeconds(60 * $failures));
+
+                return;
+            }
+
+            /*
+             * A file's FIRST push has no mapping row, so markFailure() had
+             * nothing to write and failure_count stayed 0: no retry here,
+             * and RetrySharePointFailures (which only reads failed rows)
+             * never saw it either. One Graph 504 on upload and the file was
+             * in the portal and missing from SharePoint for good. The
+             * attempt count rides on the job instead.
+             */
+            $mapped = SharePointItem::query()->where('file_id', $this->fileId)->exists();
+            if (! $mapped && $this->attempt < self::FIRST_PUSH_ATTEMPTS) {
+                $wait = self::FIRST_PUSH_DELAYS[$this->attempt - 1]
+                    ?? self::FIRST_PUSH_DELAYS[array_key_last(self::FIRST_PUSH_DELAYS)];
+
+                self::dispatch($this->fileId, $this->action, $this->attempt + 1)
+                    ->delay(now()->addMinutes($wait));
+            } elseif (! $mapped) {
+                Log::error('SharePoint first push gave up', [
+                    'file' => $this->fileId,
+                    'attempts' => $this->attempt,
+                    'reason' => $result['reason'] ?? $result['status'],
+                ]);
             }
         }
     }

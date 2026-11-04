@@ -2,11 +2,13 @@
 
 namespace App\Support\SharePoint;
 
+use App\Jobs\PushFileToSharePoint;
 use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\SharePointConnection;
 use App\Models\SharePointItem;
 use App\Support\Files\Vault;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -156,13 +158,25 @@ class Pusher
             return null;
         }
 
+        /*
+         * A SharePoint folder of this name may already be here: the same
+         * drawer provisioned twice, or one whose portal folder was binned.
+         * Reusing it stops a second, numbered copy. But a namesake that
+         * belongs to a DIFFERENT live portal folder is somebody else's
+         * folder: a client moved to another provider leaves its old copy
+         * behind under this name, and sharing it put two clients' documents
+         * in one folder, where same-named files overwrote each other.
+         */
         $named = SharePointItem::query()
             ->where('connection_id', $connection->id)
             ->where('graph_parent_id', $parentGraphId)
+            ->where('item_type', 'folder')
             ->where('name', $folder->name)
-            ->first();
+            ->orderBy('id')
+            ->get()
+            ->first(fn (SharePointItem $item) => self::mayShareFolder($item, $folder));
         if ($named) {
-            if ($named->folder_id === null) {
+            if ($named->folder_id === null || self::folderGone($named->folder_id)) {
                 $named->update(['folder_id' => $folder->id]);
             }
 
@@ -196,6 +210,99 @@ class Pusher
     }
 
     /**
+     * May this portal folder use an existing SharePoint folder mapped to
+     * another row? Yes when nothing live owns it, or when the owner is the
+     * same drawer twice under the same portal parent (provisioning folds
+     * those twins). Not when the owner is a different folder elsewhere.
+     */
+    private static function mayShareFolder(SharePointItem $item, Folder $folder): bool
+    {
+        if ($item->folder_id === null || (int) $item->folder_id === (int) $folder->id) {
+            return true;
+        }
+
+        $owner = Folder::withTrashed()->find($item->folder_id);
+
+        return $owner === null
+            || $owner->trashed()
+            || (int) $owner->parent_id === (int) $folder->parent_id;
+    }
+
+    private static function folderGone(int $folderId): bool
+    {
+        $folder = Folder::withTrashed()->find($folderId);
+
+        return $folder === null || $folder->trashed();
+    }
+
+    /**
+     * Is this portal folder somewhere the connection already reaches: the
+     * connection's own folder, or under a folder it has mapped? Only then
+     * can a move be mirrored; anything else would be resolved against the
+     * drive root and scatter the folder there.
+     */
+    private static function anchoredIn(SharePointConnection $connection, ?Folder $folder): bool
+    {
+        $seen = [];
+
+        for ($node = $folder; $node !== null && ! isset($seen[$node->id]); $node = $node->parent) {
+            $seen[$node->id] = true;
+
+            if ($connection->folder_id !== null && (int) $node->id === (int) $connection->folder_id) {
+                return true;
+            }
+
+            $mapped = SharePointItem::query()
+                ->where('connection_id', $connection->id)
+                ->where('folder_id', $node->id)
+                ->where('item_type', 'folder')
+                ->exists();
+            if ($mapped) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Where a mapped folder's SharePoint copy must move to, or null when it
+     * is already in place (or the portal parent cannot be placed safely).
+     *
+     * "In place" means under ANY of the parent's mapped copies: a drawer
+     * that SharePoint holds twice is not a reason to shuffle its children
+     * from one copy to the other.
+     */
+    private static function moveTarget(SharePointConnection $connection, Folder $folder, SharePointItem $mapping): ?string
+    {
+        if ($connection->folder_id !== null && (int) $folder->id === (int) $connection->folder_id) {
+            return null;
+        }
+
+        $parent = $folder->parent;
+        if ($parent === null || ! self::anchoredIn($connection, $parent)) {
+            return null;
+        }
+
+        $placed = SharePointItem::query()
+            ->where('connection_id', $connection->id)
+            ->where('folder_id', $parent->id)
+            ->where('item_type', 'folder')
+            ->pluck('graph_item_id')
+            ->all();
+        if ($mapping->graph_parent_id !== null && in_array($mapping->graph_parent_id, $placed, true)) {
+            return null;
+        }
+
+        $target = self::graphParentFor($connection, $parent);
+        if (! $target || $target === $mapping->graph_parent_id || $target === $mapping->graph_item_id) {
+            return null;
+        }
+
+        return $target;
+    }
+
+    /**
      * Materialise a portal folder in SharePoint without waiting for its
      * first file. Client folders are provisioned empty, and someone working
      * from SharePoint or OneDrive should see the folder the moment the
@@ -204,7 +311,7 @@ class Pusher
      *
      * @return array{status:string}
      */
-    public static function pushFolder(Folder $folder): array
+    public static function pushFolder(Folder $folder, ?SharePointItem $copy = null): array
     {
         if (self::$suspended) {
             return ['status' => 'skipped'];
@@ -216,6 +323,25 @@ class Pusher
         }
 
         /*
+         * A folder SharePoint holds twice ("Name" and "Name 1") has two
+         * mappings. The caller may name the copy to place; only the first
+         * is ever renamed, since renaming the twin onto the same name can
+         * only collide.
+         */
+        $primary = SharePointItem::query()
+            ->where('connection_id', $connection->id)
+            ->where('folder_id', $folder->id)
+            ->where('item_type', 'folder')
+            ->orderBy('id')
+            ->first();
+
+        if ($copy && $primary
+            && (int) $copy->connection_id === (int) $connection->id
+            && (int) $copy->folder_id === (int) $folder->id) {
+            return self::reconcileFolder($connection, $copy, $folder, $copy->id === $primary->id);
+        }
+
+        /*
          * A folder SharePoint already has is renamed there, not created again.
          *
          * The portal names a new filing "Application IGA26-00005" and later
@@ -223,35 +349,65 @@ class Pusher
          * the new name left SharePoint on the old one, and Graph's conflict
          * rule then stored the next copy as "Application IGA26-00005 1".
          */
-        $mapping = SharePointItem::query()
-            ->where('connection_id', $connection->id)
-            ->where('folder_id', $folder->id)
-            ->where('item_type', 'folder')
-            ->first();
-
-        if ($mapping && strcasecmp((string) $mapping->name, $folder->name) !== 0) {
-            try {
-                $result = Drive::rename($connection->drive_id, $mapping->graph_item_id, $folder->name);
-                $mapping->update([
-                    'name' => $result['name'] ?? $folder->name,
-                    'etag' => $result['eTag'] ?? $mapping->etag,
-                    'sync_status' => SharePointItem::SYNCED,
-                    'last_error' => null,
-                    'last_synced_at' => now(),
-                ]);
-
-                return ['status' => 'renamed'];
-            } catch (\Throwable $e) {
-                self::markFailure($mapping, $e->getMessage());
-                Synchroniser::log($connection, 'push-failed', 'error', $mapping->graph_item_id, $e->getMessage());
-
-                return ['status' => 'failed', 'reason' => $e->getMessage()];
-            }
+        if ($primary) {
+            return self::reconcileFolder($connection, $primary, $folder, true);
         }
 
         return self::graphParentFor($connection, $folder)
             ? ['status' => 'ok']
             : ['status' => 'no-parent'];
+    }
+
+    /**
+     * Bring a folder SharePoint already holds to the portal's name AND place.
+     *
+     * Only the name used to be pushed. Moving a client to another service
+     * provider moved the portal folder but left the SharePoint copy under
+     * the old provider, and every later upload followed the stale mapping
+     * there. The inbound pass then read SharePoint's placement back and
+     * could put the portal folder under the old provider too.
+     *
+     * @return array{status:string, reason?:string, retryAfter?:int}
+     */
+    private static function reconcileFolder(SharePointConnection $connection, SharePointItem $mapping, Folder $folder, bool $mayRename): array
+    {
+        try {
+            $renamed = $mayRename && strcasecmp((string) $mapping->name, $folder->name) !== 0;
+            $target = self::moveTarget($connection, $folder, $mapping);
+
+            if ($target === null && ! $renamed) {
+                return ['status' => 'ok'];
+            }
+
+            $result = $target !== null
+                ? Drive::move($connection->drive_id, $mapping->graph_item_id, $target, $renamed ? $folder->name : null)
+                : Drive::rename($connection->drive_id, $mapping->graph_item_id, $folder->name);
+
+            $mapping->update([
+                'name' => $result['name'] ?? $folder->name,
+                'graph_parent_id' => $result['parentReference']['id'] ?? $target ?? $mapping->graph_parent_id,
+                'etag' => $result['eTag'] ?? $mapping->etag,
+                'sync_status' => SharePointItem::SYNCED,
+                'last_error' => null,
+                'failure_count' => 0,
+                'last_synced_at' => now(),
+            ]);
+
+            if ($target !== null) {
+                Synchroniser::log($connection, 'folder-moved', 'info', $mapping->graph_item_id, $folder->name);
+
+                return ['status' => 'moved'];
+            }
+
+            return ['status' => 'renamed'];
+        } catch (GraphThrottledException $e) {
+            return ['status' => 'throttled', 'retryAfter' => $e->retryAfter];
+        } catch (\Throwable $e) {
+            self::markFailure($mapping, $e->getMessage());
+            Synchroniser::log($connection, 'push-failed', 'error', $mapping->graph_item_id, $e->getMessage());
+
+            return ['status' => 'failed', 'reason' => $e->getMessage()];
+        }
     }
 
     /**
@@ -274,15 +430,27 @@ class Pusher
             ->where('file_id', $file->id)->first();
 
         try {
-            if ($mapping) {
-                $conflict = self::detectConflict($connection, $mapping, $file);
+            /*
+             * The item this file already is in SharePoint, if it is still
+             * there. Only Graph's own 404 says it is gone; a throttle or a
+             * network blip fails the push to be retried, rather than being
+             * read as "gone" and answered with a second copy.
+             */
+            $remote = $mapping ? Drive::find($connection->drive_id, $mapping->graph_item_id) : null;
+
+            if ($remote !== null) {
+                $conflict = self::detectConflict($connection, $mapping, $file, $remote);
                 if ($conflict) {
                     return $conflict;
                 }
             }
 
-            $parentGraphId = self::graphParentFor($connection, $file->folder);
-            if (! $parentGraphId) {
+            // A file SharePoint holds is updated where it sits; a move is
+            // pushMove's business. Only a new file is placed by folder.
+            $parentGraphId = $remote !== null
+                ? ($remote['parentReference']['id'] ?? $mapping->graph_parent_id)
+                : self::graphParentFor($connection, $file->folder);
+            if ($remote === null && ! $parentGraphId) {
                 return ['status' => 'no-parent'];
             }
 
@@ -306,12 +474,20 @@ class Pusher
             }
 
             try {
-                $result = Drive::upload($connection->drive_id, $parentGraphId, $file->name, $local);
+                $result = $remote !== null
+                    ? Drive::uploadToItem($connection->drive_id, $mapping->graph_item_id, $local)
+                    : Drive::upload(
+                        $connection->drive_id,
+                        $parentGraphId,
+                        $file->name,
+                        $local,
+                        self::nameHeldByAnother($connection, $parentGraphId, $file) ? 'rename' : 'replace',
+                    );
             } finally {
                 Vault::cleanupLocalCopy($local);
             }
 
-            self::recordMapping($connection, $mapping, $file, $result, $parentGraphId);
+            self::recordMapping($connection, $mapping, $file, $result, $result['parentReference']['id'] ?? $parentGraphId);
             Synchroniser::log($connection, 'pushed', 'info', $result['id'] ?? null, $file->name);
 
             return ['status' => 'pushed'];
@@ -334,16 +510,8 @@ class Pusher
      * flagged and left alone. For a portal-originated file the firm's rule says
      * the portal wins, so the push proceeds.
      */
-    private static function detectConflict(SharePointConnection $connection, SharePointItem $mapping, FileItem $file): ?array
+    private static function detectConflict(SharePointConnection $connection, SharePointItem $mapping, FileItem $file, array $remote): ?array
     {
-        try {
-            $remote = Drive::item($connection->drive_id, $mapping->graph_item_id);
-        } catch (GraphException $e) {
-            // Gone from SharePoint: re-uploading recreates it, which is the
-            // kinder outcome than treating it as a conflict.
-            return null;
-        }
-
         $remoteCtag = $remote['cTag'] ?? null;
 
         if ($remoteCtag === null || $remoteCtag === $mapping->ctag) {
@@ -428,12 +596,33 @@ class Pusher
         }
     }
 
+    /**
+     * Does another live portal file already hold this name in that
+     * SharePoint folder? Then a new upload must not use `replace`: that
+     * wrote this document's bytes over the other one and, in recordMapping,
+     * took its mapping too, which is how two clients' same-named scans
+     * swapped places.
+     */
+    private static function nameHeldByAnother(SharePointConnection $connection, string $parentGraphId, FileItem $file): bool
+    {
+        return SharePointItem::query()
+            ->where('connection_id', $connection->id)
+            ->where('graph_parent_id', $parentGraphId)
+            ->where('item_type', 'file')
+            ->whereNull('recycled_at')
+            ->whereNotNull('file_id')
+            ->where('file_id', '!=', $file->id)
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($file->name)])
+            ->whereHas('file')
+            ->exists();
+    }
+
     private static function recordMapping(
         SharePointConnection $connection,
         ?SharePointItem $mapping,
         FileItem $file,
         array $result,
-        string $parentGraphId,
+        ?string $parentGraphId,
     ): void {
         $attributes = [
             'connection_id' => $connection->id,
@@ -448,7 +637,7 @@ class Pusher
             'size' => $result['size'] ?? $file->size,
             'mime_type' => $file->mime_type,
             'graph_modified_at' => isset($result['lastModifiedDateTime'])
-                ? \Illuminate\Support\Carbon::parse($result['lastModifiedDateTime']) : now(),
+                ? Carbon::parse($result['lastModifiedDateTime']) : now(),
             'sync_status' => SharePointItem::SYNCED,
             'conflict_reason' => null,
             'last_error' => null,
@@ -485,6 +674,17 @@ class Pusher
                 ->first()
             : null;
 
+        /*
+         * The row that owns the id may belong to a DIFFERENT live file: the
+         * upload replaced that document's bytes (a namesake our table did
+         * not know about). SharePoint now holds this file there, so the row
+         * is this file's; the displaced file is pushed again so it comes
+         * back beside it under its own name instead of vanishing.
+         */
+        $displaced = ($owner && $owner->file_id && (int) $owner->file_id !== (int) $file->id)
+            ? (int) $owner->file_id
+            : null;
+
         if ($owner && $mapping && $owner->id !== $mapping->id) {
             $mapping->delete();
             $mapping = $owner;
@@ -493,6 +693,12 @@ class Pusher
         }
 
         $mapping ? $mapping->update($attributes) : SharePointItem::create($attributes);
+
+        if ($displaced !== null && FileItem::query()->whereKey($displaced)->exists()) {
+            Synchroniser::log($connection, 'push-displaced', 'warning', $graphItemId,
+                'Upload landed on an item mapped to another file; re-pushing file '.$displaced.'.');
+            PushFileToSharePoint::dispatch($displaced, 'content');
+        }
     }
 
     public static function pushRename(FileItem $file): array
@@ -508,6 +714,22 @@ class Pusher
     public static function pushMove(FileItem $file): array
     {
         return self::withMapping($file, function (SharePointConnection $c, SharePointItem $m) use ($file) {
+            /*
+             * Moved out of this library altogether. Resolving the new folder
+             * against this connection walks past its top and answers the
+             * drive root, so the document was dumped there. Leave the
+             * SharePoint copy where it was; a library that does cover the new
+             * folder gets the file through an ordinary push.
+             */
+            $topOfPersonalDrive = $file->folder === null && $c->folder_id === null;
+            if (! $topOfPersonalDrive && ! self::anchoredIn($c, $file->folder)) {
+                $elsewhere = self::connectionForFile($file);
+
+                return ($elsewhere && $elsewhere->id !== $c->id)
+                    ? self::pushFile($file)
+                    : ['status' => 'outside-library'];
+            }
+
             $parentGraphId = self::graphParentFor($c, $file->folder);
             if (! $parentGraphId) {
                 return ['status' => 'no-parent'];

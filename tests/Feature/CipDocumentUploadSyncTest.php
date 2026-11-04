@@ -396,4 +396,89 @@ class CipDocumentUploadSyncTest extends TestCase
         $this->assertStringContainsString('?v=2', (string) $shown['downloadUrl']);
         $this->assertStringContainsString('/download', (string) $shown['downloadUrl']);
     }
+
+    /** A loose file dropped into a person's folder, as the library makes one. */
+    private function looseFile(CipPerson $person, User $staff, string $name): FileItem
+    {
+        return FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'folder_id' => $person->folder_id,
+            'name' => $name,
+            'extension' => pathinfo($name, PATHINFO_EXTENSION),
+            'mime_type' => 'application/pdf',
+            'size' => 1000,
+            'disk' => config('filesystems.files_disk', 'local'),
+            'storage_path' => 'cip/'.Str::uuid().'.pdf',
+            'owner_id' => $staff->id,
+            'uploaded_by' => $staff->id,
+        ]);
+    }
+
+    /**
+     * A short or generic name is not a requirement.
+     *
+     * Matched as a bare substring, "id" sits inside "affidavit" and filled
+     * the Special Affidavit of Support; "copy" sits in a dozen "Certified
+     * Copy of ..." labels and filled whichever was longest. The document
+     * stays in the folder for a person to file instead.
+     */
+    public function test_a_generic_filename_is_not_adopted_into_an_unrelated_slot(): void
+    {
+        $staff = $this->staff();
+        $person = $this->application($staff)->people->first();
+
+        foreach (['id.pdf', 'copy.pdf', 'scan.pdf', 'doc.pdf'] as $name) {
+            $file = $this->looseFile($person, $staff, $name);
+
+            $this->assertFalse(DocumentSlots::adoptOrphan($file->fresh(), $staff), $name.' was adopted');
+        }
+
+        $this->assertSame(0, CipDocument::where('person_id', $person->id)->whereNotNull('file_id')->count());
+    }
+
+    /** A name that fits two requirements equally is left for a person to decide. */
+    public function test_a_filename_naming_two_requirements_is_not_guessed(): void
+    {
+        $staff = $this->staff();
+        $person = $this->application($staff)->people->first();
+
+        // Both passport rows contain the word; neither is the obvious one.
+        $file = $this->looseFile($person, $staff, 'passport.pdf');
+
+        $this->assertFalse(DocumentSlots::adoptOrphan($file->fresh(), $staff));
+        $this->assertSame(0, CipDocument::where('person_id', $person->id)->whereNotNull('file_id')->count());
+    }
+
+    /** A fragment that only one requirement contains is still recognised. */
+    public function test_a_fragment_of_exactly_one_requirement_is_still_adopted(): void
+    {
+        $staff = $this->staff();
+        $person = $this->application($staff)->people->first();
+
+        $file = $this->looseFile($person, $staff, 'Net Worth Breakdown.pdf');
+
+        $this->assertTrue(DocumentSlots::adoptOrphan($file->fresh(), $staff));
+        $this->assertSame($file->id, CipDocument::where('person_id', $person->id)
+            ->where('type', 'net_worth_breakdown')->value('file_id'));
+    }
+
+    /**
+     * A file created for a slot its caller names (a file-request upload)
+     * must not also be adopted by its name into a different slot. The
+     * observer that adopts is off under test, so the guard is exercised
+     * directly.
+     */
+    public function test_a_file_created_for_a_known_slot_is_not_adopted_by_name(): void
+    {
+        $staff = $this->staff();
+        $person = $this->application($staff)->people->first();
+        $file = $this->looseFile($person, $staff, 'Chen Wei - Certified Copy of Passport Bio Data Page.pdf');
+
+        $this->assertFalse(DocumentSlots::filing(fn () => DocumentSlots::adoptOrphan($file->fresh(), $staff)));
+        $this->assertNull(CipDocument::where('person_id', $person->id)
+            ->where('type', DocumentTypes::PASSPORT_BIO_PAGE)->value('file_id'));
+
+        // Outside the guard the same file is adopted as before.
+        $this->assertTrue(DocumentSlots::adoptOrphan($file->fresh(), $staff));
+    }
 }

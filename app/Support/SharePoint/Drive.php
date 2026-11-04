@@ -194,25 +194,54 @@ class Drive
     }
 
     /**
-     * Create or replace an item's content.
+     * Create a file by NAME in a folder.
      *
      * Small files go in one PUT; anything larger uses an upload session in
      * chunks, because Graph refuses a simple upload over 4 MB (and a 2 GB PUT
      * would fail on timeouts long before that limit mattered).
+     *
+     * `$conflict` is what Graph does when the folder already holds that name:
+     * `replace` writes over it (a retried push lands on its own earlier copy,
+     * and SharePoint keeps the old bytes as a version), `rename` keeps both
+     * ("Name 1.pdf"). Only the caller knows whether the namesake is this file
+     * or somebody else's document.
      */
-    public static function upload(string $driveId, string $parentItemId, string $name, string $sourcePath): array
+    public static function upload(string $driveId, string $parentItemId, string $name, string $sourcePath, string $conflict = 'replace'): array
     {
         $size = filesize($sourcePath) ?: 0;
+        $byName = "/drives/{$driveId}/items/{$parentItemId}:/".rawurlencode($name).':';
 
         return $size <= 4 * 1024 * 1024
-            ? self::simpleUpload($driveId, $parentItemId, $name, $sourcePath)
-            : self::sessionUpload($driveId, $parentItemId, $name, $sourcePath, $size);
+            ? self::simpleUpload($byName.'/content?@microsoft.graph.conflictBehavior='.$conflict, $sourcePath)
+            : self::sessionUpload(
+                $byName.'/createUploadSession',
+                ['item' => ['@microsoft.graph.conflictBehavior' => $conflict]],
+                $sourcePath,
+                $size,
+            );
     }
 
-    private static function simpleUpload(string $driveId, string $parentItemId, string $name, string $sourcePath): array
+    /**
+     * Replace the content of one known item, addressed by its id.
+     *
+     * A file already in SharePoint is updated where it IS, never by name: by
+     * name, a rename on either side made the push create a second copy, and a
+     * namesake in the same folder (another client's document) was overwritten
+     * and its mapping taken over.
+     */
+    public static function uploadToItem(string $driveId, string $itemId, string $sourcePath): array
+    {
+        $size = filesize($sourcePath) ?: 0;
+        $byId = "/drives/{$driveId}/items/{$itemId}";
+
+        return $size <= 4 * 1024 * 1024
+            ? self::simpleUpload($byId.'/content', $sourcePath)
+            : self::sessionUpload($byId.'/createUploadSession', [], $sourcePath, $size);
+    }
+
+    private static function simpleUpload(string $path, string $sourcePath): array
     {
         $token = GraphClient::token();
-        $path = "/drives/{$driveId}/items/{$parentItemId}:/".rawurlencode($name).':/content';
 
         $response = Http::withToken($token)
             ->connectTimeout(15)
@@ -227,18 +256,11 @@ class Drive
         return $response->json();
     }
 
-    private static function sessionUpload(string $driveId, string $parentItemId, string $name, string $sourcePath, int $size): array
+    private static function sessionUpload(string $sessionPath, array $body, string $sourcePath, int $size): array
     {
         $token = GraphClient::token();
 
-        $session = GraphClient::request(
-            'POST',
-            "/drives/{$driveId}/items/{$parentItemId}:/".rawurlencode($name).':/createUploadSession',
-            [],
-            // `replace` keeps SharePoint's own version history: uploading over
-            // an existing item is a new version there, not a second file.
-            ['item' => ['@microsoft.graph.conflictBehavior' => 'replace']]
-        );
+        $session = GraphClient::request('POST', $sessionPath, [], $body);
 
         $url = $session['uploadUrl'] ?? null;
         if (! $url) {
@@ -304,11 +326,13 @@ class Drive
         return GraphClient::request('PATCH', "/drives/{$driveId}/items/{$itemId}", [], ['name' => $name]);
     }
 
-    public static function move(string $driveId, string $itemId, string $newParentId): array
+    /** Move an item, renaming it in the same request when a name is given. */
+    public static function move(string $driveId, string $itemId, string $newParentId, ?string $name = null): array
     {
-        return GraphClient::request('PATCH', "/drives/{$driveId}/items/{$itemId}", [], [
+        return GraphClient::request('PATCH', "/drives/{$driveId}/items/{$itemId}", [], array_filter([
             'parentReference' => ['id' => $newParentId],
-        ]);
+            'name' => $name,
+        ]));
     }
 
     /** Graph's DELETE sends the item to SharePoint's recycle bin, not oblivion. */

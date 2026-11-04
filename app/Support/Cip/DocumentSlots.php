@@ -324,8 +324,26 @@ class DocumentSlots
             return null;
         }
 
-        $best = null;
-        $bestLen = 0;
+        /*
+         * Loose names, matched on WHOLE WORDS and only when they point at one
+         * slot.
+         *
+         * This used to be a bare substring test both ways, so a short or
+         * generic name matched whatever label happened to contain its
+         * letters: "id.pdf" filled "Proof of residence", and "passport.pdf"
+         * fell into whichever of the passport rows had the longer label. A
+         * document landing in the wrong slot that way is worse than not
+         * being adopted at all, the upload is still in the folder for a
+         * person to file.
+         *
+         * A label named inside the filename ("passport bio page scan") is
+         * the strong signal; the longest such label wins, so "birth
+         * certificate translation" beats "birth certificate". A filename that
+         * is only a fragment of a label ("bio page") is accepted when exactly
+         * one slot fits it.
+         */
+        $named = [];
+        $fragment = [];
 
         foreach ($person->documents as $slot) {
             if ($slot->file_id !== null) {
@@ -339,18 +357,37 @@ class DocumentSlots
                     continue;
                 }
 
-                if (! str_contains($normalized, $norm) && ! str_contains($norm, $normalized)) {
-                    continue;
-                }
-
-                if (mb_strlen($norm) > $bestLen) {
-                    $best = $slot;
-                    $bestLen = mb_strlen($norm);
+                if (self::containsWords($normalized, $norm)) {
+                    $named[] = ['slot' => $slot, 'norm' => $norm];
+                } elseif (mb_strlen($normalized) >= 4 && self::containsWords($norm, $normalized)) {
+                    $fragment[$slot->id] = $slot;
                 }
             }
         }
 
-        return $best;
+        if ($named !== []) {
+            usort($named, fn (array $a, array $b) => mb_strlen($b['norm']) <=> mb_strlen($a['norm']));
+            $best = $named[0];
+
+            // Two different requirements both named in full, neither one
+            // part of the other: the file is ambiguous, and guessing is
+            // how papers swap slots.
+            foreach ($named as $match) {
+                if ($match['slot']->id !== $best['slot']->id && ! self::containsWords($best['norm'], $match['norm'])) {
+                    return null;
+                }
+            }
+
+            return $best['slot'];
+        }
+
+        return count($fragment) === 1 ? reset($fragment) : null;
+    }
+
+    /** Does $haystack contain $needle as a run of whole words? */
+    private static function containsWords(string $haystack, string $needle): bool
+    {
+        return str_contains(' '.$haystack.' ', ' '.$needle.' ');
     }
 
     private static function normalizeFilename(string $name): string
@@ -504,12 +541,38 @@ class DocumentSlots
             ($number ? ' ('.$number.')' : '').'.'.$extension;
     }
 
-    /** One stored upload as a portal file, where {@see destination()} said. */
-    private static function storeFile(CipPerson $person, array $stored, array $meta, string $name, User $actor, ?int $folderId): FileItem
+    /**
+     * Create a file that its caller is about to link to a slot itself.
+     *
+     * CipFileObserver adopts every new file into an empty slot whose label
+     * its NAME resembles. For a file headed for a known slot that is a
+     * second, competing filing: a file-request upload for the birth
+     * certificate arriving as "passport.pdf" was adopted into the passport
+     * slot first, then linked to the birth certificate too, so one document
+     * answered two requirements. Wrapping the create here tells the
+     * observer the slot is already decided.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $create
+     * @return T
+     */
+    public static function filing(callable $create): mixed
     {
+        $previous = self::$storing;
         self::$storing = true;
 
         try {
+            return $create();
+        } finally {
+            self::$storing = $previous;
+        }
+    }
+
+    /** One stored upload as a portal file, where {@see destination()} said. */
+    private static function storeFile(CipPerson $person, array $stored, array $meta, string $name, User $actor, ?int $folderId): FileItem
+    {
+        return self::filing(function () use ($stored, $meta, $name, $actor, $folderId) {
             $file = FileItem::create([
                 'uuid' => $stored['uuid'],
                 'folder_id' => $folderId,
@@ -527,9 +590,7 @@ class DocumentSlots
             Versions::recordInitial($file, $actor->id);
 
             return $file;
-        } finally {
-            self::$storing = false;
-        }
+        });
     }
 
     /**

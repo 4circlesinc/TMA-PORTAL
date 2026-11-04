@@ -132,7 +132,9 @@ class DocumentRequests
                 Versions::addStored($existing, $owner, $stored, $meta, self::note($uploaderName));
                 $file = $existing;
             } else {
-                $file = FileItem::create([
+                // The link names its slot; the file must not also be
+                // adopted by name into a different one on the way in.
+                $file = DocumentSlots::filing(fn () => FileItem::create([
                     'uuid' => $stored['uuid'],
                     'folder_id' => DocumentSlots::destinationForSlot($slot, $owner),
                     'name' => $name,
@@ -147,7 +149,7 @@ class DocumentRequests
                     // invisible to every access rule in the library.
                     'owner_id' => $ownerId,
                     'uploaded_by' => $ownerId,
-                ]);
+                ]));
 
                 Versions::recordInitial($file, $ownerId, self::note($uploaderName));
             }

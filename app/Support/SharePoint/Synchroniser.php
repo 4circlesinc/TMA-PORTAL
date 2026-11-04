@@ -2,6 +2,9 @@
 
 namespace App\Support\SharePoint;
 
+use App\Jobs\PushFileToSharePoint;
+use App\Jobs\PushFolderToSharePoint;
+use App\Jobs\RetrySharePointFailures;
 use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\SharePointConnection;
@@ -99,6 +102,15 @@ class Synchroniser
     private static ?int $ownerId = null;
 
     /**
+     * Portal moves this run kept rather than undid, to be pushed once the
+     * walk is over. Dispatched inside Pusher::suspend() a sync-driver queue
+     * would run the push on the spot, see the suspension, and skip it.
+     *
+     * @var array{folders: array<int, true>, files: array<int, true>}
+     */
+    private static array $portalMoves = ['folders' => [], 'files' => []];
+
+    /**
      * Fetch the mappings this page will ask for, in one query.
      *
      * Parents included: every item asks where its parent went, and a parent
@@ -156,6 +168,7 @@ class Synchroniser
         // Fresh per run, a long-lived worker syncs many connections.
         self::$mappings = [];
         self::$ownerId = null;
+        self::$portalMoves = ['folders' => [], 'files' => []];
 
         /*
          * One run at a time per connection.
@@ -294,12 +307,14 @@ class Synchroniser
             });
 
             /*
-             * Names the portal changed after the folder was already in
-             * SharePoint. Delta never reports those, because SharePoint
-             * itself did not change, so the two sides stay apart until this
-             * pass renames the remote item to the portal's name.
+             * Names and places the portal changed after the folder was
+             * already in SharePoint. Delta never reports those, because
+             * SharePoint itself did not change, so the two sides stay apart
+             * until this pass renames or moves the remote item.
              */
-            self::pushDivergentFolderNames($connection);
+            self::pushDivergentFolders($connection);
+
+            self::flushPortalMoves();
 
             /*
              * A pass only counts as SUCCESS if Graph handed back a deltaLink —
@@ -345,33 +360,77 @@ class Synchroniser
         return $stats;
     }
 
+    /** Divergent folders sent to Graph per pass; the rest wait a minute. */
+    private const DIVERGENT_PER_PASS = 50;
+
     /**
-     * Rename SharePoint folders whose portal name has moved on.
+     * Rename or move SharePoint folders whose portal name or place has
+     * moved on.
      *
      * A filing folder is created as "Application IGA26-00005" and later
      * named for the applicant. The remote copy used to keep the number,
      * and the next create of that name came back as "Application IGA26-00005 1".
+     *
+     * Places drift the same way: a client moved to another service provider
+     * before moves were pushed (or while the push waited in the queue) is
+     * still under the old provider in SharePoint. A folder counts as moved
+     * when its portal parent is mapped here and SharePoint holds it under
+     * none of that parent's copies. Capped per pass, so a backlog of old
+     * moves is worked off steadily instead of in one burst against Graph.
      */
-    private static function pushDivergentFolderNames(SharePointConnection $connection): void
+    private static function pushDivergentFolders(SharePointConnection $connection): void
     {
         if (! $connection->pushesBack()) {
             return;
         }
 
+        $budget = self::DIVERGENT_PER_PASS;
+
         SharePointItem::query()
             ->where('connection_id', $connection->id)
             ->where('item_type', 'folder')
             ->whereNotNull('folder_id')
+            // A folder that keeps failing is the retry sweep's to report,
+            // not something to hammer every minute.
+            ->where('failure_count', '<', RetrySharePointFailures::MAX_ATTEMPTS)
             ->with('folder')
             ->orderBy('id')
-            ->chunkById(200, function ($items): void {
+            ->chunkById(200, function ($items) use ($connection, &$budget) {
+                // Where each portal parent sits in SharePoint: one query a chunk.
+                $parentIds = $items->map(fn (SharePointItem $item) => $item->folder?->parent_id)
+                    ->filter()->unique()->values()->all();
+                $placedUnder = SharePointItem::query()
+                    ->where('connection_id', $connection->id)
+                    ->where('item_type', 'folder')
+                    ->whereIn('folder_id', $parentIds)
+                    ->get(['folder_id', 'graph_item_id'])
+                    ->groupBy(fn (SharePointItem $row) => (int) $row->folder_id)
+                    ->map(fn ($rows) => $rows->pluck('graph_item_id')->all());
+
                 foreach ($items as $item) {
                     $folder = $item->folder;
-                    if (! $folder || strcasecmp((string) $item->name, $folder->name) === 0) {
+                    if (! $folder) {
                         continue;
                     }
 
-                    Pusher::pushFolder($folder);
+                    $parents = $placedUnder->get((int) $folder->parent_id, []);
+                    $moved = $parents !== []
+                        && $item->graph_parent_id !== null
+                        && ! in_array($item->graph_parent_id, $parents, true);
+                    $renamed = strcasecmp((string) $item->name, $folder->name) !== 0;
+
+                    if (! $moved && ! $renamed) {
+                        continue;
+                    }
+
+                    $status = Pusher::pushFolder($folder, $item)['status'] ?? null;
+
+                    if ($status === 'throttled') {
+                        return false;   // Graph wants a pause; the next pass resumes.
+                    }
+                    if (in_array($status, ['moved', 'renamed', 'failed'], true) && --$budget <= 0) {
+                        return false;
+                    }
                 }
             });
     }
@@ -678,12 +737,18 @@ class Synchroniser
         $name = Naming::clean($item['name'] ?? 'Untitled');
 
         if ($isFolder && $mapping->folder) {
-            $name = self::portalDrawerName($mapping->folder, $name);
-            $mapping->folder->update([
+            $folder = $mapping->folder;
+            $name = self::portalDrawerName($folder, $name);
+            $parentId = self::inboundParentId($connection, $mapping, $item, $folder->parent_id);
+            $folder->update([
                 'name' => $name,
-                'parent_id' => self::resolveParentFolder($connection, $item)?->id,
+                'parent_id' => $parentId,
             ]);
             self::touchMapping($mapping, $item);
+            if ($parentId !== null && $parentId !== self::resolvedParentId($connection, $item)) {
+                // The portal's move stands; make sure it is on its way out.
+                self::$portalMoves['folders'][$folder->id] = true;
+            }
             $stats['updated']++;
 
             return;
@@ -698,10 +763,14 @@ class Synchroniser
         // new content would file a version for every renamed document.
         $contentChanged = ($item['cTag'] ?? null) !== $mapping->ctag;
 
+        $folderId = self::inboundParentId($connection, $mapping, $item, $file->folder_id);
         $file->update([
             'name' => $name,
-            'folder_id' => self::resolveParentFolder($connection, $item)?->id,
+            'folder_id' => $folderId,
         ]);
+        if ($folderId !== null && $folderId !== self::resolvedParentId($connection, $item)) {
+            self::$portalMoves['files'][$file->id] = true;
+        }
 
         if ($contentChanged) {
             self::pullNewVersion($connection, $mapping, $item, $file);
@@ -788,6 +857,8 @@ class Synchroniser
             self::markFailed($connection, $item, $e->getMessage());
 
             return false;
+        } finally {
+            self::flushPortalMoves();
         }
 
         /*
@@ -917,6 +988,66 @@ class Synchroniser
         $mapping = self::mappingFor($connection, $parentId);
 
         return ($mapping && $mapping->folder_id) ? $mapping->folder : $connection->folder;
+    }
+
+    /** Send the portal moves an inbound pass kept, now that pushes are live again. */
+    private static function flushPortalMoves(): void
+    {
+        $moves = self::$portalMoves;
+        self::$portalMoves = ['folders' => [], 'files' => []];
+
+        foreach (array_keys($moves['folders']) as $folderId) {
+            PushFolderToSharePoint::dispatch($folderId);
+        }
+        foreach (array_keys($moves['files']) as $fileId) {
+            PushFileToSharePoint::dispatch($fileId, 'move');
+        }
+    }
+
+    private static function resolvedParentId(SharePointConnection $connection, array $item): ?int
+    {
+        $id = self::resolveParentFolder($connection, $item)?->id;
+
+        return $id === null ? null : (int) $id;
+    }
+
+    /**
+     * Where an updated item belongs in the portal: SharePoint's placement,
+     * unless the difference is a portal move SharePoint has not seen yet.
+     *
+     * The update used to copy SharePoint's parent over the portal's every
+     * time. When a client folder was moved to another service provider and
+     * the push had not run (or never existed, before moves were pushed),
+     * any change inside it brought the folder back under the old provider.
+     *
+     * The test: SharePoint still has the item exactly where we last
+     * recorded it (its parent has not changed), yet the portal now keeps it
+     * under a DIFFERENT folder that this connection has mapped, a real place
+     * SharePoint knows. That move is the portal's, so it stands and is
+     * pushed. An item parked in the connection's own folder because its
+     * parent was unknown at import is not a move, and is still corrected.
+     */
+    private static function inboundParentId(SharePointConnection $connection, SharePointItem $mapping, array $item, mixed $portalParentId): ?int
+    {
+        $resolved = self::resolvedParentId($connection, $item);
+        $portal = $portalParentId === null ? null : (int) $portalParentId;
+
+        if ($portal === null || $portal === $resolved) {
+            return $resolved;
+        }
+
+        $remoteParent = $item['parentReference']['id'] ?? null;
+        if ($mapping->graph_parent_id === null || $remoteParent !== $mapping->graph_parent_id) {
+            return $resolved;   // SharePoint moved it: its placement wins.
+        }
+
+        $portalParentMapped = SharePointItem::query()
+            ->where('connection_id', $connection->id)
+            ->where('folder_id', $portal)
+            ->where('item_type', 'folder')
+            ->exists();
+
+        return $portalParentMapped ? $portal : $resolved;
     }
 
     /**

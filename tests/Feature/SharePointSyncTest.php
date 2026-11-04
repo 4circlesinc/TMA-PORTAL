@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\PushFileToSharePoint;
+use App\Jobs\PushFolderToSharePoint;
 use App\Jobs\RetrySharePointFailures;
 use App\Jobs\SyncSharePointLibrary;
 use App\Models\FileItem;
@@ -66,6 +68,9 @@ class SharePointSyncTest extends TestCase
 
     protected ?string $failContentFor = null;
 
+    /** Every upload answers 504, the gateway timeout a real push meets. */
+    protected bool $failUploads = false;
+
     /** Pages of delta items, when a test exercises a multi-page walk. */
     protected ?array $deltaPages = null;
 
@@ -85,6 +90,11 @@ class SharePointSyncTest extends TestCase
             'services.microsoft.client_secret' => 'test-secret',
             'services.microsoft.graph_tenant_id' => 'test-tenant',
         ]);
+
+        // Storage caches a resolved disk; one built during boot still points
+        // at the old root, so bytes written here would land where
+        // Vault::localCopy() never looks.
+        Storage::forgetDisk('local');
 
         $this->owner = User::create(['name' => 'Ada Admin', 'email' => 'ada@example.com', 'password' => bcrypt('x')]);
         $this->owner->forceFill([
@@ -156,6 +166,15 @@ class SharePointSyncTest extends TestCase
             }
             if ($this->throttle) {
                 return Http::response('slow down', 429, ['Retry-After' => '42']);
+            }
+            if ($request->method() === 'PUT' && str_contains($url, '/content')) {
+                if ($this->failUploads) {
+                    return Http::response('gateway timeout', 504);
+                }
+                // Content written to a known item comes back as that item.
+                if (preg_match('#/items/([^/:?]+)/content#', $url, $m)) {
+                    return Http::response(['id' => $m[1], 'cTag' => 'c:NEW', 'name' => 'Brief.txt', 'size' => 10]);
+                }
             }
             if (str_contains($url, '/root/delta')) {
                 $this->deltaCalls[] = $url;
@@ -975,6 +994,12 @@ class SharePointSyncTest extends TestCase
 
         // Two mappings for one file, each naming a different driveItem. The
         // upload below answers with 'i-1', the id the SECOND row holds.
+        //
+        // The first row is stale: its driveItem is gone from SharePoint. A
+        // mapping whose item still exists is now written to by id, in place,
+        // so it is the missing item that sends this push down the by-name
+        // path, where the answer belongs to the other row.
+        $this->deletedItems = ['i-stale'];
         $stale = SharePointItem::create([
             'connection_id' => $this->connection->id,
             'graph_item_id' => 'i-stale',
@@ -1601,5 +1626,368 @@ class SharePointSyncTest extends TestCase
 
         $this->assertSame('Dependent 1', $folder->fresh()->name);
         $this->assertSame(1, Folder::query()->where('parent_id', $this->connection->folder_id)->count());
+    }
+
+    /** A portal folder, made without an outbound push so a test can set the scene. */
+    private function portalFolder(string $name, ?int $parentId): Folder
+    {
+        return Pusher::suspend(fn () => Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => $name,
+            'parent_id' => $parentId,
+            'owner_id' => $this->owner->id,
+            'created_by' => $this->owner->id,
+        ]));
+    }
+
+    /** A portal-authored file with real bytes on the test disk. */
+    private function portalFile(string $name, ?int $folderId): FileItem
+    {
+        $path = 'vault/'.Str::uuid().'.txt';
+        Storage::disk('local')->put($path, 'portal-bytes');
+
+        return Pusher::suspend(fn () => FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'folder_id' => $folderId,
+            'name' => $name,
+            'extension' => 'txt',
+            'mime_type' => 'text/plain',
+            'size' => 12,
+            'disk' => 'local',
+            'storage_path' => $path,
+            'owner_id' => $this->owner->id,
+            'uploaded_by' => $this->owner->id,
+            'origin' => 'portal',
+        ]));
+    }
+
+    private function mapFolder(Folder $folder, string $graphId, string $graphParentId): SharePointItem
+    {
+        return SharePointItem::create([
+            'connection_id' => $this->connection->id,
+            'graph_item_id' => $graphId,
+            'graph_parent_id' => $graphParentId,
+            'item_type' => 'folder',
+            'folder_id' => $folder->id,
+            'name' => $folder->name,
+            'etag' => '"'.$graphId.',1"',
+            'sync_status' => SharePointItem::SYNCED,
+        ]);
+    }
+
+    /**
+     * Two provider folders in the library, and a client filed under the
+     * first, all already in SharePoint.
+     *
+     * @return array{0: Folder, 1: Folder, 2: Folder, 3: SharePointItem}
+     */
+    private function providersWithAClient(): array
+    {
+        $a = $this->portalFolder('Provider A', $this->connection->folder_id);
+        $b = $this->portalFolder('Provider B', $this->connection->folder_id);
+        $client = $this->portalFolder('Chen Wei', $a->id);
+
+        $this->mapFolder($a, 'g-a', 'root-1');
+        $this->mapFolder($b, 'g-b', 'root-1');
+        $mapping = $this->mapFolder($client, 'g-client', 'g-a');
+
+        return [$a, $b, $client, $mapping];
+    }
+
+    /** Was a PATCH sent that moves this item under that parent? */
+    private function assertMovedInSharePoint(string $itemId, string $parentId): void
+    {
+        Http::assertSent(fn (Request $r) => $r->method() === 'PATCH'
+            && str_ends_with((string) parse_url($r->url(), PHP_URL_PATH), '/items/'.$itemId)
+            && ($r->data()['parentReference']['id'] ?? null) === $parentId);
+    }
+
+    /**
+     * A first upload that fails has no mapping row to count the failure on,
+     * so nothing used to retry it: the file stayed in the portal and never
+     * reached SharePoint. The push job now carries the attempt itself.
+     */
+    public function test_a_first_push_that_fails_is_retried_instead_of_forgotten(): void
+    {
+        $file = $this->portalFile('Brief.txt', $this->connection->folder_id);
+        $this->failUploads = true;
+        Queue::fake();
+
+        (new PushFileToSharePoint($file->id))->handle();
+
+        $this->assertFalse(SharePointItem::query()->where('file_id', $file->id)->exists());
+        Queue::assertPushed(PushFileToSharePoint::class,
+            fn ($job) => $job->fileId === $file->id && $job->attempt === 2 && $job->action === 'content');
+    }
+
+    public function test_a_first_push_stops_retrying_after_its_last_attempt(): void
+    {
+        $file = $this->portalFile('Brief.txt', $this->connection->folder_id);
+        $this->failUploads = true;
+        Queue::fake();
+
+        (new PushFileToSharePoint(
+            $file->id, 'content', PushFileToSharePoint::FIRST_PUSH_ATTEMPTS,
+        ))->handle();
+
+        Queue::assertNotPushed(PushFileToSharePoint::class);
+    }
+
+    /**
+     * Content for a file SharePoint already holds goes to THAT item, by id.
+     * By name, a rename on either side made a second copy, and a namesake
+     * in the same folder had its bytes and its mapping taken over.
+     */
+    public function test_a_file_already_in_sharepoint_is_updated_by_id_not_by_name(): void
+    {
+        $file = $this->portalFile('Brief.txt', $this->connection->folder_id);
+        SharePointItem::create([
+            'connection_id' => $this->connection->id,
+            'graph_item_id' => 'i-9',
+            'graph_parent_id' => 'root-1',
+            'item_type' => 'file',
+            'file_id' => $file->id,
+            'name' => 'Renamed in SharePoint.txt',
+            'ctag' => 'c:1',
+        ]);
+        $this->remoteItem = ['id' => 'i-9', 'cTag' => 'c:1', 'parentReference' => ['id' => 'root-1']];
+
+        $this->assertSame('pushed', Pusher::pushFile($file)['status']);
+
+        Http::assertSent(fn (Request $r) => $r->method() === 'PUT'
+            && str_ends_with((string) parse_url($r->url(), PHP_URL_PATH), '/items/i-9/content'));
+        Http::assertNotSent(fn (Request $r) => $r->method() === 'PUT' && str_contains($r->url(), ':/content'));
+        $this->assertSame('i-9', SharePointItem::query()->where('file_id', $file->id)->value('graph_item_id'));
+    }
+
+    /**
+     * A new file whose name another live document already holds in the
+     * same SharePoint folder is kept beside it, never written over it.
+     */
+    public function test_a_new_file_never_overwrites_another_documents_namesake(): void
+    {
+        $theirs = $this->portalFile('Chen Wei - Birth Record.txt', $this->connection->folder_id);
+        SharePointItem::create([
+            'connection_id' => $this->connection->id,
+            'graph_item_id' => 'i-theirs',
+            'graph_parent_id' => 'root-1',
+            'item_type' => 'file',
+            'file_id' => $theirs->id,
+            'name' => 'Chen Wei - Birth Record.txt',
+        ]);
+
+        $mine = $this->portalFile('Chen Wei - Birth Record.txt', null);
+        // A second portal folder that resolves to the same SharePoint folder.
+        Pusher::suspend(fn () => $mine->update(['folder_id' => $this->connection->folder_id]));
+
+        $this->assertSame('pushed', Pusher::pushFile($mine->fresh())['status']);
+
+        Http::assertSent(fn (Request $r) => $r->method() === 'PUT'
+            && str_contains(urldecode($r->url()), 'conflictBehavior=rename'));
+        $this->assertSame($theirs->id, SharePointItem::query()->where('graph_item_id', 'i-theirs')->value('file_id'));
+    }
+
+    /**
+     * Should an upload still land on an item mapped to another file, that
+     * file is pushed again rather than silently losing its SharePoint copy.
+     */
+    public function test_a_document_displaced_by_an_upload_is_pushed_back(): void
+    {
+        $other = $this->portalFile('Other.txt', $this->connection->folder_id);
+        SharePointItem::create([
+            'connection_id' => $this->connection->id,
+            'graph_item_id' => 'i-1',    // what the fake answers a by-name upload with
+            'graph_parent_id' => 'root-1',
+            'item_type' => 'file',
+            'file_id' => $other->id,
+            'name' => 'Other.txt',
+        ]);
+        $mine = $this->portalFile('Brief.txt', $this->connection->folder_id);
+        Queue::fake();
+
+        $this->assertSame('pushed', Pusher::pushFile($mine)['status']);
+
+        $this->assertSame($mine->id, SharePointItem::query()->where('graph_item_id', 'i-1')->value('file_id'));
+        Queue::assertPushed(PushFileToSharePoint::class, fn ($job) => $job->fileId === $other->id);
+    }
+
+    /**
+     * Moving a client to another service provider moves its SharePoint
+     * folder too, so its files stop landing under the old provider.
+     */
+    public function test_moving_a_client_folder_moves_it_in_sharepoint(): void
+    {
+        [, $b, $client, $mapping] = $this->providersWithAClient();
+        Pusher::suspend(fn () => $client->update(['parent_id' => $b->id]));
+        $this->remoteItem = ['id' => 'g-client', 'name' => 'Chen Wei', 'parentReference' => ['id' => 'g-b']];
+
+        $this->assertSame('moved', Pusher::pushFolder($client->fresh())['status']);
+
+        $this->assertMovedInSharePoint('g-client', 'g-b');
+        $this->assertSame('g-b', $mapping->fresh()->graph_parent_id);
+    }
+
+    public function test_a_portal_folder_move_is_queued_for_sharepoint(): void
+    {
+        [, $b, $client] = $this->providersWithAClient();
+        Queue::fake();
+
+        $client->update(['parent_id' => $b->id]);
+
+        Queue::assertPushed(PushFolderToSharePoint::class, fn ($job) => $job->folderId === $client->id);
+    }
+
+    /**
+     * A folder that moves out of the library is not dragged to the drive
+     * root, which is where resolving it against the connection ended up.
+     */
+    public function test_a_file_moved_out_of_the_library_is_not_dumped_at_the_drive_root(): void
+    {
+        $file = $this->portalFile('Brief.txt', $this->connection->folder_id);
+        SharePointItem::create([
+            'connection_id' => $this->connection->id,
+            'graph_item_id' => 'i-5',
+            'graph_parent_id' => 'g-somewhere',
+            'item_type' => 'file',
+            'file_id' => $file->id,
+            'name' => 'Brief.txt',
+        ]);
+        $outside = $this->portalFolder('Not synced', null);
+        Pusher::suspend(fn () => $file->update(['folder_id' => $outside->id]));
+
+        $this->assertSame('outside-library', Pusher::pushMove($file->fresh())['status']);
+        Http::assertNotSent(fn (Request $r) => $r->method() === 'PATCH');
+    }
+
+    /**
+     * A new folder must not borrow a same-named SharePoint folder that
+     * belongs to a different live portal folder. That is how a client who
+     * moved away left two clients' documents sharing one folder.
+     */
+    public function test_a_new_folder_does_not_share_another_live_folders_sharepoint_copy(): void
+    {
+        [$a, $b, $client] = $this->providersWithAClient();
+        // The first client moved to B in the portal; SharePoint still has it under A.
+        Pusher::suspend(fn () => $client->update(['parent_id' => $b->id]));
+
+        $namesake = $this->portalFolder('Chen Wei', $a->id);
+        Pusher::pushFolder($namesake);
+
+        $graphId = SharePointItem::query()->where('folder_id', $namesake->id)->value('graph_item_id');
+        $this->assertNotNull($graphId);
+        $this->assertNotSame('g-client', $graphId);
+        $this->assertSame($client->id, SharePointItem::query()->where('graph_item_id', 'g-client')->value('folder_id'));
+    }
+
+    public function test_the_same_drawer_twice_still_shares_one_sharepoint_folder(): void
+    {
+        [$a, , $client] = $this->providersWithAClient();
+
+        $twin = $this->portalFolder('Chen Wei', $a->id);
+        Pusher::pushFolder($twin);
+
+        Http::assertNotSent(fn (Request $r) => $r->method() === 'POST' && str_contains($r->url(), '/children'));
+        $this->assertSame($client->id, SharePointItem::query()->where('graph_item_id', 'g-client')->value('folder_id'));
+    }
+
+    /**
+     * Inbound sync must not undo a portal move SharePoint has not seen yet.
+     * A change inside the client's folder used to bring the folder back
+     * under the old provider in the portal as well.
+     */
+    public function test_inbound_sync_keeps_an_unpushed_portal_move_and_pushes_it(): void
+    {
+        [$a, $b, $client] = $this->providersWithAClient();
+        Pusher::suspend(fn () => $client->update(['parent_id' => $b->id]));
+        Queue::fake();
+
+        // SharePoint still has it under A: only its eTag moved.
+        $this->fakeGraph([[
+            'id' => 'g-client', 'name' => 'Chen Wei', 'folder' => ['childCount' => 2],
+            'parentReference' => ['id' => 'g-a'], 'eTag' => '"g-client,2"',
+        ]]);
+        Synchroniser::sync($this->connection);
+
+        $this->assertSame($b->id, $client->fresh()->parent_id);
+        // The pass after the walk puts SharePoint where the portal is.
+        $this->assertMovedInSharePoint('g-client', 'g-b');
+    }
+
+    public function test_inbound_sync_keeps_an_unpushed_portal_file_move_and_queues_it(): void
+    {
+        [$a, $b] = $this->providersWithAClient();
+        $file = $this->portalFile('Brief.txt', $a->id);
+        SharePointItem::create([
+            'connection_id' => $this->connection->id,
+            'graph_item_id' => 'i-brief',
+            'graph_parent_id' => 'g-a',
+            'item_type' => 'file',
+            'file_id' => $file->id,
+            'name' => 'Brief.txt',
+            'etag' => '"i-brief,c:1"',
+            'ctag' => 'c:1',
+        ]);
+        Pusher::suspend(fn () => $file->update(['folder_id' => $b->id]));
+        Queue::fake();
+
+        // Touched in SharePoint (a new eTag), but still under A there.
+        $remote = $this->fileItem('i-brief', 'Brief.txt', 'c:1', 'g-a');
+        $remote['eTag'] = '"i-brief,metadata"';
+        $this->fakeGraph([$remote]);
+        Synchroniser::sync($this->connection);
+
+        $this->assertSame($b->id, $file->fresh()->folder_id);
+        Queue::assertPushed(PushFileToSharePoint::class,
+            fn ($job) => $job->fileId === $file->id && $job->action === 'move');
+    }
+
+    public function test_a_move_made_in_sharepoint_still_reaches_the_portal(): void
+    {
+        [, $b, $client] = $this->providersWithAClient();
+
+        $this->fakeGraph([[
+            'id' => 'g-client', 'name' => 'Chen Wei', 'folder' => ['childCount' => 2],
+            'parentReference' => ['id' => 'g-b'], 'eTag' => '"g-client,2"',
+        ]]);
+        Synchroniser::sync($this->connection);
+
+        $this->assertSame($b->id, $client->fresh()->parent_id);
+        Http::assertNotSent(fn (Request $r) => $r->method() === 'PATCH');
+    }
+
+    /**
+     * Folders moved before moves were pushed are still out of place in
+     * SharePoint. The pass after every sync finds and moves them.
+     */
+    /**
+     * Files whose first push was lost before retries existed are still
+     * missing. The repair command finds them, and only uploads on --push.
+     */
+    public function test_files_missing_from_sharepoint_are_reported_and_pushed_on_request(): void
+    {
+        $missing = $this->portalFile('Never arrived.txt', $this->connection->folder_id);
+        $this->portalFile('Not synced at all.txt', $this->portalFolder('Loose', null)->id);
+        Queue::fake();
+
+        $this->artisan('sharepoint:push-missing')
+            ->expectsOutputToContain('Never arrived.txt')
+            ->doesntExpectOutputToContain('Not synced at all.txt')
+            ->assertSuccessful();
+        Queue::assertNotPushed(PushFileToSharePoint::class);
+
+        $this->artisan('sharepoint:push-missing', ['--push' => true])->assertSuccessful();
+        Queue::assertPushed(PushFileToSharePoint::class, fn ($job) => $job->fileId === $missing->id);
+        Queue::assertPushed(PushFileToSharePoint::class, 1);
+    }
+
+    public function test_the_sync_moves_folders_already_out_of_place(): void
+    {
+        [, $b, $client] = $this->providersWithAClient();
+        Pusher::suspend(fn () => $client->update(['parent_id' => $b->id]));
+
+        $this->fakeGraph([]);
+        Synchroniser::sync($this->connection);
+
+        $this->assertMovedInSharePoint('g-client', 'g-b');
     }
 }

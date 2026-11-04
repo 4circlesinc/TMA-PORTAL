@@ -25,6 +25,14 @@ class PushFolderToSharePoint implements ShouldBeUnique, ShouldQueue
 
     public array $backoff = [30, 120, 300];
 
+    /**
+     * The unique lock must expire. Without this it lives until the job
+     * finishes, and a worker killed mid-push left it held for good: every
+     * later rename or move of that folder was silently dropped as a
+     * duplicate. The sync's divergence pass repairs anything missed.
+     */
+    public int $uniqueFor = 600;
+
     public function __construct(public int $folderId) {}
 
     public function uniqueId(): string
@@ -39,6 +47,12 @@ class PushFolderToSharePoint implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        Pusher::pushFolder($folder);
+        $result = Pusher::pushFolder($folder);
+
+        // Graph asked us to wait: come back then, rather than dropping the
+        // rename or move on the floor.
+        if (($result['status'] ?? null) === 'throttled') {
+            $this->release((int) ($result['retryAfter'] ?? 30));
+        }
     }
 }
