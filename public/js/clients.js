@@ -9501,19 +9501,19 @@
    * row, so this uses a row we already hold (the photo, or the Documents
    * tab listing) and otherwise asks the library for that one file.
    */
-  function openCipFile(state, fileId, render) {
+  function openCipFile(state, fileId, render, intent) {
     if (!fileId) return;
 
     var known = cipLibraryFile(state, fileId);
     if (known) {
-      openCipLibraryFile(state, known, render);
+      openCipLibraryFile(state, known, render, intent);
       return;
     }
 
     var net = filesNet();
     if (net && net.fetchJSON) {
       net.fetchJSON(net.url('/files/' + encodeURIComponent(fileId)))
-        .then(function (item) { openCipLibraryFile(state, item, render); })
+        .then(function (item) { openCipLibraryFile(state, item, render, intent); })
         .catch(function () { /* gone, or not this reader's to open */ });
       return;
     }
@@ -9574,6 +9574,14 @@
   function wireCipDocumentControls(root, state, render) {
     if (!root) return;
     wireCipSlotUploads(root, state, render);
+
+    MORPH.unwired(root, '[data-cip-new-document]').forEach(function (btn) {
+      MORPH.on(btn, 'click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openCipFile(state, btn.getAttribute('data-cip-new-document'), render, { panel: 'versions' });
+      });
+    });
 
     MORPH.unwired(root, '[data-cip-file]').forEach(function (btn) {
       MORPH.on(btn, 'click', function () {
@@ -9738,7 +9746,7 @@
     return clientFolderRow(fileId);
   }
 
-  function openCipLibraryFile(state, file, render) {
+  function openCipLibraryFile(state, file, render, intent) {
     if (!file) return;
 
     if (window.TMAFileActions && window.TMAFileActions.open) {
@@ -9747,7 +9755,7 @@
       // application back either way.
       window.TMAFileActions.open(file, function () {
         refreshCipAfterFileChange(state, render);
-      });
+      }, null, intent);
       return;
     }
 
@@ -9972,6 +9980,7 @@
         '<span class="tma-portal-status tma-portal-status--' + esc(tone) +
         ' tma-portal-status--inline">' + esc(status) + '</span>';
     }
+    chip = checklistNewDocumentHtml(d) + chip;
 
     if (d.canUpload) {
       return '<div class="tma-portal-drop' + (filed ? ' is-filled' : '') + '" data-cip-slot-drop="' + esc(d.id) + '">' +
@@ -10104,8 +10113,18 @@
    */
   var cipSlotSending = {};
 
+  function checklistNewDocumentHtml(d) {
+    if (!d || d.status !== 'update_required' || !d.fileId || !d.canUpload) return '';
+
+    return '<button type="button" class="tma-dash__clients-edit-btn" data-cip-new-document="' +
+      esc(d.fileId) + '" style="flex:0 0 auto;white-space:nowrap">Upload new document</button>';
+  }
+
   function checklistUploadHtml(d) {
     if (!d || !d.canUpload || !d.id) return '';
+    // A document sent back is replaced from its version history, not by
+    // filing a second copy from this row.
+    if (d.status === 'update_required' && d.fileId) return '';
 
     var photo = d.type === 'passport_photo';
     var accept = photo ? 'image/jpeg,image/png,image/webp,image/heic,.jpg,.jpeg,.png,.webp,.heic' : '.pdf,image/*';
@@ -10242,6 +10261,7 @@
         '<span class="tma-portal-status tma-portal-status--' + esc(tone) +
         ' tma-portal-status--inline">' + esc(status) + '</span>';
     }
+    chip = checklistNewDocumentHtml(d) + chip;
     var upload = checklistUploadHtml(d);
     var download = (checklistDownloadHtml(d) + upload) ||
       '<span class="tma-dash__clients-checklist-download-slot" aria-hidden="true"></span>';

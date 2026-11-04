@@ -156,6 +156,68 @@ class DocumentSlots
     }
 
     /**
+     * Replace the file this slot already holds, as its next version.
+     *
+     * Called from CipDocumentUploadController::store when the slot is Update
+     * required. fill() resolves a slot by type, which is the wrong file when
+     * several Additional documents share a type; attach() writes a new
+     * FileItem and leaves the refused scan current. This writes
+     * file_versions and points files.storage_path at the new bytes, and does
+     * not change files.folder_id. mayReplaceReturned is called from
+     * Versions::canAddVersion.
+     */
+    public static function replace(CipDocument $slot, UploadedFile $upload, User $actor): CipDocument
+    {
+        $slot->loadMissing(['file', 'application']);
+        $file = $slot->file;
+
+        if (! $file instanceof FileItem) {
+            throw new \InvalidArgumentException('This document has no file to replace.');
+        }
+
+        Confirmation::guardDocument($slot);
+
+        $meta = FileType::inspect($upload->getRealPath(), $upload->getClientOriginalName());
+        $stored = Vault::store($upload->getRealPath(), $meta['extension']);
+
+        Versions::addStored($file, $actor, $stored, $meta);
+
+        $slot->forceFill([
+            'uploaded_by' => $actor->id,
+            'company_member_id' => ContactIdentity::stamp(
+                $actor,
+                ContactIdentity::companyIdForApplication($slot->application),
+            )['company_member_id'],
+            'uploaded_at' => now(),
+        ])->save();
+
+        return $slot->fresh() ?? $slot;
+    }
+
+    /**
+     * May this account add a version because an officer sent this document back?
+     */
+    public static function mayReplaceReturned(User $user, FileItem $file): bool
+    {
+        $file->loadMissing('cipDocument');
+        $document = $file->cipDocument;
+
+        if (! $document instanceof CipDocument) {
+            return false;
+        }
+
+        if ($document->displayStatus() !== DocumentStatus::UPDATE_REQUIRED) {
+            return false;
+        }
+
+        if (! CipAccess::canCreate($user) || Package::locksDocument($document)) {
+            return false;
+        }
+
+        return ApplicationScope::query($user)->whereKey($document->application_id)->exists();
+    }
+
+    /**
      * Re-file a passport photo whose library file has gone while the
      * likeness remains.
      *

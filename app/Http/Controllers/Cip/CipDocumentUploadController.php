@@ -60,7 +60,11 @@ class CipDocumentUploadController extends Controller
         ]);
 
         try {
-            if ($photo) {
+            if ($document->file && $document->displayStatus() === DocumentStatus::UPDATE_REQUIRED && ! $photo) {
+                // This slot's own file, as its next version. A second FileItem
+                // would leave the refused scan as the one the checklist shows.
+                DocumentSlots::replace($document, $data['file'], $user);
+            } elseif ($photo) {
                 // Replacing: this door is only ever reached by someone
                 // choosing a file for this slot, never by a draft autosave,
                 // so a photo arriving on a filled slot is meant to supersede

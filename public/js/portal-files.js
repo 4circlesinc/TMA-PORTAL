@@ -2597,6 +2597,19 @@
         paintCommentsPanel();
       }
 
+      // clients.js openCipFile passes {panel:'versions'} through TMAFileActions.open.
+      // Nothing else opens this tab from outside the viewer.
+      if (intent.panel === 'versions') {
+        viewerPrefs.tab = 'versions';
+        viewerPrefs.panel = true;
+        var versionsPanel = lb.querySelector('[data-lb-panel]');
+        if (versionsPanel) versionsPanel.hidden = false;
+        var versionsHead = lb.querySelector('.tma-portal-viewer__head');
+        if (versionsHead) versionsHead.outerHTML = viewerHead(f);
+        paintPanel();
+        paintCommentsPanel();
+      }
+
       if (!intent.thread) return;
 
       // The thread is drawn when its comments arrive; poll briefly rather than
@@ -8542,7 +8555,7 @@
      * file it was handed through findItem, which otherwise only knows about
      * rows the library itself loaded.
      */
-    open: function (item, onChange, list) {
+    open: function (item, onChange, list, intent) {
       if (!item || item.type === 'folder') return;
       // `list` is the caller's own rows, in the caller's own order, so the
       // viewer steps through them the way the table reads. The file itself is
@@ -8552,6 +8565,9 @@
         externalItems = [item].concat(externalItems);
       }
       externalOnChange = onChange || null;
+      if (intent && intent.panel) {
+        pendingViewerIntent = { panel: intent.panel, thread: intent.thread || null };
+      }
       openLightbox(item);
     },
 

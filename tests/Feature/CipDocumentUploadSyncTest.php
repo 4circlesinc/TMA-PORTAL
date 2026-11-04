@@ -6,7 +6,10 @@ use App\Models\CipApplication;
 use App\Models\CipDocument;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
+use App\Models\Company;
+use App\Models\CompanyMember;
 use App\Models\FileItem;
+use App\Models\FileVersion;
 use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
@@ -480,5 +483,95 @@ class CipDocumentUploadSyncTest extends TestCase
 
         // Outside the guard the same file is adopted as before.
         $this->assertTrue(DocumentSlots::adoptOrphan($file->fresh(), $staff));
+    }
+
+    public function test_a_provider_replaces_a_returned_document_as_its_next_version(): void
+    {
+        $staff = $this->staff();
+        $company = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy', 'created_by' => $staff->id]);
+        $provider = CipProvider::create([
+            'name' => 'Galaxy',
+            'code' => 'GAL',
+            'company_id' => $company->id,
+        ]);
+        $application = Applications::create($provider, $staff);
+        CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Chen',
+            'last_name' => 'Wei',
+        ]);
+        Tree::provision($application->fresh(), $staff);
+        $person = $application->fresh()->people->first();
+        DocumentSlots::open($person);
+
+        DocumentSlots::fill(
+            $person,
+            DocumentTypes::PASSPORT_BIO_PAGE,
+            UploadedFile::fake()->create('bio.pdf', 40, 'application/pdf'),
+            $staff,
+        );
+
+        $slot = CipDocument::where('person_id', $person->id)
+            ->where('type', DocumentTypes::PASSPORT_BIO_PAGE)
+            ->first();
+        $slot->forceFill(['status' => DocumentStatus::UPDATE_REQUIRED])->save();
+        $file = $slot->file;
+        $folderId = $file->folder_id;
+
+        $contact = User::create([
+            'name' => 'Gil Contact',
+            'email' => 'gil@galaxy.example',
+            'password' => bcrypt('password12345'),
+        ]);
+        $contact->forceFill([
+            'email_verified_at' => now(),
+            'profile_completed_at' => now(),
+            'onboarding_completed_at' => now(),
+            'status' => 'approved',
+            'account_type' => Role::CLIENT,
+        ])->save();
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'user_id' => $contact->id,
+            'role' => 'general',
+            'status' => 'active',
+            'invited_by' => $staff->id,
+        ]);
+
+        $this->actingAs($contact)
+            ->getJson('/portal/files/files/'.$file->uuid.'/versions')
+            ->assertOk()
+            ->assertJsonPath('canAddVersion', true);
+
+        $this->actingAs($contact)
+            ->post('/portal/files/files/'.$file->uuid.'/versions', [
+                'file' => UploadedFile::fake()->createWithContent('rescan.pdf', '%PDF-1.4 replacement'),
+            ])
+            ->assertCreated();
+
+        $file->refresh();
+        $slot->refresh();
+        $this->assertSame($folderId, $file->folder_id);
+        $this->assertSame($file->id, $slot->file_id);
+        $this->assertSame(2, (int) $file->version_number);
+        $this->assertSame(1, FileVersion::where('file_id', $file->id)->where('is_current', true)->count());
+        $this->assertSame(1, FileVersion::where('file_id', $file->id)->where('is_current', false)->count());
+        $this->assertSame(DocumentStatus::APPLICATION_REVIEW, $slot->status);
+
+        $slot->forceFill(['status' => DocumentStatus::UPDATE_REQUIRED])->save();
+
+        DocumentSlots::replace(
+            $slot->fresh(),
+            UploadedFile::fake()->createWithContent('again.pdf', '%PDF-1.4 again'),
+            $contact,
+        );
+
+        $file->refresh();
+        $slot->refresh();
+        $this->assertSame($folderId, $file->folder_id);
+        $this->assertSame($file->id, $slot->file_id);
+        $this->assertSame(3, (int) $file->version_number);
+        $this->assertSame(1, FileVersion::query()->where('file_id', $file->id)->where('is_current', true)->count());
     }
 }

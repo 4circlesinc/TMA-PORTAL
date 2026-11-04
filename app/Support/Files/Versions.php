@@ -249,7 +249,15 @@ class Versions
             return false;
         }
 
-        return FileAccess::can($user, 'upload', $file);
+        if (FileAccess::can($user, 'upload', $file)) {
+            return true;
+        }
+
+        // A provider contact can read the file and still be refused a library
+        // upload. Replacing a document an officer sent back is the exception:
+        // it has to land as the next version of this file, in this folder.
+        // Called from FileVersionController::index and ::store.
+        return DocumentSlots::mayReplaceReturned($user, $file);
     }
 
     /** Why versions are refused right now, for the message the user sees. */
