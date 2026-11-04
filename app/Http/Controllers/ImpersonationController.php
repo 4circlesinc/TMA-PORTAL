@@ -25,17 +25,15 @@ class ImpersonationController extends Controller
     }
 
     /**
-     * Open the portal as this firm. The firm's own admin when it has one,
-     * otherwise a contact who can sign in.
+     * Open the portal as this firm's admin. Uses the admin who can already
+     * sign in, or opens that admin account when the firm does not have one.
      */
     public function company(Request $request, string $uid): JsonResponse
     {
         Role::authorizeAdmin($request->user());
 
         $company = Company::query()->where('uid', $uid)->firstOrFail();
-        $account = Impersonation::accountFor($company);
-
-        abort_unless($account !== null, 422, 'This service provider has no portal account to open.');
+        $account = Impersonation::ensureAccount($company, $request->user());
 
         Impersonation::start($request, $account, $company);
 

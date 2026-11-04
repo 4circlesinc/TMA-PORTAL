@@ -145,15 +145,39 @@ class ImpersonationTest extends TestCase
             ->assertJsonPath('redirect', '/citizenship-applications/companies/'.$zulu->uid);
     }
 
-    public function test_a_firm_with_nobody_who_can_sign_in_is_refused(): void
+    public function test_a_firm_with_no_portal_account_still_opens_as_its_admin(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'Ada Admin');
         [$company] = $this->firm('Empty');
 
         $this->actingAs($admin)
             ->postJson("/portal/companies/{$company->uid}/impersonate")
-            ->assertStatus(422)
-            ->assertJsonPath('message', 'This service provider has no portal account to open.');
+            ->assertOk()
+            ->assertJsonPath('redirect', '/citizenship-applications/companies/'.$company->uid);
+
+        $opened = User::query()->where('account_type', Role::SERVICE_PROVIDER_ADMIN)->get();
+        $this->assertCount(1, $opened);
+        $this->assertSame('Empty Admin', $opened->first()->name);
+
+        $this->carrySession();
+
+        $this->getJson('/me')
+            ->assertOk()
+            ->assertJsonPath('id', $opened->first()->id)
+            ->assertJsonPath('isAdmin', false)
+            ->assertJsonPath('isServiceProviderAdmin', true)
+            ->assertJsonPath('impersonation.name', 'Empty')
+            ->assertJsonPath('impersonation.asFirm', true);
+
+        Mail::assertNothingSent();
+
+        $this->flushSession();
+
+        $this->actingAs($admin)
+            ->postJson("/portal/companies/{$company->uid}/impersonate")
+            ->assertOk();
+
+        $this->assertSame(1, User::query()->where('account_type', Role::SERVICE_PROVIDER_ADMIN)->count());
     }
 
     public function test_only_an_administrator_can_open_someone_elses_account(): void

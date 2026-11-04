@@ -9,8 +9,11 @@ use App\Models\User;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Cip\CipAccess;
 use App\Support\Companies\CompanyAccess;
+use App\Support\Companies\CompanyMembers;
+use App\Support\Companies\CompanyRoles;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 
 /**
  * An administrator opening the portal as a service-provider account.
@@ -128,8 +131,8 @@ final class Impersonation
      * The portal login an administrator enters when they open a firm.
      *
      * The firm's Service Provider admin, when one can sign in. Otherwise
-     * the earliest active contact. A firm with nobody who can sign in has
-     * nothing to open.
+     * the earliest active contact. Null when the firm has no portal account
+     * yet — {@see self::ensureAccount} opens one.
      */
     public static function accountFor(Company $company): ?User
     {
@@ -161,6 +164,58 @@ final class Impersonation
         }
 
         return $contact;
+    }
+
+    /**
+     * A portal login for this firm, creating the service provider admin when
+     * the firm does not have one.
+     *
+     * A company has no password of its own. Opening it still has to land in
+     * an account that belongs to the firm, including the first time, before
+     * anyone there has been invited.
+     */
+    public static function ensureAccount(Company $company, User $by): User
+    {
+        $existing = self::accountFor($company);
+        if ($existing instanceof User) {
+            return $existing;
+        }
+
+        $email = self::standInEmail($company);
+        $user = User::query()->whereRaw('LOWER(email) = ?', [$email])->first();
+
+        if (! $user instanceof User) {
+            $firm = trim($company->name) !== '' ? trim($company->name) : 'Service provider';
+            $user = new User([
+                'first_name' => mb_substr($firm, 0, 100),
+                'last_name' => 'Admin',
+                'email' => $email,
+                'password' => Str::random(40),
+            ]);
+            $user->syncDisplayName();
+            $user->forceFill([
+                'email_verified_at' => now(),
+                'status' => User::STATUS_APPROVED,
+                'account_type' => Role::SERVICE_PROVIDER_ADMIN,
+                'approved_at' => now(),
+                'approved_by' => $by->id,
+                'profile_completed_at' => now(),
+                'onboarding_completed_at' => now(),
+                // Claimed up front so creating the login does not greet them.
+                'welcomed_at' => now(),
+            ])->save();
+        }
+
+        if (CompanyAccess::memberOf($user, $company) === null) {
+            CompanyMembers::add($company, [
+                'email' => $user->email,
+                'name' => $user->name,
+                'user_id' => $user->id,
+                'role' => CompanyRoles::PRIMARY,
+            ], $by, false);
+        }
+
+        return $user->fresh() ?? $user;
     }
 
     /**
@@ -277,6 +332,14 @@ final class Impersonation
     public static function isServiceProviderAccount(User $user): bool
     {
         return Role::isClient($user) && CipAccess::isProviderContact($user);
+    }
+
+    /** Stable address for the admin login a firm did not already have. */
+    private static function standInEmail(Company $company): string
+    {
+        $uid = $company->uid !== '' ? $company->uid : 'company-'.$company->id;
+
+        return 'admin.'.$uid.'@service-provider.invalid';
     }
 
     private static function canBeOpened(User $user): bool
