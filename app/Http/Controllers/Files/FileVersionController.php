@@ -104,7 +104,7 @@ class FileVersionController extends BaseFilesController
         $meta = FileType::inspect($upload->getRealPath(), $upload->getClientOriginalName());
 
         $stored = Vault::store($upload->getRealPath(), $meta['extension']);
-        $version = Versions::addStored($file, $user, $stored, $meta, $request->input('note'));
+        $version = Versions::addStored($file, $user, $stored, $meta, $request->input('note'), null, $upload->getClientOriginalName());
 
         return response()->json([
             'version' => $version->version_number,

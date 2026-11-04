@@ -230,13 +230,20 @@
 
   function activityItem(item, variant) {
     var cfg = VARIANTS[variant] || VARIANTS.popup;
+    var who = item.actor && item.actor.name ? item.actor.name : (item.isSystem ? 'System' : '');
+    var desc = item.description || '';
+    if (who && desc.toLowerCase().indexOf(who.toLowerCase()) !== 0) desc = who + ' — ' + desc;
+    var facts = (item.details || []).map(function (d) {
+      return d && d.value != null && d.value !== '' ? (d.label + ': ' + d.value) : '';
+    }).filter(Boolean).join(' · ');
     return '<div class="' + (cfg.activityItem || cfg.item) + '" ' +
       'data-activity-id="' + esc(item.id) + '" ' +
       'data-action-url="' + esc(actionUrlForActivity(item)) + '" ' +
       'data-status="' + esc(item.status) + '">' +
       activityLeading(item, cfg) +
       '<div class="' + cfg.body + '">' +
-        '<div class="' + cfg.title + '">' + esc(item.description) + '</div>' +
+        '<div class="' + cfg.title + '" title="' + esc(desc) + '">' + esc(desc) + '</div>' +
+        (facts ? '<div class="' + cfg.meta + '" title="' + esc(facts) + '">' + esc(facts) + '</div>' : '') +
         '<div class="' + cfg.meta + '">' + esc(timeLabel(item.createdAt)) + '</div>' +
       '</div>' +
     '</div>';

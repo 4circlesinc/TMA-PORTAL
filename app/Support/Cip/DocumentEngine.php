@@ -35,6 +35,15 @@ class DocumentEngine
      */
     public const ACTION_STATUS_CHANGED = 'document_status_changed';
 
+    /**
+     * A new version landed and the slot's status did not move.
+     *
+     * Entering Application review already reads as an upload. A second scan
+     * while the slot is already in review, or already ready, used to write
+     * nothing here, so the Activity tab could not be matched to the file.
+     */
+    public const ACTION_FILED = 'document_filed';
+
     /** The audit action written when a linked file is deleted and the slot is reset. */
     public const ACTION_FILE_DELETED = 'document_file_deleted';
 
@@ -160,11 +169,19 @@ class DocumentEngine
             $application = $document->loadMissing('application')->application;
 
             // The caller's meta cannot overwrite what the audit is for.
-            Engine::record($application, self::ACTION_STATUS_CHANGED, $actor, array_merge($meta, [
+            // label, fileName and version ride along when the move was an
+            // upload, so the history can name the scan and not only the status.
+            $audit = array_merge($meta, [
                 'document' => $document->uuid,
+                'label' => $document->label,
                 'fromStatus' => $from,
                 'toStatus' => $to,
-            ]));
+                'application' => $application?->displayNumber(),
+            ]);
+
+            Engine::record($application, self::ACTION_STATUS_CHANGED, $actor, $audit);
+
+            $filed = isset($meta['version']) || isset($meta['fileName']) || ! empty($meta['restored']);
 
             // Mirror into the portal-wide trail too, that copy is pruned per
             // retention preference; cip_events above is the durable one.
@@ -172,11 +189,13 @@ class DocumentEngine
                 'actor' => $actor,
                 'type' => 'cip.document_status_changed',
                 'module' => 'cip',
-                'description' => $document->label.' on '.$application->displayNumber()
-                    .' moved to '.DocumentStatus::label($to),
+                'description' => $filed
+                    ? DocumentSlots::filingDescription($document, $meta, $application).'; now '.DocumentStatus::label($to)
+                    : $document->label.' on '.$application->displayNumber().' moved to '.DocumentStatus::label($to),
                 'subject' => $document,
                 'old' => ['status' => $from],
                 'new' => ['status' => $to],
+                'metadata' => $audit,
             ]);
 
             Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));

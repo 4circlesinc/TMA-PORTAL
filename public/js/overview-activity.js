@@ -200,7 +200,8 @@
     function row(item) {
       var tone = toneFor(item);
       var icon = MODULE_ICON[item.module] || 'Notification';
-      var canExpand = state.isAdmin && (item.ip || item.device || item.location || (item.oldValues) || (item.newValues) || item.status !== 'success');
+      var hasFacts = item.details && item.details.length;
+      var canExpand = hasFacts || (state.isAdmin && (item.ip || item.device || item.location || (item.oldValues) || (item.newValues) || item.status !== 'success'));
       var open = !!state.expanded[item.id];
       var statusDot = item.status && item.status !== 'success'
         ? '<span class="tma-dash__actlog-status tma-dash__actlog-status--' + esc(item.status) + '">' + esc(item.status) + '</span>' : '';
@@ -215,12 +216,19 @@
       var whereLine = where
         ? '<span class="tma-dash__actlog-where" title="' + esc(where) + '">' + esc(where) + '</span>'
         : '';
+      var facts = (item.details || []).map(function (d) {
+        return d && d.value != null && d.value !== '' ? (d.label + ': ' + d.value) : '';
+      }).filter(Boolean).join(' · ');
+      var factLine = facts
+        ? '<span class="tma-dash__actlog-where" style="white-space:normal" title="' + esc(facts) + '">' + esc(facts) + '</span>'
+        : '';
 
       var main = '<div class="tma-dash__ctr tma-dash__ctr--body tma-dash__ctr--overview tma-dash__actlog-row" data-actlog-row="' + esc(item.id) + '" role="row">' +
         '<div class="tma-dash__cc tma-dash__cc--activity">' +
           '<span class="tma-dash__overview-file-icon tma-dash__overview-file-icon--' + tone + '" aria-hidden="true"><img src="' + ICON + esc(icon) + '.svg" alt="" width="16" height="16"></span>' +
           '<span class="tma-dash__actlog-desc">' +
-            '<span class="tma-dash__cc-truncate" title="' + esc(desc) + '">' + esc(desc) + '</span>' +
+            '<span class="tma-dash__cc-truncate" style="white-space:normal" title="' + esc(desc) + '">' + esc(desc) + '</span>' +
+            factLine +
             whereLine +
           '</span>' + statusDot +
         '</div>' +
@@ -241,6 +249,9 @@
         if (value == null || value === '') return '';
         return '<div class="tma-dash__actlog-detail-line"><span>' + esc(label) + '</span><span>' + esc(value) + '</span></div>';
       }
+      var facts = (item.details || []).map(function (d) {
+        return d && d.value != null && d.value !== '' ? line(d.label, d.value) : '';
+      }).join('');
       var diff = '';
       if (item.oldValues || item.newValues) {
         diff = '<div class="tma-dash__actlog-detail-line"><span>Changes</span><code>' +
@@ -258,6 +269,7 @@
         : '';
 
       return '<div class="tma-dash__actlog-detail" role="row">' +
+        facts +
         line('Type', item.type) +
         line('Status', item.status) +
         line('IP address', item.ip) +

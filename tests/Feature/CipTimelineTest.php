@@ -7,6 +7,8 @@ use App\Models\CipDocument;
 use App\Models\CipEvent;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
+use App\Models\FileItem;
+use App\Models\Folder;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
@@ -18,8 +20,10 @@ use App\Support\Cip\Review;
 use App\Support\Cip\Status;
 use App\Support\Cip\Submission;
 use App\Support\Cip\Timeline;
+use App\Support\Files\Versions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -174,6 +178,85 @@ class CipTimelineTest extends TestCase
         $this->assertContains('Rita Officer sent back Police certificate', $lines);
         $this->assertContains('Rita Officer approved Police certificate', $lines);
         $this->assertContains('Ada Admin uploaded Police certificate', $lines);
+    }
+
+    public function test_a_second_upload_names_who_replaced_the_document_and_which_version(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $application = $this->application($admin);
+        $document = $this->document($application, 'SL4 Form');
+        $folder = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Chen Wei',
+            'owner_id' => $admin->id,
+            'created_by' => $admin->id,
+        ]);
+        $file = FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'folder_id' => $folder->id,
+            'name' => 'Chen Wei - SL4 Form.pdf',
+            'extension' => 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 1200,
+            'disk' => 'local',
+            'storage_path' => 'cip/sl4-v1.pdf',
+            'owner_id' => $admin->id,
+            'uploaded_by' => $admin->id,
+        ]);
+        $document->forceFill([
+            'file_id' => $file->id,
+            'status' => DocumentStatus::UPDATE_REQUIRED,
+        ])->save();
+
+        $stored = [
+            'uuid' => (string) Str::uuid(),
+            'disk' => 'local',
+            'path' => 'cip/sl4-v2.pdf',
+            'size' => 1400,
+            'checksum' => null,
+        ];
+        $meta = ['extension' => 'pdf', 'mime' => 'application/pdf'];
+
+        // Sent back, so this scan moves the slot and has to say it replaced
+        // the document rather than merely that the status changed.
+        Versions::addStored($file, $admin, $stored, $meta, null, null, 'SL4-rescan.pdf');
+
+        $this->assertSame(
+            'Ada Admin replaced SL4 Form with version 2 (“SL4-rescan.pdf”)',
+            $this->lines($application->fresh(), $admin)[0],
+        );
+
+        // Already in review: a further scan used to leave the Activity tab
+        // with nothing to match against the document list.
+        $stored['path'] = 'cip/sl4-v3.pdf';
+        $stored['uuid'] = (string) Str::uuid();
+        Versions::addStored($file->fresh(), $admin, $stored, $meta, null, null, 'SL4-second.pdf');
+
+        $row = Timeline::for($application->fresh(), $admin)[0];
+
+        $this->assertSame(DocumentEngine::ACTION_FILED, $row['action']);
+        $this->assertSame('Ada Admin replaced SL4 Form with version 3 (“SL4-second.pdf”)', $row['what']);
+        $this->assertSame('Ada Admin', $row['who']['name']);
+        $this->assertNotNull($row['when']);
+
+        $facts = collect($row['more'])->pluck('value', 'label');
+        $this->assertSame('SL4 Form', $facts['Document']);
+        $this->assertSame('SL4-second.pdf', $facts['File']);
+        $this->assertSame('Chen Wei - SL4 Form.pdf', $facts['Checklist file']);
+        $this->assertSame('3', $facts['Version']);
+        $this->assertSame($application->displayNumber(), $facts['Application']);
+
+        $feed = collect($this->actingAs($admin)->getJson('/portal/activity')->assertOk()->json('items'));
+        $second = $feed->first(fn ($item) => str_contains((string) ($item['description'] ?? ''), 'version 3'));
+        $this->assertNotNull($second);
+        $this->assertSame(
+            'replaced SL4 Form with version 3 (“SL4-second.pdf”) on '.$application->displayNumber(),
+            $second['description'],
+        );
+        $this->assertSame('Ada Admin', $second['actor']['name']);
+        $detail = collect($second['details'])->pluck('value', 'label');
+        $this->assertSame('3', $detail['Version']);
+        $this->assertSame('SL4-second.pdf', $detail['File']);
     }
 
     public function test_sending_a_document_back_names_the_reason(): void

@@ -101,6 +101,12 @@ class Timeline
                  * short statement of what happened.
                  */
                 'reason' => self::reason($event),
+                /*
+                 * The facts the sentence names, in a form that can be matched
+                 * to the document list: which slot, which file, which version,
+                 * and the status on either side when this row is a verdict.
+                 */
+                'more' => self::more($event, $documents),
             ];
         })->all();
     }
@@ -171,6 +177,11 @@ class Timeline
             CipEvent::ACTION_STATUS_ATTACHMENT => self::attachmentSentence($meta, $who),
             PersonStatus::ACTION_CHANGED => self::personSentence($event, $who),
             DocumentEngine::ACTION_STATUS_CHANGED => self::documentSentence($meta, $who, $documents),
+            DocumentEngine::ACTION_FILED => self::filedSentence(
+                $who,
+                (string) ($meta['label'] ?? 'a document'),
+                $meta,
+            ),
             /*
              * An action added to the table after this file was written.
              *
@@ -480,10 +491,86 @@ class Timeline
             DocumentStatus::UPDATE_REQUIRED => "{$who} sent back {$label}",
             DocumentStatus::READY_FOR_SUBMISSION => "{$who} approved {$label}",
             // The only way into review is a file arriving: both edges the
-            // engine allows into it come from an upload.
-            DocumentStatus::APPLICATION_REVIEW => "{$who} uploaded {$label}",
+            // engine allows into it come from an upload. A version number
+            // distinguishes the first scan from the one that replaced it.
+            DocumentStatus::APPLICATION_REVIEW => self::filedSentence($who, $label, $meta),
             default => "{$who} moved {$label} to ".DocumentStatus::label($to),
         };
+    }
+
+    /**
+     * Who filed which document, and which version of it.
+     *
+     * Rows written before a version was stored have neither key, and keep
+     * reading as "uploaded {label}".
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    private static function filedSentence(string $who, string $label, array $meta): string
+    {
+        $version = isset($meta['version']) ? (int) $meta['version'] : 0;
+        $file = trim((string) ($meta['fileName'] ?? ''));
+        $named = $file !== '' ? ' (“'.$file.'”)' : '';
+
+        if (! empty($meta['restored'])) {
+            $which = $version > 0 ? "version {$version} of " : '';
+
+            return "{$who} restored {$which}{$label}{$named}";
+        }
+
+        if ($version > 1) {
+            return "{$who} replaced {$label} with version {$version}{$named}";
+        }
+
+        if ($version === 1) {
+            return "{$who} uploaded {$label}{$named} as version 1";
+        }
+
+        return "{$who} uploaded {$label}{$named}";
+    }
+
+    /**
+     * Structured facts drawn under the sentence, so a row can be matched to
+     * the checklist without opening the file.
+     *
+     * @param  array<string, string>  $documents  uuid => label
+     * @return list<array{label:string, value:string}>
+     */
+    private static function more(CipEvent $event, array $documents): array
+    {
+        if (! in_array($event->action, [DocumentEngine::ACTION_STATUS_CHANGED, DocumentEngine::ACTION_FILED], true)) {
+            return [];
+        }
+
+        $meta = is_array($event->meta) ? $event->meta : [];
+        $rows = [];
+        $label = $documents[$meta['document'] ?? ''] ?? null;
+        if (! is_string($label) || $label === '') {
+            $label = is_string($meta['label'] ?? null) ? $meta['label'] : null;
+        }
+        if (is_string($label) && $label !== '') {
+            $rows[] = ['label' => 'Document', 'value' => $label];
+        }
+        if (is_string($meta['fileName'] ?? null) && $meta['fileName'] !== '') {
+            $rows[] = ['label' => 'File', 'value' => (string) $meta['fileName']];
+        }
+        if (is_string($meta['libraryName'] ?? null) && $meta['libraryName'] !== '' && $meta['libraryName'] !== ($meta['fileName'] ?? null)) {
+            $rows[] = ['label' => 'Checklist file', 'value' => (string) $meta['libraryName']];
+        }
+        if (isset($meta['version']) && $meta['version'] !== '') {
+            $rows[] = ['label' => 'Version', 'value' => (string) $meta['version']];
+        }
+        if (is_string($meta['application'] ?? null) && $meta['application'] !== '') {
+            $rows[] = ['label' => 'Application', 'value' => (string) $meta['application']];
+        }
+        if (is_string($meta['fromStatus'] ?? null) && $meta['fromStatus'] !== '') {
+            $rows[] = ['label' => 'From', 'value' => DocumentStatus::label($meta['fromStatus'])];
+        }
+        if (is_string($meta['toStatus'] ?? null) && $meta['toStatus'] !== '') {
+            $rows[] = ['label' => 'To', 'value' => DocumentStatus::label($meta['toStatus'])];
+        }
+
+        return $rows;
     }
 
     /**

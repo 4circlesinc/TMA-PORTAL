@@ -76,6 +76,7 @@ class Versions
         array $meta,
         ?string $note = null,
         ?FileVersion $restoredFrom = null,
+        ?string $uploadedAs = null,
     ): FileVersion {
         if (Confirmation::locksFile($file)) {
             throw new \InvalidArgumentException(Confirmation::LOCKED_MESSAGE);
@@ -127,19 +128,33 @@ class Versions
         // the new one silently, it is marked superseded and its sender told.
         Engine::noteNewVersion($file, $version);
 
-        Activity::forFile($author->id, $file, $restoredFrom ? 'version-restored' : 'version', [
+        $file->loadMissing('cipDocument.application');
+        $document = $file->cipDocument;
+        $uploaded = trim((string) $uploadedAs);
+
+        Activity::forFile($author->id, $file, $restoredFrom ? 'version-restored' : 'version', array_filter([
             'version' => $version->version_number,
+            'previous' => $version->version_number > 1 ? $version->version_number - 1 : null,
             'from' => $restoredFrom?->version_number,
             'note' => $note,
             'size' => $version->size,
-        ]);
+            'uploadedAs' => $uploaded !== '' ? $uploaded : null,
+            'document' => $document?->label,
+            'application' => $document?->application?->displayNumber() ?: null,
+        ], fn ($value) => $value !== null && $value !== ''));
 
         self::notify($file, $author, $version, $restoredFrom);
 
         $file->loadMissing('cipDocument.person.application.client');
 
         if ($file->cipDocument) {
-            DocumentSlots::advanceAfterUpload($file->cipDocument, $author);
+            DocumentSlots::noteUpload($file->cipDocument, $author, array_filter([
+                'version' => $version->version_number,
+                'fileName' => $uploaded !== '' ? $uploaded : $file->name,
+                'libraryName' => $file->name,
+                'note' => $note,
+                'restored' => $restoredFrom !== null ? true : null,
+            ], fn ($value) => $value !== null && $value !== ''));
             Live::staff(Live::CIP);
 
             /*

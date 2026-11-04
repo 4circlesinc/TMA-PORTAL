@@ -129,7 +129,7 @@ class DocumentRequests
                  * for the file, and the visitor is named in the note, which is
                  * the only place that truth can live.
                  */
-                Versions::addStored($existing, $owner, $stored, $meta, self::note($uploaderName));
+                Versions::addStored($existing, $owner, $stored, $meta, self::note($uploaderName), null, $name);
                 $file = $existing;
             } else {
                 // The link names its slot; the file must not also be

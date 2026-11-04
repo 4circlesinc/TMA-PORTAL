@@ -10363,6 +10363,9 @@
   function renderActivityRow(e) {
     var who = e.who || {};
     var reason = (e.reason || '').trim();
+    var facts = (e.more || []).map(function (row) {
+      return row && row.value ? (row.label + ': ' + row.value) : '';
+    }).filter(Boolean).join(' · ');
 
     return (
       '<li class="tma-dash__cip-activity-row' + (reason ? ' is-quoted' : '') + '">' +
@@ -10372,6 +10375,9 @@
         : esc(String(who.name || '?').charAt(0).toUpperCase())) +
       '</span>' +
       '<span class="tma-dash__cip-activity-what">' + esc(e.what || '') +
+      (facts
+        ? '<span class="tma-dash__cip-activity-reason" style="color:#5c6570">' + esc(facts) + '</span>'
+        : '') +
       (reason
         ? '<span class="tma-dash__cip-activity-reason">' + esc(reason) + '</span>'
         : '') +

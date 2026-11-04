@@ -9,6 +9,7 @@ use App\Models\CipPerson;
 use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\User;
+use App\Support\Activity\ActivityLogger;
 use App\Support\Companies\ContactIdentity;
 use App\Support\Files\FileType;
 use App\Support\Files\FolderProvisioner;
@@ -117,9 +118,11 @@ class DocumentSlots
             $upload->getClientOriginalName(),
         );
 
-        return DB::transaction(function () use ($slot, $person, $template, $stored, $meta, $name, $actor, $type, $filedLabel) {
+        $uploadedAs = $upload->getClientOriginalName();
+
+        return DB::transaction(function () use ($slot, $person, $template, $stored, $meta, $name, $actor, $type, $filedLabel, $uploadedAs) {
             if ($slot->file_id && $file = $slot->file) {
-                Versions::addStored($file, $actor, $stored, $meta);
+                Versions::addStored($file, $actor, $stored, $meta, null, null, $uploadedAs);
                 $slot->forceFill([
                     'uploaded_by' => $actor->id,
                     'company_member_id' => ContactIdentity::stamp(
@@ -149,7 +152,11 @@ class DocumentSlots
             }
             $slot->forceFill($attributes)->save();
             $slot->setRelation('file', $file);
-            self::advanceAfterUpload($slot, $actor);
+            self::advanceAfterUpload($slot, $actor, [
+                'version' => 1,
+                'fileName' => $uploadedAs !== '' ? $uploadedAs : $name,
+                'libraryName' => $file->name,
+            ]);
 
             return $slot;
         });
@@ -180,7 +187,7 @@ class DocumentSlots
         $meta = FileType::inspect($upload->getRealPath(), $upload->getClientOriginalName());
         $stored = Vault::store($upload->getRealPath(), $meta['extension']);
 
-        Versions::addStored($file, $actor, $stored, $meta);
+        Versions::addStored($file, $actor, $stored, $meta, null, null, $upload->getClientOriginalName());
 
         $slot->forceFill([
             'uploaded_by' => $actor->id,
@@ -462,21 +469,126 @@ class DocumentSlots
     }
 
     /**
-     * An upload is what moves a slot along (section 12).
+     * Write the upload into the application history, then advance the slot
+     * when this scan is what puts it in front of a reviewer.
      *
-     * Filling an empty requirement takes it from Pending upload into
-     * Application review; re-uploading against one a reviewer sent back takes
-     * Update required to Application review again, the revision loop. Both go
-     * through {@see DocumentEngine} rather than writing the column here, so the
-     * edge is checked and the change lands in cip_events like every other.
+     * Versions::addStored is the caller. A slot already in review does not
+     * change status, and advanceAfterUpload used to return without a row, so
+     * a second SL4 scan never appeared on the Activity tab.
      *
-     * A slot already in review, or already ready, is left alone: uploading a
-     * better scan of an approved document does not un-approve it, and nothing
-     * here should quietly undo a reviewer's decision. Answering a refusal is
-     * different: that re-upload also settles the application, so the file
-     * leaves Updates Required when its last refused slot does.
+     * @param  array{version?:int, fileName?:string, libraryName?:string, note?:string, restored?:bool}  $filing
      */
-    public static function advanceAfterUpload(CipDocument $slot, ?User $actor): void
+    public static function noteUpload(CipDocument $slot, ?User $actor, array $filing): void
+    {
+        $from = $slot->status ?? DocumentStatus::PENDING_UPLOAD;
+        $advances = in_array($from, [DocumentStatus::PENDING_UPLOAD, DocumentStatus::UPDATE_REQUIRED], true);
+
+        if (! $advances) {
+            self::recordFiling($slot, $actor, $filing);
+        }
+
+        self::advanceAfterUpload($slot, $actor, $filing);
+    }
+
+    /**
+     * The overview sentence for one upload. The actor is a separate column.
+     *
+     * @param  array{version?:int, fileName?:string, restored?:bool}  $filing
+     */
+    public static function filingDescription(CipDocument $slot, array $filing, ?CipApplication $application = null): string
+    {
+        $label = $slot->label ?: 'a document';
+        $version = (int) ($filing['version'] ?? 0);
+        $file = trim((string) ($filing['fileName'] ?? ''));
+        $named = $file !== '' ? ' (“'.$file.'”)' : '';
+        $number = trim((string) ($application?->displayNumber() ?? ''));
+        $on = $number !== '' ? ' on '.$number : '';
+
+        if (! empty($filing['restored'])) {
+            $which = $version > 0 ? "version {$version} of " : '';
+
+            return "restored {$which}{$label}{$named}{$on}";
+        }
+
+        if ($version > 1) {
+            return "replaced {$label} with version {$version}{$named}{$on}";
+        }
+
+        if ($version === 1) {
+            return "uploaded {$label}{$named} as version 1{$on}";
+        }
+
+        return "uploaded {$label}{$named}{$on}";
+    }
+
+    /**
+     * A version that did not move the slot. The status-change row is the
+     * history when the upload does move it, so this is not written then.
+     *
+     * @param  array{version?:int, fileName?:string, libraryName?:string, note?:string, restored?:bool}  $filing
+     */
+    public static function recordFiling(CipDocument $slot, ?User $actor, array $filing): void
+    {
+        $slot->loadMissing('application');
+        $application = $slot->application;
+
+        if (! $application) {
+            return;
+        }
+
+        $meta = self::filingMeta($slot, $filing, $application);
+
+        Engine::record($application, DocumentEngine::ACTION_FILED, $actor, $meta);
+
+        ActivityLogger::log([
+            'actor' => $actor,
+            'type' => 'cip.document_filed',
+            'module' => 'cip',
+            'description' => self::filingDescription($slot, $filing, $application),
+            'subject' => $slot,
+            'metadata' => $meta,
+            'new' => array_filter([
+                'version' => $filing['version'] ?? null,
+                'file' => $filing['fileName'] ?? null,
+            ], fn ($value) => $value !== null && $value !== ''),
+        ]);
+    }
+
+    /**
+     * @param  array{version?:int, fileName?:string, libraryName?:string, note?:string, restored?:bool}  $filing
+     * @return array<string, mixed>
+     */
+    private static function filingMeta(CipDocument $slot, array $filing, CipApplication $application): array
+    {
+        $note = trim((string) ($filing['note'] ?? ''));
+
+        return array_filter([
+            'document' => $slot->uuid,
+            'label' => $slot->label,
+            'fileName' => $filing['fileName'] ?? null,
+            'libraryName' => $filing['libraryName'] ?? null,
+            'version' => $filing['version'] ?? null,
+            'note' => $note !== '' ? $note : null,
+            'restored' => ! empty($filing['restored']) ? true : null,
+            'application' => $application->displayNumber() ?: null,
+        ], fn ($value) => $value !== null && $value !== '');
+    }
+
+    /**
+     * Move a slot into Application review when this upload is what puts it
+     * there. A slot already in review, or already ready, is left alone:
+     * uploading a better scan of an approved document does not un-approve it.
+     * That case is recorded by {@see noteUpload} before this returns.
+     *
+     * Filling an empty requirement, and re-uploading one a reviewer sent back,
+     * both go through {@see DocumentEngine}. Answering a refusal also settles
+     * the application, so the file leaves Updates Required when its last
+     * refused slot does. $filing is the version and the filename, folded into
+     * the same status row so the history does not say "uploaded" twice.
+     *
+     * @param  array{version?:int, fileName?:string, libraryName?:string, note?:string, restored?:bool}  $filing
+     */
+    public static function advanceAfterUpload(CipDocument $slot, ?User $actor, array $filing = []): void
     {
         $from = $slot->status ?? DocumentStatus::PENDING_UPLOAD;
 
@@ -484,9 +596,9 @@ class DocumentSlots
             return;
         }
 
-        DocumentEngine::apply($slot, DocumentStatus::APPLICATION_REVIEW, $actor, [
+        DocumentEngine::apply($slot, DocumentStatus::APPLICATION_REVIEW, $actor, array_merge([
             'reason' => 'upload',
-        ]);
+        ], $filing));
 
         /*
          * The application follows the checklist, whichever way the slot came.

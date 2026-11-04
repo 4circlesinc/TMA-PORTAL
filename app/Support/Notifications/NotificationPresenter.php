@@ -6,8 +6,10 @@ use App\Models\ActivityLog;
 use App\Models\MailSenderPhoto;
 use App\Models\Notification;
 use App\Models\User;
+use App\Support\Cip\DocumentStatus;
 use App\Support\DeviceName;
 use App\Support\Security\IpLocation;
+use Illuminate\Support\Str;
 
 /**
  * Turns notification and activity rows into the JSON shapes the portal front-end
@@ -87,8 +89,59 @@ final class NotificationPresenter
             'longitude' => $includeSensitive ? $log->longitude : null,
             'oldValues' => $includeSensitive ? $log->old_values : null,
             'newValues' => $includeSensitive ? $log->new_values : null,
+            'details' => self::activityDetails(is_array($log->metadata) ? $log->metadata : []),
             'createdAt' => $log->created_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * Facts every viewer can read. IP and the before/after diff stay behind
+     * the administrator check; a document's version does not.
+     *
+     * @param  array<string, mixed>  $meta
+     * @return list<array{label:string, value:string}>
+     */
+    private static function activityDetails(array $meta): array
+    {
+        $rows = [];
+        $document = '';
+        if (is_string($meta['label'] ?? null) && $meta['label'] !== '') {
+            $document = $meta['label'];
+        } elseif (is_string($meta['document'] ?? null) && $meta['document'] !== '' && ! Str::isUuid($meta['document'])) {
+            $document = $meta['document'];
+        }
+        if ($document !== '') {
+            $rows[] = ['label' => 'Document', 'value' => $document];
+        }
+
+        $text = [
+            'application' => 'Application',
+            'fileName' => 'File',
+            'libraryName' => 'Checklist file',
+            'uploadedAs' => 'Uploaded file',
+            'note' => 'Note',
+        ];
+        foreach ($text as $key => $label) {
+            if (! is_string($meta[$key] ?? null) || $meta[$key] === '') {
+                continue;
+            }
+            if ($key === 'libraryName' && $meta[$key] === ($meta['fileName'] ?? null)) {
+                continue;
+            }
+            $rows[] = ['label' => $label, 'value' => $meta[$key]];
+        }
+
+        if (isset($meta['version']) && $meta['version'] !== '' && $meta['version'] !== null) {
+            $rows[] = ['label' => 'Version', 'value' => (string) $meta['version']];
+        }
+        foreach (['fromStatus' => 'From', 'toStatus' => 'To'] as $key => $label) {
+            if (! is_string($meta[$key] ?? null) || ! DocumentStatus::isValid($meta[$key])) {
+                continue;
+            }
+            $rows[] = ['label' => $label, 'value' => DocumentStatus::label($meta[$key])];
+        }
+
+        return $rows;
     }
 
     /** @return array<string, mixed>|null */

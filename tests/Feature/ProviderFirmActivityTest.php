@@ -198,6 +198,21 @@ class ProviderFirmActivityTest extends TestCase
             'user_id' => $officer->id,
             'item_type' => 'file',
             'item_id' => $passport->id,
+            'action' => 'version',
+            'meta' => [
+                'name' => 'Passport.pdf',
+                'version' => 2,
+                'previous' => 1,
+                'document' => 'SL4 Form',
+                'application' => 'GAL26-00001',
+                'uploadedAs' => 'SL4-rescan.pdf',
+            ],
+            'created_at' => now(),
+        ]);
+        FileActivity::create([
+            'user_id' => $officer->id,
+            'item_type' => 'file',
+            'item_id' => $passport->id,
             'action' => 'preview',
             'created_at' => now(),
         ]);
@@ -221,6 +236,16 @@ class ProviderFirmActivityTest extends TestCase
         $this->assertContains('Updated Ada Cole', $descriptions);
         $this->assertContains('uploaded “Passport.pdf”', $descriptions);
         $this->assertContains('renamed “scan.pdf” to “Passport.pdf”', $descriptions);
+        $this->assertContains(
+            'replaced SL4 Form (“Passport.pdf”) with version 2 from “SL4-rescan.pdf” on GAL26-00001',
+            $descriptions,
+        );
+        $version = $feed->first(fn ($row) => str_contains((string) ($row['description'] ?? ''), 'version 2'));
+        $this->assertSame('Rita Officer', $version['actor']['name']);
+        $versionFacts = collect($version['details'])->pluck('value', 'label');
+        $this->assertSame('2', $versionFacts['Version']);
+        $this->assertSame('SL4-rescan.pdf', $versionFacts['Uploaded file']);
+        $this->assertSame('GAL26-00001', $versionFacts['Application']);
         $this->assertNotContains('Eve Blue signed in', $descriptions);
         $this->assertFalse($feed->contains(fn ($row) => str_contains((string) ($row['description'] ?? ''), 'Other.pdf')));
         $this->assertFalse($feed->contains(fn ($row) => ($row['action'] ?? null) === 'preview'));

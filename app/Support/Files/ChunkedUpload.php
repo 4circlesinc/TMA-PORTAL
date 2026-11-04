@@ -258,7 +258,7 @@ class ChunkedUpload
         }
 
         $stored = Vault::store($assembled, $meta['extension']);
-        Versions::addStored($file, $user, $stored, $meta, $session->version_note);
+        Versions::addStored($file, $user, $stored, $meta, $session->version_note, null, $session->filename);
 
         $session->update([
             'status' => UploadSession::STATUS_COMPLETED,

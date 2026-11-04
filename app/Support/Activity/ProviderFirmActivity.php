@@ -435,8 +435,62 @@ final class ProviderFirmActivity
             'longitude' => null,
             'oldValues' => null,
             'newValues' => null,
+            'details' => self::fileDetails($activity),
             'createdAt' => $activity->created_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * Facts the overview row shows without a click. The file log already
+     * stored the version; it used to be dropped on the way to the screen.
+     *
+     * @return list<array{label:string, value:string}>
+     */
+    private static function fileDetails(FileActivity $activity): array
+    {
+        $meta = is_array($activity->meta) ? $activity->meta : [];
+        $rows = [];
+        $text = [
+            'document' => 'Document',
+            'application' => 'Application',
+            'uploadedAs' => 'Uploaded file',
+            'previous' => 'Previous version',
+            'note' => 'Note',
+        ];
+
+        if ($activity->action === 'version-restored') {
+            $text = ['from' => 'Restored from'] + $text;
+        }
+
+        foreach ($text as $key => $label) {
+            if (! isset($meta[$key]) || $meta[$key] === '' || $meta[$key] === null) {
+                continue;
+            }
+            $rows[] = ['label' => $label, 'value' => (string) $meta[$key]];
+        }
+
+        if (isset($meta['version']) && $meta['version'] !== '' && $meta['version'] !== null) {
+            $rows[] = ['label' => 'Version', 'value' => (string) $meta['version']];
+        }
+
+        if (isset($meta['size']) && $meta['size'] !== '' && $meta['size'] !== null) {
+            $rows[] = ['label' => 'Size', 'value' => self::sizeLabel((int) $meta['size'])];
+        }
+
+        return $rows;
+    }
+
+    private static function sizeLabel(int $bytes): string
+    {
+        if ($bytes < 1024) {
+            return $bytes.' B';
+        }
+
+        if ($bytes < 1024 * 1024) {
+            return round($bytes / 1024, 1).' KB';
+        }
+
+        return round($bytes / (1024 * 1024), 1).' MB';
     }
 
     private static function fileDescription(FileActivity $activity, ?string $name): string
@@ -451,8 +505,8 @@ final class ProviderFirmActivity
                 : 'renamed '.$label,
             'move' => isset($meta['to']) ? 'moved '.$label.' to “'.$meta['to'].'”' : 'moved '.$label,
             'copy' => 'copied '.$label,
-            'replaced', 'version' => 'updated '.$label,
-            'version-restored' => 'restored an earlier version of '.$label,
+            'replaced', 'version' => self::versionLine($meta, $label, false),
+            'version-restored' => self::versionLine($meta, $label, true),
             'delete', 'recycle' => 'moved '.$label.' to the Recycle Bin',
             'restore' => 'restored '.$label,
             'purge' => 'permanently deleted '.$label,
@@ -460,5 +514,36 @@ final class ProviderFirmActivity
             'share', 'assign' => 'shared '.$label,
             default => str_replace('-', ' ', (string) $activity->action).' '.$label,
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $meta
+     */
+    private static function versionLine(array $meta, string $quotedName, bool $restored): string
+    {
+        $version = isset($meta['version']) ? (int) $meta['version'] : 0;
+        $document = trim((string) ($meta['document'] ?? ''));
+        $uploaded = trim((string) ($meta['uploadedAs'] ?? ''));
+        $app = trim((string) ($meta['application'] ?? ''));
+        $subject = $document !== '' ? $document.' ('.$quotedName.')' : $quotedName;
+        $library = trim($quotedName, '“”');
+        $as = $uploaded !== '' && $uploaded !== $library ? ' from “'.$uploaded.'”' : '';
+        $on = $app !== '' ? ' on '.$app : '';
+
+        if ($restored) {
+            $which = $version > 0 ? "version {$version} of " : 'an earlier version of ';
+
+            return 'restored '.$which.$subject.$on;
+        }
+
+        if ($version > 1) {
+            return 'replaced '.$subject.' with version '.$version.$as.$on;
+        }
+
+        if ($version === 1) {
+            return 'uploaded '.$subject.' as version 1'.$as.$on;
+        }
+
+        return 'updated '.$subject.$on;
     }
 }
