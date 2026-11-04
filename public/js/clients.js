@@ -2987,7 +2987,7 @@
       '<span class="tma-dash__cc-truncate">' + esc(company.name || 'Service provider') + '</span>' +
       (isClientsAdmin() && company.id
         ? '<button type="button" class="tma-dash__clients-edit-btn" data-clients-sign-in-company="' +
-          esc(company.id) + '" aria-label="Sign in as this service provider" style="margin-left:auto;flex:0 0 auto">Sign in</button>'
+          esc(company.id) + '" aria-label="Sign as admin" style="margin-left:auto;flex:0 0 auto;white-space:nowrap">Sign as admin</button>'
         : '') +
       '</div>' +
       '<div class="tma-dash__cc tma-dash__cc--type"><span class="tma-dash__cc-truncate">' + esc(type) + '</span></div>' +
@@ -7003,7 +7003,7 @@
       if (isClientsAdmin()) {
         staffActions +=
           '<button type="button" class="tma-dash__clients-message-btn" data-clients-impersonate-company>' +
-          '<img src="' + ICONS.ArrowSquareOut + '" alt=""><span>Sign in as this service provider</span></button>' +
+          '<img src="' + ICONS.ArrowSquareOut + '" alt=""><span>Sign as admin</span></button>' +
           '<button type="button" class="tma-dash__clients-edit-btn" data-clients-delete-company aria-label="Delete service provider">' +
           '<img src="' + ICONS.Trash + '" alt=""></button>';
       }
@@ -12804,7 +12804,7 @@
       window.location.assign((data && data.redirect) || '/');
     }).catch(function (err) {
       if (button) button.disabled = false;
-      clientsToast((err && err.message) || 'Could not sign in as this service provider', 'negative');
+      clientsToast((err && err.message) || 'Could not sign in as this service provider admin', 'negative');
     });
   }
 
@@ -13706,7 +13706,7 @@
     if (kind === 'company' && isClientsAdmin()) {
       items.push({
         act: 'sign-in-company',
-        label: 'Sign in as this service provider',
+        label: 'Sign as admin',
         icon: 'ArrowSquareOut',
       });
     }

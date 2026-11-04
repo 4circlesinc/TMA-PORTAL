@@ -245,7 +245,7 @@
     }
     var who = (info && info.name) || (me && me.name) || 'this account';
     var lead = info.asFirm
-      ? 'You’re signed in as the service provider <strong>' + esc(who) + '</strong>.'
+      ? 'You’re signed in as the service provider admin of <strong>' + esc(who) + '</strong>.'
       : 'You’re signed in as <strong>' + esc(who) + '</strong>.';
     bar.innerHTML =
       '<p class="tma-impersonation__text">' + lead +
