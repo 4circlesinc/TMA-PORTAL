@@ -6,6 +6,7 @@ use App\Models\ActivityLog;
 use App\Models\MailSenderPhoto;
 use App\Models\Notification;
 use App\Models\User;
+use App\Support\Cip\DocumentEngine;
 use App\Support\Cip\DocumentStatus;
 use App\Support\DeviceName;
 use App\Support\Security\IpLocation;
@@ -63,7 +64,7 @@ final class NotificationPresenter
             'module' => $log->module,
             'action' => $log->action,
             'status' => $log->status,
-            'description' => $log->description,
+            'description' => self::describe($log),
             'isSystem' => $log->isSystem(),
             'actor' => self::actor($log->actor),
             'client' => $log->client ? [
@@ -92,6 +93,33 @@ final class NotificationPresenter
             'details' => self::activityDetails(is_array($log->metadata) ? $log->metadata : []),
             'createdAt' => $log->created_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * Older document rows called every write an override. The from and to
+     * statuses were stored beside that sentence, and the review cycle says
+     * which of those pairs was a real override.
+     */
+    private static function describe(ActivityLog $log): string
+    {
+        $description = (string) $log->description;
+        if ($log->activity_type !== 'cip.document_status_changed' || ! str_contains($description, 'status overridden to ')) {
+            return $description;
+        }
+
+        $from = is_array($log->old_values) ? ($log->old_values['status'] ?? null) : null;
+        $to = is_array($log->new_values) ? ($log->new_values['status'] ?? null) : null;
+        if (! is_string($from) || ! is_string($to) || ! DocumentEngine::isMapped($from, $to)) {
+            return $description;
+        }
+
+        $toLabel = DocumentStatus::label($to);
+
+        return str_replace(
+            'status overridden to '.$toLabel,
+            'moved from '.DocumentStatus::label($from).' to '.$toLabel,
+            $description,
+        );
     }
 
     /**

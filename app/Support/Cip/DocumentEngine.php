@@ -2,6 +2,7 @@
 
 namespace App\Support\Cip;
 
+use App\Models\CipApplication;
 use App\Models\CipDocument;
 use App\Models\User;
 use App\Support\Access\Role;
@@ -82,8 +83,38 @@ class DocumentEngine
     /** Is this edge in the cycle at all, whoever is asking? */
     public static function canTransition(CipDocument $document, string $to): bool
     {
+        return self::isMapped($document->status, $to);
+    }
+
+    /**
+     * A status change follows the review cycle. An override is a jump off it.
+     *
+     * Update required from Application review is a change. The same label
+     * reached from a status that has no edge to it is an override. The two
+     * are not the same act, and the log must not call both an override.
+     */
+    public static function isMapped(?string $from, string $to): bool
+    {
         return DocumentStatus::isValid($to)
-            && in_array($to, self::next($document), true);
+            && in_array($to, self::TRANSITIONS[$from ?? DocumentStatus::PENDING_UPLOAD] ?? [], true);
+    }
+
+    /**
+     * The overview sentence. The actor and the time are their own columns.
+     */
+    public static function changeDescription(
+        CipDocument $document,
+        string $from,
+        string $to,
+        ?CipApplication $application,
+        bool $overriding,
+    ): string {
+        $where = trim($document->label.' on '.($application?->displayNumber() ?? ''));
+        $move = 'from '.DocumentStatus::label($from).' to '.DocumentStatus::label($to);
+
+        return $overriding
+            ? $where.' status overridden '.$move
+            : $where.' moved '.$move;
     }
 
     /**
@@ -236,8 +267,11 @@ class DocumentEngine
             throw new AuthorizationException('You cannot change this document’s status.');
         }
 
-        return DB::transaction(function () use ($document, $to, $actor, $meta) {
-            $from = $document->status;
+        // The cycle decides. A caller that labels every write an override
+        // would make a normal "Update required" read as one.
+        $overriding = ! self::isMapped($from, $to);
+
+        return DB::transaction(function () use ($document, $to, $actor, $meta, $from, $overriding) {
             $document->forceFill(['status' => $to, 'status_changed_at' => now()])->save();
 
             if ($document->file_id) {
@@ -247,22 +281,26 @@ class DocumentEngine
 
             $application = $document->loadMissing('application')->application;
 
-            Engine::record($application, self::ACTION_STATUS_CHANGED, $actor, array_merge($meta, [
+            $audit = array_merge($meta, [
                 'document' => $document->uuid,
+                'label' => $document->label,
                 'fromStatus' => $from,
                 'toStatus' => $to,
-                'override' => ($meta['override'] ?? true),
-            ]));
+                'application' => $application?->displayNumber(),
+                'override' => $overriding,
+            ]);
+
+            Engine::record($application, self::ACTION_STATUS_CHANGED, $actor, $audit);
 
             ActivityLogger::log([
                 'actor' => $actor,
                 'type' => 'cip.document_status_changed',
                 'module' => 'cip',
-                'description' => $document->label.' on '.$application->displayNumber()
-                    .' status overridden to '.DocumentStatus::label($to),
+                'description' => self::changeDescription($document, $from, $to, $application, $overriding),
                 'subject' => $document,
                 'old' => ['status' => $from],
                 'new' => ['status' => $to],
+                'metadata' => $audit,
             ]);
 
             Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));

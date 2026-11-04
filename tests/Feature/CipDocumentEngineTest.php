@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\ActivityLog;
 use App\Models\CipDocument;
 use App\Models\CipEvent;
 use App\Models\CipPerson;
@@ -13,6 +14,8 @@ use App\Support\Access\Role;
 use App\Support\Cip\Applications;
 use App\Support\Cip\DocumentEngine;
 use App\Support\Cip\DocumentStatus;
+use App\Support\Cip\Timeline;
+use App\Support\Notifications\NotificationPresenter;
 use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\Status;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -258,5 +261,63 @@ class CipDocumentEngineTest extends TestCase
         // the file did not.
         $this->assertNull($event->from_status);
         $this->assertNull($event->to_status);
+    }
+
+    public function test_a_mapped_document_move_is_a_status_change_and_a_jump_is_an_override(): void
+    {
+        [$document] = $this->slot();
+        $this->at($document, DocumentStatus::APPLICATION_REVIEW);
+        $officer = $this->user(Role::ADMINISTRATOR);
+        $officer->forceFill(['name' => 'Rita Officer'])->save();
+        $label = $document->label;
+        $number = $document->application->displayNumber();
+
+        DocumentEngine::set($document->fresh(), DocumentStatus::UPDATE_REQUIRED, $officer);
+
+        $log = ActivityLog::query()->where('activity_type', 'cip.document_status_changed')->latest('id')->first();
+        $this->assertSame(
+            "{$label} on {$number} moved from Application review to Update required",
+            $log->description,
+        );
+        $change = CipEvent::query()->where('action', DocumentEngine::ACTION_STATUS_CHANGED)->latest('id')->first();
+        $this->assertFalse($change->meta['override']);
+
+        $lines = array_column(Timeline::for($document->application->fresh(), $officer), 'what');
+        $this->assertContains('Rita Officer sent back '.$label, $lines);
+
+        // Ready for submission has no edge to Application review. That jump
+        // is an override; Update required from Application review is not.
+        $this->at($document->fresh(), DocumentStatus::READY_FOR_SUBMISSION);
+        DocumentEngine::set($document->fresh(), DocumentStatus::APPLICATION_REVIEW, $officer);
+
+        $override = ActivityLog::query()->where('activity_type', 'cip.document_status_changed')->latest('id')->first();
+        $this->assertSame(
+            "{$label} on {$number} status overridden from Ready for submission to Application review",
+            $override->description,
+        );
+        $jump = CipEvent::query()->where('action', DocumentEngine::ACTION_STATUS_CHANGED)->latest('id')->first();
+        $this->assertTrue($jump->meta['override']);
+        $lines = array_column(Timeline::for($document->application->fresh(), $officer), 'what');
+        $this->assertContains(
+            'Rita Officer overrode '.$label.' from Ready for submission to Application review',
+            $lines,
+        );
+
+        $old = ActivityLog::create([
+            'actor_id' => $officer->id,
+            'activity_type' => 'cip.document_status_changed',
+            'module' => 'cip',
+            'action' => 'document_status_changed',
+            'description' => "{$label} on {$number} status overridden to Update required",
+            'old_values' => ['status' => DocumentStatus::APPLICATION_REVIEW],
+            'new_values' => ['status' => DocumentStatus::UPDATE_REQUIRED],
+            'status' => ActivityLog::STATUS_SUCCESS,
+        ]);
+        $shown = NotificationPresenter::activity($old, false);
+
+        $this->assertSame(
+            "{$label} on {$number} moved from Application review to Update required",
+            $shown['description'],
+        );
     }
 }

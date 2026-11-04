@@ -487,6 +487,23 @@ class Timeline
             return "{$who} changed {$label}";
         }
 
+        // Off the review cycle this was an override, whichever word was
+        // stored on the row. A mapped step, including Update required from
+        // Application review, stays a status change.
+        if (! DocumentEngine::isMapped(
+            is_string($meta['fromStatus'] ?? null) ? $meta['fromStatus'] : null,
+            $to,
+        )) {
+            $from = is_string($meta['fromStatus'] ?? null)
+                ? DocumentStatus::label($meta['fromStatus'])
+                : null;
+            $dest = DocumentStatus::label($to);
+
+            return $from !== null
+                ? "{$who} overrode {$label} from {$from} to {$dest}"
+                : "{$who} overrode {$label} to {$dest}";
+        }
+
         return match ($to) {
             DocumentStatus::UPDATE_REQUIRED => "{$who} sent back {$label}",
             DocumentStatus::READY_FOR_SUBMISSION => "{$who} approved {$label}",
