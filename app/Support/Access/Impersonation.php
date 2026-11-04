@@ -31,6 +31,12 @@ final class Impersonation
     public const RETURN = 'impersonation_return';
 
     /**
+     * Set when the administrator opened a firm, rather than one of its people.
+     * The bar then names the service provider, not the login used to enter it.
+     */
+    public const FIRM = 'impersonation_firm';
+
+    /**
      * Set only for the request that switches accounts, so the login listener
      * does not record a sign-in nobody performed.
      */
@@ -64,7 +70,7 @@ final class Impersonation
      * What the shell and /me need to draw the bar. Null when this session
      * is the reader's own.
      *
-     * @return array{actorName: string, name: ?string, returnUrl: string}|null
+     * @return array{actorName: string, name: ?string, asFirm: bool, returnUrl: string}|null
      */
     public static function payload(): ?array
     {
@@ -74,9 +80,13 @@ final class Impersonation
             return null;
         }
 
+        $firm = self::flag(self::FIRM);
+        $asFirm = is_string($firm) && $firm !== '';
+
         return [
             'actorName' => $actor->name,
-            'name' => auth()->user() instanceof User ? auth()->user()->name : null,
+            'name' => $asFirm ? $firm : (auth()->user() instanceof User ? auth()->user()->name : null),
+            'asFirm' => $asFirm,
             'returnUrl' => self::returnPath(),
         ];
     }
@@ -156,8 +166,12 @@ final class Impersonation
     /**
      * Switch this session to the service provider. The caller has already
      * passed {@see self::authorizeStart}.
+     *
+     * Pass $asFirm when the administrator opened the firm itself. The portal
+     * still runs as someone who can sign in there — a firm has no password
+     * of its own — and the bar names the firm, not that person.
      */
-    public static function start(Request $request, User $target): void
+    public static function start(Request $request, User $target, ?Company $asFirm = null): void
     {
         $admin = $request->user();
         self::authorizeStart($admin, $target);
@@ -165,16 +179,24 @@ final class Impersonation
         self::switchTo($request, $target);
         $request->session()->put(self::ACTOR, (int) $admin->id);
         $request->session()->put(self::RETURN, self::safeReturn($request->headers->get('referer')));
+        if ($asFirm !== null) {
+            $request->session()->put(self::FIRM, $asFirm->name);
+        }
+
+        $metadata = [
+            'impersonator_id' => $admin->id,
+            'target_id' => $target->id,
+        ];
+        if ($asFirm !== null) {
+            $metadata['company'] = $asFirm->uid;
+        }
 
         ActivityLogger::log([
             'actor' => $admin,
             'type' => 'account.impersonated',
-            'description' => $admin->name.' opened the portal as '.$target->name,
-            'subject' => $target,
-            'metadata' => [
-                'impersonator_id' => $admin->id,
-                'target_id' => $target->id,
-            ],
+            'description' => $admin->name.' opened the portal as '.($asFirm->name ?? $target->name),
+            'subject' => $asFirm ?? $target,
+            'metadata' => $metadata,
         ]);
     }
 
@@ -188,6 +210,7 @@ final class Impersonation
     public static function stop(Request $request): string
     {
         $return = self::returnPath();
+        $firmName = self::flag(self::FIRM);
         $admin = self::actor();
         $target = $request->user();
 
@@ -201,11 +224,16 @@ final class Impersonation
         self::switchTo($request, $admin);
         $request->session()->forget(self::ACTOR);
         $request->session()->forget(self::RETURN);
+        $request->session()->forget(self::FIRM);
+
+        $left = is_string($firmName) && $firmName !== ''
+            ? $firmName
+            : ($target instanceof User ? $target->name : 'a service provider')."'s account";
 
         ActivityLogger::log([
             'actor' => $admin,
             'type' => 'account.impersonation_ended',
-            'description' => $admin->name.' returned from '.($target instanceof User ? $target->name : 'a service provider')."'s account",
+            'description' => $admin->name.' returned from '.$left,
             'subject' => $target instanceof User ? $target : $admin,
             'metadata' => [
                 'impersonator_id' => $admin->id,

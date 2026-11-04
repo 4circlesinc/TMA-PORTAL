@@ -2984,7 +2984,12 @@
       // No checkbox cell either, the head has none to line up with, and an
       // empty one only indents the name away from its own column heading.
       '<div class="tma-dash__cc tma-dash__cc--user">' + companyAvatarMarkup(company) +
-      '<span class="tma-dash__cc-truncate">' + esc(company.name || 'Service provider') + '</span></div>' +
+      '<span class="tma-dash__cc-truncate">' + esc(company.name || 'Service provider') + '</span>' +
+      (isClientsAdmin() && company.id
+        ? '<button type="button" class="tma-dash__clients-edit-btn" data-clients-sign-in-company="' +
+          esc(company.id) + '" aria-label="Sign in as this service provider" style="margin-left:auto;flex:0 0 auto">Sign in</button>'
+        : '') +
+      '</div>' +
       '<div class="tma-dash__cc tma-dash__cc--type"><span class="tma-dash__cc-truncate">' + esc(type) + '</span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--code"><span class="tma-dash__cc-truncate">' +
       esc(company.cipCode || '-') + '</span></div>' +
@@ -6998,7 +7003,7 @@
       if (isClientsAdmin()) {
         staffActions +=
           '<button type="button" class="tma-dash__clients-message-btn" data-clients-impersonate-company>' +
-          '<img src="' + ICONS.ArrowSquareOut + '" alt=""><span>Open as provider</span></button>' +
+          '<img src="' + ICONS.ArrowSquareOut + '" alt=""><span>Sign in as this service provider</span></button>' +
           '<button type="button" class="tma-dash__clients-edit-btn" data-clients-delete-company aria-label="Delete service provider">' +
           '<img src="' + ICONS.Trash + '" alt=""></button>';
       }
@@ -12792,6 +12797,17 @@
     });
   }
 
+  function signInAsCompany(companyId, button) {
+    if (!companyId) return;
+    if (button) button.disabled = true;
+    CompaniesAPI.impersonate(companyId).then(function (data) {
+      window.location.assign((data && data.redirect) || '/');
+    }).catch(function (err) {
+      if (button) button.disabled = false;
+      clientsToast((err && err.message) || 'Could not sign in as this service provider', 'negative');
+    });
+  }
+
   function wireRowContextMenus(root, state, navigate, render) {
     clientsMenuCtx = { root: root, state: state, navigate: navigate, render: render };
     ensureClientsPopovers();
@@ -12831,6 +12847,14 @@
         e.stopPropagation();
         var id = btn.getAttribute('data-clients-transfer-person');
         if (id) openContactTransferPicker(id);
+      });
+    });
+
+    MORPH.unwired(root, '[data-clients-sign-in-company]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        signInAsCompany(btn.getAttribute('data-clients-sign-in-company'), btn);
       });
     });
 
@@ -13678,6 +13702,15 @@
 
     var items = [
       { act: 'open', label: 'Open', icon: 'ArrowUpRight' },
+    ];
+    if (kind === 'company' && isClientsAdmin()) {
+      items.push({
+        act: 'sign-in-company',
+        label: 'Sign in as this service provider',
+        icon: 'ArrowSquareOut',
+      });
+    }
+    items.push(
       // On section 8's table the row IS an application, so Edit means the
       // application, the client's contact form is a different record and
       // sending somebody there from here would be answering a question they
@@ -13687,7 +13720,7 @@
         label: kind === 'application' ? 'Edit application' : 'Edit',
         icon: 'PencilSimple',
       },
-    ];
+    );
     if (kind === 'company') items.push({ act: 'add-person', label: 'Add person', icon: 'Plus' });
     var app = kind === 'application' ? cipSourceFor(extra, clientUid) : null;
     if (kind === 'application' && canChangeCipStatus(app)) {
@@ -16774,6 +16807,10 @@
     }
 
     if (kind === 'company') {
+      if (act === 'sign-in-company') {
+        signInAsCompany(id);
+        return;
+      }
       if (act === 'open') return navigate('company', null, { companyId: id });
       if (act === 'edit') return navigate('edit-company', null, { companyId: id });
       if (act === 'add-person') {
@@ -18441,6 +18478,7 @@
         wireTableBulkActions(root, state, render);
         MORPH.unwired(root, '[data-clients-open-company]').forEach(function (btn) {
           btn.addEventListener('click', function (e) {
+            if (e.target.closest('[data-clients-sign-in-company]')) return;
             e.preventDefault();
             e.stopPropagation();
             var companyId = btn.getAttribute('data-clients-open-company');
@@ -18644,6 +18682,7 @@
 
     MORPH.unwired(root, '[data-clients-open-company]').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
+        if (e.target.closest('[data-clients-sign-in-company]')) return;
         e.preventDefault();
         e.stopPropagation();
         var companyId = btn.getAttribute('data-clients-open-company');
@@ -18669,13 +18708,7 @@
     if (openAsBtn) {
       openAsBtn.addEventListener('click', function () {
         if (!state.companyId || openAsBtn.disabled) return;
-        openAsBtn.disabled = true;
-        CompaniesAPI.impersonate(state.companyId).then(function (data) {
-          window.location.assign((data && data.redirect) || '/');
-        }).catch(function (err) {
-          openAsBtn.disabled = false;
-          clientsToast((err && err.message) || 'Could not open this service provider', 'negative');
-        });
+        signInAsCompany(state.companyId, openAsBtn);
       });
     }
 

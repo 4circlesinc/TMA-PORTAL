@@ -244,9 +244,12 @@
       document.body.insertBefore(bar, document.body.firstChild);
     }
     var who = (info && info.name) || (me && me.name) || 'this account';
+    var lead = info.asFirm
+      ? 'You’re signed in as the service provider <strong>' + esc(who) + '</strong>.'
+      : 'You’re signed in as <strong>' + esc(who) + '</strong>.';
     bar.innerHTML =
-      '<p class="tma-impersonation__text">You’re signed in as <strong>' + esc(who) +
-      '</strong>. This session belongs to ' + esc(info.actorName) + '.</p>' +
+      '<p class="tma-impersonation__text">' + lead +
+      ' This session belongs to ' + esc(info.actorName) + '.</p>' +
       '<button type="button" class="tma-impersonation__leave" data-impersonation-leave>Return to your account</button>';
     bar.querySelector('[data-impersonation-leave]').addEventListener('click', function () {
       leaveImpersonation(info.returnUrl || '/users', bar.querySelector('[data-impersonation-leave]'));

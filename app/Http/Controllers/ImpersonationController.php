@@ -37,7 +37,7 @@ class ImpersonationController extends Controller
 
         abort_unless($account !== null, 422, 'This service provider has no portal account to open.');
 
-        Impersonation::start($request, $account);
+        Impersonation::start($request, $account, $company);
 
         return response()->json([
             'status' => 'ok',

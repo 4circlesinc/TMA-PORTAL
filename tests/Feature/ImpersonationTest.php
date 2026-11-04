@@ -61,6 +61,7 @@ class ImpersonationTest extends TestCase
             ->assertJsonPath('isServiceProviderAdmin', true)
             ->assertJsonPath('impersonation.actorName', 'Ada Admin')
             ->assertJsonPath('impersonation.name', 'Gil Admin')
+            ->assertJsonPath('impersonation.asFirm', false)
             ->assertJsonPath('impersonation.returnUrl', '/users?tab=all');
 
         $this->get('/')
@@ -112,6 +113,21 @@ class ImpersonationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('account.id', $provider->id)
             ->assertJsonPath('redirect', '/citizenship-applications/companies/'.$company->uid);
+
+        $this->carrySession();
+
+        $this->getJson('/me')
+            ->assertOk()
+            ->assertJsonPath('id', $provider->id)
+            ->assertJsonPath('impersonation.name', 'Galaxy')
+            ->assertJsonPath('impersonation.asFirm', true)
+            ->assertJsonPath('impersonation.actorName', 'Ada Admin');
+
+        $log = ActivityLog::query()->where('activity_type', 'account.impersonated')->first();
+        $this->assertNotNull($log);
+        $this->assertSame('Ada Admin opened the portal as Galaxy', $log->description);
+        $this->assertSame($company->id, $log->subject_id);
+        $this->assertSame($company->uid, $log->metadata['company']);
     }
 
     public function test_opening_a_firm_lands_on_that_firm_when_the_admin_has_another(): void
