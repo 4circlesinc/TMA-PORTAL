@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\User;
+use App\Support\Access\Impersonation;
 use App\Support\Access\Role;
 use App\Support\Cip\CipAccess;
 use App\Support\Companies\CompanyAccess;
@@ -125,6 +126,9 @@ final class PortalShell
         $admin = Role::isAdmin($user) ? 'true' : 'false';
         $bespoke = (bool) config('services.bespoke.enabled') ? 'true' : 'false';
         $token = json_encode((string) Session::token(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+        // Painted before /me answers, so the "signed in as" bar is on the
+        // first frame rather than appearing after the portal has already drawn.
+        $impersonation = json_encode(Impersonation::payload(), $flags);
 
         // CSRF for shell sign-out (static HTML has no Blade @csrf). Capabilities
         // plus CIP reach so provider contacts keep the Applications nav without
@@ -137,6 +141,7 @@ final class PortalShell
             .'window.TMABootProviderCompany='.$firmJson.';'
             .'window.TMABootIsAdmin='.$admin.';'
             .'window.TMABootBespoke='.$bespoke.';'
+            .'window.TMABootImpersonation='.$impersonation.';'
             .'window.TMACsrfToken='.$token.';'
             .($dashboard ? self::homeHeadStart($user, $flags) : '')
             .(self::bootsApplications($user) ? self::applicationsHeadStart() : '')

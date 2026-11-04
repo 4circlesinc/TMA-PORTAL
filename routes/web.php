@@ -95,6 +95,7 @@ use App\Http\Controllers\GeoBlockedController;
 use App\Http\Controllers\GettingStartedController;
 use App\Http\Controllers\GraphWebhookController;
 use App\Http\Controllers\GroupsController;
+use App\Http\Controllers\ImpersonationController;
 use App\Http\Controllers\InvitationAcceptController;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\LegacyPageController;
@@ -157,6 +158,12 @@ Route::middleware(['auth'])->group(function () {
     // have already followed the signed link.
     Route::get('/auth/email/verification-status', EmailVerificationStatusController::class)
         ->name('verification.status');
+
+    // Way back from a service-provider session. Auth only: the account being
+    // viewed may still be sitting on a setup or authenticator screen, and
+    // that screen must not be what keeps the administrator there.
+    Route::post('/impersonation/leave', [ImpersonationController::class, 'destroy'])
+        ->name('impersonation.leave');
 });
 
 /*
@@ -386,6 +393,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     Route::post('/admin/users/{user}/deny', [AdminUsersController::class, 'deny'])->name('admin.users.deny');
     Route::post('/admin/users/{user}/suspend', [AdminUsersController::class, 'suspend'])->name('admin.users.suspend');
     Route::post('/admin/users/{user}/reactivate', [AdminUsersController::class, 'reactivate'])->name('admin.users.reactivate');
+    Route::post('/admin/users/{user}/impersonate', [ImpersonationController::class, 'store'])->name('admin.users.impersonate');
 
     /*
      * The People section. Reading the directory is staff-wide; the writes it
@@ -1062,6 +1070,10 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         // Fold a duplicate firm into this one: contacts, access, code, and folder.
         Route::post('/{uid}/merge', [CompaniesController::class, 'merge'])
             ->name('merge');
+
+        // An administrator opens the portal as this firm's own login.
+        Route::post('/{uid}/impersonate', [ImpersonationController::class, 'company'])
+            ->name('impersonate');
 
         // The firm's own staff looking after the company.
         Route::get('/{uid}/staff', [CompanyStaffController::class, 'index'])->name('staff.index');

@@ -218,8 +218,92 @@
     });
 
     markProfileClickable();
+    paintImpersonation(me && me.impersonation);
     if (window.TMAPresence && window.TMAPresence.paint) window.TMAPresence.paint();
     listeners.forEach(function (fn) { fn(me); });
+  }
+
+  /*
+   * An administrator opened the portal as this account. The bar is the way
+   * back; without it the session is that account until it expires.
+   */
+  function paintImpersonation(info) {
+    injectImpersonationCss();
+    var bar = document.querySelector('[data-impersonation-bar]');
+    if (!info || !info.actorName) {
+      if (bar) bar.remove();
+      document.documentElement.classList.remove('tma-impersonating');
+      return;
+    }
+    document.documentElement.classList.add('tma-impersonating');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.className = 'tma-impersonation';
+      bar.setAttribute('data-impersonation-bar', '');
+      bar.setAttribute('role', 'status');
+      document.body.insertBefore(bar, document.body.firstChild);
+    }
+    var who = (info && info.name) || (me && me.name) || 'this account';
+    bar.innerHTML =
+      '<p class="tma-impersonation__text">You’re signed in as <strong>' + esc(who) +
+      '</strong>. This session belongs to ' + esc(info.actorName) + '.</p>' +
+      '<button type="button" class="tma-impersonation__leave" data-impersonation-leave>Return to your account</button>';
+    bar.querySelector('[data-impersonation-leave]').addEventListener('click', function () {
+      leaveImpersonation(info.returnUrl || '/users', bar.querySelector('[data-impersonation-leave]'));
+    });
+  }
+
+  function leaveImpersonation(fallback, button) {
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Returning…';
+    }
+    var token = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+    fetch((window.__TMA_SITE_ROOT || '') + '/impersonation/leave', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-XSRF-TOKEN': token ? decodeURIComponent(token[1]) : (window.TMACsrfToken || ''),
+      },
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (j) {
+        if (!res.ok) {
+          if (button) {
+            button.disabled = false;
+            button.textContent = 'Return to your account';
+          }
+          return;
+        }
+        window.location.assign(j.redirect || fallback || '/users');
+      });
+    }).catch(function () {
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Return to your account';
+      }
+    });
+  }
+
+  function injectImpersonationCss() {
+    if (document.getElementById('tma-impersonation-css')) return;
+    var style = document.createElement('style');
+    style.id = 'tma-impersonation-css';
+    style.textContent =
+      'html.tma-impersonating, html.tma-impersonating body{height:100%}' +
+      'html.tma-impersonating body{display:flex;flex-direction:column}' +
+      'html.tma-impersonating .tma-dash{flex:1;min-height:0}' +
+      '.tma-impersonation{display:flex;align-items:center;justify-content:space-between;gap:16px;' +
+      'padding:8px 16px;background:#3d2e12;color:#f6e7c1;font:500 13px/1.4 Inter,sans-serif;z-index:80}' +
+      '.tma-impersonation__text{margin:0}' +
+      '.tma-impersonation strong{font-weight:650}' +
+      '.tma-impersonation__leave{flex:0 0 auto;border:1px solid #d7c08a;background:transparent;color:#f6e7c1;' +
+      'border-radius:8px;padding:6px 10px;font:600 13px/1 Inter,sans-serif;cursor:pointer}' +
+      '.tma-impersonation__leave:hover{background:rgba(255,255,255,.08)}' +
+      '.tma-impersonation__leave:disabled{opacity:.6;cursor:default}' +
+      '@media (max-width:640px){.tma-impersonation{align-items:flex-start;flex-direction:column;gap:8px}}';
+    (document.head || document.documentElement).appendChild(style);
   }
 
   /*
@@ -653,6 +737,7 @@
     // Show the loading skeleton first, so the shells' hardcoded dummy
     // name/photo is never what the user sees.
     if (me) { paint(); } else { setLoading(); }
+    if (window.TMABootImpersonation) paintImpersonation(window.TMABootImpersonation);
     load();
     loadBranding();
   }

@@ -820,6 +820,10 @@
     update: function (uid, payload) {
       return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid), { method: 'PATCH', json: payload });
     },
+    /* An administrator opens the portal as this firm's own login. */
+    impersonate: function (uid) {
+      return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid) + '/impersonate', { method: 'POST' });
+    },
     remove: function (uid, withPeople) {
       return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid) +
         (withPeople ? '?withPeople=1' : ''), { method: 'DELETE' });
@@ -6993,6 +6997,8 @@
       }
       if (isClientsAdmin()) {
         staffActions +=
+          '<button type="button" class="tma-dash__clients-message-btn" data-clients-impersonate-company>' +
+          '<img src="' + ICONS.ArrowSquareOut + '" alt=""><span>Open as provider</span></button>' +
           '<button type="button" class="tma-dash__clients-edit-btn" data-clients-delete-company aria-label="Delete service provider">' +
           '<img src="' + ICONS.Trash + '" alt=""></button>';
       }
@@ -18656,6 +18662,20 @@
     if (mergeCompanyBtn) {
       mergeCompanyBtn.addEventListener('click', function () {
         if (state.companyId) openCompanyMergePicker(state.companyId);
+      });
+    }
+
+    var openAsBtn = unwiredClientsChrome(root, '[data-clients-impersonate-company]');
+    if (openAsBtn) {
+      openAsBtn.addEventListener('click', function () {
+        if (!state.companyId || openAsBtn.disabled) return;
+        openAsBtn.disabled = true;
+        CompaniesAPI.impersonate(state.companyId).then(function (data) {
+          window.location.assign((data && data.redirect) || '/');
+        }).catch(function (err) {
+          openAsBtn.disabled = false;
+          clientsToast((err && err.message) || 'Could not open this service provider', 'negative');
+        });
       });
     }
 

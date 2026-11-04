@@ -5,6 +5,7 @@ namespace App\Support\Activity;
 use App\Models\ActivityLog;
 use App\Models\Client;
 use App\Models\User;
+use App\Support\Access\Impersonation;
 use App\Support\Security\IpLocation;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Log;
@@ -136,7 +137,7 @@ final class ActivityLogger
             'ip_address' => $ip,
             'user_agent' => mb_substr((string) ($attrs['user_agent'] ?? self::currentUserAgent() ?? ''), 0, 255) ?: null,
             'status' => $attrs['status'] ?? ActivityLog::STATUS_SUCCESS,
-            'metadata' => self::redact($attrs['metadata'] ?? null),
+            'metadata' => self::withImpersonator(self::redact($attrs['metadata'] ?? null)),
         ]);
     }
 
@@ -176,6 +177,28 @@ final class ActivityLogger
         }
 
         return $clean;
+    }
+
+    /**
+     * While an administrator is signed in as someone else, every row says so.
+     * The actor stays the account on screen — that is whose portal it was —
+     * and the metadata names the administrator who was actually there.
+     *
+     * @param  array<string, mixed>|null  $metadata
+     * @return array<string, mixed>|null
+     */
+    private static function withImpersonator(?array $metadata): ?array
+    {
+        $id = Impersonation::actorId();
+
+        if ($id === null) {
+            return $metadata;
+        }
+
+        $metadata ??= [];
+        $metadata['impersonator_id'] = $metadata['impersonator_id'] ?? $id;
+
+        return $metadata;
     }
 
     private static function currentIp(): ?string

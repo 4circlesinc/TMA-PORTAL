@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Access\Impersonation;
 use App\Support\StaySignedIn;
 use Closure;
 use Illuminate\Http\Request;
@@ -15,6 +16,10 @@ class EnsureStaySignedInChoice
 {
     public function handle(Request $request, Closure $next): Response
     {
+        if (Impersonation::isActive()) {
+            return $next($request);
+        }
+
         if (
             $request->user()
             && StaySignedIn::isNeeded($request)

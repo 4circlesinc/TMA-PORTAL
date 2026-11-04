@@ -1,0 +1,314 @@
+<?php
+
+namespace App\Support\Access;
+
+use App\Models\CipProvider;
+use App\Models\Company;
+use App\Models\CompanyMember;
+use App\Models\User;
+use App\Support\Activity\ActivityLogger;
+use App\Support\Cip\CipAccess;
+use App\Support\Companies\CompanyAccess;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
+/**
+ * An administrator opening the portal as a service-provider account.
+ *
+ * The session becomes that account, so every gate, query and screen answers
+ * as they would for the person who actually works there. The administrator's
+ * own id stays on the session so they can come back, and so the audit trail
+ * can say who was really holding the mouse. It is not a second login: no
+ * sign-in row, no new-device alert, no authenticator challenge for an
+ * account whose password the administrator does not have.
+ */
+final class Impersonation
+{
+    /** The administrator who opened this session. Absent means a normal sign-in. */
+    public const ACTOR = 'impersonator_id';
+
+    /** Where to send them when they leave. A path on this portal, nothing else. */
+    public const RETURN = 'impersonation_return';
+
+    /**
+     * Set only for the request that switches accounts, so the login listener
+     * does not record a sign-in nobody performed.
+     */
+    public const SWITCHING = 'impersonation_switch';
+
+    public static function isSwitching(): bool
+    {
+        return self::flag(self::SWITCHING) === true;
+    }
+
+    public static function isActive(): bool
+    {
+        return self::actorId() !== null;
+    }
+
+    public static function actorId(): ?int
+    {
+        $id = self::flag(self::ACTOR);
+
+        return is_numeric($id) ? (int) $id : null;
+    }
+
+    public static function actor(): ?User
+    {
+        $id = self::actorId();
+
+        return $id === null ? null : User::query()->find($id);
+    }
+
+    /**
+     * What the shell and /me need to draw the bar. Null when this session
+     * is the reader's own.
+     *
+     * @return array{actorName: string, name: ?string, returnUrl: string}|null
+     */
+    public static function payload(): ?array
+    {
+        $actor = self::actor();
+
+        if ($actor === null) {
+            return null;
+        }
+
+        return [
+            'actorName' => $actor->name,
+            'name' => auth()->user() instanceof User ? auth()->user()->name : null,
+            'returnUrl' => self::returnPath(),
+        ];
+    }
+
+    public static function returnPath(): string
+    {
+        $path = self::flag(self::RETURN);
+
+        return is_string($path) && self::isSafePath($path) ? $path : '/users';
+    }
+
+    /**
+     * Refuse unless an administrator may open the portal as this account.
+     */
+    public static function authorizeStart(?User $admin, User $target): void
+    {
+        if ($admin === null || ! Role::isAdmin($admin)) {
+            abort(403, 'Administrators only.');
+        }
+
+        if (self::isActive()) {
+            abort(422, 'Leave this account before signing in as someone else.');
+        }
+
+        if ($admin->is($target)) {
+            abort(422, 'You cannot sign in as your own account.');
+        }
+
+        if (! $target->isApproved() || $target->email_verified_at === null) {
+            abort(422, 'This account cannot sign in yet.');
+        }
+
+        if (! self::isServiceProviderAccount($target)) {
+            abort(422, 'This account is not a service provider.');
+        }
+    }
+
+    /**
+     * The portal login an administrator enters when they open a firm.
+     *
+     * The firm's Service Provider admin, when one can sign in. Otherwise
+     * the earliest active contact. A firm with nobody who can sign in has
+     * nothing to open.
+     */
+    public static function accountFor(Company $company): ?User
+    {
+        $isProvider = CipProvider::query()->where('company_id', $company->id)->exists();
+
+        $members = CompanyMember::query()
+            ->active()
+            ->where('company_id', $company->id)
+            ->orderBy('id')
+            ->with('user')
+            ->get();
+
+        $contact = null;
+
+        foreach ($members as $member) {
+            $user = $member->user;
+
+            if (! $user instanceof User || ! self::canBeOpened($user)) {
+                continue;
+            }
+
+            if (Role::isServiceProviderAdmin($user)) {
+                return $user;
+            }
+
+            if ($isProvider) {
+                $contact ??= $user;
+            }
+        }
+
+        return $contact;
+    }
+
+    /**
+     * Switch this session to the service provider. The caller has already
+     * passed {@see self::authorizeStart}.
+     */
+    public static function start(Request $request, User $target): void
+    {
+        $admin = $request->user();
+        self::authorizeStart($admin, $target);
+
+        self::switchTo($request, $target);
+        $request->session()->put(self::ACTOR, (int) $admin->id);
+        $request->session()->put(self::RETURN, self::safeReturn($request->headers->get('referer')));
+
+        ActivityLogger::log([
+            'actor' => $admin,
+            'type' => 'account.impersonated',
+            'description' => $admin->name.' opened the portal as '.$target->name,
+            'subject' => $target,
+            'metadata' => [
+                'impersonator_id' => $admin->id,
+                'target_id' => $target->id,
+            ],
+        ]);
+    }
+
+    /**
+     * Come back to the administrator who opened the session.
+     *
+     * Returns the path they should land on. If that administrator can no
+     * longer sign in, the session ends rather than being left as the
+     * service provider with nobody able to leave it.
+     */
+    public static function stop(Request $request): string
+    {
+        $return = self::returnPath();
+        $admin = self::actor();
+        $target = $request->user();
+
+        if ($admin === null || ! Role::isAdmin($admin) || ! $admin->isApproved()) {
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+            abort(403, 'That administrator account can no longer be restored.');
+        }
+
+        self::switchTo($request, $admin);
+        $request->session()->forget(self::ACTOR);
+        $request->session()->forget(self::RETURN);
+
+        ActivityLogger::log([
+            'actor' => $admin,
+            'type' => 'account.impersonation_ended',
+            'description' => $admin->name.' returned from '.($target instanceof User ? $target->name : 'a service provider')."'s account",
+            'subject' => $target instanceof User ? $target : $admin,
+            'metadata' => [
+                'impersonator_id' => $admin->id,
+                'target_id' => $target instanceof User ? $target->id : null,
+            ],
+        ]);
+
+        return $return;
+    }
+
+    /** Where this account lands when the portal opens as them. */
+    public static function landing(User $user, ?Company $opened = null): string
+    {
+        if (! CipAccess::enabled()) {
+            return '/';
+        }
+
+        if (Role::isServiceProviderAdmin($user)) {
+            // The firm the administrator opened, when this account belongs to
+            // it. Otherwise the firm the account itself would land on.
+            $company = $opened !== null && CompanyAccess::memberOf($user, $opened) !== null
+                ? $opened
+                : CompanyAccess::homeCompany($user);
+
+            if ($company !== null) {
+                return '/citizenship-applications/companies/'.$company->uid;
+            }
+        }
+
+        if (CipAccess::canReach($user)) {
+            return '/citizenship-applications';
+        }
+
+        return '/';
+    }
+
+    /**
+     * An external account that works for a service provider: a contact of
+     * a registered firm, or a Service Provider admin of one.
+     */
+    public static function isServiceProviderAccount(User $user): bool
+    {
+        return Role::isClient($user) && CipAccess::isProviderContact($user);
+    }
+
+    private static function canBeOpened(User $user): bool
+    {
+        return Role::isClient($user)
+            && $user->isApproved()
+            && $user->email_verified_at !== null;
+    }
+
+    private static function switchTo(Request $request, User $user): void
+    {
+        $request->session()->put(self::SWITCHING, true);
+
+        try {
+            Auth::login($user);
+        } finally {
+            $request->session()->forget(self::SWITCHING);
+        }
+
+        $request->session()->regenerate();
+    }
+
+    private static function safeReturn(mixed $candidate): string
+    {
+        if (! is_string($candidate) || $candidate === '') {
+            return '/users';
+        }
+
+        $path = parse_url($candidate, PHP_URL_PATH);
+        $query = parse_url($candidate, PHP_URL_QUERY);
+
+        if (! is_string($path) || ! self::isSafePath($path)) {
+            return '/users';
+        }
+
+        return $path.(is_string($query) && $query !== '' ? '?'.$query : '');
+    }
+
+    private static function isSafePath(string $path): bool
+    {
+        return str_starts_with($path, '/')
+            && ! str_starts_with($path, '//')
+            && ! str_contains($path, '\\')
+            && ! str_starts_with($path, '/auth')
+            && ! str_starts_with($path, '/impersonation');
+    }
+
+    private static function flag(string $key): mixed
+    {
+        // Queue workers and artisan have no browser session. Reading one
+        // there would start an empty store and, worse, stamp a job's audit
+        // row as if an administrator were signed in as someone else.
+        if (app()->runningInConsole() && ! app()->runningUnitTests()) {
+            return null;
+        }
+
+        try {
+            return session($key);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+}

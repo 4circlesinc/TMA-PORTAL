@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Access\Impersonation;
 use App\Support\Access\Role;
 use App\Support\Onboarding\AccountSetupFlow;
 use Closure;
@@ -18,7 +19,9 @@ class EnsureOnboarded
     {
         $user = $request->user();
 
-        if (! $user || AccountSetupFlow::isComplete($user)) {
+        // Viewing an account must not walk the administrator through that
+        // account's setup, which is how onboarding gets marked complete.
+        if (! $user || Impersonation::isActive() || AccountSetupFlow::isComplete($user)) {
             return $next($request);
         }
 

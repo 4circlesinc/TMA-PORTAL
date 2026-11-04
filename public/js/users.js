@@ -1041,8 +1041,31 @@ if (state.filters.user) {
         '</button>';
     }
 
+    function canSignInAs(row) {
+      return state.canManage && !row._self && row._status !== 'pending' && row._status !== 'suspended'
+        && isServiceProviderContact(row);
+    }
+
+    function signInAs(row) {
+      usersApi('POST', '/admin/users/' + row._id + '/impersonate').then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (j) {
+          if (!res.ok || !j.redirect) {
+            usersToast(j.message || 'Could not sign in as this account.', false);
+            return;
+          }
+          window.location.assign(j.redirect);
+        });
+      }).catch(function () {
+        usersToast('Could not sign in as this account.', false);
+      });
+    }
+
     function userCtxItems(row) {
       var html = uCtxItem('open', 'Open', ICONS.ArrowUpRight);
+
+      if (canSignInAs(row)) {
+        html += uCtxItem('impersonate', 'Sign in as this account', ICONS.UserSwitch);
+      }
 
       // Only an administrator may re-type an account, and never their own —
       // the server refuses both, so the menu should not offer them.
@@ -1180,6 +1203,7 @@ if (state.filters.user) {
 
     function runUserCtxAction(act, row, index) {
       if (act === 'open') { openUserInfoPanel(index); return; }
+      if (act === 'impersonate') { signInAs(row); return; }
       if (act === 'suspend') statusAction('/admin/users/' + row._id + '/suspend');
       if (act === 'reactivate') statusAction('/admin/users/' + row._id + '/reactivate');
       if (act === 'send-reset') {
@@ -1238,6 +1262,9 @@ if (state.filters.user) {
       }
       items += statusMenuItem('send-reset', 'Email password reset link', ICONS.EnvelopeSimple) +
         statusMenuItem('generate-password', 'Generate temporary password', ICONS.Key);
+      if (canSignInAs(row)) {
+        items += statusMenuItem('impersonate', 'Sign in as this account', ICONS.UserSwitch);
+      }
       if (state.canManage) {
         items += row._requireTwoFactor
           ? statusMenuItem('clear-2fa', 'Stop requiring authenticator', ICONS.ShieldSlash)
@@ -1281,6 +1308,7 @@ if (state.filters.user) {
             usersToast(res.ok ? 'Reset link sent to ' + row.email : 'Could not send the link.', res.ok);
           });
         }
+        if (kind === 'impersonate') signInAs(row);
         if (kind === 'generate-password') {
           usersApi('POST', '/admin/users/' + row._id + '/generate-password').then(function (res) {
             return res.json().catch(function () { return {}; }).then(function (j) {
@@ -1646,7 +1674,7 @@ if (state.filters.user) {
           if (r2._twoFactor) {
             actions.push({ id: 'reset-2fa', label: 'Reset', danger: true });
           }
-          return [{
+          var fields = [{
             label: 'Authenticator app',
             value: twoFactorLabel(r2),
             actions: actions,
@@ -1656,12 +1684,21 @@ if (state.filters.user) {
               ? 'Required by the sign-in policy for this account type'
               : null,
           }];
+          if (canSignInAs(r2)) {
+            fields.push({
+              label: 'Portal',
+              value: 'See the portal as this account',
+              actions: [{ id: 'impersonate', label: 'Sign in' }],
+            });
+          }
+          return fields;
         } : null,
         onAction: function (actionId, targetRow) {
           function after() {
             if (!window.TMAUserInfoPanel.isOpen()) return;
             window.TMAUserInfoPanel.refresh();
           }
+          if (actionId === 'impersonate') signInAs(targetRow);
           if (actionId === 'require-2fa') setRequireTwoFactor(targetRow, true, after);
           if (actionId === 'clear-2fa') setRequireTwoFactor(targetRow, false, after);
           if (actionId === 'reset-2fa') resetTwoFactor(targetRow, after);

@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Access\Impersonation;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -33,8 +34,12 @@ class EnforceTwoFactor
     {
         $user = $request->user();
 
+        // An administrator already passed their own authenticator. The account
+        // they opened may still be required to set one up, and sending them
+        // through that setup would change the account, not just view it.
         if (
             ! $user
+            || Impersonation::isActive()
             || $user->two_factor_confirmed_at !== null
             || $this->exempt($request)
             || ! $user->mustUseAuthenticator()

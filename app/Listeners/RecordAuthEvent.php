@@ -4,6 +4,7 @@ namespace App\Listeners;
 
 use App\Models\AuthEvent;
 use App\Models\User;
+use App\Support\Access\Impersonation;
 use App\Support\Activity\ActivityLogger;
 use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
@@ -90,6 +91,13 @@ class RecordAuthEvent
 
     public function handleLogin(Login $event): void
     {
+        // Opening the portal as a service provider logs the guard in as that
+        // account. It is not a sign-in: recording one would alert them that
+        // a new device had their password.
+        if (Impersonation::isSwitching()) {
+            return;
+        }
+
         $userId = $event->user->getAuthIdentifier();
         $ip = request()->ip();
         $ua = (string) request()->userAgent();

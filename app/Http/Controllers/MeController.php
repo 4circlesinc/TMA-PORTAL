@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\WorkDay;
+use App\Support\Access\Impersonation;
 use App\Support\Access\Role;
 use App\Support\AuthenticatorNudge;
 use App\Support\AvatarService;
@@ -81,6 +82,9 @@ class MeController extends Controller
             // Availability status for the header dropdown and self presence.
             'availability' => AvailabilityService::selfPayload($user),
             'authenticatorNudge' => AuthenticatorNudge::payload($user),
+            // Set only while an administrator is viewing the portal as this
+            // account. The bar that offers the way back reads it.
+            'impersonation' => Impersonation::payload(),
         ]);
     }
 

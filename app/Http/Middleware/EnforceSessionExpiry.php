@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Access\Impersonation;
 use App\Support\SecurityPolicies;
 use Closure;
 use Illuminate\Http\Request;
@@ -23,7 +24,9 @@ class EnforceSessionExpiry
     {
         $user = $request->user();
 
-        if (! $user || $request->routeIs('logout')) {
+        // The stamp belongs to the account on screen. An old one would expire
+        // the administrator's session the moment they opened it.
+        if (! $user || $request->routeIs('logout') || Impersonation::isActive()) {
             return $next($request);
         }
 

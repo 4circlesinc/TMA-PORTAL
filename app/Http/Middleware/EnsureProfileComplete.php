@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Access\Impersonation;
 use App\Support\Access\Role;
 use Closure;
 use Illuminate\Http\Request;
@@ -16,6 +17,10 @@ class EnsureProfileComplete
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
+
+        if (Impersonation::isActive()) {
+            return $next($request);
+        }
 
         if ($user && $user->profile_completed_at === null) {
             // Clients fill their profile in inside guided onboarding, which

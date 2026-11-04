@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Access\Impersonation;
 use App\Support\Access\Role;
 use Closure;
 use Illuminate\Http\Request;
@@ -16,6 +17,19 @@ class EnsureAccountApproved
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
+
+        // A suspended account logs its own session out. While an administrator
+        // is viewing one, that logout would take the administrator with it.
+        // Put them back on their own account instead.
+        if ($user && Impersonation::isActive() && ($user->status === 'suspended' || ! $user->isApproved())) {
+            $return = Impersonation::stop($request);
+
+            return redirect($return);
+        }
+
+        if ($user && Impersonation::isActive()) {
+            return $next($request);
+        }
 
         if ($user && $user->status === 'suspended') {
             auth()->logout();
