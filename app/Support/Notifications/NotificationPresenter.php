@@ -103,7 +103,20 @@ final class NotificationPresenter
     private static function describe(ActivityLog $log): string
     {
         $description = (string) $log->description;
-        if ($log->activity_type !== 'cip.document_status_changed' || ! str_contains($description, 'status overridden to ')) {
+        if ($log->activity_type !== 'cip.document_status_changed') {
+            return $description;
+        }
+
+        // Rows written when an upload was logged as a status move. Entering
+        // Application review is what an upload does by itself.
+        $marker = ' moved to '.DocumentStatus::label(DocumentStatus::APPLICATION_REVIEW);
+        if (str_ends_with($description, $marker)) {
+            $head = substr($description, 0, -strlen($marker));
+
+            return 'uploaded '.$head.'; status set to Application review automatically';
+        }
+
+        if (! str_contains($description, 'status overridden to ')) {
             return $description;
         }
 

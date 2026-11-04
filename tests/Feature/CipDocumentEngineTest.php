@@ -250,6 +250,21 @@ class CipDocumentEngineTest extends TestCase
 
         $event = CipEvent::query()->latest('id')->first();
 
+        $log = ActivityLog::query()->where('activity_type', 'cip.document_status_changed')->latest('id')->first();
+        $this->assertSame(
+            'uploaded '.$document->label.' on '.$document->application->displayNumber().'; status set to Application review automatically',
+            $log->description,
+        );
+
+        $old = new ActivityLog([
+            'activity_type' => 'cip.document_status_changed',
+            'description' => $document->label.' on '.$document->application->displayNumber().' moved to Application review',
+        ]);
+        $this->assertSame(
+            $log->description,
+            NotificationPresenter::activity($old, false)['description'],
+        );
+
         $this->assertSame(DocumentEngine::ACTION_STATUS_CHANGED, $event->action);
         $this->assertSame($document->application_id, $event->application_id);
         $this->assertSame($client->id, $event->actor_id);

@@ -214,15 +214,22 @@ class DocumentEngine
 
             $filed = isset($meta['version']) || isset($meta['fileName']) || ! empty($meta['restored']);
 
+            // Landing in Application review is the upload. The status follows
+            // by itself; the log has to say the file was uploaded first, or
+            // it reads as somebody moving the status.
+            $description = $to === DocumentStatus::APPLICATION_REVIEW
+                ? DocumentSlots::filingDescription($document, $meta, $application).'; status set to Application review automatically'
+                : ($filed
+                    ? DocumentSlots::filingDescription($document, $meta, $application).'; now '.DocumentStatus::label($to)
+                    : $document->label.' on '.$application->displayNumber().' moved to '.DocumentStatus::label($to));
+
             // Mirror into the portal-wide trail too, that copy is pruned per
             // retention preference; cip_events above is the durable one.
             ActivityLogger::log([
                 'actor' => $actor,
                 'type' => 'cip.document_status_changed',
                 'module' => 'cip',
-                'description' => $filed
-                    ? DocumentSlots::filingDescription($document, $meta, $application).'; now '.DocumentStatus::label($to)
-                    : $document->label.' on '.$application->displayNumber().' moved to '.DocumentStatus::label($to),
+                'description' => $description,
                 'subject' => $document,
                 'old' => ['status' => $from],
                 'new' => ['status' => $to],
