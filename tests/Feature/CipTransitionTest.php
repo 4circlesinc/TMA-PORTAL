@@ -879,4 +879,36 @@ class CipTransitionTest extends TestCase
         $this->assertNull(FileItem::query()->where('name', 'cover.pdf')->first());
         Mail::assertNothingQueued();
     }
+
+    public function test_a_post_approval_status_change_includes_the_attached_file_in_the_email(): void
+    {
+        Mail::fake();
+
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $application = $this->at($this->application($admin), Status::POST_APPROVAL);
+        $application->forceFill(['phase' => Phase::POST_APPROVAL])->save();
+
+        $this->actingAs($admin)->post($this->statusUrl($application), [
+            'status' => Status::UPDATE_REQUIRED,
+            'cc' => 'copy@outside.example',
+            'attachment' => UploadedFile::fake()->createWithContent('scan.pdf', '%PDF-1.4 scan'),
+        ], [
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])->assertOk()
+            ->assertJsonPath('application.status', Status::UPDATE_REQUIRED);
+
+        $this->assertSame(1, FileItem::query()->where('name', 'scan.pdf')->count());
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) {
+            $names = collect([$mail->attachment, ...$mail->extraAttachments])->filter()->pluck('name');
+            $listed = collect($mail->payload['files'] ?? [])->contains(
+                fn ($row) => ($row[0] ?? null) === 'scan.pdf',
+            );
+
+            return $mail->hasTo('copy@outside.example')
+                && $names->contains('scan.pdf')
+                && $listed;
+        });
+    }
 }

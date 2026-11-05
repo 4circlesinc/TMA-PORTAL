@@ -63,9 +63,32 @@ class StatusCopies
             return [];
         }
 
-        $request->attributes->set('cip.status_copies', true);
+        $copies = self::pull();
+        $request->attributes->set('cip.status_copies', $copies);
 
-        return self::pull();
+        return $copies;
+    }
+
+    /**
+     * Addresses already taken for this request, including when the notice
+     * that took them did not send. Empty when nothing has been taken.
+     *
+     * Called from CipPersonStatusController when a person step still owes
+     * its own notice. No other reader needs the list after take() has run.
+     * Stores the list on the request; reads nothing from the database.
+     *
+     * @return list<string>
+     */
+    public static function taken(): array
+    {
+        $request = request();
+        if (! $request instanceof Request || ! $request->attributes->has('cip.status_copies')) {
+            return [];
+        }
+
+        $held = $request->attributes->get('cip.status_copies');
+
+        return is_array($held) ? array_values($held) : [];
     }
 
     private static function askedOn(Request $request): bool

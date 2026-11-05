@@ -750,11 +750,6 @@ class Engine
         $certificateId = (int) ($meta['corCertificateFileId'] ?? 0);
         unset($meta['corCertificateFileId']);
 
-        // Read before the row moves. Entering post-approval flips the phase
-        // inside the write, and the file the dialog attached still belongs
-        // on the notice for the move that started in pre-approval.
-        $mailsStatusFile = ($application->phase ?? Phase::PRE_APPROVAL) === Phase::PRE_APPROVAL;
-
         // Named on the status dialog, and refused before the row moves, so a
         // typo does not leave the file on a status whose copy never went out.
         // Only the dialog's own route, and only its first write: a checklist
@@ -876,8 +871,16 @@ class Engine
                  * write usable. A notice that throws outright is the same
                  * answer: the status happened, the letter can be missed.
                  */
+                // A certificate the dialog asked to send is already filed.
+                // Anything else attached to this status — pre-approval,
+                // post-approval, or a person step that lifted the file —
+                // rides on the same notice. A claim made before this write,
+                // so the file could be kept under the right person, is reused.
                 $noticeFile = $certificateId > 0 ? FileItem::query()->find($certificateId) : null;
-                if ($noticeFile === null && $mailsStatusFile && $actor !== null) {
+                if ($noticeFile === null) {
+                    $noticeFile = StatusAttachment::alreadyClaimed();
+                }
+                if ($noticeFile === null && $actor !== null) {
                     $noticeFile = StatusAttachment::claimForNotice($application, $actor);
                 }
 
@@ -896,6 +899,14 @@ class Engine
                         $copies,
                     );
                 });
+
+                if (request() !== null) {
+                    request()->attributes->set('cip.status_notice_sent', true);
+                }
+
+                if ($noticeFile !== null) {
+                    StatusAttachment::consumeClaim();
+                }
             } catch (Throwable $e) {
                 Log::error('CIP status notice failed after the status was saved.', [
                     'application' => $application->getKey(),

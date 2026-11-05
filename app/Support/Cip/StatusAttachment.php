@@ -92,11 +92,67 @@ class StatusAttachment
             return null;
         }
 
-        $file = self::storeIfPresent($request, $application, $actor);
+        // The COR dialog can file the certificate and leave it off the
+        // notice. Unticked, the upload stays a folder file only.
+        if ($request->route()?->getName() === 'cip.applications.stage'
+            && $request->input('stage') === Stages::COR_RECEIVED
+            && ! $request->boolean('emailCertificate')) {
+            return null;
+        }
+
+        $file = self::storeIfPresent($request, $application, $actor, self::personOnDialog($application));
         $request->attributes->set('cip.status_attachment', $file?->id ?? 0);
         $request->attributes->set('cip.status_attachment_mailed', true);
 
         return $file;
+    }
+
+    /**
+     * The upload already kept for this request's notice, when an earlier
+     * claim filed it. Null when nothing was attached, or when the upload
+     * has not been claimed yet.
+     */
+    public static function alreadyClaimed(): ?FileItem
+    {
+        $request = request();
+        if ($request instanceof Request && $request->attributes->get('cip.status_attachment_sent')) {
+            return null;
+        }
+
+        $held = self::held();
+
+        return $held === false ? null : $held;
+    }
+
+    /**
+     * The notice that just went out carried the dialog file. A later status
+     * write in this same request does not attach it again.
+     */
+    public static function consumeClaim(): void
+    {
+        $request = request();
+        if ($request instanceof Request) {
+            $request->attributes->set('cip.status_attachment_sent', true);
+        }
+    }
+
+    /**
+     * A person-status dialog files under that person. An application dialog
+     * files under the main applicant.
+     */
+    private static function personOnDialog(CipApplication $application): ?CipPerson
+    {
+        $request = request();
+        if (! $request instanceof Request || $request->route()?->getName() !== 'cip.people.status') {
+            return null;
+        }
+
+        $uuid = $request->route('uuid');
+        if (! is_string($uuid) || $uuid === '') {
+            return null;
+        }
+
+        return $application->people()->where('uuid', $uuid)->first();
     }
 
     /**

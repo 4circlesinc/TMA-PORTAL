@@ -20696,13 +20696,18 @@ button.tma-file-status-chip:focus-visible,
  * dependant never had this — their card is drawn to its contents — and the same
  * person should not be a different shape for being read from a different tab.
  *
+ * Dependents is one panel of every dependant's cards. Left on flex:1 and
+ * min-height:0 it was clamped to the pane, so the document lists under the
+ * fold never extended the profile scroller and could not be reached.
+ *
  * The documents and folder panels are left stretching on purpose: a list of
  * files fills the space it is given, and a short client folder that only came
  * halfway down the card would read as a panel that had failed to finish
  * loading.
  */
 .tma-dash__clients-profile-panel[data-clients-panel="applicant"],
-.tma-dash__clients-profile-panel[data-clients-panel="sponsor"] {
+.tma-dash__clients-profile-panel[data-clients-panel="sponsor"],
+.tma-dash__clients-profile-panel[data-clients-panel="dependents"] {
   flex: 0 0 auto;
 }
 
@@ -20742,7 +20747,8 @@ button.tma-file-status-chip:focus-visible,
 }
 
 .tma-dash__clients-profile-panel[data-clients-panel="applicant"] .tma-dash__clients-profile-body,
-.tma-dash__clients-profile-panel[data-clients-panel="sponsor"] .tma-dash__clients-profile-body {
+.tma-dash__clients-profile-panel[data-clients-panel="sponsor"] .tma-dash__clients-profile-body,
+.tma-dash__clients-profile-panel[data-clients-panel="dependents"] .tma-dash__clients-profile-body {
   flex: 0 0 auto;
   /* Nothing to scroll once the card is the height of its contents, and an
      `auto` here would clip the photo's row against a height it now sets. */

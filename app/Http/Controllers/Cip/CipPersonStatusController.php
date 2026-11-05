@@ -7,15 +7,19 @@ use App\Models\CipPerson;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Contacts;
+use App\Support\Cip\Notices;
 use App\Support\Cip\NotReady;
 use App\Support\Cip\PersonStatus;
 use App\Support\Cip\Phase;
 use App\Support\Cip\StatusAttachment;
+use App\Support\Cip\StatusCopies;
 use App\Support\Realtime\Live;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use Throwable;
 
 /**
  * One person's own step in the post-approval lane.
@@ -39,6 +43,10 @@ class CipPersonStatusController extends Controller
             ->firstOrFail();
 
         StatusAttachment::accept($request);
+        // Named before the person moves, the same way an application status
+        // refuses a bad address before the row is written. This only checks;
+        // the notice that actually sends is what takes the list.
+        StatusCopies::pull();
 
         $application = ApplicationScope::findOrFail($user, $person->application->uuid);
 
@@ -71,6 +79,42 @@ class CipPersonStatusController extends Controller
         }
 
         if ($moved['changed']) {
+            $application = $application->fresh();
+            $person->setRelation('application', $application);
+
+            // The application's own notice, when the file followed this
+            // person, already carried the upload. A step that leaves the
+            // file where it is still has a notice of its own, and the file
+            // goes on that one.
+            if (! $request->attributes->get('cip.status_notice_sent')) {
+                $file = StatusAttachment::alreadyClaimed()
+                    ?? StatusAttachment::claimForNotice($application, $user);
+
+                if ($file !== null) {
+                    $copies = $request->attributes->has('cip.status_copies')
+                        ? StatusCopies::taken()
+                        : StatusCopies::take();
+
+                    try {
+                        Notices::personMoved(
+                            $person,
+                            $moved['from'],
+                            $moved['to'],
+                            $user,
+                            $file,
+                            $copies,
+                        );
+                        StatusAttachment::consumeClaim();
+                    } catch (Throwable $e) {
+                        Log::error('CIP person status notice failed after the person was saved.', [
+                            'person' => $person->getKey(),
+                            'status' => $moved['to'],
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+            }
+
             StatusAttachment::storeIfPresent($request, $application, $user, $person);
 
             // The provider side sees each person's chip too, so it hears.

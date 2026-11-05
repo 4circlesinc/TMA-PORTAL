@@ -1640,6 +1640,67 @@ class CipPersonStatusTest extends TestCase
         $this->assertSame(PersonStatus::POST_DENIED, $spouse->post_approval_status);
     }
 
+    public function test_a_person_status_change_includes_the_attached_file_in_the_email(): void
+    {
+        Mail::fake();
+
+        $staff = $this->staff();
+        [, , $spouse] = $this->family($staff);
+
+        $this->actingAs($staff)->post('/portal/cip/people/'.$spouse->uuid.'/status', [
+            'status' => PersonStatus::POST_DENIED,
+            'cc' => 'copy@outside.example',
+            'attachment' => UploadedFile::fake()->createWithContent('refusal.pdf', '%PDF-1.4 refusal'),
+        ], [
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])->assertOk();
+
+        $this->assertSame(1, FileItem::query()->where('name', 'refusal.pdf')->count());
+        $this->assertSame($spouse->fresh()->post_approval_folder_id, FileItem::query()->where('name', 'refusal.pdf')->first()->folder_id);
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) {
+            $names = collect([$mail->attachment, ...$mail->extraAttachments])->filter()->pluck('name');
+            $listed = collect($mail->payload['files'] ?? [])->contains(
+                fn ($row) => ($row[0] ?? null) === 'refusal.pdf',
+            );
+
+            return $mail->hasTo('copy@outside.example')
+                && $names->contains('refusal.pdf')
+                && $listed;
+        });
+
+        $subjects = Mail::queued(Postcard::class)->filter(function (Postcard $mail) {
+            return collect([$mail->attachment, ...$mail->extraAttachments])
+                ->filter()
+                ->pluck('name')
+                ->contains('refusal.pdf');
+        })->map(fn (Postcard $mail) => $mail->subjectLine)->unique();
+
+        $this->assertCount(1, $subjects);
+    }
+
+    public function test_a_bad_copy_address_does_not_move_the_person_or_keep_the_file(): void
+    {
+        $staff = $this->staff();
+        [, $main] = $this->family($staff);
+        Mail::fake();
+
+        $this->actingAs($staff)->post('/portal/cip/people/'.$main->uuid.'/status', [
+            'status' => PersonStatus::POST_DENIED,
+            'cc' => 'not-an-email',
+            'attachment' => UploadedFile::fake()->createWithContent('refusal.pdf', '%PDF-1.4 refusal'),
+        ], [
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])->assertStatus(422);
+
+        $this->assertSame(PersonStatus::POST_APPROVAL, $main->fresh()->post_approval_status);
+        $this->assertNull($main->fresh()->post_approval_apart);
+        $this->assertNull(FileItem::query()->where('name', 'refusal.pdf')->first());
+        Mail::assertNothingQueued();
+    }
+
     public function test_a_bad_status_file_does_not_move_the_person(): void
     {
         $staff = $this->staff();

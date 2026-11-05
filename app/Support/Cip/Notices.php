@@ -112,6 +112,60 @@ class Notices
     }
 
     /**
+     * One person moved, and the application did not.
+     *
+     * The dialog's file still belongs on a notice. When the file follows
+     * the person, {@see announce()} already carried it and this is not called.
+     *
+     * Called from CipPersonStatusController::update after PersonStatus::move
+     * when the request attribute cip.status_notice_sent is still empty.
+     * Reads the application facts and writes the same notice fan-out as a
+     * status change. No other mailer sends a person-step attachment.
+     */
+    public static function personMoved(
+        CipPerson $person,
+        string $from,
+        string $to,
+        ?User $actor,
+        ?FileItem $attachment,
+        array $copies = [],
+    ): void {
+        $application = $person->application;
+        if ($application === null || $attachment === null) {
+            return;
+        }
+
+        $facts = Contacts::facts($application);
+        $url = Contacts::url($application);
+        $who = $person->fullName();
+        $label = PersonStatus::label($to);
+        $title = $facts['number'].': '.$who;
+        $message = $who.' moved from '.PersonStatus::label($from).' to '.$label.'.';
+
+        self::fanOut(
+            $application,
+            fn (?string $name) => self::carry(
+                Postcards::notification(
+                    $title,
+                    $message,
+                    $url,
+                    'Open the application',
+                    $name ? (strtok($name, ' ') ?: $name) : null,
+                    'CIP Applications',
+                ),
+                $attachment,
+            ),
+            'cip-status',
+            'cip.status',
+            $actor,
+            $title,
+            $message,
+            $to,
+            copies: $copies,
+        );
+    }
+
+    /**
      * One document sent back, named on its own.
      *
      * {@see announce()} fires when the APPLICATION enters Updates Required

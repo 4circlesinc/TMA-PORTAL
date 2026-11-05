@@ -561,6 +561,13 @@ class PersonStatus
             Engine::record($application, self::ACTION_CHANGED, $actor, $meta, $from, $to);
         });
 
+        // Filed before the application follows, so a notice that write sends
+        // for the lift already has the dialog's file. The actor on that
+        // notice stays the system; the file is still this person's.
+        if ($actor !== null) {
+            StatusAttachment::claimForNotice($application->fresh() ?? $application, $actor);
+        }
+
         /*
          * An outcome of their own changes whose documents the FILE counts.
          *
