@@ -6284,6 +6284,25 @@
     return null;
   }
 
+  /*
+   * After a new filing, open the lane it belongs to, on the first page.
+   *
+   * Back and Cancel already do the lane half. Save did not, so a filing
+   * started from Closed, Appeals or another lane returned to that tab and
+   * the application that had just been saved was not on it. Page one,
+   * because the table is newest-first and a remembered later page is a
+   * list the new row is not on.
+   */
+  function openFiledApplicationLane(phase) {
+    var tab = listTabForFormPhase(phase);
+    if (!tab || !clientsMountState) return;
+    moveApplicationPosition(listTabOf(clientsMountState), tab);
+    clientsMountState.listTab = tab;
+    saveListTab(tab);
+    APP_TABLE.page = 1;
+    stashApplicationPosition(tab);
+  }
+
   /* List tab that matches the form the reader just left. */
   function listTabForFormPhase(phase) {
     if (phase === 'add_on') return 'add_on';
@@ -18433,6 +18452,7 @@
               ? 'Saved on this device, it will be filed when you’re back online'
               : 'Saved on this device, it will sync when you’re back online',
             'warning');
+            if (filingNew) openFiledApplicationLane(state.applicationPhase);
             navigate('list');
 
             return;
@@ -18476,6 +18496,9 @@
             navigate('detail', savedUid);
 
             return;
+          }
+          if (filingNew) {
+            openFiledApplicationLane((application && application.phase) || state.applicationPhase);
           }
           navigate('list');
         },

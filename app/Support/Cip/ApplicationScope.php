@@ -98,8 +98,12 @@ class ApplicationScope
      * A service provider admin reads every application the firm can. A
      * contact on the main office reads the firm book: applications nobody
      * has sent to a branch, plus any that sit on the main office. A contact
-     * on a branch reads only what was assigned to that branch. Their own
-     * client record stays visible either way; that match is the caller's.
+     * on a branch reads what was assigned to that branch, and also an
+     * application they themselves just filed that nobody has sent to an
+     * office yet. Without that second match the save succeeds and the row
+     * is missing from their table, because a new filing has no office.
+     * Their own client record stays visible either way; that match is the
+     * caller's.
      */
     private static function limitProvidersAndOffices(Builder $query, User $user): void
     {
@@ -127,7 +131,7 @@ class ApplicationScope
             $byCompany[(int) ($provider->company_id ?? 0)][] = (int) $provider->id;
         }
 
-        $query->where(function (Builder $outer) use ($byCompany, $rules) {
+        $query->where(function (Builder $outer) use ($byCompany, $rules, $user) {
             $first = true;
             foreach ($byCompany as $companyId => $ids) {
                 $rule = $companyId === 0
@@ -135,9 +139,19 @@ class ApplicationScope
                     : ($rules[$companyId] ?? self::unlinkedOfficeRule($rules));
                 $method = $first ? 'where' : 'orWhere';
                 $first = false;
-                $outer->{$method}(function (Builder $one) use ($ids, $rule) {
+                $outer->{$method}(function (Builder $one) use ($ids, $rule, $user) {
                     $one->whereIn('cip_applications.provider_id', $ids);
-                    self::applyOfficeRule($one, $rule);
+                    $one->where(function (Builder $visible) use ($rule, $user) {
+                        $visible->where(function (Builder $office) use ($rule) {
+                            self::applyOfficeRule($office, $rule);
+                        })->orWhere(function (Builder $own) use ($user) {
+                            // Filed, not yet sent to an office. The author's
+                            // own table has to show it; the firm book still
+                            // has it too, until somebody names an office.
+                            $own->where('cip_applications.created_by', $user->id)
+                                ->whereNull('cip_applications.location_id');
+                        });
+                    });
                 });
             }
 

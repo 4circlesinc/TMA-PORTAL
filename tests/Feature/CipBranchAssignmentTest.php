@@ -142,6 +142,24 @@ class CipBranchAssignmentTest extends TestCase
         $this->assertSees($this->firmUser, [$firmFile, $southFile]);
     }
 
+    public function test_a_branch_sees_the_application_it_just_filed(): void
+    {
+        $filed = Applications::create($this->provider, $this->northUser);
+
+        $this->assertNull($filed->location_id);
+        $this->assertSees($this->northUser, [$filed]);
+        $this->assertSees($this->southUser, []);
+        $this->assertSees($this->firmUser, [$filed]);
+        $this->assertSees($this->spAdmin, [$filed]);
+        $this->assertSees($this->admin, [$filed]);
+
+        $filed->forceFill(['location_id' => $this->south->id])->save();
+
+        $this->assertSees($this->northUser, []);
+        $this->assertSees($this->southUser, [$filed]);
+        $this->assertSees($this->firmUser, []);
+    }
+
     public function test_a_branch_is_notified_only_for_applications_assigned_to_it(): void
     {
         $firmFile = $this->application('firm-notice');
