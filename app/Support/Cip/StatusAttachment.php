@@ -63,12 +63,56 @@ class StatusAttachment
         User $actor,
         ?CipPerson $person = null,
     ): ?FileItem {
+        $held = self::held();
+        if ($held !== false) {
+            return $held;
+        }
+
         $upload = $request->file('attachment');
         if (! $upload instanceof UploadedFile) {
             return null;
         }
 
         return self::keep($application, $upload, $actor, $person);
+    }
+
+    /**
+     * File the upload that rode with this status dialog, once, so the notice
+     * can carry it. A later call in the same request, including the
+     * controller's own store after the move, finds the file already kept.
+     */
+    public static function claimForNotice(CipApplication $application, User $actor): ?FileItem
+    {
+        $request = request();
+        if (! $request instanceof Request || ! StatusCopies::onDialog()) {
+            return null;
+        }
+
+        if ($request->attributes->get('cip.status_attachment_mailed')) {
+            return null;
+        }
+
+        $file = self::storeIfPresent($request, $application, $actor);
+        $request->attributes->set('cip.status_attachment', $file?->id ?? 0);
+        $request->attributes->set('cip.status_attachment_mailed', true);
+
+        return $file;
+    }
+
+    /**
+     * The file already kept for this request, or false when nothing has
+     * claimed the upload yet.
+     */
+    private static function held(): FileItem|null|false
+    {
+        $request = request();
+        if (! $request instanceof Request || ! $request->attributes->has('cip.status_attachment')) {
+            return false;
+        }
+
+        $id = (int) $request->attributes->get('cip.status_attachment');
+
+        return $id > 0 ? FileItem::query()->find($id) : null;
     }
 
     /**

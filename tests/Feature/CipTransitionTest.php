@@ -829,4 +829,54 @@ class CipTransitionTest extends TestCase
             'action' => CipEvent::ACTION_STATUS_ATTACHMENT,
         ]);
     }
+
+    public function test_a_pre_approval_status_change_includes_the_attached_file_in_the_email(): void
+    {
+        Mail::fake();
+
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $application = $this->at($this->application($admin), Status::NEW);
+
+        $this->actingAs($admin)->post($this->statusUrl($application), [
+            'status' => Status::REVIEW_APPLICATION,
+            'cc' => 'copy@outside.example',
+            'attachment' => UploadedFile::fake()->createWithContent('cover.pdf', '%PDF-1.4 cover'),
+        ], [
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])->assertOk();
+
+        $this->assertSame(1, FileItem::query()->where('name', 'cover.pdf')->count());
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) {
+            $listed = collect($mail->payload['files'] ?? [])->contains(
+                fn ($row) => ($row[0] ?? null) === 'cover.pdf',
+            );
+
+            return $mail->hasTo('copy@outside.example')
+                && $mail->attachment !== null
+                && $mail->attachment->name === 'cover.pdf'
+                && $listed;
+        });
+    }
+
+    public function test_a_refused_pre_approval_status_change_does_not_keep_or_email_the_file(): void
+    {
+        Mail::fake();
+
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $application = $this->at($this->application($admin), Status::NEW);
+
+        $this->actingAs($admin)->post($this->statusUrl($application), [
+            'status' => Status::DELAYED,
+            'attachment' => UploadedFile::fake()->createWithContent('cover.pdf', '%PDF-1.4 cover'),
+        ], [
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])->assertStatus(422);
+
+        $this->assertSame(Status::NEW, $application->fresh()->status);
+        $this->assertNull(FileItem::query()->where('name', 'cover.pdf')->first());
+        Mail::assertNothingQueued();
+    }
 }

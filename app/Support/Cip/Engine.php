@@ -750,6 +750,11 @@ class Engine
         $certificateId = (int) ($meta['corCertificateFileId'] ?? 0);
         unset($meta['corCertificateFileId']);
 
+        // Read before the row moves. Entering post-approval flips the phase
+        // inside the write, and the file the dialog attached still belongs
+        // on the notice for the move that started in pre-approval.
+        $mailsStatusFile = ($application->phase ?? Phase::PRE_APPROVAL) === Phase::PRE_APPROVAL;
+
         // Named on the status dialog, and refused before the row moves, so a
         // typo does not leave the file on a status whose copy never went out.
         // Only the dialog's own route, and only its first write: a checklist
@@ -871,7 +876,12 @@ class Engine
                  * write usable. A notice that throws outright is the same
                  * answer: the status happened, the letter can be missed.
                  */
-                DB::transaction(function () use ($application, $to, $actor, $meta, $certificateId, $copies) {
+                $noticeFile = $certificateId > 0 ? FileItem::query()->find($certificateId) : null;
+                if ($noticeFile === null && $mailsStatusFile && $actor !== null) {
+                    $noticeFile = StatusAttachment::claimForNotice($application, $actor);
+                }
+
+                DB::transaction(function () use ($application, $to, $actor, $meta, $noticeFile, $copies) {
                     Notices::announce(
                         $application,
                         $to,
@@ -882,7 +892,7 @@ class Engine
                         // move; the checklist's own return to Apply for NIC is not
                         // the COR arriving a second time.
                         Stages::subject(is_string($meta['stage'] ?? null) ? $meta['stage'] : null),
-                        $certificateId > 0 ? FileItem::query()->find($certificateId) : null,
+                        $noticeFile,
                         $copies,
                     );
                 });

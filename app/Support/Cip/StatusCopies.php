@@ -40,6 +40,17 @@ class StatusCopies
     ];
 
     /**
+     * This request is one of the status dialogs, so a file on it belongs to
+     * the notice that dialog is about to send.
+     */
+    public static function onDialog(): bool
+    {
+        $request = request();
+
+        return $request instanceof Request && self::askedOn($request);
+    }
+
+    /**
      * The addresses named on this status change, once.
      *
      * @return list<string>

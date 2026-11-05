@@ -46,6 +46,8 @@ class Postcard extends Mailable implements ShouldQueue
         public array $payload,
         public ?string $deliveryUuid = null,
         public ?FileItem $attachment = null,
+        /** @var list<FileItem> */
+        public array $extraAttachments = [],
     ) {}
 
     public function envelope(): Envelope
@@ -84,17 +86,30 @@ class Postcard extends Mailable implements ShouldQueue
      */
     public function attachments(): array
     {
-        if ($this->attachment === null) {
-            return [];
+        $files = [];
+        foreach (array_filter([$this->attachment, ...$this->extraAttachments]) as $file) {
+            if (! $file instanceof FileItem) {
+                continue;
+            }
+
+            $part = $this->partFor($file);
+            if ($part !== null) {
+                $files[] = $part;
+            }
         }
 
-        $path = Vault::localCopy($this->attachment);
+        return $files;
+    }
+
+    private function partFor(FileItem $file): ?Attachment
+    {
+        $path = Vault::localCopy($file);
         if (! $path) {
             Log::error('Postcard attachment could not be read', [
-                'file' => $this->attachment->uuid,
+                'file' => $file->uuid,
             ]);
 
-            return [];
+            return null;
         }
 
         try {
@@ -103,10 +118,8 @@ class Postcard extends Mailable implements ShouldQueue
             Vault::cleanupLocalCopy($path);
         }
 
-        return [
-            Attachment::fromData(fn () => $bytes, $this->attachment->name)
-                ->withMime($this->attachment->mime_type ?: 'application/pdf'),
-        ];
+        return Attachment::fromData(fn () => $bytes, $file->name)
+            ->withMime($file->mime_type ?: 'application/pdf');
     }
 
     /**

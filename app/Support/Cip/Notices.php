@@ -429,7 +429,7 @@ class Notices
             ? $application->decisionLetterFile
             : null;
 
-        return match ($to) {
+        $card = match ($to) {
             Status::UPDATE_REQUIRED => Postcards::cipUpdatesRequired(
                 $facts, self::sentBack($application), $actor, $url, $recipientName, $subject,
             ),
@@ -500,6 +500,49 @@ class Notices
             ),
             default => Postcards::cipStatus($facts, $to, $url, $recipientName, $subject),
         };
+
+        return self::carry($card, $attachment);
+    }
+
+    /**
+     * Put the file on the letter and name it in the body.
+     *
+     * A decision already carries the Unit's letter. The file from the status
+     * dialog rides along beside it, and is not listed a second time when the
+     * letter is that same file.
+     */
+    private static function carry(Postcard $card, ?FileItem $file): Postcard
+    {
+        if ($file === null) {
+            return $card;
+        }
+
+        if ($card->attachment === null) {
+            $card->attachment = $file;
+        } elseif ($card->attachment->isNot($file)) {
+            $already = false;
+            foreach ($card->extraAttachments as $extra) {
+                if ($extra->is($file)) {
+                    $already = true;
+                    break;
+                }
+            }
+            if (! $already) {
+                $card->extraAttachments[] = $file;
+            }
+        }
+
+        $files = $card->payload['files'] ?? [];
+        foreach ($files as $row) {
+            if (($row[0] ?? null) === $file->name) {
+                return $card;
+            }
+        }
+
+        $files[] = [$file->name, 'Attached file'];
+        $card->payload['files'] = array_values($files);
+
+        return $card;
     }
 
     private static function daysDelayed(CipApplication $application): int
