@@ -104,8 +104,9 @@ class CipApplicationDraftController extends Controller
          */
         Intake::normaliseDocuments($request);
 
-        $data = $request->validate(Intake::draftRules(), Intake::messages());
+        // The letter rule depends on whether this draft already holds one.
         $draft = $this->mine($request);
+        $data = $request->validate(Intake::draftRules($draft), Intake::messages());
 
         /*
          * Nothing typed is nothing to keep.
@@ -341,6 +342,10 @@ class CipApplicationDraftController extends Controller
         $of($draft->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT), '');
         $of($draft->people->firstWhere('role', CipPerson::ROLE_SPONSOR), 'sponsor.');
 
+        if ($draft->decision_letter_file_id) {
+            $paths[] = 'decision_letter';
+        }
+
         foreach ($dependents as $i => $dependent) {
             $of($dependent, 'dependents.'.$i.'.');
         }
@@ -501,6 +506,14 @@ class CipApplicationDraftController extends Controller
         }
         if (filled($draft->cip_number)) {
             $answers['cipNumber'] = $draft->cip_number;
+        }
+        if ($draft->decision === Status::POST_APPROVED) {
+            $answers['outcome'] = Intake::OUTCOME_APPROVED;
+        } elseif ($draft->decision === Status::POST_DENIED) {
+            $answers['outcome'] = Intake::OUTCOME_DENIED;
+        }
+        if ($draft->decided_at) {
+            $answers['decided_at'] = $draft->decided_at->toDateString();
         }
         $answers['providerId'] = $draft->provider?->uuid ?? '';
 

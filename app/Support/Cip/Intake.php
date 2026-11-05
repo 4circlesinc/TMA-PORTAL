@@ -374,7 +374,15 @@ class Intake
                  */
                 self::DECIDED_AT => [self::decidesAtIntake(request()->all(), $draft) ? 'required' : 'nullable', 'date'],
                 self::DECISION_NOTE => ['nullable', 'string', 'max:2000'],
-                self::DECISION_LETTER => DecisionLetter::rules(self::decidesAtIntake(request()->all(), $draft)),
+                /*
+                 * The letter travels with the decision. A draft that already
+                 * holds one — recorded when the form was first saved — does
+                 * not have to upload it again to file.
+                 */
+                self::DECISION_LETTER => DecisionLetter::rules(
+                    self::decidesAtIntake(request()->all(), $draft)
+                    && ! filled($draft?->decision_letter_file_id)
+                ),
                 /*
                  * A post-approval filing arrives with the Unit's number
                  * already on it: the file was approved before the portal saw
@@ -424,11 +432,24 @@ class Intake
      * on an unfinished form is kept in the same slot a filed one uses rather
      * than asked for again when the reader comes back.
      */
-    public static function draftRules(): array
+    public static function draftRules(?CipApplication $existing = null): array
     {
         if (self::filingPhase() === Phase::ADD_ON) {
             return self::addOnDraftRules();
         }
+
+        /*
+         * A post-approval draft is a file the Unit has already decided.
+         * The decision is recorded before anything else is typed, so these
+         * six answers — and the letter that records the decision — are
+         * required on the first save. A later save keeps the letter already
+         * stored and does not ask for the file again. Pre-approval stays
+         * unfinished-friendly: only the firm is required.
+         *
+         * Sponsored uses `present` rather than `required`. Laravel treats
+         * 0 as empty, and "No" is a real answer.
+         */
+        $postApproval = self::filingPhase() === Phase::POST_APPROVAL;
 
         $rules = [
             'providerId' => ['required', 'string'],
@@ -436,12 +457,28 @@ class Intake
             'submissionId' => ['nullable', 'string', 'max:64'],
             // See followFormProvider: the firm the form believes the draft is with.
             'providerWas' => ['nullable', 'string', 'max:64'],
-            'investmentType' => ['nullable', 'string', Rule::in(array_keys(InvestmentType::ALL))],
+            'investmentType' => [$postApproval ? 'required' : 'nullable', 'string', Rule::in(array_keys(InvestmentType::ALL))],
             'investmentTypeOther' => self::investmentTypeOtherRules(required: false),
-            'sponsored' => ['nullable', 'boolean'],
-            'cipNumber' => ['nullable', 'string', 'max:'.Submission::MAX_LENGTH],
+            'sponsored' => $postApproval
+                ? ['present', Rule::in([0, 1, '0', '1', true, false])]
+                : ['nullable', 'boolean'],
+            'cipNumber' => $postApproval
+                ? ['required', 'string', 'max:'.Submission::MAX_LENGTH]
+                : ['nullable', 'string', 'max:'.Submission::MAX_LENGTH],
             'dependents' => ['nullable', 'array', 'max:'.self::MAX_DEPENDENTS_DRAFT],
         ];
+
+        if ($postApproval) {
+            $rules['outcome'] = ['required', 'string', Rule::in([
+                self::OUTCOME_APPROVED,
+                self::OUTCOME_DENIED,
+            ])];
+            $rules[self::DECIDED_AT] = ['required', 'date'];
+            $rules[self::DECISION_NOTE] = ['nullable', 'string', 'max:2000'];
+            $rules[self::DECISION_LETTER] = DecisionLetter::rules(
+                ! filled($existing?->decision_letter_file_id)
+            );
+        }
 
         foreach (['', 'sponsor.', 'dependents.*.'] as $prefix) {
             $rules = array_merge($rules, self::optionalPersonRules($prefix));
@@ -893,6 +930,11 @@ class Intake
                 ? 'Choose an enterprise category.'
                 : 'Say which investment type this is.',
             'investmentTypeOther.in' => 'Choose Marketing, Infrastructure or Housing.',
+            'outcome.required' => 'Choose Approved or Denied.',
+            'outcome.in' => 'Choose Approved or Denied.',
+            'investmentType.required' => 'Choose an investment type.',
+            'sponsored.present' => 'Choose whether this application is sponsored.',
+            'sponsored.in' => 'Choose whether this application is sponsored.',
             self::DECIDED_AT.'.required' => 'Enter the decision date.',
             self::DECIDED_AT.'.date' => 'Enter the decision date.',
             self::DECISION_LETTER.'.required' => 'Upload the decision letter as a PDF.',
@@ -1547,6 +1589,10 @@ class Intake
      */
     private static function filePostApprovalDraft(CipApplication $application, User $creator, array $data): CipApplication
     {
+        // The decision was recorded when the draft was first saved. A filing
+        // that does not repeat it still stands on that answer.
+        $data = self::adoptDraftDecision($application, $data);
+
         $number = trim((string) ($data['cipNumber'] ?? ''));
         if ($number === '') {
             $number = (string) ($application->cip_number ?? '');
@@ -1603,6 +1649,66 @@ class Intake
      *
      * @param  array<string, mixed>  $data
      */
+    /**
+     * Write the Unit's decision onto a post-approval draft.
+     *
+     * Status stays Draft. Filing is what moves the row onto Approved or
+     * Denied and sends the notice. The letter is stored the same way a
+     * decision recorded from the status menu stores one.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private static function keepDraftDecision(CipApplication $application, User $actor, array $data): void
+    {
+        if (($application->phase ?? '') !== Phase::POST_APPROVAL) {
+            return;
+        }
+
+        $outcome = (string) ($data['outcome'] ?? '');
+        if ($outcome !== self::OUTCOME_APPROVED && $outcome !== self::OUTCOME_DENIED) {
+            return;
+        }
+
+        $decision = $outcome === self::OUTCOME_APPROVED ? Status::POST_APPROVED : Status::POST_DENIED;
+        $letter = $data[self::DECISION_LETTER] ?? null;
+        if ($letter instanceof UploadedFile) {
+            DecisionLetter::store($application, $letter, $actor, $decision);
+            $application->refresh();
+        }
+
+        $day = $data[self::DECIDED_AT] ?? null;
+        $application->forceFill([
+            'decision' => $decision,
+            'decided_at' => $day ? Carbon::parse($day) : $application->decided_at,
+        ])->save();
+    }
+
+    /**
+     * A filing that does not repeat the decision uses the one already on the draft.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private static function adoptDraftDecision(CipApplication $application, array $data): array
+    {
+        $outcome = $data['outcome'] ?? null;
+        if ($outcome !== null && $outcome !== '') {
+            return $data;
+        }
+
+        if ($application->decision === Status::POST_APPROVED) {
+            $data['outcome'] = self::OUTCOME_APPROVED;
+        } elseif ($application->decision === Status::POST_DENIED) {
+            $data['outcome'] = self::OUTCOME_DENIED;
+        }
+
+        if (empty($data[self::DECIDED_AT]) && $application->decided_at) {
+            $data[self::DECIDED_AT] = $application->decided_at->toDateString();
+        }
+
+        return $data;
+    }
+
     /** Did the form say this post-approval filing is a file the Unit denied? */
     private static function deniedAtIntake(array $data): bool
     {
@@ -1789,6 +1895,7 @@ class Intake
         }
 
         self::fileUploads($application, $data, $actor, $dependentUuids);
+        self::keepDraftDecision($application, $actor, $data);
     }
 
     public static function update(CipApplication $application, User $actor, array $data): CipApplication

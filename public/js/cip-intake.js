@@ -204,6 +204,7 @@
       dateOfBirth: '', countryOfBirth: '', countryOfResidence: '',
       nationality: '', occupation: '', passportNumber: '',
       investmentType: '', investmentTypeOther: '', sponsored: '',
+      cipNumber: '', outcome: '', decided_at: '',
       parentCipNumber: '', parentCorNumber: '', parentApplicantName: '',
       addonType: '', relationship: '',
     };
@@ -322,6 +323,9 @@
     enterpriseCategory: 'Enterprise category',
     sponsored: 'Sponsored', relationship: 'Relationship',
     cipNumber: 'CIP application number',
+    outcome: 'Decision',
+    decided_at: 'Decision date',
+    decision_letter: 'Decision letter',
     internalNumber: 'Application number',
     parentCipNumber: 'Main application CIP number',
     parentCorNumber: 'Certificate of Registration (COR) number',
@@ -456,12 +460,10 @@
     var paths = ['providerId'].concat(PERSON_FIELDS)
       .concat(['investmentType', 'sponsored']);
 
-    // A file entered straight into post-approval was approved before the
-    // portal saw it, so the Unit's number is on the letter in front of the
-    // reader. Pre-approval has no such number yet. An edit does not demand
-    // one: the number is already recorded, and clearing the box is not a way
-    // to remove it.
-    if (!state.applicationId && isPostApprovalIntake()) paths.push('cipNumber');
+    // A new post-approval file, including one saved as a draft and reopened,
+    // records the Unit's decision before anything else. A filed edit does
+    // not ask again: the decision is already on the row.
+    if (asksOpeningDecision()) paths.push('cipNumber', 'outcome', 'decided_at');
 
     if (sponsored()) {
       paths = paths.concat(PERSON_FIELDS.map(function (f) { return 'sponsor.' + f; }));
@@ -483,6 +485,7 @@
       if (photoRequiredFor('passportPhoto')) paths.push('passportPhoto');
       return paths;
     }
+    if (asksOpeningDecision()) paths.push('decision_letter');
     if (photoRequiredFor('passportPhoto')) paths.push('passportPhoto');
     if (photoRequiredFor('sponsor.passportPhoto')) paths.push('sponsor.passportPhoto');
     for (var i = 0; i < state.dependents; i++) {
@@ -1372,6 +1375,7 @@
       (showsCipNumber()
         ? textField('cipNumber', { placeholder: 'As printed on the approval letter' })
         : '') +
+      (asksOpeningDecision() ? openingDecisionFields() : '') +
       '</div>');
   }
 
@@ -1464,6 +1468,55 @@
     if (state.record && state.record.phase === 'post_approval') return true;
 
     return state.phase === 'post_approval';
+  }
+
+  /*
+   * A post-approval file that has not been filed yet. The decision is asked
+   * here, at the start, rather than in a dialog after Add.
+   */
+  function asksOpeningDecision() {
+    return isFiling() && isPostApprovalIntake() && !isAddOnIntake();
+  }
+
+  function openingDecisionFields() {
+    return selectField('outcome', [
+      { value: 'approved', label: 'Approved' },
+      { value: 'denied', label: 'Denied' },
+    ], 'Approved or denied') +
+      textField('decided_at', { type: 'date' }) +
+      decisionLetterField();
+  }
+
+  function decisionLetterField() {
+    var name = '';
+    if (state.files.decision_letter) name = state.files.decision_letter.name || '';
+    else if (state.filed.decision_letter) name = state.decisionLetterName || 'Decision letter.pdf';
+    if (fieldsLocked()) {
+      return lockedField('decision_letter', name, { label: 'Decision letter' });
+    }
+
+    return '<label class="tma-portal-field' + (state.errors.decision_letter ? ' is-invalid' : '') + '"' +
+      ' data-key="field:decision_letter">' +
+      fieldLabel('decision_letter', 'Decision letter') +
+      '<input type="file" accept="application/pdf,.pdf" class="tma-portal-input"' +
+      ' data-cip-letter data-key="letter:decision"' + requiredAttr('decision_letter') + '>' +
+      (name ? '<span class="tma-portal-note">' + esc(name) + '</span>' : '') +
+      fieldError('decision_letter') +
+      '</label>';
+  }
+
+  function openingGaps() {
+    var found = {};
+    ['providerId', 'investmentType', 'sponsored', 'cipNumber', 'outcome', 'decided_at'].forEach(function (path) {
+      if (String(state.draft[path] || '').trim() === '') {
+        found[path] = labelFor(path) + ' is required';
+      }
+    });
+    if (!photoChosen('decision_letter')) {
+      found.decision_letter = 'Upload the decision letter as a PDF.';
+    }
+
+    return found;
   }
 
   function isAddOnIntake() {
@@ -1575,8 +1628,9 @@
   }
 
   /*
-   * Post-approval intake duplicates pre-approval for now. When PAD-specific
-   * fields arrive they belong here, not in preApprovalFormBody().
+   * The same page as pre-approval. The decision, its date and the letter
+   * are the first card's last row, drawn only while the file is still a
+   * filing. See openingDecisionFields().
    */
   function postApprovalFormBody() {
     return preApprovalFormBody();
@@ -1848,6 +1902,7 @@
     });
 
     wirePhotos(root);
+    wireDecisionLetter(root);
     wireDocuments(root);
     wireDependents(root);
     wireDraft(root);
@@ -2226,6 +2281,21 @@
    * snapshot should learn that while the file picker is still in mind rather
    * than after filling in eight more fields and pressing Add.
    */
+  function wireDecisionLetter(root) {
+    MORPH.unwired(root, '[data-cip-letter]').forEach(function (el) {
+      el.addEventListener('change', function () {
+        var file = el.files && el.files[0] ? keepFile(el.files[0]) : null;
+        if (!file) return;
+        state.files.decision_letter = file;
+        state.decisionLetterName = file.name || 'Decision letter.pdf';
+        state.filed.decision_letter = false;
+        delete state.errors.decision_letter;
+        touchDraft();
+        render(root);
+      });
+    });
+  }
+
   function wirePhotos(root) {
     MORPH.unwired(root, '[data-cip-photo]').forEach(function (input) {
       var path = input.getAttribute('data-cip-photo');
@@ -2709,6 +2779,9 @@
       // server refuses one on a pre-approval file, and a reader who was never
       // offered the field must not post the value the record came with.
       if (path === 'cipNumber' && !showsCipNumber()) return;
+      // The decision is sent with the filing request on its own, and with
+      // the draft body. Leaving it in this loop would post it twice.
+      if (path === 'outcome' || path === 'decided_at') return;
       /*
        * On a filed application the firm goes up only when the reader
        * changed it. The form used to post the firm it was opened with on
@@ -2770,8 +2843,9 @@
     // The decision's own day, note and letter ride with the request that
     // files it, see decisionParts(): not here, where a letter would be
     // counted among the scans and sent to the draft with them.
-    if (filing && isPostApprovalIntake() && !isAddOnIntake() && state.outcome) {
-      out.push({ name: 'outcome', value: state.outcome });
+    var outcome = state.outcome || (asksOpeningDecision() ? state.draft.outcome : '');
+    if (filing && isPostApprovalIntake() && !isAddOnIntake() && outcome) {
+      out.push({ name: 'outcome', value: outcome });
     }
 
     if (filing && state.allowDuplicate) {
@@ -2837,7 +2911,14 @@
    */
   function decisionParts() {
     var decision = state.decision;
-    if (!isFiling() || !isPostApprovalIntake() || isAddOnIntake() || !state.outcome || !decision) return [];
+    if (!isFiling() || !isPostApprovalIntake() || isAddOnIntake()) return [];
+    if (!decision && asksOpeningDecision() && state.draft.outcome) {
+      decision = {
+        decidedAt: state.draft.decided_at || '',
+        letter: state.files.decision_letter || null,
+      };
+    }
+    if (!decision) return [];
 
     // Underscored on purpose: a document requirement is posted under the
     // camel case of its label, and one called "Decision Letter" would be
@@ -3125,6 +3206,14 @@
       if (part.file) { files++; form.append(part.name, part.file, part.filename || 'upload'); }
       else form.append(part.name, part.value);
     });
+    // The letter is part of recording the decision, not one of the
+    // applicant's scans, so it is not in parts(). Once the draft holds it,
+    // later saves leave the file where it is.
+    if (asksOpeningDecision() && state.files.decision_letter && !state.filed.decision_letter) {
+      var letter = state.files.decision_letter;
+      files++;
+      form.append('decision_letter', letter, letter.name || 'decision-letter.pdf');
+    }
     form.append('uploadCount', String(files));
 
     return form;
@@ -3190,6 +3279,10 @@
      what turns a burst of them into one write. */
   function touchDraft() {
     if (!draftable()) return;
+    // A post-approval draft is not written until the decision is on the form.
+    // Autosave before that would be refused, and the refusal would redraw
+    // the row the reader is still filling in.
+    if (asksOpeningDecision() && Object.keys(openingGaps()).length) return;
     state.draftDirty = true;
     if (state.draftTimer) clearTimeout(state.draftTimer);
     state.draftTimer = setTimeout(function () {
@@ -3228,6 +3321,16 @@
      * so the button can retry instead of saying the form is not a draft.
      */
     if (announce) state.draftOff = false;
+    if (asksOpeningDecision() && Object.keys(openingGaps()).length) {
+      if (announce) {
+        state.errors = openingGaps();
+        if (state.root) render(state.root);
+        ui().toastError('Enter the decision before saving a draft.');
+      }
+      settle(false);
+
+      return;
+    }
     if (!draftable()) {
       // Pressed on a form that cannot be drafted at all. Only reachable if
       // the button outlives the state that drew it; say so rather than
@@ -3380,6 +3483,11 @@
          */
         rememberPersonIds(json.draft);
         rememberFiled(json.draft);
+        if (state.files.decision_letter) {
+          state.decisionLetterName = state.files.decision_letter.name || state.decisionLetterName;
+          state.filed.decision_letter = true;
+          state.files.decision_letter = null;
+        }
         if (json.draft && json.draft.id && !state.applicationId) {
           state.draftId = json.draft.id;
         }
@@ -3741,16 +3849,18 @@
     }
 
     /*
-     * A post-approval filing is one of two things: a file the Unit approved,
-     * which enters the lane, sends the Post-Approval notice and then the
-     * approval, or one it denied, which lands on Denied and sends the denial
-     * alone. Asked once, on Add, rather than filed and then decided by hand
-     * a minute later.
+     * The decision was captured at the start of the form. Add sends that
+     * answer with the filing. A letter already stored on the draft is not
+     * uploaded again.
      */
-    if (isFiling() && isPostApprovalIntake() && !isAddOnIntake() && !state.outcome) {
-      askOutcome();
-
-      return;
+    if (asksOpeningDecision() && state.draft.outcome) {
+      state.outcome = state.draft.outcome;
+      state.decision = {
+        decision: state.draft.outcome === 'approved' ? 'granted' : 'denied',
+        decidedAt: state.draft.decided_at || '',
+        note: '',
+        letter: state.filed.decision_letter ? null : (state.files.decision_letter || null),
+      };
     }
 
     state.saving = true;
@@ -3816,7 +3926,7 @@
          * with no question asked. The one refusal that keeps it is the
          * duplicate, whose own dialog files this same application anyway.
          */
-        if (!res.ok && !(res.status === 409 && json.duplicate)) state.outcome = null;
+        if (!res.ok && !(res.status === 409 && json.duplicate) && !state.draft.outcome) state.outcome = null;
 
         if (res.status === 422 && json.errors) {
           var decisionSaid = takeDecisionError(json.errors);
@@ -4237,6 +4347,13 @@
     state.draft.investmentType = app.investmentTypeValue || '';
     state.draft.investmentTypeOther = app.investmentTypeOther || '';
     state.draft.sponsored = app.sponsored ? '1' : '0';
+    if (app.decision === 'post_approved' || app.decision === 'granted') state.draft.outcome = 'approved';
+    else if (app.decision === 'post_denied' || app.decision === 'denied') state.draft.outcome = 'denied';
+    if (app.decidedAt) state.draft.decided_at = app.decidedAt;
+    if (app.decisionLetter && app.decisionLetter.fileId) {
+      state.filed.decision_letter = true;
+      state.decisionLetterName = app.decisionLetter.fileName || 'Decision letter.pdf';
+    }
     if (app.addonType) state.draft.addonType = app.addonType;
     if (app.parent) {
       /*
@@ -4316,6 +4433,7 @@
     state.allowDuplicate = false;
     state.allowUnmatchedParent = false;
     state.outcome = null;
+    state.decisionLetterName = '';
     // The decision that goes with that answer, and the dialog it is asked in.
     state.decision = null;
     state.askDecision = typeof opts.askDecision === 'function' ? opts.askDecision : null;

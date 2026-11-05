@@ -67,16 +67,49 @@ class CipApplicationDraftTest extends TestCase
         ]);
     }
 
+    private int $postApprovalDrafts = 0;
+
+    /**
+     * The six answers a post-approval draft has to open with, plus the letter.
+     *
+     * @return array<string, mixed>
+     */
+    private function postApprovalOpening(): array
+    {
+        $this->postApprovalDrafts++;
+
+        return [
+            'investmentType' => InvestmentType::REAL_ESTATE,
+            'sponsored' => '0',
+            'cipNumber' => sprintf('10T1G%05dP', $this->postApprovalDrafts),
+            'outcome' => Intake::OUTCOME_APPROVED,
+            'decided_at' => '2026-09-18',
+            'decision_letter' => $this->cipDecisionLetterPdf(),
+        ];
+    }
+
     /** @return array<string, mixed> */
     private function answers(CipProvider $provider, array $overrides = []): array
     {
-        return array_merge([
+        $body = array_merge([
             'providerId' => $provider->uuid,
             'phase' => Phase::PRE_APPROVAL,
             'firstName' => 'John',
             'lastName' => 'Smith',
             'countryOfResidence' => 'United Arab Emirates',
         ], $overrides);
+
+        if (($body['phase'] ?? '') !== Phase::POST_APPROVAL) {
+            return $body;
+        }
+
+        foreach ($this->postApprovalOpening() as $key => $value) {
+            if (! array_key_exists($key, $body) || $body[$key] === '' || $body[$key] === null) {
+                $body[$key] = $value;
+            }
+        }
+
+        return $body;
     }
 
     private function save(User $actor, array $body)
@@ -979,7 +1012,8 @@ class CipApplicationDraftTest extends TestCase
             ->assertCreated();
 
         $filed = $draft->fresh();
-        $this->assertSame(Status::POST_APPROVAL, $filed->status);
+        $this->assertSame(Status::POST_APPROVED, $filed->status);
+        $this->assertSame(Status::POST_APPROVED, $filed->decision);
         $this->assertSame(Phase::POST_APPROVAL, $filed->phase);
         $this->assertSame('10T1G12680P', $filed->cip_number);
         $this->assertNotNull($filed->post_approval_at);
@@ -1140,8 +1174,8 @@ class CipApplicationDraftTest extends TestCase
         $untouched = function () use ($draft): void {
             $row = $draft->fresh();
             $this->assertSame(Status::DRAFT, $row->status, 'The row left Draft though the filing was refused.');
-            $this->assertNull($row->decision);
-            $this->assertNull($row->decision_letter_file_id);
+            $this->assertSame(Status::POST_APPROVED, $row->decision);
+            $this->assertNotNull($row->decision_letter_file_id);
             $this->assertSame(0, \Illuminate\Support\Facades\DB::table('email_deliveries')->where('related_id', $row->id)->count());
         };
 
@@ -1168,7 +1202,8 @@ class CipApplicationDraftTest extends TestCase
         $this->actingAs($staff)
             ->post('/portal/cip/applications', $filing(['outcome' => 'denied']), ['Accept' => 'application/json'])
             ->assertStatus(422)
-            ->assertJsonValidationErrors(['decision_letter', 'decided_at']);
+            ->assertJsonValidationErrors(['decided_at'])
+            ->assertJsonMissingValidationErrors(['decision_letter']);
         $untouched();
 
         // And with them, it files.
@@ -1352,7 +1387,7 @@ class CipApplicationDraftTest extends TestCase
         )->assertCreated();
 
         $filed = CipApplication::query()->first();
-        $this->assertSame(Status::POST_APPROVAL, $filed->status);
+        $this->assertSame(Status::POST_APPROVED, $filed->status);
         $this->assertSame(Phase::POST_APPROVAL, $filed->phase);
         $this->assertSame('10T1G12681P', $filed->cip_number);
     }
@@ -1472,6 +1507,66 @@ class CipApplicationDraftTest extends TestCase
         ])->assertOk();
 
         $this->assertSame(1, CipApplication::query()->where('status', Status::DRAFT)->count());
+    }
+
+    /**
+     * A post-approval draft records the Unit's decision before it is saved.
+     *
+     * The six opening answers are required, and the letter is stored with
+     * them. The row stays a draft until it is filed.
+     */
+    public function test_a_post_approval_draft_records_the_decision_before_it_is_saved(): void
+    {
+        Storage::fake('local');
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+
+        $this->save($staff, [
+            'providerId' => $provider->uuid,
+            'phase' => Phase::POST_APPROVAL,
+            'firstName' => 'Amara',
+        ])->assertStatus(422)->assertJsonValidationErrors([
+            'investmentType', 'sponsored', 'cipNumber', 'outcome', 'decided_at', 'decision_letter',
+        ]);
+
+        $this->assertSame(0, CipApplication::query()->count());
+
+        $this->save($staff, [
+            'providerId' => $provider->uuid,
+            'phase' => Phase::POST_APPROVAL,
+            'investmentType' => InvestmentType::REAL_ESTATE,
+            'sponsored' => '0',
+            'cipNumber' => '10T1G12661P',
+            'outcome' => Intake::OUTCOME_DENIED,
+            'decided_at' => '2026-09-18',
+            'decision_letter' => $this->cipDecisionLetterPdf(),
+            'firstName' => 'Amara',
+        ])->assertOk();
+
+        $draft = CipApplication::query()->first();
+        $this->assertSame(Status::DRAFT, $draft->status);
+        $this->assertSame(Phase::POST_APPROVAL, $draft->phase);
+        $this->assertSame(Status::POST_DENIED, $draft->decision);
+        $this->assertSame('2026-09-18', $draft->decided_at->toDateString());
+        $this->assertSame('10T1G12661P', $draft->cip_number);
+        $this->assertFalse($draft->sponsored);
+        $this->assertNotNull($draft->decision_letter_file_id);
+
+        // A later save keeps the letter already stored.
+        $this->save($staff, [
+            'providerId' => $provider->uuid,
+            'phase' => Phase::POST_APPROVAL,
+            'investmentType' => InvestmentType::REAL_ESTATE,
+            'sponsored' => '1',
+            'cipNumber' => '10T1G12661P',
+            'outcome' => Intake::OUTCOME_DENIED,
+            'decided_at' => '2026-09-18',
+            'firstName' => 'Amara',
+            'submissionId' => $draft->submission_key,
+        ])->assertOk();
+
+        $this->assertTrue($draft->fresh()->sponsored);
+        $this->assertSame($draft->decision_letter_file_id, $draft->fresh()->decision_letter_file_id);
     }
 
     /** Shape is still enforced: a wrong answer is wrong however unfinished. */
@@ -2513,7 +2608,7 @@ class CipApplicationDraftTest extends TestCase
             ->assertCreated();
 
         $filed = $entered->fresh();
-        $this->assertSame(Status::POST_APPROVAL, $filed->status);
+        $this->assertSame(Status::POST_APPROVED, $filed->status);
         $this->assertSame('10T1G12680P', $filed->cip_number);
         $this->assertSame(Status::DRAFT, $saved->fresh()->status);
         $this->assertSame('10T1G10000P', $saved->fresh()->cip_number);
