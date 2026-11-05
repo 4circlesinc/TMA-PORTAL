@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Files;
 
+use App\Support\Cip\DocumentSlots;
 use App\Support\Files\AccessSources;
 use App\Support\Files\ActivityFeed;
 use App\Support\Files\FileAccess;
@@ -60,6 +61,12 @@ class FileViewerController extends BaseFilesController
         $user = $this->user($request);
         $file = $this->findFile($uuid, withTrashed: true);
         FileAccess::authorize($user, 'view', $file);
+
+        // A checklist scan left in File Box is filed into the person's folder
+        // before the panel names where it sits, so the path is one the
+        // library can actually open.
+        DocumentSlots::placeHomelessFile($file, $user);
+        $file->refresh();
 
         $file->loadMissing(['folder.parent', 'owner', 'uploader', 'uploadedByMember']);
 

@@ -44,6 +44,9 @@ class DocumentSlots
      */
     private static bool $storing = false;
 
+    /** True while homeless checklist files are being filed, so destination() does not provision again. */
+    private static bool $placing = false;
+
     /** What an Additional documents upload is called when it arrives nameless. */
     private const LABEL_FALLBACK = 'Additional document';
 
@@ -823,15 +826,111 @@ class DocumentSlots
     }
 
     /**
-     * The template behind a type, matched the way slots are linked to
-     * requirements everywhere, the person's applicant type and the slug.
+     * Move checklist scans that the viewer calls File Box into the person's folder.
      *
-     * The same match that stamps `requirement_id` onto a slot (here and in
-     * {@see Requirements}), so resolving by key IS resolving the slot's own
-     * requirement, and it also answers for the intake slots that predate the
-     * table and carry no requirement_id at all. One query, and only on the
-     * upload paths: the sync-scale readers never come through here.
+     * File Box is a null folder, or a folder that has since been removed. The
+     * details panel still prints that label, and neither an administrator nor
+     * the service provider finds the scan there: File Box lists only the
+     * reader's own loose files. Opening the application files every such scan
+     * into the folder the checklist already belongs to. A file that is not a
+     * slot is left where it is.
      */
+    public static function placeHomelessFiles(CipApplication $application, ?User $actor = null): void
+    {
+        if (self::$placing) {
+            return;
+        }
+
+        $application->loadMissing(['people.documents']);
+
+        $fileIds = $application->people
+            ->flatMap(fn (CipPerson $person) => $person->documents->pluck('file_id'))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($fileIds->isEmpty()) {
+            return;
+        }
+
+        $homeless = FileItem::withTrashed()
+            ->whereIn('id', $fileIds)
+            ->get()
+            ->filter(fn (FileItem $file) => self::fileNeedsAHome($file));
+
+        if ($homeless->isEmpty()) {
+            return;
+        }
+
+        self::$placing = true;
+
+        try {
+            foreach ($application->people as $person) {
+                $person->setRelation('application', $application);
+                foreach ($person->documents as $slot) {
+                    $file = $homeless->firstWhere('id', $slot->file_id);
+                    if (! $file instanceof FileItem) {
+                        continue;
+                    }
+
+                    $slot->setRelation('person', $person);
+                    $destId = self::destinationForSlot($slot, $actor);
+                    if ($destId === null) {
+                        continue;
+                    }
+
+                    self::moveFileTo($file, $destId);
+                }
+            }
+        } finally {
+            self::$placing = false;
+        }
+    }
+
+    /** The one file opened in the viewer, filed with the rest of that person's homeless scans. */
+    public static function placeHomelessFile(FileItem $file, ?User $actor = null): void
+    {
+        if (! self::fileNeedsAHome($file)) {
+            return;
+        }
+
+        $applicationId = CipDocument::query()
+            ->where('file_id', $file->id)
+            ->value('application_id');
+
+        if ($applicationId === null) {
+            return;
+        }
+
+        $application = CipApplication::query()->find($applicationId);
+        if ($application === null) {
+            return;
+        }
+
+        self::placeHomelessFiles($application, $actor);
+    }
+
+    /**
+     * A scan the library cannot show in a folder: no folder, or one that is gone.
+     *
+     * A file the reader deleted stays deleted. This is only about where a
+     * live checklist scan sits.
+     */
+    private static function fileNeedsAHome(FileItem $file): bool
+    {
+        if ($file->trashed()) {
+            return false;
+        }
+
+        if ($file->folder_id === null) {
+            return true;
+        }
+
+        $folder = Folder::withTrashed()->find($file->folder_id);
+
+        return $folder === null || $folder->trashed();
+    }
+
     /**
      * Where an upload answering this SLOT should land, the one resolution,
      * offered to the other doors a document can arrive through. The
@@ -994,6 +1093,20 @@ class DocumentSlots
 
         if ($parent === null && ($application?->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL) {
             $parent = Tree::postApprovalPersonFolder($person, null, $actor);
+        }
+
+        /*
+         * A pre-approval upload with no person folder was stored as File Box.
+         * That label is the uploader's loose files, which an administrator
+         * and the service provider both look straight past. Open the person's
+         * folder and file there instead of returning null.
+         */
+        if ($parent === null
+            && $application !== null
+            && ($application->phase ?? Phase::PRE_APPROVAL) === Phase::PRE_APPROVAL) {
+            Tree::provision($application, $actor);
+            $person->refresh();
+            $parent = $person->folder_id ? Folder::find($person->folder_id) : null;
         }
 
         if ($parent === null) {

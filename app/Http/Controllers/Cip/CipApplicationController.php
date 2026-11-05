@@ -1914,6 +1914,7 @@ class CipApplicationController extends Controller
         // open cannot leave a person, or an unconfirmed Apply for COR, on a
         // status the checklist no longer supports.
         Settlement::afterChecklistChange($application);
+        DocumentSlots::placeHomelessFiles($application, $request->user());
         $application->unsetRelation('people');
 
         return response()->json([
@@ -2065,6 +2066,7 @@ class CipApplicationController extends Controller
             Tree::syncClientName($application);
             Requirements::materialiseApplication($application);
             Settlement::afterChecklistChange($application);
+            DocumentSlots::placeHomelessFiles($application, $user);
             $application->unsetRelation('people');
         }
 

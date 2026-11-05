@@ -677,4 +677,85 @@ class CipProviderFolderAccessTest extends TestCase
         $this->assertFalse(FileAccess::can($staff, 'preview', $loose));
         $this->assertSame('full', FileAccess::fileRole($owner, $loose));
     }
+
+    /**
+     * A checklist scan the details panel calls File Box is filed into the
+     * person's folder when the application is opened.
+     *
+     * File Box lists only the reader's own loose files, so an administrator
+     * and the service provider both open that label and find nothing. A scan
+     * that is not on the checklist stays loose.
+     */
+    public function test_opening_an_application_files_a_file_box_scan_into_the_person_folder(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        [$galaxy, $gil] = $this->providerWithContact('GAL');
+        ['application' => $application, 'main' => $main] = $this->filing($galaxy, $staff);
+        $person = $application->people()->first();
+
+        $gone = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Old drawer',
+            'owner_id' => $staff->id,
+            'created_by' => $staff->id,
+        ]);
+        $gone->delete();
+
+        $boxed = FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'folder_id' => null,
+            'name' => 'CHEN WEI - SL1 form.pdf',
+            'extension' => 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 100,
+            'disk' => 'local',
+            'storage_path' => 'vault/sl1.pdf',
+            'owner_id' => $staff->id,
+            'uploaded_by' => $staff->id,
+        ]);
+        $orphaned = FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'folder_id' => $gone->id,
+            'name' => 'CHEN WEI - SL2B form.pdf',
+            'extension' => 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 100,
+            'disk' => 'local',
+            'storage_path' => 'vault/sl2b.pdf',
+            'owner_id' => $staff->id,
+            'uploaded_by' => $staff->id,
+        ]);
+        $loose = FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'folder_id' => null,
+            'name' => 'notes.pdf',
+            'extension' => 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 50,
+            'disk' => 'local',
+            'storage_path' => 'vault/notes.pdf',
+            'owner_id' => $staff->id,
+            'uploaded_by' => $staff->id,
+        ]);
+
+        foreach (['sl1_form' => $boxed, 'sl2b_form' => $orphaned] as $type => $file) {
+            CipDocument::create([
+                'application_id' => $application->id,
+                'person_id' => $person->id,
+                'type' => $type,
+                'label' => $type,
+                'file_id' => $file->id,
+            ]);
+        }
+
+        $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk();
+
+        $this->assertSame($main->id, $boxed->fresh()->folder_id);
+        $this->assertSame($main->id, $orphaned->fresh()->folder_id);
+        $this->assertNull($loose->fresh()->folder_id);
+        $this->assertTrue(FileAccess::can($gil, 'view', $boxed->fresh()));
+        $this->assertTrue(FileAccess::can($staff, 'view', $boxed->fresh()));
+    }
 }
