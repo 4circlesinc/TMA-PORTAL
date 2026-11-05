@@ -110,6 +110,22 @@ final class ProviderFirmActivity
         return ! $request->boolean('system');
     }
 
+    /**
+     * Every file-log row, for the administrator overview.
+     *
+     * Called from ActivityController::index when the viewer holds
+     * activity.viewAll. files() is the firm-scoped feed and drops preview,
+     * download, print, and zip. Nothing else reads the whole file_activities
+     * table into Overview. Columns used: user_id, company_member_id,
+     * actor_name, item_type, item_id, action, meta, ip, created_at.
+     *
+     * The overview has to show service provider logs as well, for everything.
+     */
+    public static function everyFile(): Builder
+    {
+        return FileActivity::query()->with(['user', 'companyMember.company']);
+    }
+
     /** File edits and uploads on this firm's folders, and by its people. */
     public static function files(User $user): Builder
     {
@@ -207,7 +223,7 @@ final class ProviderFirmActivity
      * @param  iterable<int, FileActivity>  $files
      * @return array{items: list<array<string, mixed>>, nextCursor: ?string, isAdmin: bool}
      */
-    public static function merge(iterable $logs, iterable $files, int $limit): array
+    public static function merge(iterable $logs, iterable $files, int $limit, bool $sensitive = false): array
     {
         $names = self::itemNames($files);
         $rows = [];
@@ -217,7 +233,7 @@ final class ProviderFirmActivity
                 'at' => $log->created_at,
                 'source' => 'log',
                 'id' => (int) $log->id,
-                'payload' => NotificationPresenter::activity($log, false),
+                'payload' => NotificationPresenter::activity($log, $sensitive),
             ];
         }
 
@@ -226,7 +242,7 @@ final class ProviderFirmActivity
                 'at' => $file->created_at,
                 'source' => 'file',
                 'id' => (int) $file->id,
-                'payload' => self::presentFile($file, $names),
+                'payload' => self::presentFile($file, $names, $sensitive),
             ];
         }
 
@@ -252,7 +268,7 @@ final class ProviderFirmActivity
             'nextCursor' => $hasMore && $last && $last['at']
                 ? self::encodeCursor($last['source'], $last['id'], $last['at'])
                 : null,
-            'isAdmin' => false,
+            'isAdmin' => $sensitive,
         ];
     }
 
@@ -406,7 +422,7 @@ final class ProviderFirmActivity
      * @param  array{file: array<int, string>, folder: array<int, string>}  $names
      * @return array<string, mixed>
      */
-    private static function presentFile(FileActivity $activity, array $names): array
+    private static function presentFile(FileActivity $activity, array $names, bool $sensitive = false): array
     {
         $key = $activity->item_type === 'folder' ? 'folder' : 'file';
         $name = $names[$key][(int) $activity->item_id] ?? null;
@@ -427,7 +443,7 @@ final class ProviderFirmActivity
             'client' => null,
             'subjectType' => $activity->item_type === 'folder' ? 'Folder' : 'FileItem',
             'subjectId' => $activity->item_id,
-            'ip' => null,
+            'ip' => $sensitive ? $activity->ip : null,
             'device' => null,
             'location' => null,
             'postal' => null,
@@ -475,6 +491,13 @@ final class ProviderFirmActivity
 
         if (isset($meta['size']) && $meta['size'] !== '' && $meta['size'] !== null) {
             $rows[] = ['label' => 'Size', 'value' => self::sizeLabel((int) $meta['size'])];
+        }
+
+        if ($activity->relationLoaded('companyMember')) {
+            $firm = $activity->companyMember?->company?->name;
+            if (is_string($firm) && $firm !== '') {
+                $rows[] = ['label' => 'Service provider', 'value' => $firm];
+            }
         }
 
         return $rows;

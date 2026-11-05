@@ -347,4 +347,86 @@ class ProviderFirmActivityTest extends TestCase
         $this->actingAs($contact)->getJson('/admin/connectors')->assertForbidden();
         $this->actingAs($private)->getJson('/admin/connectors')->assertOk();
     }
+
+    public function test_an_administrator_sees_every_service_provider_file_log(): void
+    {
+        $tma = $this->user(Role::ADMINISTRATOR, ['name' => 'TMA Admin']);
+        $galaxy = $this->user(Role::CLIENT, ['name' => 'Dana Reed', 'email' => 'dana@galaxy.example']);
+        $blue = $this->user(Role::CLIENT, ['name' => 'Eve Blue', 'email' => 'eve@bluemina.example']);
+        $folder = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Galaxy files',
+            'owner_id' => $galaxy->id,
+            'created_by' => $galaxy->id,
+        ]);
+        $passport = FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Passport.pdf',
+            'extension' => 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 100,
+            'disk' => 'local',
+            'storage_path' => 'vault/passport.pdf',
+            'folder_id' => $folder->id,
+            'owner_id' => $galaxy->id,
+            'uploaded_by' => $galaxy->id,
+        ]);
+        $other = FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Other.pdf',
+            'extension' => 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 100,
+            'disk' => 'local',
+            'storage_path' => 'vault/other.pdf',
+            'folder_id' => $folder->id,
+            'owner_id' => $blue->id,
+            'uploaded_by' => $blue->id,
+        ]);
+
+        FileActivity::create([
+            'user_id' => $galaxy->id,
+            'item_type' => 'file',
+            'item_id' => $passport->id,
+            'action' => 'upload',
+            'meta' => ['name' => 'Passport.pdf'],
+            'ip' => '203.0.113.8',
+            'created_at' => now(),
+        ]);
+        FileActivity::create([
+            'user_id' => $galaxy->id,
+            'item_type' => 'file',
+            'item_id' => $passport->id,
+            'action' => 'preview',
+            'created_at' => now(),
+        ]);
+        FileActivity::create([
+            'user_id' => $blue->id,
+            'item_type' => 'file',
+            'item_id' => $other->id,
+            'action' => 'upload',
+            'meta' => ['name' => 'Other.pdf'],
+            'created_at' => now(),
+        ]);
+        ActivityLogger::log([
+            'actor' => $tma,
+            'type' => 'client.updated',
+            'description' => 'Updated a client',
+        ]);
+
+        $response = $this->actingAs($tma)->getJson('/portal/activity')->assertOk();
+        $this->assertTrue($response->json('isAdmin'));
+        $descriptions = collect($response->json('items'))->pluck('description');
+
+        $this->assertTrue($descriptions->contains('uploaded “Passport.pdf”'));
+        $this->assertTrue($descriptions->contains('preview “Passport.pdf”'));
+        $this->assertTrue($descriptions->contains('uploaded “Other.pdf”'));
+        $this->assertTrue($descriptions->contains('Updated a client'));
+
+        $upload = collect($response->json('items'))->first(
+            fn ($row) => ($row['description'] ?? '') === 'uploaded “Passport.pdf”',
+        );
+        $this->assertSame('Dana Reed', $upload['actor']['name']);
+        $this->assertSame('203.0.113.8', $upload['ip']);
+    }
 }

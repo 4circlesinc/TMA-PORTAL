@@ -34,6 +34,9 @@ class ActivityController extends Controller
         }
 
         $isAdmin = Role::can($user, 'activity.viewAll');
+        if ($isAdmin) {
+            return response()->json($this->adminPage($request, $user));
+        }
 
         $query = ActivityLog::query()
             ->with(['actor', 'client'])
@@ -82,6 +85,15 @@ class ActivityController extends Controller
         $new = $newQuery->count();
         if (ProviderFirmActivity::applies($user)) {
             $new += ProviderFirmActivity::countNewFiles($user, $seenAt);
+        } elseif (Role::can($user, 'activity.viewAll')) {
+            $files = ProviderFirmActivity::everyFile()
+                ->where(function ($q) use ($user) {
+                    $q->whereNull('user_id')->orWhere('user_id', '!=', $user->id);
+                });
+            if ($seenAt) {
+                $files->where('created_at', '>', $seenAt);
+            }
+            $new += $files->count();
         }
 
         return response()->json([
@@ -131,6 +143,36 @@ class ActivityController extends Controller
                     ->values()
                 : [],
         ]);
+    }
+
+    /**
+     * An administrator's page is the audit trail plus every file-log row,
+     * including each service provider's uploads, replacements, and reads.
+     *
+     * @return array{items: list<array<string, mixed>>, nextCursor: ?string, isAdmin: bool}
+     */
+    private function adminPage(Request $request, User $user): array
+    {
+        $limit = min(max((int) $request->query('limit', self::PAGE), 1), 100);
+        $cursor = ProviderFirmActivity::cursor($request->query('cursor'));
+
+        $logs = ActivityLog::query()->with(['actor', 'client'])->visibleTo($user);
+        $this->applyFilters($logs, $request, true);
+        ProviderFirmActivity::olderThan($logs, 'log', $cursor);
+        $logRows = $logs->orderByDesc('created_at')->orderByDesc('id')->limit($limit + 1)->get();
+
+        $fileRows = collect();
+        if (ProviderFirmActivity::wantsFiles($request)) {
+            $files = ProviderFirmActivity::everyFile();
+            ProviderFirmActivity::applyFileFilters($files, $request);
+            if ($actor = $request->query('actor')) {
+                $files->where('user_id', (int) $actor);
+            }
+            ProviderFirmActivity::olderThan($files, 'file', $cursor);
+            $fileRows = $files->orderByDesc('created_at')->orderByDesc('id')->limit($limit + 1)->get();
+        }
+
+        return ProviderFirmActivity::merge($logRows, $fileRows, $limit, true);
     }
 
     /**
