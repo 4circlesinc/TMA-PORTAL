@@ -2,6 +2,7 @@
 
 namespace App\Support\Files;
 
+use App\Models\CipDocument;
 use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\CompanyMember;
@@ -124,7 +125,7 @@ class FileAccess
                 $shared[] = self::shareRole($user, 'folder', $folder->id);
             }
 
-            return self::highest(array_filter($shared));
+            return self::highest(array_filter($shared)) ?? self::cipChecklistRole($user, $file);
         }
 
         if (self::isAdmin($user) || $file->owner_id === $user->id) {
@@ -144,7 +145,41 @@ class FileAccess
 
         $roles[] = self::organizationDefaultRole($user, $file);
 
-        return self::highest(array_filter($roles));
+        return self::highest(array_filter($roles)) ?? self::cipChecklistRole($user, $file);
+    }
+
+    /**
+     * Preview and download on a checklist file the reader can already open
+     * the application for.
+     *
+     * The Documents tab and the dependant's checklist hand out the file's
+     * own preview address. That address used to answer from the folder the
+     * bytes happened to sit in, so a scan that was filed with no folder, or
+     * that still sat in the uploader's OneDrive, came back 403 on the same
+     * screen that listed it. The slot is the grant: someone who may see the
+     * application may see the paper on it. Downloader, not a rewrite of
+     * whatever drive the file was left in, and a file that is not a slot
+     * stays exactly as private as it was.
+     */
+    private static function cipChecklistRole(User $user, FileItem $file): ?string
+    {
+        if (! CipAccess::enabled() || ! CipAccess::canReach($user)) {
+            return null;
+        }
+
+        $applicationIds = CipDocument::query()
+            ->where('file_id', $file->id)
+            ->pluck('application_id');
+
+        if ($applicationIds->isEmpty()) {
+            return null;
+        }
+
+        $visible = ApplicationScope::query($user)
+            ->whereIn('cip_applications.id', $applicationIds)
+            ->exists();
+
+        return $visible ? 'downloader' : null;
     }
 
     /**

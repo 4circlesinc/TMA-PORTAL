@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\CipApplication;
+use App\Models\CipDocument;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Client;
@@ -11,6 +12,7 @@ use App\Models\CompanyMember;
 use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\Share;
+use App\Models\SharePointConnection;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
@@ -546,5 +548,133 @@ class CipProviderFolderAccessTest extends TestCase
             ->assertJsonPath('client', null);
 
         $this->actingAs($gil)->getJson('/portal/clients/'.$uid)->assertForbidden();
+    }
+
+    /**
+     * A dependant's scan is previewable because it is on the application,
+     * even when the bytes were never put in that client's folder.
+     *
+     * The checklist draws the preview address either way. Answering it from
+     * the folder alone is what turned those rows into 403s.
+     */
+    public function test_a_dependants_checklist_file_can_be_previewed_outside_the_client_folder(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        [$galaxy, $gil] = $this->providerWithContact('GAL');
+        [, $outsider] = $this->providerWithContact('BLU');
+        ['application' => $application] = $this->filing($galaxy, $staff);
+
+        $dependent = CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_DEPENDENT,
+            'relationship' => 'qualified_dependent',
+            'first_name' => 'Lina',
+            'last_name' => 'Wei',
+        ]);
+
+        $owner = $this->user(Role::EMPLOYEE);
+        $drive = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'OneDrive — owner',
+            'owner_id' => $owner->id,
+            'created_by' => $owner->id,
+        ]);
+        SharePointConnection::create([
+            'uuid' => (string) Str::uuid(),
+            'site_id' => 'personal',
+            'drive_id' => 'drive-owner',
+            'drive_kind' => 'onedrive',
+            'owner_upn' => $owner->email,
+            'folder_id' => $drive->id,
+            'created_by' => $owner->id,
+            'status' => 'idle',
+            'sync_enabled' => true,
+            'direction' => 'two-way',
+        ]);
+
+        $filed = FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'folder_id' => $drive->id,
+            'name' => 'Lina Wei - Birth certificate.pdf',
+            'extension' => 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 1024,
+            'disk' => 'local',
+            'storage_path' => 'vault/lina.pdf',
+            'owner_id' => $owner->id,
+            'uploaded_by' => $owner->id,
+        ]);
+        $loose = FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'folder_id' => $drive->id,
+            'name' => 'Notes.pdf',
+            'extension' => 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 100,
+            'disk' => 'local',
+            'storage_path' => 'vault/notes.pdf',
+            'owner_id' => $owner->id,
+            'uploaded_by' => $owner->id,
+        ]);
+        // Filed with no folder at all: the other shape that 403'd. The
+        // checklist still hands out this file's preview address.
+        $unfiled = FileItem::create([
+            'uuid' => (string) Str::uuid(),
+            'folder_id' => null,
+            'name' => 'Lina Wei - SL1 form.pdf',
+            'extension' => 'pdf',
+            'mime_type' => 'application/pdf',
+            'size' => 512,
+            'disk' => 'local',
+            'storage_path' => 'vault/sl1.pdf',
+            'owner_id' => $owner->id,
+            'uploaded_by' => $owner->id,
+        ]);
+        CipDocument::create([
+            'application_id' => $application->id,
+            'person_id' => $dependent->id,
+            'type' => 'birth_certificate',
+            'label' => 'Birth certificate',
+            'file_id' => $filed->id,
+        ]);
+        CipDocument::create([
+            'application_id' => $application->id,
+            'person_id' => $dependent->id,
+            'type' => 'sl1_form',
+            'label' => 'SL1 Form',
+            'file_id' => $unfiled->id,
+        ]);
+
+        foreach ([$gil, $staff] as $reader) {
+            foreach ([$filed, $unfiled] as $scan) {
+                $this->assertTrue(FileAccess::can($reader, 'preview', $scan));
+                $this->assertTrue(FileAccess::can($reader, 'view', $scan));
+                $this->assertTrue(FileAccess::can($reader, 'download', $scan));
+                $this->actingAs($reader)
+                    ->getJson('/portal/files/files/'.$scan->uuid)
+                    ->assertOk();
+                // The thumbnail address the passport photo and the checklist
+                // request. A PDF has no raster thumbnail; the old failure was
+                // the 403 before that answer.
+                $this->actingAs($reader)
+                    ->get('/portal/files/files/'.$scan->uuid.'/thumb')
+                    ->assertStatus(404);
+            }
+        }
+
+        // The slot grants a look, not a rewrite of somebody else's drive.
+        $this->assertFalse(FileAccess::can($gil, 'delete', $filed));
+        $this->assertFalse(FileAccess::can($gil, 'upload', $filed));
+        $this->assertFalse(FileAccess::can($staff, 'delete', $filed));
+        $this->assertFalse(FileAccess::can($staff, 'upload', $filed));
+
+        $this->assertFalse(FileAccess::can($outsider, 'preview', $filed));
+        $this->actingAs($outsider)
+            ->getJson('/portal/files/files/'.$filed->uuid)
+            ->assertForbidden();
+
+        $this->assertFalse(FileAccess::can($gil, 'preview', $loose));
+        $this->assertFalse(FileAccess::can($staff, 'preview', $loose));
+        $this->assertSame('full', FileAccess::fileRole($owner, $loose));
     }
 }
