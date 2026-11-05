@@ -1452,6 +1452,17 @@ if (!app.requestSingleInstanceLock()) {
       return true;
     });
 
+    // preload.js dropShell, called before Sign as admin navigates. No
+    // existing handler drops the shell for an account change.
+    // shellCache.beginAccountSwitch() and fileCache.clear() take no payload.
+    ipcMain.handle('tma:drop-shell', (event) => {
+      if (!event.sender || event.sender.isDestroyed()) return false;
+      shellCache.beginAccountSwitch();
+      fileCache.clear();
+
+      return true;
+    });
+
     // Presence settings, after Location was blocked. Not run through
     // safeExternalUrl: these are OS settings URLs, not web links.
     ipcMain.handle('tma:open-location-settings', (event) => {

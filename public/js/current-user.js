@@ -279,7 +279,7 @@
           }
           return;
         }
-        window.location.assign(j.redirect || fallback || '/users');
+        goAfterAccountSwitch(j.redirect || fallback || '/users');
       });
     }).catch(function () {
       if (button) {
@@ -287,6 +287,24 @@
         button.textContent = 'Return to your account';
       }
     });
+  }
+
+  /*
+   * Sign as admin, and the way back, on the desktop.
+   *
+   * The shell keeps the last account's document and answers the next
+   * navigation from it. Drop that copy, and the remembered /me, before
+   * leaving, or the window paints the administrator again and the switch
+   * looks like it did nothing. A browser has no shell to drop.
+   */
+  function goAfterAccountSwitch(url) {
+    try { localStorage.removeItem(ME_KEY); } catch (e) { /* private mode */ }
+    var drop = window.TMADesktop && typeof window.TMADesktop.dropShell === 'function'
+      ? window.TMADesktop.dropShell()
+      : null;
+    var go = function () { window.location.assign(url); };
+    if (drop && typeof drop.then === 'function') drop.then(go, go);
+    else go();
   }
 
   function injectImpersonationCss() {
@@ -305,7 +323,9 @@
       'border-radius:8px;padding:6px 10px;font:600 13px/1 Inter,sans-serif;cursor:pointer}' +
       '.tma-impersonation__leave:hover{background:rgba(255,255,255,.08)}' +
       '.tma-impersonation__leave:disabled{opacity:.6;cursor:default}' +
-      '@media (max-width:640px){.tma-impersonation{align-items:flex-start;flex-direction:column;gap:8px}}';
+      '@media (max-width:640px){.tma-impersonation{align-items:flex-start;flex-direction:column;gap:8px}}' +
+      'body:has(.tma-dash--desktop-bar) .tma-impersonation{margin-top:var(--tma-desktop-titlebar-h,38px);' +
+      'position:relative;z-index:210;-webkit-app-region:no-drag}';
     (document.head || document.documentElement).appendChild(style);
   }
 
@@ -671,6 +691,10 @@
     // Re-apply the signed-in user to all shell chrome after a view re-renders.
     repaint: paint,
   };
+
+  // clients.js and users.js navigate after Sign as admin. They load as
+  // their own scripts, so the helper has to be on window.
+  window.TMAGoAfterAccountSwitch = goAfterAccountSwitch;
 
   /* ── firm branding ────────────────────────────────────────────────
      The company name, page title, logo and accent colour an administrator

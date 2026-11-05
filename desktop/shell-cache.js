@@ -50,7 +50,7 @@
  * And two watchdogs on `/me`, because the shell embeds who the reader is:
  * a 401/419 means the session died since the cookie check (served shell,
  * nobody signed in — reload to the real front door), and an id that differs
- * from the one the shell was captured for means somebody signed in as
+ * from the account this process last saw means somebody signed in as
  * somebody else (their capabilities are not this shell's — drop and reload).
  *
  * The cache lives in userData, which is the desktop's own disk — the firm's
@@ -136,6 +136,23 @@ function goStale(reason) {
   suspended = true;
   invalidate();
   if (servingFromCache && callbacks.stale) callbacks.stale(reason);
+}
+
+/**
+ * The page is about to navigate as a different account.
+ *
+ * Sign as admin (and the return) regenerates the session, then loads a
+ * portal URL. Without this, that load is answered from the shell captured
+ * for the administrator: the sidebar, the capabilities and the boot user
+ * are theirs, and the switch looks like it did nothing. Suspend and drop
+ * the copy first so the navigation has to ask the network, which is now
+ * the other account. Not a reload of the page already on screen — the
+ * page is about to leave it.
+ */
+function beginAccountSwitch() {
+  servingFromCache = false;
+  suspended = true;
+  invalidate();
 }
 
 /** Is this request the window navigating to a page? (Subresources ask for
@@ -307,10 +324,15 @@ async function watchMe(copy) {
 
     const id = String(me.id);
     const meta = readMeta();
+    // The stamp on disk loses the race with the first capture: the shell is
+    // written before /me answers, so meta.account stays empty for the whole
+    // session and a later switch never looked like a different person. The
+    // id this process already saw is the one that counts.
+    const known = accountId || (meta && meta.account) || null;
 
     // The shell was captured for somebody else: its inlined capabilities are
     // theirs, and the sidebar pruned itself from them before first paint.
-    if (meta && meta.account && meta.account !== id && servingFromCache) {
+    if (known && known !== id && servingFromCache) {
       accountId = id;
       goStale('account-changed');
 
@@ -319,6 +341,12 @@ async function watchMe(copy) {
 
     accountId = id;
     suspended = false;
+
+    if (meta && meta.account !== id) {
+      try {
+        fs.writeFileSync(metaFile(), JSON.stringify({ ...meta, account: id }));
+      } catch { /* the next capture stamps it */ }
+    }
   } catch { /* a /me that is not JSON is the server's problem, not ours */ }
 }
 
@@ -363,6 +391,7 @@ module.exports = {
   noteBuild,
   on,
   invalidate,
+  beginAccountSwitch,
   readMeta,
   isNavigation,
   firstSegment,

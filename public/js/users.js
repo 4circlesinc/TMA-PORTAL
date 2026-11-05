@@ -1053,7 +1053,8 @@ if (state.filters.user) {
             usersToast(j.message || 'Could not sign in as this account.', false);
             return;
           }
-          window.location.assign(j.redirect);
+          if (window.TMAGoAfterAccountSwitch) window.TMAGoAfterAccountSwitch(j.redirect);
+          else window.location.assign(j.redirect);
         });
       }).catch(function () {
         usersToast('Could not sign in as this account.', false);

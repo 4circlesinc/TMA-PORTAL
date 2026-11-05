@@ -14,6 +14,10 @@ contextBridge.exposeInMainWorld('TMADesktop', {
     ipcRenderer.invoke('tma:open-in-browser', url);
   },
   openLocationSettings: () => ipcRenderer.invoke('tma:open-location-settings'),
+  // Sign as admin, and the way back. Called from current-user.js before
+  // the navigation. The shell on disk belongs to whoever was signed in
+  // when it was captured; drop it so the next document is the new account.
+  dropShell: () => ipcRenderer.invoke('tma:drop-shell'),
 });
 
 /*

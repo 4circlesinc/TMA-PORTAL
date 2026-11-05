@@ -12827,7 +12827,8 @@
     if (!companyId) return;
     if (button) button.disabled = true;
     CompaniesAPI.impersonate(companyId).then(function (data) {
-      window.location.assign((data && data.redirect) || '/');
+      if (window.TMAGoAfterAccountSwitch) window.TMAGoAfterAccountSwitch((data && data.redirect) || '/');
+      else window.location.assign((data && data.redirect) || '/');
     }).catch(function (err) {
       if (button) button.disabled = false;
       clientsToast((err && err.message) || 'Could not sign in as this service provider admin', 'negative');

@@ -1,1 +1,1 @@
-- The office and remote maps in Status settings draw again — you can drop a pin, search an address and set the detection radius; the map library now ships with the portal instead of a CDN the security policy refused
+- Sign as admin opens the desktop app as that service provider. The window was keeping the administrator's last page, so the switch looked like it did nothing.

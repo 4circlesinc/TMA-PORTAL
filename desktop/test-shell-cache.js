@@ -201,6 +201,50 @@ app.whenReady().then(async () => {
   check('a different account drops the shell it was shown', staleReason, 'account-changed');
   check('and the copy with it', shellCache.readMeta(), null);
 
+  /* ── the stamp loses the race with the first capture ───────────── */
+
+  scratch();
+  await session.defaultSession.cookies.set({
+    url: ORIGIN, name: 'tma_portal_session', value: 'x', expirationDate: Date.now() / 1000 + 3600,
+  });
+  shellCache.noteBuild('build-5');
+  shellCache.observe(url('/clients'), nav(`${ORIGIN}/clients`), htmlResponse(SHELL));
+  await settle();
+  check('a capture that beat /me has no account yet', shellCache.readMeta().account, null);
+
+  shellCache.observe(url('/me'), nav(`${ORIGIN}/me`), me(7));
+  await settle();
+  check('/me stamps the account it found', shellCache.readMeta().account, '7');
+
+  staleReason = null;
+  shellCache.on({ stale: (reason) => { staleReason = reason; } });
+  check('that shell is still served',
+    !!(await shellCache.maybeServe(url('/clients'), nav(`${ORIGIN}/clients`))), true);
+
+  shellCache.observe(url('/me'), nav(`${ORIGIN}/me`), me(9));
+  await settle();
+  check('signing in as someone else drops it even when the stamp arrived late',
+    staleReason, 'account-changed');
+
+  /* ── the page drops the shell before it navigates ──────────────── */
+
+  scratch();
+  await session.defaultSession.cookies.set({
+    url: ORIGIN, name: 'tma_portal_session', value: 'x', expirationDate: Date.now() / 1000 + 3600,
+  });
+  shellCache.noteBuild('build-6');
+  shellCache.observe(url('/me'), nav(`${ORIGIN}/me`), me(7));
+  await settle();
+  shellCache.observe(url('/clients'), nav(`${ORIGIN}/clients`), htmlResponse(SHELL));
+  await settle();
+  check('a shell is ready to serve',
+    !!(await shellCache.maybeServe(url('/clients'), nav(`${ORIGIN}/clients`))), true);
+
+  shellCache.beginAccountSwitch();
+  check('an account switch is not answered from that shell',
+    await shellCache.maybeServe(url('/citizenship-applications'), nav(`${ORIGIN}/citizenship-applications`)), null);
+  check('and the copy is gone before the navigation', shellCache.readMeta(), null);
+
   console.log(failures ? `\nFAILED (${failures})` : '\nPASSED');
   app.exit(failures ? 1 : 0);
 }).catch((err) => {
