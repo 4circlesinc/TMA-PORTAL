@@ -9,6 +9,7 @@ use App\Support\Access\Role;
 use App\Support\Cip\AddOn;
 use App\Support\Cip\ApplicantType;
 use App\Support\Cip\CipAccess;
+use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\Phase;
 use App\Support\Cip\Requirements;
 use App\Support\Cip\Status;
@@ -369,7 +370,7 @@ class CipRequirementController extends Controller
             'id' => $requirement->uuid,
             'applicantType' => $requirement->applicant_type,
             'key' => $requirement->key,
-            'label' => $requirement->label,
+            'label' => DocumentTypes::present((string) $requirement->label),
             'required' => (bool) $requirement->required,
             'help' => $requirement->help,
             'folder' => $requirement->folder,

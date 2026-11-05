@@ -50,7 +50,7 @@ class ApplicationRequirements
                 ['key' => 'sl2a_form', 'label' => 'SL2A Form', 'required' => true],
                 ['key' => 'sl3_form', 'label' => 'SL3 Form', 'required' => true],
                 ['key' => 'sl4_form', 'label' => 'SL4 Form', 'required' => true],
-                ['key' => 'affidavit_of_support', 'label' => 'Affidavit of Support (Formerly SL7a)', 'required' => true],
+                ['key' => 'affidavit_of_support', 'label' => 'Affidavit of Support (Formerly SL7A)', 'required' => true],
                 ['key' => DocumentTypes::BIRTH_CERTIFICATE, 'label' => 'Certified Copy of Birth Record', 'required' => true],
                 ['key' => 'name_change_document', 'label' => 'Certified Copy of Proof of Change of Name', 'required' => false, 'help' => 'Only where a name has changed.', 'carry_forward' => true],
                 ['key' => 'citizenship_certificate', 'label' => 'Certified Copy of Certificate of Citizenship', 'required' => false, 'help' => 'Only if held.'],

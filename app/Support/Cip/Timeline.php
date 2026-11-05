@@ -179,7 +179,9 @@ class Timeline
             DocumentEngine::ACTION_STATUS_CHANGED => self::documentSentence($meta, $who, $documents),
             DocumentEngine::ACTION_FILED => self::filedSentence(
                 $who,
-                (string) ($meta['label'] ?? 'a document'),
+                is_string($meta['label'] ?? null) && $meta['label'] !== ''
+                    ? DocumentTypes::present($meta['label'])
+                    : 'a document',
                 $meta,
             ),
             /*
@@ -480,7 +482,8 @@ class Timeline
      */
     private static function documentSentence(array $meta, string $who, array $documents): string
     {
-        $label = $documents[$meta['document'] ?? ''] ?? 'a document';
+        $stored = $documents[$meta['document'] ?? ''] ?? null;
+        $label = is_string($stored) && $stored !== '' ? DocumentTypes::present($stored) : 'a document';
         $to = $meta['toStatus'] ?? null;
 
         if ($to === null) {
@@ -566,7 +569,7 @@ class Timeline
             $label = is_string($meta['label'] ?? null) ? $meta['label'] : null;
         }
         if (is_string($label) && $label !== '') {
-            $rows[] = ['label' => 'Document', 'value' => $label];
+            $rows[] = ['label' => 'Document', 'value' => DocumentTypes::present($label)];
         }
         if (is_string($meta['fileName'] ?? null) && $meta['fileName'] !== '') {
             $rows[] = ['label' => 'File', 'value' => (string) $meta['fileName']];

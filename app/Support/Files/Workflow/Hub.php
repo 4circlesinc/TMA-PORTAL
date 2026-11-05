@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\DocumentComments;
+use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\FolderAccess;
 use App\Support\Companies\ContactIdentity;
@@ -354,7 +355,7 @@ final class Hub
             return [
                 'id' => $slot->uuid,
                 'kind' => 'cip',
-                'label' => $slot->label,
+                'label' => DocumentTypes::present((string) $slot->label),
                 'reason' => is_string($reason) && trim($reason) !== '' ? trim($reason) : null,
                 'status' => DocumentStatus::UPDATE_REQUIRED,
                 'statusLabel' => DocumentStatus::label(DocumentStatus::UPDATE_REQUIRED),

@@ -91,7 +91,7 @@ class CipDocumentUploadController extends Controller
         return response()->json([
             'document' => [
                 'id' => $document->uuid,
-                'label' => $document->label,
+                'label' => DocumentTypes::present((string) $document->label),
                 'uploaded' => $document->isFilled(),
                 'status' => $document->displayStatus(),
                 'statusLabel' => DocumentStatus::label($document->displayStatus()),

@@ -38,14 +38,19 @@ class DocumentTypes
 
     /** @var array<string, string> */
     public const LABELS = [
-        self::PASSPORT_PHOTO => 'Passport photo',
-        self::PASSPORT_BIO_PAGE => 'Passport bio page',
-        self::BIRTH_CERTIFICATE => 'Birth certificate',
+        self::PASSPORT_PHOTO => 'Passport Photo',
+        self::PASSPORT_BIO_PAGE => 'Passport Bio Page',
+        self::BIRTH_CERTIFICATE => 'Birth Certificate',
         self::OATH_OF_ALLEGIANCE => 'Oath of Allegiance',
         self::PROOF_OF_PAYMENT => 'Proof of Payment of the Qualifying Investment',
         self::LETTER_OF_CONFIRMATION => 'Letter of Confirmation',
         self::SALES_PURCHASE_AGREEMENT => 'Sales and Purchase Agreement',
         self::ESCROW_AGREEMENT => 'Escrow Agreement',
+        'sl1_form' => 'SL1 Form',
+        'sl2a_form' => 'SL2A Form',
+        'sl2b_form' => 'SL2B Form',
+        'sl3_form' => 'SL3 Form',
+        'sl4_form' => 'SL4 Form',
     ];
 
     /**
@@ -79,6 +84,109 @@ class DocumentTypes
 
     public static function label(string $type): string
     {
-        return self::LABELS[$type] ?? ucfirst(str_replace('_', ' ', $type));
+        if (isset(self::LABELS[$type])) {
+            return self::LABELS[$type];
+        }
+
+        // A form key that is not in the map still has to read SL, with a
+        // capital L. ucfirst("sl1_form") is "Sl1 form", and this face draws
+        // a lowercase L as a bare stem, the same shape as a capital I.
+        if (preg_match('/^sl(\d+)([a-z])?_form$/', $type, $match) === 1) {
+            $suffix = ($match[2] ?? '') !== '' ? strtoupper($match[2]) : '';
+
+            return 'SL'.$match[1].$suffix.' Form';
+        }
+
+        return self::present(ucfirst(str_replace('_', ' ', $type)));
+    }
+
+    /**
+     * The document name a reader should see.
+     *
+     * Form codes are written SL, with a capital L and a capital suffix, so
+     * "Sl1", "sl1" and a misread "SI1" all display as SL1. Every other word
+     * that is still lowercase takes a capital, except the small words a
+     * title keeps down. A name that is already in that shape is left as it
+     * is, including ePP and JPEG.
+     */
+    public static function present(string $label): string
+    {
+        $label = self::presentFormCodes($label);
+
+        $small = ['a', 'an', 'and', 'or', 'of', 'the', 'for', 'to', 'from', 'in', 'on', 'over', 'with', 'age'];
+        $parts = preg_split('/(\s+)/u', $label, -1, PREG_SPLIT_DELIM_CAPTURE);
+        if ($parts === false) {
+            return $label;
+        }
+
+        $words = [];
+        foreach ($parts as $index => $part) {
+            if (preg_match('/\S/u', $part) === 1) {
+                $words[] = $index;
+            }
+        }
+
+        if ($words === []) {
+            return $label;
+        }
+
+        $first = $words[0];
+        $last = $words[array_key_last($words)];
+        foreach ($words as $index) {
+            $parts[$index] = self::capitalizeToken($parts[$index], $small, $index === $first || $index === $last);
+        }
+
+        return implode('', $parts);
+    }
+
+    /**
+     * SL form codes only, safe to run over a whole sentence.
+     *
+     * The capital L is the whole of the "SL" versus "SI" reading: a
+     * lowercase L in Inter is a stem, and so is a capital I.
+     */
+    public static function presentFormCodes(string $text): string
+    {
+        $presented = preg_replace_callback(
+            '/\b[Ss][IlLi](\d+)([A-Za-z])?(?:\s+[Ff]orm)?\b/u',
+            static function (array $match): string {
+                $suffix = ($match[2] ?? '') !== '' ? strtoupper($match[2]) : '';
+                $form = preg_match('/form$/i', $match[0]) === 1 ? ' Form' : '';
+
+                return 'SL'.$match[1].$suffix.$form;
+            },
+            $text,
+        );
+
+        return is_string($presented) ? $presented : $text;
+    }
+
+    /**
+     * @param  list<string>  $small
+     */
+    private static function capitalizeToken(string $token, array $small, bool $edge): string
+    {
+        if (preg_match('/^(\p{P}*)(.*?)(\p{P}*)$/u', $token, $match) !== 1) {
+            return $token;
+        }
+
+        [, $lead, $core, $tail] = $match;
+        if ($core === '' || preg_match('/\d/u', $core) === 1 || preg_match('/\p{Lu}/u', $core) === 1) {
+            return $token;
+        }
+
+        $segments = explode('-', $core);
+        foreach ($segments as $index => $segment) {
+            $lower = mb_strtolower(trim($segment, "'’"));
+            if ($lower === '' || (in_array($lower, $small, true) && ! ($edge && $index === 0))) {
+                continue;
+            }
+
+            if (preg_match('/^\p{Ll}/u', $segment) === 1) {
+                $segments[$index] = mb_strtoupper(mb_substr($segment, 0, 1)).mb_substr($segment, 1);
+            }
+        }
+
+        return $lead.implode('-', $segments).$tail;
     }
 }

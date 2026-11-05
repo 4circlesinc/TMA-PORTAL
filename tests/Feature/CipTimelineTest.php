@@ -175,9 +175,9 @@ class CipTimelineTest extends TestCase
 
         // The label comes off the slot: the event's meta carries its uuid and
         // its two statuses, and none of those is a thing to read.
-        $this->assertContains('Rita Officer sent back Police certificate', $lines);
-        $this->assertContains('Rita Officer approved Police certificate', $lines);
-        $this->assertContains('Ada Admin uploaded Police certificate', $lines);
+        $this->assertContains('Rita Officer sent back Police Certificate', $lines);
+        $this->assertContains('Rita Officer approved Police Certificate', $lines);
+        $this->assertContains('Ada Admin uploaded Police Certificate', $lines);
     }
 
     public function test_a_second_upload_names_who_replaced_the_document_and_which_version(): void
@@ -273,9 +273,9 @@ class CipTimelineTest extends TestCase
         // as their own field, so the tab can set them apart instead of running
         // them into the line.
         $rows = Timeline::for($application, $admin);
-        $this->assertContains('Rita Officer sent back Police certificate', array_column($rows, 'what'));
+        $this->assertContains('Rita Officer sent back Police Certificate', array_column($rows, 'what'));
 
-        $sentBack = collect($rows)->firstWhere('what', 'Rita Officer sent back Police certificate');
+        $sentBack = collect($rows)->firstWhere('what', 'Rita Officer sent back Police Certificate');
         $this->assertSame('The stamp is not visible.', $sentBack['reason']);
     }
 

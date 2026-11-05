@@ -78,14 +78,14 @@ class PassportRequirements
 
         $birth = self::row(
             self::ORIGINAL_BIRTH_CERTIFICATE,
-            'Original Birth Certificate or certified copy from the issuing authority',
+            'Original Birth Certificate or Certified Copy from the Issuing Authority',
             required: true,
             help: 'The original, or a certified copy from the issuing authority. Hard copy only. '.self::GUIDELINES,
         );
 
         $bio = self::row(
             self::CERTIFIED_PASSPORT_BIO_PAGE,
-            'Certified copy of passport bio data page',
+            'Certified Copy of Passport Bio Data Page',
             required: true,
             help: 'A Notary or Attorney-at-Law certifies the document as a true copy of the original. Hard copy. '.self::GUIDELINES,
         );
@@ -116,14 +116,14 @@ class PassportRequirements
 
         $translations = self::row(
             self::ORIGINAL_TRANSLATIONS,
-            'Original translations of documents not originally in English',
+            'Original Translations of Documents Not Originally in English',
             required: false,
             help: 'The Passport Office will not accept copies previously provided. Hard copy originals. '.self::GUIDELINES,
         );
 
         $photos = self::row(
             self::PHYSICAL_PASSPORT_PHOTOS,
-            'Four physical passport-sized photos',
+            'Four Physical Passport-Sized Photos',
             required: true,
             help: '2 inch × 2 inch. One must be certified on the back. Follow the photo requirements previously sent. Hard copies. '.self::GUIDELINES,
         );

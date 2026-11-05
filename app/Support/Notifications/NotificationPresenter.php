@@ -7,6 +7,7 @@ use App\Models\MailSenderPhoto;
 use App\Models\Notification;
 use App\Models\User;
 use App\Support\Cip\DocumentEngine;
+use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\DocumentStatus;
 use App\Support\DeviceName;
 use App\Support\Security\IpLocation;
@@ -102,7 +103,7 @@ final class NotificationPresenter
      */
     private static function describe(ActivityLog $log): string
     {
-        $description = (string) $log->description;
+        $description = DocumentTypes::presentFormCodes((string) $log->description);
         if ($log->activity_type !== 'cip.document_status_changed') {
             return $description;
         }
@@ -152,7 +153,7 @@ final class NotificationPresenter
             $document = $meta['document'];
         }
         if ($document !== '') {
-            $rows[] = ['label' => 'Document', 'value' => $document];
+            $rows[] = ['label' => 'Document', 'value' => DocumentTypes::present($document)];
         }
 
         $text = [

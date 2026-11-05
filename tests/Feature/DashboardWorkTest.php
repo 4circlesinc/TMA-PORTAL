@@ -505,7 +505,7 @@ class DashboardWorkTest extends TestCase
             ->json('feed');
 
         $this->assertSame('update', $feed[0]['kind']);
-        $this->assertSame('Birth certificate', $feed[0]['item']['label']);
+        $this->assertSame('Birth Certificate', $feed[0]['item']['label']);
 
         $this->actingAs($ada)
             ->postJson("/portal/files/files/{$file->uuid}/workflows", [

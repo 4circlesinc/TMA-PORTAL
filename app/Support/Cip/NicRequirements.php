@@ -76,14 +76,14 @@ class NicRequirements
 
         $bio = self::row(
             self::CERTIFIED_PASSPORT_BIO_PAGE,
-            'Certified copy of passport bio data page',
+            'Certified Copy of Passport Bio Data Page',
             required: true,
             help: 'The Notary or Attorney-at-Law certifies the document as a true copy of the original. Soft copy only. '.self::GUIDELINES,
         );
 
         $birth = self::row(
             DocumentTypes::BIRTH_CERTIFICATE,
-            'Certified copy of the Birth Certificate',
+            'Certified Copy of the Birth Certificate',
             required: true,
             help: 'Notarized and certified a true copy of the original by a Notary or Attorney-at-Law. A copy already on the original package carries forward. Soft copy only. '.self::GUIDELINES,
             carryForward: true,
@@ -94,7 +94,7 @@ class NicRequirements
         // filed pre-approval answers the NIC pack without a second upload.
         $nameChange = self::row(
             self::NAME_CHANGE_DOCUMENT,
-            'Certified copy of name change document',
+            'Certified Copy of Name Change Document',
             required: false,
             help: 'If applicable. Soft copy only. '.self::GUIDELINES,
             carryForward: true,
@@ -103,7 +103,7 @@ class NicRequirements
 
         $marriage = self::row(
             'marriage_certificate',
-            'Certified copy of Marriage Certificate',
+            'Certified Copy of Marriage Certificate',
             required: false,
             help: 'If applicable. Soft copy only. '.self::GUIDELINES,
         );
@@ -122,7 +122,7 @@ class NicRequirements
 
         $spouseMarriage = self::row(
             'marriage_certificate',
-            'Certified copy of Marriage Certificate',
+            'Certified Copy of Marriage Certificate',
             required: true,
             help: 'Notarized and certified a true copy of the original. Soft copy only. '.self::GUIDELINES,
         );

@@ -451,7 +451,7 @@ class WorkflowHubTest extends TestCase
         $res = $this->actingAs($ada)->getJson('/portal/files/workflows/updates')->assertOk();
 
         $res->assertJsonCount(1, 'items')
-            ->assertJsonPath('items.0.label', 'Birth certificate')
+            ->assertJsonPath('items.0.label', 'Birth Certificate')
             ->assertJsonPath('items.0.reason', 'The stamp is not visible.')
             ->assertJsonPath('items.0.person', 'ASEM HABTOOR')
             ->assertJsonPath('items.0.file.name', 'Birth certificate.pdf')
@@ -556,7 +556,7 @@ class WorkflowHubTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'items')
             ->assertJsonPath('items.0.reason', 'Crop the edges.')
-            ->assertJsonPath('items.0.label', 'Passport bio page');
+            ->assertJsonPath('items.0.label', 'Passport Bio Page');
     }
 
     /**

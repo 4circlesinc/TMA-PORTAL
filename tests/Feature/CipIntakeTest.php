@@ -1706,7 +1706,7 @@ class CipIntakeTest extends TestCase
             ->where('type', DocumentTypes::PASSPORT_BIO_PAGE)->first();
         $file = FileItem::find($slot->file_id);
         $this->assertSame($sponsor->folder_id, $file->folder_id);
-        $this->assertSame('MARYAM HADDAD - Passport bio page.pdf', $file->name);
+        $this->assertSame('MARYAM HADDAD - Passport Bio Page.pdf', $file->name);
 
         $this->assertSame(
             [],
@@ -2034,7 +2034,7 @@ class CipIntakeTest extends TestCase
         // these are ordinary library objects with ordinary history.
         $file = FileItem::find($slot->file_id);
         $this->assertSame($main->folder_id, $file->folder_id);
-        $this->assertSame('JOHN SMITH - Birth certificate.pdf', $file->name);
+        $this->assertSame('JOHN SMITH - Birth Certificate.pdf', $file->name);
         $this->assertDatabaseHas('file_versions', ['file_id' => $file->id, 'version_number' => 1]);
     }
 
@@ -2084,8 +2084,8 @@ class CipIntakeTest extends TestCase
 
         $filed = FileItem::where('folder_id', $main->folder_id)
             ->pluck('name')->all();
-        $this->assertContains('JOHN SMITH - Birth certificate.pdf', $filed);
-        $this->assertContains('JOHN SMITH - Birth certificate (2).pdf', $filed);
+        $this->assertContains('JOHN SMITH - Birth Certificate.pdf', $filed);
+        $this->assertContains('JOHN SMITH - Birth Certificate (2).pdf', $filed);
     }
 
     /**
@@ -2155,7 +2155,7 @@ class CipIntakeTest extends TestCase
         // Both sheets — the answer and the extra file beside it — in the same
         // drawer, or one requirement's papers end up in two places.
         $this->assertSame(
-            ['JOHN SMITH - Passport bio page.pdf', 'JOHN SMITH - Passport bio page (2).pdf'],
+            ['JOHN SMITH - Passport Bio Page.pdf', 'JOHN SMITH - Passport Bio Page (2).pdf'],
             FileItem::where('folder_id', $drawer->id)->orderBy('id')->pluck('name')->all(),
         );
 

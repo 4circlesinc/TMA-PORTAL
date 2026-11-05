@@ -349,20 +349,20 @@ class CipApplicationDraftTest extends TestCase
 
         $this->assertNotNull($main->documents()->where('type', 'passport_bio_page')->whereNotNull('file_id')->first());
         $this->assertNotNull($main->documents()->where('type', 'birth_certificate')->whereNotNull('file_id')->first());
-        $this->assertSame(2, $this->sheetsNamed($main, 'Passport bio page'), 'The main applicant keeps both bio pages, and the first is not stored twice.');
+        $this->assertSame(2, $this->sheetsNamed($main, 'Passport Bio Page'), 'The main applicant keeps both bio pages, and the first is not stored twice.');
 
         $suha = $dependents[0];
         $this->assertNotNull($suha->photo_path);
         $this->assertNotNull($suha->documents()->where('type', 'passport_bio_page')->whereNotNull('file_id')->first());
         $this->assertNotNull($suha->documents()->where('type', 'birth_certificate')->whereNotNull('file_id')->first());
-        $this->assertSame(2, $this->sheetsNamed($suha, 'Passport bio page'));
-        $this->assertSame(1, $this->sheetsNamed($suha, 'Birth certificate'));
+        $this->assertSame(2, $this->sheetsNamed($suha, 'Passport Bio Page'));
+        $this->assertSame(1, $this->sheetsNamed($suha, 'Birth Certificate'));
 
         $omar = $dependents[1];
         $this->assertNotNull($omar->photo_path);
         $this->assertNotNull($omar->documents()->where('type', 'passport_bio_page')->whereNotNull('file_id')->first());
         $this->assertNotNull($omar->documents()->where('type', 'birth_certificate')->whereNotNull('file_id')->first());
-        $this->assertSame(1, $this->sheetsNamed($omar, 'Passport bio page'));
+        $this->assertSame(1, $this->sheetsNamed($omar, 'Passport Bio Page'));
 
         $filed = $this->actingAs($staff)
             ->getJson('/portal/cip/applications/draft?application='.$draft->uuid)

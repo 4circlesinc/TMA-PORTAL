@@ -2828,7 +2828,7 @@ class CipApplicationController extends Controller
                     return [
                         'id' => $slot->uuid,
                         'type' => $slot->type,
-                        'label' => $slot->label,
+                        'label' => DocumentTypes::present((string) $slot->label),
                         'required' => (bool) $slot->required,
                         'additional' => $additional,
                         'help' => $slot->requirement?->help,
