@@ -18374,7 +18374,7 @@
          * letter. The form calls this with what was answered last time, if
          * a filing was refused, and is called back with the answer.
          */
-        askDecision: function (previous, done) {
+        askDecision: isProviderCipUser() ? null : function (previous, done) {
           openDecisionDialog(null, null, null, { collect: done, defaults: previous || {} });
         },
         /*

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\CipApplication;
+use App\Models\CompanyMember;
 use App\Models\CipApplicationAssignment;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
@@ -1567,6 +1568,50 @@ class CipApplicationDraftTest extends TestCase
 
         $this->assertTrue($draft->fresh()->sponsored);
         $this->assertSame($draft->decision_letter_file_id, $draft->fresh()->decision_letter_file_id);
+    }
+
+    /**
+     * A service provider files a post-approval application without recording
+     * the Unit's decision. Add is an ordinary submit.
+     */
+    public function test_a_service_provider_saves_a_post_approval_draft_without_a_decision(): void
+    {
+        $provider = $this->provider();
+        $provider->forceFill(['active' => true])->save();
+        $contact = $this->user(Role::SERVICE_PROVIDER_ADMIN);
+        CompanyMember::create([
+            'company_id' => $provider->company_id,
+            'user_id' => $contact->id,
+            'name' => 'Gal Contact',
+            'email' => $contact->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+
+        $this->actingAs($contact)
+            ->getJson('/portal/cip/applications/form?phase='.Phase::POST_APPROVAL)
+            ->assertOk()
+            ->assertJsonPath('recordsDecision', false);
+
+        $this->actingAs($this->user(Role::ADMINISTRATOR))
+            ->getJson('/portal/cip/applications/form?phase='.Phase::POST_APPROVAL)
+            ->assertOk()
+            ->assertJsonPath('recordsDecision', true);
+
+        $this->save($contact, [
+            'providerId' => $provider->uuid,
+            'phase' => Phase::POST_APPROVAL,
+            'investmentType' => InvestmentType::REAL_ESTATE,
+            'sponsored' => '0',
+            'cipNumber' => '10T1G12670P',
+            'firstName' => 'Amara',
+        ])->assertOk();
+
+        $draft = CipApplication::query()->first();
+        $this->assertSame(Status::DRAFT, $draft->status);
+        $this->assertNull($draft->decision);
+        $this->assertNull($draft->decided_at);
+        $this->assertNull($draft->decision_letter_file_id);
     }
 
     /** Shape is still enforced: a wrong answer is wrong however unfinished. */

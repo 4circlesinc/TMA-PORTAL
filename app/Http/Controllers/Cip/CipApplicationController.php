@@ -151,6 +151,9 @@ class CipApplicationController extends Controller
             // One provider and no choice to make: the wizard shows the name
             // rather than a select of one.
             'providerFixed' => $providers->count() === 1,
+            // Staff record the Unit's decision on the form. A service
+            // provider's Add files the application and does not ask.
+            'recordsDecision' => Role::isStaff($user),
             'countries' => Countries::options(),
             'investmentTypes' => InvestmentType::options(),
             'enterpriseCategories' => InvestmentType::enterpriseOptions(),

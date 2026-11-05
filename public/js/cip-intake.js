@@ -1470,12 +1470,17 @@
     return state.phase === 'post_approval';
   }
 
+  /* Staff record the decision on the form. A service provider does not. */
+  function recordsDecision() {
+    return !!(state.options && state.options.recordsDecision);
+  }
+
   /*
-   * A post-approval file that has not been filed yet. The decision is asked
-   * here, at the start, rather than in a dialog after Add.
+   * A post-approval file that has not been filed yet, opened by staff.
+   * The decision is on the form. A service provider's Add does not ask.
    */
   function asksOpeningDecision() {
-    return isFiling() && isPostApprovalIntake() && !isAddOnIntake();
+    return isFiling() && isPostApprovalIntake() && !isAddOnIntake() && recordsDecision();
   }
 
   function openingDecisionFields() {
@@ -4005,6 +4010,16 @@
    * comes back is kept here and sent with the filing.
    */
   function askOutcome() {
+    // A service provider's Add files the application. The decision dialog
+    // is the firm's, and this form does not open it for them.
+    if (!recordsDecision()) {
+      state.decision = null;
+      state.outcome = 'post_approval';
+      submit();
+
+      return;
+    }
+
     if (state.askDecision) {
       state.askDecision(state.decision, function (answer) {
         if (!answer) return;

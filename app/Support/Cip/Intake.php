@@ -439,17 +439,17 @@ class Intake
         }
 
         /*
-         * A post-approval draft is a file the Unit has already decided.
-         * The decision is recorded before anything else is typed, so these
-         * six answers — and the letter that records the decision — are
-         * required on the first save. A later save keeps the letter already
-         * stored and does not ask for the file again. Pre-approval stays
-         * unfinished-friendly: only the firm is required.
+         * A post-approval draft a member of staff starts is a file the Unit
+         * has already decided. Those six answers — and the letter — are
+         * required on the first save. A service provider files the same
+         * form without recording that decision; their Add is an ordinary
+         * submit, and the decision is recorded later by the firm.
          *
          * Sponsored uses `present` rather than `required`. Laravel treats
          * 0 as empty, and "No" is a real answer.
          */
         $postApproval = self::filingPhase() === Phase::POST_APPROVAL;
+        $recordsDecision = $postApproval && Role::isStaff(request()->user());
 
         $rules = [
             'providerId' => ['required', 'string'],
@@ -468,7 +468,7 @@ class Intake
             'dependents' => ['nullable', 'array', 'max:'.self::MAX_DEPENDENTS_DRAFT],
         ];
 
-        if ($postApproval) {
+        if ($recordsDecision) {
             $rules['outcome'] = ['required', 'string', Rule::in([
                 self::OUTCOME_APPROVED,
                 self::OUTCOME_DENIED,
