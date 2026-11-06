@@ -54,6 +54,9 @@ module.exports = {
     // above and killed at login.
     entitlementsLoginHelper: 'entitlements.mas.loginhelper.plist',
     provisioningProfile: process.env.MAS_PROVISIONING_PROFILE || 'build/mas.provisionprofile',
+    // Signs with whichever Apple Distribution certificate the profile lists,
+    // not whichever the keychain happens to list first. See mas-sign.js.
+    sign: './mas-sign.js',
     artifactName: '${productName}-${version}-mas.${ext}',
     extendInfo: {
       // HTTPS only, which is exempt. Saves the export compliance question on

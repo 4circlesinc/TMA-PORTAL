@@ -83,6 +83,23 @@ const child = plistKeys(config.mas.entitlementsInherit);
 check('helpers inherit the app sandbox',
   child.get('com.apple.security.app-sandbox') === true && child.get('com.apple.security.inherit') === true);
 
+const masSign = require('./mas-sign');
+check('the store build signs with the certificate its profile lists',
+  config.mas.sign === './mas-sign.js' && typeof masSign.sign === 'function');
+{
+  const der = (text) => Buffer.from(text).toString('base64');
+  const sha1 = (text) => require('node:crypto').createHash('sha1').update(text).digest('hex').toUpperCase();
+  const xml = `<plist><dict><key>DeveloperCertificates</key><array><data>\n${der('cert-841D')}\n</data></array><key>Name</key><string>x</string></dict></plist>`;
+  const wanted = masSign.certificatesIn(xml);
+  check('the profile\'s certificates are read by fingerprint', JSON.stringify(wanted) === JSON.stringify([sha1('cert-841D')]));
+  check('a certificate the profile lists is kept',
+    masSign.identityFor(sha1('cert-841D'), wanted, [sha1('cert-A0DD'), sha1('cert-841D')]) === sha1('cert-841D'));
+  check('one it does not list is swapped for one it does',
+    masSign.identityFor(sha1('cert-A0DD'), wanted, [sha1('cert-A0DD'), sha1('cert-841D')]) === sha1('cert-841D'));
+  check('and with none of its certificates installed there is nothing to sign with',
+    masSign.identityFor(sha1('cert-A0DD'), wanted, [sha1('cert-A0DD')]) === null);
+}
+
 const helper = plistKeys(config.mas.entitlementsLoginHelper);
 check('the login helper has a sandbox of its own, since launchd starts it',
   helper.get('com.apple.security.app-sandbox') === true && !helper.has('com.apple.security.inherit'));
