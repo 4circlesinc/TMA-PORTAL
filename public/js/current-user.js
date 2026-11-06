@@ -224,33 +224,87 @@
   }
 
   /*
-   * An administrator opened the portal as this account. The bar is the way
+   * An administrator opened the portal as this account. The card is the way
    * back; without it the session is that account until it expires.
+   *
+   * It floats in the bottom-left corner rather than across the top of the
+   * page: a full-width bar covered the first row of every view, and on the
+   * desktop it landed half under the title bar. It minimizes to a pill but
+   * never closes - while the session belongs to someone else the page always
+   * says so. Minimized holds for the rest of that session in this tab, so it
+   * does not spring open again on every navigation; a different account, or
+   * the next session, starts open.
    */
+  var IMPERSONATION_MIN_KEY = 'tma.impersonation.minimized';
+
   function paintImpersonation(info) {
     injectImpersonationCss();
     var bar = document.querySelector('[data-impersonation-bar]');
     if (!info || !info.actorName) {
       if (bar) bar.remove();
       document.documentElement.classList.remove('tma-impersonating');
+      try { sessionStorage.removeItem(IMPERSONATION_MIN_KEY); } catch (e) { /* private mode */ }
       return;
     }
     document.documentElement.classList.add('tma-impersonating');
+
+    var who = (info && info.name) || (me && me.name) || 'this account';
+    var session = info.actorName + '\n' + who;
+    var drawn = session + '\n' + (info.asFirm ? 'firm' : 'user') + '\n' + (info.returnUrl || '');
+    // paint() runs on every view re-render. Same session, same card: leave it
+    // alone so a "Returning…" in flight, or focus inside it, survives.
+    if (bar && bar.getAttribute('data-drawn') === drawn) return;
+
     if (!bar) {
       bar = document.createElement('div');
       bar.className = 'tma-impersonation';
       bar.setAttribute('data-impersonation-bar', '');
-      bar.setAttribute('role', 'status');
-      document.body.insertBefore(bar, document.body.firstChild);
+      bar.setAttribute('role', 'region');
+      document.body.appendChild(bar);
     }
-    var who = (info && info.name) || (me && me.name) || 'this account';
-    var lead = info.asFirm
-      ? 'You’re signed in as the service provider admin of <strong>' + esc(who) + '</strong>.'
-      : 'You’re signed in as <strong>' + esc(who) + '</strong>.';
+    bar.setAttribute('data-drawn', drawn);
+    bar.setAttribute('aria-label', 'Signed in as ' + who);
+
+    var detail = info.asFirm
+      ? 'Service provider admin view. This session belongs to ' + esc(info.actorName) + '.'
+      : 'This session belongs to ' + esc(info.actorName) + '.';
     bar.innerHTML =
-      '<p class="tma-impersonation__text">' + lead +
-      ' This session belongs to ' + esc(info.actorName) + '.</p>' +
-      '<button type="button" class="tma-impersonation__leave" data-impersonation-leave>Return to your account</button>';
+      '<div class="tma-impersonation__card" id="tma-impersonation-card">' +
+        '<span class="tma-impersonation__badge" aria-hidden="true">' +
+          '<img src="images/icons/phosphor/UserSwitch.svg" alt="" width="18" height="18"></span>' +
+        '<div class="tma-impersonation__body">' +
+          '<p class="tma-impersonation__title">Signed in as <strong>' + esc(who) + '</strong></p>' +
+          '<p class="tma-impersonation__detail">' + detail + '</p>' +
+          '<button type="button" class="tma-dash__head-dropdown-btn tma-dash__head-dropdown-btn--primary tma-impersonation__leave" data-impersonation-leave>Return to your account</button>' +
+        '</div>' +
+        '<button type="button" class="tma-dash__icon-btn tma-impersonation__min" data-impersonation-minimize' +
+          ' aria-label="Minimize" title="Minimize" aria-controls="tma-impersonation-card" aria-expanded="true">' +
+          '<img src="images/icons/phosphor/CaretDown.svg" alt="" width="16" height="16"></button>' +
+      '</div>' +
+      '<button type="button" class="tma-impersonation__pill" data-impersonation-expand' +
+        ' title="Show details" aria-controls="tma-impersonation-card" aria-expanded="false">' +
+        '<img src="images/icons/phosphor/UserSwitch.svg" alt="" width="16" height="16">' +
+        '<span class="tma-impersonation__pill-label">Signed in as <strong>' + esc(who) + '</strong></span>' +
+        '<img src="images/icons/phosphor/CaretUp.svg" alt="" width="12" height="12">' +
+      '</button>';
+
+    var kept = null;
+    try { kept = sessionStorage.getItem(IMPERSONATION_MIN_KEY); } catch (e) { /* private mode */ }
+    bar.classList.toggle('is-minimized', kept === session);
+
+    function setMinimized(min) {
+      bar.classList.toggle('is-minimized', min);
+      try {
+        if (min) sessionStorage.setItem(IMPERSONATION_MIN_KEY, session);
+        else sessionStorage.removeItem(IMPERSONATION_MIN_KEY);
+      } catch (e) { /* private mode */ }
+      // The control that was clicked just disappeared; hand focus to the one
+      // that replaced it so a keyboard user is not dropped onto <body>.
+      var next = bar.querySelector(min ? '[data-impersonation-expand]' : '[data-impersonation-minimize]');
+      if (next) next.focus();
+    }
+    bar.querySelector('[data-impersonation-minimize]').addEventListener('click', function () { setMinimized(true); });
+    bar.querySelector('[data-impersonation-expand]').addEventListener('click', function () { setMinimized(false); });
     bar.querySelector('[data-impersonation-leave]').addEventListener('click', function () {
       leaveImpersonation(info.returnUrl || '/users', bar.querySelector('[data-impersonation-leave]'));
     });
@@ -311,21 +365,61 @@
     if (document.getElementById('tma-impersonation-css')) return;
     var style = document.createElement('style');
     style.id = 'tma-impersonation-css';
+    // Popup glass, tokens and the shell's own buttons (.tma-dash__head-dropdown-btn,
+    // .tma-dash__icon-btn) - nothing here is a new surface or palette. z-index
+    // sits under portal modals (620) and toasts (650): a modal covers it, and
+    // feedback stays readable over it. Toasts own the bottom centre and the
+    // notification stack the bottom right, so this takes the bottom left.
+    var surface = 'background:var(--color-bg-popup,rgba(255,255,255,.9));' +
+      '-webkit-backdrop-filter:var(--blur-40,blur(40px));backdrop-filter:var(--blur-40,blur(40px));';
+    var edge = 'inset 0 0 0 1px var(--color-border-soft,rgba(0,0,0,.1))';
     style.textContent =
-      'html.tma-impersonating, html.tma-impersonating body{height:100%}' +
-      'html.tma-impersonating body{display:flex;flex-direction:column}' +
-      'html.tma-impersonating .tma-dash{flex:1;min-height:0}' +
-      '.tma-impersonation{display:flex;align-items:center;justify-content:space-between;gap:16px;' +
-      'padding:8px 16px;background:#3d2e12;color:#f6e7c1;font:500 13px/1.4 Inter,sans-serif;z-index:80}' +
-      '.tma-impersonation__text{margin:0}' +
-      '.tma-impersonation strong{font-weight:650}' +
-      '.tma-impersonation__leave{flex:0 0 auto;border:1px solid #d7c08a;background:transparent;color:#f6e7c1;' +
-      'border-radius:8px;padding:6px 10px;font:600 13px/1 Inter,sans-serif;cursor:pointer}' +
-      '.tma-impersonation__leave:hover{background:rgba(255,255,255,.08)}' +
+      '.tma-impersonation{position:fixed;z-index:600;left:var(--space-16,16px);' +
+      'bottom:calc(var(--space-16,16px) + env(safe-area-inset-bottom,0px));' +
+      'max-width:calc(100vw - 2 * var(--space-16,16px));' +
+      'font-family:var(--font-family,Inter,system-ui,sans-serif);' +
+      'font-feature-settings:var(--font-features,"ss01" 1,"cv01" 1);' +
+      'color:var(--color-text-primary,#000);-webkit-app-region:no-drag}' +
+      '.tma-impersonation p{margin:0}' +
+      '.tma-impersonation strong{font-weight:600}' +
+      '.tma-impersonation__card{display:flex;align-items:flex-start;gap:var(--space-12,12px);' +
+      'box-sizing:border-box;width:340px;max-width:100%;' +
+      'padding:var(--space-12,12px) var(--space-8,8px) var(--space-12,12px) var(--space-12,12px);' +
+      'border-radius:var(--radius-16,16px);' + surface +
+      'box-shadow:var(--shadow-popup,0 8px 28px rgba(0,0,0,.1)),' + edge + '}' +
+      '.tma-impersonation__badge{flex:0 0 auto;display:grid;place-items:center;width:32px;height:32px;' +
+      'border-radius:var(--radius-pill,80px);background:var(--color-accent-bg,rgba(19,109,160,.08))}' +
+      '.tma-impersonation__body{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;' +
+      'align-items:flex-start;gap:var(--space-4,4px);padding-top:6px}' +
+      '.tma-impersonation__title{font-size:var(--text-size-14,14px);line-height:20px;overflow-wrap:anywhere}' +
+      '.tma-impersonation__detail{font-size:var(--text-size-12,12px);line-height:16px;' +
+      'color:var(--color-text-secondary,rgba(0,0,0,.4))}' +
+      '.tma-impersonation__leave{margin-top:var(--space-8,8px)}' +
       '.tma-impersonation__leave:disabled{opacity:.6;cursor:default}' +
-      '@media (max-width:640px){.tma-impersonation{align-items:flex-start;flex-direction:column;gap:8px}}' +
-      'body:has(.tma-dash--desktop-bar) .tma-impersonation{margin-top:var(--tma-desktop-titlebar-h,38px);' +
-      'position:relative;z-index:210;-webkit-app-region:no-drag}';
+      '.tma-impersonation__min{flex:0 0 auto;margin-top:2px}' +
+      '.tma-impersonation__pill{display:none;align-items:center;gap:var(--space-8,8px);' +
+      'box-sizing:border-box;min-height:32px;max-width:100%;' +
+      'padding:var(--space-4,4px) var(--space-12,12px) var(--space-4,4px) var(--space-8,8px);' +
+      'border:0;border-radius:var(--radius-pill,80px);' + surface +
+      'box-shadow:var(--shadow-pill,0 2px 4px rgba(0,0,0,.1)),' + edge + ';' +
+      'color:inherit;font:inherit;font-size:var(--text-size-12,12px);line-height:16px;cursor:pointer}' +
+      '.tma-impersonation__pill:hover{background-image:linear-gradient(var(--color-hover,rgba(0,0,0,.04)),' +
+      'var(--color-hover,rgba(0,0,0,.04)))}' +
+      '.tma-impersonation__pill:focus-visible{outline:2px solid var(--color-accent,#136da0);outline-offset:2px}' +
+      '.tma-impersonation__pill-label{min-width:0;max-width:260px;overflow:hidden;' +
+      'text-overflow:ellipsis;white-space:nowrap}' +
+      '.tma-impersonation__pill img{flex:0 0 auto}' +
+      '.tma-impersonation.is-minimized .tma-impersonation__card{display:none}' +
+      '.tma-impersonation.is-minimized .tma-impersonation__pill{display:inline-flex}' +
+      // An <img> icon is always black; on the dark theme flip it the way the
+      // shell's own icon buttons do.
+      ':root[data-theme="dark"] .tma-impersonation img{filter:invert(1) brightness(1.6)}' +
+      // The browser's phone/tablet layout docks a tab bar along the bottom
+      // (8 + 52 + 8, plus its 8 clearance). The desktop app never shows it.
+      '@media (max-width:1024px){.tma-impersonation{' +
+      'bottom:calc(84px + var(--space-8,8px) + env(safe-area-inset-bottom,0px))}' +
+      'body:has(.tma-dash--desktop-bar) .tma-impersonation{' +
+      'bottom:calc(var(--space-16,16px) + env(safe-area-inset-bottom,0px))}}';
     (document.head || document.documentElement).appendChild(style);
   }
 
