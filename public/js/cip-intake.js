@@ -1846,18 +1846,56 @@
       formBody() +
       '</div>');
     wire(root);
-    restoreIntakeScroll(keptScroll, root);
-    if (activePath) {
+    var point = state.pointAtGap;
+    state.pointAtGap = false;
+    if (!point) restoreIntakeScroll(keptScroll, root);
+    if (!point && activePath) {
       var again = root.querySelector('[data-cip-field="' + cssEscape(activePath) + '"]');
       if (again && typeof again.focus === 'function') {
         try { again.focus({ preventScroll: true }); } catch (err) { again.focus(); }
       }
     }
     // Morph can briefly shrink the form so the browser clamps scrollTop to 0
-    // before the new documents card lands. Put the reader back after layout.
+    // before the new documents card lands. Put the reader back after layout,
+    // unless this render exists to show them the gap they still owe.
     window.requestAnimationFrame(function () {
-      restoreIntakeScroll(keptScroll, root);
+      if (point) pointAtFirstGap(root);
+      else restoreIntakeScroll(keptScroll, root);
     });
+  }
+
+  /* The first control this render marked wrong, in the order the form is read. */
+  function gapTarget(root) {
+    if (!root) return null;
+
+    return root.querySelector(
+      '.tma-portal-field.is-invalid, .tma-portal-drop.is-invalid, .tma-dash__clients-photo.is-invalid'
+    );
+  }
+
+  /*
+   * Move the form to the missing answer and put the caret there.
+   *
+   * The intake form scrolls inside itself. scrollIntoView on the control
+   * is then undone by the scroll restore that follows every render, so the
+   * reader stayed on the documents and only saw "Check one answer."
+   */
+  function pointAtFirstGap(root) {
+    var target = gapTarget(root);
+    if (!target) return;
+    var scroller = root.querySelector('.tma-dash__clients-form')
+      || root.querySelector('[data-cip-form]');
+    if (scroller) {
+      var top = target.getBoundingClientRect().top
+        - scroller.getBoundingClientRect().top
+        + scroller.scrollTop
+        - 24;
+      scroller.scrollTop = top < 0 ? 0 : top;
+    }
+    var focusable = target.querySelector('[data-cip-field], input, select, textarea') || target;
+    if (focusable && typeof focusable.focus === 'function') {
+      try { focusable.focus({ preventScroll: true }); } catch (err) { focusable.focus(); }
+    }
   }
 
   /* ── wiring ────────────────────────────────────────────────────── */
@@ -2966,13 +3004,11 @@
   }
 
   /*
-   * What the server said about the decision itself, taken out of a refusal.
+   * The server's words for the decision, said in the toast.
    *
-   * The decision is asked in a dialog, not on the form, so there is no
-   * control to mark: left among the form's errors it became "Check one
-   * answer." with nothing marked and no reason. Its own words are said
-   * instead. A letter the server would not take is dropped from what the
-   * dialog puts back, or Add would offer the same file again.
+   * The same error stays on the form so the field can be marked and
+   * scrolled to. A letter the server would not take is dropped, or the
+   * next Add would offer that file again.
    */
   function takeDecisionError(errors) {
     var said = '';
@@ -2982,7 +3018,6 @@
       var msg = errors[key];
       if (!said) said = Array.isArray(msg) ? String(msg[0] || '') : String(msg || '');
       if ((key === 'decision_letter' || key === 'decisionLetter') && state.decision) state.decision.letter = null;
-      delete errors[key];
     });
 
     return said;
@@ -3009,6 +3044,8 @@
    * would refuse to submit with nothing marked. The list itself is the control.
    */
   function fieldForError(key) {
+    // The letter's own guard objects as decisionLetter. The control is decision_letter.
+    if (key === 'decisionLetter') return 'decision_letter';
     // The prefix travels with it: `sponsor.birthCertificate.2` belongs on the
     // sponsor's own control, not the main applicant's.
     var listed = key.match(/^(.+)\.\d+$/);
@@ -3374,8 +3411,9 @@
     if (asksOpeningDecision() && Object.keys(openingGaps()).length) {
       if (announce) {
         state.errors = openingGaps();
+        state.pointAtGap = true;
         if (state.root) render(state.root);
-        ui().toastError('Enter the decision before saving a draft.');
+        ui().toastError(answerSummary(state.errors));
       }
       settle(false);
 
@@ -3892,11 +3930,8 @@
     var found = missing();
     if (Object.keys(found).length) {
       state.errors = found;
+      state.pointAtGap = true;
       render(root);
-      // Take the reader to the first thing they still owe.
-      var first = root.querySelector('.is-invalid [data-cip-field], .is-invalid');
-      if (first && first.scrollIntoView) first.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      if (first && first.focus) first.focus();
       ui().toastError(answerSummary(found));
 
       return;
@@ -3988,6 +4023,7 @@
           // except that one file in a list objects as `passportBioPage.0` and
           // the control it belongs to is `passportBioPage`.
           applyErrors(json.errors);
+          state.pointAtGap = true;
           render(root);
           ui().toastError(decisionSaid || answerSummary(state.errors));
 
