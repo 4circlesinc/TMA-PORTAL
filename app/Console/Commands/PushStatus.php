@@ -4,6 +4,8 @@ namespace App\Console\Commands;
 
 use App\Models\DeviceToken;
 use App\Models\User;
+use App\Support\Notifications\ApnsClient;
+use App\Support\Notifications\FcmClient;
 use App\Support\Notifications\Notifier;
 use App\Support\Notifications\PushTransport;
 use Illuminate\Console\Command;
@@ -11,19 +13,21 @@ use Illuminate\Console\Command;
 /**
  * `php artisan push:status [--test=email]`
  *
- * Says whether push is configured and whether Google accepts the service
- * account, counts the registered devices, and with --test sends a real
- * notification to that person through the normal path. Made to be run from
- * Laravel Cloud's Commands panel, where there is no shell.
+ * Says whether push is configured for Android (FCM) and iPhone (APNs), and
+ * whether Google and Apple each accept the credentials, counts the registered
+ * devices, and with --test sends a real notification to that person through
+ * the normal path. Made to be run from Laravel Cloud's Commands panel, where
+ * there is no shell.
  */
 class PushStatus extends Command
 {
     protected $signature = 'push:status {--test= : Send a test notification to the user with this email}';
 
-    protected $description = 'Report the push (FCM) configuration and optionally send a test notification';
+    protected $description = 'Report the push (FCM and APNs) configuration and optionally send a test notification';
 
-    public function handle(PushTransport $transport): int
+    public function handle(PushTransport $transport, FcmClient $fcm, ApnsClient $apns): int
     {
+        $this->line('Android (FCM)');
         $project = (string) config('services.fcm.project_id');
         $credentials = (string) config('services.fcm.credentials');
         $this->line('Project id:   '.($project !== '' ? $project : '(not set)'));
@@ -34,19 +38,40 @@ class PushStatus extends Command
             default => 'FCM_CREDENTIALS_JSON is neither JSON nor a readable file',
         });
 
+        $failed = false;
+        if ($fcm->enabled()) {
+            // A token Google cannot know: "unregistered" proves the service account signed in and FCM answered.
+            $probe = $fcm->send('push-status-probe', ['kind' => 'probe']);
+            $failed = $probe === PushTransport::FAILED;
+            $this->line('Google auth:  '.match ($probe) {
+                PushTransport::UNREGISTERED => 'OK (FCM answered)',
+                PushTransport::OK => 'OK',
+                default => 'FAILED - check the service account JSON and that the Firebase Cloud Messaging API is enabled (see storage/logs)',
+            });
+        } else {
+            $this->line('Google auth:  not set up, Android phones get no push');
+        }
+
+        $this->line('');
+        $this->line('iPhone (APNs)');
+        $this->line('Key id:       '.((string) config('services.apns.key_id') ?: '(not set)'));
+        $this->line('Team id:      '.((string) config('services.apns.team_id') ?: '(not set)'));
+        $this->line('Bundle id:    '.((string) config('services.apns.bundle_id') ?: '(not set)'));
+        $this->line('Private key:  '.((string) config('services.apns.private_key') !== '' ? 'set' : '(not set)'));
+        if ($apns->enabled()) {
+            $check = $apns->check();
+            $failed = $failed || ! $check['ok'];
+            $this->line('Apple auth:   '.$check['detail']);
+        } else {
+            $this->line('Apple auth:   not set up, iPhones get no push');
+        }
+        $this->line('');
+
         if (! $transport->enabled()) {
-            $this->error('Push is OFF: set FCM_PROJECT_ID and FCM_CREDENTIALS_JSON (a service-account JSON) and redeploy.');
+            $this->error('Push is OFF. Android: set FCM_PROJECT_ID and FCM_CREDENTIALS_JSON. iPhone: set APNS_KEY_ID, APNS_TEAM_ID, APNS_BUNDLE_ID and APNS_PRIVATE_KEY. Then redeploy.');
 
             return self::FAILURE;
         }
-
-        // A token Google cannot know: "unregistered" proves the service account signed in and FCM answered.
-        $probe = $transport->send('push-status-probe', ['kind' => 'probe']);
-        $this->line('Google auth:  '.match ($probe) {
-            PushTransport::UNREGISTERED => 'OK (FCM answered)',
-            PushTransport::OK => 'OK',
-            default => 'FAILED — check the service account JSON and that the Firebase Cloud Messaging API is enabled (see storage/logs)',
-        });
 
         $devices = DeviceToken::query()->selectRaw('platform, count(*) as n')->groupBy('platform')->pluck('n', 'platform');
         $this->line('Devices:      '.($devices->isEmpty() ? 'none registered yet' : $devices->map(fn ($n, $p) => "$p: $n")->implode(', ')));
@@ -74,6 +99,6 @@ class PushStatus extends Command
                 : 'The test was not created (the person may have that group silenced).');
         }
 
-        return $probe === PushTransport::FAILED ? self::FAILURE : self::SUCCESS;
+        return $failed ? self::FAILURE : self::SUCCESS;
     }
 }

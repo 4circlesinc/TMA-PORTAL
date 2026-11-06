@@ -24,6 +24,52 @@ class ApnsClient
     }
 
     /**
+     * Whether Apple accepts this key, without reaching anyone. Apple checks
+     * the key, team and topic before it looks at the device token, so a token
+     * no device has comes back BadDeviceToken only once all three pass.
+     * Anything else is Apple's reason for refusing. For `push:status`.
+     *
+     * @return array{ok: bool, detail: string}
+     */
+    public function check(): array
+    {
+        $jwt = $this->token();
+        if ($jwt === null) {
+            return ['ok' => false, 'detail' => 'the .p8 key could not be read or signed with'];
+        }
+
+        try {
+            $response = Http::withHeaders([
+                'authorization' => 'bearer '.$jwt,
+                'apns-topic' => (string) config('services.apns.bundle_id'),
+                'apns-push-type' => 'alert',
+                'apns-priority' => '10',
+            ])
+                ->withBody('{"aps":{"alert":"push:status probe"}}', 'application/json')
+                ->withOptions(['version' => 2.0])
+                ->timeout(10)
+                ->post('https://api.push.apple.com/3/device/'.str_repeat('0', 64));
+        } catch (\Throwable $e) {
+            return ['ok' => false, 'detail' => 'Apple could not be reached: '.$e->getMessage()];
+        }
+
+        $reason = (string) data_get($response->json(), 'reason', '');
+        if ($reason === 'BadDeviceToken') {
+            return ['ok' => true, 'detail' => 'OK (Apple accepted the key)'];
+        }
+
+        $hint = match ($reason) {
+            'InvalidProviderToken' => ' - APNS_KEY_ID, APNS_TEAM_ID and the .p8 do not belong together',
+            'TopicDisallowed', 'BadTopic' => ' - the key is not allowed to send for '.config('services.apns.bundle_id'),
+            'BadEnvironmentKeyInToken' => ' - the key is for the sandbox only; make one for production',
+            'ExpiredProviderToken' => ' - the server clock is off',
+            default => '',
+        };
+
+        return ['ok' => false, 'detail' => 'Apple refused: '.($reason !== '' ? $reason : 'HTTP '.$response->status()).$hint];
+    }
+
+    /**
      * @param  array<string, string>  $data
      * @return PushTransport::OK|PushTransport::UNREGISTERED|PushTransport::FAILED
      */
