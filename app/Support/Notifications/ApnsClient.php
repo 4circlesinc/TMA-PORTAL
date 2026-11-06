@@ -162,7 +162,9 @@ class ApnsClient
 
     private function privateKey(): ?string
     {
-        $raw = (string) config('services.apns.private_key');
+        // A .p8 pasted as one line with \n for its line breaks, as the
+        // Sign in with Apple key is, works the same as the file.
+        $raw = str_replace('\n', "\n", (string) config('services.apns.private_key'));
         if ($raw === '') {
             return null;
         }

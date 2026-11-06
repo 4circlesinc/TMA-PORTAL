@@ -53,6 +53,16 @@ class PushStatusTest extends TestCase
             && str_starts_with($request->header('authorization')[0], 'bearer '));
     }
 
+    public function test_a_key_pasted_as_one_line_works_like_the_file(): void
+    {
+        config(['services.apns.private_key' => str_replace("\n", '\n', (string) config('services.apns.private_key'))]);
+        Http::fake(['api.push.apple.com/*' => Http::response(['reason' => 'BadDeviceToken'], 400)]);
+
+        $this->artisan('push:status')
+            ->expectsOutputToContain('Apple auth:   OK (Apple accepted the key)')
+            ->assertExitCode(0);
+    }
+
     public function test_it_says_why_apple_refuses_the_key(): void
     {
         Http::fake(['api.push.apple.com/*' => Http::response(['reason' => 'InvalidProviderToken'], 403)]);
