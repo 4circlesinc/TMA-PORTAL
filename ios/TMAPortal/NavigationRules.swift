@@ -9,9 +9,9 @@ import Foundation
 struct NavigationRules {
     let origin: String
 
-    private let socialRedirect = try! NSRegularExpression(pattern: #"^/auth/social/(google|microsoft)/redirect\b"#)
+    private let socialRedirect = try! NSRegularExpression(pattern: #"^/auth/social/(google|microsoft|apple)/redirect\b"#)
     private let connectReturns: Set<String> = ["getting-started", "connectors", "profile", "email", "calendar", "onboarding", "account-setup-email"]
-    private let authHosts: Set<String> = ["accounts.google.com", "login.microsoftonline.com", "login.live.com", "oauth.googleusercontent.com"]
+    private let authHosts: Set<String> = ["accounts.google.com", "login.microsoftonline.com", "login.live.com", "oauth.googleusercontent.com", "appleid.apple.com"]
     private let connectQuery = ["sync_all", "sync_email", "sync_calendar", "sync_onedrive", "sync_sharepoint"]
 
     func isPortalURL(_ url: URL) -> Bool { originOf(url) == origin }
@@ -23,6 +23,18 @@ struct NavigationRules {
 
     func isSocialRedirect(_ url: URL) -> Bool {
         isPortalURL(url) && firstMatch(in: url.path) != nil
+    }
+
+    /// A Sign in with Apple link from any page, sign-in or connect. The app
+    /// answers it with the system's own sheet rather than Apple's web page.
+    func isAppleSignIn(_ url: URL) -> Bool {
+        isSocialRedirect(url) && firstMatch(in: url.path) == "apple"
+    }
+
+    /// The invitation a sign-up link carries, so the native sheet can keep it.
+    func inviteToken(in url: URL) -> String? {
+        let value = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "invite" }?.value
+        return (value?.isEmpty ?? true) ? nil : value
     }
 
     /// "google" or "microsoft" when this link is a sign-in (not a connect) started from the sign-in page.

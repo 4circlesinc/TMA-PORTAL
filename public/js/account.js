@@ -1285,7 +1285,14 @@
   function renderProfileCards(me) {
     me = me !== undefined ? me : currentUser();
     return '<div class="tma-dash__account-row">' + renderProfileHeader(me) + renderProfileDetails(me) + '</div>' +
-      '<div class="tma-dash__account-row">' + renderPromo() + '</div>';
+      (inStoreApp() ? '' : '<div class="tma-dash__account-row">' + renderPromo() + '</div>');
+  }
+
+  /* An App Store or Mac App Store install. Apple rejects an app that offers
+     downloads of other builds or names other mobile platforms, so the
+     macOS / Windows / Android promo stays out of those. */
+  function inStoreApp() {
+    return !!(window.TMADesktop && window.TMADesktop.store);
   }
 
   function mountProfileCards(container) {

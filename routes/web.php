@@ -1684,6 +1684,15 @@ Route::get('/connect/{provider}', [SocialAuthController::class, 'redirect'])
 Route::get('/auth/social/{provider}/callback', [SocialAuthController::class, 'callback'])
     ->name('social.callback');
 
+/*
+ * The iOS app's own Sign in with Apple sheet posts its credential here from
+ * inside the web view (CSRF token included), so the session lands where the
+ * page already is. Apple's web callback POST is registered in bootstrap/app.php.
+ */
+Route::post('/auth/social/apple/native', [SocialAuthController::class, 'appleNative'])
+    ->middleware('throttle:20,1')
+    ->name('social.apple.native');
+
 Route::post('/auth/social/{provider}/disconnect', [SocialAuthController::class, 'disconnect'])
     ->middleware(['auth', 'verified'])
     ->name('social.disconnect');

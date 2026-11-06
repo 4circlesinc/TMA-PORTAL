@@ -202,6 +202,24 @@ return [
     | Store builds as ios; the sender picks the host from the device row.
     | APNS_PRIVATE_KEY is the .p8 contents or a path to the file.
     */
+    /*
+     * Sign in with Apple. The website signs in as a Services ID, the iOS app
+     * as its bundle ID, and one key (Keys > Sign in with Apple) signs for both.
+     * The button stays hidden until the Services ID and key are set. See
+     * docs/app-store.md for the Apple side.
+     */
+    'apple' => [
+        'client_id' => env('APPLE_CLIENT_ID'),
+        // Signed per request from the key, see App\Support\Apple\AppleSignIn.
+        'client_secret' => null,
+        'redirect' => env('APPLE_REDIRECT_URI', env('APP_URL').'/auth/social/apple/callback'),
+        'team_id' => env('APPLE_TEAM_ID'),
+        'key_id' => env('APPLE_KEY_ID'),
+        // The .p8 contents, or a path to the file.
+        'private_key' => env('APPLE_PRIVATE_KEY'),
+        'bundle_id' => env('APPLE_BUNDLE_ID', 'com.tmantoinelaw.portal'),
+    ],
+
     'apns' => [
         'key_id' => env('APNS_KEY_ID'),
         'team_id' => env('APNS_TEAM_ID'),

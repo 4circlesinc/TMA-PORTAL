@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Mac App Store build only. The login helper (Library/LoginItems) opens the app
+  at login when Open at Login is on. launchd starts it, not the app, so it has
+  a sandbox of its own rather than inheriting one: a helper signed with
+  com.apple.security.inherit and started by launchd is killed on launch.
+-->
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+</dict>
+</plist>

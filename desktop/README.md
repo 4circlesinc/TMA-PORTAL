@@ -277,22 +277,38 @@ extraction — against whatever is in `release/`, over a local server.
 
 ## Signing
 
-Set these before `npm run dist`, **and delete `mac.identity: null` from
-package.json**, and the build signs and notarizes itself:
+The direct download is signed with **Developer ID Application: Vernon Francis
+(59W394VBSK)** when that certificate is in the login keychain, and
+`npm run release` notarizes it. Notarized is what opens without a warning.
+
+Once per machine, store the notarization credentials under the name the release
+script uses:
 
 ```
-export CSC_LINK=/path/to/DeveloperID.p12
-export CSC_KEY_PASSWORD=…
-export APPLE_ID=…
-export APPLE_APP_SPECIFIC_PASSWORD=…
-export APPLE_TEAM_ID=…
+xcrun notarytool store-credentials tma-notary --apple-id <apple id> --team-id 59W394VBSK
 ```
 
-That is the only way to make the app open without a warning. It needs a
-**Developer ID Application** certificate, which requires a paid Apple Developer
-Program membership. Nothing below is a substitute for it.
+It asks for an app-specific password (appleid.apple.com > Sign-In and Security >
+App-Specific Passwords). An App Store Connect API key works too:
+`--key AuthKey_<id>.p8 --key-id <id> --issuer <issuer>`. Another profile name
+can be passed as `APPLE_KEYCHAIN_PROFILE`. With the certificate present and no
+stored credentials, the release fails at notarization rather than shipping a
+signed build Gatekeeper still blocks.
 
-### Why `identity: null` and `adhoc-sign.js` exist
+`mac.type: "distribution"` restricts electron-builder to Developer ID
+Application certificates (failure 2 below). On a machine without one, nothing
+is notarized and `adhoc-sign.js` signs ad-hoc as before.
+
+Leave the certificates' trust at **Use System Defaults** in Keychain Access.
+"Always Trust" makes macOS treat the certificate as its own root, and signing
+fails with `unable to build chain to self-signed root` and
+`errSecInternalComponent`.
+
+The first signed version changes the app's signature, and macOS ties camera,
+microphone, screen recording and location permission to it. Expect people to be
+asked once more after that update, and say so in its release notes.
+
+### Why `mac.type` and `adhoc-sign.js` exist
 
 Two ways to ship an app macOS refuses to open, both of which shipped once:
 
@@ -321,8 +337,9 @@ Two ways to ship an app macOS refuses to open, both of which shipped once:
 
    macOS shows that as "cannot be opened because of a problem". Shipped as 0.8.0.
 
-So `identity: null` stops electron-builder picking up a keychain cert on its
-own, and the `afterPack` hook in `adhoc-sign.js` signs the bundle ad-hoc,
+So `mac.type: "distribution"` stops electron-builder picking up a development
+cert, and on a machine with no Developer ID certificate the `afterPack` hook in
+`adhoc-sign.js` signs the bundle ad-hoc,
 innermost-first, sealing resources and binding the Info.plist — with **no**
 hardened runtime and no entitlements, both of which only bite outside a real
 Developer ID build.
@@ -334,9 +351,11 @@ passes it and still cannot launch. Check all three:
 
 ```
 codesign --verify --deep --strict "release/mac-arm64/TM ANTOINE Portal.app"
-codesign -dv --verbose=2 "release/mac-arm64/TM ANTOINE Portal.app"   # want flags=0x2(adhoc)
+codesign -dv --verbose=2 "release/mac-arm64/TM ANTOINE Portal.app"   # Developer ID: flags=0x10000(runtime); ad-hoc: flags=0x2(adhoc)
 "release/mac-arm64/TM ANTOINE Portal.app/Contents/MacOS/TM ANTOINE Portal"
 ```
+
+A notarized build also passes `spctl -a -vv` with `source=Notarized Developer ID`.
 
 The third is the one that matters: run the binary directly and confirm it stays
 up with helper processes. `open` will *not* start an ad-hoc build — Gatekeeper
@@ -627,6 +646,17 @@ no equivalent of Apple's icon grid and the margin the .icns needs would just
 make the app look smaller than its neighbours on the taskbar. `make-ico.js`
 packs the .ico by hand — there is no ImageMagick on the build machine and
 nothing in macOS emits .ico, but the container is a header and some PNGs.
+
+## The Mac App Store build
+
+`npm run release:mas` builds the same app for the Mac App Store, into
+`release-mas/` (not `release/`, whose every `.pkg` goes to the public feed).
+It is universal, runs in the App Sandbox (`entitlements.mas.plist`), and never
+updates itself: with `process.mas` set, `updater.js` checks nothing and the
+"Check for Updates…" items are hidden. Signing, upload and review are in
+[`../docs/app-store.md`](../docs/app-store.md); `electron-builder.mas.cjs` lists
+the environment variables. `npm run test:mas` checks the config without a
+certificate.
 
 ## macOS builds are Apple Silicon only
 

@@ -13,6 +13,7 @@ use App\Models\UserLocation;
 use App\Models\UserPresence;
 use App\Models\UserPresenceState;
 use App\Support\Access\Role;
+use App\Support\Apple\AppleSignIn;
 use App\Support\AvatarService;
 use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
@@ -159,6 +160,12 @@ final class AccountErasure
 
         TrustedDevice::query()->where('user_id', $user->id)->delete();
         DB::table('device_tokens')->where('user_id', $user->id)->delete();
+
+        // Apple requires a Sign in with Apple grant to be revoked when the
+        // account goes, not just forgotten here.
+        ConnectedAccount::query()->where('user_id', $user->id)->where('provider', 'apple')->whereNotNull('token')->get()
+            ->each(fn (ConnectedAccount $account) => rescue(fn () => AppleSignIn::revoke((string) $account->token), report: false));
+
         ConnectedAccount::query()->where('user_id', $user->id)->delete();
         Notification::query()->where('user_id', $user->id)->delete();
         AuthEvent::query()->where('user_id', $user->id)->delete();

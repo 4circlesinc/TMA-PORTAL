@@ -9,6 +9,9 @@ contextBridge.exposeInMainWorld('TMADesktop', {
   isDesktop: true,
   platform: process.platform,
   version: process.versions.electron,
+  // 'mac-app-store' in the store build, which must not offer downloads of
+  // other builds. null for the direct download.
+  store: process.mas ? 'mac-app-store' : null,
   openInBrowser: (url) => {
     if (typeof url !== 'string') return;
     ipcRenderer.invoke('tma:open-in-browser', url);

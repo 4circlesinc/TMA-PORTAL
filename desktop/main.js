@@ -63,6 +63,8 @@ const AUTH_HOSTS = [
   'login.microsoftonline.com',
   'login.live.com',
   'oauth.googleusercontent.com',
+  // Connecting Apple from Settings. Its sign-in also runs in the browser.
+  'appleid.apple.com',
 ];
 
 const isAuthUrl = (url) => {
@@ -687,6 +689,7 @@ function forgetVerifier() {
 function providerLabel(provider) {
   if (provider === 'google') return 'Google';
   if (provider === 'microsoft') return 'Microsoft';
+  if (provider === 'apple') return 'Apple';
   return '';
 }
 
@@ -1125,6 +1128,8 @@ function checkForUpdatesItem() {
       ? `Install Update ${updater.deferredUpdate()}…`
       : 'Check for Updates…',
     enabled: app.isPackaged,
+    // The App Store updates a store install, so there is nothing to check.
+    visible: !updater.STORE_BUILD,
     click: () => updater.checkForUpdates({ silent: false }),
   };
 }

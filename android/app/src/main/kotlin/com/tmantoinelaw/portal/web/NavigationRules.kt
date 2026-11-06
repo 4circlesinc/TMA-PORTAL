@@ -10,9 +10,9 @@ import android.net.Uri
  * outside.
  */
 class NavigationRules(private val origin: String) {
-    private val socialRedirect = Regex("^/auth/social/(google|microsoft)/redirect\\b")
+    private val socialRedirect = Regex("^/auth/social/(google|microsoft|apple)/redirect\\b")
     private val connectReturns = setOf("getting-started", "connectors", "profile", "email", "calendar", "onboarding", "account-setup-email")
-    private val authHosts = setOf("accounts.google.com", "login.microsoftonline.com", "login.live.com", "oauth.googleusercontent.com")
+    private val authHosts = setOf("accounts.google.com", "login.microsoftonline.com", "login.live.com", "oauth.googleusercontent.com", "appleid.apple.com")
 
     fun isPortalUrl(url: String): Boolean = originOf(url) == origin
 

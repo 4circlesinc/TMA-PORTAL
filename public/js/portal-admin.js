@@ -3061,7 +3061,9 @@
           '<section class="tma-security__card" aria-labelledby="sec-connected">' +
           '<div class="tma-security__head">' +
           '<h2 class="tma-security__title" id="sec-connected">Connected accounts</h2></div>' +
-          '<p class="tma-security__desc">Sign in with Google or Microsoft alongside your password. Only accounts with your portal email can be connected.</p>' +
+          '<p class="tma-security__desc">' + (d.appleAvailable || (d.apple && d.apple.connected)
+            ? 'Sign in with Google, Microsoft or Apple alongside your password. Google and Microsoft must use your portal email.'
+            : 'Sign in with Google or Microsoft alongside your password. Only accounts with your portal email can be connected.') + '</p>' +
           ((d.syncAvailable && (d.syncAvailable.google || d.syncAvailable.microsoft)) ? '<p class="tma-security__desc"><strong>Connecting also lets you sync your email and calendar</strong> into the portal, so you can use it instead of Gmail or Outlook.</p>' : '') +
           '<div class="tma-security__row">' +
           '<span class="tma-security__row-ico" aria-hidden="true"><img src="images/icons/brands/Google16.svg" alt=""></span>' +
@@ -3087,7 +3089,24 @@
           (d.microsoft && d.microsoft.connected
             ? '<button type="button" class="tma-auth__chip-btn" data-sec-sdisconnect="microsoft"><span>Disconnect</span></button>'
             : '<a class="tma-auth__chip-btn" href="/auth/social/microsoft/redirect?sync_all=' + (d.syncAvailable && d.syncAvailable.microsoft ? '1' : '0') + '"><span>Connect</span></a>') +
-          '</div></section>' +
+          '</div>' +
+          // Apple only once Sign in with Apple is set up on the server, or
+          // when an account is already linked and must stay disconnectable.
+          // sync_all=0 marks the link as a connect, as for the rows above.
+          ((d.appleAvailable || (d.apple && d.apple.connected))
+            ? '<div class="tma-security__row">' +
+              '<span class="tma-security__row-ico" aria-hidden="true"><img src="images/icons/brands/Apple16.svg" alt=""></span>' +
+              '<span class="tma-security__row-copy"><span class="tma-security__row-name">Apple</span>' +
+              (d.apple && d.apple.connected
+                ? '<span class="tma-security__row-sub tma-auth__provider-status tma-auth__provider-status--on">Connected as ' + esc(d.apple.email || 'your Apple ID') + '</span>'
+                : '<span class="tma-security__row-sub">Not connected</span>') +
+              '</span>' +
+              (d.apple && d.apple.connected
+                ? '<button type="button" class="tma-auth__chip-btn" data-sec-sdisconnect="apple"><span>Disconnect</span></button>'
+                : '<a class="tma-auth__chip-btn" href="/auth/social/apple/redirect?sync_all=0"><span>Connect</span></a>') +
+              '</div>'
+            : '') +
+          '</section>' +
 
           '<section class="tma-security__card" aria-labelledby="sec-phone">' +
           '<div class="tma-security__head">' +

@@ -84,11 +84,27 @@ function nestedBundles(root) {
   return found.sort((a, b) => b.split(path.sep).length - a.split(path.sep).length);
 }
 
+/** What electron-builder's own discovery will find, unless discovery is off. */
+function hasDeveloperId() {
+  if (process.env.CSC_IDENTITY_AUTO_DISCOVERY === 'false') return false;
+  const found = spawnSync('security', ['find-identity', '-v', '-p', 'codesigning'], { encoding: 'utf8' });
+  return /"Developer ID Application: /.test(found.stdout || '');
+}
+
 exports.default = async function adhocSign(context) {
   if (context.electronPlatformName !== 'darwin') return;
 
   if (process.env.CSC_LINK || process.env.CSC_NAME) {
     console.log('  • adhoc-sign  skipped — a signing identity is configured');
+    return;
+  }
+
+  // A Developer ID Application certificate in the keychain: electron-builder
+  // signs with it a moment later (mac.type "distribution" keeps it from
+  // reaching for a development certificate instead). Ad-hoc is only the
+  // floor for a machine without one.
+  if (hasDeveloperId()) {
+    console.log('  • adhoc-sign  skipped — Developer ID Application found in the keychain');
     return;
   }
 

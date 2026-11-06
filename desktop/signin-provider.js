@@ -15,7 +15,7 @@
  * off to `/auth/desktop/start` skips Microsoft/Google consent entirely.
  */
 
-const SOCIAL_REDIRECT = /^\/auth\/social\/(google|microsoft)\/redirect\b/;
+const SOCIAL_REDIRECT = /^\/auth\/social\/(google|microsoft|apple)\/redirect\b/;
 
 const CONNECT_RETURNS = new Set([
   'getting-started',

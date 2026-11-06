@@ -1385,6 +1385,13 @@ a.tma-flowmap__name:hover {
   filter: invert(1) brightness(1.6);
 }
 
+/* except Apple's, which is a black glyph and goes white on dark, as Apple's
+   own dark buttons do */
+[data-theme="dark"] .tma-auth img[src*="/brands/Apple16.svg"],
+.tma-dash[data-theme="dark"] .tma-security img[src*="/brands/Apple16.svg"] {
+  filter: invert(1);
+}
+
 /* the lockup is navy + cyan on transparent; brightness(0) flattens every opaque
    pixel to black and invert(1) lifts it to white, leaving the alpha channel intact */
 [data-theme="dark"] .tma-auth .tma-auth__brand img {

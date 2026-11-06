@@ -45,6 +45,9 @@ final class PortalModel: NSObject, ObservableObject {
     private var offeringUpdate = false
     private var checkingUpdate = false
     private var downloadDestinations: [ObjectIdentifier: URL] = [:]
+    private var appleNonce: String?
+    private var appleInvite: String?
+    private var appleRequest: ASAuthorizationController?
 
     @Published var loading = true
     @Published var showSplash = true
@@ -266,6 +269,71 @@ final class PortalModel: NSObject, ObservableObject {
         showSignInWaiting(provider: provider)
     }
 
+    // MARK: - Sign in with Apple
+
+    /// The system's Sign in with Apple sheet (Face ID), not Apple's web page.
+    /// Apple signs the SHA-256 of a nonce into the token; the server checks it
+    /// against the nonce posted alongside, so a token from elsewhere is refused.
+    private func startAppleSignIn(invite: String?) {
+        let nonce = Pkce.verifier()
+        appleNonce = nonce
+        appleInvite = invite
+        let request = ASAuthorizationAppleIDProvider().createRequest()
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = SHA256.hash(data: Data(nonce.utf8)).map { String(format: "%02x", $0) }.joined()
+        let controller = ASAuthorizationController(authorizationRequests: [request])
+        controller.delegate = self
+        controller.presentationContextProvider = self
+        appleRequest = controller
+        controller.performRequests()
+    }
+
+    /// Posted from inside the page with its own XSRF cookie, so the session
+    /// cookie the server sets lands in this web view. The server answers with
+    /// where to go next (the portal, a two-factor step, or the sign-in page
+    /// with the reason) and the page goes there.
+    fileprivate func submitAppleCredential(_ credential: ASAuthorizationAppleIDCredential) {
+        defer { appleNonce = nil; appleInvite = nil; appleRequest = nil }
+        guard let nonce = appleNonce, let data = credential.identityToken,
+              let identityToken = String(data: data, encoding: .utf8) else {
+            notice = PortalNotice(title: "Sign in with Apple didn't finish", message: "Apple didn't return a sign-in. Try again.")
+            return
+        }
+        var fields: [String: String] = ["identity_token": identityToken, "nonce": nonce]
+        if let code = credential.authorizationCode.flatMap({ String(data: $0, encoding: .utf8) }) { fields["authorization_code"] = code }
+        if let given = credential.fullName?.givenName, !given.isEmpty { fields["given_name"] = given }
+        if let family = credential.fullName?.familyName, !family.isEmpty { fields["family_name"] = family }
+        if let invite = appleInvite { fields["invite"] = invite }
+        guard let json = try? JSONSerialization.data(withJSONObject: fields),
+              let payload = String(data: json, encoding: .utf8) else { return }
+        let action = jsString(PortalConfig.url("/auth/social/apple/native"))
+        let fallback = jsString(PortalConfig.url("/auth/login"))
+        evaluate("""
+        (function (fields) {
+          var m = document.cookie.match(/(?:^|;\\s*)XSRF-TOKEN=([^;]+)/);
+          var body = new URLSearchParams();
+          Object.keys(fields).forEach(function (k) { body.append(k, fields[k]); });
+          fetch(\(action), {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-XSRF-TOKEN': m ? decodeURIComponent(m[1]) : '' },
+            body: body
+          }).then(function (r) { return r.json().catch(function () { return {}; }); })
+            .then(function (d) { location.assign(d && d.redirect ? d.redirect : \(fallback)); })
+            .catch(function () { location.assign(\(fallback)); });
+        })(\(payload));
+        """)
+    }
+
+    fileprivate func appleSignInFailed(_ error: Error) {
+        appleNonce = nil
+        appleInvite = nil
+        appleRequest = nil
+        // Closing the sheet is a choice, not a failure.
+        if let code = (error as? ASAuthorizationError)?.code, code == .canceled { return }
+        notice = PortalNotice(title: "Sign in with Apple didn't finish", message: "Try again, or sign in another way.")
+    }
+
     private func showSignInWaiting(provider: String?) {
         quietLoad = true
         loading = false
@@ -379,6 +447,7 @@ final class PortalModel: NSObject, ObservableObject {
     // MARK: - updates
 
     private func checkForUpdate() {
+        guard PortalConfig.offersFeedUpdates else { return }
         guard !offeringUpdate, updateOffer == nil, !checkingUpdate else { return }
         if callsHoldsTheScreen { return }
         let now = Date().timeIntervalSince1970
@@ -558,6 +627,11 @@ extension PortalModel: WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, A
         }
         if url.scheme == "file" || url.scheme == "about" || url.scheme == "data" {
             decisionHandler(.allow)
+            return
+        }
+        if rules.isAppleSignIn(url) {
+            decisionHandler(.cancel)
+            startAppleSignIn(invite: rules.inviteToken(in: url))
             return
         }
         if let provider = rules.signInProvider(for: url, current: webView.url) {
@@ -759,5 +833,24 @@ private final class ScriptBridge: NSObject, WKScriptMessageHandler {
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         let body = message.body
         Task { @MainActor in self.model?.handleScript(body) }
+    }
+}
+
+extension PortalModel: ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        return scenes.flatMap(\.windows).first { $0.isKeyWindow } ?? ASPresentationAnchor()
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+            appleSignInFailed(ASAuthorizationError(.unknown))
+            return
+        }
+        submitAppleCredential(credential)
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        appleSignInFailed(error)
     }
 }

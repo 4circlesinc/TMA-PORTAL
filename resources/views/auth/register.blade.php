@@ -38,6 +38,12 @@
             <img src="/images/icons/brands/Microsoft16.svg" alt="" width="16" height="16" aria-hidden="true">
             <span>Sign up with Microsoft</span>
           </a>
+          @if (\App\Support\Apple\AppleSignIn::configured())
+            <a class="tma-auth__social-btn" href="{{ route('social.redirect', 'apple') }}">
+              <img src="/images/icons/brands/Apple16.svg" alt="" width="16" height="16" aria-hidden="true">
+              <span>Sign up with Apple</span>
+            </a>
+          @endif
           <button type="button" class="tma-auth__social-btn" data-show-email>
             <img src="/images/icons/phosphor/EnvelopeSimple.svg" alt="" width="16" height="16" aria-hidden="true">
             <span>Sign up with Email</span>

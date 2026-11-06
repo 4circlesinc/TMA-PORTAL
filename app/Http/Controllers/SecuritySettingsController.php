@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\Fortify\PasswordValidationRules;
 use App\Models\AuthEvent;
 use App\Models\User;
+use App\Support\Apple\AppleSignIn;
 use App\Support\AuthenticatorApp;
 use App\Support\Security\SecurityAlerts;
 use App\Support\SecurityPolicies;
@@ -51,11 +52,15 @@ class SecuritySettingsController extends Controller
 
         $google = $user->connectedAccount('google');
         $microsoft = $user->connectedAccount('microsoft');
+        $apple = $user->connectedAccount('apple');
 
         return response()->json([
             'email' => $user->email,
             'google' => ['connected' => (bool) $google, 'email' => $google?->email],
             'microsoft' => ['connected' => (bool) $microsoft, 'email' => $microsoft?->email],
+            'apple' => ['connected' => (bool) $apple, 'email' => $apple?->email],
+            // The Apple row only shows once Sign in with Apple is set up.
+            'appleAvailable' => AppleSignIn::configured(),
             'hasRealPassword' => ! $user->password_auto,
             'phone' => $user->phone,
             'alerts' => SecurityAlerts::forUser($user),

@@ -5,12 +5,14 @@ namespace App\Support;
 use App\Models\CalendarEvent;
 use App\Models\CipApplication;
 use App\Models\Client;
+use App\Models\ConnectedAccount;
 use App\Models\FileItem;
 use App\Models\Folder;
 use App\Models\Group;
 use App\Models\MessageAttachment;
 use App\Models\SignatureRequest;
 use App\Models\User;
+use App\Support\Apple\AppleSignIn;
 use App\Support\Cip\Removal;
 use App\Support\Clients\ClientDirectory;
 use App\Support\Companies\CompanyMembers;
@@ -582,6 +584,11 @@ class AdminRecycleBin
         ClientConversations::preserveForLogin($user);
         SystemFolders::rehome([$user->id], $user->deleted_by ?: $user->id);
         CompanyMembers::parkForPurgedLogin($user);
+
+        // Gone for good, so a Sign in with Apple grant is revoked at Apple too.
+        ConnectedAccount::query()->where('user_id', $user->id)->where('provider', 'apple')->whereNotNull('token')->get()
+            ->each(fn (ConnectedAccount $account) => rescue(fn () => AppleSignIn::revoke((string) $account->token), report: false));
+
         $user->forceDelete();
 
         ClientDirectory::flush();

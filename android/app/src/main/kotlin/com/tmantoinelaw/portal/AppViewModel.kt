@@ -53,7 +53,7 @@ class AppViewModel @Inject constructor(
         val url = handoff.startUrl(provider)
         pendingBrowserSignInUrl = url
         _events.tryEmit(AppEvent.OpenOutside(url))
-        _events.tryEmit(AppEvent.ShowSignInWaiting(when (provider) { "google" -> "Google"; "microsoft" -> "Microsoft"; else -> "" }))
+        _events.tryEmit(AppEvent.ShowSignInWaiting(when (provider) { "google" -> "Google"; "microsoft" -> "Microsoft"; "apple" -> "Apple"; else -> "" }))
     }
 
     fun reopenBrowserSignIn() { pendingBrowserSignInUrl?.let { _events.tryEmit(AppEvent.OpenOutside(it)) } }

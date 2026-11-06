@@ -37,6 +37,10 @@ app.whenReady().then(() => {
     signInProviderFor(google, `${ORIGIN}/auth/login`, ORIGIN), 'google');
   check('sign-in from /auth/login hands off microsoft',
     signInProviderFor(microsoft, `${ORIGIN}/auth/login`, ORIGIN), 'microsoft');
+  check('sign-in from /auth/login hands off apple',
+    signInProviderFor(`${ORIGIN}/auth/social/apple/redirect`, `${ORIGIN}/auth/login`, ORIGIN), 'apple');
+  check('connecting apple from Security stays in-app',
+    signInProviderFor(`${ORIGIN}/auth/social/apple/redirect?sync_all=0`, `${ORIGIN}/auth/login`, ORIGIN), null);
 
   // The asset-cache address-bar lie: login page shown at `/`.
   check('sign-in from / (redirect address lie) hands off',

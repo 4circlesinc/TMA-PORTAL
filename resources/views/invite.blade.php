@@ -109,7 +109,8 @@
 
           {{-- The invitation rides the OAuth round-trip: the callback creates
                the account through this invite, membership and all, and any
-               Google or Microsoft account with the invited email will do. --}}
+               Google, Microsoft or Apple account with the invited email will do.
+               With Apple that means sharing the email, not hiding it. --}}
           <div class="tma-auth__social">
             <a class="tma-auth__social-btn" href="{{ route('social.redirect', 'google') }}?invite={{ urlencode($token) }}">
               <img src="/images/icons/brands/Google16.svg" alt="" width="16" height="16" aria-hidden="true">
@@ -119,6 +120,12 @@
               <img src="/images/icons/brands/Microsoft16.svg" alt="" width="16" height="16" aria-hidden="true">
               <span>Sign up with Microsoft</span>
             </a>
+            @if (\App\Support\Apple\AppleSignIn::configured())
+              <a class="tma-auth__social-btn" href="{{ route('social.redirect', 'apple') }}?invite={{ urlencode($token) }}">
+                <img src="/images/icons/brands/Apple16.svg" alt="" width="16" height="16" aria-hidden="true">
+                <span>Sign up with Apple</span>
+              </a>
+            @endif
           </div>
 
           <form class="tma-auth__form" method="POST" action="{{ url('/invite/'.$token) }}">

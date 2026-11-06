@@ -52,7 +52,7 @@ class DesktopAuthController extends Controller
     {
         $validated = $request->validate([
             'challenge' => ['required', 'string', 'size:43', 'regex:/^[A-Za-z0-9_-]+$/'],
-            'provider' => ['nullable', 'string', 'in:google,microsoft'],
+            'provider' => ['nullable', 'string', 'in:google,microsoft,apple'],
         ]);
 
         $request->session()->put('desktop.challenge', $validated['challenge']);

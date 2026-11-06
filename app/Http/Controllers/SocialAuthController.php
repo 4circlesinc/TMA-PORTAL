@@ -10,6 +10,8 @@ use App\Models\ConnectedAccount;
 use App\Models\Invitation;
 use App\Models\User;
 use App\Support\Activity\ActivityLogger;
+use App\Support\Apple\AppleSignIn;
+use App\Support\Apple\AppleSignInException;
 use App\Support\AvatarService;
 use App\Support\EmailTwoFactor;
 use App\Support\Invitations\Invitations;
@@ -37,7 +39,7 @@ use Throwable;
 
 class SocialAuthController extends Controller
 {
-    private const PROVIDERS = ['google', 'microsoft'];
+    private const PROVIDERS = ['google', 'microsoft', 'apple'];
 
     private const SYNC_EXTRAS = ['email', 'calendar', 'onedrive', 'sharepoint'];
 
@@ -77,7 +79,8 @@ class SocialAuthController extends Controller
             in_array($request->query('return'), ['getting-started', 'connectors', 'profile', 'email', 'calendar', 'onboarding', 'account-setup-email'], true) ? $request->query('return') : 'security-settings',
         );
 
-        if (! config("services.{$provider}.client_id")) {
+        $configured = $provider === 'apple' ? AppleSignIn::configured() : (bool) config("services.{$provider}.client_id");
+        if (! $configured) {
             return $this->fail($request, ucfirst($provider).' sign-in is not configured yet.');
         }
 
@@ -125,7 +128,8 @@ class SocialAuthController extends Controller
         // their account again - they already did, and the only thing that
         // failed was our half of the handshake. With no prompt the provider
         // reuses the session it just established and the lap is invisible.
-        $params = $request->boolean('retry') ? [] : ['prompt' => 'select_account'];
+        // Apple has no account chooser and documents no prompt parameter.
+        $params = $request->boolean('retry') || $provider === 'apple' ? [] : ['prompt' => 'select_account'];
 
         if (config("services.{$provider}.sync") && array_filter($wanted)) {
             $scopes = [];
@@ -262,6 +266,8 @@ class SocialAuthController extends Controller
             // (personal MSA or Entra work accounts) are provider-verified.
             'google' => (bool) ($oauth->user['email_verified'] ?? false),
             'microsoft' => (bool) $oauth->getEmail(),
+            // Apple verifies every address it hands over, the relay ones too.
+            'apple' => AppleSignIn::emailVerified($oauth->user) && (bool) $oauth->getEmail(),
             default => false,
         };
         $intent = $request->session()->pull('social.intent', 'auth');
@@ -290,10 +296,92 @@ class SocialAuthController extends Controller
 
         rescue(fn () => ChangeNotifications::releaseMail($account), report: false);
 
+        // Apple requires the grant to be revoked, not just forgotten.
+        if ($provider === 'apple' && $account->token) {
+            rescue(fn () => AppleSignIn::revoke($account->token), report: false);
+        }
+
         $account->delete();
         $this->record($user->id, 'social_disconnected');
 
         return $this->done($request, ucfirst($provider).' disconnected.', true);
+    }
+
+    /**
+     * The iOS app's own Sign in with Apple sheet. The app posts the credential
+     * from inside its web view, so the session this sets is the one the page
+     * already has, and the reply is the same redirect a web callback gets.
+     *
+     * The app posts with fetch, which would follow that redirect itself and
+     * spend any flashed message on a response nobody sees. So a JSON request
+     * is told where to go instead, and the page goes there.
+     */
+    public function appleNative(Request $request): RedirectResponse|JsonResponse
+    {
+        $response = $this->appleNativeSignIn($request);
+
+        return $request->wantsJson() ? response()->json(['redirect' => $response->getTargetUrl()]) : $response;
+    }
+
+    private function appleNativeSignIn(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'identity_token' => ['required', 'string', 'max:8192'],
+            'authorization_code' => ['nullable', 'string', 'max:1024'],
+            'nonce' => ['required', 'string', 'min:16', 'max:256'],
+            'given_name' => ['nullable', 'string', 'max:100'],
+            'family_name' => ['nullable', 'string', 'max:100'],
+            'invite' => ['nullable', 'string', 'max:200'],
+        ]);
+
+        $request->session()->forget(['social.intent', 'social.invite']);
+        if (! $request->user() && ($data['invite'] ?? '') !== '') {
+            $request->session()->put('social.invite', $data['invite']);
+        }
+
+        if (! AppleSignIn::nativeConfigured()) {
+            return $this->fail($request, 'Apple sign-in is not configured yet.');
+        }
+
+        try {
+            $claims = AppleSignIn::verifyIdToken($data['identity_token'], AppleSignIn::bundleId(), $data['nonce']);
+        } catch (AppleSignInException $e) {
+            Log::warning('Sign in with Apple (app) refused', ['host' => $request->getHost(), 'error' => $e->getMessage()]);
+            $this->recordFailure($request, 'apple', 'id_token_invalid');
+
+            return $this->fail($request, "Sign-in with Apple didn't complete. Please try again.");
+        }
+
+        // The refresh token is only for revoking later. Without it the sign-in
+        // still stands; the account just cannot be revoked at Apple.
+        $tokens = [];
+        if (($data['authorization_code'] ?? '') !== '') {
+            try {
+                $tokens = AppleSignIn::exchangeCode($data['authorization_code'], AppleSignIn::bundleId());
+            } catch (Throwable $e) {
+                Log::warning('Sign in with Apple (app): code exchange failed', ['error' => $e->getMessage()]);
+            }
+        }
+
+        $oauth = AppleSignIn::oauthUser($claims, AppleSignIn::joinName($data['given_name'] ?? null, $data['family_name'] ?? null), $tokens);
+        $verified = AppleSignIn::emailVerified($claims) && (bool) $oauth->getEmail();
+
+        if ($request->user()) {
+            return $this->connect($request, 'apple', $oauth, $verified);
+        }
+
+        return $this->authenticate($request, 'apple', $oauth, $verified);
+    }
+
+    /**
+     * Apple's refresh token, kept on the connected account so it can be
+     * revoked when the person disconnects Apple or erases their account.
+     *
+     * @return array<string, string>
+     */
+    private function appleGrant(string $provider, OAuthUser $oauth): array
+    {
+        return $provider === 'apple' && $oauth->refreshToken ? ['token' => $oauth->refreshToken] : [];
     }
 
     private function connect(Request $request, string $provider, OAuthUser $oauth, bool $verified): RedirectResponse
@@ -308,7 +396,11 @@ class SocialAuthController extends Controller
             return $this->fail($request, 'That '.ucfirst($provider).' account is already connected to a different portal account.');
         }
 
-        if (! $verified || ! Str::of($oauth->getEmail())->lower()->exactly(Str::lower($user->email))) {
+        // Google and Microsoft bring a mailbox and calendar, so they must be the
+        // person's portal address. Apple brings only a sign-in, often through a
+        // hidden relay address, and someone already signed in has just proved
+        // they hold that Apple ID.
+        if ($provider !== 'apple' && (! $verified || ! Str::of($oauth->getEmail())->lower()->exactly(Str::lower($user->email)))) {
             return $this->fail($request, 'That '.ucfirst($provider)." account's email doesn't match your portal email.");
         }
 
@@ -317,6 +409,7 @@ class SocialAuthController extends Controller
             array_merge(
                 ['provider_id' => $oauth->getId(), 'email' => $oauth->getEmail(), 'name' => $oauth->getName()],
                 $this->syncPayload($request, $oauth, $user->connectedAccount($provider)),
+                $this->appleGrant($provider, $oauth),
             ),
         );
 
@@ -467,6 +560,7 @@ class SocialAuthController extends Controller
             array_merge(
                 ['provider_id' => $oauth->getId(), 'email' => $oauth->getEmail(), 'name' => $oauth->getName()],
                 $this->syncPayload($request, $oauth, $user->connectedAccounts()->where('provider', $provider)->first()),
+                $this->appleGrant($provider, $oauth),
             ),
         );
 
@@ -692,6 +786,11 @@ class SocialAuthController extends Controller
     {
         $name = ucfirst($provider);
         $codes = self::refusalCodes($description);
+
+        // Apple's word for the person closing its sheet.
+        if ($error === 'user_cancelled_authorize') {
+            return $name.' sign-in was cancelled - nothing was changed.';
+        }
 
         // 50105: the app has "user assignment required" switched on and this
         // account is not in the assigned list. Nothing is wrong with their

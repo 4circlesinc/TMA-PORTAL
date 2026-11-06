@@ -55,6 +55,20 @@ final class PortalLogicTests: XCTestCase {
         XCTAssertFalse(rules.isPortalURL(URL(string: "https://example.com/file")!))
     }
 
+    func testAppleIsAnsweredByTheNativeSheetFromAnyPage() {
+        let rules = NavigationRules(origin: "https://portal.tmantoinelaw.com")
+        let signIn = URL(string: "https://portal.tmantoinelaw.com/auth/social/apple/redirect")!
+        let connect = URL(string: "https://portal.tmantoinelaw.com/auth/social/apple/redirect?sync_all=0")!
+        let invite = URL(string: "https://portal.tmantoinelaw.com/auth/social/apple/redirect?invite=abc123")!
+        XCTAssertTrue(rules.isAppleSignIn(signIn))
+        XCTAssertTrue(rules.isAppleSignIn(connect))
+        XCTAssertFalse(rules.isAppleSignIn(URL(string: "https://portal.tmantoinelaw.com/auth/social/google/redirect")!))
+        XCTAssertFalse(rules.isAppleSignIn(URL(string: "https://evil.example/auth/social/apple/redirect")!))
+        XCTAssertEqual(rules.inviteToken(in: invite), "abc123")
+        XCTAssertNil(rules.inviteToken(in: signIn))
+        XCTAssertTrue(rules.isAuthURL(URL(string: "https://appleid.apple.com/auth/authorize")!))
+    }
+
     func testAMailboxConnectStaysOutOfTheSignInHandoff() {
         let rules = NavigationRules(origin: "https://portal.tmantoinelaw.com")
         let connect = URL(string: "https://portal.tmantoinelaw.com/auth/social/microsoft/redirect?return=email")!

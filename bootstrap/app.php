@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AppleCallbackController;
 use App\Http\Middleware\ApplySecurityPolicyHeaders;
 use App\Http\Middleware\EnforceGeoAccess;
 use App\Http\Middleware\EnforceSessionExpiry;
@@ -22,6 +23,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Exceptions\InvalidSignatureException;
+use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -29,6 +31,13 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         channels: __DIR__.'/../routes/channels.php',
         health: '/up',
+        // Outside the web group on purpose: Apple's cross-site form POST must
+        // not start or overwrite a session. See AppleCallbackController.
+        then: function (): void {
+            Route::post('/auth/social/apple/callback', AppleCallbackController::class)
+                ->middleware('throttle:30,1')
+                ->name('social.apple.form-post');
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         // In production the app sits behind Laravel Cloud's TLS-terminating

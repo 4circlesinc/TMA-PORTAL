@@ -15,6 +15,8 @@ const asar = require('@electron/asar');
 
 const archives = [
   'release/mac-arm64/TM ANTOINE Portal.app/Contents/Resources/app.asar',
+  // npm run release:mas
+  'release-mas/mas-universal/TM ANTOINE Portal.app/Contents/Resources/app.asar',
   'release/win-unpacked/resources/app.asar',
 ].filter((p) => fs.existsSync(p));
 

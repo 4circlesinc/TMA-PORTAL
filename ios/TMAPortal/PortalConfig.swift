@@ -20,10 +20,15 @@ enum PortalConfig {
     /// The Docker stack reports its websocket host as localhost. Rewrite it to this build's origin host.
     static let rewriteLocalhost = true
     static let pushPlatform = "ios-sandbox"
+    /// Debug builds may still be offered a build from /desktop/releases.
+    static let offersFeedUpdates = true
     #else
     static let defaultOrigin = "https://portal.tmantoinelaw.com"
     static let rewriteLocalhost = false
     static let pushPlatform = "ios"
+    /// Release builds go out through the App Store and TestFlight, which do the
+    /// updating. Apple rejects an app that offers to install a build itself.
+    static let offersFeedUpdates = false
     #endif
 
     /// Contains "Safari" and "iPhone"/"iPad" so Security settings can name the device.

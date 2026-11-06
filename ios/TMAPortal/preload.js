@@ -25,6 +25,9 @@
     isDesktop: true,
     isIOS: true,
     platform: 'ios',
+    // The App Store (and TestFlight) is the only way this app is installed.
+    // The page keeps offers of other builds out of it.
+    store: 'app-store',
     version: '__TMA_VERSION__',
     pushEnabled: false,
     openInBrowser: function (url) {

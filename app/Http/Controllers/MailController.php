@@ -2139,7 +2139,9 @@ class MailController extends Controller
         $user = $request->user();
 
         return response()->json([
+            // Mailboxes only: an Apple sign-in has no mail to offer.
             'accounts' => $user->connectedAccounts()
+                ->whereIn('provider', ['google', 'microsoft'])
                 ->get()
                 ->map(fn ($account): array => [
                     'provider' => $account->provider,

@@ -36,6 +36,11 @@ const CHECK_INTERVAL = 3600000; // hourly, so a deploy lands the same day
 
 const IS_MAC = process.platform === 'darwin';
 
+// A Mac App Store install is updated by the App Store, and the store rejects
+// an app that replaces its own bundle. That build checks nothing and offers
+// nothing; see electron-builder.mas.cjs.
+const STORE_BUILD = process.mas === true;
+
 // electron-builder names the Windows manifest latest.yml and the macOS one
 // latest-mac.yml; both sit in the same bucket, so one feed serves both.
 const MANIFEST = IS_MAC ? 'latest-mac.yml' : 'latest.yml';
@@ -509,7 +514,7 @@ async function runUpdate(release, parentWindow, { announce = false } = {}) {
  *                                  when already current, and honour "Later".
  */
 async function checkForUpdates({ silent = true } = {}) {
-  if (!app.isPackaged) return null;
+  if (!app.isPackaged || STORE_BUILD) return null;
 
   // Mid-install. Nothing to add and nothing to ask.
   if (installing) return null;
@@ -578,13 +583,14 @@ async function checkForUpdates({ silent = true } = {}) {
 }
 
 function start() {
-  if (!app.isPackaged) return;
+  if (!app.isPackaged || STORE_BUILD) return;
 
   setTimeout(() => checkForUpdates(), 10000);
   setInterval(() => checkForUpdates(), CHECK_INTERVAL);
 }
 
 module.exports = {
+  STORE_BUILD,
   start,
   checkForUpdates,
   fetchManifest,

@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Mail\Transport\MicrosoftGraphTransport;
+use App\Support\Apple\AppleProvider;
 use App\Support\Notifications\PushTransport;
 use App\Support\Notifications\RoutingPushTransport;
 use App\Support\Realtime;
@@ -20,6 +21,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Socialite\Facades\Socialite;
 use SocialiteProviders\Manager\SocialiteWasCalled;
 use SocialiteProviders\Microsoft\MicrosoftExtendSocialite;
 
@@ -231,6 +233,10 @@ class AppServiceProvider extends ServiceProvider
         // auth event gets recorded twice.
 
         Event::listen(SocialiteWasCalled::class, MicrosoftExtendSocialite::class);
+
+        // Sign in with Apple. Its client secret is signed per request, so the
+        // driver is built from config each time rather than registered once.
+        Socialite::extend('apple', fn () => Socialite::buildProvider(AppleProvider::class, config('services.apple')));
 
         // Stay-signed-in remember cookie — Laravel's default is much longer.
         // The default here is the shipped 7-day window; applyRemember()

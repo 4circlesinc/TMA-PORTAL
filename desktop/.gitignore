@@ -3,3 +3,6 @@ release
 assets/icon.icns
 assets/icon.iconset
 webassets
+build/*.provisionprofile
+private_keys
+release-mas
