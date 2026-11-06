@@ -16932,8 +16932,46 @@
    * the Unit's CIP number once there is one). Taken from the answer, never
    * worked out here. Answers whether a row on screen was touched.
    */
+  function applicationRowFromChange(change) {
+    var row = {
+      familyLabel: 'F1',
+      familySize: 1,
+      assignedTo: [],
+      familyMembers: [],
+      status: 'draft',
+      statusLabel: 'Draft',
+      statusTone: 'neutral',
+    };
+    Object.keys(change).forEach(function (key) {
+      if (change[key] === undefined || change[key] === null || change[key] === '') return;
+      row[key] = change[key];
+    });
+    row.id = change.id;
+    if (change.clientUid) row.clientUid = change.clientUid;
+
+    return row;
+  }
+
+  function changeBelongsOnPhase(change, phase) {
+    if (!phase) return true;
+
+    return !!(change && change.phase && change.phase === phase);
+  }
+
+  function placeNewApplication(rows, change) {
+    if (!rows || !change || !change.id) return false;
+    var i;
+    for (i = 0; i < rows.length; i++) {
+      if (rows[i] && rows[i].id === change.id) return false;
+    }
+    rows.unshift(applicationRowFromChange(change));
+
+    return true;
+  }
+
   function applyMovedApplications(moved) {
     var touched = false;
+    var phase = clientsMountState ? applicationPhaseForTab(clientsMountState) : '';
 
     (moved || []).forEach(function (m) {
       if (!m || !m.id) return;
@@ -16945,12 +16983,17 @@
         });
       };
 
+      var found = false;
       (APP_TABLE.rows || []).forEach(function (row) {
         if (row && row.id === m.id) {
           patch(row);
           touched = true;
+          found = true;
         }
       });
+      if (!found && APP_TABLE.page === 1 && changeBelongsOnPhase(m, phase)) {
+        if (placeNewApplication(APP_TABLE.rows, m)) touched = true;
+      }
 
       var uid = m.clientUid || APPLICATION_OWNERS[m.id];
       var held = uid ? applicationFor(uid) : null;
@@ -17022,8 +17065,22 @@
           });
         });
       });
-      // Only a tab as it opens is ever stored: no search, no filter, page one.
+      // A new filing is not in this page yet. Put it on page one of its
+      // lane, and on All Applications, before this page is stored.
       var parts = key.split('|');
+      var pagePhase = parts[1] || '';
+      var firstPage = parts[parts.length - 1] === '1';
+      var openView = parts[0] === '' && parts[2] === '' && parts[3] === '' && parts[4] === '' &&
+        parts[5] === '' && parts[8] === '';
+      if (firstPage && openView) {
+        changes.forEach(function (change) {
+          if (!changeBelongsOnPhase(change, pagePhase)) return;
+          if (placeNewApplication(page.rows, change) && typeof page.total === 'number') {
+            page.total += 1;
+          }
+        });
+      }
+      // Only a tab as it opens is ever stored: no search, no filter, page one.
       var plain = parts[0] === '' && parts[2] === '' && parts[3] === '' && parts[4] === '' &&
         parts[5] === '' && parts[8] === '' && parts[parts.length - 1] === '1';
       if (plain) corrected.push({ storeKey: 'cip:applications:v1:' + key, page: page });

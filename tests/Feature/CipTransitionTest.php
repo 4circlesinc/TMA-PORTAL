@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Mail\Postcard;
+use App\Models\ActivityLog;
 use App\Models\CipApplication;
 use App\Models\CipDocument;
 use App\Models\CipEvent;
@@ -365,6 +366,31 @@ class CipTransitionTest extends TestCase
             ->postJson($this->statusUrl($application), ['status' => Status::REVIEW_APPLICATION])
             ->assertOk()
             ->assertJsonPath('application.status', Status::REVIEW_APPLICATION);
+    }
+
+    public function test_a_status_change_still_lands_when_the_activity_log_cannot_be_written(): void
+    {
+        Mail::fake();
+
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $application = $this->application($admin);
+        $done = false;
+
+        ActivityLog::creating(function () use (&$done) {
+            if ($done) {
+                return;
+            }
+            $done = true;
+
+            throw new \RuntimeException('activity log unavailable');
+        });
+
+        $this->actingAs($admin)
+            ->postJson($this->statusUrl($application), ['status' => Status::REVIEW_APPLICATION])
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::REVIEW_APPLICATION);
+
+        $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
     }
 
     public function test_a_status_change_copies_the_notice_to_the_addresses_named_on_it(): void

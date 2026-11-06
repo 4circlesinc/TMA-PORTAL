@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Support\Access\Impersonation;
 use App\Support\Security\IpLocation;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Request;
 
@@ -83,7 +84,17 @@ final class ActivityLogger
     public static function log(array $attrs): ?ActivityLog
     {
         try {
-            return self::record($attrs);
+            /*
+             * Its own savepoint.
+             *
+             * A failed insert aborts the whole Postgres transaction. This
+             * log is optional, and a status change calls it from inside the
+             * transaction that saves the status. Swallowing the error and
+             * carrying on used to throw that status away on commit, or turn
+             * the next statement into "Server Error". The failure stays
+             * here. The caller's write can still commit.
+             */
+            return DB::transaction(fn () => self::record($attrs));
         } catch (\Throwable $e) {
             Log::error('ActivityLogger.log failed', [
                 'type' => $attrs['type'] ?? null,

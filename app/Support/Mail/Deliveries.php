@@ -5,6 +5,7 @@ namespace App\Support\Mail;
 use App\Mail\Postcard;
 use App\Models\EmailDelivery;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -45,9 +46,13 @@ final class Deliveries
         try {
             // sendNow, not send: Postcard is a ShouldQueue mailable, so send()
             // would put it back on the queue we are deliberately avoiding.
-            $immediate
-                ? Mail::to($recipient)->sendNow($postcard)
-                : Mail::to($recipient)->queue($postcard);
+            // Its own savepoint, so a refused queue insert does not abort
+            // the status change this letter is riding on.
+            DB::transaction(function () use ($postcard, $recipient, $immediate) {
+                $immediate
+                    ? Mail::to($recipient)->sendNow($postcard)
+                    : Mail::to($recipient)->queue($postcard);
+            });
         } catch (Throwable $e) {
             // A refused transport is a delivery failure, not an exception the
             // caller has to handle: the row carries the reason, and the caller
@@ -101,7 +106,9 @@ final class Deliveries
         ?string $template,
     ): ?EmailDelivery {
         try {
-            return EmailDelivery::create([
+            // A failed tracking row must not abort the Postgres transaction
+            // the status change is still using.
+            return DB::transaction(fn () => EmailDelivery::create([
                 'uuid' => (string) Str::uuid(),
                 'recipient' => $recipient,
                 'subject' => $subject,
@@ -111,7 +118,7 @@ final class Deliveries
                 'related_id' => $related?->getKey(),
                 'status' => EmailDelivery::STATUS_QUEUED,
                 'queued_at' => now(),
-            ]);
+            ]));
         } catch (Throwable $e) {
             Log::warning('Could not record an email delivery: '.$e->getMessage());
 

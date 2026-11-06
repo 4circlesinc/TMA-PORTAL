@@ -3546,6 +3546,10 @@
             provider: json.draft.provider,
             providerId: answers.providerId,
             providerCode: json.draft.providerCode,
+            phase: json.draft.phase || '',
+            status: json.draft.status || 'draft',
+            statusLabel: json.draft.statusLabel || 'Draft',
+            statusTone: json.draft.statusTone || 'neutral',
           };
           if (named) patch.applicantName = upperName(named);
           state.onChanged([patch]);

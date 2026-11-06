@@ -11,6 +11,7 @@ use App\Support\Companies\NotificationEmail;
 use App\Support\Mail\Postcards;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -58,7 +59,9 @@ final class Notifier
     public static function send(array $attrs): ?Notification
     {
         try {
-            return self::dispatch($attrs);
+            // Same savepoint as the activity log: a failed bell must not
+            // abort the status change that asked for it.
+            return DB::transaction(fn () => self::dispatch($attrs));
         } catch (\Throwable $e) {
             Log::error('Notifier.send failed', [
                 'type' => $attrs['type'] ?? null,

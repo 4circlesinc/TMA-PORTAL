@@ -519,6 +519,9 @@ class CipApplicationDraftController extends Controller
 
         return [
             'id' => $draft->uuid,
+            'status' => $draft->status,
+            'statusLabel' => Status::label($draft->status),
+            'statusTone' => Status::tone($draft->status),
             'number' => $draft->internal_number,
             /*
              * What the applications table draws for this row, as it stands
