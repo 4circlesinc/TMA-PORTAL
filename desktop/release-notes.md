@@ -1,1 +1,2 @@
 - Sign as admin opens the desktop app as that service provider. The window was keeping the administrator's last page, so the switch looked like it did nothing.
+- Right-clicking beside a field on the sign-in and register screens offers Paste. It used to offer nothing unless the click landed exactly on the box.
