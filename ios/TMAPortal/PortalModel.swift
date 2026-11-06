@@ -1,6 +1,7 @@
 import AuthenticationServices
 import CryptoKit
 import Network
+import SafariServices
 import UIKit
 import UserNotifications
 import WebKit
@@ -36,7 +37,7 @@ final class PortalModel: NSObject, ObservableObject {
     private var online = true
     private var quietLoad = false
     private var servedFromShell = false
-    private var risen = false
+    private var splash = SplashGate()
     private var callInfo: String?
     private var authSession: ASWebAuthenticationSession?
     private var pendingBrowserURL: URL?
@@ -101,8 +102,13 @@ final class PortalModel: NSObject, ObservableObject {
 
         Task { await shell.refreshBuild() }
         Task {
-            try? await Task.sleep(nanoseconds: 420_000_000)
-            risen = true
+            try? await Task.sleep(nanoseconds: UInt64(SplashGate.minimum * 1_000_000_000))
+            splash.rise()
+            refreshSplash()
+        }
+        Task {
+            try? await Task.sleep(nanoseconds: UInt64(SplashGate.limit * 1_000_000_000))
+            splash.timedOut()
             refreshSplash()
         }
         refreshNotificationPermission()
@@ -217,6 +223,11 @@ final class PortalModel: NSObject, ObservableObject {
             if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
         case "requestNotifications":
             requestNotifications()
+        case "ready":
+            // DOMContentLoaded: the page's content is there, even if images
+            // are still arriving. Enough to lift the boot splash.
+            splash.pageReady()
+            refreshSplash()
         default:
             break
         }
@@ -337,6 +348,7 @@ final class PortalModel: NSObject, ObservableObject {
     private func showSignInWaiting(provider: String?) {
         quietLoad = true
         loading = false
+        splash.pageReady()
         refreshSplash()
         let label: String
         switch provider {
@@ -542,7 +554,7 @@ final class PortalModel: NSObject, ObservableObject {
     }
 
     private func refreshSplash() {
-        showSplash = loading || !risen
+        showSplash = splash.showing
     }
 
     private func evaluate(_ js: String, done: ((String) -> Void)? = nil) {
@@ -581,6 +593,15 @@ final class PortalModel: NSObject, ObservableObject {
     private func openOutside(_ raw: String) {
         guard let url = URL(string: raw), let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http" else { return }
         UIApplication.shared.open(url)
+    }
+
+    /// Terms and Privacy over the app, so the page underneath keeps its place.
+    private func showDocument(_ url: URL) {
+        let viewer = SFSafariViewController(url: url)
+        viewer.dismissButtonStyle = .done
+        viewer.preferredControlTintColor = UIColor(red: 0x13 / 255, green: 0x6D / 255, blue: 0xA0 / 255, alpha: 1)
+        guard let top = topController() else { openOutside(url.absoluteString); return }
+        top.present(viewer, animated: true)
     }
 
     private func topController() -> UIViewController? {
@@ -684,7 +705,9 @@ extension PortalModel: WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, A
 
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         if let url = navigationAction.request.url {
-            if rules.isPortalURL(url) || rules.isAuthURL(url) {
+            if rules.isPublicDocument(url) {
+                showDocument(url)
+            } else if rules.isPortalURL(url) || rules.isAuthURL(url) {
                 webView.load(navigationAction.request)
             } else {
                 openOutside(url.absoluteString)
@@ -702,6 +725,7 @@ extension PortalModel: WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, A
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         quietLoad = false
         loading = false
+        splash.pageReady()
         refreshSplash()
         guard let url = webView.url, rules.isPortalURL(url) else { return }
         if let script = pendingCallJS {
@@ -739,6 +763,7 @@ extension PortalModel: WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, A
         let failed = (ns.userInfo[NSURLErrorFailingURLErrorKey] as? URL) ?? webView.url
         guard let failed, rules.isPortalURL(failed) else {
             loading = false
+            splash.pageReady()
             refreshSplash()
             return
         }
@@ -758,6 +783,7 @@ extension PortalModel: WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, A
                 self.webView.loadHTMLString(page, baseURL: PortalConfig.originURL)
             }
             self.loading = false
+            self.splash.pageReady()
             self.refreshSplash()
         }
     }

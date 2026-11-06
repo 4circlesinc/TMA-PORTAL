@@ -31,6 +31,16 @@ struct NavigationRules {
         isSocialRedirect(url) && firstMatch(in: url.path) == "apple"
     }
 
+    /// The public legal pages. A new-window link to one opens over the app
+    /// (Safari's viewer, Done to come back) instead of replacing the page that
+    /// linked to it: the sign-in page's Legal terms only unlock Agree after
+    /// both documents are opened, and replacing that page lost the progress.
+    func isPublicDocument(_ url: URL) -> Bool {
+        guard isPortalURL(url) else { return false }
+        let path = url.path.lowercased()
+        return ["/terms-of-service", "/privacy-policy"].contains { path == $0 || path.hasPrefix($0 + "/") }
+    }
+
     /// The invitation a sign-up link carries, so the native sheet can keep it.
     func inviteToken(in url: URL) -> String? {
         let value = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "invite" }?.value

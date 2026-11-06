@@ -19,7 +19,7 @@ final class PortalLogicTests: XCTestCase {
     }
 
     func testALaterReminderIsHeldUntilTheWindow() {
-        XCTAssertFalse(AppVersions.shouldReoffer(declinedVersion: "0.2.0", declinedAt: 1_000, version: "0.2.0", now: 1_000 + 60_000, remindAfter: 3 * 3_600))
+        XCTAssertFalse(AppVersions.shouldReoffer(declinedVersion: "0.2.0", declinedAt: 1_000, version: "0.2.0", now: 1_000 + 60, remindAfter: 3 * 3_600))
         XCTAssertTrue(AppVersions.shouldReoffer(declinedVersion: "0.2.0", declinedAt: 1_000, version: "0.2.0", now: 1_000 + 3 * 3_600, remindAfter: 3 * 3_600))
         XCTAssertTrue(AppVersions.shouldReoffer(declinedVersion: "0.2.0", declinedAt: 1_000, version: "0.3.0", now: 1_001, remindAfter: 3 * 3_600))
         XCTAssertTrue(AppVersions.shouldReoffer(declinedVersion: nil, declinedAt: 0, version: "0.2.0", now: 1, remindAfter: 3 * 3_600))
@@ -53,6 +53,36 @@ final class PortalLogicTests: XCTestCase {
         XCTAssertTrue(rules.isPortalURL(login))
         XCTAssertTrue(rules.isAuthURL(URL(string: "https://accounts.google.com/o/oauth2/v2/auth")!))
         XCTAssertFalse(rules.isPortalURL(URL(string: "https://example.com/file")!))
+    }
+
+    func testTheLegalDocumentsOpenOverTheAppNotInsteadOfIt() {
+        let rules = NavigationRules(origin: "https://portal.tmantoinelaw.com")
+        XCTAssertTrue(rules.isPublicDocument(URL(string: "https://portal.tmantoinelaw.com/terms-of-service/")!))
+        XCTAssertTrue(rules.isPublicDocument(URL(string: "https://portal.tmantoinelaw.com/privacy-policy")!))
+        XCTAssertFalse(rules.isPublicDocument(URL(string: "https://portal.tmantoinelaw.com/files/123")!))
+        XCTAssertFalse(rules.isPublicDocument(URL(string: "https://portal.tmantoinelaw.com/privacy-policy-old")!))
+        XCTAssertFalse(rules.isPublicDocument(URL(string: "https://evil.example/terms-of-service/")!))
+    }
+
+    func testTheSplashCoversOnlyTheFirstPage() {
+        var gate = SplashGate()
+        XCTAssertTrue(gate.showing)
+        gate.pageReady()
+        XCTAssertTrue(gate.showing, "a fast page still waits out the minimum, so the splash does not flash")
+        gate.rise()
+        XCTAssertFalse(gate.showing)
+        // Later navigations, reloads included, never bring it back.
+        gate.pageReady()
+        XCTAssertFalse(gate.showing)
+    }
+
+    func testTheSplashLiftsAtTheLimitWhateverThePageIsDoing() {
+        var gate = SplashGate()
+        gate.rise()
+        XCTAssertTrue(gate.showing, "still waiting on the first page")
+        gate.timedOut()
+        XCTAssertFalse(gate.showing)
+        XCTAssertLessThanOrEqual(SplashGate.limit, 10)
     }
 
     func testAppleIsAnsweredByTheNativeSheetFromAnyPage() {

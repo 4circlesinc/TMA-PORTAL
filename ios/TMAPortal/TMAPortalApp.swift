@@ -51,19 +51,22 @@ struct PortalRootView: View {
     }
 }
 
-/// The desktop splash: `--color-primary-dark`, the wordmark, an indeterminate bar.
+/// The desktop splash: `--color-primary-dark`, the firm's logo knocked out to
+/// white (Assets: SplashLogo, made from desktop/assets/logo-full.png), and an
+/// indeterminate bar. The launch screen shows the same logo at the same size
+/// and place (Info.plist UILaunchScreen), so the hand-over does not jump: the
+/// logo stays centred and the bar hangs below it.
 private struct BootSplash: View {
     var body: some View {
         ZStack {
             Color(red: 0x13 / 255, green: 0x6D / 255, blue: 0xA0 / 255)
-            VStack(spacing: 28) {
-                Text("TM ANTOINE")
-                    .font(.system(size: 22, weight: .semibold))
-                    .tracking(1.6)
-                    .foregroundStyle(.white)
-                SplashBar()
-                    .frame(width: 180, height: 4)
-            }
+            Image("SplashLogo")
+                .accessibilityLabel("TM ANTOINE Partners")
+                .overlay(alignment: .bottom) {
+                    SplashBar()
+                        .frame(width: 180, height: 4)
+                        .offset(y: 28 + 4)
+                }
         }
         .ignoresSafeArea()
     }

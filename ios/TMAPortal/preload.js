@@ -61,6 +61,12 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watchHostAttributes, { once: true });
   else watchHostAttributes();
 
+  // Tells the app the page's content is in, so the boot splash can lift
+  // without waiting for every image (SplashGate.swift).
+  function ready() { post('ready'); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ready, { once: true });
+  else ready();
+
   var live = {};
   var nextId = 1;
   function IOSNotification(title, options) {
