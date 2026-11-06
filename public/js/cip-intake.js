@@ -405,7 +405,13 @@
      either way demanding the field again is the form showing the picture
      and calling it missing. */
   function photoChosen(path) {
-    return !!(state.files[path] || state.filed[path] || state.previews[path]);
+    if (state.files[path] || state.filed[path] || state.previews[path]) return true;
+    // A scan already sitting on the slot is an answer, even when this form
+    // never held the File. The checklist and a reopened draft both describe
+    // it that way. Update required still wants a new file.
+    var meta = state.filedMeta[path];
+
+    return !!(meta && meta.status !== 'update_required' && (meta.uploaded || meta.fileId));
   }
 
   /* Copy bytes out of the file picker before Morph tears the input down.
@@ -534,19 +540,40 @@
     return parseInt(String(value || '').slice(0, 4), 10) >= 1900;
   }
 
+  /* Sponsor and dependent gaps name the person. "Oath of Allegiance is
+     required" on its own reads as the main applicant's copy, which is
+     already filed, while a dependent's copy is the one still open. */
+  function owned(path, sentence) {
+    if (String(path).indexOf('sponsor.') === 0) return 'Sponsor: ' + sentence;
+    var match = String(path).match(/^dependents\.(\d+)\./);
+    if (match) return 'Dependent ' + (Number(match[1]) + 1) + ': ' + sentence;
+
+    return sentence;
+  }
+
+  /* A required scan already on the form or already on the slot. */
+  function documentSatisfied(path) {
+    var files = state.documents[path];
+    if (files && files.length) return true;
+    if (state.filed[path]) return true;
+    var meta = state.filedMeta[path];
+
+    return !!(meta && meta.status !== 'update_required' && (meta.uploaded || meta.fileId));
+  }
+
   function missing() {
     var found = {};
 
     requiredPaths().forEach(function (path) {
       var value = String(state.draft[path] || '').trim();
       if (value === '') {
-        found[path] = labelFor(path) + ' is required';
+        found[path] = owned(path, labelFor(path) + ' is required');
         return;
       }
       // Same rule as Intake::rules `before:today`. Not enforced with min/max
       // on the input — those reject year digits while 2004 is still 0002.
       if (/dateOfBirth$/.test(path) && value >= todayLocal()) {
-        found[path] = 'A date of birth has to be in the past.';
+        found[path] = owned(path, 'A date of birth has to be in the past.');
       }
     });
 
@@ -554,13 +581,15 @@
     // rows stay on the checklist; sending one on an edit still files it.
     if (!packageLocked() && isFiling()) {
       requiredFiles().forEach(function (path) {
-        if (!photoChosen(path)) found[path] = labelFor(path) + ' is required';
+        if (photoChosen(path)) return;
+        found[path] = path === 'decision_letter'
+          ? 'Upload the decision letter as a PDF.'
+          : owned(path, labelFor(path) + ' is required');
       });
 
       requiredDocuments().forEach(function (path) {
-        var files = state.documents[path];
-        if ((!files || !files.length) && !state.filed[path]) {
-          found[path] = labelFor(path) + ' is required';
+        if (!documentSatisfied(path)) {
+          found[path] = owned(path, labelFor(path) + ' is required');
         }
       });
     }
@@ -1803,9 +1832,7 @@
       // happened deserves to be told why without hunting the page.
       (count
         ? '<p class="tma-portal-modal__error" role="alert">' +
-          // Neutral about why: a field can be empty or, in a photo's case,
-          // filled with something that cannot be filed.
-          esc(checkAnswersMessage(count)) +
+          esc(answerSummary(state.errors)) +
           '</p>'
         : '') +
       resumedNotice() +
@@ -3053,8 +3080,26 @@
     return Array.isArray(msg) ? String(msg[0] || '') : String(msg || '');
   }
 
-  function checkAnswersMessage(count) {
-    return count === 1 ? 'Check one answer.' : 'Check ' + count + ' answers.';
+  /* The sentences already stored on the fields. One gap is said on its
+     own. Several are said together, so a filled document list is not
+     summed up as "Check one answer." */
+  function answerLines(errors) {
+    var lines = [];
+    Object.keys(errors || {}).forEach(function (key) {
+      var msg = errors[key];
+      var text = Array.isArray(msg) ? String(msg[0] || '') : String(msg || '');
+      if (text) lines.push(text);
+    });
+
+    return lines;
+  }
+
+  function answerSummary(errors) {
+    var lines = answerLines(errors);
+    if (!lines.length) return 'Check the form and try again.';
+    if (lines.length === 1) return lines[0];
+
+    return lines.join(' ');
   }
 
   function httpFailure(res, json) {
@@ -3852,7 +3897,7 @@
       var first = root.querySelector('.is-invalid [data-cip-field], .is-invalid');
       if (first && first.scrollIntoView) first.scrollIntoView({ block: 'center', behavior: 'smooth' });
       if (first && first.focus) first.focus();
-      ui().toastError(checkAnswersMessage(Object.keys(found).length));
+      ui().toastError(answerSummary(found));
 
       return;
     }
@@ -3944,7 +3989,7 @@
           // the control it belongs to is `passportBioPage`.
           applyErrors(json.errors);
           render(root);
-          ui().toastError(decisionSaid || checkAnswersMessage(Object.keys(state.errors).length));
+          ui().toastError(decisionSaid || answerSummary(state.errors));
 
           return;
         }
