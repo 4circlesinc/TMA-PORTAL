@@ -4289,6 +4289,9 @@
   height: 14px;
   padding: 0 3px;
   border-radius: var(--radius-pill);
+  /* Red unless a kind says otherwise. The text is white, so a kind with no
+     background of its own was white on the bar: the CIP count, invisible. */
+  background: #ff4747;
   font-size: 9px;
   line-height: 14px;
   font-weight: 500;
@@ -4301,6 +4304,8 @@
 .tma-dash__tab-badge--alerts { background: #ff4747; }
 .tma-dash__tab-badge--email { background: #ff4747; }
 .tma-dash__tab-badge--messages { background: var(--color-primary); }
+/* Red, as the CIP Applications count is in the sidebar (.tma-dash__nav-count). */
+.tma-dash__tab-badge--cip { background: #ff4747; }
 .tma-dash__tab-badge[hidden] { display: none; }
 
 /* Mobile menu (the "Home" navigation hub) */
