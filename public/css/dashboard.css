@@ -40612,3 +40612,179 @@ span.tma-dash__messages-profile-avatar {
   border-radius: var(--radius-4);
   background: var(--color-bg-card, #f4f5f7);
 }
+
+/*
+ * Settings screens on a phone: the header and the option list.
+ *
+ * Header: back on the left saying where it goes ("‹ Notifications"), the
+ * screen's title centred, like every iPhone screen and the admin console's
+ * (portal.css). The admin console embeds these pages and hides this header,
+ * except over an option list, where it takes over from its own.
+ *
+ * Option list: a handful of choices is one rounded card in its own order
+ * with a check on the chosen one, sized to its rows; a long list keeps its
+ * search box and scrolls. It used to be a grey box with a search field over
+ * two options and an empty white card running to the bottom of the screen.
+ */
+@media (max-width: 1024px) {
+  .tma-dash__settings-content .tma-dash__settings-mobile-head {
+    display: grid;
+    grid-template-columns: minmax(max-content, 1fr) minmax(0, max-content) minmax(0, 1fr);
+    align-items: center;
+    min-height: 44px;
+    margin: 0 0 var(--space-8);
+    padding: 0;
+    gap: var(--space-8);
+  }
+
+  .tma-dash__settings-content .tma-dash__settings-mobile-back {
+    grid-column: 1;
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    max-width: none;
+    min-width: 44px;
+    min-height: 44px;
+    margin-left: -6px;
+    padding: 0 var(--space-4) 0 0;
+    color: var(--color-primary, #03a5e9);
+    font: inherit;
+    font-size: var(--text-size-16, 16px);
+    line-height: 22px;
+    font-weight: 500;
+  }
+
+  .tma-dash__settings-content .tma-dash__settings-mobile-back img {
+    display: none;
+  }
+
+  .tma-dash__settings-content .tma-dash__settings-mobile-back::before {
+    content: "";
+    flex: 0 0 24px;
+    width: 24px;
+    height: 24px;
+    background: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M165.66,202.34a8,8,0,0,1-11.32,11.32l-80-80a8,8,0,0,1,0-11.32l80-80a8,8,0,0,1,11.32,11.32L91.31,128Z'/%3E%3C/svg%3E") center / 24px no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M165.66,202.34a8,8,0,0,1-11.32,11.32l-80-80a8,8,0,0,1,0-11.32l80-80a8,8,0,0,1,11.32,11.32L91.31,128Z'/%3E%3C/svg%3E") center / 24px no-repeat;
+  }
+
+  .tma-dash__settings-mobile-back-label {
+    min-width: 0;
+    max-width: 38vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tma-dash__settings-content .tma-dash__settings-mobile-title {
+    grid-column: 2;
+    max-width: 52vw;
+    font-size: var(--text-size-16, 16px);
+    line-height: 22px;
+    font-weight: 600;
+  }
+
+  .tma-dash__settings-panel .tma-dash__settings-mobile-select {
+    gap: var(--space-8);
+    padding: var(--space-8) 0 var(--space-16);
+    background: transparent;
+  }
+
+  .tma-dash__settings-panel .tma-dash__settings-mobile-select-search[hidden],
+  .tma-dash__settings-panel .tma-dash__settings-mobile-select-pinned[hidden],
+  .tma-dash__settings-panel .tma-dash__settings-mobile-select-hint[hidden] {
+    display: none !important;
+  }
+
+  .tma-dash__settings-panel .tma-dash__settings-mobile-select-card,
+  .tma-dash__settings-panel .tma-dash__settings-mobile-select-pinned {
+    flex: 0 1 auto;
+    border-radius: var(--radius-16, 16px);
+    background: var(--dash-panel-bg, #f4f4f5);
+  }
+
+  .tma-dash__settings-panel .tma-dash__settings-mobile-select-option {
+    position: relative;
+    justify-content: space-between;
+    gap: var(--space-12);
+    min-height: 52px;
+    padding: var(--space-12) var(--space-16);
+    border-bottom: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* A hairline between rows, inset like the rows' text. */
+  .tma-dash__settings-panel .tma-dash__settings-mobile-select-option + .tma-dash__settings-mobile-select-option::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: var(--space-16);
+    right: 0;
+    height: 1px;
+    background: var(--color-border, rgba(0, 0, 0, 0.08));
+    transform: scaleY(0.5);
+    transform-origin: top;
+  }
+
+  .tma-dash__settings-panel .tma-dash__settings-mobile-select-option:active {
+    background: var(--color-hover, rgba(0, 0, 0, 0.04));
+  }
+
+  .tma-dash__settings-panel .tma-dash__settings-mobile-select-option.is-active .tma-dash__settings-mobile-select-option-label {
+    font-weight: 500;
+  }
+
+  .tma-dash__settings-mobile-select-check {
+    flex: 0 0 20px;
+    width: 20px;
+    height: 20px;
+    background: var(--color-primary, #03a5e9);
+    -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z'/%3E%3C/svg%3E") center / 20px no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z'/%3E%3C/svg%3E") center / 20px no-repeat;
+  }
+
+  .tma-dash__settings-mobile-select-hint {
+    margin: 0;
+    padding: 0 var(--space-16);
+    font-size: var(--text-size-13, 13px);
+    line-height: 18px;
+    color: var(--color-text-secondary);
+  }
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__settings-panel .tma-dash__settings-mobile-select-card,
+.tma-dash[data-theme="dark"] .tma-dash__settings-panel .tma-dash__settings-mobile-select-pinned,
+:root[data-theme="dark"] .tma-dash__settings-panel .tma-dash__settings-mobile-select-card,
+:root[data-theme="dark"] .tma-dash__settings-panel .tma-dash__settings-mobile-select-pinned {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__settings-panel .tma-dash__settings-mobile-select-option + .tma-dash__settings-mobile-select-option::before,
+:root[data-theme="dark"] .tma-dash__settings-panel .tma-dash__settings-mobile-select-option + .tma-dash__settings-mobile-select-option::before {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/*
+ * The Settings page on a phone clears the floating header like every other
+ * page. `.tma-dash--settings .tma-dash__main { padding: 0 }` (the desktop
+ * card's full bleed) comes after the phone rule that adds the header's
+ * height, so the menu and each page's back button sat under the bubbles.
+ */
+@media (max-width: 1024px) {
+  .tma-dash.tma-dash--settings .tma-dash__main {
+    padding-top: calc(var(--dash-mobile-header-h) + var(--space-12));
+  }
+}
+
+/*
+ * A settings page's cards sit on the page's 16px gutter, under the header's
+ * back button. The page pads 16px and each card stack added another 16px,
+ * so the cards sat 32px in (40px inside the admin console).
+ */
+@media (max-width: 1024px) {
+  .tma-dash__settings-content .tma-dash__settings-panel > [class*="-stack"] {
+    padding-left: 0;
+    padding-right: 0;
+  }
+}

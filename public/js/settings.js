@@ -67,14 +67,35 @@
     card.classList.toggle('is-settings-detail', inDetail);
     if (mobileHead) mobileHead.hidden = !inDetail;
     if (mobileTitle) mobileTitle.textContent = detailTitle(activeId || getActiveNavId(root));
+    var backLabel = root.querySelector('[data-settings-mobile-back-label]');
+    if (backLabel && !root.classList.contains('is-settings-mobile-select-open')) backLabel.textContent = 'Settings';
   }
 
-  function showSettingsMenu(root) {
+  function showSettingsMenu(root, fromHistory) {
     if (!isSettingsMobile()) return;
+    var card = root.querySelector('[data-settings-card]');
+    var screen = card && card._screen;
+    if (card) card._screen = null;
+    if (screen && !fromHistory && window.TMAPhoneScreens) window.TMAPhoneScreens.closed(screen);
     closePaymentPayout(root);
     closePaymentSwipes(root);
     closePopups(root);
     setMobileView(root, 'menu');
+  }
+
+  /* On a phone a page picked from the menu replaces it: a screen of its own,
+     so back and the edge swipe return to the menu (phone-screens.js). */
+  function openDetailScreen(root, id) {
+    var card = root.querySelector('[data-settings-card]');
+    if (!card || !isSettingsMobile() || card._screen || !window.TMAPhoneScreens) return;
+    if (card.classList.contains('is-settings-detail')) return;
+    card._screen = window.TMAPhoneScreens.open(
+      function () { showSettingsMenu(root, true); },
+      function (screen) {
+        card._screen = screen;
+        activateNav(root, id);
+      }
+    );
   }
 
   function syncSettingsLayout(root, activeId) {
@@ -663,6 +684,14 @@
     'sound-iphone': 'Notification sound',
   };
 
+  // Lists longer than this get a search box and the chosen option pinned.
+  var MOBILE_SELECT_SHORT = 8;
+
+  // A line under the list, for a choice that needs saying more about.
+  var MOBILE_SELECT_HINTS = {
+    'sound-iphone': 'Apple tone plays the sound chosen in iPhone Settings \u203a Sounds & Haptics \u203a Default Alerts. iOS doesn\u2019t let apps use the Text Tone.',
+  };
+
   var MOBILE_SELECT_PANEL = {
     timezone: 'time',
     language: 'time',
@@ -766,8 +795,11 @@
 
   function renderMobileSelectOption(item, selectedId) {
     var on = item.id === selectedId;
-    return '<button type="button" class="tma-dash__settings-mobile-select-option' + (on ? ' is-active' : '') + '" data-mobile-select-option="' + esc(item.id) + '">' +
-      '<span class="tma-dash__settings-mobile-select-option-label">' + esc(item.label) + '</span></button>';
+    return '<button type="button" class="tma-dash__settings-mobile-select-option' + (on ? ' is-active' : '') + '" data-mobile-select-option="' + esc(item.id) + '"' +
+      ' role="radio" aria-checked="' + (on ? 'true' : 'false') + '">' +
+      '<span class="tma-dash__settings-mobile-select-option-label">' + esc(item.label) + '</span>' +
+      (on ? '<span class="tma-dash__settings-mobile-select-check" aria-hidden="true"></span>' : '') +
+      '</button>';
   }
 
   function renderMobileSelectOverlay(nodeId) {
@@ -778,7 +810,8 @@
       '<img class="tma-dash__settings-mobile-select-mic" src="' + ICON + 'Microphone.svg" alt="" width="20" height="20" aria-hidden="true">' +
       '</label>' +
       '<div class="tma-dash__settings-mobile-select-pinned" data-mobile-select-pinned hidden></div>' +
-      '<div class="tma-dash__settings-mobile-select-card" data-mobile-select-list></div></div>';
+      '<div class="tma-dash__settings-mobile-select-card" data-mobile-select-list role="radiogroup"></div>' +
+      '<p class="tma-dash__settings-mobile-select-hint" data-mobile-select-hint hidden></p></div>';
   }
 
   function renderTimePanel() {
@@ -880,14 +913,27 @@
     var selectedItem = findOption(list, selected, list[0].id);
     var pinnedEl = overlay.querySelector('[data-mobile-select-pinned]');
     var listEl = overlay.querySelector('[data-mobile-select-list]');
+    var searchEl = overlay.querySelector('.tma-dash__settings-mobile-select-search');
+    var hintEl = overlay.querySelector('[data-mobile-select-hint]');
+    // A handful of choices is one list in its own order with a check on the
+    // chosen one, like iPhone Settings. Only a long list (time zones,
+    // languages) is worth a search box and the chosen one pinned on top.
+    var long = list.length > MOBILE_SELECT_SHORT;
 
+    overlay.classList.toggle('is-short', !long);
+    if (searchEl) searchEl.hidden = !long;
     if (pinnedEl) {
-      pinnedEl.innerHTML = renderMobileSelectOption(selectedItem, selected);
-      pinnedEl.hidden = false;
+      pinnedEl.innerHTML = long ? renderMobileSelectOption(selectedItem, selectedItem.id) : '';
+      pinnedEl.hidden = !long;
     }
     if (listEl) {
-      listEl.innerHTML = list.filter(function (item) { return item.id !== selectedItem.id; })
-        .map(function (item) { return renderMobileSelectOption(item, selected); }).join('');
+      listEl.setAttribute('aria-label', MOBILE_SELECT_TITLES[id] || 'Options');
+      listEl.innerHTML = list.filter(function (item) { return !long || item.id !== selectedItem.id; })
+        .map(function (item) { return renderMobileSelectOption(item, selectedItem.id); }).join('');
+    }
+    if (hintEl) {
+      hintEl.textContent = MOBILE_SELECT_HINTS[id] || '';
+      hintEl.hidden = !MOBILE_SELECT_HINTS[id];
     }
   }
 
@@ -900,10 +946,19 @@
     });
   }
 
-  function closeMobileSelect(root) {
+  /*
+   * The option list is a screen of its own (phone-screens.js): the header's
+   * back, the iPhone's edge swipe and Android's back all close it, and only
+   * it. `fromHistory` is history closing it, which needs no entry dropped.
+   */
+  function closeMobileSelect(root, fromHistory) {
     var panel = root.querySelector('[data-settings-panel].is-mobile-select-open');
     var overlay = panel && panel.querySelector('[data-settings-mobile-select]');
     if (!overlay) return;
+
+    var screen = overlay._screen;
+    overlay._screen = null;
+    if (screen && !fromHistory && window.TMAPhoneScreens) window.TMAPhoneScreens.closed(screen);
 
     overlay.hidden = true;
     overlay.removeAttribute('data-active-select');
@@ -914,19 +969,41 @@
       mobileTitle.textContent = overlay.dataset.previousTitle;
       delete overlay.dataset.previousTitle;
     }
+    var backLabel = root.querySelector('[data-settings-mobile-back-label]');
+    if (backLabel && overlay.dataset.previousBack != null) {
+      backLabel.textContent = overlay.dataset.previousBack;
+      delete overlay.dataset.previousBack;
+    }
 
     root.classList.remove('is-settings-mobile-select-open');
   }
 
-  function openMobileSelect(root, id) {
+  function openMobileSelect(root, id, reopened) {
     var panel = getMobileSelectPanel(root, id);
     var overlay = panel && panel.querySelector('[data-settings-mobile-select]');
     if (!overlay) return;
+
+    // Before the page changes, so the snapshot the swipe slides back to is
+    // the panel underneath.
+    if (reopened) {
+      overlay._screen = reopened;
+    } else if (window.TMAPhoneScreens) {
+      overlay._screen = window.TMAPhoneScreens.open(
+        function () { closeMobileSelect(root, true); },
+        function (screen) { openMobileSelect(root, id, screen); }
+      );
+    }
 
     var mobileTitle = root.querySelector('[data-settings-mobile-title]');
     if (mobileTitle) {
       overlay.dataset.previousTitle = mobileTitle.textContent;
       mobileTitle.textContent = MOBILE_SELECT_TITLES[id] || 'Select';
+    }
+    // Back says where it goes: the page this list belongs to.
+    var backLabel = root.querySelector('[data-settings-mobile-back-label]');
+    if (backLabel) {
+      overlay.dataset.previousBack = backLabel.textContent;
+      backLabel.textContent = detailTitle(MOBILE_SELECT_PANEL[id] || 'time');
     }
 
     overlay.setAttribute('data-active-select', id);
@@ -938,10 +1015,11 @@
     if (search) {
       search.value = '';
       filterMobileSelectList(overlay, '');
-      window.setTimeout(function () { search.focus(); }, 0);
     }
 
     syncMobileSelectUI(root, id);
+    var scroller = overlay.querySelector('[data-mobile-select-list]');
+    if (scroller) scroller.scrollTop = 0;
   }
 
   function closePickers(root) {
@@ -4018,8 +4096,9 @@
       '<nav class="tma-dash__settings-nav" aria-label="Settings sections" data-settings-sidebar>' + renderNav(activeNav || 'profile') + '</nav>' +
       '<div class="tma-dash__settings-content" data-settings-content>' +
       '<div class="tma-dash__settings-mobile-head" data-settings-mobile-head hidden>' +
-      '<button type="button" class="tma-dash__settings-mobile-back" data-settings-menu-back aria-label="Back to settings menu">' +
-      '<img src="' + ICON + 'CaretLeft.svg" alt="" width="24" height="24"></button>' +
+      '<button type="button" class="tma-dash__settings-mobile-back" data-settings-menu-back>' +
+      '<img src="' + ICON + 'CaretLeft.svg" alt="" width="24" height="24">' +
+      '<span class="tma-dash__settings-mobile-back-label" data-settings-mobile-back-label>Settings</span></button>' +
       '<h2 class="tma-dash__settings-mobile-title" data-settings-mobile-title>Settings</h2>' +
       '<button type="button" class="tma-dash__settings-mobile-more" data-settings-mobile-more hidden aria-label="More options">' +
       '<img src="' + ICON + 'DotsThree.svg" alt="" width="24" height="24"></button></div>' +
@@ -5341,6 +5420,7 @@
 
     root.querySelectorAll('[data-settings-nav]').forEach(function (btn) {
       btn.addEventListener('click', function () {
+        openDetailScreen(root, btn.getAttribute('data-settings-nav'));
         activateNav(root, btn.getAttribute('data-settings-nav'));
         if (btn.getAttribute('data-settings-nav') === 'account-security' && window.TMAAccountSecurity) {
           var mountEl = root.querySelector('[data-account-security-mount]');
@@ -5354,6 +5434,8 @@
       menuBack.dataset.bound = '1';
       menuBack.addEventListener('click', function (e) {
         e.preventDefault();
+        // The same as the edge swipe: history steps back one screen.
+        if (window.TMAPhoneScreens && window.TMAPhoneScreens.back()) return;
         if (root.classList.contains('is-settings-mobile-select-open')) {
           closeMobileSelect(root);
           return;

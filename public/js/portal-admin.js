@@ -4899,8 +4899,11 @@
       var group = NAV.filter(function (n) { return n.group === state.group; })[0];
       var subItems = group ? group.items.filter(function (it) { return allowed(it.id); }) : [];
       if (group && subItems.length) {
-        return '<button type="button" class="tma-portal-admin__nav-back" data-admin-group-back>&lsaquo; Settings</button>' +
-          '<p class="tma-portal-admin__nav-title">' + ui().esc(group.label) + '</p>' +
+        return '<div class="tma-portal-admin__head tma-portal-admin__head--group">' +
+          '<button type="button" class="tma-portal-admin__back" data-admin-group-back>' +
+          '<img src="images/icons/phosphor/CaretLeft.svg" alt="" width="24" height="24"><span>Settings</span></button>' +
+          '<h2 class="tma-portal-admin__head-title">' + ui().esc(group.label) + '</h2>' +
+          '</div>' +
           subItems.map(function (it) {
             return '<button type="button" class="tma-portal-admin__nav-item' + (pageId === it.id ? ' is-active' : '') + '" data-admin-nav="' + it.id + '">' + ui().esc(it.label) + '</button>';
           }).join('');
@@ -4928,6 +4931,49 @@
             '</div>'
           : '');
     }).join('');
+  }
+
+  /* The name a section goes by in the rail, for the phone header's title. */
+  function pageLabel(pageId) {
+    var label = 'Settings';
+    NAV.forEach(function (n) {
+      if (n.id === pageId) label = n.label;
+      (n.items || []).forEach(function (it) { if (it.id === pageId) label = it.label; });
+    });
+    return label;
+  }
+
+  function groupLabel(groupId) {
+    var group = NAV.filter(function (n) { return n.group === groupId; })[0];
+    return group ? group.label : 'Settings';
+  }
+
+  /*
+   * On a phone the menu, a group's page and a section are screens, each a
+   * history entry (phone-screens.js): the header's back, the iPhone's edge
+   * swipe and Android's back step back one, and swiping forward returns.
+   * Opened before the page re-renders, so the swipe's snapshot is the screen
+   * underneath.
+   */
+  function openScreen(close, reopen) {
+    if (!isTouchWidth() || !window.TMAPhoneScreens) return;
+    window.TMAPhoneScreens.open(close, reopen);
+  }
+
+  function goBack(fallback) {
+    if (window.TMAPhoneScreens && window.TMAPhoneScreens.back()) return;
+    fallback();
+  }
+
+  function openSection(pageId) {
+    if (state.screen !== 'detail') {
+      var group = state.group;
+      openScreen(
+        function () { state.screen = 'menu'; render(); },
+        function () { state.group = group; state.page = pageId; state.screen = 'detail'; render(); }
+      );
+    }
+    setPage(pageId);
   }
 
   function setPage(pageId) {
@@ -4961,15 +5007,22 @@
       (state.screen === 'detail' ? 'is-admin-detail' : 'is-admin-menu') + '">' +
       '<nav class="tma-portal-admin__nav" aria-label="Settings sections">' + renderNav(pageId) + '</nav>' +
       '<div class="tma-portal-admin__content">' +
-      '<button type="button" class="tma-portal-admin__back" data-admin-back>&lsaquo; Settings</button>' +
+      // A phone's header for the section: back says where it goes (the
+      // group's page it was opened from, or the menu), the title what this is.
+      '<div class="tma-portal-admin__head">' +
+      '<button type="button" class="tma-portal-admin__back" data-admin-back>' +
+      '<img src="images/icons/phosphor/CaretLeft.svg" alt="" width="24" height="24">' +
+      '<span>' + ui().esc(isTouchWidth() && state.group && groupForPage(pageId) === state.group ? groupLabel(state.group) : 'Settings') + '</span>' +
+      '</button>' +
+      '<h2 class="tma-portal-admin__head-title">' + ui().esc(pageLabel(pageId)) + '</h2>' +
+      '</div>' +
       page.render(s) +
       '</div></div></div>';
 
     var backBtn = el.querySelector('[data-admin-back]');
     if (backBtn) {
       backBtn.addEventListener('click', function () {
-        state.screen = 'menu';
-        render();
+        goBack(function () { state.screen = 'menu'; render(); });
       });
     }
 
@@ -4977,19 +5030,22 @@
     if (nav && navScroll) nav.scrollTop = navScroll;
 
     el.querySelectorAll('[data-admin-nav]').forEach(function (b) {
-      b.addEventListener('click', function () { setPage(b.getAttribute('data-admin-nav')); });
+      b.addEventListener('click', function () { openSection(b.getAttribute('data-admin-nav')); });
     });
     var groupBack = el.querySelector('[data-admin-group-back]');
     if (groupBack) {
       groupBack.addEventListener('click', function () {
-        state.group = null;
-        render();
+        goBack(function () { state.group = null; render(); });
       });
     }
     el.querySelectorAll('[data-admin-group]').forEach(function (b) {
       b.addEventListener('click', function () {
         var g = b.getAttribute('data-admin-group');
         if (isTouchWidth()) {
+          openScreen(
+            function () { state.group = null; render(); },
+            function () { state.group = g; state.screen = 'menu'; render(); }
+          );
           state.group = g;
         } else {
           state.expanded[g] = !state.expanded[g];

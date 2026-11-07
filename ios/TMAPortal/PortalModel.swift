@@ -51,6 +51,7 @@ final class PortalModel: NSObject, ObservableObject {
     private var appleNonce: String?
     private var appleInvite: String?
     private var appleRequest: ASAuthorizationController?
+    private var backObservation: NSKeyValueObservation?
 
     @Published var loading = true
     @Published var showSplash = true
@@ -88,7 +89,13 @@ final class PortalModel: NSObject, ObservableObject {
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.customUserAgent = PortalConfig.userAgent
+        // The left-edge swipe is back, sliding the screen away under the
+        // finger. The portal makes each screen it opens on a phone a history
+        // entry (phone-screens.js), so the swipe steps back one screen.
         webView.allowsBackForwardNavigationGestures = true
+        backObservation = webView.observe(\.canGoBack, options: [.new]) { [weak self] _, _ in
+            Task { @MainActor in self?.tellPageCanGoBack() }
+        }
         webView.scrollView.contentInsetAdjustmentBehavior = .automatic
         webView.isOpaque = false
         webView.backgroundColor = UIColor(red: 0x13 / 255, green: 0x6D / 255, blue: 0xA0 / 255, alpha: 1)
@@ -121,6 +128,13 @@ final class PortalModel: NSObject, ObservableObject {
 
     func goBack() {
         if webView.canGoBack { webView.goBack() }
+    }
+
+    /// Whether the left edge is the back swipe right now. The page's own edge
+    /// drag (the menu drawer) gives way to it, or both moved at once and the
+    /// drawer was left half out (dashboard.js, edgeIsBack).
+    private func tellPageCanGoBack() {
+        evaluate("window.TMADesktop && (window.TMADesktop.canGoBack = \(webView.canGoBack ? "true" : "false"))")
     }
 
     func loadPortal(_ path: String = "/") {
@@ -753,6 +767,7 @@ extension PortalModel: WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, A
         loading = false
         splash.pageReady()
         refreshSplash()
+        tellPageCanGoBack()
         guard let url = webView.url, rules.isPortalURL(url) else { return }
         if let script = pendingCallJS {
             evaluate(script)

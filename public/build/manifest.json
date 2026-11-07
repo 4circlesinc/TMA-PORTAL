@@ -1,6 +1,6 @@
 {
-  "css": "app-b0cdef0d6559.css",
-  "js": "app-7a7f3f025a0b.js",
+  "css": "app-1a407abcca85.css",
+  "js": "app-999cb63f4a29.js",
   "sources": {
     "css": [
       "tokens.css",
@@ -135,6 +135,7 @@
       "portal-shortcuts.js",
       "portal-home-library.js",
       "portal-home.js",
+      "phone-screens.js",
       "dashboard.js",
       "pull-refresh.js",
       "phone-input.js",

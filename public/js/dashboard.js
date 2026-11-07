@@ -618,6 +618,7 @@
         '',
         appUrl(next)
       );
+      if (window.TMAPhoneScreens) window.TMAPhoneScreens.left();
     }
 
     /* ── helpers ───────────────────────────────── */
@@ -843,6 +844,15 @@
       function typingIn(el) {
         return !!(el && el.closest && el.closest('input, textarea, select, [contenteditable="true"]'));
       }
+      /* In the iPhone app the left edge is the back swipe (WebKit's own,
+         which slides the screen away under the finger) whenever there is
+         somewhere to go back to; the app says so in TMADesktop.canGoBack.
+         Both at once dragged the menu out under the swipe and left it stuck.
+         An app too old to say keeps the edge for back; ☰ opens the menu. */
+      function edgeIsBack() {
+        var host = window.TMADesktop;
+        return !!(host && host.isIOS && host.canGoBack !== false);
+      }
 
       function onStart(e) {
         gesture = null;
@@ -855,7 +865,7 @@
           var onDrawer = el.contains(e.target);
           var onScrim = !!(e.target.closest && e.target.closest('[data-dash-scrim], [data-email-mobile-scrim]'));
           if (!onDrawer && !onScrim) return;
-        } else if (t.clientX > EDGE) {
+        } else if (t.clientX > EDGE || edgeIsBack()) {
           return;
         }
         gesture = { x: t.clientX, y: t.clientY, open: open, el: el, engaged: false, dead: false, dx: 0, w: 0 };
@@ -898,6 +908,15 @@
       root.addEventListener('touchstart', onStart, { passive: true });
       root.addEventListener('touchmove', onMove, { passive: true });
       root.addEventListener('touchend', onEnd, { passive: true });
+      // The system took the touch (the back swipe, a call): put the drawer
+      // back where it was rather than leave it half out.
+      root.addEventListener('touchcancel', function () {
+        var g = gesture;
+        gesture = null;
+        if (!g || !g.engaged) return;
+        g.el.style.transition = '';
+        g.el.style.transform = '';
+      }, { passive: true });
       root.addEventListener('touchcancel', onEnd, { passive: true });
     }
 
@@ -1701,6 +1720,9 @@
     });
 
     window.addEventListener('popstate', function (e) {
+      // A screen within the section (a Settings page, an option list) going
+      // back or forward: phone-screens.js handles it and the page stays.
+      if (window.TMAPhoneScreens && window.TMAPhoneScreens.handlePop(e)) return;
       var state = e.state || routeFromPath(window.location.pathname);
       if (!state) return;
       activate(state.navId, {

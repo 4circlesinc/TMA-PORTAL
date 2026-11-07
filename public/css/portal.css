@@ -7874,3 +7874,113 @@ body:has(.tma-dash.is-sidebar-collapsed) .tma-sync-pill {
     margin-right: calc(-1 * max(var(--dash-mobile-gutter, 16px), env(safe-area-inset-right, 0px)));
   }
 }
+
+/*
+ * The admin console's screens on a phone (portal-admin.js): a group's page
+ * and a section share one header, back on the left saying where it goes
+ * ("‹ Settings", "‹ CIP Console"), the title centred, the same as the
+ * personal settings screens (dashboard.css). Each screen is a history entry
+ * (phone-screens.js), so the edge swipe steps back one as well.
+ */
+.tma-portal-admin__head {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .tma-portal-admin .tma-portal-admin__head {
+    display: none;
+    grid-template-columns: minmax(max-content, 1fr) minmax(0, max-content) minmax(0, 1fr);
+    align-items: center;
+    gap: var(--space-8);
+    min-height: 44px;
+    margin: 0 0 var(--space-8);
+  }
+
+  .tma-portal-admin.is-admin-detail .tma-portal-admin__content > .tma-portal-admin__head,
+  .tma-portal-admin .tma-portal-admin__nav > .tma-portal-admin__head--group {
+    display: grid;
+  }
+
+  .tma-portal-admin .tma-portal-admin__head .tma-portal-admin__back {
+    grid-column: 1;
+    justify-self: start;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    max-width: none;
+    min-width: 44px;
+    min-height: 44px;
+    margin: 0 0 0 -6px;
+    padding: 0 var(--space-4) 0 0;
+    border-radius: 0;
+    background: none;
+    color: var(--color-primary, #03a5e9);
+    font-size: var(--text-size-16, 16px);
+    line-height: 22px;
+    font-weight: 500;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .tma-portal-admin .tma-portal-admin__head .tma-portal-admin__back:hover {
+    background: none;
+    color: var(--color-primary, #03a5e9);
+  }
+
+  .tma-portal-admin .tma-portal-admin__head .tma-portal-admin__back img {
+    display: none;
+  }
+
+  .tma-portal-admin .tma-portal-admin__head .tma-portal-admin__back::before {
+    content: "";
+    flex: 0 0 24px;
+    width: 24px;
+    height: 24px;
+    background: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M165.66,202.34a8,8,0,0,1-11.32,11.32l-80-80a8,8,0,0,1,0-11.32l80-80a8,8,0,0,1,11.32,11.32L91.31,128Z'/%3E%3C/svg%3E") center / 24px no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20256%20256'%20fill='currentColor'%3E%3Cpath%20d='M165.66,202.34a8,8,0,0,1-11.32,11.32l-80-80a8,8,0,0,1,0-11.32l80-80a8,8,0,0,1,11.32,11.32L91.31,128Z'/%3E%3C/svg%3E") center / 24px no-repeat;
+  }
+
+  .tma-portal-admin .tma-portal-admin__head .tma-portal-admin__back span {
+    min-width: 0;
+    max-width: 38vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tma-portal-admin .tma-portal-admin__head-title {
+    grid-column: 2;
+    max-width: 52vw;
+    margin: 0;
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--text-size-16, 16px);
+    line-height: 22px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+
+  /* Over an option list the embedded settings page's own header takes over:
+     its back closes the list ("‹ Notifications"), not the section. */
+  .tma-portal-admin__content:has([data-settings-embed].is-settings-mobile-select-open) > .tma-portal-admin__head {
+    display: none !important;
+  }
+
+  .tma-portal-admin__content [data-settings-embed].is-settings-mobile-select-open .tma-dash__settings-mobile-head {
+    display: grid !important;
+  }
+}
+
+/*
+ * One 16px gutter on a phone, the menu's: the section area padded 24px, and
+ * an embedded settings page's cards sat 40px in under a header at 24px (the
+ * settings side of it is in dashboard.css).
+ */
+@media (max-width: 1024px) {
+  .tma-portal-admin .tma-portal-admin__content {
+    padding-left: var(--space-16);
+    padding-right: var(--space-16);
+  }
+}
