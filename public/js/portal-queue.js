@@ -87,6 +87,12 @@
      two together. */
   var reachable = true;
 
+  /* Set once a request actually gets an answer. The browser's own offline
+     flag can stay stuck after the connection is back, and one failed send
+     must not be described as having no connection when another filing just
+     got an answer from the firm. */
+  var reached = false;
+
   var running = false;
 
   /* Bumped when a person asks to send now. A send already in flight must not
@@ -97,6 +103,11 @@
   /* Set when a flush is asked for while one is already going. The one that
      is going finishes, then this runs, so a click is not thrown away. */
   var runAgain = false;
+
+  /* A person asked to send now. That try goes out even when the browser
+     still says there is no network, because that flag is often wrong and
+     the click is the person saying the connection is back. */
+  var forceNext = false;
 
   var retryTimer = null;
 
@@ -208,8 +219,18 @@
 
   /* ── what the rest of the portal sees ───────────────────────────── */
 
+  function browserOnline() {
+    return typeof navigator === 'undefined' || navigator.onLine !== false;
+  }
+
   function online() {
-    return (typeof navigator === 'undefined' || navigator.onLine !== false) && reachable;
+    // The sentence in the panel. A thrown send used to clear `reachable`
+    // and the panel then said you were offline, including after the firm
+    // had just answered. The browser flag is the only "no network" signal,
+    // and a real answer overrides it when that flag is stuck.
+    if (browserOnline()) return true;
+
+    return reached;
   }
 
   /** Whether a write can be parked at all. False means saving needs a network. */
@@ -395,14 +416,15 @@
 
       return Promise.resolve(0);
     }
+    var force = forceNext;
+    forceNext = false;
     /*
-     * Only the browser's own "no network" skips the attempt. `reachable` is
-     * what the last attempt learned, and the only way to unlearn it is to try
-     * again: bailing on it too meant one failed send switched the queue off
-     * until an `online` event that, on a network that never dropped, never
-     * comes.
+     * Only the browser's own "no network" skips the attempt, and a click
+     * does not: the person is looking at the list and asking to send.
+     * `reachable` is what the last attempt learned, and the only way to
+     * unlearn it is to try again.
      */
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) return Promise.resolve(0);
+    if (!force && !browserOnline()) return Promise.resolve(0);
 
     running = true;
     summary.syncing = true;
@@ -465,6 +487,7 @@
     }).then(function (value) {
       if (!runAgain) return value;
       runAgain = false;
+      if (force) forceNext = true;
 
       return flush().then(function () { return value; });
     });
@@ -574,6 +597,7 @@
       if (res === 'skipped') return res;
       if (mine !== attempt) return 'skipped';
       reachable = true;
+      reached = true;
 
       /*
        * The session, or the server unwell. Not this change's fault, so it is
@@ -661,6 +685,7 @@
       // A send already in flight must not record its answer over this.
       attempt += 1;
       reachable = true;
+      forceNext = true;
       retryDelay = RETRY_MS;
 
       return putEntry(entry)
@@ -749,6 +774,7 @@
 
   window.addEventListener('offline', function () {
     reachable = false;
+    reached = false;
     notify();
   });
 

@@ -105,7 +105,8 @@ function memoryDb() {
   };
 }
 
-function boot() {
+function boot(opts) {
+  opts = opts || {};
   const calls = [];
   const timers = [];
   let seq = 1;
@@ -130,7 +131,7 @@ function boot() {
         return req;
       },
     },
-    navigator: { onLine: true },
+    navigator: { onLine: opts.onLine !== false },
     addEventListener() {},
     document: {
       cookie: 'XSRF-TOKEN=test',
@@ -138,8 +139,9 @@ function boot() {
       addEventListener() {},
       dispatchEvent() {},
     },
-    fetch(url, opts) {
-      calls.push({ url, body: opts && opts.body });
+    fetch(url, init) {
+      calls.push({ url, body: init && init.body });
+      if (opts.fail) return Promise.reject(new TypeError('Failed to fetch'));
       return Promise.resolve({
         status: 200,
         ok: true,
@@ -262,5 +264,32 @@ await settle(claim.queue.add({
 await settle(claim.queue.setAccount('9'));
 const sentOnSignIn = claim.calls.some((call) => call.body && call.body.get('providerId') === '3');
 assert.equal(sentOnSignIn, true, 'signing in replays a filing that had no account yet');
+
+const dropped = boot({ fail: true });
+await settle(dropped.queue.add({
+  kind: 'cip.application',
+  label: 'A new application for VERNO FRAN',
+  method: 'POST',
+  url: '/portal/cip/applications',
+  parts: [{ name: 'providerId', value: '42' }],
+}));
+await dropped.fire(0);
+assert.equal(dropped.queue.state().online, true, 'a failed send is not the same as having no connection');
+
+const stuckLine = boot({ onLine: false });
+const waiting = await settle(stuckLine.queue.add({
+  kind: 'cip.application',
+  label: 'A new application for VERNO FRAN',
+  method: 'POST',
+  url: '/portal/cip/applications',
+  parts: [{ name: 'providerId', value: '42' }],
+}));
+await stuckLine.fire(0);
+assert.equal(stuckLine.calls.length, 0, 'an automatic run waits when the browser says there is no network');
+assert.equal(stuckLine.queue.state().online, false);
+const forced = await settle(stuckLine.queue.retry(waiting.id));
+assert.equal(forced, true);
+assert.equal(stuckLine.calls.length, 1, 'Try now sends even when the browser still says offline');
+assert.equal(stuckLine.queue.state().online, true, 'an answer from the firm clears the offline sentence');
 
 console.log('portal queue replay: ok');
