@@ -12,6 +12,7 @@ use App\Support\Bespoke\Bespoke;
 use App\Support\Cip\CipAccess;
 use App\Support\Companies\CompanyAccess;
 use App\Support\Messaging\MessagingSettings;
+use App\Support\Notifications\NotificationSounds;
 use App\Support\Notifications\ToastSettings;
 use App\Support\Presence\AvailabilityService;
 use App\Support\RealtimeConfig;
@@ -76,6 +77,8 @@ class MeController extends Controller
             'desktopNotifications' => [
                 'enabled' => (bool) MessagingSettings::get($user, 'desktopNotifications'),
                 'preview' => (bool) MessagingSettings::get($user, 'notificationPreview'),
+                // The iPhone app's sound: the TM tone or the Apple tone.
+                'sounds' => NotificationSounds::for($user),
             ],
             // Today's work plan (public fields only) for Messages / profiles.
             'workStatus' => WorkDay::publicStatusFor($user),

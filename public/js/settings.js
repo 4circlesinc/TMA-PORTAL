@@ -660,6 +660,7 @@
     'online-status': 'Who can see when I\u2019m online',
     'last-seen': 'Who can see my last seen',
     history: 'History',
+    'sound-iphone': 'Notification sound',
   };
 
   var MOBILE_SELECT_PANEL = {
@@ -671,6 +672,7 @@
     'online-status': 'privacy',
     'last-seen': 'privacy',
     history: 'privacy',
+    'sound-iphone': 'notifications',
   };
 
   function getMobileSelectPanel(root, selectId) {
@@ -851,6 +853,7 @@
     if (id === 'toast-duration') return TOAST_DURATIONS;
     if (id === 'online-status' || id === 'last-seen') return VISIBILITY_OPTIONS;
     if (id === 'history') return HISTORY_DAYS;
+    if (id === 'sound-iphone') return SOUND_IPHONE_OPTIONS;
     return getTimeSelectList(id);
   }
 
@@ -860,6 +863,7 @@
     if (id === 'online-status') return (privacyCache && privacyCache.onlineStatus) || 'everyone';
     if (id === 'last-seen') return (privacyCache && privacyCache.lastSeen) || 'everyone';
     if (id === 'history') return String(readPrivacyPrefs().historyDays);
+    if (id === 'sound-iphone') return notificationSound;
     return getTimeSelectValue(readTimePrefs(), id);
   }
 
@@ -1029,6 +1033,13 @@
           syncNotificationsPanelUI(root);
           return;
         }
+        if (id === 'sound-iphone') {
+          // Stays open: people listen to both before settling on one.
+          saveNotificationSound(value);
+          applyNotificationSound(root);
+          syncMobileSelectUI(root, id);
+          return;
+        }
         if (id === 'online-status' || id === 'last-seen') {
           savePrivacySetting(id === 'online-status' ? 'onlineStatus' : 'lastSeen', value);
           closeMobileSelect(root);
@@ -1111,6 +1122,12 @@
           applyToastPickerChoice(id, value);
           closePickers(root);
           syncNotificationsPanelUI(root);
+          return;
+        }
+        if (id === 'sound-iphone') {
+          // Stays open: people listen to both before settling on one.
+          saveNotificationSound(value);
+          applyNotificationSound(root);
           return;
         }
         if (id === 'online-status' || id === 'last-seen') {
@@ -1235,6 +1252,112 @@
     } else if (id === 'toast-duration') {
       writeToastPrefs({ durationSec: parseInt(value, 10) || 10 }, { preview: true });
     }
+  }
+
+  /* ── Notification sound (iPhone app only) ────────────────────────
+     The sound notifications make in the iPhone app, saved to the account
+     (App\Support\Notifications\NotificationSounds) so pushes carry it. The TM
+     tone, the portal's chime, is the default. The Apple tone is the phone's own
+     alert sound, the one set in iPhone Settings > Sounds & Haptics > Default
+     Alerts: iOS gives apps no way to use the Text Tone (it belongs to
+     Messages), so Default Alerts is the Apple sound an app can follow. Only
+     the iPhone app shows this; the Mac and the other apps keep their default. */
+  var SOUND_IPHONE_OPTIONS = [
+    { id: 'chime', label: 'TM tone' },
+    { id: 'default', label: 'Apple tone' },
+  ];
+  var notificationSound = 'chime';
+  var notificationSoundLoaded = false;
+
+  function showsNotificationSound() {
+    return !!(window.TMADesktop && window.TMADesktop.isIOS);
+  }
+
+  function notificationSoundLabel(value) {
+    var option = findOption(SOUND_IPHONE_OPTIONS, value, 'chime');
+    return option.label + (option.id === 'chime' ? ' (Default)' : '');
+  }
+
+  function renderNotificationSoundGroup() {
+    if (!showsNotificationSound()) return '';
+    return '<div class="tma-dash__settings-notifications-group">' +
+      '<p class="tma-dash__settings-notifications-group-label">Notification sound</p>' +
+      '<p class="tma-dash__settings-notifications-hint">The sound notifications make on this iPhone. Tap one to hear it; the list stays open so you can compare.</p>' +
+      '<div class="tma-dash__settings-picker-anchor" data-picker-anchor="sound-iphone">' +
+      renderRow({
+        label: 'Sound',
+        desc: 'Apple tone plays the sound chosen in iPhone Settings > Sounds & Haptics > Default Alerts. iOS doesn’t let apps use the Text Tone.',
+        action: 'pick-sound-iphone',
+        value: notificationSoundLabel(notificationSound),
+        valueMuted: true,
+      }) +
+      renderPicker('sound-iphone', '30919:278125', SOUND_IPHONE_OPTIONS, notificationSound) +
+      '</div>' +
+      '</div>';
+  }
+
+  function applyNotificationSound(root) {
+    var row = root.querySelector('[data-settings-action="pick-sound-iphone"]');
+    var out = row && row.querySelector('[data-settings-row-value="pick-sound-iphone"]');
+    if (out) out.textContent = notificationSoundLabel(notificationSound);
+    var list = root.querySelector('[data-settings-picker="sound-iphone"] [data-picker-list]');
+    if (list) list.innerHTML = renderPickerList(SOUND_IPHONE_OPTIONS, notificationSound);
+  }
+
+  function loadNotificationSound(root) {
+    if (!showsNotificationSound()) return;
+    if (notificationSoundLoaded) { applyNotificationSound(root); return; }
+    notificationSoundLoaded = true;
+    fetch('/me/notification-sounds', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      if (!d) { notificationSoundLoaded = false; return; }
+      notificationSound = d.iphone === 'default' ? 'default' : 'chime';
+      applyNotificationSound(root);
+    }).catch(function () { notificationSoundLoaded = false; });
+  }
+
+  // The Apple tone is the phone's Default Alerts sound, which a page cannot
+  // play; the TM tone is the same chime the app carries.
+  function previewNotificationSound(value) {
+    if (value !== 'chime') return;
+    try {
+      var audio = new Audio('audio/message-chime.mp3');
+      var playing = audio.play();
+      if (playing && playing.catch) playing.catch(function () {});
+    } catch (e) { /* preview only */ }
+  }
+
+  function saveNotificationSound(value) {
+    if (value !== 'chime' && value !== 'default') return;
+    var previous = notificationSound;
+    notificationSound = value;
+    previewNotificationSound(value);
+    // Notifications from now on use it, without waiting for the next /me.
+    if (window.TMADesktopNotify && window.TMADesktopNotify.applyPrefs) {
+      window.TMADesktopNotify.applyPrefs({ sounds: { iphone: value } });
+    }
+    fetch('/me/notification-sounds', {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-XSRF-TOKEN': csrfToken(),
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: JSON.stringify({ iphone: value }),
+    }).then(function (r) {
+      if (r.ok) return;
+      notificationSound = previous;
+      if (window.TMADesktopNotify && window.TMADesktopNotify.applyPrefs) {
+        window.TMADesktopNotify.applyPrefs({ sounds: { iphone: previous } });
+      }
+      var root = document.querySelector('[data-settings-panel="notifications"]');
+      root = root && (root.closest('.tma-dash') || document);
+      if (root) { applyNotificationSound(root); syncMobileSelectUI(root, 'sound-iphone'); }
+    }).catch(function () {});
   }
 
   function readNotificationsPrefs() {
@@ -1657,6 +1780,7 @@
       }) +
       '</div>' +
       renderToastSettingsGroup() +
+      renderNotificationSoundGroup() +
       renderNotificationPrefsGroup() +
       '</div>' +
       renderMobileSelectOverlay('30919:293271') +
@@ -1779,6 +1903,7 @@
 
   function syncNotificationsPanelUI(root) {
     loadNotificationPrefs(root);
+    loadNotificationSound(root);
     var prefs = readNotificationsPrefs();
     var toastPrefs = readToastPrefs();
     var position = findOption(TOAST_POSITIONS, toastPrefs.position, 'bottom-right');

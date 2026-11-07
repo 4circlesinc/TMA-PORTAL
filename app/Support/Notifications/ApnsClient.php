@@ -146,10 +146,13 @@ class ApnsClient
             $body = (is_array($payload) && ($payload['media'] ?? '') === 'video') ? 'Incoming video call' : 'Incoming call';
         }
 
-        $aps = [
-            'alert' => ['title' => $title, 'body' => $body],
-            'sound' => 'default',
-        ];
+        $aps = ['alert' => ['title' => $title, 'body' => $body]];
+        // The person's chosen sound rides on notifications; calls and
+        // anything without one ring with the phone's default.
+        $sound = array_key_exists('iosSound', $data) ? (string) $data['iosSound'] : 'default';
+        if ($sound !== '') {
+            $aps['sound'] = $sound;
+        }
         if ($badge !== null) {
             $aps['badge'] = $badge;
         }
@@ -158,7 +161,7 @@ class ApnsClient
             $aps['interruption-level'] = 'time-sensitive';
         }
 
-        return ['aps' => $aps] + $data;
+        return ['aps' => $aps] + array_diff_key($data, ['iosSound' => true]);
     }
 
     /** Why APNS_PRIVATE_KEY is set but unusable, or null. For push:status. */

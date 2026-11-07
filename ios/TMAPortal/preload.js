@@ -168,13 +168,16 @@
     this.tag = options.tag == null ? '' : String(options.tag);
     this.data = options.data;
     this.silent = !!options.silent;
+    // "chime" (the TM tone, the default) or "default" (the Apple tone); the
+    // page's notify-store passes the person's choice from Settings.
+    this.sound = typeof options.sound === 'string' && options.sound ? options.sound : 'chime';
     this.onclick = null;
     this.onclose = null;
     this.__id = nextId++;
     live[this.__id] = this;
     var url = '';
     try { url = options.data && options.data.url ? String(options.data.url) : ''; } catch (e) { /* ignore */ }
-    post('notify', { json: JSON.stringify({ id: this.__id, title: this.title, body: this.body, tag: this.tag, silent: this.silent, url: url, icon: options.icon || '' }) });
+    post('notify', { json: JSON.stringify({ id: this.__id, title: this.title, body: this.body, tag: this.tag, silent: this.silent, sound: this.sound, url: url, icon: options.icon || '' }) });
   }
   IOSNotification.permission = notificationsAllowed ? 'granted' : 'default';
   IOSNotification.requestPermission = function (cb) {

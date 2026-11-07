@@ -28,6 +28,9 @@ final class Push
             'kind' => 'notification',
             'notification' => json_encode($notification, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
             'unread' => (string) $unread,
+            // The person's iPhone sound: the bundled TM tone or "default"
+            // (the Apple tone). Android ignores it.
+            'iosSound' => NotificationSounds::apnsSound($recipient),
         ]);
     }
 

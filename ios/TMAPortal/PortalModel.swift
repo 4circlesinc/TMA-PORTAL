@@ -434,7 +434,8 @@ final class PortalModel: NSObject, ObservableObject {
         let content = UNMutableNotificationContent()
         content.title = (object["title"] as? String)?.isEmpty == false ? object["title"] as! String : "TM ANTOINE Portal"
         content.body = object["body"] as? String ?? ""
-        if (object["silent"] as? Bool) != true { content.sound = .default }
+        // The TM tone unless the person chose the Apple tone (Default Alerts).
+        content.sound = NotificationSound.sound(for: object["sound"] as? String, silent: (object["silent"] as? Bool) == true)
         content.userInfo = ["id": id, "url": object["url"] as? String ?? "", "source": "page"]
         if let tag = object["tag"] as? String, !tag.isEmpty { content.threadIdentifier = tag }
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "page-\(id)", content: content, trigger: nil))

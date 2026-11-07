@@ -1,3 +1,4 @@
+import UserNotifications
 import XCTest
 @testable import TMAPortal
 
@@ -125,5 +126,19 @@ final class PortalLogicTests: XCTestCase {
         let settings = URL(string: "https://portal.tmantoinelaw.com/settings")!
         XCTAssertNil(rules.signInProvider(for: connect, current: settings))
         XCTAssertTrue(rules.isSocialRedirect(connect))
+    }
+
+    func testTheTMToneIsTheDefaultAndAppleToneIsDefaultAlerts() {
+        let tm = UNNotificationSound(named: UNNotificationSoundName("tma-chime.caf"))
+        XCTAssertEqual(NotificationSound.sound(for: nil, silent: false), tm, "no choice yet: the TM tone")
+        XCTAssertEqual(NotificationSound.sound(for: "chime", silent: false), tm)
+        XCTAssertEqual(NotificationSound.sound(for: "something-newer", silent: false), tm)
+        XCTAssertEqual(NotificationSound.sound(for: "default", silent: false), UNNotificationSound.default)
+        XCTAssertNil(NotificationSound.sound(for: "chime", silent: true))
+        XCTAssertNil(NotificationSound.sound(for: "none", silent: false))
+    }
+
+    func testTheTMToneShipsInTheApp() {
+        XCTAssertNotNil(Bundle.main.url(forResource: "tma-chime", withExtension: "caf"), "push payloads name tma-chime.caf")
     }
 }

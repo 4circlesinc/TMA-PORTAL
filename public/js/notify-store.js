@@ -488,7 +488,9 @@
   }
 
   var desktop = (function () {
-    var prefs = { enabled: false, preview: true };
+    // sounds.iphone: the iPhone app's tone, "chime" (the TM tone, the default)
+    // or "default" (the Apple tone, the phone's Default Alerts).
+    var prefs = { enabled: false, preview: true, sounds: { iphone: 'chime' } };
     var live = [];
     var recent = {};
     var RECENT_MS = 30000;
@@ -614,6 +616,9 @@
            */
           // The per-module Sound column, on top of the global sounds switch.
           silent: !soundOn() || !channelOn(item.module, 'sound'),
+          // Read only by the iPhone app's Notification (ios preload.js);
+          // browsers ignore it and play their own sound.
+          sound: prefs.sounds.iphone,
         });
         note.onclick = function () {
           note.close();
@@ -645,10 +650,15 @@
       }
     }
 
+    function applySounds(sounds) {
+      if (sounds && (sounds.iphone === 'chime' || sounds.iphone === 'default')) prefs.sounds = { iphone: sounds.iphone };
+    }
+
     function applyPrefs(next) {
       if (!next || typeof next !== 'object') return;
       if (typeof next.enabled === 'boolean') prefs.enabled = next.enabled;
       if (typeof next.preview === 'boolean') prefs.preview = next.preview;
+      applySounds(next.sounds);
       try { localStorage.setItem('tma.desktopNotifications', JSON.stringify(prefs)); } catch (e) { /* ignore */ }
     }
 
@@ -659,6 +669,7 @@
       if (cached && typeof cached === 'object') {
         prefs.enabled = !!cached.enabled;
         prefs.preview = cached.preview !== false;
+        applySounds(cached.sounds);
       }
     } catch (e) { /* ignore */ }
 
