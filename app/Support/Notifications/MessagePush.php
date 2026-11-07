@@ -2,6 +2,7 @@
 
 namespace App\Support\Notifications;
 
+use App\Models\CipApplication;
 use App\Models\Conversation;
 use App\Models\User;
 use Illuminate\Support\Facades\URL;
@@ -12,6 +13,7 @@ use Illuminate\Support\Facades\URL;
  *
  *   direct message   the sender's photo; their name, then the message
  *   group message    the group's photo; who wrote, the group, the message
+ *   CIP file thread  the client's photo; who wrote, the file, the message
  *   email            the sender's photo; their name, the subject, its start
  *
  * A reply to an email goes back as an email.
@@ -41,6 +43,10 @@ final class MessagePush
 
         if ($type === 'email.received') {
             return self::email($recipient, $notification, $meta);
+        }
+
+        if ($type === 'cip.message') {
+            return self::cipThread($recipient, $notification, $meta);
         }
 
         $conversation = $meta['conversationId'] ?? null;
@@ -113,6 +119,60 @@ final class MessagePush
                 ['message' => $message, 'user' => $recipient->id],
             ),
         ], fn ($value) => $value !== null && $value !== '');
+    }
+
+    /**
+     * A message on a CIP file's thread, laid out as a group: who wrote it, the
+     * file's number, the message, under the client's photo. A reply goes back
+     * into the same lane (internal, or the service provider's).
+     *
+     * @param  array<string, mixed>  $notification
+     * @param  array<string, mixed>  $meta
+     * @return array<string, string>|null
+     */
+    private static function cipThread(User $recipient, array $notification, array $meta): ?array
+    {
+        $application = $meta['applicationId'] ?? null;
+        $lane = $meta['lane'] ?? null;
+        if (! is_string($application) || $application === '' || ! is_string($lane) || $lane === '') {
+            return null;
+        }
+
+        $actor = is_array($notification['actor'] ?? null) ? $notification['actor'] : [];
+        $number = trim((string) ($meta['number'] ?? '')) ?: 'CIP file';
+        $name = trim((string) ($actor['name'] ?? '')) ?: $number;
+
+        return array_filter([
+            'conversation' => 'cip:'.$application,
+            'sender' => isset($actor['id']) ? (string) $actor['id'] : null,
+            'name' => $name,
+            'photo' => self::photo($actor['avatar'] ?? null),
+            'group' => $number,
+            'groupPhoto' => self::clientPhoto($application),
+            'title' => $name,
+            'subtitle' => $number,
+            'body' => (string) ($meta['pushBody'] ?? $notification['message'] ?? ''),
+            'url' => is_string($notification['actionUrl'] ?? null) ? $notification['actionUrl'] : null,
+            'reply' => URL::temporarySignedRoute(
+                'cip.push-reply',
+                now()->addDays(self::REPLY_DAYS),
+                ['application' => $application, 'user' => $recipient->id, 'lane' => $lane],
+            ),
+        ], fn ($value) => $value !== null && $value !== '');
+    }
+
+    /**
+     * The client's own photo for a file's thread. Never the passport portrait:
+     * a lock screen is no place for it.
+     */
+    private static function clientPhoto(string $application): ?string
+    {
+        $client = CipApplication::query()->where('uuid', $application)->with('client.user')->first()?->client;
+        if (! $client) {
+            return null;
+        }
+
+        return self::photo($client->photo_url ?: ($client->hasLiveLogin() ? $client->user?->photoUrl() : null));
     }
 
     /** The group's own photo, signed for the extension, or null when it has none. */

@@ -903,6 +903,16 @@ class Threads
                 'subject' => $application,
                 'action_url' => $path,
                 'email' => false,
+                // On the phone the file's thread reads like a group: who wrote,
+                // the file, the message, and a reply goes back into this lane
+                // (MessagePush).
+                'metadata' => [
+                    'applicationId' => $application->uuid,
+                    'number' => $number,
+                    'lane' => $message->lane,
+                    'messageId' => $message->uuid,
+                    'pushBody' => $preview,
+                ],
             ]);
         }
     }

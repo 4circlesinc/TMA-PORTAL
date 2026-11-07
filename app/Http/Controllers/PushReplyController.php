@@ -6,6 +6,9 @@ use App\Models\DeviceToken;
 use App\Models\MailMessage;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\ApplicationScope;
+use App\Support\Cip\CipAccess;
+use App\Support\Cip\Threads;
 use App\Support\Mail\QuickReply;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -78,6 +81,25 @@ class PushReplyController extends Controller
         $send->setUserResolver(fn () => $person);
 
         return app(MailController::class)->send($send);
+    }
+
+    /**
+     * A reply on a CIP file's thread, in the lane the message came in on, as
+     * the person (Threads::create, the same as the file's Messages tab).
+     */
+    public function cip(Request $request, string $application, int $user, string $lane): JsonResponse
+    {
+        $data = $this->validated($request);
+        $person = $this->person($user, $data['device']);
+        abort_unless(CipAccess::canReach($person), 404);
+
+        $file = ApplicationScope::findOrFail($person, $application);
+        $message = Threads::create($file, $person, $data['body'], $lane);
+
+        return response()->json(
+            Threads::present($message->fresh()->load(['author', 'companyMember', 'replyTo']), $person),
+            201,
+        );
     }
 
     /** @return array{body: string, device: string, nonce?: string|null} */

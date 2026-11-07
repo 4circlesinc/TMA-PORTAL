@@ -158,6 +158,11 @@ Route::post('/push/messages/{conversation}/{user}', [PushReplyController::class,
     ->whereNumber('user')
     ->middleware(['signed', 'throttle:30,1'])
     ->name('messaging.push-reply');
+// A reply on a CIP file's thread from its notification, in the same lane.
+Route::post('/push/cip/{application}/{user}/{lane}', [PushReplyController::class, 'cip'])
+    ->whereNumber('user')
+    ->middleware(['signed', 'throttle:30,1'])
+    ->name('cip.push-reply');
 // A group's photo for a group message's notification.
 Route::get('/media/groups/{uuid}/push', [MessagingAttachmentController::class, 'conversationPhotoForPush'])
     ->middleware(['signed', 'throttle:120,1'])

@@ -51,6 +51,7 @@ return Application::configure(basePath: dirname(__DIR__))
             // A reply from an iPhone notification: a signed link, not a session.
             'push/messages/*',
             'push/mail/*',
+            'push/cip/*',
         ]);
 
         $middleware->alias([
