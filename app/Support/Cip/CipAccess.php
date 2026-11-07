@@ -236,8 +236,11 @@ class CipAccess
             return false;
         }
 
+        // A draft is the work of whoever started it. Colleagues may open and
+        // edit it, but only its creator (or an administrator, above) may
+        // throw it away.
         if ($application->status === Status::DRAFT) {
-            return Role::isStaff($user) || (int) $application->created_by === (int) $user->id;
+            return (int) $application->created_by === (int) $user->id;
         }
 
         return Role::isStaff($user) && Role::of($user) !== Role::EMPLOYEE;

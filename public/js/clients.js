@@ -7275,7 +7275,9 @@
          * copy waiting on this device go. A filed application is the firm's
          * record and is closed through its status instead, so it has none.
          */
-        (editingApp || hideSave
+        // A draft says whether this reader may delete it: its creator or an
+        // administrator. A new form is the reader's own.
+        (editingApp || hideSave || (draftApp && (applicationRecord(state) || {}).canDelete === false)
           ? ''
           : '<button type="button" class="tma-dash__clients-edit-btn tma-portal-btn--danger" data-cip-discard>' +
             'Delete</button>') +
@@ -18482,10 +18484,11 @@
         var ok = host.querySelector('[data-discard-ok]');
         ok.addEventListener('click', function () {
           ok.disabled = true;
-          window.TMACipIntake.discard().then(function (gone) {
+          window.TMACipIntake.discard().then(function (result) {
             ui.closeModal();
+            var gone = result === true || (result && result.ok);
             if (!gone) {
-              ui.toastError('Couldn’t delete this application. Try again.');
+              ui.toastError((result && result.message) || 'Couldn’t delete this application. Try again.');
               return;
             }
             forgetApplicationTable();

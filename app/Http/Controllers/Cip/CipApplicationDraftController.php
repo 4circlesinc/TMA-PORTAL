@@ -205,6 +205,8 @@ class CipApplicationDraftController extends Controller
         abort_unless(CipAccess::canCreate($user), 404);
 
         if ($draft = $this->mine($request)) {
+            // Being able to edit a draft is not being able to delete it.
+            abort_unless(CipAccess::canDelete($user, $draft), 403, 'Only the person who started this application, or an administrator, can delete it.');
             Removal::discardDraft($draft, $user);
         }
 

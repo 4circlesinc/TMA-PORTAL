@@ -4439,7 +4439,10 @@
         }
         state.discarded = false;
 
-        return false;
+        // Refused: not this reader's to delete. The server says why.
+        return res.json().catch(function () { return {}; }).then(function (json) {
+          return { ok: false, message: (json && json.message) || '' };
+        });
       }, function () {
         state.discarded = false;
 

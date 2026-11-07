@@ -2686,4 +2686,47 @@ class CipApplicationDraftTest extends TestCase
 
         $this->save($staff, $this->answers($provider))->assertNotFound();
     }
+
+    /**
+     * A draft is deleted by the person who started it, or an administrator.
+     *
+     * A colleague who may open and edit the draft still may not throw it
+     * away: the work is the creator's.
+     */
+    public function test_only_the_creator_or_an_administrator_may_delete_a_draft(): void
+    {
+        $provider = $this->provider();
+        $creator = $this->user(Role::REVIEWING_OFFICER);
+        $colleague = $this->user(Role::REVIEWING_OFFICER);
+        $admin = $this->user(Role::ADMINISTRATOR);
+
+        $this->save($creator, $this->answers($provider))->assertOk();
+        $draft = CipApplication::query()->firstOrFail();
+
+        $this->actingAs($colleague)
+            ->deleteJson('/portal/cip/applications/draft?application='.$draft->uuid)
+            ->assertForbidden();
+        $this->assertNotNull(CipApplication::query()->find($draft->id), 'A colleague cannot delete it.');
+
+        $this->actingAs($colleague)
+            ->getJson('/portal/cip/applications/'.$draft->uuid)
+            ->assertOk()
+            ->assertJsonPath('application.canDelete', false);
+
+        $this->actingAs($creator)
+            ->getJson('/portal/cip/applications/'.$draft->uuid)
+            ->assertJsonPath('application.canDelete', true);
+
+        $this->actingAs($admin)
+            ->deleteJson('/portal/cip/applications/draft?application='.$draft->uuid)
+            ->assertOk();
+        $this->assertNull(CipApplication::query()->find($draft->id), 'An administrator can.');
+
+        $this->save($creator, $this->answers($provider))->assertOk();
+        $own = CipApplication::query()->firstOrFail();
+        $this->actingAs($creator)
+            ->deleteJson('/portal/cip/applications/draft?application='.$own->uuid)
+            ->assertOk();
+        $this->assertNull(CipApplication::query()->find($own->id), 'The creator can.');
+    }
 }
