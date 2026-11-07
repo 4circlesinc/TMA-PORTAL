@@ -514,6 +514,27 @@ class MailController extends Controller
      * with no photo (yet, or ever) gets a 404, which the UI treats as "draw
      * initials", never blocking on it.
      */
+    /**
+     * A sender's photo for an iPhone email notification (MessagePush): the
+     * app's notification service extension cannot sign in, so the push
+     * carries a signed, expiring link to this. A face only: a company's logo
+     * cropped into the round photo reads wrong, and initials say more.
+     */
+    public function senderPhotoForPush(string $hash): mixed
+    {
+        $row = MailSenderPhoto::where('hash', $hash)->first();
+        abort_unless($row && $row->has_photo && $row->isFacePhoto(), 404);
+
+        $photo = MailSenderPhoto::cachedOnly((string) $row->email);
+        abort_unless($photo, 404);
+
+        return response($photo['body'], 200, [
+            'Content-Type' => $photo['mime'],
+            'Cache-Control' => 'private, max-age=86400',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
     public function senderPhoto(Request $request, string $hash): mixed
     {
         $account = Mailbox::accountFor($request->user());

@@ -587,6 +587,10 @@ class MailSynchronizer
                         ? (string) ($m->from_name ?: $m->from_email ?: 'Sender')
                         : $fromName,
                     'message_uuid' => $m->uuid,
+                    // On the phone an email reads like a message: who sent
+                    // it, then the subject and the start of it (MessagePush).
+                    'subject' => (string) ($m->subject ?? ''),
+                    'snippet' => Str::limit(trim((string) $m->snippet), 160),
                 ],
                 'dedupe_key' => 'email.received:'.$m->remote_id,
             ]);

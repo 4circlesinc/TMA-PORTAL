@@ -1,10 +1,16 @@
 import Intents
 import UserNotifications
 
-/// Turns a message push into the kind of notification Messages shows: the
-/// sender's photo with the app's icon in its corner, the person's (or the
-/// group's) name, the message under it, and the Reply box (the MESSAGE
-/// category, handled by the app's AppDelegate).
+/// Turns a message or email push into the kind of notification Messages
+/// shows, laid out the same for all of them: the sender's photo with the app's
+/// icon in its corner, one line saying who (the person, the group for a group,
+/// the sender of an email), the message under it, and the Reply box (the
+/// MESSAGE category, handled by the app's AppDelegate).
+///
+/// A group is deliberately not given to iOS as a group conversation: iOS then
+/// lays it out on three lines, the sender as the title and the group's name
+/// under it, then the message. Instead the group's name is the title and the
+/// photo is the person who wrote it, the same two lines as any message.
 ///
 /// The server sends the push with mutable-content and a "msg" field
 /// (App\Support\Notifications\MessagePush): who wrote, a signed link to their
@@ -52,7 +58,10 @@ final class NotificationService: UNNotificationServiceExtension {
 struct IncomingMessage {
     let conversation: String
     let sender: String
+    /// Who wrote it, for their initials when there is no photo.
     let name: String
+    /// The line that says who: the person, the group, or the email's sender.
+    let title: String
     let photo: URL?
     let group: String?
     let body: String
@@ -69,6 +78,8 @@ struct IncomingMessage {
         self.photo = (fields["photo"] as? String).flatMap(URL.init(string:))
         let group = fields["group"] as? String
         self.group = (group?.isEmpty ?? true) ? nil : group
+        let title = fields["title"] as? String ?? ""
+        self.title = self.group ?? (title.isEmpty ? name : title)
         self.body = fields["body"] as? String ?? ""
     }
 
@@ -86,20 +97,25 @@ struct IncomingMessage {
 
     func notification(from content: UNNotificationContent, photo: Data?) async -> UNNotificationContent {
         let mutable = (content.mutableCopy() as? UNMutableNotificationContent) ?? UNMutableNotificationContent()
-        // The person or the group, and the message on its own line.
-        mutable.title = group ?? name
+        // Who, then the message on its own line.
+        mutable.title = title
         mutable.subtitle = ""
         if !body.isEmpty { mutable.body = body }
         mutable.threadIdentifier = conversation
         mutable.categoryIdentifier = "MESSAGE"
 
+        // The one line iOS shows above the message is the sender's name, so
+        // the sender carries the title; the photo and the initials are the
+        // person who wrote it. In a group that is a stand-in kept apart from
+        // the real person, so a group's name never sticks to anyone.
+        let identity = group == nil ? "\(sender)" : "\(conversation)|\(sender)"
         let person = INPerson(
-            personHandle: INPersonHandle(value: "user-\(sender)", type: .unknown),
+            personHandle: INPersonHandle(value: identity, type: .unknown),
             nameComponents: PersonNameComponentsFormatter().personNameComponents(from: name),
-            displayName: name,
+            displayName: title,
             image: photo.map { INImage(imageData: $0) },
             contactIdentifier: nil,
-            customIdentifier: "user-\(sender)",
+            customIdentifier: identity,
             isMe: false,
             suggestionType: .none
         )
@@ -108,13 +124,13 @@ struct IncomingMessage {
             nameComponents: nil, displayName: nil, image: nil,
             contactIdentifier: nil, customIdentifier: nil, isMe: true, suggestionType: .none
         )
-        // A group is a conversation with more than one recipient and a name;
-        // with no group photo set, the sender's photo is the one shown.
+        // One recipient and no group name: the two-line layout of a direct
+        // message, for groups and email too (see the note on the class).
         let intent = INSendMessageIntent(
-            recipients: group == nil ? [me] : [me, person],
+            recipients: [me],
             outgoingMessageType: .outgoingMessageText,
             content: mutable.body,
-            speakableGroupName: group.map { INSpeakableString(spokenPhrase: $0) },
+            speakableGroupName: nil,
             conversationIdentifier: conversation,
             serviceName: nil,
             sender: person,

@@ -2,9 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\SyncMailbox;
+use App\Models\ConnectedAccount;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\DeviceToken;
+use App\Models\MailMessage;
+use App\Models\MailSenderPhoto;
 use App\Models\Message;
 use App\Models\User;
 use App\Support\Notifications\MessagePush;
@@ -12,8 +16,10 @@ use App\Support\Notifications\Notifier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -206,5 +212,132 @@ class MessagePushTest extends TestCase
         $this->get(URL::temporarySignedRoute('avatar.push', now()->addDay(), ['name' => self::PHOTO]))
             ->assertOk()
             ->assertHeader('Content-Type', 'image/jpeg');
+    }
+
+    public function test_an_email_reads_like_a_message_the_sender_then_the_subject_and_its_start(): void
+    {
+        $recipient = $this->user('alfred@wayne.test');
+        DeviceToken::create(['user_id' => $recipient->id, 'platform' => DeviceToken::PLATFORM_IOS, 'token' => self::PHONE]);
+        // The mailbox has a photo of Dana cached.
+        $hash = MailSenderPhoto::hashFor('dana@example.com');
+        MailSenderPhoto::create(['hash' => $hash, 'email' => 'dana@example.com', 'has_photo' => true, 'source' => 'directory', 'mime' => 'image/jpeg', 'checked_at' => now()]);
+
+        Notifier::send([
+            'user' => $recipient,
+            'type' => 'email.received',
+            'title' => 'Dana Reed sent you an email',
+            'message' => 'Quarterly review',
+            'action_url' => '/email?message=m-1',
+            'metadata' => [
+                'from_email' => 'dana@example.com', 'from_name' => 'Dana Reed', 'message_uuid' => 'm-1',
+                'subject' => 'Quarterly review', 'snippet' => 'The numbers are in and they look good.',
+            ],
+        ]);
+
+        $body = $this->pushed();
+        $this->assertSame(['title' => 'Dana Reed', 'body' => "Quarterly review\nThe numbers are in and they look good."], $body['aps']['alert']);
+        $this->assertSame('MESSAGE', $body['aps']['category'], 'a Reply box');
+        $this->assertSame('email:dana@example.com', $body['aps']['thread-id'], 'stacked by sender');
+
+        $msg = json_decode($body['msg'], true);
+        $this->assertSame('email', $msg['kind']);
+        $this->assertSame('Dana Reed', $msg['name']);
+        $this->assertArrayNotHasKey('group', $msg);
+        $this->assertStringContainsString('/portal/mail/sender-photo/'.$hash.'/push?expires=', $msg['photo']);
+        $this->assertStringContainsString("/push/mail/m-1/{$recipient->id}?expires=", $msg['reply']);
+        $this->assertSame('/email?message=m-1', $msg['url']);
+    }
+
+    public function test_a_batch_of_emails_stays_a_plain_notification(): void
+    {
+        $recipient = $this->user('alfred@wayne.test');
+        DeviceToken::create(['user_id' => $recipient->id, 'platform' => DeviceToken::PLATFORM_IOS, 'token' => self::PHONE]);
+
+        Notifier::send([
+            'user' => $recipient, 'type' => 'email.received', 'title' => '5 new emails', 'message' => 'From Dana, Pat…',
+            'metadata' => ['from_email' => 'dana@example.com', 'from_name' => 'Dana', 'message_uuid' => 'm-1'],
+        ]);
+
+        $this->assertArrayNotHasKey('msg', $this->pushed());
+    }
+
+    /** @return array{0: User, 1: MailMessage} */
+    private function mailbox(): array
+    {
+        $user = $this->user('alfred@wayne.test', ['account_type' => 'Administrator', 'preferences' => ['mail' => [
+            'signatures' => [
+                ['id' => 'sig-a', 'name' => 'Short', 'html' => '<p>A.</p>'],
+                ['id' => 'sig-b', 'name' => 'Full', 'html' => '<p>Alfred Pennyworth<br>Wayne Manor</p>'],
+            ],
+            'activeSignatureId' => 'sig-b',
+        ]]]);
+        DeviceToken::create(['user_id' => $user->id, 'platform' => DeviceToken::PLATFORM_IOS, 'token' => self::PHONE]);
+        $account = ConnectedAccount::create([
+            'user_id' => $user->id, 'provider' => 'google', 'provider_id' => 'g-'.$user->id,
+            'email' => 'alfred@wayne.test', 'name' => 'Alfred', 'token' => 'refresh-token',
+            'scopes' => ['https://www.googleapis.com/auth/gmail.modify'], 'sync_email' => true,
+        ]);
+        $original = MailMessage::create([
+            'uuid' => (string) Str::uuid(), 'user_id' => $user->id, 'connected_account_id' => $account->id,
+            'remote_id' => 'gmail-1', 'thread_id' => 'thread-1', 'folder' => 'inbox',
+            'subject' => 'Quarterly review', 'from_name' => 'Dana Reed', 'from_email' => 'dana@example.com',
+            'reply_to' => 'Dana Assistant <assist@example.com>',
+            'to' => [['name' => 'Alfred', 'email' => 'alfred@wayne.test']], 'is_read' => false, 'sent_at' => now()->subHour(),
+        ]);
+
+        return [$user, $original];
+    }
+
+    private function mailReplyUrl(MailMessage $m, User $user): string
+    {
+        return URL::temporarySignedRoute('mail.push-reply', now()->addDays(MessagePush::REPLY_DAYS), ['message' => $m->uuid, 'user' => $user->id]);
+    }
+
+    public function test_an_email_reply_from_notification_center_goes_back_in_its_thread_signed_off(): void
+    {
+        [$user, $original] = $this->mailbox();
+        Queue::fake([SyncMailbox::class]);
+        Http::fake([
+            'oauth2.googleapis.com/*' => Http::response(['access_token' => 'access-token', 'expires_in' => 3600]),
+            'gmail.googleapis.com/gmail/v1/users/me/messages/send' => Http::response(['id' => 'sent-123']),
+            'gmail.googleapis.com/gmail/v1/users/me/messages/gmail-1*' => Http::response([
+                'id' => 'gmail-1', 'threadId' => 'thread-1',
+                'payload' => ['headers' => [['name' => 'Message-ID', 'value' => '<CAE123@mail.gmail.com>']]],
+            ]),
+        ]);
+
+        $this->postJson($this->mailReplyUrl($original, $user), ['body' => "Thanks Dana.\nSee you Monday.", 'device' => self::PHONE])
+            ->assertOk()
+            ->assertJsonPath('sent', true);
+
+        Http::assertSent(function ($request) {
+            if (! str_contains($request->url(), '/messages/send')) {
+                return false;
+            }
+            $this->assertSame('thread-1', $request['threadId']);
+            $raw = base64_decode(strtr($request['raw'], '-_', '+/'), true);
+            $this->assertStringContainsString('To: assist@example.com', $raw, 'to whoever the email asks replies to go to');
+            $this->assertStringContainsString('Subject: Re: Quarterly review', $raw);
+            $this->assertStringContainsString('In-Reply-To: <CAE123@mail.gmail.com>', $raw);
+
+            $html = '';
+            if (preg_match('#Content-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n([A-Za-z0-9+/=\r\n]+)#', $raw, $m)) {
+                $html = (string) base64_decode(preg_replace('/\s+/', '', $m[1]));
+            }
+            $this->assertStringContainsString('<div>Thanks Dana.</div><div>See you Monday.</div>', $html);
+            $this->assertStringContainsString('Alfred Pennyworth<br>Wayne Manor', $html, 'the chosen signature');
+            $this->assertStringNotContainsString('<p>A.</p>', $html);
+
+            return true;
+        });
+    }
+
+    public function test_an_email_reply_needs_one_of_the_persons_devices(): void
+    {
+        [$user, $original] = $this->mailbox();
+        Http::fake();
+
+        $this->postJson($this->mailReplyUrl($original, $user), ['body' => 'Hi', 'device' => str_repeat('f', 64)])->assertForbidden();
+        Http::assertNothingSent();
     }
 }

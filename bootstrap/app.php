@@ -50,6 +50,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'hooks/microsoft-graph',
             // A reply from an iPhone notification: a signed link, not a session.
             'push/messages/*',
+            'push/mail/*',
         ]);
 
         $middleware->alias([

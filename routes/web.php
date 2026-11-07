@@ -158,6 +158,15 @@ Route::post('/push/messages/{conversation}/{user}', [PushReplyController::class,
     ->whereNumber('user')
     ->middleware(['signed', 'throttle:30,1'])
     ->name('messaging.push-reply');
+// The same for an email notification: its sender's photo, and a reply.
+Route::get('/portal/mail/sender-photo/{hash}/push', [MailController::class, 'senderPhotoForPush'])
+    ->where('hash', '[a-f0-9]{64}')
+    ->middleware(['signed', 'throttle:120,1'])
+    ->name('mail.sender-photo.push');
+Route::post('/push/mail/{message}/{user}', [PushReplyController::class, 'mail'])
+    ->whereNumber('user')
+    ->middleware(['signed', 'throttle:30,1'])
+    ->name('mail.push-reply');
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/media/avatars/{name}', [AvatarController::class, 'show'])->name('avatar.show');
