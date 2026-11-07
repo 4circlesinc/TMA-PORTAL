@@ -306,18 +306,10 @@ class AppleSignIn
         return $keys;
     }
 
-    /** The .p8 contents, or a path to the file, as APNS_PRIVATE_KEY accepts. */
     private static function privateKey(): ?string
     {
-        $raw = str_replace('\n', "\n", (string) config('services.apple.private_key'));
-        if ($raw === '') {
-            return null;
-        }
-        if (! str_contains($raw, 'PRIVATE KEY') && is_file($raw)) {
-            $raw = (string) file_get_contents($raw);
-        }
-
-        return str_contains($raw, 'PRIVATE KEY') ? $raw : null;
+        // However it was pasted: line breaks, \n, spaces or quotes.
+        return P8Key::from(config('services.apple.private_key'));
     }
 
     private static function canSign(): bool

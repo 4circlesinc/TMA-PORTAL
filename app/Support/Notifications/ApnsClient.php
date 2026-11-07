@@ -2,6 +2,7 @@
 
 namespace App\Support\Notifications;
 
+use App\Support\Apple\P8Key;
 use Firebase\JWT\JWT;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -160,19 +161,16 @@ class ApnsClient
         return ['aps' => $aps] + $data;
     }
 
+    /** Why APNS_PRIVATE_KEY is set but unusable, or null. For push:status. */
+    public function keyProblem(): ?string
+    {
+        return P8Key::problem(config('services.apns.private_key'));
+    }
+
     private function privateKey(): ?string
     {
-        // A .p8 pasted as one line with \n for its line breaks, as the
-        // Sign in with Apple key is, works the same as the file.
-        $raw = str_replace('\n', "\n", (string) config('services.apns.private_key'));
-        if ($raw === '') {
-            return null;
-        }
-        if (! str_contains($raw, 'PRIVATE KEY') && is_file($raw)) {
-            $raw = (string) file_get_contents($raw);
-        }
-
-        return str_contains($raw, 'PRIVATE KEY') ? $raw : null;
+        // However it was pasted: line breaks, \n, spaces or quotes.
+        return P8Key::from(config('services.apns.private_key'));
     }
 
     private function token(): ?string
@@ -184,8 +182,15 @@ class ApnsClient
             return null;
         }
 
-        return Cache::remember('apns:jwt:'.md5($keyId.$teamId), now()->addMinutes(50), function () use ($key, $keyId, $teamId) {
-            return JWT::encode(['iss' => $teamId, 'iat' => time()], $key, 'ES256', $keyId);
-        });
+        try {
+            return Cache::remember('apns:jwt:'.md5($keyId.$teamId), now()->addMinutes(50), function () use ($key, $keyId, $teamId) {
+                return JWT::encode(['iss' => $teamId, 'iat' => time()], $key, 'ES256', $keyId);
+            });
+        } catch (\Throwable $e) {
+            // A key OpenSSL reads but cannot sign with. Fail the send, not the job.
+            Log::warning('APNs: could not sign with the key', ['error' => $e->getMessage()]);
+
+            return null;
+        }
     }
 }

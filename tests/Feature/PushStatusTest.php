@@ -63,6 +63,59 @@ class PushStatusTest extends TestCase
             ->assertExitCode(0);
     }
 
+    /**
+     * However the key survived the environment editor, it works: line breaks
+     * flattened to spaces, escaped once or twice, wrapped in stray quotes.
+     *
+     * @return array<string, array{0: callable(string): string}>
+     */
+    public static function pastedKeys(): array
+    {
+        return [
+            'line breaks turned to spaces' => [fn (string $pem) => str_replace("\n", ' ', $pem)],
+            'one line with \\n' => [fn (string $pem) => str_replace("\n", '\\n', $pem)],
+            'one line with \\\\n' => [fn (string $pem) => str_replace("\n", '\\\\n', $pem)],
+            'stray quotes around it' => [fn (string $pem) => '"'.trim($pem).'"'],
+            'Windows line endings' => [fn (string $pem) => str_replace("\n", "\r\n", $pem)],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('pastedKeys')]
+    public function test_a_key_however_it_was_pasted_signs(callable $mangle): void
+    {
+        config(['services.apns.private_key' => $mangle((string) config('services.apns.private_key'))]);
+        Http::fake(['api.push.apple.com/*' => Http::response(['reason' => 'BadDeviceToken'], 400)]);
+
+        $this->artisan('push:status')
+            ->expectsOutputToContain('Private key:  set')
+            ->expectsOutputToContain('Apple auth:   OK (Apple accepted the key)')
+            ->assertExitCode(0);
+    }
+
+    public function test_a_key_cut_short_is_reported_not_crashed_on(): void
+    {
+        $pem = (string) config('services.apns.private_key');
+        $lines = explode("\n", trim($pem));
+        config(['services.apns.private_key' => $lines[0]."\n".substr($lines[1], 0, 20)."\n".end($lines)]);
+        Http::fake();
+
+        $this->artisan('push:status')
+            ->expectsOutputToContain('Private key:  set, but unusable: OpenSSL cannot read it')
+            ->expectsOutputToContain('Apple auth:   not tried, the key cannot be read')
+            ->assertExitCode(1);
+
+        Http::assertNothingSent();
+    }
+
+    public function test_a_value_that_is_not_a_key_says_so(): void
+    {
+        config(['services.apns.private_key' => 'MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQg']);
+
+        $this->artisan('push:status')
+            ->expectsOutputToContain('has no -----BEGIN PRIVATE KEY-----')
+            ->assertExitCode(1);
+    }
+
     public function test_it_says_why_apple_refuses_the_key(): void
     {
         Http::fake(['api.push.apple.com/*' => Http::response(['reason' => 'InvalidProviderToken'], 403)]);

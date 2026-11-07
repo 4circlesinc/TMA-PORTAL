@@ -57,8 +57,16 @@ class PushStatus extends Command
         $this->line('Key id:       '.((string) config('services.apns.key_id') ?: '(not set)'));
         $this->line('Team id:      '.((string) config('services.apns.team_id') ?: '(not set)'));
         $this->line('Bundle id:    '.((string) config('services.apns.bundle_id') ?: '(not set)'));
-        $this->line('Private key:  '.((string) config('services.apns.private_key') !== '' ? 'set' : '(not set)'));
-        if ($apns->enabled()) {
+        $keyProblem = $apns->keyProblem();
+        $this->line('Private key:  '.match (true) {
+            (string) config('services.apns.private_key') === '' => '(not set)',
+            $keyProblem !== null => 'set, but unusable: '.$keyProblem,
+            default => 'set',
+        });
+        if ($keyProblem !== null) {
+            $failed = true;
+            $this->line('Apple auth:   not tried, the key cannot be read');
+        } elseif ($apns->enabled()) {
             $check = $apns->check();
             $failed = $failed || ! $check['ok'];
             $this->line('Apple auth:   '.$check['detail']);
