@@ -20,6 +20,12 @@
  *   TMAPhoneScreens.handlePop(event)
  *       dashboard.js asks first on popstate; true means it was a screen
  *       moving within the section, not a different page of the portal.
+ *   TMAPhoneScreens.showing()
+ *       How many screens are open on this page.
+ *
+ * The left-edge swipe means back only while a screen is open; on a page of
+ * its own it opens the menu (dashboard.js). The iPhone app's back swipe is
+ * switched to match (TMADesktop.setEdgeBack), so the two never both move.
  *
  * Global: window.TMAPhoneScreens
  */
@@ -42,6 +48,27 @@
     return stacks[path];
   }
 
+  function showing() {
+    var list = stacks[at.path] || [];
+    var n = 0;
+    for (var i = 0; i < at.depth && i < list.length; i++) {
+      if (list[i] && list[i].open) n += 1;
+    }
+    return n;
+  }
+
+  var edgeBack = null;
+  /* Tell the iPhone app whether its edge swipe is back right now. */
+  function syncEdge() {
+    var on = showing() > 0;
+    if (on === edgeBack) return;
+    edgeBack = on;
+    var host = window.TMADesktop;
+    if (host && typeof host.setEdgeBack === 'function') {
+      try { host.setEdgeBack(on); } catch (e) { /* the menu keeps the edge */ }
+    }
+  }
+
   function push(screen) {
     var list = stack(at.path);
     list.length = at.depth; // a new screen drops the ones ahead of it
@@ -59,6 +86,7 @@
     try {
       history.pushState(state, '', location.href);
     } catch (e) { /* history unavailable: back buttons still close */ }
+    syncEdge();
   }
 
   function open(close, reopen) {
@@ -84,6 +112,7 @@
     if (waiting !== -1) { queued.splice(waiting, 1); return; }
     if (screen.depth !== at.depth || location.pathname !== at.path) return;
     pendingPops += 1;
+    syncEdge();
     history.back();
   }
 
@@ -103,6 +132,7 @@
         queued = [];
         waiting.forEach(function (screen) { if (screen.open) push(screen); });
       }
+      syncEdge();
       return true;
     }
 
@@ -110,6 +140,7 @@
     // route's own popstate shows it.
     if (path !== at.path || (target === 0 && at.depth === 0)) {
       at = { path: path, depth: target };
+      syncEdge();
       return false;
     }
 
@@ -133,12 +164,14 @@
       }
     }
     at.depth = target;
+    syncEdge();
     return true;
   }
 
   /* dashboard.js went to another page of the portal (a new entry of its own). */
   function left() {
     at = { path: location.pathname, depth: depthOf(history.state) };
+    syncEdge();
   }
 
   window.TMAPhoneScreens = {
@@ -147,6 +180,8 @@
     closed: closed,
     handlePop: handlePop,
     left: left,
+    showing: showing,
     depth: function () { return at.depth; },
   };
+  syncEdge();
 })();

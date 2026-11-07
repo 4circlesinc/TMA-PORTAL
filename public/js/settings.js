@@ -69,6 +69,30 @@
     if (mobileTitle) mobileTitle.textContent = detailTitle(activeId || getActiveNavId(root));
     var backLabel = root.querySelector('[data-settings-mobile-back-label]');
     if (backLabel && !root.classList.contains('is-settings-mobile-select-open')) backLabel.textContent = 'Settings';
+    if (inDetail) syncMobileTitleRepeat(root);
+  }
+
+  /*
+   * The phone header's title gives way when the page's first card is already
+   * headed with it ("Time And Language" over a card labelled "Time And
+   * Language"); an option list keeps its title, nothing under it repeats it.
+   */
+  function syncMobileTitleRepeat(root) {
+    var head = root.querySelector('[data-settings-mobile-head]');
+    var title = root.querySelector('[data-settings-mobile-title]');
+    if (!head || !title) return;
+    var repeated = false;
+    if (!root.classList.contains('is-settings-mobile-select-open')) {
+      var panel = root.querySelector('[data-settings-panel].is-active');
+      var labels = panel ? panel.querySelectorAll('[class*="-group-label"]') : [];
+      for (var i = 0; i < labels.length; i++) {
+        if (!labels[i].offsetParent || !labels[i].textContent.trim()) continue;
+        var norm = function (s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); };
+        repeated = norm(labels[i].textContent) === norm(title.textContent);
+        break;
+      }
+    }
+    head.classList.toggle('is-title-repeated', repeated);
   }
 
   function showSettingsMenu(root, fromHistory) {
@@ -976,6 +1000,7 @@
     }
 
     root.classList.remove('is-settings-mobile-select-open');
+    syncMobileTitleRepeat(root);
   }
 
   function openMobileSelect(root, id, reopened) {
@@ -1010,6 +1035,7 @@
     overlay.hidden = false;
     panel.classList.add('is-mobile-select-open');
     root.classList.add('is-settings-mobile-select-open');
+    syncMobileTitleRepeat(root);
 
     var search = overlay.querySelector('[data-mobile-select-search]');
     if (search) {

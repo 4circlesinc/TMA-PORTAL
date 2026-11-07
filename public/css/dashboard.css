@@ -40646,7 +40646,7 @@ span.tma-dash__messages-profile-avatar {
     max-width: none;
     min-width: 44px;
     min-height: 44px;
-    margin-left: -6px;
+    margin-left: -7px; /* the chevron's drawn edge on the 16px gutter */
     padding: 0 var(--space-4) 0 0;
     color: var(--color-primary, #03a5e9);
     font: inherit;
@@ -40780,11 +40780,26 @@ span.tma-dash__messages-profile-avatar {
 /*
  * A settings page's cards sit on the page's 16px gutter, under the header's
  * back button. The page pads 16px and each card stack added another 16px,
- * so the cards sat 32px in (40px inside the admin console).
+ * so the cards sat 32px in (40px inside the admin console), and 32px below
+ * the header, which floated apart from its page.
  */
 @media (max-width: 1024px) {
   .tma-dash__settings-content .tma-dash__settings-panel > [class*="-stack"] {
+    padding-top: 0;
     padding-left: 0;
     padding-right: 0;
+  }
+
+  /* The header 10px under the floating bar, the first card 16px under it. */
+  .tma-dash__settings-card.is-settings-detail .tma-dash__settings-content {
+    padding-top: 0;
+  }
+}
+
+/* The header's title gives way when the page's first card is headed with it
+   (settings.js, syncMobileTitleRepeat). */
+@media (max-width: 1024px) {
+  .tma-dash__settings-content .tma-dash__settings-mobile-head.is-title-repeated .tma-dash__settings-mobile-title {
+    display: none;
   }
 }

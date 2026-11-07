@@ -51,7 +51,6 @@ final class PortalModel: NSObject, ObservableObject {
     private var appleNonce: String?
     private var appleInvite: String?
     private var appleRequest: ASAuthorizationController?
-    private var backObservation: NSKeyValueObservation?
 
     @Published var loading = true
     @Published var showSplash = true
@@ -89,13 +88,11 @@ final class PortalModel: NSObject, ObservableObject {
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.customUserAgent = PortalConfig.userAgent
-        // The left-edge swipe is back, sliding the screen away under the
-        // finger. The portal makes each screen it opens on a phone a history
-        // entry (phone-screens.js), so the swipe steps back one screen.
-        webView.allowsBackForwardNavigationGestures = true
-        backObservation = webView.observe(\.canGoBack, options: [.new]) { [weak self] _, _ in
-            Task { @MainActor in self?.tellPageCanGoBack() }
-        }
+        // A drag from the left edge is back only while the page has a screen
+        // open inside it (a Settings page, an option list), each a history
+        // entry (phone-screens.js); on a page of its own the drag opens the
+        // menu. The page switches this through setEdgeBack ("edgeBack").
+        webView.allowsBackForwardNavigationGestures = false
         webView.scrollView.contentInsetAdjustmentBehavior = .automatic
         webView.isOpaque = false
         webView.backgroundColor = UIColor(red: 0x13 / 255, green: 0x6D / 255, blue: 0xA0 / 255, alpha: 1)
@@ -128,13 +125,6 @@ final class PortalModel: NSObject, ObservableObject {
 
     func goBack() {
         if webView.canGoBack { webView.goBack() }
-    }
-
-    /// Whether the left edge is the back swipe right now. The page's own edge
-    /// drag (the menu drawer) gives way to it, or both moved at once and the
-    /// drawer was left half out (dashboard.js, edgeIsBack).
-    private func tellPageCanGoBack() {
-        evaluate("window.TMADesktop && (window.TMADesktop.canGoBack = \(webView.canGoBack ? "true" : "false"))")
     }
 
     func loadPortal(_ path: String = "/") {
@@ -235,6 +225,9 @@ final class PortalModel: NSObject, ObservableObject {
             if let json = dict["json"] as? String { showPageNotification(json) }
         case "tone":
             PageTone.play(dict["name"] as? String ?? "")
+        case "edgeBack":
+            // The back swipe while a screen is open; the menu's drag otherwise.
+            webView.allowsBackForwardNavigationGestures = (dict["on"] as? Bool) == true
         case "closeNotification":
             UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["page-\(intValue(dict["id"]))"])
         case "openInBrowser":
@@ -757,6 +750,8 @@ extension PortalModel: WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, A
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        // A new page starts with no screen open; it switches the swipe on itself.
+        webView.allowsBackForwardNavigationGestures = false
         guard !quietLoad else { return }
         loading = true
         refreshSplash()
@@ -767,7 +762,6 @@ extension PortalModel: WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, A
         loading = false
         splash.pageReady()
         refreshSplash()
-        tellPageCanGoBack()
         guard let url = webView.url, rules.isPortalURL(url) else { return }
         if let script = pendingCallJS {
             evaluate(script)

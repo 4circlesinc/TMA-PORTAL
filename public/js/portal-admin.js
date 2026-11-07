@@ -4960,6 +4960,40 @@
     window.TMAPhoneScreens.open(close, reopen);
   }
 
+  /*
+   * The header's title gives way when the page's first label already says
+   * it (Notifications' first card is headed "Notifications"): saying it twice,
+   * once big and once small, was noise. Pages load their sections late, so it
+   * is checked again as the page fills in.
+   */
+  function sameWords(a, b) {
+    var norm = function (s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); };
+    return norm(a) !== '' && norm(a) === norm(b);
+  }
+
+  function watchHeadTitle(content) {
+    if (state.headObserver) { state.headObserver.disconnect(); state.headObserver = null; }
+    var head = content && content.querySelector(':scope > .tma-portal-admin__head');
+    var title = head && head.querySelector('.tma-portal-admin__head-title');
+    if (!title) return;
+    var check = function () {
+      var first = null;
+      var candidates = content.querySelectorAll('[class*="group-label"], .tma-portal-section__title, h2, h3');
+      for (var i = 0; i < candidates.length; i++) {
+        var el = candidates[i];
+        if (head.contains(el) || !el.offsetParent || !el.textContent.trim()) continue;
+        first = el;
+        break;
+      }
+      head.classList.toggle('is-title-repeated', !!first && sameWords(first.textContent, title.textContent));
+    };
+    check();
+    if (window.MutationObserver) {
+      state.headObserver = new MutationObserver(check);
+      state.headObserver.observe(content, { childList: true, subtree: true });
+    }
+  }
+
   function goBack(fallback) {
     if (window.TMAPhoneScreens && window.TMAPhoneScreens.back()) return;
     fallback();
@@ -5055,6 +5089,7 @@
     });
 
     if (page.wire) page.wire(el.querySelector('.tma-portal-admin__content'), s);
+    if (isTouchWidth()) watchHeadTitle(el.querySelector('.tma-portal-admin__content'));
   }
 
   var meWatched = false;
@@ -5066,7 +5101,8 @@
     if (!btn) return;
     btn.outerHTML = renderNavUser(!allowed(state.page) || state.page === 'profile');
     var fresh = state.el.querySelector('.tma-portal-admin__nav-user');
-    if (fresh) fresh.addEventListener('click', function () { setPage('profile'); });
+    // The same as every row: on a phone, a screen of its own (openSection).
+    if (fresh) fresh.addEventListener('click', function () { openSection('profile'); });
   }
 
   function mount(el, opts) {

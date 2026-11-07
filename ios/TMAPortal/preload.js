@@ -46,6 +46,11 @@
       post('tone', { name: name });
       return true;
     },
+    // Whether a drag from the left edge is back (a screen is open inside the
+    // page) or opens the menu (a page of its own). phone-screens.js says.
+    setEdgeBack: function (on) {
+      post('edgeBack', { on: !!on });
+    },
   };
 
   /*

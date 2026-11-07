@@ -7910,7 +7910,7 @@ body:has(.tma-dash.is-sidebar-collapsed) .tma-sync-pill {
     max-width: none;
     min-width: 44px;
     min-height: 44px;
-    margin: 0 0 0 -6px;
+    margin: 0 0 0 -7px; /* the chevron's drawn edge on the 16px gutter */
     padding: 0 var(--space-4) 0 0;
     border-radius: 0;
     background: none;
@@ -7982,5 +7982,31 @@ body:has(.tma-dash.is-sidebar-collapsed) .tma-sync-pill {
   .tma-portal-admin .tma-portal-admin__content {
     padding-left: var(--space-16);
     padding-right: var(--space-16);
+  }
+}
+
+/*
+ * The page's header under the floating bar on a phone, 10px clear of it like
+ * every page, not pulled up under it. The view's -28px top margin is the
+ * desktop gutter; on a phone it tucked the header 2px under the bar with a
+ * 32px gap below it, so it read as part of the bar, not of its page.
+ */
+@media (max-width: 1024px) {
+  .tma-dash:not(.tma-dash--desktop-bar) .tma-dash__view[data-view="admin"]:not([hidden]) {
+    margin-top: 0;
+  }
+
+  .tma-portal-admin .tma-portal-admin__content {
+    padding-top: 0;
+  }
+
+}
+
+/* The header's title gives way when the page's first label already says it
+   (portal-admin.js, watchHeadTitle): "‹ Settings" alone over a card headed
+   "Notifications", not "Notifications" twice. */
+@media (max-width: 1024px) {
+  .tma-portal-admin .tma-portal-admin__head.is-title-repeated .tma-portal-admin__head-title {
+    display: none;
   }
 }

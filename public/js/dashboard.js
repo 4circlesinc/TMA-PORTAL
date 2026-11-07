@@ -844,14 +844,20 @@
       function typingIn(el) {
         return !!(el && el.closest && el.closest('input, textarea, select, [contenteditable="true"]'));
       }
-      /* In the iPhone app the left edge is the back swipe (WebKit's own,
-         which slides the screen away under the finger) whenever there is
-         somewhere to go back to; the app says so in TMADesktop.canGoBack.
-         Both at once dragged the menu out under the swipe and left it stuck.
-         An app too old to say keeps the edge for back; ☰ opens the menu. */
+      /* In the iPhone app a drag from the left edge is back while a screen
+         is open inside the page (a Settings page, an option list), and opens
+         the menu on a page of its own. phone-screens.js switches the app's
+         back swipe to match (setEdgeBack), so only one of them ever moves;
+         both at once dragged the menu out under the swipe and left it stuck.
+         An app too old to switch keeps the edge for back whenever it can go
+         back (canGoBack), and ☰ opens the menu. */
       function edgeIsBack() {
         var host = window.TMADesktop;
-        return !!(host && host.isIOS && host.canGoBack !== false);
+        if (!host || !host.isIOS) return false;
+        if (typeof host.setEdgeBack === 'function') {
+          return !!(window.TMAPhoneScreens && window.TMAPhoneScreens.showing() > 0);
+        }
+        return host.canGoBack !== false;
       }
 
       function onStart(e) {

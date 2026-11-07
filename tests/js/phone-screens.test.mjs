@@ -19,7 +19,7 @@ import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const source = readFileSync(join(root, 'public/js/phone-screens.js'), 'utf8');
 
-function browser(path) {
+function browser(path, host) {
   const entries = [{ state: null, path }];
   let index = 0;
   const location = { pathname: path, get href() { return 'https://portal.test' + this.pathname; } };
@@ -49,7 +49,7 @@ function browser(path) {
     back() { go(-1); },
     forward() { go(1); },
   };
-  const window = { history, location };
+  const window = { history, location, TMADesktop: host };
   window.window = window;
   runInContext(source, createContext(window));
   return {
@@ -166,6 +166,29 @@ function ui() {
   b.history.back();
   b.settle();
   assert.deepEqual(b.routeChanges, ['/account-settings']);
+}
+
+// The iPhone app's back swipe is on only while a screen is open; on a page
+// of its own the left edge opens the menu instead.
+{
+  const told = [];
+  const b = browser('/account-settings', { isIOS: true, setEdgeBack: (on) => told.push(on) });
+  const u = ui();
+  assert.deepEqual(told, [false], 'a page starts with the edge for the menu');
+  u.screen('Notifications', b);
+  u.screen('Notification sound', b);
+  assert.deepEqual(told, [false, true], 'told once, when the first screen opens');
+  b.history.back();
+  b.settle();
+  assert.deepEqual(told, [false, true]);
+  b.history.back();
+  b.settle();
+  assert.deepEqual(told, [false, true, false], 'the last screen closed: the menu again');
+  assert.equal(b.screens.showing(), 0);
+  const list = u.screen('Toast position', b);
+  u.shown.pop();
+  b.screens.closed(list);
+  assert.deepEqual(told, [false, true, false, true, false], 'a list closing itself hands the edge back at once');
 }
 
 console.log('phone-screens: ok');
