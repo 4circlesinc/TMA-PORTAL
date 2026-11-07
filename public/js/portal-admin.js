@@ -4902,8 +4902,7 @@
         return '<button type="button" class="tma-portal-admin__nav-back" data-admin-group-back>&lsaquo; Settings</button>' +
           '<p class="tma-portal-admin__nav-title">' + ui().esc(group.label) + '</p>' +
           subItems.map(function (it) {
-            return '<button type="button" class="tma-portal-admin__nav-item' + (pageId === it.id ? ' is-active' : '') + '" data-admin-nav="' + it.id + '">' + ui().esc(it.label) +
-              '<img class="tma-portal-admin__caret" src="images/icons/phosphor/CaretRight.svg" alt=""></button>';
+            return '<button type="button" class="tma-portal-admin__nav-item' + (pageId === it.id ? ' is-active' : '') + '" data-admin-nav="' + it.id + '">' + ui().esc(it.label) + '</button>';
           }).join('');
       }
       state.group = null;

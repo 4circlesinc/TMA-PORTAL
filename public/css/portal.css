@@ -7845,3 +7845,21 @@ body:has(.tma-dash.is-sidebar-collapsed) .tma-sync-pill {
   white-space: nowrap;
   border: 0;
 }
+
+/*
+ * Settings menu on a phone (portal-admin.js). Last in the file and one class
+ * more specific, because the rail's own `.tma-portal-admin__nav` rule further
+ * up sets an 8px side padding that won over the phone rule before it.
+ * A 16px gutter on both sides, the profile card included; no arrows.
+ */
+@media (max-width: 1024px) {
+  .tma-portal-admin .tma-portal-admin__nav {
+    box-sizing: border-box;
+    padding-left: var(--space-16);
+    padding-right: var(--space-16);
+  }
+
+  .tma-portal-admin .tma-portal-admin__caret {
+    display: none;
+  }
+}
