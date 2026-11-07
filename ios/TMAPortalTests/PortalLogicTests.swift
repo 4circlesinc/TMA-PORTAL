@@ -138,6 +138,17 @@ final class PortalLogicTests: XCTestCase {
         XCTAssertNil(NotificationSound.sound(for: "none", silent: false))
     }
 
+    @MainActor
+    func testEveryPageToneShipsInTheApp() {
+        // The page's tones play natively (no Now Playing panel); each one the
+        // page can ask for must be in the app, or it would play nothing.
+        XCTAssertEqual(Set(PageTone.files.keys), ["chime", "system", "sent", "beep"])
+        for (name, file) in PageTone.files {
+            XCTAssertNotNil(Bundle.main.url(forResource: file, withExtension: nil), "\(name): \(file) is not in the app")
+        }
+        XCTAssertEqual(PageTone.files["chime"], NotificationSound.files[NotificationSound.tm], "the preview is the tone pushes play")
+    }
+
     func testTheTMToneShipsInTheApp() {
         XCTAssertNotNil(Bundle.main.url(forResource: "tma-chime", withExtension: "caf"), "push payloads name tma-chime.caf")
     }

@@ -1319,9 +1319,15 @@
   }
 
   // The Apple tone is the phone's Default Alerts sound, which a page cannot
-  // play; the TM tone is the same chime the app carries.
+  // play; the TM tone is the same chime the app carries. The app plays it as a
+  // system sound, like a notification: page audio is media to iOS and put up
+  // the Now Playing panel. An app without playTone hears the page's copy.
   function previewNotificationSound(value) {
     if (value !== 'chime') return;
+    var host = window.TMADesktop;
+    try {
+      if (host && typeof host.playTone === 'function' && host.playTone('chime')) return;
+    } catch (e) { /* the page's copy below */ }
     try {
       var audio = new Audio('audio/message-chime.mp3');
       var playing = audio.play();

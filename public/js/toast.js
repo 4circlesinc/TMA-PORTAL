@@ -299,6 +299,12 @@
   }
 
   function playNotifySound() {
+    // The iPhone app plays it as a system sound: page audio is media to iOS
+    // and put up the Now Playing panel.
+    try {
+      const host = window.TMADesktop;
+      if (host && typeof host.playTone === 'function' && host.playTone('beep')) return;
+    } catch (e) { /* fall back to the page's own tone */ }
     try {
       const Ctx = window.AudioContext || window.webkitAudioContext;
       if (!Ctx) return;

@@ -7851,8 +7851,24 @@
     return MESSAGE_TONE_FILES[key] ? key : 'chime';
   }
 
+  /*
+   * In the iPhone app the short tones play natively, as system sounds. Page
+   * audio is media to iOS: a one-second chime put up the Now Playing panel
+   * (title, scrubber, AirPlay) and could pause music. False anywhere else, or
+   * for a tone the app does not carry, and the page plays it itself.
+   */
+  function playNativeTone(name) {
+    var host = window.TMADesktop;
+    try {
+      return !!(host && typeof host.playTone === 'function' && host.playTone(name));
+    } catch (err) {
+      return false;
+    }
+  }
+
   function playMessageTone(key, volume) {
     if (key === 'none') return;
+    if (playNativeTone(key)) return;
     if (key === 'beep') { playSynthesisedTone(); return; }
     playTone(MESSAGE_TONE_FILES[key], volume == null ? 0.7 : volume);
   }
@@ -7870,6 +7886,7 @@
   function playSentMessageSound() {
     if (!STORE.settings.notificationSounds) return;
     if (messageToneKey() === 'none') return;
+    if (playNativeTone('sent')) return;
     playTone(SENT_TONE_FILE, 0.45);
   }
 

@@ -219,6 +219,8 @@ final class PortalModel: NSObject, ObservableObject {
             relay(dict["channel"] as? String ?? "", value: "\(dict["value"] ?? "")")
         case "notify":
             if let json = dict["json"] as? String { showPageNotification(json) }
+        case "tone":
+            PageTone.play(dict["name"] as? String ?? "")
         case "closeNotification":
             UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["page-\(intValue(dict["id"]))"])
         case "openInBrowser":

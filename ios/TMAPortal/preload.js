@@ -37,6 +37,15 @@
     openLocationSettings: function () {
       post('openLocationSettings');
     },
+    // The page's short tones, played natively as system sounds (PageTone.swift).
+    // Page audio is media to iOS: a one-second chime put up the Now Playing
+    // panel and could pause music. True when the app played it, so the page
+    // only falls back to its own audio for a tone this build does not carry.
+    playTone: function (name) {
+      if (['chime', 'system', 'sent', 'beep'].indexOf(name) === -1) return false;
+      post('tone', { name: name });
+      return true;
+    },
   };
 
   /*
