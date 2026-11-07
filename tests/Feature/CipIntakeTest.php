@@ -2089,13 +2089,13 @@ class CipIntakeTest extends TestCase
     }
 
     /**
-     * A request the host trimmed is refused, not filed in part.
+     * A file count that does not match is not a reason to refuse.
      *
-     * PHP's max_file_uploads drops every upload past its count and the body
-     * still parses, so a filing that lost its tenth paper used to succeed. The
-     * wizard names how many scans it attached; fewer arriving is a refusal.
+     * The firm dropped the "Only X of Y files arrived" rule: it turned away
+     * whole filings, queued offline ones included, over a count the reader
+     * cannot see or fix. Required papers are still checked field by field.
      */
-    public function test_a_filing_missing_uploads_it_declared_is_refused(): void
+    public function test_a_filing_is_not_refused_over_a_declared_upload_count(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);
         $provider = $this->provider('GAL');
@@ -2103,25 +2103,9 @@ class CipIntakeTest extends TestCase
         $this->file($staff, $this->payload($provider, [
             'additionalDocuments' => [$this->scan('one.pdf'), $this->scan('two.pdf')],
             'uploadCount' => 99,
-        ]))->assertStatus(422)->assertJsonValidationErrors('uploadCount');
-
-        $this->assertSame(0, CipApplication::count());
-
-        $this->actingAs($staff)
-            ->post('/portal/cip/applications/draft', $this->payload($provider, [
-                'additionalDocuments' => [$this->scan('one.pdf')],
-                'uploadCount' => 99,
-            ]), ['Accept' => 'application/json'])
-            ->assertStatus(422)->assertJsonValidationErrors('uploadCount');
-
-        // The count that matches, nested uploads included, goes through.
-        $this->file($staff, $this->payload($provider, [
-            'additionalDocuments' => [$this->scan('one.pdf'), $this->scan('two.pdf')],
-            'uploadCount' => 2 + count(array_filter(
-                \Illuminate\Support\Arr::flatten($this->payload($provider)),
-                fn ($value) => $value instanceof UploadedFile,
-            )),
         ]))->assertStatus(201);
+
+        $this->assertSame(1, CipApplication::count());
     }
 
     /**

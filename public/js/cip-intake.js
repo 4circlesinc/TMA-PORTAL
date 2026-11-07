@@ -3025,13 +3025,10 @@
 
   function body(list) {
     var form = new FormData();
-    var files = 0;
     list.forEach(function (part) {
-      if (part.file) { files++; form.append(part.name, part.file, part.filename || 'upload'); }
+      if (part.file) form.append(part.name, part.file, part.filename || 'upload');
       else form.append(part.name, part.value);
     });
-    // What the server should find. Fewer means the host trimmed the request.
-    form.append('uploadCount', String(files));
 
     return form;
   }
@@ -3269,7 +3266,6 @@
   function draftForm(list) {
     var form = new FormData();
     var body = draftBody();
-    var files = 0;
 
     Object.keys(body).forEach(function (key) {
       var value = body[key];
@@ -3290,7 +3286,7 @@
     appendProviderWas(function (value) { form.append('providerWas', value); });
 
     list.forEach(function (part) {
-      if (part.file) { files++; form.append(part.name, part.file, part.filename || 'upload'); }
+      if (part.file) form.append(part.name, part.file, part.filename || 'upload');
       else form.append(part.name, part.value);
     });
     // The letter is part of recording the decision, not one of the
@@ -3298,10 +3294,8 @@
     // later saves leave the file where it is.
     if (asksOpeningDecision() && state.files.decision_letter && !state.filed.decision_letter) {
       var letter = state.files.decision_letter;
-      files++;
       form.append('decision_letter', letter, letter.name || 'decision-letter.pdf');
     }
-    form.append('uploadCount', String(files));
 
     return form;
   }
@@ -4076,6 +4070,7 @@
          * to resume it would invite the reader to file the same person twice.
          */
         clearDraft();
+        forgetRestored();
         // The caller announces this, it knows where the reader lands next.
         var moved = (json.moved && json.moved.length) ? json.moved : (state.moved || null);
         state.moved = null;
@@ -4276,12 +4271,114 @@
        * see CipApplicationController::store.
        */
       clearDraft();
+      forgetRestored();
       if (state.onDone) state.onDone(editing ? optimistic() : null, { queued: true });
     }).catch(function () {
       done();
       ui().toastError('Could not reach the server');
       if (root) render(root);
     });
+  }
+
+  /* ── a queued filing, back in the form ─────────────────────────── */
+
+  var RESTORE_KEY = 'tma.cip.restoreQueued';
+
+  /*
+   * Fields that belong to one attempt at sending, not to the application.
+   * The form mints its own submission key and finds its own draft; carrying
+   * the old ones over would tie this filing to a send that already failed.
+   */
+  var RESTORE_SKIP = {
+    submissionId: 1, draftId: 1, providerWas: 1, uploadCount: 1, phase: 1,
+    allowDuplicate: 1, allowUnmatchedParent: 1, decision_note: 1,
+  };
+
+  /*
+   * The queued entry the sync panel asked this form to open, if it is for
+   * the application this form is opening. Read once: a later open of the
+   * form is a fresh one.
+   */
+  function takeQueuedRestore(applicationId) {
+    var raw = null;
+    try {
+      raw = window.sessionStorage.getItem(RESTORE_KEY);
+      window.sessionStorage.removeItem(RESTORE_KEY);
+    } catch (e) { return Promise.resolve(null); }
+    if (!raw || !window.TMAQueue) return Promise.resolve(null);
+
+    var asked = null;
+    try { asked = JSON.parse(raw); } catch (e) { return Promise.resolve(null); }
+    if (!asked || String(asked.applicationId || '') !== String(applicationId || '')) {
+      return Promise.resolve(null);
+    }
+
+    return window.TMAQueue.all().then(function (entries) {
+      return entries.filter(function (e) { return e.id === asked.id; })[0] || null;
+    }).catch(function () { return null; });
+  }
+
+  function asFile(blob, filename) {
+    if (!blob) return null;
+    var name = filename || blob.name || 'upload';
+    try {
+      return new File([blob], name, { type: blob.type || 'application/octet-stream' });
+    } catch (e) {
+      return blob;
+    }
+  }
+
+  /*
+   * Lay a queued filing over the form: its answers into the draft, its scans
+   * back into their slots, a photo with its preview. The reverse of parts().
+   */
+  function restoreQueued(entry) {
+    var lastDependent = -1;
+    (entry.parts || []).forEach(function (part) {
+      if (!part || !part.name || RESTORE_SKIP[part.name]) return;
+      var name = String(part.name);
+      var list = /\[\]$/.test(name);
+      if (list) name = name.slice(0, -2);
+      var path = name.replace(/\[([^\]]*)\]/g, '.$1');
+      var dependent = path.match(/^dependents\.(\d+)\./);
+      if (dependent) lastDependent = Math.max(lastDependent, Number(dependent[1]));
+
+      if (part.file) {
+        var file = asFile(part.file, part.filename);
+        if (list) {
+          state.documents[path] = (state.documents[path] || []).concat([file]);
+        } else {
+          state.files[path] = file;
+          previewFor(path, file);
+        }
+
+        return;
+      }
+      state.draft[path] = part.value == null ? '' : String(part.value);
+    });
+    if (lastDependent + 1 > state.dependents) {
+      state.dependents = Math.min(lastDependent + 1, MAX_DEPENDENTS);
+    }
+    state.restoredFrom = entry.id;
+  }
+
+  function previewFor(path, file) {
+    if (!/passportPhoto$/.test(path) || !file || !/^image\//.test(file.type || '')) return;
+    try {
+      var reader = new FileReader();
+      reader.onload = function () {
+        state.previews[path] = reader.result;
+        if (state.root && !state.loading) render(state.root);
+      };
+      reader.readAsDataURL(file);
+    } catch (e) { /* the file still goes up; only the thumbnail is missing */ }
+  }
+
+  /* Filed, or queued again from here: the old copy in the queue is done. */
+  function forgetRestored() {
+    var id = state.restoredFrom;
+    state.restoredFrom = null;
+    if (id != null && window.TMAQueue) window.TMAQueue.forget(id);
   }
 
   function mintKey() {
@@ -4578,6 +4675,11 @@
      */
     var wantDraft = Promise.resolve(null);
 
+    // Edit, from the "Waiting to sync" list: the queued filing comes back
+    // into this form. See takeQueuedRestore().
+    state.restoredFrom = null;
+    var wantQueued = takeQueuedRestore(state.applicationId);
+
     var loadRecord = state.applicationId
       ? held(
         'cip:application-record:' + state.applicationId,
@@ -4601,6 +4703,7 @@
       return Promise.all([
         held('cip:form:' + (state.phase || 'pre_approval'), formUrl),
         wantDraft,
+        wantQueued,
       ]);
     }).then(function (both) {
       state.options = both[0];
@@ -4630,9 +4733,13 @@
        * the requirement templates to work out which scans it could not keep.
        */
       if (both[1]) restoreDraft(both[1]);
+      if (both[2]) restoreQueued(both[2]);
       state.loading = false;
       render(root);
       if (state.onReady) state.onReady(state.record);
+      // Kept on the server as a draft while it is being corrected, the same
+      // as anything typed by hand.
+      if (both[2]) touchDraft();
     }).catch(function () {
       state.loading = false;
       state.error = state.applicationId

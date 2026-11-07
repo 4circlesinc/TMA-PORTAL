@@ -66,9 +66,7 @@ class Intake
      * are dropped without an error: the request succeeds, the draft is
      * "saved", and the tenth paper somebody put in the Additional documents
      * box is nowhere. So the wizard sends its scans in batches of this many,
-     * well under that default, and names the count it sent so
-     * {@see assertUploadsArrived} can refuse a request the host trimmed
-     * rather than file part of it.
+     * well under that default.
      */
     public const UPLOADS_PER_REQUEST = 10;
 
@@ -597,40 +595,6 @@ class Intake
     }
 
     /**
-     * Every file the sender says it attached is here.
-     *
-     * A sender that names its count (`uploadCount`) is asking for this check;
-     * one that does not is not held to it. When PHP's `max_file_uploads` has
-     * cut the request short the body still parses and every rule passes on
-     * the files that remain, so without this the filing quietly kept some of
-     * the papers and the reader found out by counting.
-     */
-    public static function assertUploadsArrived(Request $request): void
-    {
-        $declared = $request->input('uploadCount');
-        if ($declared === null || ! is_numeric($declared)) {
-            return;
-        }
-
-        $declared = (int) $declared;
-        $received = count(array_filter(
-            Arr::flatten($request->allFiles()),
-            fn ($file) => $file instanceof UploadedFile,
-        ));
-
-        if ($received < $declared) {
-            throw ValidationException::withMessages([
-                'uploadCount' => sprintf(
-                    'Only %d of %d files arrived; send up to %d at a time.',
-                    $received,
-                    $declared,
-                    self::UPLOADS_PER_REQUEST,
-                ),
-            ]);
-        }
-    }
-
-    /**
      * Let one file arrive where a list is expected.
      *
      * The form always sends `passportBioPage[]`, but the endpoint is also the
@@ -640,8 +604,6 @@ class Intake
      */
     public static function normaliseDocuments(Request $request): void
     {
-        self::assertUploadsArrived($request);
-
         foreach (self::allDocumentFieldNames() as $field) {
             /*
              * The bag, not $request->file().

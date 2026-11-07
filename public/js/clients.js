@@ -21530,6 +21530,13 @@
       clientsMountRoot._clientsController.syncRoute(parsed);
     },
     routeFromPath: parseClientsPath,
+    // Where the intake form for a new filing (by phase) or an edit (by id)
+    // lives, for screens outside this view that need to open it.
+    applicationFormPath: function (applicationId, phase) {
+      return applicationId
+        ? pathForClientsScreen('edit-application', applicationId)
+        : pathForNewApplication(phase || 'pre_approval');
+    },
     // Filter the applications table to one of section 9's buckets. The Dashboard's
     // CIP card navigates here and then calls this; an unknown key is ignored.
     openBucket: openBucket,

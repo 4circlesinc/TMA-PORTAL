@@ -349,23 +349,18 @@
       });
     })).then(function (ready) {
       var form = new FormData();
-      var files = 0;
-      var declared = false;
 
       ready.forEach(function (part) {
         if (!part || !part.name) return;
-        if (part.name === 'uploadCount') declared = true;
+        // Entries queued before the file-count rule was dropped still carry
+        // it. The server ignores it now; leave it out anyway.
+        if (part.name === 'uploadCount') return;
         if (part.file) {
-          files += 1;
           form.append(part.name, part.file, part.filename || 'upload');
         } else {
           form.append(part.name, part.value == null ? '' : String(part.value));
         }
       });
-
-      // The live save counts its files so the server can tell when some were
-      // dropped. A replay has to do the same, or a short body looks complete.
-      if (!declared) form.append('uploadCount', String(files));
 
       return form;
     });

@@ -160,6 +160,9 @@
         '</div>' +
         (failed
           ? '<div class="tma-sync-panel__actions">' +
+            (editable(entry)
+              ? '<button type="button" class="tma-portal-link" data-sync-edit="' + entry.id + '">Edit</button>'
+              : '') +
             '<button type="button" class="tma-portal-link" data-sync-retry="' + entry.id + '">Try again</button>' +
             '<button type="button" class="tma-portal-link" data-sync-forget="' + entry.id + '">Discard</button>' +
             '</div>'
@@ -168,6 +171,44 @@
           : '<span class="tma-sync-panel__waiting">' + (syncing ? 'Sending…' : 'Waiting') + '</span>') +
         '</li>';
     }).join('') + '</ul>';
+  }
+
+  /*
+   * A queued CIP application can be opened back in its form, to fix what the
+   * server refused rather than only retry or throw it away.
+   */
+  var CIP_FILING_URL = /^\/portal\/cip\/applications(?:\/([^/?#]+))?$/;
+
+  function editable(entry) {
+    return entry.kind === 'cip.application' && CIP_FILING_URL.test(String(entry.url || ''));
+  }
+
+  function openForEdit(entry) {
+    var match = String(entry.url || '').match(CIP_FILING_URL);
+    if (!match) return;
+    var applicationId = match[1] ? decodeURIComponent(match[1]) : null;
+    var phase = ((entry.parts || []).filter(function (p) { return p && p.name === 'phase'; })[0] || {}).value;
+    var path = window.TMAClients && window.TMAClients.applicationFormPath
+      ? window.TMAClients.applicationFormPath(applicationId, phase)
+      : null;
+    if (!path) {
+      if (ui() && ui().toastError) ui().toastError('Couldn’t open this application. Reload and try again.');
+
+      return;
+    }
+    try {
+      // The form reads this as it opens and lays the queued answers and
+      // scans over itself (cip-intake.js, takeQueuedRestore).
+      window.sessionStorage.setItem('tma.cip.restoreQueued', JSON.stringify({
+        id: entry.id,
+        applicationId: applicationId,
+      }));
+    } catch (e) {
+      if (ui() && ui().toastError) ui().toastError('Couldn’t open this application on this device.');
+
+      return;
+    }
+    window.location.assign((window.__TMA_SITE_ROOT || '') + path);
   }
 
   function lead(status) {
@@ -204,6 +245,19 @@
           });
 
           host.addEventListener('click', function (e) {
+            var edit = e.target.closest('[data-sync-edit]');
+            if (edit) {
+              e.preventDefault();
+              var editId = Number(edit.getAttribute('data-sync-edit'));
+              window.TMAQueue.all().then(function (list) {
+                var entry = list.filter(function (x) { return x.id === editId; })[0];
+                if (!entry) return;
+                ui().closeModal();
+                openForEdit(entry);
+              });
+
+              return;
+            }
             var retry = e.target.closest('[data-sync-retry]');
             var forget = e.target.closest('[data-sync-forget]');
             if (!retry && !forget) return;

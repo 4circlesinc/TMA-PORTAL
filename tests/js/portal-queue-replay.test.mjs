@@ -208,7 +208,7 @@ const body = replay.calls[0].body;
 assert.ok(body instanceof FormData, 'the replay is a form, not an empty body');
 assert.equal(body.get('providerId'), '42');
 assert.equal(body.get('principal[firstName]'), 'VERNO');
-assert.equal(body.get('uploadCount'), '1');
+assert.equal(body.get('uploadCount'), null, 'no file count is sent');
 const sentFile = body.get('scan');
 assert.equal(sentFile.size, original.size);
 assert.notEqual(sentFile, original, 'the stored blob is copied before it is sent');
@@ -244,7 +244,7 @@ await stuck.fire(0);
 assert.equal(stuck.queue.state().syncing, true, 'the hung read is in flight');
 assert.equal(stuck.calls.length, 0, 'fetch has not started while the blob read is hung');
 
-await stuck.fire(2 * 60 * 1000);
+await stuck.fire(30 * 1000);
 assert.equal(stuck.queue.state().syncing, false, 'a hung read must release the queue');
 
 hang = false;
