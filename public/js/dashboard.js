@@ -12,6 +12,12 @@
 (function () {
   'use strict';
 
+  // The iPhone app wears its own look (dashboard-tma-overrides.css, html.tma-ios).
+  // Its preload sets this before the first paint; this covers an app from before.
+  if (window.TMADesktop && window.TMADesktop.isIOS) {
+    document.documentElement.classList.add('tma-ios');
+  }
+
   var NAV_SHELL_VERSION = '2026-09-11-bespoke-menu-wash';
   var CIP_APPLICATIONS_PATH = '/citizenship-applications';
 

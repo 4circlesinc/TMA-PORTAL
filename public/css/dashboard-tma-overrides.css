@@ -2723,3 +2723,138 @@ body::-webkit-scrollbar,
   /* A dragged image ghosts under the cursor before dragstart is seen. */
   -webkit-user-drag: none;
 }
+
+/* ── Liquid glass, iPhone app ─────────────────────────────────────────────
+ *
+ * html.tma-ios is set by the iPhone app (its preload, and dashboard.js for
+ * an app from before). The bottom bar floats as a glass capsule above the
+ * home indicator instead of docking to the screen's edge, and the header's
+ * two bubbles are the same glass. Pages scroll underneath and show through,
+ * blurred and brightened, with a bright rim where the light catches the
+ * edge, a sheen across the top, and a soft shadow lifting it off the page.
+ * A web page cannot use the system's own material; this is drawn to match.
+ */
+@media (max-width: 1024px) {
+  html.tma-ios {
+    --tma-glass-fill: rgba(255, 255, 255, 0.26);
+    --tma-glass-rim: rgba(255, 255, 255, 0.72);
+    --tma-glass-rim-low: rgba(255, 255, 255, 0.28);
+    --tma-glass-sheen: rgba(255, 255, 255, 0.42);
+    --tma-glass-shadow: 0 12px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+    --tma-glass-blur: blur(22px) saturate(190%) brightness(1.04);
+    --tma-glass-active: rgba(0, 0, 0, 0.06);
+  }
+
+  html.tma-ios[data-theme="dark"],
+  html.tma-ios:has(.tma-dash[data-theme="dark"]) {
+    --tma-glass-fill: rgba(28, 28, 30, 0.40);
+    --tma-glass-rim: rgba(255, 255, 255, 0.24);
+    --tma-glass-rim-low: rgba(255, 255, 255, 0.08);
+    --tma-glass-sheen: rgba(255, 255, 255, 0.10);
+    --tma-glass-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
+    --tma-glass-blur: blur(22px) saturate(170%) brightness(0.92);
+    --tma-glass-active: rgba(255, 255, 255, 0.10);
+  }
+
+  /* The bar: a capsule floating 16px in from the sides, just above the home
+     indicator, not a dock along the bottom edge. */
+  html.tma-ios .tma-dash:not(.tma-dash--desktop-bar) .tma-dash__tabbar {
+    left: max(var(--space-16), env(safe-area-inset-left, 0px));
+    right: max(var(--space-16), env(safe-area-inset-right, 0px));
+    bottom: max(var(--space-12), calc(env(safe-area-inset-bottom, 0px) - var(--space-12)));
+    padding: var(--space-4) var(--space-8);
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: var(--tma-glass-fill);
+    box-shadow:
+      var(--tma-glass-shadow),
+      inset 0 1px 0 var(--tma-glass-rim),
+      inset 0 -1px 0 var(--tma-glass-rim-low),
+      inset 0 0 0 0.5px var(--tma-glass-rim-low);
+    -webkit-backdrop-filter: var(--tma-glass-blur);
+    backdrop-filter: var(--tma-glass-blur);
+    isolation: isolate;
+  }
+
+  /* The sheen: light pooling across the top of the glass. */
+  html.tma-ios .tma-dash:not(.tma-dash--desktop-bar) .tma-dash__tabbar::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    background: linear-gradient(180deg, var(--tma-glass-sheen) 0%, transparent 48%, transparent 78%, var(--tma-glass-rim-low) 100%);
+    pointer-events: none;
+  }
+
+  /* The rim: brighter where it faces the light, top-left and bottom-right. */
+  html.tma-ios .tma-dash:not(.tma-dash--desktop-bar) .tma-dash__tabbar::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    padding: 1px;
+    border-radius: inherit;
+    background: linear-gradient(135deg, var(--tma-glass-rim) 0%, transparent 35%, transparent 65%, var(--tma-glass-rim) 100%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* The open tab sits in a lens of its own around its icon, like the
+     system's bar; the brand dot under it goes. */
+  html.tma-ios .tma-dash__tab-btn--active::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: min(72px, 100%);
+    height: 44px;
+    transform: translate(-50%, -50%);
+    border-radius: var(--radius-pill);
+    background: var(--tma-glass-active);
+    pointer-events: none;
+  }
+
+  html.tma-ios .tma-dash__tab-btn-icon {
+    z-index: 1;
+  }
+
+  html.tma-ios .tma-dash__tab-btn--active::after {
+    display: none;
+  }
+
+  /* The admin console's screens scroll inside themselves and stopped short of
+     the bar, so the glass only ever had white behind it. Run them to the
+     bottom of the screen and pad their ends instead: the last row still
+     clears the bar, and what scrolls past goes under the glass. */
+  html.tma-ios .tma-dash:not(.tma-dash--desktop-bar) .tma-dash__main:has(> .tma-dash__view[data-view="admin"]:not([hidden])) {
+    padding-bottom: 0;
+  }
+
+  html.tma-ios .tma-dash:not(.tma-dash--desktop-bar) .tma-dash__view[data-view="admin"]:not([hidden]) {
+    margin-bottom: 0;
+  }
+
+  html.tma-ios .tma-portal-admin .tma-portal-admin__nav,
+  html.tma-ios .tma-portal-admin .tma-portal-admin__content:not(:has([data-settings-embed])),
+  html.tma-ios .tma-portal-admin__content [data-settings-embed] .tma-dash__settings-panel.is-active {
+    padding-bottom: calc(var(--dash-tabbar-clearance) + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* The header's bubbles: the same glass. */
+  html.tma-ios .tma-dash__header-left,
+  html.tma-ios .tma-dash__header-icons,
+  html.tma-ios .tma-dash__email-header-tools {
+    border: 0;
+    background: var(--tma-glass-fill);
+    box-shadow:
+      var(--tma-glass-shadow),
+      inset 0 1px 0 var(--tma-glass-rim),
+      inset 0 -1px 0 var(--tma-glass-rim-low),
+      inset 0 0 0 0.5px var(--tma-glass-rim-low);
+    -webkit-backdrop-filter: var(--tma-glass-blur);
+    backdrop-filter: var(--tma-glass-blur);
+  }
+}

@@ -11,6 +11,9 @@
 (function () {
   if (window.__tmaIOSPreload) return;
   window.__tmaIOSPreload = true;
+  // The iPhone app's look (liquid-glass bar and header, dashboard-tma-overrides.css),
+  // set before the first paint so the page never flashes the plain dock.
+  try { document.documentElement.classList.add('tma-ios'); } catch (e) { /* no document yet */ }
   var notificationsAllowed = __TMA_NOTIFICATIONS__;
 
   function post(op, extra) {
