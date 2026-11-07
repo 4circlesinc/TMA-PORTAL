@@ -7270,6 +7270,15 @@
         (editingApp ? 'Edit application' : newApplicationLabel(newPhase)) + '</span>' +
         '</div>' +
         '<div class="tma-dash__clients-profile-actions tma-dash__clients-profile-actions--form">' +
+        /*
+         * Delete, for an application nobody has filed: the draft and any
+         * copy waiting on this device go. A filed application is the firm's
+         * record and is closed through its status instead, so it has none.
+         */
+        (editingApp || hideSave
+          ? ''
+          : '<button type="button" class="tma-dash__clients-edit-btn tma-portal-btn--danger" data-cip-discard>' +
+            'Delete</button>') +
         '<button type="button" class="tma-dash__clients-edit-btn" data-cip-cancel>Cancel</button>' +
         /*
          * Save as draft, beside the button that files it.
@@ -18454,6 +18463,40 @@
      arrow after onReady has no click handler and appears broken. */
   var cipToolbarWired = false;
 
+  function confirmDiscardApplication(navigate) {
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal || !window.TMACipIntake || !window.TMACipIntake.discard) return;
+    ui.openModal({
+      title: 'Delete this application?',
+      body: '<p class="tma-portal-modal__text">' +
+        'The answers and documents on this application are deleted. This can’t be undone.' +
+        '</p>' +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-discard-cancel>Keep it</button>' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--danger" data-discard-ok>Delete</button>' +
+        '</div>',
+      onMount: function (host) {
+        host.querySelector('[data-discard-cancel]').addEventListener('click', function () {
+          ui.closeModal();
+        });
+        var ok = host.querySelector('[data-discard-ok]');
+        ok.addEventListener('click', function () {
+          ok.disabled = true;
+          window.TMACipIntake.discard().then(function (gone) {
+            ui.closeModal();
+            if (!gone) {
+              ui.toastError('Couldn’t delete this application. Try again.');
+              return;
+            }
+            forgetApplicationTable();
+            if (ui.toast) ui.toast('Application deleted');
+            navigate('list');
+          });
+        });
+      },
+    });
+  }
+
   function wireCipToolbar(navigate) {
     if (cipToolbarWired) return;
     cipToolbarWired = true;
@@ -18461,6 +18504,11 @@
       if (e.target.closest('[data-cip-save]')) {
         e.preventDefault();
         if (window.TMACipIntake) window.TMACipIntake.submit();
+        return;
+      }
+      if (e.target.closest('[data-cip-discard]')) {
+        e.preventDefault();
+        confirmDiscardApplication(navigate);
         return;
       }
       var draftSave = e.target.closest('[data-cip-draft-save]');

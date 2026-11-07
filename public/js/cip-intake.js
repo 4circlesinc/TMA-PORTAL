@@ -3156,7 +3156,7 @@
    * check before it happens.
    */
   function draftable() {
-    if (state.draftOff || fieldsLocked()) return false;
+    if (state.discarded || state.draftOff || fieldsLocked()) return false;
     // Add-On: needs a firm to mint the row. Matching a parent CIP in the
     // portal is optional — pick the provider when the number is not on file.
     if (isAddOnIntake() && isFiling() && !state.draft.providerId) return false;
@@ -4390,6 +4390,64 @@
     if (id != null && window.TMAQueue) window.TMAQueue.forget(id);
   }
 
+  /* ── Delete ─────────────────────────────────────────────────────── */
+
+  var DISCARD_WAIT_MS = 15000;
+
+  /* An autosave already on the wire finishes first, or it would bring the
+     draft straight back after the delete. */
+  function whenDraftIdle() {
+    var started = Date.now();
+
+    return new Promise(function (resolve) {
+      (function check() {
+        if (!state.draftSaving || Date.now() - started > DISCARD_WAIT_MS) { resolve(); return; }
+        setTimeout(check, 100);
+      })();
+    });
+  }
+
+  /*
+   * Throw this application away: the draft on the server, if there is one,
+   * and the copy waiting on this device, if it came from there. Only a new
+   * filing or a draft can be deleted this way; a filed application is the
+   * firm's record and is closed through its status, not deleted.
+   *
+   * Resolves true once nothing of it is left.
+   */
+  function discard() {
+    if (state.applicationId && !editingDraft()) return Promise.resolve(false);
+    state.discarded = true;
+    if (state.draftTimer) { clearTimeout(state.draftTimer); state.draftTimer = null; }
+
+    return whenDraftIdle().then(function () {
+      forgetRestored();
+      var named = (editingDraft() && state.applicationId) ? state.applicationId : state.draftId;
+      if (!named) return true;
+
+      return fetch(DRAFT_URL + '?application=' + encodeURIComponent(named), {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: headers({ 'Content-Type': 'application/json' }),
+      }).then(function (res) {
+        // Already gone is what was asked for.
+        if (res.ok || res.status === 404) {
+          state.draftId = null;
+          dropStoredListings();
+
+          return true;
+        }
+        state.discarded = false;
+
+        return false;
+      }, function () {
+        state.discarded = false;
+
+        return false;
+      });
+    });
+  }
+
   function mintKey() {
     if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
 
@@ -4629,6 +4687,7 @@
     state.saving = false;
     state.error = '';
     state.applicationId = opts.applicationId || null;
+    state.discarded = false;
     state.createdAt = null;
     state.draftId = null;
     /*
@@ -4820,5 +4879,7 @@
     render(state.root);
   }
 
-  window.TMACipIntake = { open: open, submit: submit, saveDraft: saveDraft, applyRecord: applyRecord };
+  window.TMACipIntake = {
+    open: open, submit: submit, saveDraft: saveDraft, applyRecord: applyRecord, discard: discard,
+  };
 })();
