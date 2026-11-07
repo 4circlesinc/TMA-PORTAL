@@ -1027,9 +1027,10 @@
           return;
         }
         if (id === 'sound-mac' || id === 'sound-iphone') {
+          // Stays open: people listen to a few before settling on one.
           saveNotificationSound(id === 'sound-mac' ? 'mac' : 'iphone', value);
-          closeMobileSelect(root);
           applyNotificationSounds(root);
+          syncMobileSelectUI(root, id);
           return;
         }
         if (id === 'online-status' || id === 'last-seen') {
@@ -1116,8 +1117,8 @@
           return;
         }
         if (id === 'sound-mac' || id === 'sound-iphone') {
+          // Stays open: people listen to a few before settling on one.
           saveNotificationSound(id === 'sound-mac' ? 'mac' : 'iphone', value);
-          closePickers(root);
           applyNotificationSounds(root);
           return;
         }
@@ -1256,7 +1257,7 @@
       .map(function (name) { return { id: name, label: name }; }))
     .concat([{ id: 'none', label: 'Silent' }]);
   var SOUND_IPHONE_OPTIONS = [
-    { id: 'default', label: 'iPhone default' },
+    { id: 'default', label: 'Apple alert tone' },
     { id: 'chime', label: 'TM Chime' },
     { id: 'notification', label: 'TM Notification' },
     { id: 'none', label: 'Silent' },
@@ -1267,33 +1268,60 @@
   var notificationSounds = { mac: 'default', iphone: 'default' };
   var notificationSoundsLoaded = false;
 
+  /*
+   * Which device's sound this screen sets. Each app shows only its own: the
+   * Mac app the Mac sound, the iPhone app the iPhone sound. A browser shows
+   * both, so either can be set from anywhere. Windows and Android play their
+   * own default sound, so their apps show neither.
+   */
+  function notificationSoundPlatforms() {
+    var host = window.TMADesktop;
+    if (host && host.isIOS) return ['iphone'];
+    if (host && host.isDesktop) return host.platform === 'darwin' ? ['mac'] : [];
+    return ['mac', 'iphone'];
+  }
+
   function renderNotificationSoundGroup() {
-    var inMacApp = !!(window.TMADesktop && typeof window.TMADesktop.previewSound === 'function');
+    var platforms = notificationSoundPlatforms();
+    if (!platforms.length) return '';
+    var both = platforms.length === 2;
+    var hint = both
+      ? 'The sound notifications make in the TM ANTOINE Portal apps. Mac sounds play in the Mac app.'
+      : 'The sound notifications make on this ' + (platforms[0] === 'mac' ? 'Mac' : 'iPhone') + '. Tap one to hear it; the list stays open so you can compare.';
     return '<div class="tma-dash__settings-notifications-group">' +
       '<p class="tma-dash__settings-notifications-group-label">Notification sound</p>' +
-      '<p class="tma-dash__settings-notifications-hint">The sound notifications make in the TM ANTOINE Portal apps. Choosing one plays it' +
-      (inMacApp ? '.' : ' (Mac sounds play in the Mac app).') + '</p>' +
-      '<div class="tma-dash__settings-picker-anchor" data-picker-anchor="sound-mac">' +
+      '<p class="tma-dash__settings-notifications-hint">' + esc(hint) + '</p>' +
+      (platforms.indexOf('mac') !== -1 ? renderMacSoundRow(both) : '') +
+      (both ? profileInnerDivider() : '') +
+      (platforms.indexOf('iphone') !== -1 ? renderIphoneSoundRow(both) : '') +
+      '</div>';
+  }
+
+  function renderMacSoundRow(both) {
+    return '<div class="tma-dash__settings-picker-anchor" data-picker-anchor="sound-mac">' +
       renderRow({
-        label: 'On Mac',
-        desc: 'One of the Mac\u2019s own alert sounds.',
+        label: both ? 'On Mac' : 'Sound',
+        desc: 'Every alert sound macOS has, or silent.',
         action: 'pick-sound-mac',
         value: findOption(SOUND_MAC_OPTIONS, notificationSounds.mac, 'default').label,
         valueMuted: true,
       }) +
       renderPicker('sound-mac', '30919:278125', SOUND_MAC_OPTIONS, notificationSounds.mac) +
-      '</div>' +
-      profileInnerDivider() +
-      '<div class="tma-dash__settings-picker-anchor" data-picker-anchor="sound-iphone">' +
+      '</div>';
+  }
+
+  function renderIphoneSoundRow(both) {
+    return '<div class="tma-dash__settings-picker-anchor" data-picker-anchor="sound-iphone">' +
       renderRow({
-        label: 'On iPhone',
-        desc: 'iPhone default follows the tone set in iPhone Settings > Sounds & Haptics. Apple keeps its other tones for its own apps.',
+        label: both ? 'On iPhone' : 'Sound',
+        // The only way Apple lets an app use its tones: the phone's default
+        // alert, which the person picks from all of Apple's tones.
+        desc: 'Apple alert tone plays the Apple tone chosen in iPhone Settings > Sounds & Haptics > Default Alerts (Rebound, Tri-tone, Chord and the rest).',
         action: 'pick-sound-iphone',
         value: findOption(SOUND_IPHONE_OPTIONS, notificationSounds.iphone, 'default').label,
         valueMuted: true,
       }) +
       renderPicker('sound-iphone', '30919:278125', SOUND_IPHONE_OPTIONS, notificationSounds.iphone) +
-      '</div>' +
       '</div>';
   }
 
