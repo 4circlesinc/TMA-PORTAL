@@ -96,10 +96,21 @@
     for (var i = 0; i < attrs.length; i++) {
       var name = attrs[i].name;
       if (name.indexOf('data-') !== 0) continue;
-      if (name.indexOf('data-morph-') === 0) continue;
+      if (bookkeeping(name)) continue;
       names.push(name);
     }
     return names.sort().join(',');
+  }
+
+  /*
+   * Attributes that say nothing about what a node is or renders: the morph's
+   * own, and the mark glass-chrome.js puts on a search bar the iPhone app
+   * draws in Liquid Glass. They neither change a node's role (a marked search
+   * field must be patched, not rebuilt: rebuilding it drops the keyboard mid-
+   * word) nor get removed for being absent from the new markup.
+   */
+  function bookkeeping(name) {
+    return name.indexOf('data-morph-') === 0 || name === 'data-glass';
   }
 
   /*
@@ -148,7 +159,7 @@
     for (i = oldAttrs.length - 1; i >= 0; i--) {
       name = oldAttrs[i].name;
       // Internal bookkeeping, not rendered output.
-      if (name.indexOf('data-morph-') === 0) continue;
+      if (bookkeeping(name)) continue;
       if (!newEl.hasAttribute(name)) oldEl.removeAttribute(name);
     }
   }

@@ -2882,4 +2882,24 @@ body::-webkit-scrollbar,
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
+
+  /* Search bars, all of them (glass-chrome.js marks each with data-glass).
+     The app draws them in the same glass; the page's own field hides while it
+     is drawn, and shows while it is typed in (the app can't hold the page's
+     caret) or while something lies over part of it. When it shows, it wears
+     the same glass, drawn to match, so the hand-over doesn't change it. */
+  html.tma-native-glass [data-glass="drawn"]:not(:focus-within) {
+    opacity: 0 !important;
+  }
+
+  html.tma-native-glass [data-glass] {
+    border-color: transparent !important;
+    background: var(--tma-glass-fill) !important;
+    box-shadow:
+      inset 0 1px 0 var(--tma-glass-rim),
+      inset 0 -1px 0 var(--tma-glass-rim-low),
+      inset 0 0 0 0.5px var(--tma-glass-rim-low) !important;
+    -webkit-backdrop-filter: var(--tma-glass-blur) !important;
+    backdrop-filter: var(--tma-glass-blur) !important;
+  }
 }

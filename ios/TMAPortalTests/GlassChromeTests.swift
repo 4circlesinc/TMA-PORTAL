@@ -106,6 +106,43 @@ final class GlassChromeTests: XCTestCase {
         XCTAssertNil(chrome.state)
     }
 
+    func testASearchBarCarriesItsMarks() throws {
+        let json = """
+        {"state":{"width":402,"groups":[
+          {"id":"search-1","field":true,"inert":true,"rect":[24,84,354,28],"radius":16,"items":[
+            {"key":"search-1","label":"Search conversations","rect":[0,0,354,28],"marks":[
+              {"icon":"glass.svg@16x16","rect":[9,6,16,16],"tone":"secondary"},
+              {"icon":"t1abc","rect":[29,3,292,22],"tone":"primary"},
+              {"icon":"photo@20x20","rect":[330,4,20,20],"original":true}]}]}]},
+         "icons":{"glass.svg@16x16":"\(png)"}}
+        """
+        let chrome = GlassChrome()
+        var asked = 0
+        chrome.onMissingIcons = { asked += 1 }
+        chrome.receive(json)
+        let field = try XCTUnwrap(chrome.state?.groups.first)
+        XCTAssertTrue(field.field)
+        XCTAssertTrue(field.inert)
+        XCTAssertEqual(field.items[0].marks.map(\.tone), ["secondary", "primary", nil])
+        XCTAssertEqual(field.items[0].marks.map(\.original), [false, false, true])
+        XCTAssertTrue(chrome.state?.iconIDs.isSuperset(of: ["glass.svg@16x16", "t1abc", "photo@20x20"]) ?? false)
+        XCTAssertEqual(asked, 1, "the two marks that never came are asked for")
+    }
+
+    func testSearchBarsAndMovesDontFadeButAppearingDoes() throws {
+        func state(_ groups: String, scrolled: Bool = false) throws -> GlassChromeState {
+            try XCTUnwrap(JSONDecoder().decode(GlassMessage.self, from: Data(#"{"state":{"width":402,"scrolled":\#(scrolled),"groups":[\#(groups)]}}"#.utf8)).state)
+        }
+        let bar = #"{"id":"bar","bar":true,"rect":[16,706,370,60],"shown":true}"#
+        let moved = #"{"id":"bar","bar":true,"rect":[16,800,370,60],"shown":true}"#
+        let hidden = #"{"id":"bar","bar":true,"rect":[16,706,370,60],"shown":false}"#
+        let field = #"{"id":"search-1","field":true,"inert":true,"rect":[24,84,354,28]}"#
+        XCTAssertEqual(try state(bar).fading, try state(moved).fading, "a move follows the page frame by frame")
+        XCTAssertEqual(try state(bar).fading, try state(bar + "," + field).fading, "a search bar hands over without a fade")
+        XCTAssertNotEqual(try state(bar).fading, try state(hidden).fading, "the bar going fades")
+        XCTAssertNotEqual(try state(bar).fading, try state(bar, scrolled: true).fading, "the soft edge fades in")
+    }
+
     func testATapGoesBackToThePageByKey() {
         let chrome = GlassChrome()
         var tapped: [String] = []

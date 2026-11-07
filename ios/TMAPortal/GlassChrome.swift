@@ -53,6 +53,29 @@ struct GlassBadge: Decodable, Equatable {
     var foreground: String?
 }
 
+/// One thing drawn on a search bar: an icon, or words the page drew in its
+/// own font, placed where the page has them.
+struct GlassMark: Decodable, Equatable {
+    /// An id into the icons the page has sent.
+    var icon: String
+    /// Relative to its item.
+    var rect: PageRect
+    /// In its own colours (a photo) instead of the glass's ink.
+    var original: Bool
+    /// How strongly it is inked: "primary", "secondary" or "tertiary".
+    var tone: String?
+
+    enum CodingKeys: String, CodingKey { case icon, rect, original, tone }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        icon = try c.decode(String.self, forKey: .icon)
+        rect = try c.decode(PageRect.self, forKey: .rect)
+        original = try c.decodeIfPresent(Bool.self, forKey: .original) ?? false
+        tone = try c.decodeIfPresent(String.self, forKey: .tone)
+    }
+}
+
 /// A small coloured dot, the presence status.
 struct GlassDot: Decodable, Equatable {
     var color: String
@@ -81,11 +104,13 @@ struct GlassItem: Decodable, Equatable, Identifiable {
     var active: Bool
     /// The button's popup is open.
     var expanded: Bool
+    /// A search bar's face, in place of a single icon.
+    var marks: [GlassMark]
 
     var id: String { key }
 
     enum CodingKeys: String, CodingKey {
-        case key, label, rect, icon, iconRect, original, round, dot, text, badge, active, expanded
+        case key, label, rect, icon, iconRect, original, round, dot, text, badge, active, expanded, marks
     }
 
     init(from decoder: Decoder) throws {
@@ -102,6 +127,7 @@ struct GlassItem: Decodable, Equatable, Identifiable {
         badge = try c.decodeIfPresent(GlassBadge.self, forKey: .badge)
         active = try c.decodeIfPresent(Bool.self, forKey: .active) ?? false
         expanded = try c.decodeIfPresent(Bool.self, forKey: .expanded) ?? false
+        marks = try c.decodeIfPresent([GlassMark].self, forKey: .marks) ?? []
     }
 }
 
@@ -109,6 +135,9 @@ struct GlassGroup: Decodable, Equatable, Identifiable {
     var id: String
     /// The bottom bar (tabs, one open), as opposed to a bubble of buttons.
     var bar: Bool
+    /// A search bar. It hands over to the page's own field (while it is typed
+    /// in) and back without a fade, so the two never show at once.
+    var field: Bool
     var rect: PageRect
     var radius: Double
     /// False while something on the page covers it (a sheet, the menu).
@@ -121,13 +150,14 @@ struct GlassGroup: Decodable, Equatable, Identifiable {
     var items: [GlassItem]
 
     enum CodingKeys: String, CodingKey {
-        case id, bar, rect, radius, shown, inert, opacity, items
+        case id, bar, field, rect, radius, shown, inert, opacity, items
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
         bar = try c.decodeIfPresent(Bool.self, forKey: .bar) ?? false
+        field = try c.decodeIfPresent(Bool.self, forKey: .field) ?? false
         rect = try c.decode(PageRect.self, forKey: .rect)
         radius = try c.decodeIfPresent(Double.self, forKey: .radius) ?? 0
         shown = try c.decodeIfPresent(Bool.self, forKey: .shown) ?? true
@@ -158,9 +188,17 @@ struct GlassChromeState: Decodable, Equatable {
         groups = try c.decodeIfPresent([GlassGroup].self, forKey: .groups) ?? []
     }
 
-    /// Every icon the state draws.
+    /// Every icon the state draws, search bars' marks included.
     var iconIDs: Set<String> {
-        Set(groups.flatMap { $0.items.compactMap(\.icon) })
+        Set(groups.flatMap { $0.items.flatMap { item in item.marks.map(\.icon) + [item.icon].compactMap { $0 } } })
+    }
+
+    /// What appears and disappears with a fade: the bar and the header's
+    /// bubbles, and the soft edge. Search bars and moves are left out, so a
+    /// search bar hands over without a fade and glass follows the page's own
+    /// movements frame by frame.
+    var fading: [String] {
+        groups.filter { !$0.field }.map { "\($0.id):\($0.shown):\($0.inert)" } + ["edge:\(scrolled)"]
     }
 }
 
@@ -274,7 +312,15 @@ final class GlassChrome: ObservableObject {
         for (id, source) in message.icons ?? [:] where icons[id] == nil {
             load(id, from: source)
         }
-        if state != message.state { state = message.state }
+        if state != message.state {
+            // A fade when something appears or goes; Reduce Motion keeps it short.
+            if (state?.fading ?? []) != (message.state?.fading ?? []) {
+                let fade: Animation = UIAccessibility.isReduceMotionEnabled ? .easeInOut(duration: 0.15) : .smooth(duration: 0.24)
+                withAnimation(fade) { state = message.state }
+            } else {
+                state = message.state
+            }
+        }
         let missing = (message.state?.iconIDs ?? [])
             .subtracting(icons.keys).subtracting(fetching).subtracting(asked)
         if !missing.isEmpty {
@@ -325,7 +371,6 @@ struct GlassShape: Shape {
 @available(iOS 26.0, *)
 struct GlassChromeOverlay: View {
     @ObservedObject var chrome: GlassChrome
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /*
      * The page's viewport is the safe area: the web view keeps its content
@@ -357,9 +402,8 @@ struct GlassChromeOverlay: View {
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
-            // The page moves and hides these with its own transitions; this
-            // follows them. Reduce Motion keeps it to a short fade.
-            .animation(reduceMotion ? .easeInOut(duration: 0.15) : .smooth(duration: 0.24), value: chrome.state)
+            // The page reports its own transitions frame by frame and the
+            // glass follows them; appearing and going fade (GlassChrome.receive).
         }
         .ignoresSafeArea(.keyboard)
     }
@@ -414,8 +458,11 @@ private struct GlassGroupView: View {
             .glassEffect(.regular.interactive(), in: GlassShape(radius: map.length(group.radius)))
             .opacity(group.opacity)
             .allowsHitTesting(!group.inert)
+            // A search input's glass passes taps to the page's input, which
+            // VoiceOver reaches directly; a search button is a button here.
+            .accessibilityHidden(group.field && group.inert)
             .position(x: frame.midX, y: frame.midY)
-            .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            .transition(group.field ? .identity : .opacity.combined(with: .scale(scale: 0.96)))
     }
 
     @ViewBuilder private var content: some View {
@@ -602,7 +649,16 @@ private struct GlassItemFace: View {
     var body: some View {
         let box = map.local(item.rect)
         ZStack(alignment: .topLeading) {
-            if let id = item.icon, let image = icons[id] {
+            if !item.marks.isEmpty {
+                ForEach(Array(item.marks.enumerated()), id: \.offset) { _, mark in
+                    if let image = icons[mark.icon] {
+                        let r = map.local(mark.rect)
+                        markImage(image, mark)
+                            .frame(width: r.width, height: r.height)
+                            .position(x: r.midX, y: r.midY)
+                    }
+                }
+            } else if let id = item.icon, let image = icons[id] {
                 let r = item.iconRect.map { map.local($0) }
                     ?? CGRect(x: (box.width - 24) / 2, y: (box.height - 24) / 2, width: 24, height: 24)
                 icon(image)
@@ -631,6 +687,23 @@ private struct GlassItemFace: View {
             Image(uiImage: image).resizable().scaledToFill()
         } else {
             Image(uiImage: image).renderingMode(.template).resizable().scaledToFit().foregroundStyle(.primary)
+        }
+    }
+
+    /// A search bar's icon or words, inked by the glass's own hierarchy so
+    /// they stay legible over whatever is underneath and with Increase Contrast.
+    @ViewBuilder private func markImage(_ image: UIImage, _ mark: GlassMark) -> some View {
+        if mark.original {
+            Image(uiImage: image).resizable().scaledToFit()
+        } else {
+            switch mark.tone {
+            case "secondary":
+                Image(uiImage: image).renderingMode(.template).resizable().foregroundStyle(.secondary)
+            case "tertiary":
+                Image(uiImage: image).renderingMode(.template).resizable().foregroundStyle(.tertiary)
+            default:
+                Image(uiImage: image).renderingMode(.template).resizable().foregroundStyle(.primary)
+            }
         }
     }
 }

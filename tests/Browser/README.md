@@ -2812,8 +2812,15 @@ node tests/Browser/messaging-toolbar.mjs
   a tap by key clicks the page's button; a sheet over the bar takes it away,
   a clear tap-catching layer leaves it showing but inert, the menu sliding
   over the header takes that away; nothing at desktop width, nothing without
-  `TMADesktop.glassChrome`, and `resend()` sends the icons again. No portal
-  seed required.
+  `TMADesktop.glassChrome`, and `resend()` sends the icons again. Search
+  bars: the menu's search button is tappable glass that opens its search;
+  the Messages search is glass that lets taps through, with its magnifier and
+  its placeholder drawn in the page's font; focusing it hands over to the
+  page's field and blurring takes back over showing what was typed; a
+  `TMAMorph` re-render keeps the field's `data-glass` mark, and one mid-word
+  keeps the input, its focus and its text; a search box by name counts, an
+  address field with a "Search…" placeholder doesn't. No portal seed
+  required.
 
 ```sh
 node tests/Browser/glass-chrome.mjs

@@ -36,6 +36,8 @@ On iOS 26 and later the app draws the bottom bar and the header's bubbles itself
 
 The page stays in charge. `public/js/glass-chrome.js` (loaded by the shell, active only when the preload says `TMADesktop.glassChrome`) sends where each bubble sits, its buttons and their icons (drawn to PNG once), the open tab, the counts, and whether something on the page covers it. The app draws that in the same place; a tap on the glass comes back as a click on the page's own button. The page's copies stay where they are, invisible and hidden from VoiceOver (`html.tma-native-glass`), so the layout, the popups that hang from them and the measurements don't move. The page's viewport is the safe area, so the overlay lays out in the safe area too.
 
+Search bars, everywhere, are glass too: the buttons that open search, and every search input (`type="search"`, or a "Search…" placeholder on something named search). The page sends each one's icons and words, the words drawn in its own font (Inter, which the app doesn't carry) and inked by the glass. An input's glass lets taps through, so the page's input takes the focus and the keyboard; while it is typed in, the page's own field shows in the same look (the app can't hold the page's caret) and the glass takes back over on blur. The page's field carries `data-glass`, which `dom-morph.js` treats as bookkeeping, so a re-render patches it instead of rebuilding it mid-word.
+
 Older iPhones (iOS 18 and earlier) and older builds of the app keep the page's own bar. `tests/Browser/glass-chrome.mjs` covers the page's side; `GlassChromeTests` the app's.
 
 ## Push
