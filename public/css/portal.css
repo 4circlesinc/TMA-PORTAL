@@ -7862,4 +7862,15 @@ body:has(.tma-dash.is-sidebar-collapsed) .tma-sync-pill {
   .tma-portal-admin .tma-portal-admin__caret {
     display: none;
   }
+
+  /*
+   * The Account settings view cancels the main area's padding with -28px,
+   * which is the desktop app's gutter. A phone's gutter is 16px (or the safe
+   * area), so -28px pulled the page 12px past both edges of the screen and
+   * the menu's 16px padding left 4px. Cancel exactly the phone's gutter.
+   */
+  .tma-dash:not(.tma-dash--desktop-bar) .tma-dash__view[data-view="admin"]:not([hidden]) {
+    margin-left: calc(-1 * max(var(--dash-mobile-gutter, 16px), env(safe-area-inset-left, 0px)));
+    margin-right: calc(-1 * max(var(--dash-mobile-gutter, 16px), env(safe-area-inset-right, 0px)));
+  }
 }
