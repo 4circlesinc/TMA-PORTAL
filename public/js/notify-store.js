@@ -488,7 +488,7 @@
   }
 
   var desktop = (function () {
-    var prefs = { enabled: false, preview: true, sounds: { mac: 'default', iphone: 'default' } };
+    var prefs = { enabled: false, preview: true };
     var live = [];
     var recent = {};
     var RECENT_MS = 30000;
@@ -589,28 +589,6 @@
       if (!channelOn(item.module, 'desktop')) return;
       if (seenRecently(item.id + '@' + (item.createdAt || ''))) return;
 
-      var silent = !soundOn() || !channelOn(item.module, 'sound');
-      var title = item.title || 'New notification';
-      var body = prefs.preview ? (item.message || '') : (QUIET_BODY[item.module] || 'New notification');
-
-      /*
-       * The Mac app posts the banner itself, so it can play the macOS alert
-       * sound chosen in Settings → Notifications (a browser notification has
-       * no say in its sound). An older Mac app without this falls through to
-       * the browser notification below and sounds as it always did.
-       */
-      if (window.TMADesktop && typeof window.TMADesktop.notify === 'function') {
-        try {
-          window.TMADesktop.notify({
-            title: title,
-            body: body,
-            tag: 'tma-' + (item.id || 'notification'),
-            sound: silent ? 'none' : prefs.sounds.mac,
-          }, function () { open(item.actionUrl); });
-        } catch (e) { /* the bell and the toast already showed it */ }
-        return;
-      }
-
       try {
         var note = new Notification(item.title || 'New notification', {
           body: prefs.preview
@@ -635,10 +613,7 @@
            * while we are sounding, see playIncomingMessageSound's caller.
            */
           // The per-module Sound column, on top of the global sounds switch.
-          silent: silent,
-          // The iPhone app's notification shim plays this (Settings →
-          // Notifications); browsers ignore it.
-          sound: silent ? 'none' : prefs.sounds.iphone,
+          silent: !soundOn() || !channelOn(item.module, 'sound'),
         });
         note.onclick = function () {
           note.close();
@@ -674,10 +649,6 @@
       if (!next || typeof next !== 'object') return;
       if (typeof next.enabled === 'boolean') prefs.enabled = next.enabled;
       if (typeof next.preview === 'boolean') prefs.preview = next.preview;
-      if (next.sounds && typeof next.sounds === 'object') {
-        if (typeof next.sounds.mac === 'string') prefs.sounds.mac = next.sounds.mac;
-        if (typeof next.sounds.iphone === 'string') prefs.sounds.iphone = next.sounds.iphone;
-      }
       try { localStorage.setItem('tma.desktopNotifications', JSON.stringify(prefs)); } catch (e) { /* ignore */ }
     }
 
@@ -688,7 +659,6 @@
       if (cached && typeof cached === 'object') {
         prefs.enabled = !!cached.enabled;
         prefs.preview = cached.preview !== false;
-        if (cached.sounds && typeof cached.sounds === 'object') applyPrefs({ sounds: cached.sounds });
       }
     } catch (e) { /* ignore */ }
 

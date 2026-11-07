@@ -1,1 +1,0 @@
-- Choose the sound portal notifications make on this Mac: any of the Mac's own alert sounds, or silent. It's under Settings > Notifications > Notification sound, and picking one plays it.

@@ -72,63 +72,7 @@ function test(onClick) {
   }
 }
 
-/*
- * The portal's banners, posted here rather than as browser notifications so
- * they can play the alert sound chosen in Settings → Notifications. macOS
- * plays its own alert sounds by name (/System/Library/Sounds), so nothing is
- * shipped; elsewhere the OS plays its default. The list matches
- * App\Support\Notifications\NotificationSounds::MAC on the server, and a name
- * not on it is the default, never a path.
- */
-const SOUNDS = ['Basso', 'Blow', 'Bottle', 'Frog', 'Funk', 'Glass', 'Hero', 'Morse', 'Ping', 'Pop', 'Purr', 'Sosumi', 'Submarine', 'Tink'];
-
-/** Notification options for a sound choice: a name, 'default' or 'none'. */
-function soundOptions(choice) {
-  if (choice === 'none') return { silent: true };
-  if (process.platform === 'darwin' && SOUNDS.includes(choice)) return { silent: false, sound: choice };
-  return { silent: false };
-}
-
-// Held until clicked or closed: a notification collected before then would
-// take its click handler with it.
-const shown = new Set();
-
-/**
- * @param {{ title?: string, body?: string, sound?: string }} options
- * @param {() => void} [onClick]
- */
-function show(options, onClick) {
-  if (!Notification.isSupported()) return false;
-  const opts = options || {};
-  try {
-    const note = new Notification({
-      title: String(opts.title || 'TM ANTOINE Portal').slice(0, 200),
-      body: String(opts.body || '').slice(0, 1000),
-      ...soundOptions(opts.sound),
-    });
-    shown.add(note);
-    note.on('click', () => {
-      shown.delete(note);
-      if (typeof onClick === 'function') onClick();
-    });
-    note.on('close', () => shown.delete(note));
-    note.show();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Settings → Notifications: a sample banner in the chosen sound. */
-function preview(sound, onClick) {
-  return show({
-    title: 'Notification sound',
-    body: sound === 'none' ? 'Notifications will be silent.' : 'This is how portal notifications will sound.',
-    sound,
-  }, onClick);
-}
-
 /** True once the app has asked the OS at least once. */
 const primed = () => !!settings.get('notificationsPrimed');
 
-module.exports = { primeOnFirstRun, test, primed, show, preview, soundOptions, SOUNDS, isSupported: () => Notification.isSupported() };
+module.exports = { primeOnFirstRun, test, primed, isSupported: () => Notification.isSupported() };

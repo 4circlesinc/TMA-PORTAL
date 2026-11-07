@@ -28,9 +28,6 @@ final class Push
             'kind' => 'notification',
             'notification' => json_encode($notification, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
             'unread' => (string) $unread,
-            // The person's iPhone notification sound (Settings → Notifications):
-            // a bundled file, "default", or '' for silent. Android ignores it.
-            'iosSound' => NotificationSounds::apnsSound($recipient),
         ]);
     }
 
