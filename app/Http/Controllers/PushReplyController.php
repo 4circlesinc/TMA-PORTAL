@@ -3,103 +3,43 @@
 namespace App\Http\Controllers;
 
 use App\Models\DeviceToken;
-use App\Models\MailMessage;
 use App\Models\User;
-use App\Support\Access\Role;
-use App\Support\Cip\ApplicationScope;
-use App\Support\Cip\CipAccess;
-use App\Support\Cip\Threads;
-use App\Support\Mail\QuickReply;
+use App\Support\Notifications\NotificationReply;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 
 /**
- * A reply typed into a message or email notification on an iPhone (the Reply
- * box in Notification Center), sent without opening the app.
+ * A reply typed into a message, CIP thread or email notification on a phone
+ * (the iPhone's Reply box, Android's inline reply), sent without opening the
+ * app.
  *
  * The app may be woken in the background with its web session long expired,
  * so it does not sign in: the notification carries a signed link scoped to
  * this person and this conversation (MessagePush, a few days), and the reply
  * must come with one of their registered device tokens, so signing out of the
- * phone (which drops the token) ends it. The message goes through the same
- * send as the Messages page, so blocking, membership, broadcasting and
- * everyone else's notifications behave exactly as if it were typed there, and
- * the conversation is marked read, as replying to it means it was.
+ * phone (which drops the token) ends it. NotificationReply does the sending.
  */
 class PushReplyController extends Controller
 {
     public function store(Request $request, string $conversation, int $user): JsonResponse
     {
         $data = $this->validated($request);
-        $person = $this->person($user, $data['device']);
 
-        $send = Request::create($request->url(), 'POST', array_filter([
-            'body' => $data['body'],
-            'nonce' => $data['nonce'] ?? null,
-        ]));
-        $send->headers->set('Accept', 'application/json');
-        $send->setUserResolver(fn () => $person);
-
-        $messaging = app(MessagingController::class);
-        $response = $messaging->send($send, $conversation);
-
-        try {
-            $read = Request::create($request->url(), 'POST');
-            $read->setUserResolver(fn () => $person);
-            $messaging->markRead($read, $conversation);
-        } catch (\Throwable $e) {
-            Log::info('push reply: could not mark the conversation read', ['error' => $e->getMessage()]);
-        }
-
-        return $response;
+        return NotificationReply::message($this->person($user, $data['device']), $conversation, $data['body'], $data['nonce'] ?? null);
     }
 
-    /**
-     * An email reply: back to whoever the email asks replies to go to, in its
-     * thread, with the person's signature, through the same send as the Email
-     * page (so it threads in Gmail and Outlook like any reply).
-     */
     public function mail(Request $request, string $message, int $user): JsonResponse
     {
         $data = $this->validated($request);
-        $person = $this->person($user, $data['device']);
-        abort_unless(Role::can($person, 'mail.use'), 403);
 
-        $original = MailMessage::query()->where('user_id', $person->id)->where('uuid', $message)->first();
-        abort_unless($original !== null, 404);
-
-        $send = Request::create($request->url(), 'POST', [
-            'to' => [QuickReply::recipient($original)],
-            'subject' => QuickReply::subject($original->subject),
-            'bodyHtml' => QuickReply::html($data['body'], $person),
-            'mode' => 'reply',
-            'inReplyTo' => $original->uuid,
-        ]);
-        $send->headers->set('Accept', 'application/json');
-        $send->setUserResolver(fn () => $person);
-
-        return app(MailController::class)->send($send);
+        return NotificationReply::email($this->person($user, $data['device']), $message, $data['body']);
     }
 
-    /**
-     * A reply on a CIP file's thread, in the lane the message came in on, as
-     * the person (Threads::create, the same as the file's Messages tab).
-     */
     public function cip(Request $request, string $application, int $user, string $lane): JsonResponse
     {
         $data = $this->validated($request);
-        $person = $this->person($user, $data['device']);
-        abort_unless(CipAccess::canReach($person), 404);
 
-        $file = ApplicationScope::findOrFail($person, $application);
-        $message = Threads::create($file, $person, $data['body'], $lane);
-
-        return response()->json(
-            Threads::present($message->fresh()->load(['author', 'companyMember', 'replyTo']), $person),
-            201,
-        );
+        return NotificationReply::cip($this->person($user, $data['device']), $application, $lane, $data['body']);
     }
 
     /** @return array{body: string, device: string, nonce?: string|null} */
@@ -122,9 +62,6 @@ class PushReplyController extends Controller
             403,
             'This device is no longer signed in.',
         );
-
-        // This request only: nothing is written to a session.
-        Auth::setUser($person);
 
         return $person;
     }

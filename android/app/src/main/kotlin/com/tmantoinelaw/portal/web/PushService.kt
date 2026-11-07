@@ -23,6 +23,13 @@ class PushService : FirebaseMessagingService() {
         val data = message.data
         when (data["kind"]) {
             "notification" -> {
+                // A message, group message, CIP file thread or email: a
+                // conversation notification with the photo and a Reply.
+                val msg = runCatching { JSONObject(data["msg"] ?: "") }.getOrNull()
+                if (msg != null && msg.optString("conversation").isNotBlank()) {
+                    MessageNotifications.show(this, msg)
+                    return
+                }
                 val record = runCatching { JSONObject(data["notification"] ?: "") }.getOrNull() ?: return
                 val id = record.optString("id").hashCode().let { if (it == 0) 1 else Math.abs(it) }
                 WebNotifications.show(this, JSONObject()

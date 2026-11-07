@@ -5,6 +5,23 @@ const { contextBridge, ipcRenderer } = require('electron');
 // "install the app" prompts) without gaining privileges. openInBrowser is
 // a clicked email link leaving the app (main still validates the URL).
 // openLocationSettings opens the OS Location pane after a deny.
+// Handlers for banners posted through TMADesktop.notify, by id: a click opens
+// what it was about, a reply (macOS) is sent by the page.
+const notificationHandlers = new Map();
+let notificationSeq = 0;
+function notificationEvent(kind) {
+  return (_event, id, payload) => {
+    const handlers = notificationHandlers.get(id);
+    notificationHandlers.delete(id);
+    const fn = handlers && handlers[kind];
+    if (typeof fn === 'function') {
+      try { fn(payload); } catch { /* the page's handler threw */ }
+    }
+  };
+}
+ipcRenderer.on('tma:notification-click', notificationEvent('onClick'));
+ipcRenderer.on('tma:notification-reply', notificationEvent('onReply'));
+
 contextBridge.exposeInMainWorld('TMADesktop', {
   isDesktop: true,
   platform: process.platform,
@@ -21,6 +38,25 @@ contextBridge.exposeInMainWorld('TMADesktop', {
   // the navigation. The shell on disk belongs to whoever was signed in
   // when it was captured; drop it so the next document is the new account.
   dropShell: () => ipcRenderer.invoke('tma:drop-shell'),
+  // The portal's banner, posted by the app: who, the group or subject, the
+  // message, the photo (a data: URL), and on a Mac a Reply box. handlers:
+  // { onClick, onReply(text) }.
+  notify: (options, handlers) => {
+    const id = ++notificationSeq;
+    if (handlers && typeof handlers === 'object') {
+      notificationHandlers.set(id, { onClick: handlers.onClick, onReply: handlers.onReply });
+    }
+    const o = options || {};
+    return ipcRenderer.invoke('tma:notify', {
+      title: String(o.title || ''),
+      subtitle: String(o.subtitle || ''),
+      body: String(o.body || ''),
+      icon: typeof o.icon === 'string' && o.icon.startsWith('data:image/') && o.icon.length < 3000000 ? o.icon : '',
+      silent: !!o.silent,
+      reply: !!o.reply,
+      replyPlaceholder: String(o.replyPlaceholder || ''),
+    }, id);
+  },
 });
 
 /*

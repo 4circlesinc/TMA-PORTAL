@@ -87,6 +87,51 @@ app.whenReady().then(async () => {
   await js("window.TMADesktopNotify.applyPrefs({ enabled: false, preview: true })");
   check('willSound() is false when notifications are off', await js('window.TMADesktopNotify.willSound()'), false);
 
+  /*
+   * A message laid out the way Messages lays one out (the server's
+   * MessagePush::layout): who as the title, then the group, then the message,
+   * one banner per conversation.
+   */
+  await js('document.hasFocus = function () { return false; }; void 0;');
+  await js("window.TMADesktopNotify.applyPrefs({ enabled: true, preview: true })");
+  const groupItem = {
+    id: 'n-g', module: 'messages', title: 'Tax team', message: 'Bruce Wayne: Meeting at noon', createdAt: 't',
+    actionUrl: '/social/messages?conversation=c-1',
+    layout: { kind: 'group', title: 'Bruce Wayne', subtitle: 'Tax team', body: 'Meeting at noon',
+      url: '/social/messages?conversation=c-1', tag: 'c-1', replyTo: { kind: 'message', conversation: 'c-1' } },
+  };
+  await js(`window.__raised = []; window.Notification = function (title, opts) { window.__raised.push({ title, body: opts.body, tag: opts.tag }); this.close = function(){}; }; window.Notification.permission = 'granted'; void 0;`);
+  await js(`window.TMADesktopNotify.notify(${JSON.stringify(groupItem)}); void 0;`);
+  const browserBanner = await js('window.__raised[0]');
+  check('a browser banner is titled with who wrote', browserBanner.title, 'Bruce Wayne');
+  check('then the group, then the message', browserBanner.body, 'Tax team\nMeeting at noon');
+  check('one banner per conversation', browserBanner.tag, 'tma-c-1');
+
+  // The Mac and Windows apps post it themselves, with a Reply box on a Mac.
+  await js(`window.__posted = []; window.TMADesktop = { isDesktop: true, notify: function (o, h) { window.__posted.push({ o: o, h: h }); return true; } }; void 0;`);
+  await js(`window.TMADesktopNotify.notify(${JSON.stringify({ ...groupItem, id: 'n-g2' })}); void 0;`);
+  const posted = await js('JSON.stringify(window.__posted[0].o)').then(JSON.parse);
+  check('the app gets who', posted.title, 'Bruce Wayne');
+  check('the app gets the group as its own line', posted.subtitle, 'Tax team');
+  check('the app gets the message', posted.body, 'Meeting at noon');
+  check('the app is asked for a Reply box', posted.reply, true);
+
+  // A reply typed in the banner goes to the signed-in reply endpoint.
+  await js(`window.__sent = null; window.fetch = function (url, init) { window.__sent = { url: url, body: init.body }; return Promise.resolve({ ok: true }); }; window.__posted[0].h.onReply('On my way'); void 0;`);
+  const sent = await js('JSON.stringify(window.__sent)').then(JSON.parse);
+  check('the reply goes to the reply endpoint', sent && sent.url, '/portal/notifications/reply');
+  check('with what it answers', sent && JSON.parse(sent.body).replyTo.conversation, 'c-1');
+  check('and what was typed', sent && JSON.parse(sent.body).body, 'On my way');
+
+  // Preview off: who and the group stay, what was said does not, and no Reply.
+  await js("window.TMADesktopNotify.applyPrefs({ enabled: true, preview: false })");
+  await js(`window.TMADesktopNotify.notify(${JSON.stringify({ ...groupItem, id: 'n-g3' })}); void 0;`);
+  const hidden = await js('JSON.stringify(window.__posted[1].o)').then(JSON.parse);
+  check('preview off keeps the group', hidden.subtitle, 'Tax team');
+  check('preview off hides the message', hidden.body, 'New message');
+  check('preview off offers no Reply', hidden.reply, false);
+  await js('window.TMADesktop = undefined; void 0;');
+
   // The phone posts the same record from FCM; a page banner would be twice.
   await js('document.hasFocus = function () { return false; }; void 0;');
   await js("window.TMADesktopNotify.applyPrefs({ enabled: true, preview: true })");

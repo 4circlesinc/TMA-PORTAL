@@ -106,6 +106,7 @@ use App\Http\Controllers\MeController;
 use App\Http\Controllers\MeOneDriveController;
 use App\Http\Controllers\MessagingAttachmentController;
 use App\Http\Controllers\MessagingController;
+use App\Http\Controllers\NotificationReplyController;
 use App\Http\Controllers\PushReplyController;
 use App\Http\Controllers\MessagingGroupController;
 use App\Http\Controllers\MessagingScheduleController;
@@ -393,6 +394,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::get('/preferences', [NotificationController::class, 'preferences'])->name('preferences');
         Route::put('/preferences', [NotificationController::class, 'updatePreferences'])->name('preferences.update');
         Route::post('/read-all', [NotificationController::class, 'readAll'])->name('read-all');
+        // A reply typed into a notification on a computer (the Mac app).
+        Route::post('/reply', [NotificationReplyController::class, 'store'])->middleware('throttle:30,1')->name('reply');
         Route::post('/bulk', [NotificationController::class, 'bulk'])->name('bulk');
         Route::post('/{uid}/read', [NotificationController::class, 'read'])->name('read');
         Route::post('/{uid}/unread', [NotificationController::class, 'unread'])->name('unread');

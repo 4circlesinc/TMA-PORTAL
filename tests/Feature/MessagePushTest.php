@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Events\PortalNotificationCreated;
 use App\Jobs\SyncMailbox;
 use App\Models\ConnectedAccount;
 use App\Models\Conversation;
@@ -17,6 +18,7 @@ use App\Support\Notifications\Notifier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -409,5 +411,56 @@ class MessagePushTest extends TestCase
 
         $this->postJson($this->mailReplyUrl($original, $user), ['body' => 'Hi', 'device' => str_repeat('f', 64)])->assertForbidden();
         Http::assertNothingSent();
+    }
+
+    public function test_the_page_gets_the_same_layout_for_browsers_and_the_desktop_apps(): void
+    {
+        Event::fake([PortalNotificationCreated::class]);
+        $sender = $this->user('bruce@wayne.test', ['name' => 'Bruce Wayne', 'avatar_url' => '/media/avatars/'.self::PHOTO]);
+        $recipient = $this->user('alfred@wayne.test');
+        $c = $this->conversation([$sender, $recipient, $this->user('lucius@wayne.test')], Conversation::TYPE_GROUP);
+
+        $this->actingAs($sender)
+            ->postJson("/portal/messaging/conversations/{$c->uuid}/messages", ['body' => 'Meeting at noon'])
+            ->assertOk();
+
+        Event::assertDispatched(PortalNotificationCreated::class, function (PortalNotificationCreated $event) use ($recipient, $c) {
+            if ($event->userId !== $recipient->id) {
+                return false;
+            }
+            $layout = $event->notification['layout'] ?? [];
+            $this->assertSame('group', $layout['kind']);
+            $this->assertSame('Bruce Wayne', $layout['title'], 'who wrote');
+            $this->assertSame('Tax team', $layout['subtitle'], 'the group');
+            $this->assertSame('Meeting at noon', $layout['body']);
+            $this->assertSame('/media/avatars/'.self::PHOTO, $layout['image'], 'the portal\'s own address: the page is signed in');
+            $this->assertSame('/social/messages?conversation='.$c->uuid, $layout['url']);
+            $this->assertSame(['kind' => 'message', 'conversation' => $c->uuid], $layout['replyTo']);
+
+            return true;
+        });
+    }
+
+    public function test_a_reply_from_a_computer_notification_is_sent_from_the_signed_in_page(): void
+    {
+        [$c, $sender, $recipient] = $this->replyable();
+
+        $this->postJson('/portal/notifications/reply', ['body' => 'Hi', 'replyTo' => ['kind' => 'message', 'conversation' => $c->uuid]])
+            ->assertUnauthorized();
+
+        $this->actingAs($recipient)
+            ->postJson('/portal/notifications/reply', ['body' => 'On my way', 'replyTo' => ['kind' => 'message', 'conversation' => $c->uuid]])
+            ->assertOk()
+            ->assertJsonPath('message.body', 'On my way');
+
+        $message = Message::query()->where('conversation_id', $c->id)->latest('id')->first();
+        $this->assertSame($recipient->id, $message->user_id);
+
+        // Not a conversation they are in: refused, nothing sent.
+        $outsider = $this->user('selina@kyle.test');
+        $this->actingAs($outsider)
+            ->postJson('/portal/notifications/reply', ['body' => 'Hi', 'replyTo' => ['kind' => 'message', 'conversation' => $c->uuid]])
+            ->assertNotFound();
+        $this->assertSame(1, Message::query()->where('conversation_id', $c->id)->count());
     }
 }

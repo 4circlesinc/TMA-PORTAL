@@ -1482,6 +1482,24 @@ if (!app.requestSingleInstanceLock()) {
       return true;
     });
 
+    // The portal's banners (preload.js notify, from notify-store.js): the
+    // photo beside it, and on a Mac a Reply box (notifications.js). A click
+    // brings the window forward and tells the page which banner it was; a
+    // reply goes back to the page, which sends it as the signed-in person.
+    ipcMain.handle('tma:notify', (event, options, id) => {
+      if (!event.sender || event.sender.isDestroyed()) return false;
+      const sender = event.sender;
+      return notifications.show(options, {
+        onClick: () => {
+          revealWindow({ steal: true });
+          if (!sender.isDestroyed()) sender.send('tma:notification-click', id);
+        },
+        onReply: (text) => {
+          if (!sender.isDestroyed()) sender.send('tma:notification-reply', id, text);
+        },
+      });
+    });
+
     // From the ring panel. It has no portal session of its own, so answering
     // and declining both go through the page that owns the call.
     ipcMain.on('call:accept', answerCall);

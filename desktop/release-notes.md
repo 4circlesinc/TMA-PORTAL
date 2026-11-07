@@ -1,0 +1,1 @@
+Notifications read like messages. A message shows who wrote it, then the group (or, for an email, the subject), then what was said, with their photo beside it, and clicking it opens that conversation. On a Mac you can reply straight from the notification.

@@ -89,6 +89,10 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+        <!-- The inline Reply on a message or email notification (MessageNotifications). -->
+        <receiver
+            android:name=".web.ReplyReceiver"
+            android:exported="false" />
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.files"

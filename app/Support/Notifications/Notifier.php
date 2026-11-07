@@ -37,24 +37,24 @@ final class Notifier
      * was intentionally suppressed (preference off, self-notification, or a
      * dedupe hit that refreshed an existing row).
      *
-     * @param  array<string, mixed>  $attrs {
-     *     user:         User|int          recipient (required)
-     *     type:         string            registry key (required)
-     *     title:        string            (required)
-     *     actor:        User|int|null     person who caused it; null = system
-     *     message:      string|null
-     *     subject:      Model|null        the related record
-     *     client:       Client|int|null
-     *     action_url:   string|null
-     *     action_label: string|null       defaults from registry
-     *     level:        string|null       defaults from registry
-     *     icon:         string|null       defaults from registry
-     *     image:        string|null       explicit avatar/logo override
-     *     priority:     string|null       defaults from registry
-     *     dedupe_key:   string|null
-     *     dedupe_minutes: int|null
-     *     metadata:     array|null
-     * }
+     * @param  array<string, mixed>  $attrs  {
+     *                                       user:         User|int          recipient (required)
+     *                                       type:         string            registry key (required)
+     *                                       title:        string            (required)
+     *                                       actor:        User|int|null     person who caused it; null = system
+     *                                       message:      string|null
+     *                                       subject:      Model|null        the related record
+     *                                       client:       Client|int|null
+     *                                       action_url:   string|null
+     *                                       action_label: string|null       defaults from registry
+     *                                       level:        string|null       defaults from registry
+     *                                       icon:         string|null       defaults from registry
+     *                                       image:        string|null       explicit avatar/logo override
+     *                                       priority:     string|null       defaults from registry
+     *                                       dedupe_key:   string|null
+     *                                       dedupe_minutes: int|null
+     *                                       metadata:     array|null
+     *                                       }
      */
     public static function send(array $attrs): ?Notification
     {
@@ -267,6 +267,12 @@ final class Notifier
                 ->count();
 
             $presented = NotificationPresenter::notification($notification);
+            // A message or an email is shown the way Messages shows one, the
+            // same on a browser and in the Mac, Windows and phone apps.
+            $layout = MessagePush::layout($presented);
+            if ($layout !== null) {
+                $presented['layout'] = $layout;
+            }
             event(new PortalNotificationCreated(
                 (int) $notification->user_id,
                 $presented,

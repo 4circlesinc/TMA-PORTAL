@@ -575,6 +575,97 @@
       signatures: 'Signature update',
     };
 
+    /*
+     * A message or an email is laid out the way Messages lays one out, the
+     * same on every device (App\Support\Notifications\MessagePush::layout):
+     * who as the title, then the group or the email's subject, then the
+     * message, with the group's (or the sender's) photo. Anything else keeps
+     * its own title and line.
+     */
+    function view(item) {
+      var l = item.layout;
+      if (!l) {
+        return {
+          title: item.title || 'New notification',
+          subtitle: '',
+          text: item.message || '',
+          picture: item.image || null,
+          url: item.actionUrl,
+          tag: 'tma-' + (item.id || 'notification'),
+          replyTo: null,
+        };
+      }
+      return {
+        title: l.title || item.title || 'New notification',
+        subtitle: l.subtitle || '',
+        text: l.body || '',
+        picture: l.image || item.image || null,
+        url: l.url || item.actionUrl,
+        // Per conversation: a run of messages replaces its own banner.
+        tag: 'tma-' + (l.tag || item.id || 'notification'),
+        replyTo: l.replyTo || null,
+      };
+    }
+
+    /*
+     * The photo as a data: URL, read through the signed-in page: a browser
+     * fetching a notification's icon on its own, and the desktop app's native
+     * banner, have no session, and the portal's photos need one. Null when it
+     * cannot be had in time; the banner goes without rather than waiting.
+     */
+    function pictureData(url) {
+      if (!url || typeof fetch !== 'function' || typeof FileReader === 'undefined') return Promise.resolve(null);
+      var timer = null;
+      var timeout = new Promise(function (resolve) { timer = setTimeout(function () { resolve(null); }, 2000); });
+      var load = fetch(url, { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.blob() : null; })
+        .then(function (blob) {
+          if (!blob || !/^image\//.test(blob.type) || blob.size > 2000000) return null;
+          return new Promise(function (resolve) {
+            var reader = new FileReader();
+            reader.onload = function () { resolve(typeof reader.result === 'string' ? reader.result : null); };
+            reader.onerror = function () { resolve(null); };
+            reader.readAsDataURL(blob);
+          });
+        })
+        .catch(function () { return null; });
+      return Promise.race([load, timeout]).then(function (data) { clearTimeout(timer); return data; });
+    }
+
+    function xsrf() {
+      try {
+        var match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+        return match ? decodeURIComponent(match[1]) : '';
+      } catch (e) {
+        return '';
+      }
+    }
+
+    /* A reply typed into the banner (the Mac app): sent as the signed-in page. */
+    function sendReply(v, text) {
+      var body = String(text || '').trim();
+      if (!body || !v.replyTo) return;
+      fetch('/portal/notifications/reply', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-XSRF-TOKEN': xsrf(),
+        },
+        body: JSON.stringify({ body: body, replyTo: v.replyTo }),
+      }).then(function (r) {
+        if (!r.ok) throw new Error('reply refused');
+      }).catch(function () {
+        // Never lost quietly: say so, and a click opens the conversation.
+        try {
+          var failed = new Notification('Reply not sent', { body: 'Open the conversation to try again.', tag: v.tag + '-failed' });
+          failed.onclick = function () { failed.close(); open(v.url); };
+        } catch (e) { /* the conversation still has it unsent in the box */ }
+      });
+    }
+
     function notify(item) {
       if (!prefs.enabled || !item) return;
       /*
@@ -591,44 +682,67 @@
       if (!channelOn(item.module, 'desktop')) return;
       if (seenRecently(item.id + '@' + (item.createdAt || ''))) return;
 
-      try {
-        var note = new Notification(item.title || 'New notification', {
-          body: prefs.preview
-            ? (item.message || '')
-            : (QUIET_BODY[item.module] || 'New notification'),
-          // Per conversation, so a run of messages replaces its own banner
-          // instead of stacking one per message.
-          tag: 'tma-' + (item.id || 'notification'),
-          renotify: true,
-          icon: item.image || null,
-          /*
-           * This used to be hard-coded silent, on the reasoning that messages.js
-           * plays the tone. It only ever did so for *messages*, and only for a
-           * conversation it had already loaded, so an email, a calendar change
-           * or a file update raised a banner with no sound at all, and a message
-           * in an unloaded thread did too.
-           *
-           * The banner is raised here, for every module, so the sound belongs
-           * here as well. The OS plays it: page audio is unreliable in exactly
-           * the case that matters, since a hidden window is where autoplay
-           * policy and background throttling apply. messages.js stands down
-           * while we are sounding, see playIncomingMessageSound's caller.
-           */
-          // The per-module Sound column, on top of the global sounds switch.
-          silent: !soundOn() || !channelOn(item.module, 'sound'),
-          // Read only by the iPhone app's Notification (ios preload.js);
-          // browsers ignore it and play their own sound.
-          sound: prefs.sounds.iphone,
-        });
-        note.onclick = function () {
-          note.close();
-          open(item.actionUrl);
-        };
-        live.push(note);
-      } catch (e) {
-        // Some browsers only permit notifications from a service worker. There
-        // is nothing to fall back to; the bell and the toast already showed it.
+      var v = view(item);
+      // Preview off: who and the group stay, what was said does not.
+      var text = prefs.preview ? v.text : (QUIET_BODY[item.module] || 'New notification');
+      /*
+       * The sound: this used to be hard-coded silent, on the reasoning that
+       * messages.js plays the tone. It only ever did for messages in a loaded
+       * conversation, so every other banner was silent. The banner is raised
+       * here, for every module, so the sound belongs here too, and the OS plays
+       * it: page audio is unreliable in a hidden window. messages.js stands down
+       * while we are sounding (willSound). The per-module Sound column sits on
+       * top of the global sounds switch.
+       */
+      var silent = !soundOn() || !channelOn(item.module, 'sound');
+      var host = window.TMADesktop;
+
+      function post(picture) {
+        // The Mac and Windows apps post it themselves: the picture beside it,
+        // and on a Mac a Reply box in the banner.
+        if (host && host.isDesktop && typeof host.notify === 'function') {
+          host.notify({
+            title: v.title,
+            subtitle: v.subtitle,
+            body: text,
+            icon: picture || '',
+            silent: silent,
+            reply: !!v.replyTo && prefs.preview,
+            replyPlaceholder: v.replyTo && v.replyTo.kind === 'email' ? 'Reply to email' : 'Reply',
+          }, {
+            onClick: function () { open(v.url); },
+            onReply: function (reply) { sendReply(v, reply); },
+          });
+          return;
+        }
+        try {
+          var note = new Notification(v.title, {
+            // A browser banner has a title and a body: the group or subject
+            // leads the body, the message under it.
+            body: [v.subtitle, text].filter(Boolean).join('\n'),
+            tag: v.tag,
+            renotify: true,
+            icon: picture || v.picture || null,
+            silent: silent,
+            // Read only by the iPhone app's Notification (ios preload.js);
+            // browsers ignore it and play their own sound.
+            sound: prefs.sounds.iphone,
+          });
+          note.onclick = function () {
+            note.close();
+            open(v.url);
+          };
+          live.push(note);
+        } catch (e) {
+          // Some browsers only permit notifications from a service worker. There
+          // is nothing to fall back to; the bell and the toast already showed it.
+        }
       }
+
+      // Without a photo it goes up at once; with one, once the photo is read
+      // (at most two seconds).
+      if (v.picture) pictureData(v.picture).then(post);
+      else post(null);
     }
 
     /*
