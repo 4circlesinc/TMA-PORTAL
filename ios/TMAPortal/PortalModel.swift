@@ -32,6 +32,8 @@ final class PortalModel: NSObject, ObservableObject {
     let calls = CallCoordinator()
     /// Location for the page through iOS's own permission, asked once (LocationBridge.swift).
     let location = LocationBridge()
+    /// The bottom bar and the header's bubbles, drawn in Liquid Glass (GlassChrome.swift).
+    let glass = GlassChrome()
     private let rules: NavigationRules
     private let shell: ShellCache
     private let bridge = ScriptBridge()
@@ -81,6 +83,13 @@ final class PortalModel: NSObject, ObservableObject {
         calls.model = self
         location.evaluate = { [weak self] js in self?.evaluate(js) }
         location.permissionChanged = { [weak self] in self?.reinstallScripts() }
+        // A tap on the glass clicks the page's own button.
+        glass.onTap = { [weak self] key in
+            self?.evaluate("window.__tmaGlassChrome && __tmaGlassChrome.tap(\(jsString(key)))")
+        }
+        glass.onMissingIcons = { [weak self] in
+            self?.evaluate("window.__tmaGlassChrome && __tmaGlassChrome.resend()")
+        }
         AppBridge.model = self
         content.add(bridge, name: "tmaHost")
         installScripts(in: content)
@@ -244,6 +253,9 @@ final class PortalModel: NSObject, ObservableObject {
         case "edgeBack":
             // The back swipe while a screen is open; the menu's drag otherwise.
             webView.allowsBackForwardNavigationGestures = (dict["on"] as? Bool) == true
+        case "glass":
+            // What the bar and the header's bubbles hold (glass-chrome.js).
+            if let json = dict["json"] as? String { glass.receive(json) }
         case "closeNotification":
             UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: ["page-\(intValue(dict["id"]))"])
         case "openInBrowser":
@@ -537,6 +549,7 @@ final class PortalModel: NSObject, ObservableObject {
             .replacingOccurrences(of: "__TMA_VERSION__", with: PortalConfig.version)
             .replacingOccurrences(of: "__TMA_NOTIFICATIONS__", with: "false")
             .replacingOccurrences(of: "__TMA_GEO_STATE__", with: location.state)
+            .replacingOccurrences(of: "__TMA_GLASS__", with: GlassChrome.available ? "true" : "false")
         content.addUserScript(WKUserScript(source: preload, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         if let hostBridge = bundleScript("host-bridge") {
             content.addUserScript(WKUserScript(source: hostBridge, injectionTime: .atDocumentStart, forMainFrameOnly: true))
@@ -771,6 +784,11 @@ extension PortalModel: WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, A
         guard !quietLoad else { return }
         loading = true
         refreshSplash()
+    }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        // The old page's bar and bubbles go with it; the new page sends its own.
+        glass.reset()
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

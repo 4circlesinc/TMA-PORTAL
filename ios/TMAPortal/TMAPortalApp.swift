@@ -22,6 +22,13 @@ struct PortalRootView: View {
     var body: some View {
         ZStack {
             PortalWebView(webView: model.webView)
+                .overlay {
+                    // The bottom bar and the header's bubbles in the system's
+                    // Liquid Glass, over the page (GlassChrome.swift).
+                    if #available(iOS 26.0, *) {
+                        GlassChromeOverlay(chrome: model.glass)
+                    }
+                }
             if model.showSplash {
                 BootSplash()
                     .transition(.opacity)

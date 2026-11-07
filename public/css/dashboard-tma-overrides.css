@@ -2858,3 +2858,28 @@ body::-webkit-scrollbar,
     backdrop-filter: var(--tma-glass-blur);
   }
 }
+
+/* ── Liquid Glass drawn by the iPhone app (iOS 26 and later) ─────────────
+ *
+ * The imitation above can't follow the device: the Liquid Glass look chosen
+ * in Settings (Clear or Tinted), Reduce Transparency, Increase Contrast and
+ * Reduce Motion apply only to the system's own material. So the app draws the
+ * bar and the header's bubbles itself, in that material, over the page
+ * (ios/TMAPortal/GlassChrome.swift, told what to draw by glass-chrome.js,
+ * which sets html.tma-native-glass). The page's copies keep their places,
+ * holding the layout and measured for the app, and are not painted.
+ */
+@media (max-width: 1024px) {
+  html.tma-native-glass .tma-dash:not(.tma-dash--desktop-bar) .tma-dash__tabbar,
+  html.tma-native-glass .tma-dash__header .tma-dash__header-left,
+  html.tma-native-glass .tma-dash__header .tma-dash__header-icons,
+  html.tma-native-glass .tma-dash__header .tma-dash__email-header-tools,
+  html.tma-native-glass .tma-dash__header .tma-dash__email-header-reading-back-btn,
+  html.tma-native-glass .tma-dash__header .tma-dash__email-header-reading-tools-group {
+    opacity: 0 !important;
+    background: none !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}

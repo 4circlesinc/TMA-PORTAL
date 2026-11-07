@@ -54,6 +54,14 @@
     setEdgeBack: function (on) {
       post('edgeBack', { on: !!on });
     },
+    // iOS 26 and later: the app draws the bottom bar and the header's bubbles
+    // in the system's Liquid Glass (GlassChrome.swift), which follows the
+    // device's Liquid Glass and accessibility settings. glass-chrome.js tells
+    // it what they hold, through setGlassChrome.
+    glassChrome: __TMA_GLASS__,
+    setGlassChrome: function (json) {
+      post('glass', { json: String(json) });
+    },
   };
 
   /*

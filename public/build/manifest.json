@@ -1,6 +1,6 @@
 {
-  "css": "app-c5fc4c1f9807.css",
-  "js": "app-6b15a1b05351.js",
+  "css": "app-869ee9e76379.css",
+  "js": "app-fe581b77fd6c.js",
   "sources": {
     "css": [
       "tokens.css",
@@ -137,6 +137,7 @@
       "portal-home.js",
       "phone-screens.js",
       "dashboard.js",
+      "glass-chrome.js",
       "pull-refresh.js",
       "phone-input.js",
       "presence-status.js",

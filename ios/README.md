@@ -28,6 +28,15 @@ Debug builds talk to `http://127.0.0.1:8001` and may use plain HTTP, including a
 | Incoming call | CallStyle | CallKit, when the app is not in front |
 | Updates | APK from `/desktop/releases` | the `ios` entry on the same feed; Update opens the URL |
 | Push | FCM, platform `android` | APNs, platform `ios` (release) or `ios-sandbox` (debug) |
+| Bottom bar and header bubbles | the page's own | `GlassChrome.swift` on iOS 26+, in the system's Liquid Glass |
+
+## Liquid Glass
+
+On iOS 26 and later the app draws the bottom bar and the header's bubbles itself, with SwiftUI's `glassEffect`, over the page. A page can only imitate the material, and it cannot see what changes it: the look chosen in Settings > Display & Brightness > Liquid Glass (Clear or Tinted), Reduce Transparency, Increase Contrast and Reduce Motion. Apple applies those to its own material and has no API for the first, so only the system's glass follows them.
+
+The page stays in charge. `public/js/glass-chrome.js` (loaded by the shell, active only when the preload says `TMADesktop.glassChrome`) sends where each bubble sits, its buttons and their icons (drawn to PNG once), the open tab, the counts, and whether something on the page covers it. The app draws that in the same place; a tap on the glass comes back as a click on the page's own button. The page's copies stay where they are, invisible and hidden from VoiceOver (`html.tma-native-glass`), so the layout, the popups that hang from them and the measurements don't move. The page's viewport is the safe area, so the overlay lays out in the safe area too.
+
+Older iPhones (iOS 18 and earlier) and older builds of the app keep the page's own bar. `tests/Browser/glass-chrome.mjs` covers the page's side; `GlassChromeTests` the app's.
 
 ## Push
 

@@ -2802,6 +2802,24 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= php artisan tinker --execute="
 node tests/Browser/messaging-toolbar.mjs
 ```
 
+- **`glass-chrome.mjs`** — what the page tells the iPhone app to draw in
+  Liquid Glass (`public/js/glass-chrome.js`; the app's side is
+  `ios/TMAPortal/GlassChrome.swift`). Plays the app over the real shell at a
+  phone's size: the page's own bar and bubbles stop painting and leave
+  VoiceOver but keep their boxes; the bar and both bubbles are described
+  where the page has them, with the open tab, PNG icons, the avatar and
+  logo in their own colours, the presence dot and counts with their colours;
+  a tap by key clicks the page's button; a sheet over the bar takes it away,
+  a clear tap-catching layer leaves it showing but inert, the menu sliding
+  over the header takes that away; nothing at desktop width, nothing without
+  `TMADesktop.glassChrome`, and `resend()` sends the icons again. No portal
+  seed required.
+
+```sh
+node tests/Browser/glass-chrome.mjs
+TMA_BROWSER=webkit node tests/Browser/glass-chrome.mjs
+```
+
 - **`messaging-mobile-list.mjs`** — phone inbox layout: Favorites / Chats
   group labels must not sit over a blank column. The list body is a flex
   column; mobile rows live in a swipe wrap with `overflow: hidden`, which
