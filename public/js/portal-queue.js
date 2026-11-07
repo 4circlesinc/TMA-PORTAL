@@ -58,7 +58,7 @@
      doubles up to. Short enough that a connection coming back on its own is
      noticed within a minute; long enough that a server that is down is not
      hammered by every open tab in the firm. */
-  var RETRY_MS = 15 * 1000;
+  var RETRY_MS = 5 * 1000;
 
   var RETRY_MAX_MS = 5 * 60 * 1000;
 
@@ -66,15 +66,15 @@
      stays true for as long as a send is in flight, so one hung upload used to
      mean nothing behind it was ever sent again. Generous, because a queued
      filing can carry scans. */
-  var REQUEST_TIMEOUT_MS = 2 * 60 * 1000;
+  var REQUEST_TIMEOUT_MS = 30 * 1000;
 
-  /* How many times the SERVER may turn an entry away for reasons that are not
-     about the entry (signed out, stale token, an error on its side) before the
-     entry is handed to a person. Without a ceiling an entry the server will
-     never accept sat as "Waiting" for ever, with no reason shown and no way
-     to act on it. A dead network does not count: being offline is not a
-     reason to give up. */
-  var MAX_SERVER_STALLS = 5;
+  /* How many attempts an entry gets while the browser has a network: the
+     first send and ONE automatic retry. After that it goes to the reader with
+     its reason and Try again / Discard, instead of sitting on "Waiting" with
+     no end and nothing to act on. Signed out, a stale token, a server error, a
+     timeout and a failed connection all count. Only a browser that says it is
+     offline does not: being offline is not a reason to give up. */
+  var MAX_SERVER_STALLS = 2;
 
   var dbPromise = null;
 
@@ -636,6 +636,17 @@
        */
       if (err && err.name === 'AbortError' && navigator.onLine !== false) {
         return stall(entry, 'The server took too long to answer.');
+      }
+
+      /*
+       * The browser has a network and the send still failed: a refused
+       * connection, a dropped tunnel, a scan that could not be read back off
+       * the disk. Left uncounted, this was the "Waiting" that never ended and
+       * never said why. It gets its one retry like everything else, then goes
+       * to the reader with Try again and Discard.
+       */
+      if (navigator.onLine !== false) {
+        return stall(entry, 'Could not send this to the server.');
       }
 
       // Nothing was delivered. Whether that is a dead wifi or a dropped

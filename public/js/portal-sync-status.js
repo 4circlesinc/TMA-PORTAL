@@ -142,7 +142,7 @@
     });
   }
 
-  function rows(entries) {
+  function rows(entries, syncing) {
     if (!entries.length) {
       return '<p class="tma-sync-panel__empty">Everything has been sent.</p>';
     }
@@ -163,12 +163,21 @@
             '<button type="button" class="tma-portal-link" data-sync-retry="' + entry.id + '">Try again</button>' +
             '<button type="button" class="tma-portal-link" data-sync-forget="' + entry.id + '">Discard</button>' +
             '</div>'
-          : '<div class="tma-sync-panel__actions">' +
-            '<span class="tma-sync-panel__waiting">Waiting</span>' +
-            '<button type="button" class="tma-portal-link" data-sync-retry="' + entry.id + '">Try now</button>' +
-            '</div>') +
+          // No button: it is already being sent, and retried once on its own.
+          // If that retry fails too it turns into the failed row above.
+          : '<span class="tma-sync-panel__waiting">' + (syncing ? 'Sending…' : 'Waiting') + '</span>') +
         '</li>';
     }).join('') + '</ul>';
+  }
+
+  function lead(status) {
+    return status.online
+      ? '<p class="tma-sync-panel__lead">These changes are on this device and are being sent to the firm.</p>'
+      : '<p class="tma-sync-panel__lead">You’re offline. These changes are saved on this device and will be sent on their own once you have a connection.</p>';
+  }
+
+  function panelHtml(entries, status) {
+    return lead(status) + rows(entries, status.syncing);
   }
 
   function openPanel() {
@@ -176,14 +185,24 @@
 
     window.TMAQueue.all().then(function (entries) {
       var status = window.TMAQueue.state();
-      var head = status.online
-        ? '<p class="tma-sync-panel__lead">These changes are on this device and are being sent to the firm.</p>'
-        : '<p class="tma-sync-panel__lead">You’re offline. These changes are saved on this device and will be sent on their own once you have a connection.</p>';
 
       ui().openModal({
         title: 'Waiting to sync',
-        body: '<div class="tma-sync-panel">' + head + rows(entries) + '</div>',
+        body: '<div class="tma-sync-panel">' + panelHtml(entries, status) + '</div>',
         onMount: function (host) {
+          /*
+           * Live while open. The list used to be a picture of the moment it
+           * was opened, so an entry that sent, or failed with a reason, still
+           * read "Waiting" until the dialog was closed and opened again.
+           */
+          var panel = host.querySelector('.tma-sync-panel');
+          var stop = window.TMAQueue.onChange(function (next) {
+            if (!panel || !document.body.contains(panel)) { if (stop) stop(); return; }
+            window.TMAQueue.all().then(function (list) {
+              if (document.body.contains(panel)) panel.innerHTML = panelHtml(list, next);
+            });
+          });
+
           host.addEventListener('click', function (e) {
             var retry = e.target.closest('[data-sync-retry]');
             var forget = e.target.closest('[data-sync-forget]');
