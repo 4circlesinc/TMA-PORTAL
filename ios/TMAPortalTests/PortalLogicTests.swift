@@ -55,6 +55,26 @@ final class PortalLogicTests: XCTestCase {
         XCTAssertFalse(rules.isPortalURL(URL(string: "https://example.com/file")!))
     }
 
+    func testLocationPermissionIsReportedTheWayTheWebDoes() {
+        XCTAssertEqual(LocationBridge.state(for: .authorizedWhenInUse), "granted")
+        XCTAssertEqual(LocationBridge.state(for: .authorizedAlways), "granted")
+        XCTAssertEqual(LocationBridge.state(for: .denied), "denied")
+        XCTAssertEqual(LocationBridge.state(for: .restricted), "denied")
+        XCTAssertEqual(LocationBridge.state(for: .notDetermined), "prompt")
+    }
+
+    func testALocationFixReachesThePageAsAGeolocationPosition() throws {
+        let fix = LocationBridge.Fix(latitude: 18.0425, longitude: -63.0548, accuracy: 12.5, timestamp: 1_793_990_000_000)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(fix.json.utf8)) as? [String: Any])
+        XCTAssertEqual(object["latitude"] as? Double, 18.0425)
+        XCTAssertEqual(object["longitude"] as? Double, -63.0548)
+        XCTAssertEqual(object["accuracy"] as? Double, 12.5)
+        XCTAssertEqual(object["timestamp"] as? Double, 1_793_990_000_000)
+        XCTAssertTrue(object["altitude"] is NSNull, "unknown values are null, as the web API has them")
+        let quoted = LocationBridge.jsonString("It's \"off\"")
+        XCTAssertEqual(try JSONSerialization.jsonObject(with: Data("[\(quoted)]".utf8)) as? [String], ["It's \"off\""])
+    }
+
     func testTheLegalDocumentsOpenOverTheAppNotInsteadOfIt() {
         let rules = NavigationRules(origin: "https://portal.tmantoinelaw.com")
         XCTAssertTrue(rules.isPublicDocument(URL(string: "https://portal.tmantoinelaw.com/terms-of-service/")!))

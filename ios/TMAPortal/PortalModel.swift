@@ -30,6 +30,8 @@ enum AppBridge {
 final class PortalModel: NSObject, ObservableObject {
     let webView: WKWebView
     let calls = CallCoordinator()
+    /// Location for the page through iOS's own permission, asked once (LocationBridge.swift).
+    let location = LocationBridge()
     private let rules: NavigationRules
     private let shell: ShellCache
     private let bridge = ScriptBridge()
@@ -77,6 +79,8 @@ final class PortalModel: NSObject, ObservableObject {
 
         bridge.model = self
         calls.model = self
+        location.evaluate = { [weak self] js in self?.evaluate(js) }
+        location.permissionChanged = { [weak self] in self?.reinstallScripts() }
         AppBridge.model = self
         content.add(bridge, name: "tmaHost")
         installScripts(in: content)
@@ -223,6 +227,16 @@ final class PortalModel: NSObject, ObservableObject {
             if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
         case "requestNotifications":
             requestNotifications()
+        case "geoGet", "geoWatch":
+            location.request(LocationBridge.Request(
+                id: intValue(dict["id"]),
+                highAccuracy: (dict["highAccuracy"] as? Bool) ?? false,
+                timeout: (dict["timeout"] as? NSNumber)?.doubleValue ?? 0,
+                maximumAge: (dict["maximumAge"] as? NSNumber)?.doubleValue ?? 0,
+                watch: op == "geoWatch"
+            ))
+        case "geoClear":
+            location.clear(id: intValue(dict["id"]))
         case "ready":
             // DOMContentLoaded: the page's content is there, even if images
             // are still arriving. Enough to lift the boot splash.
@@ -496,10 +510,19 @@ final class PortalModel: NSObject, ObservableObject {
         let preload = (bundleScript("preload") ?? "")
             .replacingOccurrences(of: "__TMA_VERSION__", with: PortalConfig.version)
             .replacingOccurrences(of: "__TMA_NOTIFICATIONS__", with: "false")
+            .replacingOccurrences(of: "__TMA_GEO_STATE__", with: location.state)
         content.addUserScript(WKUserScript(source: preload, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         if let hostBridge = bundleScript("host-bridge") {
             content.addUserScript(WKUserScript(source: hostBridge, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         }
+    }
+
+    /// The preload carries the location permission as it stood when the page
+    /// loaded; when it changes, pages loaded from now on start from the new one.
+    private func reinstallScripts() {
+        let content = webView.configuration.userContentController
+        content.removeAllUserScripts()
+        installScripts(in: content)
     }
 
     private func bundleScript(_ name: String) -> String? {

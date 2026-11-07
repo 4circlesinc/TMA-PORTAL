@@ -40,7 +40,7 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>TM ANTOINE Portal uses the microphone for calls and voice messages.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>TM ANTOINE Portal uses your location when you choose to share it.</string>
+	<string>TM ANTOINE Portal uses your location to show whether you are working from the office or remotely, and to place an office on the map. Your exact location is never shown to others.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>TM ANTOINE Portal uses your photos when you attach one.</string>
 	<key>UIBackgroundModes</key>
