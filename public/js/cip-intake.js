@@ -3993,6 +3993,12 @@
       ? '/portal/cip/applications'
       : '/portal/cip/applications/' + encodeURIComponent(state.applicationId);
 
+    // Captured now, not inside the failure handler. The handler runs later,
+    // and by then the form may have moved on. The queue has to replay this
+    // request, the one the form already checked, not whatever is on screen
+    // when the network finally gives up.
+    var sent = decisionParts().concat(batch.parts);
+
     fetch(url, {
       method: 'POST',
       credentials: 'same-origin',
@@ -4001,7 +4007,7 @@
       // The request that files it carries the decision with it. A batch
       // with scans still held back is not that request: it is an edit
       // posting in turns, and a filing flushed its scans above.
-      body: body(decisionParts().concat(batch.parts)),
+      body: body(sent),
     }).then(function (res) {
       return res.json().catch(function () { return {}; }).then(function (json) {
         state.saving = false;
@@ -4082,7 +4088,7 @@
        * exists. The form has already checked everything the server checks,
        * so parking it is a reasonable bet rather than a hope.
        */
-      park(url);
+      park(url, sent);
     });
   }
 
@@ -4227,7 +4233,7 @@
    * that meant two different things depending on the wifi would be the worst
    * possible outcome of this whole feature.
    */
-  function park(url) {
+  function park(url, sent) {
     var root = state.root;
     var editing = !!state.applicationId;
     var done = function () {
@@ -4251,7 +4257,7 @@
       url: url,
       // With the decision a post-approval filing records, letter included:
       // the replay is the request that files it.
-      parts: decisionParts().concat(parts()),
+      parts: sent || decisionParts().concat(parts()),
       // Everything drawn from this application, wherever it was cached. Two
       // prefixes because two screens ask different questions of the same
       // record: the profile keys on the client, the wizard on the application.

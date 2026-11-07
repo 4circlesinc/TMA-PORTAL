@@ -89,6 +89,15 @@
 
   var running = false;
 
+  /* Bumped when a person asks to send now. A send already in flight must not
+     write over that request: its answer belongs to the attempt that started
+     it, and a newer one is about to go out. */
+  var attempt = 0;
+
+  /* Set when a flush is asked for while one is already going. The one that
+     is going finishes, then this runs, so a click is not thrown away. */
+  var runAgain = false;
+
   var retryTimer = null;
 
   var retryDelay = RETRY_MS;
@@ -283,16 +292,62 @@
 
   /* ── replay ─────────────────────────────────────────────────────── */
 
+  /*
+   * A file kept in the queue is a blob the browser stored on disk.
+   *
+   * Handing that blob straight to fetch sends an empty body, or a request
+   * that never finishes. The server then says every field is missing (the
+   * first of them is the service provider), and the queue stays on Waiting
+   * because the send never ends. The bytes have to be copied out first.
+   */
+  function fileBytes(file) {
+    if (!file || typeof file.arrayBuffer !== 'function') return Promise.resolve(file);
+
+    return file.arrayBuffer().then(function (buf) {
+      return new Blob([buf], { type: file.type || '' });
+    }, function () {
+      try { return file.slice(0, file.size, file.type || ''); }
+      catch (e) { return file; }
+    });
+  }
+
   function bodyFor(entry) {
     // Rebuilt every attempt rather than stored: a FormData cannot be written
     // to disk, and its boundary is the browser's to choose anyway.
-    var form = new FormData();
-    (entry.parts || []).forEach(function (part) {
-      if (part.file) form.append(part.name, part.file, part.filename || 'upload');
-      else form.append(part.name, part.value);
-    });
+    var parts = entry.parts || [];
 
-    return form;
+    return Promise.all(parts.map(function (part) {
+      if (!part || !part.file) return Promise.resolve(part);
+
+      return fileBytes(part.file).then(function (copy) {
+        return {
+          name: part.name,
+          file: copy,
+          filename: part.filename || part.file.name || 'upload',
+        };
+      });
+    })).then(function (ready) {
+      var form = new FormData();
+      var files = 0;
+      var declared = false;
+
+      ready.forEach(function (part) {
+        if (!part || !part.name) return;
+        if (part.name === 'uploadCount') declared = true;
+        if (part.file) {
+          files += 1;
+          form.append(part.name, part.file, part.filename || 'upload');
+        } else {
+          form.append(part.name, part.value == null ? '' : String(part.value));
+        }
+      });
+
+      // The live save counts its files so the server can tell when some were
+      // dropped. A replay has to do the same, or a short body looks complete.
+      if (!declared) form.append('uploadCount', String(files));
+
+      return form;
+    });
   }
 
   function headers() {
@@ -334,7 +389,12 @@
    * whether it is worth saying anything to the reader.
    */
   function flush() {
-    if (running || !usable()) return Promise.resolve(0);
+    if (!usable()) return Promise.resolve(0);
+    if (running) {
+      runAgain = true;
+
+      return Promise.resolve(0);
+    }
     /*
      * Only the browser's own "no network" skips the attempt. `reachable` is
      * what the last attempt learned, and the only way to unlearn it is to try
@@ -362,8 +422,12 @@
 
           // 'failed' is this entry's own problem and does not block the ones
           // behind it, nothing later depends on a change that will never
-          // land. Anything else stopped the run.
+          // land. 'skipped' is an attempt a newer click replaced. Anything
+          // else stopped the run.
           if (result === 'failed') return step();
+          // A newer click owns the queue now. Stop this run so it cannot
+          // send the same change a second time.
+          if (result === 'skipped') return result;
 
           return result;
         });
@@ -375,6 +439,7 @@
       summary.syncing = false;
 
       return recount().then(function () {
+        if (runAgain) return applied;
         if (outcome === 'done') {
           retryDelay = RETRY_MS;
           if (summary.waiting > 0) schedule(retryDelay);
@@ -391,8 +456,17 @@
       running = false;
       summary.syncing = false;
       notify();
+      if (!runAgain) {
+        schedule(retryDelay);
+        retryDelay = Math.min(retryDelay * 2, RETRY_MAX_MS);
+      }
 
       return applied;
+    }).then(function (value) {
+      if (!runAgain) return value;
+      runAgain = false;
+
+      return flush().then(function () { return value; });
     });
   }
 
@@ -405,17 +479,47 @@
    */
   function deliver(entry) {
     var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    var timer = controller ? setTimeout(function () { controller.abort(); }, REQUEST_TIMEOUT_MS) : null;
-    var clear = function () { if (timer) clearTimeout(timer); };
+    var settled = false;
 
-    return fetch(entry.url, {
-      method: entry.method,
-      credentials: 'same-origin',
-      // No Content-Type: multipart needs the browser's own boundary.
-      headers: headers(),
-      body: bodyFor(entry),
-      signal: controller ? controller.signal : undefined,
-    }).then(function (res) { clear(); return res; }, function (err) { clear(); throw err; });
+    // The timer covers the copy as well as the request. Aborting fetch does
+    // not help when the hang is the blob read that happens before fetch, and
+    // a send that never settles leaves `running` true so every later try,
+    // including a click, returns without sending.
+    var work = bodyFor(entry).then(function (body) {
+      return fetch(entry.url, {
+        method: entry.method,
+        credentials: 'same-origin',
+        // No Content-Type: multipart needs the browser's own boundary.
+        headers: headers(),
+        body: body,
+        signal: controller ? controller.signal : undefined,
+      });
+    });
+
+    return new Promise(function (resolve, reject) {
+      var timer = setTimeout(function () {
+        if (settled) return;
+        settled = true;
+        if (controller) {
+          try { controller.abort(); } catch (e) { /* the request already ended */ }
+        }
+        var err = new Error('timeout');
+        err.name = 'AbortError';
+        reject(err);
+      }, REQUEST_TIMEOUT_MS);
+
+      work.then(function (res) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(res);
+      }, function (err) {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(err);
+      });
+    });
   }
 
   /*
@@ -457,14 +561,18 @@
   }
 
   function send(entry) {
+    var mine = attempt;
     entry.tries += 1;
 
     return deliver(entry).then(function (res) {
+      if (mine !== attempt) return 'skipped';
       if (res.status !== 419) return res;
 
       // One fresh token and one more go, before counting it against the entry.
       return refreshToken().then(function () { return deliver(entry); });
     }).then(function (res) {
+      if (res === 'skipped') return res;
+      if (mine !== attempt) return 'skipped';
       reachable = true;
 
       /*
@@ -496,6 +604,7 @@
           });
       });
     }).catch(function (err) {
+      if (mine !== attempt) return 'skipped';
       /*
        * Gave up waiting. The browser says there is a network, so this is the
        * server not answering in time, and it counts like any other stall,
@@ -549,6 +658,8 @@
       entry.tries = 0;
       entry.stalls = 0;
       // A person asked: whatever the last attempt concluded, try now.
+      // A send already in flight must not record its answer over this.
+      attempt += 1;
       reachable = true;
       retryDelay = RETRY_MS;
 
@@ -587,17 +698,34 @@
   function claimUnstamped() {
     return tx('readwrite', function (store, resolve) {
       var req = store.openCursor();
+      var settled = false;
+      var finish = function () {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      // Moving the cursor while an update is still pending aborts the
+      // transaction, and nothing here used to notice. The promise then never
+      // settled, so the replay that should start when you sign in never did.
       req.onsuccess = function () {
         var cursor = req.result;
-        if (!cursor) { resolve(); return; }
+        if (!cursor) { finish(); return; }
+        var next = function () { cursor.continue(); };
         if (cursor.value.account == null && accountId != null) {
           var entry = cursor.value;
           entry.account = accountId;
-          cursor.update(entry);
+          var update = cursor.update(entry);
+          update.onsuccess = next;
+          update.onerror = next;
+        } else {
+          next();
         }
-        cursor.continue();
       };
-      req.onerror = function () { resolve(); };
+      req.onerror = finish;
+      if (req.transaction) {
+        req.transaction.onabort = finish;
+        req.transaction.oncomplete = finish;
+      }
     });
   }
 
