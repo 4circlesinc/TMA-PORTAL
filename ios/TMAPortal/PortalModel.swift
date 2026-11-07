@@ -178,12 +178,28 @@ final class PortalModel: NSObject, ObservableObject {
             return
         }
         let info = response.notification.request.content.userInfo
+        // A message notification opens its conversation.
+        if let message = MessageNotification(userInfo: info), let path = message.url, !path.isEmpty {
+            openPortalPath(path)
+            return
+        }
         let id = intValue(info["id"])
         let url = info["url"] as? String ?? ""
         guard id > 0 else { return }
         evaluate("!!(window.__tmaNotificationClick && __tmaNotificationClick(\(id)))") { [weak self] result in
             guard let self, result != "true", !url.isEmpty else { return }
             guard let target = URL(string: url.hasPrefix("http") ? url : PortalConfig.url(url)) else { return }
+            self.load(target)
+        }
+    }
+
+    /// A portal link from outside the page (a notification): in place when the
+    /// portal is up, so nothing reloads; loaded when it is not yet.
+    private func openPortalPath(_ path: String) {
+        let quoted = (try? JSONSerialization.data(withJSONObject: [path])).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+        evaluate("(function(u){var r=document.querySelector('.tma-dash');if(r&&r._portalNavigate){r._portalNavigate(u);return true}return false})(\(quoted)[0])") { [weak self] result in
+            guard let self, result != "true" else { return }
+            guard let target = URL(string: path.hasPrefix("http") ? path : PortalConfig.url(path)) else { return }
             self.load(target)
         }
     }

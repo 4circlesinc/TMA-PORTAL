@@ -138,6 +138,48 @@ final class PortalLogicTests: XCTestCase {
         XCTAssertNil(NotificationSound.sound(for: "none", silent: false))
     }
 
+    private func messagePush(_ fields: [String: String]) -> [AnyHashable: Any] {
+        let data = try! JSONSerialization.data(withJSONObject: fields)
+        return ["kind": "notification", "msg": String(data: data, encoding: .utf8)!]
+    }
+
+    func testAMessagePushSaysWhereItOpensAndWhereARepliesGo() {
+        let info = messagePush([
+            "conversation": "c-1", "name": "Bruce Wayne", "group": "Tax team",
+            "url": "/social/messages?conversation=c-1",
+            "reply": "https://portal.tmantoinelaw.com/push/messages/c-1/7?expires=1&signature=abc",
+        ])
+        let message = MessageNotification(userInfo: info)
+        XCTAssertEqual(message?.conversation, "c-1")
+        XCTAssertEqual(message?.name, "Tax team", "a group is replied to as the group")
+        XCTAssertEqual(message?.url, "/social/messages?conversation=c-1")
+        XCTAssertNil(MessageNotification(userInfo: ["kind": "notification"]), "anything else is not a message")
+    }
+
+    func testAReplyPostsTheTextWithThisPhonesToken() throws {
+        let message = try XCTUnwrap(MessageNotification(userInfo: messagePush([
+            "conversation": "c-1", "name": "Bruce Wayne",
+            "reply": "https://portal.tmantoinelaw.com/push/messages/c-1/7?expires=1&signature=abc",
+        ])))
+        let request = try XCTUnwrap(MessageReply.request(for: message, text: "  On my way \n", device: "tok"))
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.url?.absoluteString, "https://portal.tmantoinelaw.com/push/messages/c-1/7?expires=1&signature=abc")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Accept"), "application/json")
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: String])
+        XCTAssertEqual(body["body"], "On my way")
+        XCTAssertEqual(body["device"], "tok")
+        XCTAssertNotNil(UUID(uuidString: body["nonce"] ?? ""))
+
+        XCTAssertNil(MessageReply.request(for: message, text: "   ", device: "tok"), "nothing typed")
+        XCTAssertNil(MessageReply.request(for: message, text: "Hi", device: nil), "no token: the server would refuse it")
+    }
+
+    func testMessagesCarryAReplyBox() {
+        let category = MessageReply.category
+        XCTAssertEqual(category.identifier, "MESSAGE", "the category the server names in aps.category")
+        XCTAssertTrue(category.actions.first is UNTextInputNotificationAction)
+    }
+
     @MainActor
     func testEveryPageToneShipsInTheApp() {
         // The page's tones play natively (no Now Playing panel); each one the

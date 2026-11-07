@@ -24,14 +24,21 @@ final class Push
             return;
         }
 
-        self::queue($recipient->id, [
+        $data = [
             'kind' => 'notification',
             'notification' => json_encode($notification, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
             'unread' => (string) $unread,
             // The person's iPhone sound: the bundled TM tone or "default"
             // (the Apple tone). Android ignores it.
             'iosSound' => NotificationSounds::apnsSound($recipient),
-        ]);
+        ];
+        // A message: the iPhone shows the sender's photo and a Reply box.
+        $message = MessagePush::for($recipient, $notification);
+        if ($message !== null) {
+            $data['msg'] = json_encode($message, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        }
+
+        self::queue($recipient->id, $data);
     }
 
     /**

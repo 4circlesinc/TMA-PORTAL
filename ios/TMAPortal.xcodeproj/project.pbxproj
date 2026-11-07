@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A100000000000000000000E1 /* TMAPortalNotifications.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A10000000000000000000053 /* TMAPortalNotifications.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		A10000000000000000000082 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -14,7 +18,28 @@
 			remoteGlobalIDString = A10000000000000000000021;
 			remoteInfo = TMAPortal;
 		};
+		A10000000000000000000084 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000000000000000000091 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A10000000000000000000023;
+			remoteInfo = TMAPortalNotifications;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A10000000000000000000077 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A100000000000000000000E1 /* TMAPortalNotifications.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		A10000000000000000000051 /* TMAPortal.app */ = {
@@ -31,6 +56,13 @@
 			path = TMAPortalTests.xctest;
 			sourceTree = BUILT_PRODUCTS_DIR;
 		};
+		A10000000000000000000053 /* TMAPortalNotifications.appex */ = {
+			isa = PBXFileReference;
+			explicitFileType = "wrapper.app-extension";
+			includeInIndex = 0;
+			path = TMAPortalNotifications.appex;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -41,6 +73,13 @@
 				TMAPortal.entitlements,
 			);
 			target = A10000000000000000000021 /* TMAPortal */;
+		};
+		A10000000000000000000012 /* Exceptions for "TMAPortalNotifications" folder in "TMAPortalNotifications" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A10000000000000000000023 /* TMAPortalNotifications */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -56,6 +95,14 @@
 		A10000000000000000000002 /* TMAPortalTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = TMAPortalTests;
+			sourceTree = "<group>";
+		};
+		A10000000000000000000003 /* TMAPortalNotifications */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A10000000000000000000012 /* Exceptions for "TMAPortalNotifications" folder in "TMAPortalNotifications" target */,
+			);
+			path = TMAPortalNotifications;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -75,6 +122,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A10000000000000000000033 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -83,6 +137,7 @@
 			children = (
 				A10000000000000000000001 /* TMAPortal */,
 				A10000000000000000000002 /* TMAPortalTests */,
+				A10000000000000000000003 /* TMAPortalNotifications */,
 				A10000000000000000000042 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -92,6 +147,7 @@
 			children = (
 				A10000000000000000000051 /* TMAPortal.app */,
 				A10000000000000000000052 /* TMAPortalTests.xctest */,
+				A10000000000000000000053 /* TMAPortalNotifications.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -106,10 +162,12 @@
 				A10000000000000000000071 /* Sources */,
 				A10000000000000000000031 /* Frameworks */,
 				A10000000000000000000072 /* Resources */,
+				A10000000000000000000077 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A10000000000000000000083 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A10000000000000000000001 /* TMAPortal */,
@@ -140,6 +198,26 @@
 			productReference = A10000000000000000000052 /* TMAPortalTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		A10000000000000000000023 /* TMAPortalNotifications */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10000000000000000000064 /* Build configuration list for PBXNativeTarget "TMAPortalNotifications" */;
+			buildPhases = (
+				A10000000000000000000076 /* Sources */,
+				A10000000000000000000033 /* Frameworks */,
+				A10000000000000000000075 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A10000000000000000000003 /* TMAPortalNotifications */,
+			);
+			name = TMAPortalNotifications;
+			productName = TMAPortalNotifications;
+			productReference = A10000000000000000000053 /* TMAPortalNotifications.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -155,6 +233,9 @@
 					A10000000000000000000022 = {
 						CreatedOnToolsVersion = 27.0;
 						TestTargetID = A10000000000000000000021;
+					};
+					A10000000000000000000023 = {
+						CreatedOnToolsVersion = 27.0;
 					};
 				};
 			};
@@ -175,6 +256,7 @@
 			targets = (
 				A10000000000000000000021 /* TMAPortal */,
 				A10000000000000000000022 /* TMAPortalTests */,
+				A10000000000000000000023 /* TMAPortalNotifications */,
 			);
 		};
 /* End PBXProject section */
@@ -188,6 +270,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A10000000000000000000074 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000000000000000000075 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -211,6 +300,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A10000000000000000000076 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -218,6 +314,11 @@
 			isa = PBXTargetDependency;
 			target = A10000000000000000000021 /* TMAPortal */;
 			targetProxy = A10000000000000000000082 /* PBXContainerItemProxy */;
+		};
+		A10000000000000000000083 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A10000000000000000000023 /* TMAPortalNotifications */;
+			targetProxy = A10000000000000000000084 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -354,6 +455,60 @@
 			};
 			name = Release;
 		};
+		A100000000000000000000A7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TMAPortalNotifications/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tmantoinelaw.portal.notifications;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A100000000000000000000A8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TMAPortalNotifications/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.tmantoinelaw.portal.notifications;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -371,6 +526,15 @@
 			buildConfigurations = (
 				A100000000000000000000A5 /* Debug */,
 				A100000000000000000000A6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A10000000000000000000064 /* Build configuration list for PBXNativeTarget "TMAPortalNotifications" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A100000000000000000000A7 /* Debug */,
+				A100000000000000000000A8 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

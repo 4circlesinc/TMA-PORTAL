@@ -105,6 +105,7 @@ use App\Http\Controllers\MeController;
 use App\Http\Controllers\MeOneDriveController;
 use App\Http\Controllers\MessagingAttachmentController;
 use App\Http\Controllers\MessagingController;
+use App\Http\Controllers\PushReplyController;
 use App\Http\Controllers\MessagingGroupController;
 use App\Http\Controllers\MessagingScheduleController;
 use App\Http\Controllers\MeSyncStatusController;
@@ -142,6 +143,21 @@ use Illuminate\Support\Facades\Route;
  * 'profile.complete' passes. Gated with the portal, the <img> would follow a
  * redirect back to the setup page and render as a broken image.
  */
+/*
+ * A message notification on an iPhone (MessagePush): the sender's photo for
+ * the app's notification service extension, which cannot sign in, and a
+ * reply typed into Notification Center, which the app sends from the
+ * background without its web session. Both are signed, expiring links; the
+ * reply also needs one of the person's registered devices.
+ */
+Route::get('/media/avatars/{name}/push', [AvatarController::class, 'forPush'])
+    ->middleware(['signed', 'throttle:120,1'])
+    ->name('avatar.push');
+Route::post('/push/messages/{conversation}/{user}', [PushReplyController::class, 'store'])
+    ->whereNumber('user')
+    ->middleware(['signed', 'throttle:30,1'])
+    ->name('messaging.push-reply');
+
 Route::middleware(['auth'])->group(function () {
     Route::get('/media/avatars/{name}', [AvatarController::class, 'show'])->name('avatar.show');
 

@@ -160,6 +160,10 @@ final class MessageNotifier
                     'metadata' => [
                         'conversationId' => $conversation->uuid,
                         'messageId' => $message->uuid,
+                        // The phone shows the person or group as the title and
+                        // the message alone under it (MessagePush).
+                        'group' => $conversation->isGroup(),
+                        'pushBody' => $preview,
                     ],
                     'email' => $email,
                 ]);
@@ -238,6 +242,13 @@ final class MessageNotifier
             'metadata' => [
                 'conversationId' => $conversation->uuid,
                 'messageId' => $message->uuid,
+                // On the phone the sender's photo says who; the line says why.
+                'group' => $conversation->isGroup(),
+                'pushBody' => match (true) {
+                    $byName => 'Mentioned you: ',
+                    (bool) $message->is_announcement => 'Announcement: ',
+                    default => 'Mentioned everyone: ',
+                }.$preview,
             ],
         ]);
     }

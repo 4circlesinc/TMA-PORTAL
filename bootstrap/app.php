@@ -48,6 +48,8 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->validateCsrfTokens(except: [
             'hooks/microsoft-graph',
+            // A reply from an iPhone notification: a signed link, not a session.
+            'push/messages/*',
         ]);
 
         $middleware->alias([

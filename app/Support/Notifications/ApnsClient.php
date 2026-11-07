@@ -146,7 +146,25 @@ class ApnsClient
             $body = (is_array($payload) && ($payload['media'] ?? '') === 'video') ? 'Incoming video call' : 'Incoming call';
         }
 
+        // A message (MessagePush): the person or group as the title, the
+        // message alone under it. mutable-content wakes the app's
+        // notification service extension, which adds the sender's photo;
+        // the MESSAGE category carries the Reply box; thread-id stacks a
+        // conversation together.
+        $message = $kind === 'notification' && isset($data['msg']) ? json_decode((string) $data['msg'], true) : null;
+        if (is_array($message)) {
+            $title = (string) ($message['title'] ?? $title);
+            $body = (string) ($message['body'] ?? $body);
+        }
+
         $aps = ['alert' => ['title' => $title, 'body' => $body]];
+        if (is_array($message)) {
+            $aps['mutable-content'] = 1;
+            $aps['category'] = 'MESSAGE';
+            if (! empty($message['conversation'])) {
+                $aps['thread-id'] = (string) $message['conversation'];
+            }
+        }
         // The person's chosen sound rides on notifications; calls and
         // anything without one ring with the phone's default.
         $sound = array_key_exists('iosSound', $data) ? (string) $data['iosSound'] : 'default';
@@ -161,7 +179,11 @@ class ApnsClient
             $aps['interruption-level'] = 'time-sensitive';
         }
 
-        return ['aps' => $aps] + array_diff_key($data, ['iosSound' => true]);
+        // A message's own fields replace the full record, which the app does
+        // not read and which would crowd APNs' 4 KB limit.
+        $drop = ['iosSound' => true] + (is_array($message) ? ['notification' => true] : []);
+
+        return ['aps' => $aps] + array_diff_key($data, $drop);
     }
 
     /** Why APNS_PRIVATE_KEY is set but unusable, or null. For push:status. */

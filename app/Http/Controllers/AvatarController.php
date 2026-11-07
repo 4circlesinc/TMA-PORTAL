@@ -14,6 +14,16 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class AvatarController extends Controller
 {
+    /**
+     * The same photo for an iPhone notification: the app's notification
+     * service extension cannot sign in, so the push carries a signed,
+     * expiring link (MessagePush) and the route checks the signature.
+     */
+    public function forPush(Request $request, string $name): StreamedResponse
+    {
+        return $this->show($request, $name);
+    }
+
     public function show(Request $request, string $name): StreamedResponse
     {
         // Only our own generated names (uuid.jpg). Blocks path traversal.

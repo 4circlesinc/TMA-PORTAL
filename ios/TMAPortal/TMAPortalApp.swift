@@ -103,7 +103,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         let answer = UNNotificationAction(identifier: "ANSWER", title: "Answer", options: [.foreground])
         let decline = UNNotificationAction(identifier: "DECLINE", title: "Decline", options: [.destructive])
         let calls = UNNotificationCategory(identifier: "CALL", actions: [answer, decline], intentIdentifiers: [], options: [])
-        UNUserNotificationCenter.current().setNotificationCategories([calls])
+        // Messages carry a Reply box (MessageReply).
+        UNUserNotificationCenter.current().setNotificationCategories([calls, MessageReply.category])
         return true
     }
 
@@ -118,6 +119,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         let token = deviceToken.map { String(format: "%02x", $0) }.joined()
         AppBridge.token = token
+        UserDefaults.standard.set(token, forKey: MessageReply.tokenKey)
         Task { @MainActor in AppBridge.model?.pushTokenArrived(token) }
     }
 
@@ -137,6 +139,22 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        // A reply typed into a message notification: sent from here, in the
+        // background, without opening the app.
+        let userInfo = response.notification.request.content.userInfo
+        if response.actionIdentifier == MessageReply.actionIdentifier,
+           let typed = response as? UNTextInputNotificationResponse,
+           let message = MessageNotification(userInfo: userInfo) {
+            Task {
+                if await MessageReply.send(typed.userText, for: message, device: MessageReply.deviceToken) {
+                    MessageReply.clearDelivered(for: message)
+                } else {
+                    MessageReply.reportFailure(for: message, userInfo: userInfo)
+                }
+                completionHandler()
+            }
+            return
+        }
         Task { @MainActor in
             AppBridge.model?.notificationResponse(response)
             completionHandler()

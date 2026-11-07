@@ -43,6 +43,10 @@
 	<string>TM ANTOINE Portal uses your location to show whether you are working from the office or remotely, and to place an office on the map. Your exact location is never shown to others.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>TM ANTOINE Portal uses your photos when you attach one.</string>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>INSendMessageIntent</string>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
