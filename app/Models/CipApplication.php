@@ -52,6 +52,7 @@ class CipApplication extends Model
             'decided_at' => 'date',
             'appeal_lodged_at' => 'date',
             'appeal_requested_at' => 'datetime',
+            'deletion_requested_at' => 'datetime',
             'appeal_submitted_at' => 'date',
             'locked_at' => 'datetime',
             'cor_locked_at' => 'datetime',
@@ -117,6 +118,12 @@ class CipApplication extends Model
     public function addOns(): HasMany
     {
         return $this->hasMany(self::class, 'parent_application_id');
+    }
+
+    /** Who asked an administrator to delete this file, while that is open. */
+    public function deletionRequester(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'deletion_requested_by');
     }
 
     /** Who asked the firm to appeal, when one has. */

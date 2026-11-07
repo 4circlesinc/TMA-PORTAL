@@ -315,6 +315,91 @@ class Notices
         }
     }
 
+    /**
+     * Somebody has asked an administrator to delete a filed application.
+     *
+     * To the administrators only, the people who can answer it. A request
+     * that may be declined is not news for anyone else on the file.
+     */
+    public static function deletionRequested(CipApplication $application, User $author, string $reason): void
+    {
+        $facts = Contacts::facts($application);
+        $title = $facts['number'].': deletion requested';
+        $message = $author->name.' asked to delete this application: '.Str::limit(trim($reason), 140);
+
+        foreach (Contacts::administrators() as $admin) {
+            if (mb_strtolower($admin['email']) === mb_strtolower((string) $author->email)) {
+                continue;
+            }
+
+            Deliveries::send(
+                Postcards::notification(
+                    $title, $message, Contacts::url($application), 'Review the request',
+                    $admin['name'] ? (strtok($admin['name'], ' ') ?: $admin['name']) : null,
+                    'CIP Applications',
+                ),
+                $admin['email'],
+                $application,
+                'cip-deletion-request',
+            );
+
+            if ($admin['userId'] === null) {
+                continue;
+            }
+
+            Notifier::send([
+                'user' => User::find($admin['userId']),
+                'actor' => $author,
+                'type' => 'cip.deletion-request',
+                'title' => $title,
+                'message' => $message,
+                'subject' => $application,
+                'action_url' => Contacts::path($application),
+                'email' => false,
+            ]);
+        }
+    }
+
+    /** The administrator's answer to a deletion request, to whoever asked. */
+    public static function deletionDecided(CipApplication $application, ?User $requester, User $actor, bool $approved, ?string $note = null): void
+    {
+        if ($requester === null || $requester->id === $actor->id) {
+            return;
+        }
+
+        $facts = Contacts::facts($application);
+        $title = $facts['number'].': deletion '.($approved ? 'approved' : 'declined');
+        $message = trim((string) $note) !== ''
+            ? trim((string) $note)
+            : ($approved
+                ? 'The application was deleted, as you asked.'
+                : 'The application was not deleted.');
+
+        if (NotificationEmail::wanted($requester)) {
+            Deliveries::send(
+                Postcards::notification(
+                    $title, $message, Contacts::url($application), 'Open the application',
+                    strtok($requester->name, ' ') ?: $requester->name,
+                    'CIP Applications',
+                ),
+                $requester->email,
+                $application,
+                'cip-deletion-request',
+            );
+        }
+
+        Notifier::send([
+            'user' => $requester,
+            'actor' => $actor,
+            'type' => 'cip.deletion-request',
+            'title' => $title,
+            'message' => $message,
+            'subject' => $application,
+            'action_url' => Contacts::path($application),
+            'email' => false,
+        ]);
+    }
+
     /** The answer, to whoever asked. */
     public static function personChangeDecided(CipPersonChangeRequest $request, User $actor): void
     {

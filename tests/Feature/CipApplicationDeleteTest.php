@@ -163,7 +163,11 @@ class CipApplicationDeleteTest extends TestCase
         $this->assertNotNull(CipApplication::query()->find($application->id));
     }
 
-    public function test_an_officer_may_delete_a_file_they_do_not_hold(): void
+    /**
+     * A filed application is deleted by an administrator only. An officer
+     * asks for it instead (see CipDeletionRequestTest).
+     */
+    public function test_an_officer_cannot_delete_a_filed_application(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $officer = $this->user(Role::REVIEWING_OFFICER, 'cro@example.com');
@@ -171,9 +175,9 @@ class CipApplicationDeleteTest extends TestCase
 
         $this->actingAs($officer)
             ->deleteJson('/portal/cip/applications/'.$application->uuid)
-            ->assertOk();
+            ->assertNotFound();
 
-        $this->assertNull(CipApplication::query()->find($application->id));
+        $this->assertNotNull(CipApplication::query()->find($application->id));
     }
 
     public function test_deleting_an_application_twice_is_ok(): void

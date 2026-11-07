@@ -4954,7 +4954,7 @@
       familyExpandButton(a, expanded, postApproval) +
       '<span class="tma-cip-table__family" title="' + esc(familyTitle(a)) + '">' +
       esc(a.familyLabel || '-') + '</span></span></td>' +
-      '<td class="tma-cip-table__status-cell">' + progressCell + '</td>' +
+      '<td class="tma-cip-table__status-cell">' + progressCell + deletionRequestChip(a) + '</td>' +
       '<td>' + assignedCell(a.assignedTo, a) + '</td>' +
       '<td class="tma-portal-cell--menu">' +
       '<button type="button" class="tma-portal-row-menu" data-cip-row-menu="' +
@@ -5016,7 +5016,7 @@
       '<td>' + applicantCell(a) +
       '<span class="tma-cip-table__inline-status">' + progressCell + '</span></td>' +
       '<td>' + esc(a.relationshipLabel || '-') + '</td>' +
-      '<td class="tma-cip-table__status-cell">' + progressCell + '</td>' +
+      '<td class="tma-cip-table__status-cell">' + progressCell + deletionRequestChip(a) + '</td>' +
       '<td class="tma-portal-table__muted">' + esc(submitted || '-') + '</td>' +
       '<td>' + assignedCell(a.assignedTo, a) + '</td>' +
       '<td class="tma-portal-cell--menu">' +
@@ -7281,6 +7281,7 @@
           ? ''
           : '<button type="button" class="tma-dash__clients-edit-btn tma-portal-btn--danger" data-cip-discard>' +
             'Delete</button>') +
+        (editingApp ? filedApplicationDeleteButton(applicationRecord(state)) : '') +
         '<button type="button" class="tma-dash__clients-edit-btn" data-cip-cancel>Cancel</button>' +
         /*
          * Save as draft, beside the button that files it.
@@ -13953,8 +13954,22 @@
       });
     }
     items.push({ sep: true });
+    var asked = kind === 'application' && app && app.deletionRequest;
+    if (asked && asked.mine) {
+      items.push({ act: 'withdraw-deletion', label: 'Withdraw deletion request', icon: 'ArrowCounterClockwise' });
+    } else if (kind === 'application' && app && app.canRequestDeletion && !asked) {
+      items.push({ act: 'request-deletion', label: 'Request deletion', icon: 'Trash', danger: true });
+    }
+    if (asked && app.canDelete) {
+      items.push({ act: 'decline-deletion', label: 'Decline deletion request', icon: 'Prohibit' });
+    }
     if (kind !== 'application' || !app || app.canDelete !== false) {
-      items.push({ act: 'delete', label: 'Delete', icon: 'Trash', danger: true });
+      items.push({
+        act: 'delete',
+        label: asked ? 'Delete (approve request)' : 'Delete',
+        icon: 'Trash',
+        danger: true,
+      });
     }
     return items;
   }
@@ -16997,6 +17012,14 @@
         deleteCipApplication(id, extra.applicationId);
         return;
       }
+      if (act === 'request-deletion') {
+        openDeletionRequestDialog(extra.applicationId || (cipSourceFor(extra, id) || {}).id);
+        return;
+      }
+      if (act === 'withdraw-deletion' || act === 'decline-deletion') {
+        clearDeletionRequest(extra.applicationId || (cipSourceFor(extra, id) || {}).id, act === 'decline-deletion');
+        return;
+      }
       rememberCipApplicant(id);
       kind = 'client';
     }
@@ -17722,7 +17745,92 @@
       });
   }
 
-  function deleteCipApplication(clientUid, applicationId) {
+  /* ── asking an administrator to delete a filed application ─────── */
+
+  function afterDeletionRequestChange(message) {
+    clientsToast(message, 'positive');
+    forgetApplicationTable();
+    var ctx = clientsMenuCtx || (clientsMountRoot && clientsMountRoot._clientsController);
+    if (clientsMountState && clientsMountState.applicationId && window.TMAStore) {
+      try { window.TMAStore.invalidate('cip:application-record:' + clientsMountState.applicationId); } catch (e) { /* ignore */ }
+    }
+    if (clientsMountRoot && clientsMountRoot._clientsController) {
+      clientsMountRoot._clientsController.syncRoute(parseClientsPath(window.location.pathname));
+    } else if (ctx && ctx.render) {
+      ctx.render({ forceFull: true });
+    }
+  }
+
+  /*
+   * Staff and the provider side cannot delete a filed application; they ask
+   * an administrator, with a reason the administrator reads before deciding.
+   */
+  function openDeletionRequestDialog(applicationId) {
+    var ui = window.TMAPortalUI;
+    if (!applicationId || !ui || !ui.openModal) return;
+    ui.openModal({
+      title: 'Request deletion',
+      body: '<p class="tma-portal-modal__text">An administrator reviews this and deletes the application, ' +
+        'or declines. Say why it should be deleted.</p>' +
+        '<textarea class="tma-portal-input" rows="4" maxlength="2000" data-deletion-reason' +
+        ' aria-label="Reason for deleting this application" style="width:100%;margin-top:8px"></textarea>' +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-deletion-cancel>Cancel</button>' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--danger" data-deletion-send>Send request</button>' +
+        '</div>',
+      onMount: function (host) {
+        var field = host.querySelector('[data-deletion-reason]');
+        var send = host.querySelector('[data-deletion-send]');
+        if (field) field.focus();
+        host.querySelector('[data-deletion-cancel]').addEventListener('click', function () { ui.closeModal(); });
+        send.addEventListener('click', function () {
+          var reason = field ? field.value.trim() : '';
+          if (!reason) {
+            ui.toastError('Say why this application should be deleted.');
+            if (field) field.focus();
+            return;
+          }
+          send.disabled = true;
+          clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/deletion-request', {
+            method: 'POST',
+            json: { reason: reason },
+          }).then(function () {
+            ui.closeModal();
+            afterDeletionRequestChange('Deletion requested. An administrator will review it.');
+          }).catch(function (err) {
+            send.disabled = false;
+            ui.toastError((err && err.message) || 'Couldn’t send the request. Try again.');
+          });
+        });
+      },
+    });
+  }
+
+  /* The requester takes it back, or an administrator declines it. */
+  function clearDeletionRequest(applicationId, declining) {
+    if (!applicationId) return;
+    if (declining && !window.confirm('Decline this deletion request? The application is kept.')) return;
+    clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/deletion-request', {
+      method: 'DELETE',
+    }).then(function () {
+      afterDeletionRequestChange(declining ? 'Deletion request declined' : 'Deletion request withdrawn');
+    }).catch(function (err) {
+      clientsToast((err && err.message) || 'Couldn’t update the request', 'negative');
+    });
+  }
+
+  /* On the row, beside the status, while a request is open. */
+  function deletionRequestChip(a) {
+    var asked = a && a.deletionRequest;
+    if (!asked) return '';
+    var title = 'Deletion requested' + (asked.requestedBy ? ' by ' + asked.requestedBy : '') +
+      (asked.reason ? ': ' + asked.reason : '');
+
+    return ' <span class="tma-portal-status tma-portal-status--danger tma-portal-status--inline"' +
+      ' title="' + esc(title) + '">Deletion requested</span>';
+  }
+
+  function deleteCipApplication(clientUid, applicationId, onDeleted) {
     var ctx = clientsMenuCtx;
     var app = applicationRowById(applicationId) || applicationHeldById(applicationId)
       || (clientUid ? applicationFor(clientUid) : null);
@@ -17753,6 +17861,10 @@
       clientsToast('Application deleted', 'positive');
       forgetApplicationTable();
       forgetBuckets();
+      if (typeof onDeleted === 'function') {
+        onDeleted();
+        return;
+      }
       if (ctx && ctx.state && ctx.state.selectedId === clientUid && ctx.navigate) {
         ctx.navigate('list');
       } else if (ctx && ctx.render) {
@@ -18465,6 +18577,32 @@
      arrow after onReady has no click handler and appears broken. */
   var cipToolbarWired = false;
 
+  /*
+   * A filed application's own Delete, in its form: an administrator deletes
+   * it; everyone else may ask, or take their ask back.
+   */
+  function filedApplicationDeleteButton(app) {
+    if (!app || !app.id) return '';
+    var asked = app.deletionRequest;
+    if (app.canDelete) {
+      return '<button type="button" class="tma-dash__clients-edit-btn tma-portal-btn--danger" data-cip-filed-delete>' +
+        (asked ? 'Delete (approve request)' : 'Delete') + '</button>';
+    }
+    if (asked && asked.mine) {
+      return '<button type="button" class="tma-dash__clients-edit-btn" data-cip-withdraw-deletion>' +
+        'Withdraw deletion request</button>';
+    }
+    if (asked) {
+      return '<span class="tma-portal-status tma-portal-status--danger tma-portal-status--inline">Deletion requested</span>';
+    }
+    if (app.canRequestDeletion) {
+      return '<button type="button" class="tma-dash__clients-edit-btn tma-portal-btn--danger" data-cip-request-deletion>' +
+        'Request deletion</button>';
+    }
+
+    return '';
+  }
+
   function confirmDiscardApplication(navigate) {
     var ui = window.TMAPortalUI;
     if (!ui || !ui.openModal || !window.TMACipIntake || !window.TMACipIntake.discard) return;
@@ -18512,6 +18650,23 @@
       if (e.target.closest('[data-cip-discard]')) {
         e.preventDefault();
         confirmDiscardApplication(navigate);
+        return;
+      }
+      var filedApp = clientsMountState ? applicationRecord(clientsMountState) : null;
+      if (filedApp && e.target.closest('[data-cip-request-deletion]')) {
+        e.preventDefault();
+        openDeletionRequestDialog(filedApp.id);
+        return;
+      }
+      if (filedApp && e.target.closest('[data-cip-withdraw-deletion]')) {
+        e.preventDefault();
+        clearDeletionRequest(filedApp.id, false);
+        return;
+      }
+      if (filedApp && e.target.closest('[data-cip-filed-delete]')) {
+        e.preventDefault();
+        // From its own form: once it is gone there is nothing to stay on.
+        deleteCipApplication(filedApp.clientUid || null, filedApp.id, function () { navigate('list'); });
         return;
       }
       var draftSave = e.target.closest('[data-cip-draft-save]');

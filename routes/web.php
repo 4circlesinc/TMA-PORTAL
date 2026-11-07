@@ -27,6 +27,7 @@ use App\Http\Controllers\Cip\CipDocumentCommentController;
 use App\Http\Controllers\Cip\CipDocumentUploadController;
 use App\Http\Controllers\Cip\CipEventController;
 use App\Http\Controllers\Cip\CipLetterController;
+use App\Http\Controllers\Cip\CipDeletionRequestController;
 use App\Http\Controllers\Cip\CipPeopleController;
 use App\Http\Controllers\Cip\CipPersonStatusController;
 use App\Http\Controllers\Cip\CipProviderTransferController;
@@ -547,6 +548,12 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
             ->name('applications.destroy.post');
         Route::post('/applications/{uuid}/restore', [CipApplicationController::class, 'restore'])
             ->name('applications.restore');
+        // Staff and the provider side ask an administrator to delete a filed
+        // application; the requester withdraws, or an administrator declines.
+        Route::post('/applications/{uuid}/deletion-request', [CipDeletionRequestController::class, 'store'])
+            ->name('applications.deletion-request.store');
+        Route::delete('/applications/{uuid}/deletion-request', [CipDeletionRequestController::class, 'destroy'])
+            ->name('applications.deletion-request.destroy');
         Route::delete('/applications/{uuid}/force', [CipApplicationController::class, 'purge'])
             ->name('applications.purge');
         Route::get('/applications/{uuid}/messages', [CipThreadController::class, 'index'])

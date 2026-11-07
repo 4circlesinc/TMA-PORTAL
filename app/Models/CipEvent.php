@@ -192,6 +192,16 @@ class CipEvent extends Model
 
     public const ACTION_APPEAL_REQUESTED = 'appeal_requested';
 
+    /**
+     * Somebody asked an administrator to delete a filed application, and the
+     * two ways that ask ends without a deletion. Approval is ACTION_DELETED.
+     */
+    public const ACTION_DELETION_REQUESTED = 'deletion_requested';
+
+    public const ACTION_DELETION_DECLINED = 'deletion_declined';
+
+    public const ACTION_DELETION_WITHDRAWN = 'deletion_withdrawn';
+
     public const ACTION_APPEAL_LODGED = 'appeal_lodged';
 
     public const ACTION_APPEAL_READY = 'appeal_ready';

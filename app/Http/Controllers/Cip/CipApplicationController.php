@@ -35,6 +35,7 @@ use App\Support\Cip\InvestmentType;
 use App\Support\Cip\Milestones;
 use App\Support\Cip\PassportPhoto;
 use App\Support\Cip\NotReady;
+use App\Support\Cip\Notices;
 use App\Support\Cip\PersonStatus;
 use App\Support\Cip\Settlement;
 use App\Support\Cip\Phase;
@@ -1518,6 +1519,8 @@ class CipApplicationController extends Controller
             'availableOverrides' => $this->overrides($application, $viewer, forListing: true),
             'lockedStatuses' => $this->lockedStatuses($application, $viewer, forListing: true),
             'canDelete' => CipAccess::canDelete($viewer, $application),
+            'canRequestDeletion' => CipAccess::canRequestDeletion($viewer, $application),
+            'deletionRequest' => $this->deletionRequest($application, $viewer),
             'canTransferProvider' => CipAccess::canTransferProvider($viewer),
             'providerId' => $application->provider?->uuid,
             'providerCode' => $application->provider?->code,
@@ -1942,7 +1945,14 @@ class CipApplicationController extends Controller
             return response()->json(['status' => 'ok']);
         }
 
+        // Deleting a file somebody asked to have deleted is the yes.
+        $requester = $application->deletion_requested_at !== null ? $application->deletionRequester : null;
+
         Removal::delete($application, $request->user());
+
+        if ($requester !== null) {
+            Notices::deletionDecided($application, $requester, $request->user(), true);
+        }
 
         return response()->json(['status' => 'ok']);
     }
@@ -1988,6 +1998,25 @@ class CipApplicationController extends Controller
         abort_unless(CipAccess::canDelete($user, $application), 404);
 
         return $application;
+    }
+
+    /**
+     * The open request to delete this file, if there is one: who asked, when,
+     * why, and whether the reader is the one who asked (they may withdraw).
+     * Null when nobody has asked, which is nearly every row.
+     */
+    private function deletionRequest(CipApplication $application, User $viewer): ?array
+    {
+        if ($application->deletion_requested_at === null) {
+            return null;
+        }
+
+        return [
+            'requestedAt' => $application->deletion_requested_at->toIso8601String(),
+            'requestedBy' => $application->deletionRequester?->name,
+            'reason' => $application->deletion_request_reason,
+            'mine' => (int) $application->deletion_requested_by === (int) $viewer->id,
+        ];
     }
 
     /** The application record shape, for controllers that update and re-read. */
@@ -2580,6 +2609,8 @@ class CipApplicationController extends Controller
             'availableOverrides' => $this->overrides($application, $viewer),
             'lockedStatuses' => $this->lockedStatuses($application, $viewer),
             'canDelete' => CipAccess::canDelete($viewer, $application),
+            'canRequestDeletion' => CipAccess::canRequestDeletion($viewer, $application),
+            'deletionRequest' => $this->deletionRequest($application, $viewer),
             'canTransferProvider' => CipAccess::canTransferProvider($viewer),
             'stageStatuses' => $this->statusChoices(Engine::stageStatuses($application, $viewer)),
             'provider' => $application->provider?->name,

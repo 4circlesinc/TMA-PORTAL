@@ -238,12 +238,35 @@ class CipAccess
 
         // A draft is the work of whoever started it. Colleagues may open and
         // edit it, but only its creator (or an administrator, above) may
-        // throw it away.
+        // throw it away. A filed application is the firm's record: only an
+        // administrator deletes it, and everyone else asks one to
+        // (see canRequestDeletion).
         if ($application->status === Status::DRAFT) {
             return (int) $application->created_by === (int) $user->id;
         }
 
-        return Role::isStaff($user) && Role::of($user) !== Role::EMPLOYEE;
+        return false;
+    }
+
+    /**
+     * May this account ask an administrator to delete a filed application?
+     *
+     * Staff and the provider side, on a file they can see (the caller checks
+     * reach through ApplicationScope; a provider may ask about a
+     * post-approval file even though they may not edit it). Not an
+     * administrator, who deletes it instead, and never a draft, which its
+     * creator deletes without asking.
+     */
+    public static function canRequestDeletion(?User $user, CipApplication $application): bool
+    {
+        if ($user === null || ! self::enabled() || Role::isAdmin($user)) {
+            return false;
+        }
+        if ($application->trashed() || $application->status === Status::DRAFT) {
+            return false;
+        }
+
+        return self::canCreate($user);
     }
 
     /**
