@@ -1468,6 +1468,23 @@ if (!app.requestSingleInstanceLock()) {
       return true;
     });
 
+    // The portal's banners, with the sound chosen in Settings → Notifications
+    // (notifications.js). A click brings the window forward and tells the page
+    // which banner it was, so it can open what the banner was about.
+    ipcMain.handle('tma:notify', (event, options, id) => {
+      if (!event.sender || event.sender.isDestroyed()) return false;
+      const sender = event.sender;
+      return notifications.show(options, () => {
+        revealWindow({ steal: true });
+        if (!sender.isDestroyed()) sender.send('tma:notification-click', id);
+      });
+    });
+
+    ipcMain.handle('tma:preview-sound', (event, sound) => {
+      if (!event.sender || event.sender.isDestroyed()) return false;
+      return notifications.preview(String(sound || 'default'), () => revealWindow({ steal: true }));
+    });
+
     // Presence settings, after Location was blocked. Not run through
     // safeExternalUrl: these are OS settings URLs, not web links.
     ipcMain.handle('tma:open-location-settings', (event) => {

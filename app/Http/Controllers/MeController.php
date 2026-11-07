@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\WorkDay;
 use App\Support\Access\Impersonation;
+use App\Support\Notifications\NotificationSounds;
 use App\Support\Access\Role;
 use App\Support\AuthenticatorNudge;
 use App\Support\AvatarService;
@@ -76,6 +77,8 @@ class MeController extends Controller
             'desktopNotifications' => [
                 'enabled' => (bool) MessagingSettings::get($user, 'desktopNotifications'),
                 'preview' => (bool) MessagingSettings::get($user, 'notificationPreview'),
+                // The sound the Mac and iPhone apps play for a banner.
+                'sounds' => NotificationSounds::for($user),
             ],
             // Today's work plan (public fields only) for Messages / profiles.
             'workStatus' => WorkDay::publicStatusFor($user),

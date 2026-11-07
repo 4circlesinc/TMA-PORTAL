@@ -146,10 +146,13 @@ class ApnsClient
             $body = (is_array($payload) && ($payload['media'] ?? '') === 'video') ? 'Incoming video call' : 'Incoming call';
         }
 
-        $aps = [
-            'alert' => ['title' => $title, 'body' => $body],
-            'sound' => 'default',
-        ];
+        $aps = ['alert' => ['title' => $title, 'body' => $body]];
+        // The person's chosen sound rides on notifications ('' is silent);
+        // calls and anything without one ring with the phone's default.
+        $sound = array_key_exists('iosSound', $data) ? (string) $data['iosSound'] : 'default';
+        if ($sound !== '') {
+            $aps['sound'] = $sound;
+        }
         if ($badge !== null) {
             $aps['badge'] = $badge;
         }

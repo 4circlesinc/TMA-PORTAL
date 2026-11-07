@@ -657,6 +657,8 @@
     voice: 'Select voice',
     'toast-position': 'Toast position',
     'toast-duration': 'Display duration',
+    'sound-mac': 'Sound on Mac',
+    'sound-iphone': 'Sound on iPhone',
   };
 
   var MOBILE_SELECT_PANEL = {
@@ -665,6 +667,8 @@
     voice: 'time',
     'toast-position': 'notifications',
     'toast-duration': 'notifications',
+    'sound-mac': 'notifications',
+    'sound-iphone': 'notifications',
   };
 
   function getMobileSelectPanel(root, selectId) {
@@ -843,12 +847,16 @@
   function getMobileSelectList(id) {
     if (id === 'toast-position') return TOAST_POSITIONS;
     if (id === 'toast-duration') return TOAST_DURATIONS;
+    if (id === 'sound-mac') return SOUND_MAC_OPTIONS;
+    if (id === 'sound-iphone') return SOUND_IPHONE_OPTIONS;
     return getTimeSelectList(id);
   }
 
   function getMobileSelectValue(id) {
     if (id === 'toast-position') return String(readToastPrefs().position);
     if (id === 'toast-duration') return String(readToastPrefs().durationSec);
+    if (id === 'sound-mac') return notificationSounds.mac;
+    if (id === 'sound-iphone') return notificationSounds.iphone;
     return getTimeSelectValue(readTimePrefs(), id);
   }
 
@@ -1018,6 +1026,12 @@
           syncNotificationsPanelUI(root);
           return;
         }
+        if (id === 'sound-mac' || id === 'sound-iphone') {
+          saveNotificationSound(id === 'sound-mac' ? 'mac' : 'iphone', value);
+          closeMobileSelect(root);
+          applyNotificationSounds(root);
+          return;
+        }
         if (id === 'online-status' || id === 'last-seen') {
           savePrivacySetting(id === 'online-status' ? 'onlineStatus' : 'lastSeen', value);
           closeMobileSelect(root);
@@ -1099,6 +1113,12 @@
           applyToastPickerChoice(id, value);
           closePickers(root);
           syncNotificationsPanelUI(root);
+          return;
+        }
+        if (id === 'sound-mac' || id === 'sound-iphone') {
+          saveNotificationSound(id === 'sound-mac' ? 'mac' : 'iphone', value);
+          closePickers(root);
+          applyNotificationSounds(root);
           return;
         }
         if (id === 'online-status' || id === 'last-seen') {
@@ -1223,6 +1243,125 @@
     } else if (id === 'toast-duration') {
       writeToastPrefs({ durationSec: parseInt(value, 10) || 10 }, { preview: true });
     }
+  }
+
+  /* ── Notification sound ──────────────────────────────────────────
+     The sound a banner makes in the Mac and iPhone apps, saved to the
+     account (App\Support\Notifications\NotificationSounds). The Mac app plays
+     macOS's own alert sounds by name. iOS lets apps use only the phone's
+     default tone or tones they ship, so the iPhone list is its default (the
+     tone set in iPhone Settings > Sounds & Haptics) and the portal's two. */
+  var SOUND_MAC_OPTIONS = [{ id: 'default', label: 'Mac default' }]
+    .concat(['Basso', 'Blow', 'Bottle', 'Frog', 'Funk', 'Glass', 'Hero', 'Morse', 'Ping', 'Pop', 'Purr', 'Sosumi', 'Submarine', 'Tink']
+      .map(function (name) { return { id: name, label: name }; }))
+    .concat([{ id: 'none', label: 'Silent' }]);
+  var SOUND_IPHONE_OPTIONS = [
+    { id: 'default', label: 'iPhone default' },
+    { id: 'chime', label: 'TM Chime' },
+    { id: 'notification', label: 'TM Notification' },
+    { id: 'none', label: 'Silent' },
+  ];
+  // The same tones the iPhone app carries, so they can be heard here first.
+  var SOUND_IPHONE_PREVIEW = { chime: 'audio/message-chime.mp3', notification: 'audio/notification-system.mp3' };
+
+  var notificationSounds = { mac: 'default', iphone: 'default' };
+  var notificationSoundsLoaded = false;
+
+  function renderNotificationSoundGroup() {
+    var inMacApp = !!(window.TMADesktop && typeof window.TMADesktop.previewSound === 'function');
+    return '<div class="tma-dash__settings-notifications-group">' +
+      '<p class="tma-dash__settings-notifications-group-label">Notification sound</p>' +
+      '<p class="tma-dash__settings-notifications-hint">The sound notifications make in the TM ANTOINE Portal apps. Choosing one plays it' +
+      (inMacApp ? '.' : ' (Mac sounds play in the Mac app).') + '</p>' +
+      '<div class="tma-dash__settings-picker-anchor" data-picker-anchor="sound-mac">' +
+      renderRow({
+        label: 'On Mac',
+        desc: 'One of the Mac\u2019s own alert sounds.',
+        action: 'pick-sound-mac',
+        value: findOption(SOUND_MAC_OPTIONS, notificationSounds.mac, 'default').label,
+        valueMuted: true,
+      }) +
+      renderPicker('sound-mac', '30919:278125', SOUND_MAC_OPTIONS, notificationSounds.mac) +
+      '</div>' +
+      profileInnerDivider() +
+      '<div class="tma-dash__settings-picker-anchor" data-picker-anchor="sound-iphone">' +
+      renderRow({
+        label: 'On iPhone',
+        desc: 'iPhone default follows the tone set in iPhone Settings > Sounds & Haptics. Apple keeps its other tones for its own apps.',
+        action: 'pick-sound-iphone',
+        value: findOption(SOUND_IPHONE_OPTIONS, notificationSounds.iphone, 'default').label,
+        valueMuted: true,
+      }) +
+      renderPicker('sound-iphone', '30919:278125', SOUND_IPHONE_OPTIONS, notificationSounds.iphone) +
+      '</div>' +
+      '</div>';
+  }
+
+  function applyNotificationSounds(root) {
+    [['sound-mac', SOUND_MAC_OPTIONS, notificationSounds.mac], ['sound-iphone', SOUND_IPHONE_OPTIONS, notificationSounds.iphone]].forEach(function (entry) {
+      var row = root.querySelector('[data-settings-action="pick-' + entry[0] + '"]');
+      var out = row && row.querySelector('[data-settings-row-value="pick-' + entry[0] + '"]');
+      if (out) out.textContent = findOption(entry[1], entry[2], 'default').label;
+      var list = root.querySelector('[data-settings-picker="' + entry[0] + '"] [data-picker-list]');
+      if (list) list.innerHTML = renderPickerList(entry[1], entry[2]);
+    });
+  }
+
+  function loadNotificationSounds(root) {
+    if (notificationSoundsLoaded) { applyNotificationSounds(root); return; }
+    notificationSoundsLoaded = true;
+    fetch('/me/notification-sounds', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      if (!d) { notificationSoundsLoaded = false; return; }
+      notificationSounds = { mac: d.mac || 'default', iphone: d.iphone || 'default' };
+      applyNotificationSounds(root);
+    }).catch(function () { notificationSoundsLoaded = false; });
+  }
+
+  function previewNotificationSound(platform, value) {
+    if (platform === 'mac') {
+      if (window.TMADesktop && typeof window.TMADesktop.previewSound === 'function') {
+        try { window.TMADesktop.previewSound(value); } catch (e) { /* preview only */ }
+      }
+      return;
+    }
+    var src = SOUND_IPHONE_PREVIEW[value];
+    if (!src) return;
+    try {
+      var audio = new Audio(src);
+      var playing = audio.play();
+      if (playing && playing.catch) playing.catch(function () {});
+    } catch (e) { /* preview only */ }
+  }
+
+  function saveNotificationSound(platform, value) {
+    var previous = notificationSounds[platform];
+    notificationSounds[platform] = value;
+    previewNotificationSound(platform, value);
+    // Banners raised from now on use it, without waiting for the next /me.
+    if (window.TMADesktopNotify && window.TMADesktopNotify.applyPrefs) {
+      window.TMADesktopNotify.applyPrefs({ sounds: notificationSounds });
+    }
+    var body = {};
+    body[platform] = value;
+    fetch('/me/notification-sounds', {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-XSRF-TOKEN': csrfToken(),
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: JSON.stringify(body),
+    }).then(function (r) {
+      if (r.ok) return;
+      notificationSounds[platform] = previous;
+      var root = document.querySelector('[data-settings-panel="notifications"]');
+      if (root) applyNotificationSounds(root.closest('.tma-dash') || document);
+    }).catch(function () {});
   }
 
   function readNotificationsPrefs() {
@@ -1645,6 +1784,7 @@
       }) +
       '</div>' +
       renderToastSettingsGroup() +
+      renderNotificationSoundGroup() +
       renderNotificationPrefsGroup() +
       '</div>' +
       renderMobileSelectOverlay('30919:293271') +
@@ -1767,6 +1907,7 @@
 
   function syncNotificationsPanelUI(root) {
     loadNotificationPrefs(root);
+    loadNotificationSounds(root);
     var prefs = readNotificationsPrefs();
     var toastPrefs = readToastPrefs();
     var position = findOption(TOAST_POSITIONS, toastPrefs.position, 'bottom-right');

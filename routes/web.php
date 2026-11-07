@@ -58,6 +58,7 @@ use App\Http\Controllers\DesktopReleasesController;
 use App\Http\Controllers\DesktopUpdateController;
 use App\Http\Controllers\DevDatabaseController;
 use App\Http\Controllers\DeviceTokenController;
+use App\Http\Controllers\NotificationSoundsController;
 use App\Http\Controllers\EmailTwoFactorController;
 use App\Http\Controllers\EmailVerificationStatusController;
 use App\Http\Controllers\Feed\FeedAnalyticsController;
@@ -329,6 +330,9 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     // Native apps' push tokens (docs/android-app-prompt.md section 13).
     Route::post('/me/devices', [DeviceTokenController::class, 'store'])->name('me.devices.store');
     Route::delete('/me/devices/{token}', [DeviceTokenController::class, 'destroy'])->name('me.devices.destroy');
+    // The sound notifications make in the Mac and iPhone apps.
+    Route::get('/me/notification-sounds', [NotificationSoundsController::class, 'show'])->name('me.notification-sounds');
+    Route::put('/me/notification-sounds', [NotificationSoundsController::class, 'update'])->name('me.notification-sounds.update');
     Route::post('/me/onedrive/pause', [MeOneDriveController::class, 'pause'])->name('me.onedrive.pause');
     Route::post('/me/onedrive/resume', [MeOneDriveController::class, 'resume'])->name('me.onedrive.resume');
 

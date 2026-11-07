@@ -174,7 +174,8 @@
     live[this.__id] = this;
     var url = '';
     try { url = options.data && options.data.url ? String(options.data.url) : ''; } catch (e) { /* ignore */ }
-    post('notify', { json: JSON.stringify({ id: this.__id, title: this.title, body: this.body, tag: this.tag, silent: this.silent, url: url, icon: options.icon || '' }) });
+    var sound = typeof options.sound === 'string' ? options.sound : 'default';
+    post('notify', { json: JSON.stringify({ id: this.__id, title: this.title, body: this.body, tag: this.tag, silent: this.silent, sound: sound, url: url, icon: options.icon || '' }) });
   }
   IOSNotification.permission = notificationsAllowed ? 'granted' : 'default';
   IOSNotification.requestPermission = function (cb) {

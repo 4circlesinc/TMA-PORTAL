@@ -1,5 +1,14 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+// Click handlers for banners posted through TMADesktop.notify, by id.
+const notificationClicks = new Map();
+let notificationSeq = 0;
+ipcRenderer.on('tma:notification-click', (_event, id) => {
+  const onClick = notificationClicks.get(id);
+  notificationClicks.delete(id);
+  if (onClick) { try { onClick(); } catch { /* the page's handler threw */ } }
+});
+
 // Almost nothing from Node is exposed to the portal. isDesktop exists so
 // page code can tell it is running inside the desktop shell (e.g. to hide
 // "install the app" prompts) without gaining privileges. openInBrowser is
@@ -17,6 +26,19 @@ contextBridge.exposeInMainWorld('TMADesktop', {
     ipcRenderer.invoke('tma:open-in-browser', url);
   },
   openLocationSettings: () => ipcRenderer.invoke('tma:open-location-settings'),
+  // A banner with the sound chosen in Settings → Notifications (macOS alert
+  // sounds by name). onClick runs when it is clicked.
+  notify: (options, onClick) => {
+    const id = ++notificationSeq;
+    if (typeof onClick === 'function') notificationClicks.set(id, onClick);
+    const o = options || {};
+    return ipcRenderer.invoke('tma:notify', {
+      title: String(o.title || ''),
+      body: String(o.body || ''),
+      sound: String(o.sound || 'default'),
+    }, id);
+  },
+  previewSound: (sound) => ipcRenderer.invoke('tma:preview-sound', String(sound || 'default')),
   // Sign as admin, and the way back. Called from current-user.js before
   // the navigation. The shell on disk belongs to whoever was signed in
   // when it was captured; drop it so the next document is the new account.

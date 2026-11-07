@@ -94,6 +94,27 @@ app.whenReady().then(async () => {
   const beforeAndroid = await js('window.__raised.length');
   check('android does not banner from the page', await raise('email', 'From phone', 'hi'), beforeAndroid);
 
+  /*
+   * Settings → Notifications → Notification sound. The Mac app posts the
+   * banner itself (TMADesktop.notify) so the chosen macOS sound plays; the
+   * iPhone shim gets the phone's choice on the browser notification.
+   */
+  await js(`window.__posted = []; window.TMADesktop = { isDesktop: true, notify: function (o, onClick) { window.__posted.push(o); window.__click = onClick; } }; void 0;`);
+  await js("window.TMAMessagingSettings = {}; window.TMADesktopNotify.applyPrefs({ enabled: true, preview: true, sounds: { mac: 'Glass', iphone: 'chime' } })");
+  const beforeMac = await js('window.__raised.length');
+  await raise('email', 'New email from Dana', 'Contract');
+  check('the Mac app is handed the banner, not the browser', await js('window.__raised.length'), beforeMac);
+  check('with the chosen macOS sound', await js('window.__posted[window.__posted.length-1].sound'), 'Glass');
+  check('and the banner text', await js('window.__posted[window.__posted.length-1].title'), 'New email from Dana');
+  await js('window.TMAMessagingSettings = { notificationSounds: false }');
+  await raise('email', 'New email', 'Contract');
+  check('sounds off is silent in the Mac app too', await js('window.__posted[window.__posted.length-1].sound'), 'none');
+
+  await js(`window.TMAMessagingSettings = {}; window.TMADesktop = { isDesktop: true, isIOS: true }; void 0;`);
+  await js(`window.Notification = function (title, opts) { window.__raised.push({ title, sound: opts.sound, silent: opts.silent }); this.close = function(){}; }; window.Notification.permission = 'granted'; void 0;`);
+  await raise('email', 'On the phone', 'hi');
+  check('the iPhone shim gets the phone\'s sound', await js('window.__raised[window.__raised.length-1].sound'), 'chime');
+
   console.log(failures ? `\n${failures} FAILURE(S)` : '\nALL PASS');
   app.exit(failures ? 1 : 0);
 });

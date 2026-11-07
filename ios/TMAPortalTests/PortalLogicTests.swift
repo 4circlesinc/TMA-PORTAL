@@ -1,3 +1,4 @@
+import UserNotifications
 import XCTest
 @testable import TMAPortal
 
@@ -53,6 +54,20 @@ final class PortalLogicTests: XCTestCase {
         XCTAssertTrue(rules.isPortalURL(login))
         XCTAssertTrue(rules.isAuthURL(URL(string: "https://accounts.google.com/o/oauth2/v2/auth")!))
         XCTAssertFalse(rules.isPortalURL(URL(string: "https://example.com/file")!))
+    }
+
+    func testTheChosenIPhoneNotificationSoundIsWhatPlays() {
+        XCTAssertEqual(NotificationSound.sound(for: "default", silent: false), .default)
+        XCTAssertEqual(NotificationSound.sound(for: nil, silent: false), .default)
+        XCTAssertEqual(NotificationSound.sound(for: "chime", silent: false), UNNotificationSound(named: UNNotificationSoundName("tma-chime.caf")))
+        XCTAssertEqual(NotificationSound.sound(for: "notification", silent: false), UNNotificationSound(named: UNNotificationSoundName("tma-notification.caf")))
+        XCTAssertNil(NotificationSound.sound(for: "none", silent: false))
+        XCTAssertNil(NotificationSound.sound(for: "chime", silent: true), "the Sound column switched off wins")
+        // Every tone the server can name is in the app.
+        for file in NotificationSound.files.values {
+            let name = (file as NSString).deletingPathExtension
+            XCTAssertNotNil(Bundle(for: PortalModel.self).url(forResource: name, withExtension: "caf"), file)
+        }
     }
 
     func testLocationPermissionIsReportedTheWayTheWebDoes() {
