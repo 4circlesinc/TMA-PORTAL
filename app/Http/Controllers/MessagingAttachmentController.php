@@ -52,6 +52,25 @@ class MessagingAttachmentController extends Controller
     }
 
     /** A group's photo, visible to its members. */
+    /**
+     * A group's photo for an iPhone message notification (MessagePush): the
+     * app's notification service extension cannot sign in, so the push
+     * carries a signed, expiring link to this.
+     */
+    public function conversationPhotoForPush(string $uuid): Response
+    {
+        $conversation = Conversation::query()->where('uuid', $uuid)->firstOrFail();
+        abort_unless($conversation->photo_path, 404);
+
+        return $this->stream(
+            $conversation->photo_disk ?: config('filesystems.files_disk', 'local'),
+            $conversation->photo_path,
+            'group.jpg',
+            'image/jpeg',
+            inline: true,
+        );
+    }
+
     public function conversationPhoto(Request $request, string $uuid): Response
     {
         $conversation = Conversation::query()

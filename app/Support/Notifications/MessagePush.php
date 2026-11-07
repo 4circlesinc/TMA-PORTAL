@@ -2,15 +2,19 @@
 
 namespace App\Support\Notifications;
 
+use App\Models\Conversation;
 use App\Models\User;
 use Illuminate\Support\Facades\URL;
 
 /**
- * What an iPhone needs to show a message, or an email, the way Messages does:
- * the sender's photo with the app's icon in its corner, one line saying who
- * (the person, or the group for a group), the message under it, and a Reply
- * box in Notification Center. An email is laid out the same: the sender, then
- * its subject and the start of it; a reply goes back as an email.
+ * What an iPhone needs to show a message, or an email, the way Messages does,
+ * with the app's icon in the picture's corner and a Reply box:
+ *
+ *   direct message   the sender's photo; their name, then the message
+ *   group message    the group's photo; who wrote, the group, the message
+ *   email            the sender's photo; their name, the subject, its start
+ *
+ * A reply to an email goes back as an email.
  *
  * The app's notification service extension (ios/TMAPortalNotifications)
  * turns this into a communication notification. It runs outside the app's
@@ -48,15 +52,19 @@ final class MessagePush
         $actor = is_array($notification['actor'] ?? null) ? $notification['actor'] : [];
         $title = (string) ($notification['title'] ?? '');
         $group = (bool) ($meta['group'] ?? false);
+        $name = (string) ($actor['name'] ?? $title);
 
         return array_filter([
             'conversation' => $conversation,
             'sender' => isset($actor['id']) ? (string) $actor['id'] : null,
-            'name' => (string) ($actor['name'] ?? $title),
+            'name' => $name,
             'photo' => self::photo($actor['avatar'] ?? null),
-            // A group's name; the photo is still the person who wrote.
+            // A group: the group's photo is the picture, the person who wrote
+            // is the first line and the group's name the second.
             'group' => $group ? $title : null,
-            'title' => $title,
+            'groupPhoto' => $group ? self::groupPhoto($conversation) : null,
+            'title' => $group ? $name : $title,
+            'subtitle' => $group ? $title : null,
             'body' => (string) ($meta['pushBody'] ?? $notification['message'] ?? ''),
             'url' => is_string($notification['actionUrl'] ?? null) ? $notification['actionUrl'] : null,
             'reply' => URL::temporarySignedRoute(
@@ -84,20 +92,20 @@ final class MessagePush
         }
 
         $name = trim((string) ($meta['from_name'] ?? '')) ?: $from;
-        $subject = trim((string) $meta['subject']);
-        $snippet = trim((string) ($meta['snippet'] ?? ''));
-        // The subject, then the start of the email on the line under it.
-        $body = implode("\n", array_filter([$subject, $snippet], fn ($line) => $line !== ''));
+        $subject = trim((string) $meta['subject']) ?: '(no subject)';
 
         return array_filter([
             'kind' => 'email',
             // One thread per sender, as Mail stacks them.
             'conversation' => 'email:'.$from,
+            'message' => $message,
             'sender' => 'email:'.$from,
             'name' => $name,
             'photo' => self::photo($notification['image'] ?? null),
+            // The sender, the subject, then the start of the email.
             'title' => $name,
-            'body' => $body !== '' ? $body : '(no subject)',
+            'subtitle' => $subject,
+            'body' => trim((string) ($meta['snippet'] ?? '')),
             'url' => is_string($notification['actionUrl'] ?? null) ? $notification['actionUrl'] : null,
             'reply' => URL::temporarySignedRoute(
                 'mail.push-reply',
@@ -105,6 +113,16 @@ final class MessagePush
                 ['message' => $message, 'user' => $recipient->id],
             ),
         ], fn ($value) => $value !== null && $value !== '');
+    }
+
+    /** The group's own photo, signed for the extension, or null when it has none. */
+    private static function groupPhoto(string $conversation): ?string
+    {
+        $row = Conversation::query()->where('uuid', $conversation)->first(['id', 'uuid', 'photo_path']);
+
+        return $row?->photo_path
+            ? URL::temporarySignedRoute('messaging.group-photo.push', now()->addDays(self::PHOTO_DAYS), ['uuid' => $row->uuid])
+            : null;
     }
 
     /** A link the extension can fetch without signing in, or null to draw initials. */

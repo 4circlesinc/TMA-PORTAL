@@ -158,6 +158,10 @@ Route::post('/push/messages/{conversation}/{user}', [PushReplyController::class,
     ->whereNumber('user')
     ->middleware(['signed', 'throttle:30,1'])
     ->name('messaging.push-reply');
+// A group's photo for a group message's notification.
+Route::get('/media/groups/{uuid}/push', [MessagingAttachmentController::class, 'conversationPhotoForPush'])
+    ->middleware(['signed', 'throttle:120,1'])
+    ->name('messaging.group-photo.push');
 // The same for an email notification: its sender's photo, and a reply.
 Route::get('/portal/mail/sender-photo/{hash}/push', [MailController::class, 'senderPhotoForPush'])
     ->where('hash', '[a-f0-9]{64}')

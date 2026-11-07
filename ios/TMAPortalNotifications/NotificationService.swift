@@ -2,21 +2,24 @@ import Intents
 import UserNotifications
 
 /// Turns a message or email push into the kind of notification Messages
-/// shows, laid out the same for all of them: the sender's photo with the app's
-/// icon in its corner, one line saying who (the person, the group for a group,
-/// the sender of an email), the message under it, and the Reply box (the
-/// MESSAGE category, handled by the app's AppDelegate).
+/// shows, with the app's icon in the corner of the picture and a Reply box
+/// (the MESSAGE category, handled by the app's AppDelegate):
 ///
-/// A group is deliberately not given to iOS as a group conversation: iOS then
-/// lays it out on three lines, the sender as the title and the group's name
-/// under it, then the message. Instead the group's name is the title and the
-/// photo is the person who wrote it, the same two lines as any message.
+///   direct message   the sender's photo; their name, then the message
+///   group message    the group's photo; who wrote, the group, the message
+///   email            the sender's photo; their name, the subject, its start
+///
+/// The three-line layout is the one iOS gives a group conversation (more than
+/// one recipient and a group name): the sender's name, then the group's name,
+/// then the message, under the group's picture. An email is given the same
+/// shape with its subject as the second line and its sender's photo as the
+/// picture, which is the only way iOS puts a line between the name and the
+/// body of a message notification.
 ///
 /// The server sends the push with mutable-content and a "msg" field
-/// (App\Support\Notifications\MessagePush): who wrote, a signed link to their
-/// photo, and the group's name when it is one. iOS gives this extension about
-/// 30 seconds; if anything goes wrong the push shows as it came, a plain
-/// notification that still has its Reply box.
+/// (App\Support\Notifications\MessagePush). iOS gives this extension about
+/// 30 seconds; if anything goes wrong the push shows as it came, the same
+/// lines without the pictures, Reply box and all.
 final class NotificationService: UNNotificationServiceExtension {
     private let lock = NSLock()
     private var deliver: ((UNNotificationContent) -> Void)?
@@ -33,8 +36,9 @@ final class NotificationService: UNNotificationServiceExtension {
             return
         }
         Task {
-            let photo = await message.photoData()
-            finish(await message.notification(from: request.content, photo: photo))
+            async let sender = IncomingMessage.download(message.photo)
+            async let group = IncomingMessage.download(message.groupPhoto)
+            finish(await message.notification(from: request.content, senderPhoto: await sender, groupPhoto: await group))
         }
     }
 
@@ -58,13 +62,16 @@ final class NotificationService: UNNotificationServiceExtension {
 struct IncomingMessage {
     let conversation: String
     let sender: String
-    /// Who wrote it, for their initials when there is no photo.
+    /// Who wrote it: the first line, and their initials without a photo.
     let name: String
-    /// The line that says who: the person, the group, or the email's sender.
-    let title: String
-    let photo: URL?
-    let group: String?
+    /// The second line: a group's name, or an email's subject. Nil for a
+    /// direct message, which has two lines.
+    let subtitle: String?
     let body: String
+    let photo: URL?
+    let groupPhoto: URL?
+    let isEmail: Bool
+    let message: String?
 
     init?(userInfo: [AnyHashable: Any]) {
         guard let raw = userInfo["msg"] as? String,
@@ -72,22 +79,26 @@ struct IncomingMessage {
               let fields = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let conversation = fields["conversation"] as? String, !conversation.isEmpty,
               let name = fields["name"] as? String, !name.isEmpty else { return nil }
+        func text(_ key: String) -> String? {
+            let value = (fields[key] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return (value?.isEmpty ?? true) ? nil : value
+        }
         self.conversation = conversation
-        self.sender = fields["sender"] as? String ?? name
-        self.name = name
-        self.photo = (fields["photo"] as? String).flatMap(URL.init(string:))
-        let group = fields["group"] as? String
-        self.group = (group?.isEmpty ?? true) ? nil : group
-        let title = fields["title"] as? String ?? ""
-        self.title = self.group ?? (title.isEmpty ? name : title)
-        self.body = fields["body"] as? String ?? ""
+        self.sender = text("sender") ?? name
+        self.name = text("title") ?? name
+        self.isEmail = text("kind") == "email"
+        self.subtitle = text("subtitle") ?? text("group")
+        self.body = (fields["body"] as? String) ?? ""
+        self.photo = text("photo").flatMap(URL.init(string:))
+        self.groupPhoto = text("groupPhoto").flatMap(URL.init(string:))
+        self.message = text("message")
     }
 
-    /// The sender's photo, or nil for their initials. A slow or missing photo
-    /// must not hold the notification back.
-    func photoData() async -> Data? {
-        guard let photo, photo.scheme == "https" || photo.scheme == "http" else { return nil }
-        var request = URLRequest(url: photo, timeoutInterval: 10)
+    /// A photo, or nil for initials. A slow or missing one must not hold the
+    /// notification back.
+    static func download(_ url: URL?) async -> Data? {
+        guard let url, url.scheme == "https" || url.scheme == "http" else { return nil }
+        var request = URLRequest(url: url, timeoutInterval: 10)
         request.setValue("image/*", forHTTPHeaderField: "Accept")
         guard let (data, response) = try? await URLSession.shared.data(for: request),
               let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
@@ -95,27 +106,21 @@ struct IncomingMessage {
         return data
     }
 
-    func notification(from content: UNNotificationContent, photo: Data?) async -> UNNotificationContent {
+    func notification(from content: UNNotificationContent, senderPhoto: Data?, groupPhoto: Data?) async -> UNNotificationContent {
         let mutable = (content.mutableCopy() as? UNMutableNotificationContent) ?? UNMutableNotificationContent()
-        // Who, then the message on its own line.
-        mutable.title = title
-        mutable.subtitle = ""
-        if !body.isEmpty { mutable.body = body }
+        mutable.title = name
+        mutable.subtitle = subtitle ?? ""
+        mutable.body = body
         mutable.threadIdentifier = conversation
         mutable.categoryIdentifier = "MESSAGE"
 
-        // The one line iOS shows above the message is the sender's name, so
-        // the sender carries the title; the photo and the initials are the
-        // person who wrote it. In a group that is a stand-in kept apart from
-        // the real person, so a group's name never sticks to anyone.
-        let identity = group == nil ? "\(sender)" : "\(conversation)|\(sender)"
         let person = INPerson(
-            personHandle: INPersonHandle(value: identity, type: .unknown),
+            personHandle: INPersonHandle(value: sender, type: .unknown),
             nameComponents: PersonNameComponentsFormatter().personNameComponents(from: name),
-            displayName: title,
-            image: photo.map { INImage(imageData: $0) },
+            displayName: name,
+            image: senderPhoto.map { INImage(imageData: $0) },
             contactIdentifier: nil,
-            customIdentifier: identity,
+            customIdentifier: sender,
             isMe: false,
             suggestionType: .none
         )
@@ -124,18 +129,40 @@ struct IncomingMessage {
             nameComponents: nil, displayName: nil, image: nil,
             contactIdentifier: nil, customIdentifier: nil, isMe: true, suggestionType: .none
         )
-        // One recipient and no group name: the two-line layout of a direct
-        // message, for groups and email too (see the note on the class).
-        let intent = INSendMessageIntent(
-            recipients: [me],
-            outgoingMessageType: .outgoingMessageText,
-            content: mutable.body,
-            speakableGroupName: nil,
-            conversationIdentifier: conversation,
-            serviceName: nil,
-            sender: person,
-            attachments: nil
-        )
+
+        let intent: INSendMessageIntent
+        if let subtitle {
+            // Three lines under a picture of the conversation: the group's
+            // photo (the sender's when the group has none), or for an email
+            // its sender's photo. Each email is its own "conversation", so one
+            // subject never stands in for another's.
+            intent = INSendMessageIntent(
+                recipients: [me, person],
+                outgoingMessageType: .outgoingMessageText,
+                content: body,
+                speakableGroupName: INSpeakableString(spokenPhrase: subtitle),
+                conversationIdentifier: isEmail ? "\(conversation)|\(message ?? subtitle)" : conversation,
+                serviceName: nil,
+                sender: person,
+                attachments: nil
+            )
+            let picture = isEmail ? senderPhoto : (groupPhoto ?? senderPhoto)
+            if let picture {
+                intent.setImage(INImage(imageData: picture), forParameterNamed: \.speakableGroupName)
+            }
+        } else {
+            intent = INSendMessageIntent(
+                recipients: [me],
+                outgoingMessageType: .outgoingMessageText,
+                content: body,
+                speakableGroupName: nil,
+                conversationIdentifier: conversation,
+                serviceName: nil,
+                sender: person,
+                attachments: nil
+            )
+        }
+
         let interaction = INInteraction(intent: intent, response: nil)
         interaction.direction = .incoming
         try? await interaction.donate()

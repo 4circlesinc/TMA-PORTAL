@@ -152,12 +152,19 @@ class ApnsClient
         // the MESSAGE category carries the Reply box; thread-id stacks a
         // conversation together.
         $message = $kind === 'notification' && isset($data['msg']) ? json_decode((string) $data['msg'], true) : null;
+        $subtitle = '';
         if (is_array($message)) {
             $title = (string) ($message['title'] ?? $title);
+            // A group's name, or an email's subject, on the line under it.
+            $subtitle = (string) ($message['subtitle'] ?? '');
             $body = (string) ($message['body'] ?? $body);
         }
 
-        $aps = ['alert' => ['title' => $title, 'body' => $body]];
+        $aps = ['alert' => array_filter(
+            ['title' => $title, 'subtitle' => $subtitle, 'body' => $body],
+            fn ($line, $key) => $key !== 'subtitle' || $line !== '',
+            ARRAY_FILTER_USE_BOTH,
+        )];
         if (is_array($message)) {
             $aps['mutable-content'] = 1;
             $aps['category'] = 'MESSAGE';

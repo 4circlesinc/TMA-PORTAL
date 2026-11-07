@@ -15,6 +15,7 @@ use App\Support\Notifications\MessagePush;
 use App\Support\Notifications\Notifier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request as HttpRequest;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -116,7 +117,7 @@ class MessagePushTest extends TestCase
         $this->assertSame('/social/messages?conversation='.$c->uuid, $msg['url']);
     }
 
-    public function test_a_group_message_is_titled_with_the_group_and_says_only_the_message(): void
+    public function test_a_group_message_says_who_then_the_group_then_the_message(): void
     {
         $sender = $this->user('bruce@wayne.test', ['name' => 'Bruce Wayne']);
         $recipient = $this->user('alfred@wayne.test');
@@ -129,11 +130,40 @@ class MessagePushTest extends TestCase
             ->assertOk();
 
         $body = $this->pushed();
-        $this->assertSame(['title' => 'Tax team', 'body' => 'Meeting at noon'], $body['aps']['alert']);
+        $this->assertSame(['title' => 'Bruce Wayne', 'subtitle' => 'Tax team', 'body' => 'Meeting at noon'], $body['aps']['alert']);
         $msg = json_decode($body['msg'], true);
         $this->assertSame('Tax team', $msg['group']);
-        $this->assertSame('Bruce Wayne', $msg['name'], 'the photo is the person who wrote');
-        $this->assertArrayNotHasKey('photo', $msg, 'no photo: the phone draws their initials');
+        $this->assertSame('Bruce Wayne', $msg['title']);
+        $this->assertSame('Tax team', $msg['subtitle']);
+        $this->assertArrayNotHasKey('groupPhoto', $msg, 'a group without a photo');
+        $this->assertArrayNotHasKey('photo', $msg, 'nor a photo of its sender: initials');
+    }
+
+    public function test_a_group_with_a_photo_sends_it_signed_and_serves_it_only_signed(): void
+    {
+        $sender = $this->user('bruce@wayne.test', ['name' => 'Bruce Wayne']);
+        $recipient = $this->user('alfred@wayne.test');
+        DeviceToken::create(['user_id' => $recipient->id, 'platform' => DeviceToken::PLATFORM_IOS, 'token' => self::PHONE]);
+        $c = $this->conversation([$sender, $recipient, $this->user('lucius@wayne.test')], Conversation::TYPE_GROUP);
+        ConversationParticipant::query()->where('conversation_id', $c->id)->where('user_id', $sender->id)
+            ->update(['role' => ConversationParticipant::ROLE_ADMIN]);
+        $this->actingAs($sender)
+            ->post("/portal/messaging/groups/{$c->uuid}/photo", ['photo' => UploadedFile::fake()->image('team.png', 64, 64)], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $this->actingAs($sender)
+            ->postJson("/portal/messaging/conversations/{$c->uuid}/messages", ['body' => 'Meeting at noon'])
+            ->assertOk();
+
+        $msg = json_decode($this->pushed()['msg'], true);
+        $this->assertStringContainsString("/media/groups/{$c->uuid}/push?expires=", $msg['groupPhoto']);
+
+        // What a member of the group gets from the photo's own route.
+        $asMember = $this->actingAs($recipient)->get("/portal/messaging/conversations/{$c->uuid}/photo")->status();
+
+        auth()->logout();
+        $this->get("/media/groups/{$c->uuid}/push")->assertForbidden();
+        $this->assertSame($asMember, $this->get($msg['groupPhoto'])->status(), 'signed, it serves what a member sees');
     }
 
     public function test_other_notifications_keep_their_plain_push(): void
@@ -235,12 +265,14 @@ class MessagePushTest extends TestCase
         ]);
 
         $body = $this->pushed();
-        $this->assertSame(['title' => 'Dana Reed', 'body' => "Quarterly review\nThe numbers are in and they look good."], $body['aps']['alert']);
+        $this->assertSame(['title' => 'Dana Reed', 'subtitle' => 'Quarterly review', 'body' => 'The numbers are in and they look good.'], $body['aps']['alert']);
         $this->assertSame('MESSAGE', $body['aps']['category'], 'a Reply box');
         $this->assertSame('email:dana@example.com', $body['aps']['thread-id'], 'stacked by sender');
 
         $msg = json_decode($body['msg'], true);
         $this->assertSame('email', $msg['kind']);
+        $this->assertSame('Quarterly review', $msg['subtitle']);
+        $this->assertSame('m-1', $msg['message']);
         $this->assertSame('Dana Reed', $msg['name']);
         $this->assertArrayNotHasKey('group', $msg);
         $this->assertStringContainsString('/portal/mail/sender-photo/'.$hash.'/push?expires=', $msg['photo']);

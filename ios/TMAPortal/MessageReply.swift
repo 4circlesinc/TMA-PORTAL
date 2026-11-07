@@ -17,6 +17,7 @@ struct MessageNotification {
               let fields = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let conversation = fields["conversation"] as? String, !conversation.isEmpty else { return nil }
         self.conversation = conversation
+        // A reply goes to the group, or to the person (an email's sender).
         self.name = (fields["group"] as? String) ?? (fields["name"] as? String) ?? "the conversation"
         self.url = fields["url"] as? String
         self.reply = (fields["reply"] as? String).flatMap(URL.init(string:))
