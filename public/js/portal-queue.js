@@ -716,6 +716,29 @@
    * their Friday afternoon is still there. It stops being replayed, not
    * stored, and `all()` is what enforces that.
    */
+  /*
+   * Resolves once the signed-in account is known. Until then `all()` hides
+   * every entry stamped with an account, so a screen that asks for one
+   * straight after a reload (the form reopening a queued filing) found
+   * nothing and opened blank. Gives up after a few seconds rather than wait
+   * for ever on a /me that never answers.
+   */
+  var accountKnown = null;
+  var markAccountKnown = null;
+  var ACCOUNT_WAIT_MS = 5000;
+
+  function ready() {
+    if (accountId != null) return Promise.resolve();
+    if (!accountKnown) {
+      accountKnown = new Promise(function (resolve) {
+        markAccountKnown = resolve;
+        setTimeout(resolve, ACCOUNT_WAIT_MS);
+      });
+    }
+
+    return accountKnown;
+  }
+
   function setAccount(id) {
     var next = id == null ? null : String(id);
     if (next === accountId) return Promise.resolve();
@@ -723,7 +746,11 @@
 
     // Anything written before /me answered is this reader's, stamp it, so it
     // stops matching the next person to sign in on this machine.
-    return claimUnstamped().then(recount).then(function () { return flush(); });
+    return claimUnstamped().then(recount).then(function () {
+      if (accountId != null && markAccountKnown) markAccountKnown();
+
+      return flush();
+    });
   }
 
   function claimUnstamped() {
@@ -801,6 +828,7 @@
     usable: usable,
     onChange: onChange,
     setAccount: setAccount,
+    ready: ready,
   };
 
   // Whatever was left from last time, before anyone asks.

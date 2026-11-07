@@ -4313,7 +4313,9 @@
       return Promise.resolve(null);
     }
 
-    return window.TMAQueue.all().then(function (entries) {
+    var known = window.TMAQueue.ready ? window.TMAQueue.ready() : Promise.resolve();
+
+    return known.then(function () { return window.TMAQueue.all(); }).then(function (entries) {
       return entries.filter(function (e) { return e.id === asked.id; })[0] || null;
     }).catch(function () { return null; });
   }

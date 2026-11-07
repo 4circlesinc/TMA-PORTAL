@@ -5027,6 +5027,135 @@
       '</tr>';
   }
 
+  /* ── applications saved on this device, not yet at the firm ───── */
+
+  /*
+   * New filings waiting in the write queue, shown in the table like any
+   * other application, with a status that says where they are. Before this
+   * they lived only in the "Waiting to sync" list, so a filing that could not
+   * be sent seemed to vanish from the table it was added to.
+   *
+   * Edits of a filed application are not here: that application already has
+   * its own row.
+   */
+  var QUEUED_APPS = [];
+
+  var QUEUED_FILING_URL = '/portal/cip/applications';
+
+  function queuedPart(entry, name) {
+    var part = (entry.parts || []).filter(function (p) { return p && p.name === name; })[0];
+    return part && part.value != null ? String(part.value) : '';
+  }
+
+  function queuedApplication(entry) {
+    var failed = entry.state === 'failed';
+    var name = [queuedPart(entry, 'firstName'), queuedPart(entry, 'lastName')]
+      .filter(Boolean).join(' ');
+    var dependents = {};
+    (entry.parts || []).forEach(function (p) {
+      var m = p && String(p.name || '').match(/^dependents\[(\d+)\]/);
+      if (m) dependents[m[1]] = true;
+    });
+    var family = Object.keys(dependents).length;
+
+    return {
+      id: 'queued-' + entry.id,
+      queuedId: entry.id,
+      phase: queuedPart(entry, 'phase') || 'pre_approval',
+      applicantName: name || 'New applicant',
+      familyLabel: family ? ('+' + family) : '-',
+      failed: failed,
+      error: entry.error || '',
+    };
+  }
+
+  function refreshQueuedApplications() {
+    if (!window.TMAQueue) return;
+    window.TMAQueue.all().then(function (entries) {
+      var next = (entries || []).filter(function (e) {
+        return e.kind === 'cip.application' && e.url === QUEUED_FILING_URL;
+      }).map(queuedApplication);
+      if (JSON.stringify(next) === JSON.stringify(QUEUED_APPS)) return;
+      QUEUED_APPS = next;
+      if (!clientsMountState || !onApplicationsTable(clientsMountState)) return;
+      if (clientsMountRoot && clientsMountRoot._clientsController) {
+        clientsMountRoot._clientsController.render();
+      }
+    });
+  }
+
+  /* The ones that belong on this tab: their lane, or every lane on All. */
+  function queuedApplicationsFor(state) {
+    if (APP_TABLE.page > 1) return [];
+    var tab = listTabOf(state);
+    if (tab === 'closed' || tab === 'appeal') return [];
+    var lane = applicationPhaseForTab(state);
+
+    return QUEUED_APPS.filter(function (a) { return !lane || a.phase === lane; });
+  }
+
+  function queuedStatusChip(a) {
+    var label = a.failed ? 'Not sent' : 'Saved offline';
+    var tone = a.failed ? 'danger' : 'amber';
+    var title = a.failed
+      ? (a.error || 'This application could not be sent.') + ' Open it to fix and file it.'
+      : 'Saved on this device. It is sent to the firm on its own.';
+
+    return '<span class="tma-portal-status tma-portal-status--' + tone +
+      ' tma-portal-status--inline" title="' + esc(title) + '">' + esc(label) + '</span>';
+  }
+
+  function renderQueuedApplicationRow(a, state) {
+    var chip = queuedStatusChip(a);
+    var opener = ' data-cip-open="" data-cip-app="' + esc(a.id) + '" data-cip-draft="1"' +
+      ' data-cip-queued="' + esc(a.queuedId) + '"';
+    var number = '<td><span class="tma-cip-table__number">Not filed yet</span>' +
+      '<div class="tma-portal-table__muted">On this device</div></td>';
+    var applicant = '<td>' + applicantCell(a) +
+      '<span class="tma-cip-table__inline-status">' + chip + '</span></td>';
+
+    if (isAddOnApplicationsTab(state)) {
+      return '<tr data-key="app:' + esc(a.id) + '"' + opener + '>' + number +
+        '<td class="tma-portal-table__muted">-</td><td class="tma-portal-table__muted">-</td>' +
+        applicant + '<td>-</td>' +
+        '<td class="tma-cip-table__status-cell">' + chip + '</td>' +
+        '<td class="tma-portal-table__muted">-</td><td>-</td><td class="tma-portal-cell--menu"></td></tr>';
+    }
+
+    return '<tr data-key="app:' + esc(a.id) + '"' + opener + '>' + number + applicant +
+      '<td class="tma-portal-table__muted">-</td>' +
+      '<td class="tma-portal-table__muted">-</td>' +
+      '<td><span class="tma-cip-table__family">' + esc(a.familyLabel) + '</span></td>' +
+      '<td class="tma-cip-table__status-cell">' + chip + '</td>' +
+      '<td>-</td><td class="tma-portal-cell--menu"></td></tr>';
+  }
+
+  /*
+   * Open a queued filing in the form, filled in from what was queued. The
+   * form reads the handoff as it opens (cip-intake.js, takeQueuedRestore).
+   */
+  function openQueuedApplication(queuedId, phase) {
+    try {
+      window.sessionStorage.setItem('tma.cip.restoreQueued', JSON.stringify({
+        id: Number(queuedId),
+        applicationId: null,
+      }));
+    } catch (e) {
+      if (window.TMAPortalUI) window.TMAPortalUI.toastError('Couldn’t open this application on this device.');
+
+      return false;
+    }
+    var controller = clientsMountRoot && clientsMountRoot._clientsController;
+    if (controller) {
+      controller.navigate('new-application', null, { applicationPhase: phase || 'pre_approval' });
+
+      return true;
+    }
+    window.location.assign((window.__TMA_SITE_ROOT || '') + pathForNewApplication(phase || 'pre_approval'));
+
+    return true;
+  }
+
   function renderApplicationTable(state) {
     var ui = window.TMAPortalUI;
     if (!ui || !ui.table) return '';
@@ -5044,13 +5173,17 @@
       });
     }
 
-    if (!APP_TABLE.rows.length) {
+    var queued = queuedApplicationsFor(state);
+
+    if (!APP_TABLE.rows.length && !queued.length) {
       return '<div class="tma-dash__clients-directory-empty">' +
         renderApplicationTableEmptyState(state) + '</div>';
     }
 
     var postApproval = isPostApprovalApplicationsTab(state);
-    var rows = sortedApplicationRows().map(function (a) {
+    var rows = queued.map(function (a) {
+      return renderQueuedApplicationRow(a, state);
+    }).join('') + sortedApplicationRows().map(function (a) {
       return renderApplicationTableRow(a, state, postApproval);
     }).join('');
 
@@ -5842,6 +5975,16 @@
       // A link in a row goes where it points, rather than opening the file.
       if (e.target.closest('a')) return;
       if (e.target.closest('[data-cip-family-expand]')) return;
+
+      // Saved on this device: back into the form, filled in, to file it.
+      if (row.hasAttribute('data-cip-queued')) {
+        var queuedRow = QUEUED_APPS.filter(function (a) {
+          return String(a.queuedId) === row.getAttribute('data-cip-queued');
+        })[0];
+        openQueuedApplication(row.getAttribute('data-cip-queued'), queuedRow && queuedRow.phase);
+
+        return;
+      }
 
       /*
        * A draft row reopens the wizard where it was left.
@@ -21502,8 +21645,21 @@
     clientsMountRoot._clientsController.render();
   });
 
+  // The queued rows follow the queue: added, sent, refused.
+  function watchQueuedApplications() {
+    if (!window.TMAQueue) return;
+    window.TMAQueue.onChange(refreshQueuedApplications);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', watchQueuedApplications);
+  } else {
+    watchQueuedApplications();
+  }
+
   document.addEventListener('tma:queue-applied', function (e) {
     if (!e.detail || e.detail.kind !== 'cip.application') return;
+    // The real row arrives with the refetch below; the local one goes now.
+    forgetApplicationTable();
 
     Object.keys(APPLICATIONS).forEach(function (id) {
       var app = APPLICATIONS[id];
@@ -21530,6 +21686,7 @@
       clientsMountRoot._clientsController.syncRoute(parsed);
     },
     routeFromPath: parseClientsPath,
+    openQueuedApplication: openQueuedApplication,
     // Where the intake form for a new filing (by phase) or an edit (by id)
     // lives, for screens outside this view that need to open it.
     applicationFormPath: function (applicationId, phase) {

@@ -188,6 +188,12 @@
     if (!match) return;
     var applicationId = match[1] ? decodeURIComponent(match[1]) : null;
     var phase = ((entry.parts || []).filter(function (p) { return p && p.name === 'phase'; })[0] || {}).value;
+    // A new filing opens in place, the same way its row in the table does.
+    if (!applicationId && window.TMAClients && window.TMAClients.openQueuedApplication) {
+      window.TMAClients.openQueuedApplication(entry.id, phase);
+
+      return;
+    }
     var path = window.TMAClients && window.TMAClients.applicationFormPath
       ? window.TMAClients.applicationFormPath(applicationId, phase)
       : null;
