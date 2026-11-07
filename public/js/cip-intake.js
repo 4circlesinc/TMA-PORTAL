@@ -3573,6 +3573,13 @@
         if (json.draft && json.draft.id && !state.applicationId) {
           state.draftId = json.draft.id;
         }
+        /*
+         * Opened from the queue and now a draft on the server, with every
+         * scan this save had to carry. From here the draft row in the table
+         * is this application; the copy on the device would only show it
+         * twice, once as a draft and once as "Not sent".
+         */
+        if (json.draft && json.draft.id && !batch.heldBack) forgetRestored();
         if (json.draft && json.draft.createdAt) {
           state.createdAt = json.draft.createdAt;
         }
