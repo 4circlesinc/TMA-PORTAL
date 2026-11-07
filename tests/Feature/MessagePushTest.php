@@ -10,6 +10,7 @@ use App\Models\DeviceToken;
 use App\Models\MailMessage;
 use App\Models\MailSenderPhoto;
 use App\Models\Message;
+use App\Models\Notification;
 use App\Models\User;
 use App\Support\Notifications\MessagePush;
 use App\Support\Notifications\Notifier;
@@ -278,6 +279,43 @@ class MessagePushTest extends TestCase
         $this->assertStringContainsString('/portal/mail/sender-photo/'.$hash.'/push?expires=', $msg['photo']);
         $this->assertStringContainsString("/push/mail/m-1/{$recipient->id}?expires=", $msg['reply']);
         $this->assertSame('/email?message=m-1', $msg['url']);
+    }
+
+    public function test_an_email_preview_is_one_line_of_text(): void
+    {
+        $recipient = $this->user('alfred@wayne.test');
+        DeviceToken::create(['user_id' => $recipient->id, 'platform' => DeviceToken::PLATFORM_IOS, 'token' => self::PHONE]);
+
+        Notifier::send([
+            'user' => $recipient, 'type' => 'email.received', 'title' => 'Dana Reed sent you an email', 'message' => 'Quarterly review',
+            'metadata' => [
+                'from_email' => 'dana@example.com', 'from_name' => 'Dana Reed', 'message_uuid' => 'm-2',
+                'subject' => "Quarterly\n review", 'snippet' => "test\n\n\n   CIP Applications are due",
+            ],
+        ]);
+
+        $alert = $this->pushed()['aps']['alert'];
+        $this->assertSame('Quarterly review', $alert['subtitle']);
+        $this->assertSame('test CIP Applications are due', $alert['body']);
+    }
+
+    public function test_an_email_the_portal_sent_does_not_ring_the_phone_again(): void
+    {
+        config(['mail.from.address' => 'notices@tmantoine.test']);
+        $recipient = $this->user('alfred@wayne.test');
+        DeviceToken::create(['user_id' => $recipient->id, 'platform' => DeviceToken::PLATFORM_IOS, 'token' => self::PHONE]);
+
+        Notifier::send([
+            'user' => $recipient, 'type' => 'email.received', 'title' => 'TM ANTOINE Advisory sent you an email',
+            'message' => 'CIP23i239232: new message',
+            'metadata' => [
+                'from_email' => 'Notices@TMAntoine.test', 'from_name' => 'TM ANTOINE Advisory', 'message_uuid' => 'm-3',
+                'subject' => 'CIP23i239232: new message', 'snippet' => 'test',
+            ],
+        ]);
+
+        Http::assertNotSent(fn (HttpRequest $request) => str_contains($request->url(), '/3/device/'));
+        $this->assertSame(1, Notification::query()->where('user_id', $recipient->id)->count(), 'still on the bell and in the inbox');
     }
 
     public function test_a_batch_of_emails_stays_a_plain_notification(): void

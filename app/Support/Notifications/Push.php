@@ -24,6 +24,14 @@ final class Push
             return;
         }
 
+        // An email the portal itself sent (the notice about a CIP message, a
+        // status change) is about something that already reached the phone
+        // as its own notification: ringing it again for the email was two
+        // banners for one thing. The email still lands in the inbox.
+        if ($type === 'email.received' && self::isPortalsOwnEmail($notification)) {
+            return;
+        }
+
         $data = [
             'kind' => 'notification',
             'notification' => json_encode($notification, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
@@ -66,6 +74,16 @@ final class Push
         }
 
         return NotificationPreferences::channelEnabled($user, $type, 'desktop');
+    }
+
+    /** @param  array<string, mixed>  $notification */
+    private static function isPortalsOwnEmail(array $notification): bool
+    {
+        $portal = mb_strtolower(trim((string) config('mail.from.address')));
+        $meta = is_array($notification['meta'] ?? null) ? $notification['meta'] : [];
+        $from = mb_strtolower(trim((string) ($meta['from_email'] ?? '')));
+
+        return $portal !== '' && $from === $portal;
     }
 
     private static function queue(int $userId, array $data, bool $urgent = true, ?int $ttlSeconds = null): void

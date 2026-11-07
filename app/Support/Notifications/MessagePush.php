@@ -98,7 +98,7 @@ final class MessagePush
         }
 
         $name = trim((string) ($meta['from_name'] ?? '')) ?: $from;
-        $subject = trim((string) $meta['subject']) ?: '(no subject)';
+        $subject = self::oneLine($meta['subject']) ?: '(no subject)';
 
         return array_filter([
             'kind' => 'email',
@@ -111,7 +111,8 @@ final class MessagePush
             // The sender, the subject, then the start of the email.
             'title' => $name,
             'subtitle' => $subject,
-            'body' => trim((string) ($meta['snippet'] ?? '')),
+            // One run of text: an email's own line breaks left gaps in it.
+            'body' => self::oneLine($meta['snippet'] ?? ''),
             'url' => is_string($notification['actionUrl'] ?? null) ? $notification['actionUrl'] : null,
             'reply' => URL::temporarySignedRoute(
                 'mail.push-reply',
@@ -173,6 +174,11 @@ final class MessagePush
         }
 
         return self::photo($client->photo_url ?: ($client->hasLiveLogin() ? $client->user?->photoUrl() : null));
+    }
+
+    private static function oneLine(mixed $text): string
+    {
+        return trim((string) preg_replace('/\s+/u', ' ', (string) $text));
     }
 
     /** The group's own photo, signed for the extension, or null when it has none. */
