@@ -5944,6 +5944,35 @@ label.tma-portal-check-row:hover {
   }
 
   .tma-portal-admin.is-admin-menu .tma-portal-admin__content { display: none; }
+
+  /* The menu keeps the page's 16px gutter on both sides, the profile card
+     included, instead of running to the screen's edges. */
+  .tma-portal-admin__nav {
+    box-sizing: border-box;
+    padding-left: var(--space-16);
+    padding-right: var(--space-16);
+  }
+
+  /* A group's own page (portal-admin.js renderNav): back, its name, its sections. */
+  .tma-portal-admin__nav-back {
+    align-self: flex-start;
+    margin: var(--space-8) 0 var(--space-4);
+    padding: var(--space-8) 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: var(--text-size-14);
+    color: var(--color-primary);
+    cursor: pointer;
+  }
+
+  .tma-portal-admin__nav-title {
+    margin: 0 0 var(--space-8);
+    font-size: var(--text-size-20);
+    line-height: var(--text-lh-20);
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
   .tma-portal-admin.is-admin-detail .tma-portal-admin__nav { display: none; }
   .tma-portal-admin.is-admin-detail .tma-portal-admin__back { display: inline-flex; }
 }

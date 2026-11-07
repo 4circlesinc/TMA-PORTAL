@@ -31,7 +31,7 @@
     return !a || !a.canSettingsPage || a.canSettingsPage(pageId);
   }
 
-  var state = { el: null, page: 'profile', expanded: {} };
+  var state = { el: null, page: 'profile', expanded: {}, group: null };
 
   /* Personal sections reuse the real panels from settings.js */
   var SETTINGS_PAGES = [
@@ -4887,7 +4887,27 @@
       '</span></button>';
   }
 
+  /* On a phone a group opens as its own page of sections (state.group),
+     never as a disclosure in the list; the same width as the CSS that splits
+     the list and the page into two screens. */
+  function isTouchWidth() {
+    return !!(window.matchMedia && window.matchMedia('(max-width: 1024px)').matches);
+  }
+
   function renderNav(pageId) {
+    if (isTouchWidth() && state.group) {
+      var group = NAV.filter(function (n) { return n.group === state.group; })[0];
+      var subItems = group ? group.items.filter(function (it) { return allowed(it.id); }) : [];
+      if (group && subItems.length) {
+        return '<button type="button" class="tma-portal-admin__nav-back" data-admin-group-back>&lsaquo; Settings</button>' +
+          '<p class="tma-portal-admin__nav-title">' + ui().esc(group.label) + '</p>' +
+          subItems.map(function (it) {
+            return '<button type="button" class="tma-portal-admin__nav-item' + (pageId === it.id ? ' is-active' : '') + '" data-admin-nav="' + it.id + '">' + ui().esc(it.label) +
+              '<img class="tma-portal-admin__caret" src="images/icons/phosphor/CaretRight.svg" alt=""></button>';
+          }).join('');
+      }
+      state.group = null;
+    }
     return NAV.map(function (n) {
       if (!n.items) {
         if (!allowed(n.id)) return '';
@@ -4898,7 +4918,7 @@
          an empty disclosure behind. */
       var items = n.items.filter(function (it) { return allowed(it.id); });
       if (!items.length) return '';
-      var open = !!state.expanded[n.group];
+      var open = !isTouchWidth() && !!state.expanded[n.group];
       return '<button type="button" class="tma-portal-admin__nav-item" data-admin-group="' + n.group + '" aria-expanded="' + open + '">' + navIcon(n.icon) + ui().esc(n.label) +
         '<img class="tma-portal-admin__caret" src="images/icons/phosphor/CaretRight.svg" alt=""></button>' +
         (open
@@ -4960,10 +4980,21 @@
     el.querySelectorAll('[data-admin-nav]').forEach(function (b) {
       b.addEventListener('click', function () { setPage(b.getAttribute('data-admin-nav')); });
     });
+    var groupBack = el.querySelector('[data-admin-group-back]');
+    if (groupBack) {
+      groupBack.addEventListener('click', function () {
+        state.group = null;
+        render();
+      });
+    }
     el.querySelectorAll('[data-admin-group]').forEach(function (b) {
       b.addEventListener('click', function () {
         var g = b.getAttribute('data-admin-group');
-        state.expanded[g] = !state.expanded[g];
+        if (isTouchWidth()) {
+          state.group = g;
+        } else {
+          state.expanded[g] = !state.expanded[g];
+        }
         render();
       });
     });
