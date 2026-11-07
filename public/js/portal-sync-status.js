@@ -149,19 +149,24 @@
 
     return '<ul class="tma-sync-panel__list">' + entries.map(function (entry) {
       var failed = entry.state === 'failed';
+      // A waiting entry the server has already turned away says why, so
+      // "Waiting" is never the whole story when something is wrong.
+      var reason = entry.error ? ' · ' + esc(entry.error) : '';
 
       return '<li class="tma-sync-panel__item' + (failed ? ' is-failed' : '') + '">' +
         '<div class="tma-sync-panel__what">' +
         '<span class="tma-sync-panel__label">' + esc(entry.label) + '</span>' +
-        '<span class="tma-sync-panel__meta">' + esc(when(entry.at)) +
-        (failed ? ' · ' + esc(entry.error) : '') + '</span>' +
+        '<span class="tma-sync-panel__meta">' + esc(when(entry.at)) + reason + '</span>' +
         '</div>' +
         (failed
           ? '<div class="tma-sync-panel__actions">' +
             '<button type="button" class="tma-portal-link" data-sync-retry="' + entry.id + '">Try again</button>' +
             '<button type="button" class="tma-portal-link" data-sync-forget="' + entry.id + '">Discard</button>' +
             '</div>'
-          : '<span class="tma-sync-panel__waiting">Waiting</span>') +
+          : '<div class="tma-sync-panel__actions">' +
+            '<span class="tma-sync-panel__waiting">Waiting</span>' +
+            '<button type="button" class="tma-portal-link" data-sync-retry="' + entry.id + '">Try now</button>' +
+            '</div>') +
         '</li>';
     }).join('') + '</ul>';
   }

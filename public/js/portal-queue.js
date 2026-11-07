@@ -62,6 +62,20 @@
 
   var RETRY_MAX_MS = 5 * 60 * 1000;
 
+  /* A request that never answers must not hold the queue forever. `running`
+     stays true for as long as a send is in flight, so one hung upload used to
+     mean nothing behind it was ever sent again. Generous, because a queued
+     filing can carry scans. */
+  var REQUEST_TIMEOUT_MS = 2 * 60 * 1000;
+
+  /* How many times the SERVER may turn an entry away for reasons that are not
+     about the entry (signed out, stale token, an error on its side) before the
+     entry is handed to a person. Without a ceiling an entry the server will
+     never accept sat as "Waiting" for ever, with no reason shown and no way
+     to act on it. A dead network does not count: being offline is not a
+     reason to give up. */
+  var MAX_SERVER_STALLS = 5;
+
   var dbPromise = null;
 
   var accountId = null;
@@ -321,7 +335,14 @@
    */
   function flush() {
     if (running || !usable()) return Promise.resolve(0);
-    if (!online()) return Promise.resolve(0);
+    /*
+     * Only the browser's own "no network" skips the attempt. `reachable` is
+     * what the last attempt learned, and the only way to unlearn it is to try
+     * again: bailing on it too meant one failed send switched the queue off
+     * until an `online` event that, on a network that never dropped, never
+     * comes.
+     */
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return Promise.resolve(0);
 
     running = true;
     summary.syncing = true;
@@ -382,8 +403,10 @@
    * meaning the queue learned nothing about this entry, only that now is not
    * the time.
    */
-  function send(entry) {
-    entry.tries += 1;
+  function deliver(entry) {
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = controller ? setTimeout(function () { controller.abort(); }, REQUEST_TIMEOUT_MS) : null;
+    var clear = function () { if (timer) clearTimeout(timer); };
 
     return fetch(entry.url, {
       method: entry.method,
@@ -391,18 +414,66 @@
       // No Content-Type: multipart needs the browser's own boundary.
       headers: headers(),
       body: bodyFor(entry),
+      signal: controller ? controller.signal : undefined,
+    }).then(function (res) { clear(); return res; }, function (err) { clear(); throw err; });
+  }
+
+  /*
+   * A fresh XSRF cookie. The token the queue sends is read from the cookie at
+   * send time, and a tab left open past the session's rotation holds a stale
+   * one: every replay then comes back 419, for ever. Any GET through the web
+   * middleware sets a new cookie, and /me is the cheapest one there is.
+   */
+  function refreshToken() {
+    return fetch((window.__TMA_SITE_ROOT || '') + '/me', {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    }).then(function () { return true; }, function () { return false; });
+  }
+
+  /*
+   * The server answered, but not about this entry. Count it, keep the reason
+   * where the panel can show it, and once it has happened often enough hand
+   * the entry to a person rather than leave it "Waiting" with no end.
+   */
+  function stall(entry, reason) {
+    entry.stalls = (entry.stalls || 0) + 1;
+    entry.error = reason;
+    if (entry.stalls >= MAX_SERVER_STALLS) {
+      entry.state = 'failed';
+
+      return putEntry(entry).then(function () { return 'failed'; });
+    }
+
+    return putEntry(entry).then(function () { return 'stop'; });
+  }
+
+  function stallReason(status) {
+    if (status === 401) return 'You were signed out. Sign in again, then try again.';
+    if (status === 419) return 'Your session expired. Reload the page, then try again.';
+    if (status === 429) return 'The server is busy. Try again in a minute.';
+
+    return 'The server had a problem saving this (error ' + status + ').';
+  }
+
+  function send(entry) {
+    entry.tries += 1;
+
+    return deliver(entry).then(function (res) {
+      if (res.status !== 419) return res;
+
+      // One fresh token and one more go, before counting it against the entry.
+      return refreshToken().then(function () { return deliver(entry); });
     }).then(function (res) {
       reachable = true;
 
       /*
-       * The session, not the change. A queue that marked its entries failed
-       * because nobody was signed in would throw away an afternoon's work
-       * over an expired cookie.
+       * The session, or the server unwell. Not this change's fault, so it is
+       * retried, but only so many times: see stall().
        */
-      if (res.status === 401 || res.status === 419) return 'stop';
-
-      // The server is there and unhappy with itself. Worth trying again.
-      if (res.status === 429 || res.status >= 500) return 'stop';
+      if (res.status === 401 || res.status === 419 || res.status === 429 || res.status >= 500) {
+        return stall(entry, stallReason(res.status));
+      }
 
       if (!res.ok) {
         return res.json().catch(function () { return {}; }).then(function (json) {
@@ -424,7 +495,16 @@
             return 'applied';
           });
       });
-    }).catch(function () {
+    }).catch(function (err) {
+      /*
+       * Gave up waiting. The browser says there is a network, so this is the
+       * server not answering in time, and it counts like any other stall,
+       * otherwise an upload the server never finishes would retry for ever.
+       */
+      if (err && err.name === 'AbortError' && navigator.onLine !== false) {
+        return stall(entry, 'The server took too long to answer.');
+      }
+
       // Nothing was delivered. Whether that is a dead wifi or a dropped
       // tunnel does not matter: the entry is untouched and the run stops.
       reachable = false;
@@ -467,6 +547,10 @@
       entry.state = 'waiting';
       entry.error = '';
       entry.tries = 0;
+      entry.stalls = 0;
+      // A person asked: whatever the last attempt concluded, try now.
+      reachable = true;
+      retryDelay = RETRY_MS;
 
       return putEntry(entry)
         .then(recount)
