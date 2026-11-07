@@ -9,6 +9,7 @@ use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyMember;
 use App\Models\DeviceToken;
+use App\Models\Message;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
@@ -81,7 +82,7 @@ class CipThreadPushTest extends TestCase
         return [$staff, $contact, $application];
     }
 
-    public function test_a_file_thread_message_says_who_then_the_file_then_the_message(): void
+    public function test_a_file_thread_message_says_who_then_the_group_chat_then_the_message_and_opens_the_chat(): void
     {
         [$staff, $contact, $application] = $this->filed();
 
@@ -92,14 +93,16 @@ class CipThreadPushTest extends TestCase
         $sent = Http::recorded(fn (HttpRequest $r) => str_contains($r->url(), '/3/device/'.self::PHONE));
         $this->assertNotEmpty($sent, 'the administrator\'s phone heard it');
         $body = $sent->last()[0]->data();
-        $number = $application->fresh()->displayNumber();
+        // The case group chat the thread is copied into.
+        $chat = Message::query()->whereNotNull('cip_application_message_id')->latest('id')->first()->conversation;
 
-        $this->assertSame(['title' => 'Gil Contact', 'subtitle' => $number, 'body' => 'The passport scan is attached.'], $body['aps']['alert']);
+        $this->assertSame(['title' => 'Gil Contact', 'subtitle' => 'Chen Wei', 'body' => 'The passport scan is attached.'], $body['aps']['alert'], 'the chat\'s name, not the file number');
         $this->assertSame('MESSAGE', $body['aps']['category'], 'a Reply box');
-        $this->assertSame('cip:'.$application->uuid, $body['aps']['thread-id']);
+        $this->assertSame($chat->uuid, $body['aps']['thread-id']);
 
         $msg = json_decode($body['msg'], true);
-        $this->assertSame($number, $msg['group']);
+        $this->assertSame('Chen Wei', $msg['group']);
+        $this->assertSame('/social/messages?conversation='.$chat->uuid, $msg['url'], 'opens the group chat, not the application');
         $this->assertStringContainsString('/media/avatars/0b6e8f3a-1c2d-4e5f-8a9b-0c1d2e3f4a5b.jpg/push?expires=', $msg['groupPhoto'], 'the client\'s photo');
         $this->assertStringContainsString('/push/cip/'.$application->uuid.'/'.$staff->id.'/provider?expires=', $msg['reply'], 'back into the provider lane');
     }

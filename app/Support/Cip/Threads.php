@@ -17,6 +17,7 @@ use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
 use App\Support\Messaging\Broadcaster;
 use App\Support\Messaging\ClientConversations;
+use App\Support\Messaging\MessagingPresenter;
 use App\Support\Notifications\Notifier;
 use App\Support\Realtime\Live;
 use Illuminate\Support\Carbon;
@@ -98,8 +99,9 @@ class Threads
         ]);
 
         self::markRead($application, $author, $message->id);
-        self::announce($application, $message, $author);
+        // Into the case chat first, so the notification can open that chat.
         self::mirrorToCaseChat($message);
+        self::announce($application, $message, $author);
         self::signal($application, 'created');
         Live::staff(Live::CIP);
         Live::users(Live::CIP, self::recipientUserIds($application, $message, $author));
@@ -134,8 +136,8 @@ class Threads
         $message->forceFill(['lane' => CipApplicationMessage::LANE_PROVIDER])->save();
 
         $author = $message->author ?? $actor;
-        self::announce($application, $message, $author);
         self::mirrorToCaseChat($message);
+        self::announce($application, $message, $author);
         self::signal($application, 'shared');
         Live::staff(Live::CIP);
         Live::users(Live::CIP, self::recipientUserIds($application, $message, $author));
@@ -870,6 +872,11 @@ class Threads
         $preview = Str::limit($message->body, 140);
         $title = $number.': new message';
         $email = $message->lane === CipApplicationMessage::LANE_PROVIDER;
+        // The case group chat the message was copied into (mirrorToCaseChat).
+        $chat = Message::query()
+            ->where('cip_application_message_id', $message->id)
+            ->with('conversation.client', 'conversation.activeParticipants.user')
+            ->first()?->conversation;
 
         foreach (self::recipients($application, $message, $author) as $recipient) {
             // A firm that chose one notification email: the rest of its
@@ -894,8 +901,10 @@ class Threads
                 continue;
             }
 
+            $user = User::find($recipient['userId']);
+
             Notifier::send([
-                'user' => User::find($recipient['userId']),
+                'user' => $user,
                 'actor' => $author,
                 'type' => 'cip.message',
                 'title' => $title,
@@ -906,13 +915,17 @@ class Threads
                 // On the phone the file's thread reads like a group: who wrote,
                 // the file, the message, and a reply goes back into this lane
                 // (MessagePush).
-                'metadata' => [
+                'metadata' => array_filter([
                     'applicationId' => $application->uuid,
                     'number' => $number,
                     'lane' => $message->lane,
                     'messageId' => $message->uuid,
                     'pushBody' => $preview,
-                ],
+                    // The phone opens the group chat, named as Messages names
+                    // it (the client, which is the application's name).
+                    'conversationId' => $chat?->uuid,
+                    'chatName' => $chat && $user ? MessagingPresenter::title($chat, $user) : null,
+                ]),
             ]);
         }
     }

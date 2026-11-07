@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\URL;
  *
  *   direct message   the sender's photo; their name, then the message
  *   group message    the group's photo; who wrote, the group, the message
- *   CIP file thread  the client's photo; who wrote, the file, the message
+ *   CIP file thread  the chat's photo; who wrote, the group chat, the message
  *   email            the sender's photo; their name, the subject, its start
  *
  * A reply to an email goes back as an email.
@@ -123,9 +123,12 @@ final class MessagePush
     }
 
     /**
-     * A message on a CIP file's thread, laid out as a group: who wrote it, the
-     * file's number, the message, under the client's photo. A reply goes back
-     * into the same lane (internal, or the service provider's).
+     * A message on a CIP file's thread, laid out as the group chat it is
+     * copied into: who wrote it, the chat's name (the client, the
+     * application's name), the message, under the chat's photo or else the
+     * client's. Tapping it opens that chat. A reply goes back into the same
+     * lane (internal, or the service provider's), so a reply to an internal
+     * note never reaches the service provider.
      *
      * @param  array<string, mixed>  $notification
      * @param  array<string, mixed>  $meta
@@ -140,20 +143,24 @@ final class MessagePush
         }
 
         $actor = is_array($notification['actor'] ?? null) ? $notification['actor'] : [];
-        $number = trim((string) ($meta['number'] ?? '')) ?: 'CIP file';
-        $name = trim((string) ($actor['name'] ?? '')) ?: $number;
+        $chat = is_string($meta['conversationId'] ?? null) && $meta['conversationId'] !== '' ? $meta['conversationId'] : null;
+        $group = trim((string) ($meta['chatName'] ?? '')) ?: (trim((string) ($meta['number'] ?? '')) ?: 'CIP file');
+        $name = trim((string) ($actor['name'] ?? '')) ?: $group;
 
         return array_filter([
-            'conversation' => 'cip:'.$application,
+            // Stacked with the chat's own messages.
+            'conversation' => $chat ?? 'cip:'.$application,
             'sender' => isset($actor['id']) ? (string) $actor['id'] : null,
             'name' => $name,
             'photo' => self::photo($actor['avatar'] ?? null),
-            'group' => $number,
-            'groupPhoto' => self::clientPhoto($application),
+            'group' => $group,
+            'groupPhoto' => ($chat ? self::groupPhoto($chat) : null) ?? self::clientPhoto($application),
             'title' => $name,
-            'subtitle' => $number,
+            'subtitle' => $group,
             'body' => (string) ($meta['pushBody'] ?? $notification['message'] ?? ''),
-            'url' => is_string($notification['actionUrl'] ?? null) ? $notification['actionUrl'] : null,
+            'url' => $chat
+                ? '/social/messages?conversation='.$chat
+                : (is_string($notification['actionUrl'] ?? null) ? $notification['actionUrl'] : null),
             'reply' => URL::temporarySignedRoute(
                 'cip.push-reply',
                 now()->addDays(self::REPLY_DAYS),
