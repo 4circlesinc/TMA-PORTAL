@@ -657,6 +657,9 @@
     voice: 'Select voice',
     'toast-position': 'Toast position',
     'toast-duration': 'Display duration',
+    'online-status': 'Who can see when I\u2019m online',
+    'last-seen': 'Who can see my last seen',
+    history: 'History',
   };
 
   var MOBILE_SELECT_PANEL = {
@@ -665,6 +668,9 @@
     voice: 'time',
     'toast-position': 'notifications',
     'toast-duration': 'notifications',
+    'online-status': 'privacy',
+    'last-seen': 'privacy',
+    history: 'privacy',
   };
 
   function getMobileSelectPanel(root, selectId) {
@@ -843,12 +849,17 @@
   function getMobileSelectList(id) {
     if (id === 'toast-position') return TOAST_POSITIONS;
     if (id === 'toast-duration') return TOAST_DURATIONS;
+    if (id === 'online-status' || id === 'last-seen') return VISIBILITY_OPTIONS;
+    if (id === 'history') return HISTORY_DAYS;
     return getTimeSelectList(id);
   }
 
   function getMobileSelectValue(id) {
     if (id === 'toast-position') return String(readToastPrefs().position);
     if (id === 'toast-duration') return String(readToastPrefs().durationSec);
+    if (id === 'online-status') return (privacyCache && privacyCache.onlineStatus) || 'everyone';
+    if (id === 'last-seen') return (privacyCache && privacyCache.lastSeen) || 'everyone';
+    if (id === 'history') return String(readPrivacyPrefs().historyDays);
     return getTimeSelectValue(readTimePrefs(), id);
   }
 
@@ -1029,6 +1040,7 @@
         store.set(storageKey, value);
         closeMobileSelect(root);
         if (id === 'language') { reloadForLanguage(); return; }
+        if (id === 'history') { syncPrivacyPanelUI(root); return; }
         syncTimePanelUI(root);
       });
     });
@@ -1962,6 +1974,7 @@
       '</div>' +
       profileInnerDivider() +
       renderPrivacyRights() +
+      renderMobileSelectOverlay('33319:118350') +
       '</section>';
   }
 

@@ -31292,6 +31292,39 @@ button.tma-dash__header-popup-item:focus-visible {
 :root[data-theme="dark"] .tma-dash__settings-panel[data-settings-panel="plugins"] .tma-dash__settings-plugin-desc {
     color: var(--color-text-secondary);
   }
+
+  /*
+   * Every sub-setting opens as its own page on a phone, never a dropdown:
+   * the panel's content steps aside for the option list, and the header's
+   * back returns. Was written per panel (Time, Notifications), so a panel
+   * without its own copy (Privacy) still dropped a list down mid-page.
+   */
+  .tma-dash__settings-panel [data-settings-picker] {
+    display: none !important;
+  }
+
+  .tma-dash__settings-panel.is-mobile-select-open > :not(.tma-dash__settings-mobile-select) {
+    display: none !important;
+  }
+
+  .tma-dash__settings-panel.is-mobile-select-open .tma-dash__settings-mobile-select:not([hidden]) {
+    display: flex;
+  }
+
+  /*
+   * Cards on a phone have no padding of their own: each row brings 16px.
+   * The hint and the per-module grid did not, so they ran into the card's
+   * edges beside an indented heading.
+   */
+  .tma-dash__settings-notifications-group .tma-dash__settings-notifications-hint {
+    margin: 0;
+    padding: var(--space-4) var(--space-16) var(--space-8);
+  }
+
+  .tma-dash__settings-notifications-group .tma-dash__notifprefs {
+    padding: 0 var(--space-16) var(--space-8);
+  }
+
 }
 
 @media (min-width: 1025px) {
