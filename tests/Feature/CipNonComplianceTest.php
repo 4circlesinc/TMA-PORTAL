@@ -388,7 +388,8 @@ class CipNonComplianceTest extends TestCase
         $this->assertSame('2026-08-18', $fresh->query_received_at?->toDateString());
     }
 
-    public function test_an_officer_can_override_a_query_onto_a_file_off_the_map(): void
+    /** Off the map is an override, and overrides are the administrators' alone. */
+    public function test_an_officer_cannot_override_a_query_onto_a_file_off_the_map(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);
         $application = $this->pending($staff);
@@ -409,11 +410,11 @@ class CipNonComplianceTest extends TestCase
                 'override' => true,
                 'note' => 'Unit letter arrived before the portal caught up.',
             ])
-            ->assertOk();
+            ->assertForbidden();
 
         $fresh = $application->fresh();
-        $this->assertSame(Status::NON_COMPLIANT, $fresh->status);
-        $this->assertSame('2026-08-18', $fresh->query_received_at?->toDateString());
+        $this->assertSame(Status::NEW, $fresh->status);
+        $this->assertNull($fresh->query_received_at);
     }
 
     public function test_recording_again_updates_the_date_without_a_second_notice(): void

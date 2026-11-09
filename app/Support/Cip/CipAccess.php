@@ -288,11 +288,12 @@ class CipAccess
     /**
      * May this account pull a status backwards, or jump off the lifecycle map?
      *
-     * Administrators and CRO / Reviewing officers. Updating a status is the
-     * officer's work, the same as driving the next mapped step; the jump is
-     * still logged as an override and still requires a reason. Assigning who
-     * holds the file stays with administrators. Everyone else may only drive
-     * the next mapped step.
+     * Administrators only, in both lanes — the application's status and each
+     * person's post-approval status. CRO / Reviewing officers drive the next
+     * mapped step like everyone who may change status, and see the rest of
+     * the lifecycle locked; moving a file anywhere else is an administrator's
+     * call, logged as an override. Assigning who holds the file is
+     * administrators' too.
      */
     public static function canOverrideStatus(?User $user): bool
     {
@@ -300,31 +301,20 @@ class CipAccess
             return false;
         }
 
-        return Role::isAdmin($user) || self::isOfficer($user);
+        return Role::isAdmin($user);
     }
 
     /**
      * May this account read a document warning and carry on past it?
      *
-     * Moving a file to Ready to Submit or the Unit submission while a paper
-     * is not Ready for submission was already open to administrators and
-     * CRO / Reviewing officers, but only by dressing the move up as an
-     * override with a typed reason. The warning is what they actually need:
-     * here is what is missing, continue anyway. Apply for COR and the dated
-     * post-approval steps hand a pack to the Unit, so carrying on past an
-     * unfinished one there is an administrator's call alone.
+     * Carrying a file past an unfinished checklist is an override, so it is
+     * the administrators' alone, like every other override: they are shown
+     * what is missing and may continue; everyone else is told to finish the
+     * documents first.
      */
     public static function canAcknowledgeBlockers(?User $user, string $to): bool
     {
-        if (! self::canOverrideStatus($user)) {
-            return false;
-        }
-
-        if (in_array($to, [Status::READY_TO_SUBMIT, Status::PENDING_REVIEW], true)) {
-            return true;
-        }
-
-        return Role::isAdmin($user);
+        return self::canOverrideStatus($user);
     }
 
     /**

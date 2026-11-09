@@ -148,7 +148,7 @@ class Decision
             if (! $already) {
                 /*
                  * A mapped next step goes through apply(). An administrator
-                 * or CRO / Reviewing officer overriding from elsewhere (for
+                 * overriding from elsewhere (for
                  * example recording a grant off the usual Background Check /
                  * DD Query / Delayed statuses) goes through set() with a
                  * reason.

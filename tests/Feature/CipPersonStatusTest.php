@@ -1595,7 +1595,7 @@ class CipPersonStatusTest extends TestCase
         $this->assertNull($main->fresh()->post_approval_apart);
     }
 
-    public function test_a_reviewing_officer_records_a_persons_step_and_may_take_it_back(): void
+    public function test_a_reviewing_officer_records_a_persons_step_but_only_an_administrator_takes_it_back(): void
     {
         Mail::fake();
         $admin = $this->staff();
@@ -1609,7 +1609,11 @@ class CipPersonStatusTest extends TestCase
             ->assertOk()
             ->assertJsonPath('application.applicant.status', PersonStatus::PENDING_NIC);
 
-        $this->move($officer, $main, PersonStatus::APPLY_FOR_NIC)
+        // Taking a step back is an override: the administrator's alone.
+        $this->move($officer, $main, PersonStatus::APPLY_FOR_NIC)->assertForbidden();
+        $this->assertNotNull($main->fresh()->post_approval_dates);
+
+        $this->move($admin, $main, PersonStatus::APPLY_FOR_NIC)
             ->assertOk()
             ->assertJsonPath('application.applicant.status', PersonStatus::APPLY_FOR_NIC);
 

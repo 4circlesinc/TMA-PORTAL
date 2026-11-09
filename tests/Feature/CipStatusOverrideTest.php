@@ -118,7 +118,8 @@ class CipStatusOverrideTest extends TestCase
         $this->assertSame(Status::GRANTED, $application->fresh()->status);
     }
 
-    public function test_an_officer_can_pull_a_status_backwards_with_a_reason(): void
+    /** Overrides are the administrators' alone, in both lanes. */
+    public function test_an_officer_cannot_pull_a_status_backwards_even_with_a_reason(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $officer = $this->user(Role::REVIEWING_OFFICER);
@@ -127,24 +128,17 @@ class CipStatusOverrideTest extends TestCase
         $application->forceFill(['status' => Status::GRANTED])->save();
         Assignments::assign($application->fresh(), $officer, $admin);
 
-        $this->actingAs($officer)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
-                'status' => Status::ASSESSMENT_FEEDBACK,
-            ])
-            ->assertStatus(422)
-            ->assertJsonPath('message', 'Give a reason for changing the status.');
-
-        $this->assertSame(Status::GRANTED, $application->fresh()->status);
+        $this->assertSame([], Engine::availableOverrides($application->fresh(), $officer));
+        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::lockedStatuses($application->fresh(), $officer));
 
         $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::ASSESSMENT_FEEDBACK,
                 'note' => 'The Unit asked for another scan.',
             ])
-            ->assertOk()
-            ->assertJsonPath('application.status', Status::ASSESSMENT_FEEDBACK);
+            ->assertForbidden();
 
-        $this->assertSame(Status::ASSESSMENT_FEEDBACK, $application->fresh()->status);
+        $this->assertSame(Status::GRANTED, $application->fresh()->status);
     }
 
     public function test_an_officer_may_still_move_forward_along_the_map(): void
@@ -162,7 +156,7 @@ class CipStatusOverrideTest extends TestCase
             ->assertJsonPath('application.status', Status::REVIEW_APPLICATION);
     }
 
-    public function test_an_officer_can_jump_off_the_lifecycle_map_with_a_reason(): void
+    public function test_an_officer_cannot_jump_off_the_lifecycle_map(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $officer = $this->user(Role::REVIEWING_OFFICER);
@@ -175,21 +169,29 @@ class CipStatusOverrideTest extends TestCase
                 'status' => Status::UPDATE_REQUIRED,
                 'note' => 'The provider already owes a replacement scan.',
             ])
+            ->assertForbidden();
+
+        $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
+
+        // The administrator may.
+        $this->actingAs($admin)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::UPDATE_REQUIRED,
+                'note' => 'The provider already owes a replacement scan.',
+            ])
             ->assertOk()
             ->assertJsonPath('application.status', Status::UPDATE_REQUIRED);
-
-        $this->assertSame(Status::UPDATE_REQUIRED, $application->fresh()->status);
     }
 
     /**
      * A person's own outcome, and taking it back.
      *
      * Setting it is a mapped move, the officer's as much as an
-     * administrator's. Taking it back is the override, and that is theirs
-     * too. What neither may do is type a status the documents or the
+     * administrator's. Taking it back is the override, and that is the
+     * administrator's alone. Neither may type a status the documents or the
      * application decide; see CipPersonStatusTest for those rules.
      */
-    public function test_an_officer_may_set_a_person_apart_and_pull_them_back(): void
+    public function test_an_officer_may_set_a_person_apart_but_only_an_administrator_pulls_them_back(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $officer = $this->user(Role::REVIEWING_OFFICER);
@@ -213,6 +215,13 @@ class CipStatusOverrideTest extends TestCase
             ->assertJsonPath('application.applicant.statusApart', true);
 
         $this->actingAs($officer)
+            ->postJson('/portal/cip/people/'.$person->uuid.'/status', [
+                'status' => PersonStatus::POST_APPROVAL,
+            ])
+            ->assertForbidden();
+        $this->assertNotNull($person->fresh()->post_approval_apart);
+
+        $this->actingAs($admin)
             ->postJson('/portal/cip/people/'.$person->uuid.'/status', [
                 'status' => PersonStatus::POST_APPROVAL,
             ])

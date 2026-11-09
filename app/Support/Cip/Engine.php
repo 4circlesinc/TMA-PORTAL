@@ -278,10 +278,10 @@ class Engine
      * order is the lifecycle's own, which is the order a reader expects to
      * see the choices in.
      *
-     * These are the mapped next steps. Administrators and CRO / Reviewing
-     * officers also receive {@see availableOverrides()} for a jump off the
-     * map. Everyone else who may change status sees that list locked, from
-     * {@see lockedStatuses()}.
+     * These are the mapped next steps. Administrators also receive
+     * {@see availableOverrides()} for a jump off the map. Everyone else who
+     * may change status — CRO / Reviewing officers included — sees that list
+     * locked, from {@see lockedStatuses()}.
      *
      * @return list<string>
      */
@@ -325,7 +325,7 @@ class Engine
     /**
      * Statuses this reader may set that are not the next mapped step.
      *
-     * Administrators and CRO / Reviewing officers. Pulling Approved back to
+     * Administrators only, in both lanes. Pulling Approved back to
      * Assessment Feedback is an override and is logged as one. Everyone else
      * gets an empty list; officers used to see the same rows locked, and
      * that read as though they could not change a status at all.
@@ -415,7 +415,7 @@ class Engine
      * The same off-map statuses, shown locked, for a reader who may see the
      * lifecycle but may not set those statuses.
      *
-     * Empty for an administrator and for a CRO / Reviewing officer, whose
+     * Empty for an administrator, whose
      * copy of this list is actionable and arrives through
      * {@see availableOverrides()}, and for anyone who may not change status
      * at all.
@@ -781,7 +781,7 @@ class Engine
      * Put the application on this status, whether or not the lifecycle has
      * an edge there from here.
      *
-     * Administrators and CRO / Reviewing officers. Mapped next steps go
+     * Administrators only. Mapped next steps go
      * through {@see apply()}; jumping from Approved back to Assessment
      * Feedback is an override and is logged as one. DRAFT is not a
      * destination.

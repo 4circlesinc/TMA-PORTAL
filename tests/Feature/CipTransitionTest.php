@@ -480,7 +480,9 @@ class CipTransitionTest extends TestCase
             Engine::availableTransitions($granted, $officer),
         );
         $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::availableOverrides($granted, $admin));
-        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::availableOverrides($granted, $officer));
+        // Overrides are the administrators' alone; the officer sees them locked.
+        $this->assertSame([], Engine::availableOverrides($granted, $officer));
+        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::lockedStatuses($granted, $officer));
 
         $post = $this->at($this->application($admin), Status::POST_APPROVAL);
         $post->forceFill(['phase' => Phase::POST_APPROVAL])->save();
@@ -545,79 +547,49 @@ class CipTransitionTest extends TestCase
         );
     }
 
-    public function test_an_officer_may_set_the_same_statuses_an_administrator_may(): void
+    /**
+     * Only an administrator sets a status off the lifecycle map, in either
+     * lane. An officer drives the mapped next steps and sees the rest of the
+     * lifecycle locked.
+     */
+    public function test_only_an_administrator_may_set_statuses_off_the_map(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $officer = $this->user(Role::REVIEWING_OFFICER);
         $employee = $this->user(Role::EMPLOYEE);
 
-        $this->assertTrue(CipAccess::canOverrideStatus($officer));
+        $this->assertTrue(CipAccess::canOverrideStatus($admin));
+        $this->assertFalse(CipAccess::canOverrideStatus($officer));
+        $this->assertFalse(CipAccess::canOverrideStatus($employee));
 
-        // The officer's override list is the administrator's, and it is
-        // actionable, so it is not also sent as a locked copy.
         $granted = $this->at($this->application($admin), Status::GRANTED);
-
-        $this->assertSame(
-            Engine::availableOverrides($granted, $admin),
-            Engine::availableOverrides($granted, $officer),
-        );
-        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::availableOverrides($granted, $officer));
-        $this->assertSame([], Engine::lockedStatuses($granted, $officer));
+        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::availableOverrides($granted, $admin));
+        $this->assertSame([], Engine::availableOverrides($granted, $officer));
+        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::lockedStatuses($granted, $officer));
         $this->assertSame([], Engine::lockedStatuses($granted, $admin));
 
-        // A new file's only next step is Review Applications. That is a
-        // status change officers hold, not the assignment capability.
+        // A new file's next step is still the officer's to drive.
         $fresh = $this->application($admin);
-        $this->assertSame(
-            [Status::REVIEW_APPLICATION],
-            Engine::availableTransitions($fresh, $officer),
-        );
+        $this->assertSame([Status::REVIEW_APPLICATION], Engine::availableTransitions($fresh, $officer));
 
-        // Post-approval reads the same way, and stays inside its own lane.
+        // Post-approval reads the same way.
         $post = $this->at($this->application($admin), Status::POST_APPROVAL);
         $post->forceFill(['phase' => Phase::POST_APPROVAL])->save();
+        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::availableOverrides($post, $admin));
+        $this->assertSame([], Engine::availableOverrides($post, $officer));
+        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::lockedStatuses($post, $officer));
 
-        $this->assertSame(
-            Engine::availableOverrides($post, $admin),
-            Engine::availableOverrides($post, $officer),
-        );
-        /*
-         * A file at Post-Approval has only just crossed over and assessed
-         * nothing, so undoing the grant is still on offer — an officer can
-         * set it, the same list the administrator can act on.
-         */
-        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::availableOverrides($post, $officer));
-        $this->assertNotContains(Status::READY_TO_SUBMIT, Engine::availableOverrides($post, $officer));
-
-        /*
-         * The other lane stays reachable as an override, which the picker
-         * puts behind its own row rather than mixing into the same list. The
-         * lane's own steps belong to the stage buttons, so neither list
-         * offers those.
-         */
         $working = $this->at($this->application($admin), Status::APPLY_FOR_COR);
         $working->forceFill(['phase' => Phase::POST_APPROVAL])->save();
-
         foreach ([Status::ASSESSMENT_FEEDBACK, Status::PENDING_REVIEW, Status::BACKGROUND_CHECK, Status::DD_QUERY] as $preApproval) {
             $this->assertContains($preApproval, Engine::availableOverrides($working, $admin));
             $this->assertNotContains($preApproval, Engine::availableTransitions($working, $admin));
         }
         $this->assertNotContains(Status::PENDING_COR, Engine::availableOverrides($working, $admin));
 
-        // An override is never one the officer could already drive, so
-        // the picker cannot list the same status twice.
-        $this->assertSame(
-            [],
-            array_intersect(
-                Engine::availableTransitions($post, $officer),
-                Engine::availableOverrides($post, $officer),
-            ),
-        );
-
-        // A parked employee may not change status at all, so there is
-        // nothing to show them either.
-        $this->assertSame([], Engine::lockedStatuses($granted, $employee));
-        $this->assertSame([], Engine::lockedStatuses($post, $employee));
+        // Refused at the write as well as hidden in the picker.
+        $this->expectException(\Illuminate\Auth\Access\AuthorizationException::class);
+        Engine::set($granted, Status::ASSESSMENT_FEEDBACK, $officer, ['note' => 'Pulling it back.']);
     }
 
     public function test_the_payload_says_what_this_reader_may_do_next(): void

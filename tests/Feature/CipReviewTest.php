@@ -402,14 +402,14 @@ class CipReviewTest extends TestCase
     }
 
     /**
-     * The next step stays shut. The warning does not.
+     * The next step stays shut. An administrator may carry on past it.
      *
-     * Every administrator and CRO / Reviewing officer can still move the
-     * file while a document is in Application review: the move is a step
-     * forward, so it is not an override, and the documents still in review
-     * are shown as a warning they may acknowledge and continue past.
+     * Moving a file to Ready to Submit while a document is still in review
+     * is an override: an administrator is shown the documents and may
+     * acknowledge them and continue; a CRO / Reviewing officer is told to
+     * finish the review first.
      */
-    public function test_an_officer_may_continue_to_ready_to_submit_past_a_document_still_in_review(): void
+    public function test_only_an_administrator_may_continue_to_ready_to_submit_past_a_document_still_in_review(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
         $officer = $this->user(Role::REVIEWING_OFFICER, 'off@example.com', 'Otto Officer');
@@ -419,19 +419,35 @@ class CipReviewTest extends TestCase
 
         $fresh = $application->fresh();
         $this->assertNotContains(Status::READY_TO_SUBMIT, Engine::availableTransitions($fresh, $officer));
-        $this->assertContains(Status::READY_TO_SUBMIT, Engine::availableOverrides($fresh, $officer));
+        $this->assertNotContains(Status::READY_TO_SUBMIT, Engine::availableOverrides($fresh, $officer));
         $this->assertContains(Status::READY_TO_SUBMIT, Engine::availableOverrides($fresh, $admin));
 
-        $warned = $this->actingAs($officer)
+        // The officer is told what is missing, with no way past it...
+        $refused = $this->actingAs($officer)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::READY_TO_SUBMIT,
+            ])
+            ->assertStatus(422);
+        $this->assertNull($refused->json('canAcknowledge'));
+
+        // ...and an acknowledgement they send anyway is refused outright.
+        $this->actingAs($officer)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::READY_TO_SUBMIT,
+                'acknowledge' => true,
+            ])
+            ->assertForbidden();
+        $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
+
+        $warned = $this->actingAs($admin)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::READY_TO_SUBMIT,
             ])
             ->assertStatus(422)
             ->assertJsonPath('canAcknowledge', true);
         $this->assertStringContainsString('Ready for submission', $warned->json('message'));
-        $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
 
-        $this->actingAs($officer)
+        $this->actingAs($admin)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::READY_TO_SUBMIT,
                 'acknowledge' => true,
