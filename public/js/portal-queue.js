@@ -884,7 +884,18 @@
    */
   function revive() {
     return all().then(function (entries) {
-      var back = entries.filter(function (e) { return e.state === 'failed' && e.transient; });
+      var back = entries.filter(function (e) {
+        if (e.state !== 'failed') return false;
+        if (e.transient) return true;
+        /*
+         * Handed back before this flag existed. A new filing the old queue
+         * gave up on after its stalls (no internet behind the wifi, a slow
+         * upload) carries its submission key, so sending it again is safe,
+         * and is how a filing already stuck on somebody's machine reaches
+         * the firm once they are back. A refusal never counted a stall.
+         */
+        return e.transient === undefined && (e.stalls || 0) > 0 && safeToRepeat(e);
+      });
 
       return Promise.all(back.map(function (e) {
         e.state = 'waiting';

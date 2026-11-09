@@ -252,6 +252,37 @@ for (const how of ['redirect', 'html']) {
   await reset();
 }
 
+/* ── 6b. Already stuck on somebody's machine from before this fix ───── */
+{
+  /*
+   * Written straight into the queue's own store the way the old code left
+   * them: a filing it gave up on after two stalls, and a refusal. Neither
+   * has the `transient` flag, which did not exist then.
+   */
+  mode.filing = 'ok';
+  hits.filing = 0;
+  const ids = await page.evaluate(() => new Promise((resolve) => {
+    const open = indexedDB.open('tma-portal-queue', 1);
+    open.onsuccess = () => {
+      const tx = open.result.transaction('intents', 'readwrite');
+      const store = tx.objectStore('intents');
+      const base = (name, extra) => Object.assign({
+        account: '7', kind: 'cip.application', label: 'A new application for ' + name, method: 'POST',
+        url: '/portal/cip/applications', invalidate: [], meta: null, at: Date.now(), tries: 2,
+        parts: [{ name: 'firstName', value: name }, { name: 'submissionId', value: 'key-' + name }],
+      }, extra);
+      const out = {};
+      store.add(base('Ha', { state: 'failed', stalls: 2, error: 'Could not send this to the server.' })).onsuccess = (e) => { out.stuck = e.target.result; };
+      store.add(base('Ix', { state: 'failed', error: 'The passport bio page is required.' })).onsuccess = (e) => { out.refused = e.target.result; };
+      tx.oncomplete = () => resolve(out);
+    };
+  }));
+  await online();
+  check(await until(async () => !(await one(ids.stuck)), 8000, 'legacy stuck filing'), 'already stuck before the fix: back online, the filing goes by itself');
+  check(!!(await one(ids.refused)), 'already refused before the fix: still kept for a person, not resent');
+  await reset();
+}
+
 /* ── 7. The browser's offline flag stuck after the connection is back ─ */
 {
   await page.evaluate(() => { window.__online = false; });
