@@ -47,10 +47,13 @@
     { value: 'all', label: 'All' },
   ];
 
-  /* Staff send file requests, so staff have the tab that tracks them. */
+  /* Staff and service providers send file requests, so they have the tab
+     that tracks them (and sends the reminders). */
   function seesFileRequests() {
     var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
-    if (me && (me.isStaff || me.isAdmin)) return true;
+    if (me && (me.isStaff || me.isAdmin || me.isProviderContact)) return true;
+    var access = window.TMAPortalAccess;
+    if (access && access.isProviderContact && access.isProviderContact()) return true;
 
     return isAdminUser();
   }

@@ -1210,13 +1210,17 @@
   /*
    * "Request documents" on a filed application: ask the service provider
    * (or anyone) for this person's outstanding papers in one link; each is
-   * renamed and filed in its slot as it arrives. Staff only, and only once
-   * the application exists, since the request is aimed at its slots.
+   * renamed and filed in its slot as it arrives. Staff and the service
+   * provider, and only once the application exists, since the request is
+   * aimed at its slots.
    */
   function requestDocumentsAction(prefix) {
     if (!state.applicationId || editingDraft() || !state.record || !window.TMACipDocumentRequests) return '';
     var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
-    if (!me || !me.isStaff) return '';
+    var access = window.TMAPortalAccess;
+    var provider = (me && me.isProviderContact) || (access && access.isProviderContact && access.isProviderContact());
+    // Staff, and the service provider asking the applicant for its own file's papers.
+    if (!me || !(me.isStaff || provider)) return '';
     var who = padPersonForPrefix(prefix);
     if (!who || !who.id) return '';
     var outstanding = (who.documents || []).some(function (d) {

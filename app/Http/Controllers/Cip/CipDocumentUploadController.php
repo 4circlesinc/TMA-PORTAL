@@ -130,8 +130,19 @@ class CipDocumentUploadController extends Controller
     public function requestDocuments(Request $request, string $uuid): JsonResponse
     {
         $user = $request->user();
-        abort_unless($user && Role::isStaff($user), 403, 'Only staff can request documents.');
+        /*
+         * Staff, and the service provider on its own applications (item 8):
+         * a provider asks the applicant, or anyone else, for the papers the
+         * file still needs. ApplicationScope keeps them to the files their
+         * firm filed, and they always ask "someone else" — the service
+         * provider is who they are.
+         */
+        $provider = $user && ! Role::isStaff($user) && CipAccess::isProviderContact($user);
+        abort_unless($user && (Role::isStaff($user) || $provider), 403, 'Only staff and the service provider can request documents.');
         $application = ApplicationScope::findOrFail($user, $uuid);
+        if ($provider) {
+            $request->merge(['to' => 'someone', 'cc' => []]);
+        }
 
         $data = $request->validate([
             'documents' => ['required', 'array', 'min:1', 'max:60'],
@@ -148,6 +159,7 @@ class CipDocumentUploadController extends Controller
             'allowedExtensions' => ['nullable', 'array', 'max:64'],
             'allowedExtensions.*' => ['string', 'max:32'],
             'expiresAt' => ['nullable', 'date', 'after:today'],
+            'reminderEveryDays' => ['nullable', 'integer'],
             'send' => ['nullable', 'boolean'],
         ], [
             'documents.required' => 'Choose at least one document to ask for.',
@@ -209,6 +221,7 @@ class CipDocumentUploadController extends Controller
             'recipient_user_id' => count($recipients) === 1 ? ($first['userId'] ?? null) : null,
             'allowed_extensions' => FileRequests::normalizeExtensions($data['allowedExtensions'] ?? null),
             'expires_at' => $data['expiresAt'] ?? now()->addDays(14)->toDateString(),
+            'reminder_every_days' => FileRequests::reminderDaysFor($user, $data['reminderEveryDays'] ?? null),
         ], fn ($value) => $value !== null);
 
         try {

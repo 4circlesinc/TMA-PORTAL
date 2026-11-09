@@ -82,8 +82,11 @@ class FileRequestTest extends TestCase
 
     private function create(User $user, array $payload = []): array
     {
+        // Instructions and at least one file type are required (item 8).
         $res = $this->actingAs($user)->postJson('/portal/files/requests', array_merge([
             'title' => 'Please upload your passport',
+            'message' => 'A clear scan of every page.',
+            'allowedExtensions' => ['documents', 'images', 'spreadsheets', 'presentations'],
         ], $payload));
         $res->assertCreated();
 
@@ -180,6 +183,8 @@ class FileRequestTest extends TestCase
     {
         $user = $this->staff();
         $this->create($user);
+        // A link made before file types were required, accepting anything.
+        FileRequest::query()->update(['allowed_extensions' => null]);
 
         $token = FileRequest::firstOrFail()->token;
 
@@ -252,8 +257,10 @@ class FileRequestTest extends TestCase
         // Past MAX_FILES_CEILING is refused at creation.
         $this->actingAs($user)->postJson('/portal/files/requests', [
             'title' => 'Everything you have',
+            'message' => 'All of it.',
+            'allowedExtensions' => ['pdf'],
             'maxFiles' => FileRequests::MAX_FILES_CEILING + 1,
-        ])->assertStatus(422);
+        ])->assertStatus(422)->assertJsonValidationErrors(['maxFiles']);
 
         // A size past the request ceiling is clamped down to it, not honoured.
         $this->create($user, ['maxBytes' => FileType::MAX_BYTES]);
@@ -324,6 +331,8 @@ class FileRequestTest extends TestCase
 
         $this->actingAs($outsider)->postJson('/portal/files/requests', [
             'title' => 'Send me things',
+            'message' => 'Anything you have.',
+            'allowedExtensions' => ['pdf'],
             'folder' => $folder->uuid,
         ])->assertStatus(403);
 

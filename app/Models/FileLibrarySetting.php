@@ -32,6 +32,14 @@ class FileLibrarySetting extends Model
          */
         'clientSubfolders' => [],
         'autoCreateStaffFolder' => false,
+        /*
+         * Request Files reminders (item 8): how often the recipient of an
+         * outstanding request is reminded, in days (0: never), and whether
+         * the person sending a request may choose differently. Off, every
+         * request uses the administrators' frequency.
+         */
+        'requestReminderDays' => 3,
+        'requestReminderChoosable' => true,
     ];
 
     /** @return array<string, mixed> */
@@ -49,6 +57,20 @@ class FileLibrarySetting extends Model
         $row->save();
 
         return $row->settings;
+    }
+
+    /** The firm's reminder frequency for file requests, in days; 0 is never. */
+    public static function requestReminderDays(): int
+    {
+        $days = (int) (self::current()['requestReminderDays'] ?? 3);
+
+        return array_key_exists($days, \App\Support\Files\FileRequests::REMINDER_CHOICES) ? $days : 3;
+    }
+
+    /** May the person sending a request choose a different frequency? */
+    public static function requestReminderChoosable(): bool
+    {
+        return (bool) (self::current()['requestReminderChoosable'] ?? true);
     }
 
     /** @return array<int, string> */

@@ -131,10 +131,35 @@
    * @param {string} [ctx.title]       pre-filled request title
    * @param {Function} [ctx.onCreated] called with the created request
    */
+  /* What the form offers when the options cannot be read: the firm's usual. */
+  var FALLBACK_OPTIONS = {
+    reminders: {
+      days: 3,
+      choosable: true,
+      choices: [
+        { value: 0, label: 'Never' }, { value: 1, label: 'Every day' }, { value: 2, label: 'Every 2 days' },
+        { value: 3, label: 'Every 3 days' }, { value: 7, label: 'Every week' },
+      ],
+    },
+    defaults: { maxFiles: 5, allowedExtensions: ['pdf'] },
+  };
+
   function open(ctx) {
     ctx = ctx || {};
 
     if (!ui() || !net()) return;
+
+    // The reminder choices are the firm's (an administrator may fix them),
+    // so they are read before the form is drawn.
+    net().fetchJSON(net().url('/requests/options'))
+      .then(function (res) { openWith(ctx, res && res.reminders ? res : FALLBACK_OPTIONS); })
+      .catch(function () { openWith(ctx, FALLBACK_OPTIONS); });
+  }
+
+  function openWith(ctx, options) {
+    var defaults = options.defaults || FALLBACK_OPTIONS.defaults;
+    var groups = {};
+    (defaults.allowedExtensions || ['pdf']).forEach(function (ext) { groups[ext] = true; });
 
     var draft = {
       title: ctx.title || (ctx.clientName ? 'Documents for ' + ctx.clientName : 'Please upload your documents'),
@@ -145,9 +170,12 @@
       clientName: ctx.clientName || null,
       recipientEmail: '',
       recipientName: '',
-      groups: {},
+      // Somebody on the portal, picked from the people this reader can reach.
+      person: null,
+      groups: groups,
       maxBytes: MAX_BYTES_CEILING,
-      maxFiles: 20,
+      maxFiles: defaults.maxFiles || 5,
+      reminders: options.reminders || FALLBACK_OPTIONS.reminders,
       allowMultiple: true,
       password: '',
       usePassword: false,
@@ -174,10 +202,32 @@
     return !access || !access.can || access.can('cip.view') || access.can('clients.view');
   }
 
-  function optionRow(label, hint, controlHtml) {
+  /* A field whose answer is required: the form's own red asterisk. */
+  function requiredField(label, controlHtml) {
+    return '<div class="tma-portal-field">' +
+      '<span class="tma-portal-field__label">' + esc(label) +
+      '<span class="tma-portal-field__required" aria-hidden="true">*</span></span>' +
+      controlHtml +
+      '</div>';
+  }
+
+  /* A person's picture, or their initials, the size of a picker row's mark. */
+  function personFace(person) {
+    var src = person && person.photo;
+    if (!src && window.TMACurrentUser && window.TMACurrentUser.initialsFor && person) {
+      src = window.TMACurrentUser.initialsFor(person.name || person.email || '', person.id || person.email || '');
+    }
+
+    return src
+      ? '<img class="tma-cip-table__applicant-face" src="' + esc(src) + '" alt="" width="26" height="26">'
+      : '<span class="tma-cip-table__applicant-face" aria-hidden="true"></span>';
+  }
+
+  function optionRow(label, hint, controlHtml, required) {
     return '<div class="tma-portal-request__row">' +
       '<div class="tma-portal-request__row-copy">' +
-      '<span class="tma-portal-request__row-label">' + esc(label) + '</span>' +
+      '<span class="tma-portal-request__row-label">' + esc(label) +
+      (required ? '<span class="tma-portal-field__required" aria-hidden="true">*</span>' : '') + '</span>' +
       (hint ? '<span class="tma-portal-request__row-hint">' + esc(hint) + '</span>' : '') +
       '</div>' +
       '<div class="tma-portal-request__row-control">' + controlHtml + '</div>' +
@@ -208,16 +258,14 @@
 
       // ── what you are asking for
       '<div class="tma-portal-request__section">' +
-      ui().field('Request title', ui().input({
+      requiredField('Request title', ui().input({
         value: draft.title,
         placeholder: 'Please upload your documents',
-        attrs: 'data-req-title maxlength="150"',
+        attrs: 'data-req-title maxlength="150" aria-required="true"',
       })) +
-      '<div class="tma-portal-field">' +
-      '<span class="tma-portal-field__label">Instructions</span>' +
-      '<textarea class="tma-portal-textarea" data-req-message maxlength="2000" rows="3"' +
-      ' placeholder="Tell them exactly which documents you need, and anything they should know."></textarea>' +
-      '</div>' +
+      requiredField('Instructions',
+        '<textarea class="tma-portal-textarea" data-req-message maxlength="2000" rows="3" aria-required="true"' +
+        ' placeholder="Tell them exactly which documents you need, and anything they should know."></textarea>') +
       '</div>' +
 
       // ── where it lands
@@ -237,28 +285,50 @@
       // ── who it goes to
       '<div class="tma-portal-request__section">' +
       '<h3 class="tma-portal-request__heading">Who you are asking</h3>' +
-      '<div class="tma-portal-request__pair">' +
-      ui().field('Name', ui().input({ value: draft.recipientName, placeholder: 'Jane Doe', attrs: 'data-req-rname maxlength="120"' })) +
-      ui().field('Email address', ui().input({ type: 'email', value: draft.recipientEmail, placeholder: 'jane@example.com', attrs: 'data-req-remail' })) +
+      '<div class="tma-portal-radio-row">' +
+      '<label class="tma-portal-radio"><input type="radio" name="tma-req-who" value="user" data-req-who checked>' +
+      '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Someone on the portal</label>' +
+      '<label class="tma-portal-radio"><input type="radio" name="tma-req-who" value="external" data-req-who>' +
+      '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Someone else</label>' +
       '</div>' +
-      '<p class="tma-portal-request__note">Leave the email blank to copy the link and send it yourself.</p>' +
+      // Somebody on the portal: found by name or address, their own details used.
+      '<div data-req-who-user>' +
+      '<div data-req-person-chosen hidden></div>' +
+      '<div data-req-person-find>' +
+      requiredField('Find a person', ui().input({
+        type: 'search',
+        placeholder: 'Name or email address',
+        attrs: 'data-req-person-search autocomplete="off" spellcheck="false"',
+      })) +
+      '<div class="tma-portal-picker" data-req-person-results>' +
+      '<p class="tma-portal-picker__empty">Type a name or an email address.</p></div>' +
+      '</div>' +
+      '<p class="tma-portal-request__note">They get the email, and a message and a notification in the portal, each with the link.</p>' +
+      '</div>' +
+      // Anybody else: a name and an address, both needed.
+      '<div data-req-who-external hidden>' +
+      '<div class="tma-portal-request__pair">' +
+      requiredField('Name', ui().input({ value: draft.recipientName, placeholder: 'Jane Doe', attrs: 'data-req-rname maxlength="120"' })) +
+      requiredField('Email address', ui().input({ type: 'email', value: draft.recipientEmail, placeholder: 'jane@example.com', attrs: 'data-req-remail' })) +
+      '</div>' +
+      '</div>' +
       '</div>' +
 
       // ── the rules
       '<div class="tma-portal-request__section">' +
       '<h3 class="tma-portal-request__heading">Rules</h3>' +
 
-      optionRow('Allowed file types', 'Everything is accepted when none are ticked.',
+      optionRow('Allowed file types', 'At least one. Only these can be uploaded.',
         '<div class="tma-portal-request__chips">' +
         EXTENSIONS.map(function (e) {
           var src = extIconSrc(e.ext);
           return '<label class="tma-portal-request__chip">' +
-            '<input type="checkbox" data-req-group="' + esc(e.ext) + '">' +
+            '<input type="checkbox" data-req-group="' + esc(e.ext) + '"' + (draft.groups[e.ext] ? ' checked' : '') + '>' +
             '<img class="' + extIconClass(src) + '" src="' + esc(src) + '"' +
             ' alt="" width="16" height="16" aria-hidden="true">' +
             '<span>' + esc(e.label) + '</span></label>';
         }).join('') +
-        '</div>') +
+        '</div>', true) +
 
       optionRow('Maximum file size', null,
         ui().select(sizeOptions, String(draft.maxBytes), 'data-req-size', 'Maximum file size')) +
@@ -268,6 +338,13 @@
 
       optionRow('How many files', null,
         ui().input({ type: 'number', value: String(draft.maxFiles), attrs: 'data-req-maxfiles min="1" max="200"' })) +
+
+      optionRow('Reminders',
+        draft.reminders.choosable
+          ? 'How often they are reminded, by email and in the portal, until it arrives.'
+          : 'Set by your administrator.',
+        ui().select(draft.reminders.choices || [], String(draft.reminders.days), 'data-req-reminder' +
+          (draft.reminders.choosable ? '' : ' disabled'), 'Reminder frequency')) +
 
       optionRow('Expires', 'The link stops accepting uploads after this date.',
         '<div class="tma-portal-request__inline">' +
@@ -287,7 +364,7 @@
 
       '<div class="tma-portal-form-actions tma-portal-form-actions--start">' +
       ui().btn({ label: 'Create link', icon: 'LinkSimple', attrs: ' data-req-create' }) +
-      ui().btn({ label: 'Create and email', icon: 'PaperPlaneTilt', variant: 'ghost', attrs: ' data-req-send' }) +
+      ui().btn({ label: 'Create and send', icon: 'PaperPlaneTilt', variant: 'ghost', attrs: ' data-req-send' }) +
       ui().btn({ label: 'Cancel', variant: 'ghost', attrs: ' data-portal-modal-close' }) +
       '</div>' +
 
@@ -361,7 +438,7 @@
     function syncMultiple() {
       maxFilesInput.disabled = !multipleToggle.checked;
       if (!multipleToggle.checked) maxFilesInput.value = '1';
-      else if (maxFilesInput.value === '1') maxFilesInput.value = '20';
+      else if (maxFilesInput.value === '1') maxFilesInput.value = '5';
     }
 
     pwToggle.addEventListener('change', syncPassword);
@@ -374,6 +451,8 @@
     host.querySelector('[data-req-pick]').addEventListener('click', function () {
       pickDestination(host, draft);
     });
+
+    wireRecipient(host, draft);
 
     host.querySelectorAll('[data-req-kind]').forEach(function (radio) {
       radio.addEventListener('change', function () {
@@ -389,20 +468,26 @@
 
       var size = parseInt(host.querySelector('[data-req-size]').value, 10) || 0;
       var multiple = multipleToggle.checked;
+      var whoEl = host.querySelector('[data-req-who]:checked');
+      var who = whoEl ? whoEl.value : 'external';
+      var reminderEl = host.querySelector('[data-req-reminder]');
 
       return {
+        who: who,
         title: (host.querySelector('[data-req-title]').value || '').trim(),
         message: (host.querySelector('[data-req-message]').value || '').trim() || null,
         folder: draft.folder,
         client: draft.client,
-        recipientName: (host.querySelector('[data-req-rname]').value || '').trim() || null,
-        recipientEmail: (host.querySelector('[data-req-remail]').value || '').trim() || null,
+        recipientUserId: who === 'user' && draft.person ? draft.person.id : null,
+        recipientName: who === 'external' ? ((host.querySelector('[data-req-rname]').value || '').trim() || null) : null,
+        recipientEmail: who === 'external' ? ((host.querySelector('[data-req-remail]').value || '').trim() || null) : null,
         allowedExtensions: groups.length ? groups : null,
         maxBytes: size || null,
-        maxFiles: multiple ? (parseInt(maxFilesInput.value, 10) || 20) : 1,
+        maxFiles: multiple ? (parseInt(maxFilesInput.value, 10) || 5) : 1,
         allowMultiple: multiple,
         password: pwToggle.checked ? pwInput.value : null,
         expiresAt: expiryToggle.checked ? (expiryInput.value || null) : null,
+        reminderEveryDays: reminderEl ? parseInt(reminderEl.value, 10) : null,
       };
     }
 
@@ -414,11 +499,27 @@
         host.querySelector('[data-req-title]').focus();
         return;
       }
-      if (send && !payload.recipientEmail) {
-        showError(host, 'Add an email address, or use “Create link” and send it yourself.');
-        host.querySelector('[data-req-remail]').focus();
+      if (!payload.message) {
+        showError(host, 'Add instructions so they know exactly what to upload.');
+        host.querySelector('[data-req-message]').focus();
         return;
       }
+      if (payload.who === 'user' && !payload.recipientUserId) {
+        showError(host, 'Choose the person you are asking.');
+        var find = host.querySelector('[data-req-person-search]');
+        if (find) find.focus();
+        return;
+      }
+      if (payload.who === 'external' && (!payload.recipientName || !payload.recipientEmail)) {
+        showError(host, payload.recipientName ? 'Add their email address.' : 'Add the name of the person you are asking.');
+        host.querySelector(payload.recipientName ? '[data-req-remail]' : '[data-req-rname]').focus();
+        return;
+      }
+      if (!payload.allowedExtensions) {
+        showError(host, 'Choose at least one file type they may upload.');
+        return;
+      }
+      delete payload.who;
       if (payload.password !== null && payload.password.length < 4) {
         showError(host, 'A password needs at least 4 characters.');
         pwInput.focus();
@@ -446,6 +547,100 @@
 
     host.querySelector('[data-req-create]').addEventListener('click', function () { create(false); });
     host.querySelector('[data-req-send]').addEventListener('click', function () { create(true); });
+  }
+
+  /*
+   * Who is being asked.
+   *
+   * Somebody on the portal is found among the people this reader may reach
+   * (the same list Messages offers them) and their own name and address are
+   * used; anybody else is a name and an address typed in.
+   */
+  function wireRecipient(host, draft) {
+    var userBox = host.querySelector('[data-req-who-user]');
+    var externalBox = host.querySelector('[data-req-who-external]');
+    var chosen = host.querySelector('[data-req-person-chosen]');
+    var find = host.querySelector('[data-req-person-find]');
+    var input = host.querySelector('[data-req-person-search]');
+    var results = host.querySelector('[data-req-person-results]');
+    var seq = 0;
+    var timer = null;
+
+    host.querySelectorAll('[data-req-who]').forEach(function (radio) {
+      radio.addEventListener('change', function () {
+        if (!radio.checked) return;
+        userBox.hidden = radio.value !== 'user';
+        externalBox.hidden = radio.value !== 'external';
+        showError(host, '');
+      });
+    });
+
+    function paintChosen() {
+      var person = draft.person;
+      chosen.hidden = !person;
+      find.hidden = !!person;
+      if (!person) {
+        chosen.innerHTML = '';
+        return;
+      }
+      chosen.innerHTML = '<div class="tma-portal-picker__list"><div class="tma-portal-picker__folder is-current">' +
+        personFace(person) +
+        '<span class="tma-save-folder__name">' + esc(person.name || person.email) +
+        (person.email ? '<span class="tma-save-folder__path">' + esc(person.email) + '</span>' : '') +
+        '</span>' +
+        '<button type="button" class="tma-portal-link" data-req-person-change>Change</button>' +
+        '</div></div>';
+      chosen.querySelector('[data-req-person-change]').addEventListener('click', function () {
+        draft.person = null;
+        paintChosen();
+        input.value = '';
+        results.innerHTML = '<p class="tma-portal-picker__empty">Type a name or an email address.</p>';
+        input.focus();
+      });
+    }
+
+    function search(q) {
+      var mine = ++seq;
+      results.innerHTML = ui().loading({ count: 3 });
+      net().fetchJSON('/portal/messaging/contacts?q=' + encodeURIComponent(q))
+        .then(function (res) {
+          if (mine !== seq) return;
+          var people = (res && res.contacts) || [];
+          if (!people.length) {
+            results.innerHTML = '<p class="tma-portal-picker__empty">Nobody on the portal matches. Choose “Someone else” to enter their details.</p>';
+            return;
+          }
+          results.innerHTML = '<div class="tma-portal-picker__list">' + people.slice(0, 12).map(function (person, i) {
+            return '<button type="button" class="tma-portal-picker__folder" data-req-person="' + i + '">' +
+              personFace(person) +
+              '<span class="tma-save-folder__name">' + esc(person.name || person.email) +
+              (person.email ? '<span class="tma-save-folder__path">' + esc(person.email) + '</span>' : '') +
+              '</span></button>';
+          }).join('') + '</div>';
+          results.querySelectorAll('[data-req-person]').forEach(function (b) {
+            b.addEventListener('click', function () {
+              draft.person = people[parseInt(b.getAttribute('data-req-person'), 10)];
+              showError(host, '');
+              paintChosen();
+            });
+          });
+        })
+        .catch(function () {
+          if (mine !== seq) return;
+          results.innerHTML = '<p class="tma-portal-picker__empty">Could not search the portal.</p>';
+        });
+    }
+
+    input.addEventListener('input', function () {
+      var q = input.value.trim();
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(function () {
+        if (q.length >= 2) search(q);
+        else results.innerHTML = '<p class="tma-portal-picker__empty">Type a name or an email address.</p>';
+      }, 250);
+    });
+
+    paintChosen();
   }
 
   function wireDone(host, req, ctx) {

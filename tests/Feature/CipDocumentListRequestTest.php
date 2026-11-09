@@ -195,12 +195,32 @@ class CipDocumentListRequestTest extends TestCase
             ->assertJsonPath('emailed', 2);
     }
 
-    public function test_only_staff_may_ask(): void
+    /**
+     * Staff ask, and so does the service provider on its own file (item 8):
+     * always as "someone else" — the applicant, or whoever holds the paper —
+     * since the provider is who they are. Nobody else asks.
+     */
+    public function test_the_service_provider_may_ask_someone_for_its_files_documents(): void
     {
         [, $contact, $application, $oath] = $this->file();
 
-        $this->request($contact, $application, [$oath->uuid])->assertForbidden();
-        $this->assertSame(0, FileRequest::count());
+        // "The service provider" from the provider is read as someone else,
+        // who then needs an address.
+        $this->request($contact, $application, [$oath->uuid])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['emails']);
+
+        $this->request($contact, $application, [$oath->uuid], ['emails' => ['chen.wei@example.com']])
+            ->assertCreated()
+            ->assertJsonPath('emailed', 1)
+            ->assertJsonPath('recipients', ['chen.wei@example.com']);
+        $this->assertSame($contact->id, (int) FileRequest::query()->latest('id')->value('created_by'));
+
+        // A client with no part in this file is refused.
+        $stranger = $this->user(Role::CLIENT, 'nobody@example.com', 'No Body');
+        $this->request($stranger, $application, [$oath->uuid], ['to' => 'someone', 'emails' => ['x@example.com']])
+            ->assertStatus(403);
+        $this->assertSame(1, FileRequest::count());
     }
 
     public function test_documents_from_another_application_are_refused(): void

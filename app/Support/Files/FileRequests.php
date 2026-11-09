@@ -61,6 +61,258 @@ final class FileRequests
     /** Hard ceiling on files per link, whatever the requester asks for. */
     public const MAX_FILES_CEILING = 200;
 
+    /** What a new request asks for unless told otherwise (item 8). */
+    public const DEFAULT_MAX_FILES = 5;
+
+    /** @var list<string> */
+    public const DEFAULT_EXTENSIONS = ['pdf'];
+
+    /** How often an outstanding request's recipient is reminded: days => words. */
+    public const REMINDER_CHOICES = [
+        0 => 'Never',
+        1 => 'Every day',
+        2 => 'Every 2 days',
+        3 => 'Every 3 days',
+        7 => 'Every week',
+    ];
+
+    /** No request is reminded more often than this, however long it stays open. */
+    public const MAX_REMINDERS = 10;
+
+    /**
+     * The reminder frequency a new request gets.
+     *
+     * An administrator's choice stands. Anybody else may choose only while
+     * the firm lets them (FileLibrarySetting::requestReminderChoosable);
+     * otherwise every request uses the firm's frequency.
+     */
+    public static function reminderDaysFor(User $user, mixed $asked): int
+    {
+        $firm = \App\Models\FileLibrarySetting::requestReminderDays();
+
+        if ($asked === null || $asked === '') {
+            return $firm;
+        }
+
+        $asked = (int) $asked;
+        if (! array_key_exists($asked, self::REMINDER_CHOICES)) {
+            return $firm;
+        }
+
+        return FileAccess::isAdmin($user) || \App\Models\FileLibrarySetting::requestReminderChoosable()
+            ? $asked
+            : $firm;
+    }
+
+    /** The reminder choices and the firm's default, for the request form. */
+    public static function reminderOptions(User $user): array
+    {
+        return [
+            'days' => \App\Models\FileLibrarySetting::requestReminderDays(),
+            'choosable' => FileAccess::isAdmin($user) || \App\Models\FileLibrarySetting::requestReminderChoosable(),
+            'choices' => collect(self::REMINDER_CHOICES)
+                ->map(fn (string $label, int $days) => ['value' => $days, 'label' => $label])
+                ->values()
+                ->all(),
+        ];
+    }
+
+    /**
+     * Is anything this request asked for still to come?
+     *
+     * A list of documents waits until each has arrived; a folder request
+     * until something has been sent, then it has had its answer. A request
+     * that is shut (expired, closed, withdrawn) is waiting on nobody.
+     */
+    public static function outstanding(FileRequest $request): bool
+    {
+        if (! $request->isOpen()) {
+            return false;
+        }
+
+        $listed = \App\Support\Cip\DocumentRequests::listFor($request);
+        if ($listed->isNotEmpty()) {
+            return $listed->contains(fn (array $row) => ! $row['received'] && ! $row['closed']);
+        }
+
+        return (int) $request->upload_count === 0;
+    }
+
+    /**
+     * Tell somebody with a portal account about a request, in the portal:
+     * the bell, and a message in their Messages from the person who asked,
+     * each with the link to the upload page. The email goes separately.
+     */
+    public static function notifyPortalUser(FileRequest $request, User $recipient, ?User $sender, bool $reminder = false): void
+    {
+        $url = self::url($request);
+        $who = $sender?->name ?: 'The firm';
+
+        \App\Support\Notifications\Notifier::send([
+            'user' => $recipient->id,
+            'actor' => $sender,
+            'type' => $reminder ? 'files.request_reminder' : 'files.request_received',
+            'title' => ($reminder ? 'Reminder: ' : '').$request->title,
+            'message' => $reminder
+                ? 'Still waiting for your upload. Requested by '.$who.'.'
+                : 'Requested by '.$who.'.',
+            'subject' => $request,
+            'action_url' => '/r/'.$request->token,
+            // The request email is the email.
+            'email' => false,
+        ]);
+
+        if ($sender === null) {
+            return;
+        }
+
+        $body = $reminder
+            ? "Reminder: I'm still waiting for your upload for \"{$request->title}\".\n\nUpload here: {$url}"
+            : "I've asked you to upload documents: \"{$request->title}\".".
+                (trim((string) $request->message) !== '' ? "\n\n".trim((string) $request->message) : '').
+                "\n\nUpload here: {$url}";
+
+        self::message($sender, $recipient, $body);
+    }
+
+    /**
+     * A direct message from one portal user to another, as if typed.
+     *
+     * The same path the welcome message takes: the thread is found or
+     * opened, the message written, broadcast and announced (bell, no second
+     * email). Never throws: two people who may not message each other, or
+     * a messaging hiccup, leave the request and its email standing.
+     */
+    public static function message(User $sender, User $recipient, string $body): void
+    {
+        if ($sender->is($recipient) || ! $recipient->isApproved() || ! $sender->isApproved()) {
+            return;
+        }
+
+        try {
+            if (\App\Models\UserBlock::blockedBetween($sender->id, $recipient->id)) {
+                return;
+            }
+
+            [$conversation, $message, $mentioned] = \Illuminate\Support\Facades\DB::transaction(function () use ($sender, $recipient, $body) {
+                $conversation = \App\Support\Messaging\ClientConversations::resolveDirect($sender, $recipient);
+                [$message, $mentioned] = \App\Support\Messaging\Posting::write($conversation, $sender, [
+                    'type' => \App\Models\Message::TYPE_TEXT,
+                    'body' => $body,
+                ]);
+
+                return [$conversation, $message, $mentioned];
+            });
+
+            $message->load(\App\Support\Messaging\Posting::RELATIONS);
+            \App\Support\Messaging\Broadcaster::to(new \App\Events\MessageSent($message));
+            \App\Support\Messaging\MessageNotifier::announceMessage($conversation, $message, $sender, $mentioned, email: false);
+            \App\Support\Messaging\MessageNotifier::announceFirstCorrespondence($conversation, $message, $sender);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('A file request message could not be sent.', [
+                'sender' => $sender->id,
+                'recipient' => $recipient->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * The account an address belongs to, if it has one.
+     */
+    public static function portalUserFor(?string $email): ?User
+    {
+        $email = mb_strtolower(trim((string) $email));
+        if ($email === '') {
+            return null;
+        }
+
+        return User::query()
+            ->whereRaw('LOWER(email) = ?', [$email])
+            ->where('status', User::STATUS_APPROVED)
+            ->first();
+    }
+
+    /**
+     * Remind everyone a request went to that it is still waiting: the email
+     * again, headed as a reminder, and for anyone with an account the bell
+     * and a message from the person who asked.
+     *
+     * @return int  how many were emailed
+     */
+    public static function remind(FileRequest $request, ?User $sender = null): int
+    {
+        // The whole account (the relation is often loaded with id and name only).
+        $sender ??= User::find($request->created_by);
+        $emailed = 0;
+        $listed = \App\Support\Cip\DocumentRequests::listFor($request);
+        $details = [];
+        if ($listed->isNotEmpty()) {
+            $waiting = $listed
+                ->filter(fn (array $row) => ! $row['received'] && ! $row['closed'])
+                ->map(fn (array $row) => \App\Support\Cip\DocumentTypes::present((string) $row['slot']->label))
+                ->values()
+                ->all();
+            if ($waiting !== []) {
+                $details[] = ['Still needed', implode(', ', $waiting)];
+            }
+        }
+        if ($request->expires_at) {
+            $details[] = ['Upload by', $request->expires_at->format('j M Y')];
+        }
+
+        foreach (self::sentTo($request) as $email) {
+            $delivery = \App\Support\Mail\Deliveries::send(
+                \App\Support\Mail\Postcards::fileRequest(
+                    'Reminder: '.$request->title,
+                    $sender?->name ?: \App\Support\Mail\Postcards::site(),
+                    $request->message,
+                    self::url($request),
+                    null,
+                    $details,
+                ),
+                $email,
+                $request,
+                'fileRequestReminder',
+                immediate: true,
+            );
+            if ($delivery === null || $delivery->status !== \App\Models\EmailDelivery::STATUS_FAILED) {
+                $emailed++;
+            }
+
+            $user = self::portalUserFor($email);
+            if ($user) {
+                self::notifyPortalUser($request, $user, $sender, reminder: true);
+            }
+        }
+
+        $request->forceFill([
+            'reminded_at' => now(),
+            'reminders_sent' => (int) $request->reminders_sent + 1,
+        ])->save();
+
+        return $emailed;
+    }
+
+    /**
+     * Is a reminder due? Its frequency has passed since the last reminder,
+     * or since it was sent, and the request is still waiting on somebody.
+     */
+    public static function reminderDue(FileRequest $request): bool
+    {
+        $days = (int) $request->reminder_every_days;
+        if ($days <= 0 || (int) $request->reminders_sent >= self::MAX_REMINDERS) {
+            return false;
+        }
+
+        $since = $request->reminded_at ?? $request->created_at;
+        if ($since === null || $since->copy()->addDays($days)->isFuture()) {
+            return false;
+        }
+
+        return self::sentTo($request) !== [] && self::outstanding($request);
+    }
+
     /** A long, unguessable link token. Same shape as a public share's. */
     public static function token(): string
     {
@@ -285,6 +537,8 @@ final class FileRequests
             'total' => $total,
             'items' => $items,
             'sentTo' => self::sentTo($request),
+            // Still waiting on somebody: a reminder can be sent.
+            'outstanding' => self::outstanding($request),
         ];
     }
 
@@ -353,6 +607,11 @@ final class FileRequests
             'lastUploadAt' => optional($request->last_upload_at)->toIso8601String(),
             'createdAt' => optional($request->created_at)->toIso8601String(),
             'createdBy' => $request->creator?->name,
+            'recipientUserId' => $request->recipient_user_id,
+            'reminderEveryDays' => (int) $request->reminder_every_days,
+            'reminderLabel' => self::REMINDER_CHOICES[(int) $request->reminder_every_days] ?? 'Never',
+            'remindedAt' => optional($request->reminded_at)->toIso8601String(),
+            'remindersSent' => (int) $request->reminders_sent,
         ];
     }
 

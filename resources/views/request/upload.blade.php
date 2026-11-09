@@ -93,6 +93,19 @@
   </div>
 </section>
 
+{{-- A file type the link does not take: why, and what to do instead. --}}
+<div class="tma-auth__dialog" data-type-warning role="dialog" aria-modal="true" aria-labelledby="tma-type-warning-title" hidden>
+  <div class="tma-auth__dialog-card">
+    <h2 class="tma-auth__dialog-title" id="tma-type-warning-title">That file type isn’t accepted</h2>
+    <p class="tma-auth__dialog-text" data-type-warning-text></p>
+    <p class="tma-auth__dialog-text">Sending something sensitive? Password-protect it first.</p>
+    <div class="tma-auth__dialog-actions">
+      <button type="button" class="tma-auth__submit tma-auth__submit--ghost" data-type-warning-cancel>Cancel</button>
+      <button type="button" class="tma-auth__submit" data-type-warning-pick>Choose another file</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function () {
   'use strict';
@@ -161,6 +174,40 @@
     return null;
   }
 
+  function typeAllowed(file) {
+    return !(ALLOWED && ALLOWED.length && ALLOWED.indexOf(extensionOf(file.name)) === -1);
+  }
+
+  /*
+   * A file of a type the link does not take is not uploaded: the server
+   * would refuse it. Before anything else happens the visitor is told why,
+   * briefly — the types are limited for security — and offered the picker
+   * again. Short enough to be read.
+   */
+  var warning = document.querySelector('[data-type-warning]');
+  var warningRetry = null;
+  function warnType(file, retry) {
+    warning.querySelector('[data-type-warning-text]').textContent =
+      (file && file.name ? '“' + file.name + '” can’t be sent. ' : '') +
+      'For security, this link only accepts ' + (ALLOWED_LABEL || 'the file types listed') + '.';
+    warningRetry = retry || null;
+    warning.hidden = false;
+    var pick = warning.querySelector('[data-type-warning-pick]');
+    if (pick) pick.focus();
+  }
+  function closeWarning() {
+    warning.hidden = true;
+    warningRetry = null;
+  }
+  warning.querySelector('[data-type-warning-cancel]').addEventListener('click', closeWarning);
+  warning.querySelector('[data-type-warning-pick]').addEventListener('click', function () {
+    var retry = warningRetry;
+    closeWarning();
+    if (retry) retry();
+  });
+  warning.addEventListener('click', function (e) { if (e.target === warning) closeWarning(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !warning.hidden) closeWarning(); });
+
   function addRow(file) {
     var li = document.createElement('li');
     li.className = 'tma-request__row';
@@ -212,6 +259,14 @@
     if (busy || !files || !files.length) return;
     var list = Array.prototype.slice.call(files);
     if (!MULTIPLE) list = list.slice(0, 1);
+
+    var refused = list.filter(function (file) { return !typeAllowed(file); });
+    if (refused.length) {
+      warnType(refused.length === 1 ? refused[0] : null, function () { picker.click(); });
+      list = list.filter(typeAllowed);
+      picker.value = '';
+      if (!list.length) return;
+    }
 
     banner('', '');
     busy = true;
@@ -286,6 +341,10 @@
       var take = function (files) {
         var file = files && files[0];
         if (!file) return;
+        if (!typeAllowed(file)) {
+          warnType(file, function () { input.click(); });
+          return;
+        }
         var reason = localReason(file);
         state.hidden = false;
         if (reason) {

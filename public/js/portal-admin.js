@@ -4705,8 +4705,17 @@
    */
   var FILELIB = {
     loaded: false, loading: false, error: null,
-    settings: { clientSubfolders: [], autoCreateStaffFolder: false }, orgFolders: [],
+    settings: { clientSubfolders: [], autoCreateStaffFolder: false, requestReminderDays: 3, requestReminderChoosable: true }, orgFolders: [],
   };
+
+  /* FileRequests::REMINDER_CHOICES, the frequencies a request may be reminded at. */
+  var REQUEST_REMINDER_CHOICES = [
+    { value: '0', label: 'Never' },
+    { value: '1', label: 'Every day' },
+    { value: '2', label: 'Every 2 days' },
+    { value: '3', label: 'Every 3 days' },
+    { value: '7', label: 'Every week' },
+  ];
 
   function filelibJson(method, url, body) {
     return secApi(method, url, body).then(function (r) {
@@ -4860,7 +4869,17 @@
         ui().toggle(FILELIB.settings.autoCreateStaffFolder, 'data-staff-toggle', 'Auto-create staff folder') + '</div>',
         { description: 'A private folder under “Staff Files” for each employee. Only they and administrators can see it.' });
 
-      return orgSection + subSection + staffSection;
+      // Item 8: how often outstanding file requests are chased, and whether
+      // the person sending one may choose differently.
+      var reminderDays = FILELIB.settings.requestReminderDays == null ? 3 : FILELIB.settings.requestReminderDays;
+      var requestSection = ui().section('Request Files reminders',
+        '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Remind recipients of outstanding requests</span>' +
+        ui().select(REQUEST_REMINDER_CHOICES, String(reminderDays), 'data-req-reminder-days', 'Reminder frequency') + '</div>' +
+        '<div class="tma-portal-toggle-row"><span class="tma-portal-toggle-row__label">Let staff and service providers choose a different frequency on each request</span>' +
+        ui().toggle(FILELIB.settings.requestReminderChoosable !== false, 'data-req-reminder-choosable', 'Allow a different frequency') + '</div>',
+        { description: 'Reminders go by email, and in the portal to anyone with an account, until everything asked for has arrived or the link expires.' });
+
+      return orgSection + subSection + staffSection + requestSection;
     },
     wire: function (el) {
       if (!FILELIB.loaded) { loadFileLib(); return; }
@@ -4912,6 +4931,21 @@
         addBtn.addEventListener('click', doAdd);
         addInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doAdd(); } });
       }
+
+      var reminderDays = el.querySelector('[data-req-reminder-days]');
+      if (reminderDays) reminderDays.addEventListener('change', function () {
+        var prev = String(FILELIB.settings.requestReminderDays == null ? 3 : FILELIB.settings.requestReminderDays);
+        filelibJson('PUT', '/portal/file-library/settings', { requestReminderDays: parseInt(reminderDays.value, 10) })
+          .then(function (d) { FILELIB.settings = d.settings; ui().toast('Saved'); })
+          .catch(function (err) { ui().toast(err.message); reminderDays.value = prev; });
+      });
+      var reminderChoosable = el.querySelector('[data-req-reminder-choosable]');
+      if (reminderChoosable) reminderChoosable.addEventListener('change', function (e) {
+        var on = e.target.checked;
+        filelibJson('PUT', '/portal/file-library/settings', { requestReminderChoosable: on })
+          .then(function (d) { FILELIB.settings = d.settings; ui().toast('Saved'); })
+          .catch(function (err) { ui().toast(err.message); e.target.checked = !on; });
+      });
 
       var staffToggle = el.querySelector('[data-staff-toggle]');
       if (staffToggle) staffToggle.addEventListener('change', function (e) {

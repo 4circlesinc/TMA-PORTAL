@@ -183,6 +183,39 @@ Artisan::command('calendar:send-reminders', function () {
 Schedule::command('calendar:send-reminders')->everyMinute()->withoutOverlapping(5);
 
 /*
+ * Request Files reminders (item 8): every outstanding request whose
+ * frequency has come round is sent again, headed as a reminder, by email
+ * and in the portal for anyone with an account (FileRequests::remind). The
+ * frequency is the request's own, chosen within the firm's settings.
+ */
+Artisan::command('files:send-request-reminders', function () {
+    $sent = 0;
+    \App\Models\FileRequest::query()
+        ->whereNull('revoked_at')
+        ->whereNull('closed_at')
+        ->where('reminder_every_days', '>', 0)
+        ->where('reminders_sent', '<', \App\Support\Files\FileRequests::MAX_REMINDERS)
+        ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+        ->with('creator')
+        ->orderBy('id')
+        ->chunkById(100, function ($requests) use (&$sent) {
+            foreach ($requests as $request) {
+                try {
+                    if (\App\Support\Files\FileRequests::reminderDue($request)) {
+                        \App\Support\Files\FileRequests::remind($request);
+                        $sent++;
+                    }
+                } catch (\Throwable $e) {
+                    report($e);
+                }
+            }
+        });
+    $this->info("Reminded {$sent} file request(s).");
+})->purpose('Remind recipients of outstanding file requests, at each request’s frequency');
+
+Schedule::command('files:send-request-reminders')->hourly()->withoutOverlapping(30);
+
+/*
  * Each person's History retention choice (Settings → Privacy). Daily is
  * enough for a window measured in days, and it runs off-peak because it
  * touches every account.

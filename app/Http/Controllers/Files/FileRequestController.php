@@ -63,26 +63,68 @@ class FileRequestController extends BaseFilesController
         ]);
     }
 
+    /** What the request form needs before it is drawn: the reminder choices and the firm's default. */
+    public function options(Request $request): JsonResponse
+    {
+        return response()->json([
+            'reminders' => FileRequests::reminderOptions($this->user($request)),
+            'defaults' => [
+                'maxFiles' => FileRequests::DEFAULT_MAX_FILES,
+                'allowedExtensions' => FileRequests::DEFAULT_EXTENSIONS,
+            ],
+        ]);
+    }
+
     public function store(Request $request): JsonResponse
     {
+        /*
+         * Item 8: a request says what it is for and what may be sent, so the
+         * instructions and at least one file type are required; the person
+         * asked is either somebody on the portal (recipientUserId) or a
+         * name and an email address together.
+         */
         $data = $request->validate([
             'title' => ['required', 'string', 'max:150'],
-            'message' => ['nullable', 'string', 'max:2000'],
+            'message' => ['required', 'string', 'max:2000'],
             'folder' => ['nullable', 'string', 'max:64'],
             'client' => ['nullable', 'string', 'max:64'],
-            'recipientEmail' => ['nullable', 'email', 'max:191'],
-            'recipientName' => ['nullable', 'string', 'max:120'],
-            'allowedExtensions' => ['nullable', 'array', 'max:64'],
+            'recipientUserId' => ['nullable', 'integer'],
+            'recipientEmail' => ['nullable', 'required_with:recipientName', 'email', 'max:191'],
+            'recipientName' => ['nullable', 'required_with:recipientEmail', 'string', 'max:120'],
+            'allowedExtensions' => ['required', 'array', 'min:1', 'max:64'],
             'allowedExtensions.*' => ['string', 'max:32'],
             'maxBytes' => ['nullable', 'integer', 'min:1'],
             'maxFiles' => ['nullable', 'integer', 'min:1', 'max:'.FileRequests::MAX_FILES_CEILING],
             'allowMultiple' => ['nullable', 'boolean'],
             'password' => ['nullable', 'string', 'min:4', 'max:128'],
             'expiresAt' => ['nullable', 'date'],
+            'reminderEveryDays' => ['nullable', 'integer'],
             'send' => ['nullable', 'boolean'],
+        ], [
+            'message.required' => 'Add instructions so they know exactly what to upload.',
+            'allowedExtensions.required' => 'Choose at least one file type they may upload.',
+            'allowedExtensions.min' => 'Choose at least one file type they may upload.',
+            'recipientName.required_with' => 'Add the name of the person you are asking.',
+            'recipientEmail.required_with' => 'Add the email address of the person you are asking.',
         ]);
 
         $user = $this->user($request);
+
+        // Somebody on the portal: their own name and address, and only an
+        // account this person may reach (a client sees the people on their
+        // account, never the whole directory).
+        $recipientUser = null;
+        if (! empty($data['recipientUserId'])) {
+            $reachable = \App\Support\Access\ContactScope::visibleUserIds($user);
+            $recipientUser = \App\Models\User::query()
+                ->where('id', (int) $data['recipientUserId'])
+                ->where('status', \App\Models\User::STATUS_APPROVED)
+                ->when($reachable !== null, fn ($q) => $q->whereIn('id', $reachable))
+                ->first();
+            abort_unless($recipientUser, 422, 'That person is not someone you can send a request to.');
+            $data['recipientEmail'] = $recipientUser->email;
+            $data['recipientName'] = $recipientUser->name;
+        }
         $folder = FileRequests::resolveDestination($user, $data['folder'] ?? null);
         $client = $this->resolveClient($data['client'] ?? null, $folder);
 
@@ -98,13 +140,15 @@ class FileRequestController extends BaseFilesController
             'created_by' => $user->id,
             'recipient_email' => $data['recipientEmail'] ?? null,
             'recipient_name' => $data['recipientName'] ?? null,
+            'recipient_user_id' => $recipientUser?->id ?? FileRequests::portalUserFor($data['recipientEmail'] ?? null)?->id,
             'allowed_extensions' => FileRequests::normalizeExtensions($data['allowedExtensions'] ?? null),
             'max_bytes' => FileRequests::normalizeMaxBytes($data['maxBytes'] ?? null),
             // "One file only" is a limit of one, not a separate concept, the
             // upload page and the server then enforce the same single number.
-            'max_files' => $allowMultiple ? (int) ($data['maxFiles'] ?? 20) : 1,
+            'max_files' => $allowMultiple ? (int) ($data['maxFiles'] ?? FileRequests::DEFAULT_MAX_FILES) : 1,
             'allow_multiple' => $allowMultiple,
             'expires_at' => $data['expiresAt'] ?? null,
+            'reminder_every_days' => FileRequests::reminderDaysFor($user, $data['reminderEveryDays'] ?? null),
         ]);
 
         FileRequests::setPassword($fileRequest, $data['password'] ?? null);
@@ -230,6 +274,27 @@ class FileRequestController extends BaseFilesController
         $fileRequest->save();
 
         return response()->json(['emailed' => $this->email($fileRequest)]);
+    }
+
+    /**
+     * Remind them now: the request again, headed as a reminder, to everyone
+     * it went to, and in the portal for anyone with an account. For an
+     * outstanding request; one that has had its answer, or is shut, is not
+     * waiting on anybody.
+     */
+    public function remind(Request $request, string $uuid): JsonResponse
+    {
+        $fileRequest = $this->findRequest($request, $uuid);
+        abort_if(FileRequests::sentTo($fileRequest) === [], 422, 'This request has not been sent to anyone yet.');
+        abort_unless($fileRequest->isOpen(), 422, 'This request has closed. Resend it with a new date instead.');
+        abort_unless(FileRequests::outstanding($fileRequest), 422, 'Everything this request asked for has arrived.');
+
+        $emailed = FileRequests::remind($fileRequest, $this->user($request));
+
+        return response()->json([
+            'request' => FileRequests::present($fileRequest->fresh(['folder:id,uuid,name', 'client:id,uid,name', 'creator:id,name'])),
+            'emailed' => $emailed,
+        ]);
     }
 
     /**
@@ -364,6 +429,15 @@ class FileRequestController extends BaseFilesController
             'fileRequest',
             immediate: true,
         );
+
+        // Somebody with an account hears in the portal as well: the bell and
+        // a message from the person who asked, with the link.
+        $account = FileRequests::portalUserFor($to ?? $fileRequest->recipient_email);
+        if ($account) {
+            // The whole account: the creator relation is often loaded with
+            // only an id and a name.
+            FileRequests::notifyPortalUser($fileRequest, $account, \App\Models\User::find($fileRequest->created_by));
+        }
 
         return $delivery === null || $delivery->status !== EmailDelivery::STATUS_FAILED;
     }

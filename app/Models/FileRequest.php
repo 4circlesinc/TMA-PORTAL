@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'recipient_email', 'recipient_name', 'allowed_extensions', 'max_bytes',
     'max_files', 'allow_multiple', 'password_hash', 'expires_at', 'closed_at',
     'revoked_at', 'opened_at', 'recipient_user_id',
+    'reminder_every_days', 'reminded_at', 'reminders_sent',
 ])]
 #[Hidden(['password_hash', 'token'])]
 class FileRequest extends Model
@@ -33,6 +34,7 @@ class FileRequest extends Model
             'closed_at' => 'datetime',
             'revoked_at' => 'datetime',
             'opened_at' => 'datetime',
+            'reminded_at' => 'datetime',
             'last_upload_at' => 'datetime',
         ];
     }

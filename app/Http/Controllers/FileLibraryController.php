@@ -41,6 +41,8 @@ class FileLibraryController extends Controller
             'clientSubfolders' => ['sometimes', 'array'],
             'clientSubfolders.*' => ['nullable', 'string', 'max:255'],
             'autoCreateStaffFolder' => ['sometimes', 'boolean'],
+            'requestReminderDays' => ['sometimes', 'integer', \Illuminate\Validation\Rule::in(array_keys(\App\Support\Files\FileRequests::REMINDER_CHOICES))],
+            'requestReminderChoosable' => ['sometimes', 'boolean'],
         ]);
 
         if (isset($data['clientSubfolders'])) {

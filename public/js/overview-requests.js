@@ -142,6 +142,8 @@
 
     var detailMeta = [
       req.expiresAt && p.status !== 'complete' ? 'Upload by ' + shortDate(req.expiresAt) : null,
+      p.outstanding && req.reminderEveryDays ? 'Reminded ' + String(req.reminderLabel || '').toLowerCase() : null,
+      req.remindedAt ? 'Last reminder ' + shortDate(req.remindedAt) : null,
       req.client && req.client.name ? 'Filed under ' + req.client.name : null,
     ].filter(Boolean).join(' · ');
 
@@ -151,10 +153,14 @@
       ((p.items || []).length
         ? '<ul class="tma-dash__clients-checklist">' + p.items.map(itemRow).join('') + '</ul>'
         : '<p class="tma-dash__clients-checklist-empty">Nothing has arrived yet.</p>') +
-      (canResend(req) || (req.open && req.link)
+      (canResend(req) || canRemind(req) || (req.open && req.link)
         ? '<div class="tma-portal-form-actions tma-portal-form-actions--start">' +
+          (canRemind(req)
+            ? '<button type="button" class="tma-no-data__btn" data-req-remind="' + esc(req.id) + '">' +
+              '<img class="tma-no-data__btn-icon" src="' + ICON + 'BellRinging.svg" alt="" width="16" height="16"><span>Send reminder</span></button>'
+            : '') +
           (canResend(req)
-            ? '<button type="button" class="tma-no-data__btn" data-req-resend="' + esc(req.id) + '">' +
+            ? '<button type="button" class="tma-no-data__btn' + (canRemind(req) ? ' tma-portal-btn--ghost' : '') + '" data-req-resend="' + esc(req.id) + '">' +
               '<img class="tma-no-data__btn-icon" src="' + ICON + 'PaperPlaneTilt.svg" alt="" width="16" height="16"><span>Resend</span></button>'
             : '') +
           (req.open && req.link
@@ -240,6 +246,29 @@
       .catch(function (err) {
         state.error = (err && err.message) || 'Could not load your requests.';
         render(state);
+      });
+  }
+
+  /* Still waiting on somebody who was sent the link, and the link is open. */
+  function canRemind(req) {
+    var p = req.progress || {};
+    return !!(req.open && p.outstanding && (p.sentTo || []).length);
+  }
+
+  function remind(state, req, btn) {
+    var ui = window.TMAPortalUI;
+    btn.disabled = true;
+    var label = btn.querySelector('span');
+    if (label) label.textContent = 'Sending…';
+    net().fetchJSON('/portal/files/requests/' + encodeURIComponent(req.id) + '/remind', { method: 'POST', json: {} })
+      .then(function () {
+        if (ui) ui.toast('Reminder sent');
+        load(state, true);
+      })
+      .catch(function (err) {
+        btn.disabled = false;
+        if (label) label.textContent = 'Send reminder';
+        if (ui) ui.toastError((err && err.message) || 'Could not send the reminder.');
       });
   }
 
@@ -362,6 +391,12 @@
         if (filter) {
           state.filter = filter.getAttribute('data-req-filter');
           render(state);
+          return;
+        }
+        var remindBtn = e.target.closest('[data-req-remind]');
+        if (remindBtn) {
+          var due = (state.rows || []).filter(function (r) { return r.id === remindBtn.getAttribute('data-req-remind'); })[0];
+          if (due) remind(state, due, remindBtn);
           return;
         }
         var resend = e.target.closest('[data-req-resend]');

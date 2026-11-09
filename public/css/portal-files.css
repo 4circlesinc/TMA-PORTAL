@@ -380,6 +380,8 @@
 /* An application found by search: the applicant's face, round, as the applications table draws it. */
 .tma-portal-picker__folder img.tma-cip-table__applicant-face { width: 26px; height: 26px; flex: 0 0 26px; object-fit: cover; }
 .tma-portal-picker__folder > .tma-portal-status { margin-left: auto; flex: 0 0 auto; }
+/* The person chosen in Request Files: Change sits where a status would. */
+.tma-portal-picker__folder > .tma-portal-link { margin-left: auto; flex: 0 0 auto; }
 .tma-portal-picker__empty, .tma-portal-picker__loading { padding: var(--space-16); color: var(--color-text-secondary); font-size: var(--text-size-14); }
 
 /* ── bottom-right dock ─────────────────────────────────

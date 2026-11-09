@@ -623,6 +623,8 @@ class CipLockingTest extends TestCase
 
         $this->actingAs($staff)->postJson('/portal/files/requests', [
             'title' => 'Another query',
+            'message' => 'One more scan, please.',
+            'allowedExtensions' => ['pdf'],
             'folder' => $main->uuid,
         ])->assertForbidden();
     }

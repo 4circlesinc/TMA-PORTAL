@@ -246,18 +246,11 @@ class DocumentRequests
             immediate: true,
         );
 
-        if (! empty($recipient['userId'])) {
-            \App\Support\Notifications\Notifier::send([
-                'user' => $recipient['userId'],
-                'actor' => $sender,
-                'type' => 'files.request_received',
-                'title' => $request->title,
-                'message' => 'Requested by '.($sender->name ?: 'the firm').': '.implode(', ', $listed),
-                'subject' => $request,
-                'action_url' => '/r/'.$request->token,
-                // The request email above is the email.
-                'email' => false,
-            ]);
+        // Somebody with an account is told in the portal as well: the bell
+        // and a message from the person asking, each with the link.
+        $account = ! empty($recipient['userId']) ? User::find($recipient['userId']) : null;
+        if ($account) {
+            FileRequests::notifyPortalUser($request, $account, $sender);
         }
 
         return $delivery === null || $delivery->status !== \App\Models\EmailDelivery::STATUS_FAILED;

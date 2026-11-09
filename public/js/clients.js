@@ -10290,7 +10290,8 @@
   }
 
   function cipRequestDocsButton(person, app, docs) {
-    if (!app || !app.id || isExternalCipUser()) return '';
+    // Staff, and the service provider on its own file; never anyone else outside.
+    if (!app || !app.id || (isExternalCipUser() && !isProviderCipUser())) return '';
     if (!cipOutstandingDocs(docs).length) return '';
 
     return '<button type="button" class="tma-portal-link tma-dash__clients-card-action" data-cip-request-docs' +
@@ -10317,6 +10318,10 @@
     }
 
     var provider = app.provider || '';
+    // The service provider asking for its own file's papers asks someone
+    // else (the applicant, whoever holds them): it is the provider.
+    var providerAsking = isProviderCipUser();
+    var askProvider = provider && !providerAsking;
     var expiry = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
     var checkedFor = function (person) {
       return !opts.personId || opts.personId === person.id;
@@ -10375,16 +10380,18 @@
           '</ul></section>';
       }).join('') +
       '</div>' +
-      '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
-      '<span class="tma-dash__clients-field-label">Ask</span>' +
-      '<div class="tma-portal-radio-row">' +
-      (provider
-        ? '<label class="tma-portal-radio"><input type="radio" name="cip-docreq-to" value="provider" data-docreq-to checked>' +
-          '<span class="tma-portal-radio__dot" aria-hidden="true"></span> ' + esc(provider) + ' (service provider)</label>'
-        : '') +
-      '<label class="tma-portal-radio"><input type="radio" name="cip-docreq-to" value="someone" data-docreq-to' + (provider ? '' : ' checked') + '>' +
-      '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Someone else</label>' +
-      '</div></div>' +
+      (providerAsking
+        ? '<input type="radio" name="cip-docreq-to" value="someone" data-docreq-to checked hidden>'
+        : '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
+          '<span class="tma-dash__clients-field-label">Ask</span>' +
+          '<div class="tma-portal-radio-row">' +
+          (askProvider
+            ? '<label class="tma-portal-radio"><input type="radio" name="cip-docreq-to" value="provider" data-docreq-to checked>' +
+              '<span class="tma-portal-radio__dot" aria-hidden="true"></span> ' + esc(provider) + ' (service provider)</label>'
+            : '') +
+          '<label class="tma-portal-radio"><input type="radio" name="cip-docreq-to" value="someone" data-docreq-to' + (askProvider ? '' : ' checked') + '>' +
+          '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Someone else</label>' +
+          '</div></div>') +
       /*
        * One address box, the status dialog's CC field: type an address and
        * it becomes a chip, as many as needed. For the service provider it is
@@ -10393,7 +10400,7 @@
        */
       '<div class="tma-dash__clients-field">' +
       '<label class="tma-dash__clients-field-label" for="cip-status-cc" data-docreq-cc-label>' +
-      (provider ? 'CC' : 'Email addresses') + '</label>' +
+      (askProvider ? 'CC' : 'Email addresses') + '</label>' +
       '<div class="tma-cip-cc" data-cip-status-cc-box>' +
       '<input type="text" id="cip-status-cc" class="tma-cip-cc__input" data-cip-status-cc' +
       ' placeholder="name@firm.com" autocomplete="off" enterkeyhint="done">' +
@@ -10407,6 +10414,13 @@
       '<label class="tma-dash__clients-field-label" for="cip-docreq-expiry">Upload by</label>' +
       '<input type="date" id="cip-docreq-expiry" class="tma-dash__clients-field-input" data-docreq-expiry value="' + esc(expiry) + '">' +
       '</div>' +
+      // How often they are reminded until everything arrives: the firm's
+      // frequency, which only an administrator may lock (read on mount).
+      '<div class="tma-dash__clients-field">' +
+      '<label class="tma-dash__clients-field-label" for="cip-docreq-reminder">Reminders</label>' +
+      '<select id="cip-docreq-reminder" class="tma-portal-select" data-docreq-reminder aria-label="Reminder frequency">' +
+      '<option value="3" selected>Every 3 days</option></select>' +
+      '</div>' +
       '<div class="tma-portal-modal__foot">' +
       '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-docreq-cancel>Cancel</button>' +
       '<button type="button" class="tma-no-data__btn" data-docreq-send>Send request</button>' +
@@ -10417,6 +10431,18 @@
       cls: 'tma-cip-not-ready tma-cip-docreq',
       body: body,
       onMount: function (el) {
+        var reminderSel = el.querySelector('[data-docreq-reminder]');
+        clientsFetch('/portal/files/requests/options').then(function (res) {
+          var r = res && res.reminders;
+          if (!r || !reminderSel) return;
+          reminderSel.innerHTML = (r.choices || []).map(function (c) {
+            return '<option value="' + esc(String(c.value)) + '"' + (String(c.value) === String(r.days) ? ' selected' : '') + '>' +
+              esc(c.label) + '</option>';
+          }).join('');
+          reminderSel.disabled = !r.choosable;
+          if (!r.choosable) reminderSel.title = 'Set by your administrator';
+        }).catch(function () { /* the firm's usual stays selected */ });
+
         var ccLabel = el.querySelector('[data-docreq-cc-label]');
         el.querySelectorAll('[data-docreq-to]').forEach(function (radio) {
           radio.addEventListener('change', function () {
@@ -10443,6 +10469,7 @@
             to: to,
             message: (el.querySelector('[data-docreq-message]').value || '').trim() || null,
             expiresAt: el.querySelector('[data-docreq-expiry]').value || null,
+            reminderEveryDays: reminderSel ? parseInt(reminderSel.value, 10) : null,
             send: true,
           };
           // The chips and anything still being typed, checked as the
@@ -12156,7 +12183,8 @@
          */
         var app = clientId ? applicationFor(clientId) : null;
         var ui = window.TMAPortalUI;
-        if (app && app.id && isApplicationProfile(app) && !isExternalCipUser() && ui && ui.openModal
+        // Staff and the service provider may ask for checklist documents.
+        if (app && app.id && isApplicationProfile(app) && (!isExternalCipUser() || isProviderCipUser()) && ui && ui.openModal
           && !requestBtn._chosenFolder) {
           ui.openModal({
             title: 'Request Files',
