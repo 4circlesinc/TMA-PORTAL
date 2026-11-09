@@ -1011,6 +1011,47 @@ class CipPostApprovalTest extends TestCase
     }
 
     /**
+     * The Unit's grant is the decision. A file granted in pre-approval and
+     * moved on to post-approval is not asked to be Approved or Denied a
+     * second time: the menu does not offer the lane's outcomes, and its next
+     * step is Apply for COR once the papers are in. A file entered with no
+     * decision still records one first.
+     */
+    public function test_a_file_granted_in_pre_approval_is_not_asked_to_decide_again(): void
+    {
+        $staff = $this->staff();
+        $officer = $this->staff(Role::REVIEWING_OFFICER);
+        [$application] = $this->corFile($staff);
+        $fresh = $application->fresh(['people.documents']);
+
+        $this->assertSame(Status::POST_APPROVAL, $fresh->status);
+        $this->assertSame(Status::GRANTED, $fresh->decision);
+        $this->assertTrue(Engine::grantedBeforeLane($fresh));
+
+        foreach ([$staff, $officer] as $reader) {
+            $offered = array_merge(
+                Engine::availableTransitions($fresh, $reader),
+                Engine::availableOverrides($fresh, $reader),
+                Engine::lockedStatuses($fresh, $reader),
+            );
+            $this->assertNotContains(Status::POST_APPROVED, $offered);
+            $this->assertNotContains(Status::POST_DENIED, $offered);
+        }
+
+        // Apply for COR is the next step itself, waiting only on the papers.
+        $this->assertNotContains(Status::APPLY_FOR_COR, Engine::availableTransitions($fresh, $officer));
+        $this->fileRequiredCor($application, $staff);
+        $this->approveRequiredCor($application, $staff);
+        $this->assertSame(Status::APPLY_FOR_COR, $application->fresh()->status);
+        $this->assertSame(Status::GRANTED, $application->fresh()->decision);
+
+        // Undecided on entry: the lane's decision comes first, as before.
+        $undecided = $application->fresh()->forceFill(['status' => Status::POST_APPROVAL, 'decision' => null]);
+        $this->assertFalse(Engine::grantedBeforeLane($undecided));
+        $this->assertContains(Status::POST_APPROVED, Engine::availableTransitions($undecided, $staff));
+    }
+
+    /**
      * The decision can arrive after the papers.
      *
      * A file whose COR documents are all accepted while it is still

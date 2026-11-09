@@ -218,6 +218,21 @@ class Engine
         $from = $application->status;
         $base = self::TRANSITIONS[$from] ?? [];
 
+        /*
+         * Decided before the lane: the Unit's grant is the decision.
+         *
+         * A file granted in pre-approval and moved on to post-approval was
+         * asked to be Approved or Denied a second time before it could
+         * collect its COR papers. The grant already answered that, so its
+         * next step from Post-Approval is Apply for COR, once the papers are
+         * in. The lane's outcomes stay in the map — a decision recorded late
+         * through the decision verb still lands — but no menu offers them on
+         * a file the grant already decided; see {@see grantedBeforeLane()}.
+         */
+        if ($from === Status::POST_APPROVAL && self::grantedBeforeLane($application)) {
+            return [Status::UPDATE_REQUIRED, Status::POST_APPROVED, Status::POST_DENIED, Status::APPLY_FOR_COR];
+        }
+
         if (($application->phase ?? Phase::PRE_APPROVAL) !== Phase::ADD_ON) {
             return $base;
         }
@@ -228,6 +243,29 @@ class Engine
             Status::GRANTED => [Status::NEW_APPEAL],
             default => $base,
         };
+    }
+
+    /**
+     * Is this post-approval file carrying the Unit's pre-approval grant as
+     * its decision?
+     *
+     * Then the lane asks for no decision of its own: Approved and Denied are
+     * not offered, and Apply for COR follows Post-Approval directly. A file
+     * that entered post-approval with no decision (filed by a provider
+     * without one) still records the lane's Approved or Denied first.
+     */
+    public static function grantedBeforeLane(CipApplication $application): bool
+    {
+        return ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL
+            && $application->decision === Status::GRANTED;
+    }
+
+    /** A lane outcome a file decided before the lane is not asked for again. */
+    private static function outcomeAlreadyDecided(CipApplication $application, string $to): bool
+    {
+        return in_array($to, [Status::POST_APPROVED, Status::POST_DENIED], true)
+            && $application->status !== $to
+            && self::grantedBeforeLane($application);
     }
 
     /**
@@ -290,6 +328,7 @@ class Engine
         return array_values(array_filter(
             Status::ALL,
             fn (string $to) => self::canTransition($application, $to)
+                && ! self::outcomeAlreadyDecided($application, $to)
                 && self::allows($actor, $application, $to)
                 && self::checklistAllows($application, $to, $forListing)
                 && (! Stages::owns($to) || self::returnIsOpen($application, $to))
@@ -510,6 +549,7 @@ class Engine
             Status::listed(),
             fn (string $to) => $to !== $application->status
                 && ! in_array($to, $next, true)
+                && ! self::outcomeAlreadyDecided($application, $to)
                 && self::overrideFits($application, $to)
                 && (self::packageAllowsOverride($application, $to, $forListing)
                     || CipAccess::canAcknowledgeBlockers($actor, $to))
