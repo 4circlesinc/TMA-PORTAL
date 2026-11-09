@@ -20,6 +20,7 @@ use App\Support\Cip\CipAccess;
 use App\Support\Cip\Decision;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\Milestones;
+use App\Support\Cip\Phase;
 use App\Support\Cip\Status;
 use App\Support\Cip\Timeline;
 use App\Support\Cip\Tree;
@@ -80,6 +81,60 @@ class CipDecisionTest extends TestCase
         ])->save();
 
         return $application->refresh();
+    }
+
+    /**
+     * After an appeal is submitted the decision is made again — by an
+     * administrator or a reviewing officer, as the first one was — with the
+     * pair belonging to the file's lane. A post-approval appeal used to
+     * reach Appeal submitted and have no next step at all.
+     */
+    public function test_an_appeal_submitted_is_decided_again_in_its_own_lane(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Reviewer');
+        $preAppeal = $this->inBackgroundCheck($admin);
+        $provider = CipProvider::query()->firstOrFail();
+
+        $appealing = function (string $phase, string $decision) use ($provider, $admin): CipApplication {
+            $application = Applications::create($provider, $admin);
+            CipPerson::create([
+                'application_id' => $application->id,
+                'role' => CipPerson::ROLE_MAIN_APPLICANT,
+                'first_name' => 'Omar', 'last_name' => 'Haddad',
+            ]);
+            $application->forceFill([
+                'status' => Status::APPEAL_SUBMITTED,
+                'phase' => $phase,
+                'decision' => $decision,
+                'cip_number' => '10T1G'.random_int(10000, 99999).'P',
+            ])->save();
+
+            return $application->refresh();
+        };
+
+        $preAppeal->forceFill(['status' => Status::APPEAL_SUBMITTED, 'decision' => Status::DENIED])->save();
+        $postDenied = $appealing(Phase::POST_APPROVAL, Status::POST_DENIED);
+        $postGranted = $appealing(Phase::POST_APPROVAL, Status::GRANTED);
+
+        foreach ([$admin, $officer] as $reader) {
+            $this->assertSame([Status::GRANTED, Status::DENIED], \App\Support\Cip\Engine::availableTransitions($preAppeal->fresh(), $reader));
+            foreach ([$postDenied, $postGranted] as $post) {
+                $this->assertSame(
+                    [Status::POST_APPROVED, Status::POST_DENIED],
+                    array_values(array_intersect(Status::ALL, \App\Support\Cip\Engine::availableTransitions($post->fresh(), $reader))),
+                );
+            }
+        }
+
+        // The reviewing officer records the appeal's outcome, as they would the first.
+        $this->postCipDecision($officer, $preAppeal->uuid, ['decision' => Status::GRANTED, 'decidedAt' => '2026-10-01'])->assertOk();
+        $this->assertSame(Status::GRANTED, $preAppeal->fresh()->status);
+
+        $this->postCipDecision($admin, $postDenied->uuid, ['decision' => Status::GRANTED, 'decidedAt' => '2026-10-02'])->assertOk();
+        $this->assertSame(Status::POST_APPROVED, $postDenied->fresh()->decision);
+        $this->assertNotSame(Status::APPEAL_SUBMITTED, $postDenied->fresh()->status);
     }
 
     public function test_recording_granted_moves_the_file_to_approved(): void

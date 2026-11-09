@@ -236,6 +236,20 @@ class Engine
             return [Status::UPDATE_REQUIRED, Status::POST_APPROVED, Status::POST_DENIED, Status::APPLY_FOR_COR];
         }
 
+        /*
+         * An appeal is decided again, in the file's own lane.
+         *
+         * The map ends an appeal in Approved or Denied, the pre-approval
+         * pair, which a post-approval file is never given — so an appeal
+         * lodged against a post-approval decision reached Appeal submitted
+         * and had nowhere to go: no next step for anyone, an administrator
+         * reduced to the override list. There, the lane's own pair is the
+         * outcome, recorded through Record decision like any other.
+         */
+        if ($from === Status::APPEAL_SUBMITTED && ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL) {
+            return [Status::POST_APPROVED, Status::POST_DENIED];
+        }
+
         if (($application->phase ?? Phase::PRE_APPROVAL) !== Phase::ADD_ON) {
             return $base;
         }
@@ -263,11 +277,16 @@ class Engine
             && $application->decision === Status::GRANTED;
     }
 
-    /** A lane outcome a file decided before the lane is not asked for again. */
+    /**
+     * A lane outcome a file decided before the lane is not asked for again —
+     * unless the decision is under appeal, whose whole point is to be
+     * decided again.
+     */
     private static function outcomeAlreadyDecided(CipApplication $application, string $to): bool
     {
         return in_array($to, [Status::POST_APPROVED, Status::POST_DENIED], true)
             && $application->status !== $to
+            && $application->status !== Status::APPEAL_SUBMITTED
             && self::grantedBeforeLane($application);
     }
 
