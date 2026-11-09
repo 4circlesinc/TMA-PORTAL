@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\CipApplication;
 use App\Models\CipDocument;
+use App\Models\CipEvent;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Company;
@@ -19,6 +20,7 @@ use App\Support\Cip\Confirmation;
 use App\Support\Cip\DocumentRequests;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
+use App\Support\Cip\Engine;
 use App\Support\Cip\Package;
 use App\Support\Cip\PersonStatus;
 use App\Support\Cip\Phase;
@@ -333,15 +335,9 @@ class CipLockingTest extends TestCase
             ->assertJsonPath('application.phase', Phase::PRE_APPROVAL);
 
         $this->assertSame(Phase::PRE_APPROVAL, $application->fresh()->phase);
-        $this->assertNotNull($application->fresh()->locked_at);
-
-        $this->actingAs($staff)
-            ->postJson('/portal/cip/applications/'.$application->uuid, [
-                'firstName' => 'Hacked',
-            ])
-            ->assertStatus(422);
-
-        $this->assertSame('CHEN', $person->fresh()->first_name);
+        // Back at Assessment Feedback the package is being worked on again:
+        // the lock follows the stage, so it is lifted (Engine::lockFollowsStage).
+        $this->assertNull($application->fresh()->locked_at);
 
         $this->actingAs($staff)
             ->patchJson('/portal/files/files/'.$file->uuid.'/review', [
@@ -629,5 +625,74 @@ class CipLockingTest extends TestCase
             'title' => 'Another query',
             'folder' => $main->uuid,
         ])->assertForbidden();
+    }
+
+    /**
+     * The lock follows the stage. A confirmed package pulled back to
+     * Assessment Feedback is being worked on again, so its scans can be
+     * replaced; it is not "the original submission" any more.
+     */
+    public function test_pulling_a_confirmed_file_back_reopens_its_package(): void
+    {
+        ['staff' => $staff, 'application' => $application, 'main' => $main] = $this->lockedPackage();
+        $this->assertTrue($application->isLocked());
+        $this->assertTrue(Package::locksFolder($main));
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::ASSESSMENT_FEEDBACK,
+                'note' => 'The bio page needs a clearer scan.',
+            ])
+            ->assertOk();
+
+        $fresh = $application->fresh();
+        $this->assertSame(Status::ASSESSMENT_FEEDBACK, $fresh->status);
+        $this->assertFalse($fresh->isLocked());
+        $this->assertFalse(Package::locksFolder($main->fresh()));
+
+        $event = CipEvent::query()->where('application_id', $application->id)
+            ->where('action', CipEvent::ACTION_STATUS_CHANGED)->latest('id')->first();
+        $this->assertTrue($event->meta['packageReopened'] ?? false);
+    }
+
+    public function test_pulling_a_file_back_from_the_unit_to_ready_to_submit_reopens_it(): void
+    {
+        ['staff' => $staff, 'application' => $application] = $this->lockedPackage();
+        $application->forceFill(['status' => Status::PENDING_REVIEW, 'submitted_at' => now()])->save();
+
+        Engine::set($application->fresh(), Status::READY_TO_SUBMIT, $staff, ['note' => 'Sent to the Unit by mistake.']);
+
+        $this->assertFalse($application->fresh()->isLocked());
+    }
+
+    public function test_a_query_from_the_unit_keeps_the_original_package_locked(): void
+    {
+        ['staff' => $staff, 'application' => $application] = $this->lockedPackage();
+        $application->forceFill(['status' => Status::NON_COMPLIANT, 'submitted_at' => now()])->save();
+
+        Engine::set($application->fresh(), Status::PENDING_REVIEW, $staff, ['note' => 'Answered.']);
+
+        $this->assertTrue($application->fresh()->isLocked());
+    }
+
+    /** Moved past the submission without one, the package freezes as it stands. */
+    public function test_a_file_put_onto_a_submitted_stage_by_override_is_locked(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+        $application = Applications::create($provider, $staff);
+        $this->assertFalse($application->isLocked());
+
+        Engine::set($application->fresh(), Status::BACKGROUND_CHECK, $staff);
+
+        $fresh = $application->fresh();
+        $this->assertTrue($fresh->isLocked());
+        $event = CipEvent::query()->where('application_id', $application->id)
+            ->where('action', CipEvent::ACTION_STATUS_CHANGED)->latest('id')->first();
+        $this->assertTrue($event->meta['packageLocked'] ?? false);
+
+        // And back again, it opens.
+        Engine::set($fresh, Status::REVIEW_APPLICATION, $staff, ['note' => 'Not with the Unit yet.']);
+        $this->assertFalse($application->fresh()->isLocked());
     }
 }

@@ -103,13 +103,40 @@ class Threads
             'body' => $body,
         ]);
 
-        self::markRead($application, $author, $message->id);
-        // Into the case chat first, so the notification can open that chat.
-        self::mirrorToCaseChat($message);
-        self::announce($application, $message, $author);
-        self::signal($application, 'created');
-        Live::staff(Live::CIP);
-        Live::users(Live::CIP, self::recipientUserIds($application, $message, $author));
+        /*
+         * The message is filed. Nothing after this line may turn that into an
+         * error: a case chat that cannot be opened, a mailbox that refuses a
+         * postcard, a push service that is down — each of those used to
+         * answer the Send with a server error for a message that had in fact
+         * been saved, and the natural thing to do then is press Send again,
+         * which filed it twice. Each step is tried on its own, and what fails
+         * is reported to the log, not to the person who wrote it.
+         */
+        $steps = [
+            'read' => fn () => self::markRead($application, $author, $message->id),
+            // Into the case chat first, so the notification can open that chat.
+            'mirror' => fn () => self::mirrorToCaseChat($message),
+            'announce' => fn () => self::announce($application, $message, $author),
+            'signal' => fn () => self::signal($application, 'created'),
+            'live' => function () use ($application, $message, $author) {
+                Live::staff(Live::CIP);
+                Live::users(Live::CIP, self::recipientUserIds($application, $message, $author));
+            },
+        ];
+
+        foreach ($steps as $name => $step) {
+            try {
+                $step();
+            } catch (\Throwable $e) {
+                report($e);
+                \Illuminate\Support\Facades\Log::warning('cip thread: a step after saving a message failed', [
+                    'step' => $name,
+                    'message' => $message->uuid,
+                    'application' => $application->uuid,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
 
         return $message;
     }

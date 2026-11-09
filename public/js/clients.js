@@ -20203,6 +20203,11 @@
           state.cipReplyTo = null;
           state.cipThreadLane = lane;
           if (!state.cipThread) state.cipThread = { messages: [], canPostInternal: canInternal };
+          // Filed, but the server could not draw it: read the thread again.
+          if (row && row.reload) {
+            ensureCipThreadLoaded(state, render, { force: true });
+            return;
+          }
           var have = (state.cipThread.messages || []).some(function (m) { return m && row && m.id === row.id; });
           if (!have) state.cipThread.messages = (state.cipThread.messages || []).concat([row]);
           if (usesPagedClientsFlow(state)) render();
@@ -20212,6 +20217,10 @@
           // Still on its way from an earlier press: nothing to undo, and the
           // key is kept so the retry is the same message.
           if (err && err.status === 409) return;
+          // A server error may have come after the message was filed. Read
+          // the thread again so a message that did land is shown rather than
+          // sent a second time; the key stays, so a retry files it once.
+          if (err && err.status >= 500) ensureCipThreadLoaded(state, render, { force: true });
           var now = root.querySelector('[data-cip-thread-form] button[type="submit"]') || save;
           if (now) {
             now.disabled = false;

@@ -86,7 +86,17 @@ class CipThreadController extends Controller
             Cache::put($claim, $message->id, now()->addMinutes(10));
         }
 
-        return response()->json(Threads::present($message->fresh()->load(['author', 'companyMember', 'replyTo']), $user), 201);
+        try {
+            $presented = Threads::present($message->fresh()->load(['author', 'companyMember', 'replyTo']), $user);
+        } catch (\Throwable $e) {
+            // Filed either way; the page reloads the thread rather than
+            // reading a send that worked as one that failed.
+            report($e);
+
+            return response()->json(['id' => $message->uuid, 'body' => $message->body, 'lane' => $message->lane, 'reload' => true], 201);
+        }
+
+        return response()->json($presented, 201);
     }
 
     /**

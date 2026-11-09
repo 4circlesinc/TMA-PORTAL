@@ -894,6 +894,96 @@ class Engine
         return $application;
     }
 
+    /** Statuses where the original package is still being put together. */
+    private const PACKAGE_OPEN = [
+        Status::NEW,
+        Status::REVIEW_APPLICATION,
+        Status::ASSESSMENT_FEEDBACK,
+        Status::UPDATE_REQUIRED,
+    ];
+
+    /** Statuses where the original package has gone to the Unit. */
+    private const PACKAGE_SUBMITTED = [
+        Status::PENDING_REVIEW,
+        Status::NON_COMPLIANT,
+        Status::BACKGROUND_CHECK,
+        Status::DD_QUERY,
+        Status::DELAYED,
+        Status::GRANTED,
+        Status::DENIED,
+    ];
+
+    /**
+     * The package lock follows the stage the file is on, not the day it was
+     * first confirmed.
+     *
+     * "The original submission is locked" is true of a file the provider has
+     * confirmed and the Unit holds. It used to be stamped once and never
+     * lifted, so a file an administrator pulled back to Assessment Feedback
+     * or Updates Required still refused every replacement scan, with only
+     * Additional Documents open — the very papers the file had been sent
+     * back to fix. Now:
+     *
+     *  - back to New, Review, Assessment Feedback or Updates Required, or
+     *    back from the Unit to Ready to Submit: the package opens again, and
+     *    the provider confirms it again when it is ready;
+     *  - onto Pending Review or anything after it without a confirmation (an
+     *    override past that step): the package is frozen as it stands;
+     *  - in post-approval the COR package does the same — it opens again
+     *    when the file goes back to Post-Approval, Approved, or Updates
+     *    Required while the COR papers are what is being collected — and a
+     *    file leaving the lane leaves no COR lock behind.
+     *
+     * The audit row says which way it went.
+     *
+     * @param  array<string, mixed>  $extra
+     * @param  array<string, mixed>  $meta
+     * @return array<string, mixed>
+     */
+    private static function lockFollowsStage(CipApplication $application, string $to, array $extra, array &$meta): array
+    {
+        $from = $application->status;
+        $phase = $extra['phase'] ?? ($application->phase ?? Phase::PRE_APPROVAL);
+
+        if ($phase !== Phase::POST_APPROVAL) {
+            if ($application->cor_locked_at !== null && ! array_key_exists('cor_locked_at', $extra)) {
+                $extra['cor_locked_at'] = null;
+            }
+
+            $reopens = in_array($to, self::PACKAGE_OPEN, true)
+                || ($to === Status::READY_TO_SUBMIT && in_array($from, self::PACKAGE_SUBMITTED, true));
+
+            if ($application->locked_at !== null && $reopens) {
+                $extra['locked_at'] = null;
+                $meta['packageReopened'] = true;
+            } elseif ($application->locked_at === null && in_array($to, self::PACKAGE_SUBMITTED, true)) {
+                $extra['locked_at'] = now();
+                $meta['packageLocked'] = true;
+            }
+
+            return $extra;
+        }
+
+        if ($application->cor_locked_at === null) {
+            return $extra;
+        }
+
+        $corOpens = in_array($to, [Status::POST_APPROVAL, Status::POST_APPROVED], true)
+            || ($to === Status::UPDATE_REQUIRED && Pack::current($application) === Pack::COR)
+            || ($to === Status::APPLY_FOR_COR && in_array($from, [
+                Status::PENDING_COR, Status::COR_RECEIVED, Status::APPLY_FOR_NIC, Status::PENDING_NIC,
+                Status::NIC_RECEIVED, Status::APPLY_FOR_PASSPORT, Status::PENDING_PASSPORT,
+                Status::PASSPORT_RECEIVED, Status::PASSPORT_DELIVERED, Status::CLOSED,
+            ], true));
+
+        if ($corOpens) {
+            $extra['cor_locked_at'] = null;
+            $meta['corPackageReopened'] = true;
+        }
+
+        return $extra;
+    }
+
     /** The row and the audit, once the move has already been allowed. */
     private static function write(CipApplication $application, string $to, ?User $actor, array $meta, array $extra = []): CipApplication
     {
@@ -942,7 +1032,9 @@ class Engine
         }
 
         $from = $application->status;
-        $application = DB::transaction(function () use ($application, $to, $actor, $meta, $from, $extra, $enteringPost) {
+        $extra = self::lockFollowsStage($application, $to, $extra, $meta);
+        $lockMoved = array_key_exists('locked_at', $extra) || array_key_exists('cor_locked_at', $extra);
+        $application = DB::transaction(function () use ($application, $to, $actor, $meta, $from, $extra, $enteringPost, $lockMoved) {
             $application->forceFill(array_merge(['status' => $to], $extra))->save();
 
             self::record($application, CipEvent::ACTION_STATUS_CHANGED, $actor, $meta, $from, $to);
@@ -978,7 +1070,7 @@ class Engine
              */
             PersonStatus::settle($application);
 
-            if ($to === Status::CLOSED || $to === Status::PASSPORT_DELIVERED) {
+            if ($to === Status::CLOSED || $to === Status::PASSPORT_DELIVERED || $lockMoved) {
                 Package::forget();
             }
 
