@@ -41104,3 +41104,16 @@ span.tma-dash__messages-profile-avatar {
     display: none;
   }
 }
+
+/* Overview → Requested Files: a request row opens onto its documents. */
+[data-req-row] { cursor: pointer; }
+.tma-overview-requests__caret { flex: 0 0 16px; opacity: 0.6; transform: rotate(-90deg); transition: transform 0.15s ease; }
+.tma-overview-requests__caret.is-open { transform: none; }
+.tma-overview-requests__detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-16) var(--space-16) 44px;
+  border-bottom: 0.5px solid var(--color-border-soft);
+}
+@media (prefers-reduced-motion: reduce) { .tma-overview-requests__caret { transition: none; } }
