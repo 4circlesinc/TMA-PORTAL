@@ -497,7 +497,13 @@ async function handle(request) {
      * deploy behind the copy we shipped. Without this the window is a
      * page of blue links on a blank field.
      */
-    const asset = bundledAssetFor(url);
+    /*
+     * The network's own copy first (shell-cache keeps the bundles the kept
+     * shell names), then the package's. The package's is whatever deploy
+     * this release was built from, which on a machine that updates the app
+     * rarely is months of portal code behind the page it is painted into.
+     */
+    const asset = localFile(url, null) || shellCache.keptBundle(url.pathname) || bundledAssetFor(url);
     if (asset) return fileResponse(asset);
 
     return Promise.reject(new Error('Failed to fetch'));

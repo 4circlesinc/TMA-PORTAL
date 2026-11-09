@@ -609,8 +609,22 @@ function showOffline(win) {
     <script>
       // Come back by itself. A reader who walks out of the tunnel should find
       // the portal, not a button they have to notice.
-      addEventListener('online', () => { location.href = '${PORTAL_URL}'; });
-      setInterval(() => { if (navigator.onLine) location.href = '${PORTAL_URL}'; }, 5000);
+      //
+      // Only once the portal answers. navigator.onLine is no test on Windows:
+      // a Hyper-V, WSL or VPN adapter keeps it true with the wifi off, and
+      // reloading on it every five seconds flashed the window between a
+      // failed load and this screen for as long as the reader was offline.
+      // Offline, the app's own handler refuses this request outright.
+      let looking = false;
+      const look = () => {
+        if (looking) return;
+        looking = true;
+        fetch('${new URL('/up', PORTAL_URL).toString()}', { mode: 'no-cors', cache: 'no-store' })
+          .then(() => { location.href = '${PORTAL_URL}'; }, () => { looking = false; });
+      };
+      addEventListener('online', look);
+      addEventListener('focus', look);
+      setInterval(look, 5000);
     </script>
   `;
   win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(page)}`);

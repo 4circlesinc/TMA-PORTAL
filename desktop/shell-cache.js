@@ -104,6 +104,72 @@ function cacheDir() {
 
 function htmlFile() { return path.join(cacheDir(), 'shell.html'); }
 
+/*
+ * The bundles the kept shell names, kept beside it.
+ *
+ * The shell is one deploy's document, and it asks for that deploy's
+ * `/build/app-<hash>.{css,js}`. Offline, those used to be answered with the
+ * copy shipped inside the installed app, whatever deploy that was: weeks of
+ * portal code behind the page it was painted into, and behind every offline
+ * fix made since. Released apps are updated far less often than the portal
+ * is, and a Windows machine on the release from September was running
+ * September's offline code every time it opened with no connection. The
+ * network's own copy is kept here as it passes, so offline the page runs
+ * the code it was served with.
+ *
+ * Not account data, so a sign-out or account switch does not drop them; a
+ * deploy only stops naming them, and the oldest go once more are kept.
+ */
+const BUNDLE_RE = /^\/build\/app-[0-9a-f]+\.(css|js)$/;
+
+/* Per kind: this deploy's and the ones before, for a shell kept a deploy ago. */
+const KEEP_BUNDLES = 3;
+
+function bundleDir() { return path.join(cacheDir(), 'build'); }
+
+async function keepBundle(pathname, copy) {
+  try {
+    const name = path.basename(pathname);
+    const buf = Buffer.from(await copy.arrayBuffer());
+    if (!buf.length) return;
+
+    const dir = bundleDir();
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, name);
+    // Written whole or not at all: a launch that finds half a script would
+    // paint a portal that does nothing.
+    const part = `${file}.part`;
+    fs.writeFileSync(part, buf);
+    fs.renameSync(part, file);
+    pruneBundles(path.extname(name));
+  } catch { /* keeping a copy must never break the page */ }
+}
+
+function pruneBundles(ext) {
+  try {
+    const dir = bundleDir();
+    const kept = fs.readdirSync(dir)
+      .filter((n) => n.startsWith('app-') && n.endsWith(ext))
+      .map((n) => ({ n, at: fs.statSync(path.join(dir, n)).mtimeMs }))
+      .sort((a, b) => b.at - a.at);
+    kept.slice(KEEP_BUNDLES).forEach(({ n }) => {
+      try { fs.rmSync(path.join(dir, n), { force: true }); } catch { /* next time */ }
+    });
+  } catch { /* nothing kept yet */ }
+}
+
+/** The network's own copy of this bundle, if one was kept; else null. */
+function keptBundle(pathname) {
+  if (!BUNDLE_RE.test(String(pathname))) return null;
+  try {
+    const file = path.join(bundleDir(), path.basename(pathname));
+
+    return fs.statSync(file).isFile() ? file : null;
+  } catch {
+    return null;
+  }
+}
+
 function metaFile() { return path.join(cacheDir(), 'meta.json'); }
 
 function readMeta() {
@@ -262,6 +328,9 @@ function observe(url, request, response) {
       watchMe(response.clone());
     } else if (isNavigation(request) && response.ok) {
       captureIfShell(url, response.clone());
+    } else if (request.method === 'GET' && response.status === 200
+      && BUNDLE_RE.test(url.pathname) && !request.headers.get('range')) {
+      keepBundle(url.pathname, response.clone());
     }
   } catch { /* observation must never break the page it observes */ }
 
@@ -388,6 +457,7 @@ function _reset(overrideDir) {
 module.exports = {
   maybeServe,
   observe,
+  keptBundle,
   noteBuild,
   on,
   invalidate,

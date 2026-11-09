@@ -159,6 +159,22 @@ with 2,000 usable files on disk. The moment a manifest can be fetched, the
 per-file gate is back. `test-asset-cache.js` pins both halves;
 `test-shell-cache.js` pins every gate and watchdog above.
 
+**The kept shell keeps its own bundles.** The shell names this deploy's
+`build/app-<hash>.{css,js}`, and offline those used to be answered with the
+bundle shipped in the installed release, whatever deploy that was built from.
+A machine that updates the app rarely (Windows on the September release, for
+months) then ran months-old portal code, offline queue included, inside
+today's page every time it opened with no connection. `shell-cache.js` now
+keeps the network's copy of each bundle as it passes (the newest three of
+each kind, in `userData/shell-cache/build`), and offline that copy comes
+before the package's. `npm run test:offline-bundle`.
+
+**The offline screen asks the portal, not `navigator.onLine`.** On Windows a
+Hyper-V, WSL or VPN adapter keeps that flag true with the wifi off, and the
+screen reloaded on it every five seconds: the window flashed between a failed
+load and the notice for as long as the reader was offline. It now reloads only
+once a request to `/up` is answered.
+
 ## The document-byte cache
 
 [file-cache.js](file-cache.js): previews and thumbs are kept on this machine
