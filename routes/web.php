@@ -1013,6 +1013,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::patch('/requests/{uuid}', [FileRequestController::class, 'update'])->name('requests.update');
         Route::delete('/requests/{uuid}', [FileRequestController::class, 'destroy'])->name('requests.destroy');
         Route::post('/requests/{uuid}/send', [FileRequestController::class, 'send'])->name('requests.send');
+        Route::post('/requests/{uuid}/resend', [FileRequestController::class, 'resend'])->name('requests.resend');
 
         Route::get('/shares', [ShareController::class, 'index'])->name('shares.index');
         // Who an item can be assigned to, for the row menu's picker.

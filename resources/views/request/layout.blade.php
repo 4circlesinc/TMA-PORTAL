@@ -23,7 +23,7 @@
   <link rel="stylesheet" href="/css/theme.css">
   <link rel="stylesheet" href="/css/auth.css">
   <link rel="stylesheet" href="/css/auth-flow.css">
-  <link rel="stylesheet" href="/css/request.css">
+  <link rel="stylesheet" href="/css/request.css?v={{ @filemtime(public_path('css/request.css')) ?: 1 }}">
   <style>
     html, body { margin: 0; min-height: 100%; }
   </style>

@@ -232,6 +232,60 @@ class FileRequestController extends BaseFilesController
         return response()->json(['emailed' => $this->email($fileRequest)]);
     }
 
+    /**
+     * Send the request again, with a new deadline.
+     *
+     * The same link, to everyone it was emailed to before; a request that
+     * had passed its date, or been closed by hand, is open again until the
+     * new one. A document request is sent as one (its list of documents, and
+     * a portal notification for anyone with a login).
+     */
+    public function resend(Request $request, string $uuid): JsonResponse
+    {
+        $data = $request->validate([
+            'expiresAt' => ['nullable', 'date', 'after:today'],
+        ], [
+            'expiresAt.after' => 'Choose a date after today.',
+        ]);
+
+        $fileRequest = $this->findRequest($request, $uuid);
+        abort_if($fileRequest->revoked_at !== null, 422, 'This request was withdrawn and cannot be sent again.');
+
+        $recipients = FileRequests::sentTo($fileRequest);
+        abort_if($recipients === [], 422, 'This request has not been emailed to anyone yet. Copy the link and send it yourself.');
+
+        $expires = $data['expiresAt'] ?? $fileRequest->expires_at;
+        abort_if(
+            $expires !== null && \Illuminate\Support\Carbon::parse($expires)->isPast(),
+            422,
+            'This request has passed its date. Choose a new one to send it again.'
+        );
+
+        $fileRequest->forceFill([
+            'expires_at' => $expires,
+            'closed_at' => null,
+        ])->save();
+        $fileRequest->refresh();
+
+        $user = $this->user($request);
+        $emailed = 0;
+        foreach ($recipients as $email) {
+            $emailed += \App\Support\Cip\DocumentRequests::isList($fileRequest)
+                ? (\App\Support\Cip\DocumentRequests::sendTo($fileRequest, [
+                    'email' => $email,
+                    'name' => null,
+                    'userId' => \App\Models\User::query()->whereRaw('LOWER(email) = ?', [mb_strtolower($email)])->value('id'),
+                ], $user) ? 1 : 0)
+                : ($this->email($fileRequest, $email) ? 1 : 0);
+        }
+
+        return response()->json([
+            'request' => FileRequests::present($fileRequest->fresh(['folder:id,uuid,name', 'client:id,uid,name', 'creator:id,name'])),
+            'emailed' => $emailed,
+            'sentTo' => $recipients,
+        ]);
+    }
+
     /* ── internals ─────────────────────────────────── */
 
     private function findRequest(Request $request, string $uuid): FileRequest
@@ -282,7 +336,7 @@ class FileRequestController extends BaseFilesController
      * request the recipient never receives is worse than a slow response —
      * the account-lifecycle emails take the same view for the same reason.
      */
-    private function email(FileRequest $fileRequest): bool
+    private function email(FileRequest $fileRequest, ?string $to = null): bool
     {
         $details = [];
 
@@ -305,7 +359,7 @@ class FileRequestController extends BaseFilesController
                 $fileRequest->recipient_name,
                 $details,
             ),
-            $fileRequest->recipient_email,
+            $to ?? $fileRequest->recipient_email,
             $fileRequest,
             'fileRequest',
             immediate: true,

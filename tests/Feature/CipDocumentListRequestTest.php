@@ -131,7 +131,10 @@ class CipDocumentListRequestTest extends TestCase
             ->assertOk()
             ->assertSee('Oath of Allegiance')
             ->assertSee('Proof of Payment')
-            ->assertDontSee('placeholder="Your name"', false);
+            ->assertDontSee('placeholder="Your name"', false)
+            // A drop box for each document still wanted.
+            ->assertSee('data-doc-drop', false)
+            ->assertSee('Drop the file here');
     }
 
     public function test_each_upload_is_renamed_and_filed_in_its_own_slot(): void
@@ -287,5 +290,47 @@ class CipDocumentListRequestTest extends TestCase
         $this->actingAs($other)->getJson('/portal/files/requests?mine=1&progress=1')
             ->assertOk()
             ->assertJsonCount(0, 'requests');
+    }
+
+    /** Resend: the same link, a new date, to the same people. */
+    public function test_a_request_can_be_sent_again_with_a_new_date(): void
+    {
+        [$staff, $contact, $application, $oath, $payment] = $this->file();
+        $this->request($staff, $application, [$oath->uuid, $payment->uuid], ['cc' => ['lawyer@example.com']])->assertCreated();
+        $request = FileRequest::query()->latest('id')->firstOrFail();
+
+        // It lapsed.
+        $request->forceFill(['expires_at' => now()->subDay()])->save();
+        $this->assertFalse($request->fresh()->isOpen());
+
+        $sentBefore = \App\Models\EmailDelivery::query()->where('related_id', $request->id)->count();
+        $date = now()->addDays(10)->toDateString();
+
+        // Who it went to is on the list, for the dialog to show.
+        $row = $this->actingAs($staff)->getJson('/portal/files/requests?mine=1&progress=1')->json('requests.0');
+        $this->assertEqualsCanonicalizing(['gil@galaxy.example', 'lawyer@example.com'], $row['progress']['sentTo']);
+
+        // A date that has passed is refused.
+        $this->actingAs($staff)->postJson('/portal/files/requests/'.$request->uuid.'/resend', ['expiresAt' => now()->subDay()->toDateString()])
+            ->assertStatus(422);
+
+        $this->actingAs($staff)->postJson('/portal/files/requests/'.$request->uuid.'/resend', ['expiresAt' => $date])
+            ->assertOk()
+            ->assertJsonPath('emailed', 2)
+            ->assertJsonPath('request.open', true);
+
+        $request->refresh();
+        $this->assertSame($date, $request->expires_at->toDateString());
+        $this->assertSame($sentBefore + 2, \App\Models\EmailDelivery::query()->where('related_id', $request->id)->count());
+        $this->assertSame(2, \App\Models\Notification::query()
+            ->where('user_id', $contact->id)->where('type', 'files.request_received')->count());
+
+        // The link works again.
+        auth()->logout();
+        $this->get('/r/'.$request->token)->assertOk()->assertSee('data-doc-drop', false);
+
+        // Only the person who sent it (or an admin) may resend it.
+        $this->actingAs($contact)->postJson('/portal/files/requests/'.$request->uuid.'/resend', ['expiresAt' => $date])
+            ->assertForbidden();
     }
 }

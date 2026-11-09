@@ -214,6 +214,55 @@ class DocumentRequests
             ->exists();
     }
 
+    /**
+     * One recipient of a document request: the email with the link, and for
+     * somebody with a portal account, the same in their notifications.
+     *
+     * @param  array{email:string, name:?string, userId:?int}  $recipient
+     */
+    public static function sendTo(FileRequest $request, array $recipient, User $sender): bool
+    {
+        $url = FileRequests::url($request);
+        $listed = self::listFor($request)
+            ->map(fn (array $row) => DocumentTypes::present((string) $row['slot']->label))
+            ->all();
+        $details = [['Documents', implode(', ', $listed)]];
+        if ($request->expires_at) {
+            $details[] = ['Upload by', $request->expires_at->format('j M Y')];
+        }
+
+        $delivery = \App\Support\Mail\Deliveries::send(
+            \App\Support\Mail\Postcards::fileRequest(
+                $request->title,
+                $sender->name ?: \App\Support\Mail\Postcards::site(),
+                $request->message,
+                $url,
+                $recipient['name'] ?? null,
+                $details,
+            ),
+            (string) $recipient['email'],
+            $request,
+            'fileRequest',
+            immediate: true,
+        );
+
+        if (! empty($recipient['userId'])) {
+            \App\Support\Notifications\Notifier::send([
+                'user' => $recipient['userId'],
+                'actor' => $sender,
+                'type' => 'files.request_received',
+                'title' => $request->title,
+                'message' => 'Requested by '.($sender->name ?: 'the firm').': '.implode(', ', $listed),
+                'subject' => $request,
+                'action_url' => '/r/'.$request->token,
+                // The request email above is the email.
+                'email' => false,
+            ]);
+        }
+
+        return $delivery === null || $delivery->status !== \App\Models\EmailDelivery::STATUS_FAILED;
+    }
+
     /** @param  list<string>  $labels */
     private static function listed(array $labels): string
     {

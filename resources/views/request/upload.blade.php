@@ -50,22 +50,30 @@
     @endif
 
     @if($documents !== [])
-      {{-- One row per document asked for, each with its own upload. --}}
+      {{-- One row per document asked for, each with its own drop box. --}}
       <ul class="tma-request__queue tma-request__docs" data-docs>
         @foreach($documents as $doc)
           <li class="tma-request__row tma-request__doc" data-doc="{{ $doc['id'] }}">
-            <span class="tma-request__name">
-              <span class="tma-request__doc-label">{{ $doc['label'] }}</span>
-              @if($doc['person'])<span class="tma-auth__hint">{{ $doc['person'] }}</span>@endif
-              @if(!empty($doc['help']))<span class="tma-auth__hint">{{ $doc['help'] }}</span>@endif
-            </span>
-            @if($doc['received'])
-              <span class="tma-request__state is-done">Received</span>
-            @elseif(!empty($doc['closed']))
-              <span class="tma-request__state">No longer needed</span>
-            @else
-              <button type="button" class="tma-auth__link-btn" data-doc-pick aria-label="Upload {{ $doc['label'] }}">Upload</button>
-              <span class="tma-request__state" data-doc-state hidden></span>
+            <div class="tma-request__doc-head">
+              <span class="tma-request__name">
+                <span class="tma-request__doc-label">{{ $doc['label'] }}</span>
+                @if($doc['person'])<span class="tma-auth__hint">{{ $doc['person'] }}</span>@endif
+                @if(!empty($doc['help']))<span class="tma-auth__hint">{{ $doc['help'] }}</span>@endif
+              </span>
+              @if($doc['received'])
+                <span class="tma-request__state is-done">Received</span>
+              @elseif(!empty($doc['closed']))
+                <span class="tma-request__state">No longer needed</span>
+              @else
+                <span class="tma-request__state" data-doc-state hidden></span>
+              @endif
+            </div>
+            @if(!$doc['received'] && empty($doc['closed']))
+              <div class="tma-request__drop tma-request__drop--doc" data-doc-drop tabindex="0" role="button" aria-label="Upload {{ $doc['label'] }}">
+                <img src="/images/icons/phosphor/CloudArrowUp.svg" alt="" width="32" height="32" aria-hidden="true">
+                <p class="tma-request__drop-title">Drop the file here</p>
+                <p class="tma-auth__hint">or click to browse your device</p>
+              </div>
               <input type="file" data-doc-input hidden @if($accept) accept="{{ $accept }}" @endif>
             @endif
           </li>
@@ -235,26 +243,48 @@
     });
   }
 
+  // A page-wide drop would otherwise be handled by the browser, which
+  // navigates away from the form and loses everything typed into it.
+  ['dragover', 'drop'].forEach(function (type) {
+    window.addEventListener(type, function (e) { e.preventDefault(); });
+  });
+
+  /* The drop box's own behaviour: click or Enter to browse, files dropped on it. */
+  function wireDrop(box, browse, take) {
+    box.addEventListener('click', function () { if (!box.classList.contains('is-busy')) browse(); });
+    box.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!box.classList.contains('is-busy')) browse(); }
+    });
+    ['dragenter', 'dragover'].forEach(function (type) {
+      box.addEventListener(type, function (e) { e.preventDefault(); box.classList.add('is-over'); });
+    });
+    ['dragleave', 'drop'].forEach(function (type) {
+      box.addEventListener(type, function (e) { e.preventDefault(); box.classList.remove('is-over'); });
+    });
+    box.addEventListener('drop', function (e) {
+      if (!box.classList.contains('is-busy')) take(e.dataTransfer && e.dataTransfer.files);
+    });
+  }
+
   /*
-   * A request for named documents: each row uploads its own file, which the
-   * firm files under that document's name.
+   * A request for named documents: each document has its own drop box, and
+   * the file dropped on it is filed by the firm under that document's name.
    */
   var docs = document.querySelector('[data-docs]');
   if (docs) {
     var refreshDone = function () {
-      if (!docs.querySelectorAll('[data-doc-pick]').length) {
+      if (!docs.querySelectorAll('[data-doc-drop]').length) {
         banner('ok', 'Every document was received. Thank you.');
       }
     };
     docs.querySelectorAll('[data-doc]').forEach(function (row) {
-      var pick = row.querySelector('[data-doc-pick]');
+      var box = row.querySelector('[data-doc-drop]');
       var input = row.querySelector('[data-doc-input]');
       var state = row.querySelector('[data-doc-state]');
-      if (!pick || !input || !state) return;
-      pick.addEventListener('click', function () { input.click(); });
-      input.addEventListener('change', function () {
-        var file = input.files && input.files[0];
-        input.value = '';
+      if (!box || !input || !state) return;
+
+      var take = function (files) {
+        var file = files && files[0];
         if (!file) return;
         var reason = localReason(file);
         state.hidden = false;
@@ -263,43 +293,35 @@
           state.className = 'tma-request__state is-error';
           return;
         }
-        pick.disabled = true;
+        banner('', '');
+        box.classList.add('is-busy');
+        box.setAttribute('aria-disabled', 'true');
         send(file, state, row.getAttribute('data-doc')).then(function () {
           if (state.className.indexOf('is-done') !== -1) {
             state.textContent = 'Received';
-            pick.remove();
+            box.remove();
+            input.remove();
             banner('ok', 'Thank you. ' + file.name + ' was received.');
             refreshDone();
           } else {
-            pick.disabled = false;
+            box.classList.remove('is-busy');
+            box.removeAttribute('aria-disabled');
           }
         });
+      };
+
+      wireDrop(box, function () { input.click(); }, take);
+      input.addEventListener('change', function () {
+        var files = input.files;
+        take(files);
+        input.value = '';
       });
     });
     return;
   }
 
-  drop.addEventListener('click', function () { picker.click(); });
-  drop.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); picker.click(); }
-  });
+  wireDrop(drop, function () { picker.click(); }, accept);
   picker.addEventListener('change', function () { accept(picker.files); });
-
-  ['dragenter', 'dragover'].forEach(function (type) {
-    drop.addEventListener(type, function (e) { e.preventDefault(); drop.classList.add('is-over'); });
-  });
-  ['dragleave', 'drop'].forEach(function (type) {
-    drop.addEventListener(type, function (e) { e.preventDefault(); drop.classList.remove('is-over'); });
-  });
-  drop.addEventListener('drop', function (e) {
-    accept(e.dataTransfer && e.dataTransfer.files);
-  });
-
-  // A page-wide drop would otherwise be handled by the browser, which
-  // navigates away from the form and loses everything typed into it.
-  ['dragover', 'drop'].forEach(function (type) {
-    window.addEventListener(type, function (e) { e.preventDefault(); });
-  });
 })();
 </script>
 @endsection

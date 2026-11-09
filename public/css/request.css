@@ -149,3 +149,34 @@
 .tma-request__doc-label {
   font-weight: 600;
 }
+
+/*
+ * Each document asked for: its name, then its own drop box (the page's
+ * drop box, a little shorter, as there may be several).
+ */
+.tma-request__row.tma-request__doc {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-8);
+  padding: var(--space-12) 0;
+}
+
+.tma-request__doc-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+.tma-request__drop--doc {
+  padding: var(--space-16) var(--space-20);
+}
+
+.tma-request__drop--doc img {
+  width: 24px;
+  height: 24px;
+}
+
+.tma-request__drop.is-busy {
+  cursor: progress;
+  opacity: 0.6;
+}

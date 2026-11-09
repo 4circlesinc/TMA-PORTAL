@@ -284,7 +284,41 @@ final class FileRequests
             'received' => $received,
             'total' => $total,
             'items' => $items,
+            'sentTo' => self::sentTo($request),
         ];
+    }
+
+    /**
+     * Everyone this request has been emailed to, read off its deliveries,
+     * so a resend reaches the same people the first email did.
+     *
+     * @return list<string>
+     */
+    public static function sentTo(FileRequest $request): array
+    {
+        $emails = \App\Models\EmailDelivery::query()
+            ->where('related_type', FileRequest::class)
+            ->where('related_id', $request->id)
+            ->orderBy('id')
+            ->pluck('recipient')
+            ->all();
+
+        if ($request->recipient_email) {
+            array_unshift($emails, $request->recipient_email);
+        }
+
+        $seen = [];
+        $out = [];
+        foreach ($emails as $email) {
+            $key = mb_strtolower(trim((string) $email));
+            if ($key === '' || isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $out[] = trim((string) $email);
+        }
+
+        return $out;
     }
 
     public static function present(FileRequest $request): array

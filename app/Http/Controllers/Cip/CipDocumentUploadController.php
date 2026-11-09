@@ -220,7 +220,7 @@ class CipDocumentUploadController extends Controller
         $emailed = 0;
         if ($request->boolean('send', true)) {
             foreach ($recipients as $recipient) {
-                $emailed += $this->sendDocumentRequest($fileRequest, $recipient, $user) ? 1 : 0;
+                $emailed += DocumentRequests::sendTo($fileRequest, $recipient, $user) ? 1 : 0;
             }
         }
 
@@ -232,55 +232,6 @@ class CipDocumentUploadController extends Controller
             'emailed' => $emailed,
             'recipients' => array_map(fn (array $r) => $r['name'] ?: $r['email'], $recipients),
         ], 201);
-    }
-
-    /**
-     * One recipient of a document request: the email with the link, and for
-     * somebody with a portal account, the same in their notifications.
-     *
-     * @param  array{email:string, name:?string, userId:?int}  $recipient
-     */
-    private function sendDocumentRequest(FileRequest $fileRequest, array $recipient, User $sender): bool
-    {
-        $url = FileRequests::url($fileRequest);
-        $listed = DocumentRequests::listFor($fileRequest)
-            ->map(fn (array $row) => DocumentTypes::present((string) $row['slot']->label))
-            ->all();
-        $details = [['Documents', implode(', ', $listed)]];
-        if ($fileRequest->expires_at) {
-            $details[] = ['Upload by', $fileRequest->expires_at->format('j M Y')];
-        }
-
-        $delivery = Deliveries::send(
-            Postcards::fileRequest(
-                $fileRequest->title,
-                $sender->name ?: Postcards::site(),
-                $fileRequest->message,
-                $url,
-                $recipient['name'] ?? null,
-                $details,
-            ),
-            (string) $recipient['email'],
-            $fileRequest,
-            'fileRequest',
-            immediate: true,
-        );
-
-        if (! empty($recipient['userId'])) {
-            Notifier::send([
-                'user' => $recipient['userId'],
-                'actor' => $sender,
-                'type' => 'files.request_received',
-                'title' => $fileRequest->title,
-                'message' => 'Requested by '.($sender->name ?: 'the firm').': '.implode(', ', $listed),
-                'subject' => $fileRequest,
-                'action_url' => '/r/'.$fileRequest->token,
-                // The request email above is the email.
-                'email' => false,
-            ]);
-        }
-
-        return $delivery === null || $delivery->status !== \App\Models\EmailDelivery::STATUS_FAILED;
     }
 
     public static function canUpload(CipDocument $document, ?User $viewer): bool

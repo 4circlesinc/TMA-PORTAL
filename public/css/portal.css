@@ -7802,6 +7802,10 @@ body:has(.tma-dash.is-sidebar-collapsed) .tma-sync-pill {
 .tma-cip-cc__tag:hover,
 .tma-cip-cc__tag:focus-visible { background: var(--color-hover); }
 
+/* An address shown, not edited (Resend request): no remove button beside it. */
+.tma-cip-cc__tag--static { padding-right: 10px; cursor: default; }
+.tma-cip-cc__tag--static:hover { background: var(--color-overlay-4); }
+
 .tma-cip-cc__tag-text {
   overflow: hidden;
   text-overflow: ellipsis;

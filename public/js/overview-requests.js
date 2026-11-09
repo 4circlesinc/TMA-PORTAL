@@ -144,10 +144,16 @@
       ((p.items || []).length
         ? '<ul class="tma-dash__clients-checklist">' + p.items.map(itemRow).join('') + '</ul>'
         : '<p class="tma-dash__clients-checklist-empty">Nothing has arrived yet.</p>') +
-      (req.open && req.link
+      (canResend(req) || (req.open && req.link)
         ? '<div class="tma-portal-form-actions tma-portal-form-actions--start">' +
-          '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-req-copy="' + esc(req.link) + '">' +
-          '<img class="tma-no-data__btn-icon" src="' + ICON + 'LinkSimple.svg" alt="" width="16" height="16"><span>Copy link</span></button>' +
+          (canResend(req)
+            ? '<button type="button" class="tma-no-data__btn" data-req-resend="' + esc(req.id) + '">' +
+              '<img class="tma-no-data__btn-icon" src="' + ICON + 'PaperPlaneTilt.svg" alt="" width="16" height="16"><span>Resend</span></button>'
+            : '') +
+          (req.open && req.link
+            ? '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-req-copy="' + esc(req.link) + '">' +
+              '<img class="tma-no-data__btn-icon" src="' + ICON + 'LinkSimple.svg" alt="" width="16" height="16"><span>Copy link</span></button>'
+            : '') +
           '</div>'
         : '') +
       '</div>';
@@ -225,6 +231,89 @@
       });
   }
 
+  /* Something is still to come, and somebody was emailed the link. */
+  function canResend(req) {
+    var p = req.progress || {};
+    if (req.closedReason === 'revoked' || p.status === 'complete') return false;
+    return (p.sentTo || []).length > 0;
+  }
+
+  function isoDay(d) {
+    var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  /*
+   * Send the same link again with a new deadline: to everyone it went to
+   * before, and open again until the new date if it had lapsed.
+   */
+  function openResend(state, req) {
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal) return;
+
+    var tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    var suggested = new Date();
+    suggested.setDate(suggested.getDate() + 14);
+    var current = req.expiresAt ? new Date(req.expiresAt) : null;
+    if (current && !isNaN(current.getTime()) && current > suggested) suggested = current;
+
+    var to = (req.progress && req.progress.sentTo) || [];
+    var p = req.progress || {};
+    var left = p.total ? (p.total - p.received) : 0;
+
+    var body =
+      '<p class="tma-portal-modal__text">Email the upload link for <strong>' + esc(req.title || 'this request') + '</strong> again' +
+      (left ? ', for the ' + left + (left === 1 ? ' document' : ' documents') + ' still outstanding' : '') + '.</p>' +
+      '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
+      '<span class="tma-dash__clients-field-label">Sent to</span>' +
+      '<div class="tma-cip-cc">' + to.map(function (email) {
+        return '<span class="tma-cip-cc__tag tma-cip-cc__tag--static"><span class="tma-cip-cc__tag-text">' + esc(email) + '</span></span>';
+      }).join('') + '</div>' +
+      '</div>' +
+      '<div class="tma-dash__clients-field">' +
+      '<label class="tma-dash__clients-field-label" for="req-resend-expiry">Upload by</label>' +
+      '<input type="date" id="req-resend-expiry" class="tma-dash__clients-field-input" data-req-resend-expiry' +
+      ' min="' + isoDay(tomorrow) + '" value="' + isoDay(suggested) + '">' +
+      '</div>' +
+      '<div class="tma-portal-modal__foot">' +
+      '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-req-resend-cancel>Cancel</button>' +
+      '<button type="button" class="tma-no-data__btn" data-req-resend-send>Resend</button>' +
+      '</div>';
+
+    ui.openModal({
+      title: 'Resend request',
+      cls: 'tma-cip-not-ready tma-cip-docreq',
+      body: body,
+      onMount: function (el) {
+        el.querySelector('[data-req-resend-cancel]').addEventListener('click', function () { ui.closeModal(); });
+        var send = el.querySelector('[data-req-resend-send]');
+        send.addEventListener('click', function () {
+          var date = el.querySelector('[data-req-resend-expiry]').value;
+          if (!date) {
+            ui.toastError('Choose the date they should upload by.');
+            return;
+          }
+          send.disabled = true;
+          send.textContent = 'Sending…';
+          net().fetchJSON('/portal/files/requests/' + encodeURIComponent(req.id) + '/resend', {
+            method: 'POST',
+            json: { expiresAt: date },
+          }).then(function (res) {
+            ui.closeModal();
+            var who = (res && res.sentTo && res.sentTo.length) ? res.sentTo.join(', ') : 'them';
+            ui.toast('Request sent again to ' + who);
+            load(state, true);
+          }).catch(function (err) {
+            send.disabled = false;
+            send.textContent = 'Resend';
+            ui.toastError((err && err.message) || 'Could not send the request again.');
+          });
+        });
+      },
+    });
+  }
+
   function openFile(folderId, fileId) {
     var dash = window.TMADashboard;
     if (dash && dash.navigate) {
@@ -252,6 +341,12 @@
         if (filter) {
           state.filter = filter.getAttribute('data-req-filter');
           render(state);
+          return;
+        }
+        var resend = e.target.closest('[data-req-resend]');
+        if (resend) {
+          var target = (state.rows || []).filter(function (r) { return r.id === resend.getAttribute('data-req-resend'); })[0];
+          if (target) openResend(state, target);
           return;
         }
         var file = e.target.closest('[data-req-open-file]');
