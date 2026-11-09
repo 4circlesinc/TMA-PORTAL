@@ -1682,8 +1682,12 @@
       }
       document.execCommand('insertText', false, token);
     } else if ('value' in el) {
-      el.value += token;
+      // At the caret the reader left, which a text box keeps after it loses focus.
+      var start = typeof el.selectionStart === 'number' ? el.selectionStart : el.value.length;
+      var end = typeof el.selectionEnd === 'number' ? el.selectionEnd : start;
       el.focus();
+      if (typeof el.setRangeText === 'function') el.setRangeText(token, start, end, 'end');
+      else el.value += token;
     }
     el.dispatchEvent(new Event('input', { bubbles: true }));
   }
@@ -1691,6 +1695,152 @@
   /* Shared with the CIP letters editor (portal-admin.js), so every template
      body in the portal is written with the one rich control. */
   window.TMATplRich = { available: richAvailable, control: richFieldControl, value: fieldValue, insertToken: insertToken };
+
+  /*
+   * The codes a template may use, behind one button.
+   *
+   * A row of {{name}} {{url}} {{inviter}} {{site}} chips said nothing to
+   * whoever was writing the email, and on the busier emails ran to a dozen.
+   * Now one "Insert a code" button opens a short list: each code by a plain
+   * name, what it is filled with, and the code itself, searchable when
+   * there are many. Picking one drops it where the reader was typing — the
+   * subject, a heading or the body — not only the body. Shared by the
+   * system emails, the welcome message and the CIP decision letters.
+   */
+  var CODE_NAMES = {
+    name: 'First name', recipient: 'First name', url: 'Button link', site: 'Firm name',
+    email: 'Email address', newEmail: 'New email address', isProvider: 'Is a service provider',
+    what: 'What arrived', whatLower: 'What arrived (mid-sentence)', decisionLower: 'Decision (lowercase)',
+    docsNeed: 'Documents needing an update', sent: 'How many were sent back', by: 'Changes asked by',
+    who: 'Who accepted', whatFor: 'What they can now see', file: 'File reference',
+    number: 'Application or CIP number', application: 'Application number', actionLabel: 'Button label',
+    letterTitle: 'Letter title', letterLead: 'Letter opening line', letterBody: 'Letter text',
+    days: 'Days passed', item: 'File or folder name', group: 'Group name',
+  };
+
+  function codeName(token) {
+    if (CODE_NAMES[token]) return CODE_NAMES[token];
+    var words = String(token).replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+    return words.charAt(0).toUpperCase() + words.slice(1);
+  }
+
+  function codesButton(codes) {
+    if (!codes || !codes.length) return '';
+    return '<div class="tma-portal-codes-bar">' +
+      '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost tma-portal-codes-btn" data-codes-open aria-haspopup="dialog">' +
+      '<img class="tma-no-data__btn-icon" src="images/icons/phosphor/BracketsCurly.svg" alt="" width="16" height="16">' +
+      '<span>Insert a code</span><span class="tma-tab__count">' + codes.length + '</span></button>' +
+      '<span class="tma-portal-codes-hint">Codes are filled in for each person when the email is sent.</span>' +
+      '</div>';
+  }
+
+  /**
+   * @param {Element} host
+   * @param {Array<{token: string, meaning: string}>} codes
+   * @param {{targets: string, fallback: string, insert?: Function}} opts
+   */
+  function wireCodes(host, codes, opts) {
+    var openBtn = host.querySelector('[data-codes-open]');
+    if (!openBtn || !codes || !codes.length) return;
+    var last = null;
+
+    // Where the reader was last typing is where a code goes.
+    host.addEventListener('focusin', function (e) {
+      var field = e.target.closest && e.target.closest(opts.targets);
+      if (field) last = field;
+    });
+
+    var menu = null;
+    function close() {
+      if (!menu) return;
+      menu.remove();
+      menu = null;
+      document.removeEventListener('mousedown', outside, true);
+      document.removeEventListener('keydown', onKey, true);
+      openBtn.setAttribute('aria-expanded', 'false');
+    }
+    function outside(e) {
+      if (menu && !menu.contains(e.target) && !openBtn.contains(e.target)) close();
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') { e.stopPropagation(); close(); openBtn.focus(); }
+    }
+    function rows(q) {
+      var needle = String(q || '').trim().toLowerCase();
+      // Name and code matches before a word that only turns up in a description.
+      var rank = function (c) {
+        if (!needle) return 0;
+        var name = codeName(c.token).toLowerCase();
+        if (name.indexOf(needle) === 0) return 0;
+        if (name.indexOf(needle) !== -1 || c.token.toLowerCase().indexOf(needle) !== -1) return 1;
+        return String(c.meaning || '').toLowerCase().indexOf(needle) !== -1 ? 2 : 3;
+      };
+      var hits = codes.filter(function (c) { return rank(c) < 3; })
+        .map(function (c, i) { return { c: c, r: rank(c), i: i }; })
+        .sort(function (a, b) { return a.r - b.r || a.i - b.i; })
+        .map(function (x) { return x.c; });
+      if (!hits.length) return '<p class="tma-portal-codes__empty">No code matches.</p>';
+      return hits.map(function (c) {
+        return '<button type="button" class="tma-portal-context-menu__item tma-portal-codes__item" data-code="' + ui().esc(c.token) + '">' +
+          '<span class="tma-portal-codes__text">' +
+          '<span class="tma-portal-codes__name">' + ui().esc(codeName(c.token)) + '</span>' +
+          (c.meaning ? '<span class="tma-portal-codes__meaning">' + ui().esc(c.meaning) + '</span>' : '') +
+          '</span>' +
+          '<code class="tma-portal-codes__token">{{' + ui().esc(c.token) + '}}</code>' +
+          '</button>';
+      }).join('');
+    }
+
+    openBtn.addEventListener('click', function () {
+      if (menu) { close(); return; }
+      menu = document.createElement('div');
+      menu.className = 'tma-portal-context-menu tma-portal-codes';
+      menu.setAttribute('role', 'dialog');
+      menu.setAttribute('aria-label', 'Insert a code');
+      menu.innerHTML =
+        (codes.length > 6
+          ? '<div class="tma-portal-codes__search"><input type="search" class="tma-portal-input" placeholder="Search codes" data-codes-search autocomplete="off" spellcheck="false"></div>'
+          : '') +
+        '<div class="tma-portal-codes__list" data-codes-list>' + rows('') + '</div>';
+      document.body.appendChild(menu);
+      openBtn.setAttribute('aria-expanded', 'true');
+
+      var box = openBtn.getBoundingClientRect();
+      var width = Math.min(360, window.innerWidth - 16);
+      menu.style.width = width + 'px';
+      var left = Math.min(Math.max(8, box.left), window.innerWidth - width - 8);
+      var below = window.innerHeight - box.bottom - 12;
+      menu.style.left = left + 'px';
+      if (below >= 240 || below >= box.top) {
+        menu.style.top = (box.bottom + 6) + 'px';
+        menu.style.maxHeight = Math.max(200, below) + 'px';
+      } else {
+        menu.style.bottom = (window.innerHeight - box.top + 6) + 'px';
+        menu.style.maxHeight = Math.max(200, box.top - 12) + 'px';
+      }
+
+      var search = menu.querySelector('[data-codes-search]');
+      var list = menu.querySelector('[data-codes-list]');
+      if (search) {
+        search.addEventListener('input', function () { list.innerHTML = rows(search.value); });
+        search.focus();
+      }
+      // mousedown, so the field keeps the caret the code is going into.
+      menu.addEventListener('mousedown', function (e) {
+        var item = e.target.closest('[data-code]');
+        if (!item) return;
+        e.preventDefault();
+        var target = (last && last.isConnected) ? last : host.querySelector(opts.fallback);
+        var token = '{{' + item.getAttribute('data-code') + '}}';
+        (opts.insert || insertToken)(target, token);
+        close();
+      });
+      document.addEventListener('mousedown', outside, true);
+      document.addEventListener('keydown', onKey, true);
+    });
+  }
+
+  window.TMATplCodes = { button: codesButton, wire: wireCodes, name: codeName };
 
   function etplEditorModal(t) {
     var isNew = !t;
@@ -1813,11 +1963,6 @@
       return ui().field(labels[f] || f, control);
     }).join('');
 
-    // Every placeholder as a chip: press to drop it at the caret.
-    var tokens = (t.variables || []).map(function (v) {
-      return '<button type="button" class="tma-portal-token-chip" data-tpl-token="' + ui().esc(v.token) + '"' +
-        ' title="' + ui().esc(v.meaning) + '">{{' + ui().esc(v.token) + '}}</button>';
-    }).join('');
 
     ui().openModal({
       title: t.name,
@@ -1827,7 +1972,7 @@
         '<div class="tma-portal-tpl-edit__form">' +
         '<p class="tma-portal-note">' + ui().esc(t.when) + '</p>' +
         fieldsHtml +
-        '<p class="tma-portal-table__muted">' + tokens + '</p>' +
+        codesButton(t.variables || []) +
         '<div class="tma-portal-form-actions">' +
         ui().btn({ label: 'Save', attrs: ' data-tpl-save' }) +
         (t.customized ? ui().btn({ label: 'Restore default', variant: 'ghost', attrs: ' data-tpl-restore' }) : '') +
@@ -1846,14 +1991,11 @@
     var timer = null;
     if (richAvailable()) window.TMAComposeEditor.wire(host);
 
-    // mousedown, not click, so the editor's selection is still live when the
-    // token lands where the caret was.
-    host.querySelectorAll('[data-tpl-token]').forEach(function (b) {
-      b.addEventListener('mousedown', function (e) {
-        e.preventDefault();
-        var target = host.querySelector('[data-tma-rich-editor]') || host.querySelector('[data-tpl-field="body"]');
-        insertToken(target, '{{' + b.getAttribute('data-tpl-token') + '}}');
-      });
+    // Codes go into whichever field the reader was writing in; the body
+    // when they have not been in one yet.
+    wireCodes(host, t.variables || [], {
+      targets: '[data-tpl-field]',
+      fallback: '[data-tma-rich-editor], [data-tpl-field="body"]',
     });
 
     function draft() {
@@ -1969,10 +2111,6 @@
       return { value: String(p.id), label: p.name + (p.jobTitle ? ' (' + p.jobTitle + ')' : '') };
     }));
 
-    var tokens = (d.variables || []).map(function (v) {
-      return '<button type="button" class="tma-portal-token-chip" data-wtpl-token="' + ui().esc(v.token) + '"' +
-        ' title="' + ui().esc(v.meaning) + '">{{' + ui().esc(v.token) + '}}</button>';
-    }).join('');
 
     el.innerHTML =
       '<div class="tma-portal-page tma-portal-page--templates">' +
@@ -1984,7 +2122,7 @@
       ui().field('From', ui().select(options, chosen ? String(chosen.id) : '', 'data-wtpl-sender', 'From')) +
       ui().field('Message', '<textarea class="tma-portal-textarea" data-wtpl-body rows="12" maxlength="' +
         ui().esc(String(d.maxLength || 5000)) + '" aria-label="Message">' + ui().esc(d.body || '') + '</textarea>') +
-      '<p class="tma-portal-table__muted">' + tokens + '</p>' +
+      codesButton(d.variables || []) +
       '<div class="tma-portal-form-actions">' +
       ui().btn({ label: 'Save', attrs: ' data-wtpl-save' }) +
       ui().btn({ label: 'Restore default', variant: 'ghost', attrs: ' data-wtpl-restore' }) +
@@ -2042,18 +2180,10 @@
     if (senderSelect) senderSelect.addEventListener('change', refreshPreview);
     refreshPreview();
 
-    // mousedown, not click, so the caret is still in the message.
-    el.querySelectorAll('[data-wtpl-token]').forEach(function (b) {
-      b.addEventListener('mousedown', function (e) {
-        e.preventDefault();
-        if (!body) return;
-        var token = '{{' + b.getAttribute('data-wtpl-token') + '}}';
-        var start = body.selectionStart != null ? body.selectionStart : body.value.length;
-        var end = body.selectionEnd != null ? body.selectionEnd : start;
-        body.focus();
-        body.setRangeText(token, start, end, 'end');
-        body.dispatchEvent(new Event('input', { bubbles: true }));
-      });
+    // Into the message, at the caret.
+    wireCodes(el.querySelector('.tma-portal-tpl-edit__form') || el, d.variables || [], {
+      targets: '[data-wtpl-body]',
+      fallback: '[data-wtpl-body]',
     });
 
     var restore = el.querySelector('[data-wtpl-restore]');

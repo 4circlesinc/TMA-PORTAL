@@ -73,6 +73,25 @@ class SystemEmailTemplatesTest extends TestCase
         }
     }
 
+    /**
+     * Every email fits a phone: the card is fluid (100% wide, at most 560px)
+     * rather than a fixed 560px table, long links wrap, and a phone gets its
+     * own tighter layout where styles are honoured. Desktop Outlook keeps
+     * 560px through a conditional ghost table.
+     */
+    public function test_every_email_is_built_to_fit_a_phone(): void
+    {
+        foreach (SystemEmails::keys() as $key) {
+            $html = SystemEmails::preview($key)['html'];
+            // Outside Outlook's conditional comment there is no fixed width.
+            $outsideMso = preg_replace('/<!--\[if mso\]>.*?<!\[endif\]-->/s', '', $html);
+            $this->assertStringNotContainsString('width="560"', $outsideMso, $key.' has a fixed 560px table');
+            $this->assertStringContainsString('max-width:560px', $html, $key);
+            $this->assertStringContainsString('name="viewport"', $html, $key);
+            $this->assertStringContainsString('@media only screen and (max-width: 600px)', $html, $key);
+        }
+    }
+
     public function test_an_edit_changes_what_is_sent(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);

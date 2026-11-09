@@ -2466,11 +2466,9 @@
     var letter = found.letter;
     var canEdit = !!(CIPLETTERS.data && CIPLETTERS.data.canEdit);
     var rich = canEdit && window.TMATplRich && window.TMATplRich.available();
-    // Every placeholder as a chip: press to drop it at the caret.
-    var tokens = (CIPLETTERS.data.placeholders || []).map(function (p) {
-      return '<button type="button" class="tma-portal-token-chip" data-cipletter-token="' + ui().esc(p.token) + '"' +
-        ' title="' + ui().esc(p.meaning) + '">{{' + ui().esc(p.token) + '}}</button>';
-    }).join('');
+    // The placeholders behind one "Insert a code" button (portal-work.js).
+    var codes = CIPLETTERS.data.placeholders || [];
+    var codesHtml = canEdit && window.TMATplCodes ? window.TMATplCodes.button(codes) : '';
 
     ui().openModal({
       title: found.type.label + ' · ' + (found.phase ? found.phase.label + ' · ' : '') + letter.decisionLabel,
@@ -2488,7 +2486,7 @@
           ? window.TMATplRich.control('data-cipletter-body', 'Letter', letter.body)
           : '<textarea class="tma-portal-textarea" data-cipletter-body rows="18" maxlength="20000"' +
             (canEdit ? '' : ' disabled') + '>' + ui().esc(letter.body) + '</textarea>') +
-        '<p class="tma-portal-table__muted">' + tokens + '</p>' +
+        codesHtml +
         (canEdit
           ? '<div class="tma-portal-form-actions">' +
             ui().btn({ label: 'Save', attrs: 'data-cipletter-save' }) +
@@ -2499,18 +2497,13 @@
         var save = host.querySelector('[data-cipletter-save]');
         if (rich && window.TMAComposeEditor) window.TMAComposeEditor.wire(host);
 
-        // mousedown keeps the editor's selection alive so the token lands
-        // exactly where the caret sits.
-        host.querySelectorAll('[data-cipletter-token]').forEach(function (b) {
-          b.addEventListener('mousedown', function (e) {
-            e.preventDefault();
-            if (!canEdit || !window.TMATplRich) return;
-            window.TMATplRich.insertToken(
-              host.querySelector('[data-cipletter-body]'),
-              '{{' + b.getAttribute('data-cipletter-token') + '}}'
-            );
+        // Codes go into the title or the letter, wherever the caret was.
+        if (canEdit && window.TMATplCodes) {
+          window.TMATplCodes.wire(host, codes, {
+            targets: '[data-cipletter-title], [data-cipletter-body]',
+            fallback: '[data-cipletter-body]',
           });
-        });
+        }
 
         function saved(message) {
           ui().closeModal();

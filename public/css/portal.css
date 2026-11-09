@@ -8337,3 +8337,115 @@ body:has(.tma-dash.is-sidebar-collapsed) .tma-sync-pill {
 @media (max-width: 480px) {
   .tma-cip-decision__pair { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ── Template codes: "Insert a code" (portal-work.js TMATplCodes) ──────
+ *
+ * One button under a template's fields instead of a row of {{token}}
+ * chips; it opens a short list in the context menu's own shell, each code
+ * by a plain name, what it is filled with, and the code in small type.
+ */
+.tma-portal-codes-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-8) var(--space-12);
+  margin: var(--space-4) 0 var(--space-8);
+}
+
+.tma-portal-codes-btn .tma-tab__count { margin-left: 2px; }
+
+.tma-portal-codes-hint {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-context-menu.tma-portal-codes {
+  padding: 0;
+  overflow: hidden;
+}
+
+.tma-portal-codes__search {
+  padding: var(--space-8);
+  border-bottom: 0.5px solid var(--color-border-soft);
+}
+
+.tma-portal-codes__search .tma-portal-input { max-width: none; }
+
+.tma-portal-codes__list {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4);
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.tma-portal-context-menu__item.tma-portal-codes__item {
+  align-items: flex-start;
+  gap: var(--space-12);
+  white-space: normal;
+  text-align: left;
+}
+
+.tma-portal-codes__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The menu's rows are one line each; a code's description wraps instead of
+   being cut off, so the code beside it always stays in view. */
+.tma-portal-codes__item .tma-portal-codes__name,
+.tma-portal-codes__item .tma-portal-codes__meaning {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+}
+
+.tma-portal-context-menu__item.tma-portal-codes__item {
+  /* The menu's rows size to their text; here they are the list's width,
+     so a long description wraps rather than widening the row past it. */
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  padding-top: var(--space-8);
+  padding-bottom: var(--space-8);
+}
+
+.tma-portal-codes__name {
+  font-size: var(--text-size-14);
+  line-height: var(--text-lh-14);
+  color: var(--color-text-primary);
+}
+
+.tma-portal-codes__meaning {
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-codes__token {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border-radius: var(--radius-8, 8px);
+  background: var(--color-overlay-4, rgba(0, 0, 0, 0.04));
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-codes__empty {
+  margin: 0;
+  padding: var(--space-12);
+  font-size: var(--text-size-12);
+  color: var(--color-text-secondary);
+}
