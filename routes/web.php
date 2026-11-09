@@ -155,6 +155,10 @@ use Illuminate\Support\Facades\Route;
 Route::get('/media/avatars/{name}/push', [AvatarController::class, 'forPush'])
     ->middleware(['signed', 'throttle:120,1'])
     ->name('avatar.push');
+// The applicant's initials, for a notification about a file with no photo.
+Route::get('/media/cip/applicants/{uuid}/initials', [AvatarController::class, 'applicantInitials'])
+    ->middleware(['signed', 'throttle:120,1'])
+    ->name('cip.applicant-initials.push');
 Route::post('/push/messages/{conversation}/{user}', [PushReplyController::class, 'store'])
     ->whereNumber('user')
     ->middleware(['signed', 'throttle:30,1'])

@@ -3,6 +3,11 @@
 namespace Tests\Feature;
 
 use App\Events\PortalNotificationCreated;
+use App\Models\CipApplication;
+use App\Models\CipPerson;
+use App\Models\CipProvider;
+use App\Models\Client;
+use App\Models\Company;
 use App\Jobs\SyncMailbox;
 use App\Models\ConnectedAccount;
 use App\Models\Conversation;
@@ -13,6 +18,8 @@ use App\Models\MailSenderPhoto;
 use App\Models\Message;
 use App\Models\Notification;
 use App\Models\User;
+use App\Support\Cip\Applications;
+use App\Support\Messaging\MessageNotifier;
 use App\Support\Notifications\MessagePush;
 use App\Support\Notifications\Notifier;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -236,6 +243,108 @@ class MessagePushTest extends TestCase
         $this->assertSame('Dana Reed', $alert['title']);
         $this->assertSame('Commented on Birth certificate · GAL26-00001 (Chen)', $alert['subtitle']);
         $this->assertSame('The stamp is not legible.', $alert['body']);
+    }
+
+    private const APPLICANT_PHOTO = '9c8d7e6f-5a4b-4c3d-8e2f-1a0b9c8d7e6f.jpg';
+
+    /** An application whose main applicant is Vernon Francis, with or without a photo. */
+    private function application(User $staff, bool $withPhoto = true): CipApplication
+    {
+        $company = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy', 'created_by' => $staff->id]);
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL', 'company_id' => $company->id]);
+        $client = Client::create([
+            'uid' => 'vernon-francis', 'name' => 'Vernon Francis', 'email' => 'vernon@example.com',
+            'created_by' => $staff->id, 'data' => [],
+        ]);
+        $application = Applications::create($provider, $staff, ['client_id' => $client->id]);
+        $application->people()->where('role', CipPerson::ROLE_MAIN_APPLICANT)->delete();
+        (new CipPerson)->forceFill([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Vernon',
+            'last_name' => 'Francis',
+            'photo_url' => $withPhoto ? '/media/avatars/'.self::APPLICANT_PHOTO : null,
+        ])->save();
+
+        return $application->fresh();
+    }
+
+    public function test_a_notice_about_an_application_shows_the_applicant_not_the_officer(): void
+    {
+        $officer = $this->user('ada@example.com', ['name' => 'Ada Officer', 'avatar_url' => '/media/avatars/'.self::PHOTO]);
+        $recipient = $this->user('gil@galaxy.example');
+        DeviceToken::create(['user_id' => $recipient->id, 'platform' => DeviceToken::PLATFORM_IOS, 'token' => self::PHONE]);
+        $application = $this->application($officer);
+
+        Notifier::send([
+            'user' => $recipient,
+            'actor' => $officer,
+            'type' => 'cip.dd-query',
+            'title' => $application->displayNumber().' (Vernon): DD Query',
+            'message' => 'The Unit has requested additional documents.',
+            'subject' => $application,
+            'email' => false,
+        ]);
+
+        $msg = json_decode($this->pushed()['msg'], true);
+        $this->assertSame('Ada Officer', $msg['name'], 'who did it is still the first line');
+        $this->assertStringContainsString('/media/avatars/'.self::APPLICANT_PHOTO.'/push?expires=', $msg['photo']);
+        $this->assertStringContainsString('/media/avatars/'.self::APPLICANT_PHOTO.'/push?expires=', $msg['groupPhoto']);
+        $this->assertStringNotContainsString(self::PHOTO, (string) json_encode($msg), 'never the officer’s face');
+    }
+
+    public function test_a_message_in_an_applications_group_chat_shows_the_applicant(): void
+    {
+        $officer = $this->user('ada@example.com', ['name' => 'Ada Officer', 'avatar_url' => '/media/avatars/'.self::PHOTO]);
+        $recipient = $this->user('gil@galaxy.example');
+        DeviceToken::create(['user_id' => $recipient->id, 'platform' => DeviceToken::PLATFORM_IOS, 'token' => self::PHONE]);
+        $application = $this->application($officer);
+        $chat = $this->conversation([$officer, $recipient], Conversation::TYPE_GROUP);
+        $chat->forceFill([
+            'client_id' => $application->client_id,
+            'cip_application_id' => $application->id,
+            'subject' => Conversation::SUBJECT_PROVIDER,
+        ])->save();
+
+        // A file sent in the case chat: the group-message path (a text there
+        // is filed on the application's own thread instead).
+        $message = Message::create([
+            'conversation_id' => $chat->id, 'user_id' => $officer->id,
+            'type' => Message::TYPE_ATTACHMENT, 'body' => null,
+        ]);
+        MessageNotifier::announceMessage($chat, $message, $officer);
+
+        $msg = json_decode($this->pushed()['msg'], true);
+        $this->assertSame('Ada Officer', $msg['name']);
+        // The big picture is the applicant's; the sender stays the sender.
+        $this->assertStringContainsString('/media/avatars/'.self::APPLICANT_PHOTO.'/push?expires=', $msg['groupPhoto']);
+        $this->assertStringContainsString('/media/avatars/'.self::PHOTO.'/push?expires=', $msg['photo']);
+    }
+
+    public function test_an_applicant_without_a_photo_is_shown_by_their_initials_never_the_sender(): void
+    {
+        $officer = $this->user('ada@example.com', ['name' => 'Ada Officer', 'avatar_url' => '/media/avatars/'.self::PHOTO]);
+        $recipient = $this->user('gil@galaxy.example');
+        DeviceToken::create(['user_id' => $recipient->id, 'platform' => DeviceToken::PLATFORM_IOS, 'token' => self::PHONE]);
+        $application = $this->application($officer, withPhoto: false);
+
+        Notifier::send([
+            'user' => $recipient,
+            'actor' => $officer,
+            'type' => 'cip.status',
+            'title' => $application->displayNumber().' (Vernon): Background Check',
+            'message' => 'The Unit has accepted this file for processing.',
+            'subject' => $application,
+            'email' => false,
+        ]);
+
+        $msg = json_decode($this->pushed()['msg'], true);
+        $this->assertStringContainsString('/media/cip/applicants/'.$application->uuid.'/initials?expires=', $msg['photo']);
+        $this->assertStringContainsString('/media/cip/applicants/'.$application->uuid.'/initials?expires=', $msg['groupPhoto']);
+
+        // The phone can fetch it without signing in, and only with the signature.
+        $this->get($msg['photo'])->assertOk()->assertHeader('Content-Type', 'image/png');
+        $this->get('/media/cip/applicants/'.$application->uuid.'/initials')->assertForbidden();
     }
 
     /** @return array{0: Conversation, 1: User, 2: User} */

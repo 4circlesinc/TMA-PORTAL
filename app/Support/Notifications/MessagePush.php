@@ -5,6 +5,7 @@ namespace App\Support\Notifications;
 use App\Models\CipApplication;
 use App\Models\Conversation;
 use App\Models\User;
+use App\Support\Cip\ApplicantFace;
 use App\Support\Messaging\MessagingPresenter;
 use Illuminate\Support\Facades\URL;
 
@@ -14,10 +15,16 @@ use Illuminate\Support\Facades\URL;
  *
  *   direct message   the sender's photo; their name, then the message
  *   group message    the group's photo; who wrote, the group, the message
- *   CIP file thread  the chat's photo; who wrote, the group chat, the message
+ *   CIP file thread  the applicant's photo; who wrote, the chat, the message
  *   email            the sender's photo; their name, the subject, its start
  *   activity         the person's photo; their name, what happened, its line
  *                    (a status change, a comment, a share; no Reply box)
+ *
+ * Anything about an application (its thread, its case chat, a notice on the
+ * file) is pictured with the main applicant's face, their initials when they
+ * have no photo (App\Support\Cip\ApplicantFace), never the sender's: the
+ * reader knows the file by the family. Only a one-on-one conversation shows
+ * the person who wrote.
  *
  * Tapping it opens the conversation (a CIP thread's group chat, the email);
  * replying sends a message there, or an email back (NotificationReply).
@@ -61,7 +68,7 @@ final class MessagePush
             'message' => $d['kind'] === 'email' ? $d['reply']['message'] : null,
             'sender' => $d['sender'],
             'name' => $d['name'],
-            'photo' => self::signedPhoto($d['photo']),
+            'photo' => self::senderPicture($d),
             'group' => $d['group'],
             'groupPhoto' => self::signedGroupPhoto($d),
             'title' => $d['title'],
@@ -142,7 +149,8 @@ final class MessagePush
             'url' => $actionUrl,
             'photo' => self::string($actor['avatar'] ?? null),
             'groupConversation' => $isGroup ? $conversation : null,
-            'clientPhoto' => null,
+            // An application's case chat shows the applicant, not the sender.
+            'application' => $isGroup ? self::caseApplication($conversation) : null,
             'reply' => ['kind' => 'message', 'conversation' => $conversation],
         ];
     }
@@ -180,7 +188,7 @@ final class MessagePush
             'url' => $actionUrl,
             'photo' => self::string($notification['image'] ?? null),
             'groupConversation' => null,
-            'clientPhoto' => null,
+            'application' => null,
             'reply' => ['kind' => 'email', 'message' => $message],
         ];
     }
@@ -223,7 +231,7 @@ final class MessagePush
             'url' => $chat ? '/social/messages?conversation='.$chat : $actionUrl,
             'photo' => self::string($actor['avatar'] ?? null),
             'groupConversation' => $chat,
-            'clientPhoto' => self::clientPhoto($application),
+            'application' => CipApplication::query()->where('uuid', $application)->first(),
             'reply' => ['kind' => 'cip', 'application' => $application, 'lane' => $lane],
         ];
     }
@@ -273,35 +281,82 @@ final class MessagePush
             'url' => $actionUrl,
             'photo' => self::string($actor['avatar'] ?? null),
             'groupConversation' => null,
-            'clientPhoto' => null,
+            // A notice about a file shows the applicant's face, not the
+            // officer's who moved it.
+            'application' => $subjectType === 'CipApplication' && is_numeric($subjectId)
+                ? CipApplication::query()->find((int) $subjectId)
+                : null,
             'reply' => null,
         ];
     }
 
     /**
-     * The picture the page shows: the group's (or client's) photo, else the sender's.
+     * The picture the page shows. Anything about an application: the main
+     * applicant's face (ApplicantFace). Otherwise the group's photo, else
+     * the sender's.
      *
      * @param  array<string, mixed>  $d
      */
     private static function pagePicture(array $d): ?string
     {
+        if ($d['application'] instanceof CipApplication) {
+            return ApplicantFace::photoUrl($d['application']) ?? ApplicantFace::initialsUrl($d['application']);
+        }
+
         $group = self::groupWithPhoto($d['groupConversation']);
         if ($group) {
             return MessagingPresenter::groupPhotoUrl($group);
         }
 
-        return $d['clientPhoto'] ?? $d['photo'];
+        return $d['photo'];
     }
 
-    /** @param  array<string, mixed>  $d */
+    /**
+     * The phone's big picture: the applicant for anything about an
+     * application, else a group's own photo. Null leaves the sender's.
+     *
+     * @param  array<string, mixed>  $d
+     */
     private static function signedGroupPhoto(array $d): ?string
     {
+        if ($d['application'] instanceof CipApplication) {
+            return self::applicantPicture($d['application']);
+        }
+
         $group = self::groupWithPhoto($d['groupConversation']);
         if ($group) {
             return URL::temporarySignedRoute('messaging.group-photo.push', now()->addDays(self::PHOTO_DAYS), ['uuid' => $group->uuid]);
         }
 
-        return self::signedPhoto($d['clientPhoto']);
+        return null;
+    }
+
+    /**
+     * The sender's picture on the phone. A notice about an application has
+     * no conversation to draw, so the phone uses this one as the picture:
+     * it is the applicant's face, not the officer's.
+     *
+     * @param  array<string, mixed>  $d
+     */
+    private static function senderPicture(array $d): ?string
+    {
+        if ($d['kind'] === 'activity' && $d['application'] instanceof CipApplication) {
+            return self::applicantPicture($d['application']);
+        }
+
+        return self::signedPhoto($d['photo']);
+    }
+
+    /** The applicant's photo as a link a phone can fetch, else their initials. */
+    private static function applicantPicture(CipApplication $application): string
+    {
+        return self::signedPhoto(ApplicantFace::photoUrl($application)) ?? ApplicantFace::initialsUrl($application);
+    }
+
+    /** The application a group conversation is the case chat for, if any. */
+    private static function caseApplication(string $uuid): ?CipApplication
+    {
+        return Conversation::query()->where('uuid', $uuid)->first()?->caseApplication();
     }
 
     private static function groupWithPhoto(?string $uuid): ?Conversation
@@ -325,20 +380,6 @@ final class MessagePush
             'cip' => URL::temporarySignedRoute('cip.push-reply', $until, ['application' => $reply['application'], 'user' => $recipient->id, 'lane' => $reply['lane']]),
             default => URL::temporarySignedRoute('messaging.push-reply', $until, ['conversation' => $reply['conversation'], 'user' => $recipient->id]),
         };
-    }
-
-    /**
-     * The client's own photo for a file's thread. Never the passport portrait:
-     * a lock screen is no place for it.
-     */
-    private static function clientPhoto(string $application): ?string
-    {
-        $client = CipApplication::query()->where('uuid', $application)->with('client.user')->first()?->client;
-        if (! $client) {
-            return null;
-        }
-
-        return self::string($client->photo_url ?: ($client->hasLiveLogin() ? $client->user?->photoUrl() : null));
     }
 
     /** A link a phone can fetch without signing in, or null to draw initials. */

@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CipApplication;
+use App\Support\Cip\ApplicantFace;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -22,6 +25,21 @@ class AvatarController extends Controller
     public function forPush(Request $request, string $name): StreamedResponse
     {
         return $this->show($request, $name);
+    }
+
+    /**
+     * An applicant's initials as a picture, for a notification about their
+     * file when they have no photo (ApplicantFace). Signed and expiring, like
+     * the photo link, because the phone's extension cannot sign in.
+     */
+    public function applicantInitials(string $uuid): Response
+    {
+        $application = CipApplication::query()->where('uuid', $uuid)->firstOrFail();
+
+        return response(ApplicantFace::initialsPng($application), 200, [
+            'Content-Type' => 'image/png',
+            'Cache-Control' => 'private, max-age=86400',
+        ]);
     }
 
     public function show(Request $request, string $name): StreamedResponse
