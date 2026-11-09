@@ -293,18 +293,11 @@ class CipDdQueryTest extends TestCase
         $application = $this->inBackgroundCheck($staff);
         $application->forceFill(['status' => Status::PENDING_REVIEW])->save();
 
+        // A step further along the lane: no reason is asked for.
         $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/dd-query', [
                 'queryReceivedAt' => '2026-08-18',
                 'override' => true,
-            ])
-            ->assertStatus(422);
-
-        $this->actingAs($staff)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/dd-query', [
-                'queryReceivedAt' => '2026-08-18',
-                'override' => true,
-                'note' => 'Unit letter arrived before the portal caught up.',
             ])
             ->assertOk();
 

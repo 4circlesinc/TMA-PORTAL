@@ -374,20 +374,12 @@ class CipNonComplianceTest extends TestCase
         $application = $this->pending($staff);
         $application->forceFill(['status' => Status::NEW])->save();
 
-        // The typed confirmation on the screen becomes override + note here;
-        // the reason is demanded, the move goes through Engine::set.
+        // Off the map but further along the lane: the move goes through
+        // Engine::set, and as a step forward it asks for no reason.
         $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/query', [
                 'queryReceivedAt' => '2026-08-18',
                 'override' => true,
-            ])
-            ->assertStatus(422);
-
-        $this->actingAs($staff)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/query', [
-                'queryReceivedAt' => '2026-08-18',
-                'override' => true,
-                'note' => 'Unit letter arrived before the portal caught up.',
             ])
             ->assertOk();
 

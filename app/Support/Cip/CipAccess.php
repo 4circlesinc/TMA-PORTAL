@@ -304,6 +304,48 @@ class CipAccess
     }
 
     /**
+     * May this account read a document warning and carry on past it?
+     *
+     * Moving a file to Ready to Submit or the Unit submission while a paper
+     * is not Ready for submission was already open to administrators and
+     * CRO / Reviewing officers, but only by dressing the move up as an
+     * override with a typed reason. The warning is what they actually need:
+     * here is what is missing, continue anyway. Apply for COR and the dated
+     * post-approval steps hand a pack to the Unit, so carrying on past an
+     * unfinished one there is an administrator's call alone.
+     */
+    public static function canAcknowledgeBlockers(?User $user, string $to): bool
+    {
+        if (! self::canOverrideStatus($user)) {
+            return false;
+        }
+
+        if (in_array($to, [Status::READY_TO_SUBMIT, Status::PENDING_REVIEW], true)) {
+            return true;
+        }
+
+        return Role::isAdmin($user);
+    }
+
+    /**
+     * May this account type in or replace the Unit's CIP number at any stage?
+     *
+     * The number normally arrives with the submission verb. An administrator
+     * may enter it whenever it turns up — before the file reached Pending
+     * Review, on a file brought in from elsewhere, on one whose submission
+     * was recorded without it. Correcting a number that is already on the
+     * file stays with the compliance officers who record submissions.
+     */
+    public static function canAssignCipNumber(?User $user): bool
+    {
+        if ($user === null || ! self::enabled()) {
+            return false;
+        }
+
+        return Role::isAdmin($user);
+    }
+
+    /**
      * May this account hand a filed application to a different service provider?
      *
      * Administrators only. The move reparents the client folder and cuts the

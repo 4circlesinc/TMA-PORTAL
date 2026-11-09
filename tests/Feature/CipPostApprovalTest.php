@@ -857,6 +857,55 @@ class CipPostApprovalTest extends TestCase
         });
     }
 
+    public function test_the_updates_required_button_opens_the_line_to_upload_again(): void
+    {
+        Mail::fake();
+        $staff = $this->staff();
+        [$application, $person, $oath] = $this->corFile($staff);
+
+        DocumentSlots::fill(
+            $person,
+            CorRequirements::OATH_OF_ALLEGIANCE,
+            UploadedFile::fake()->create('oath.pdf', 40, 'application/pdf'),
+            $staff,
+        );
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/documents/'.$oath->uuid.'/request-changes', [
+                'comment' => 'The notary stamp is not legible.',
+            ])
+            ->assertOk();
+
+        // The checklist line on the person's tab, where Upload is, not the
+        // Documents file browser.
+        $expected = 'tab=applicant&doc='.$oath->uuid;
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($expected) {
+            return str_contains((string) $mail->subjectLine, 'UPDATE REQUIRED')
+                && ($mail->payload['button']['label'] ?? null) === 'Upload updated documents'
+                && str_contains((string) ($mail->payload['button']['url'] ?? ''), $expected);
+        });
+    }
+
+    public function test_a_stage_that_asks_for_documents_opens_the_checklist(): void
+    {
+        Mail::fake();
+        $this->seedCor();
+
+        $staff = $this->staff();
+        $application = $this->granted($staff);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/post-approval')
+            ->assertOk();
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) {
+            return str_contains((string) $mail->subjectLine, 'POST APPROVAL')
+                && ($mail->payload['button']['label'] ?? null) === 'Upload documents'
+                && str_contains((string) ($mail->payload['button']['url'] ?? ''), '?tab=applicant');
+        });
+    }
+
     public function test_approving_every_cor_document_moves_the_file_to_apply_for_cor(): void
     {
         Mail::fake();
@@ -1017,34 +1066,55 @@ class CipPostApprovalTest extends TestCase
     }
 
     /**
-     * Apply for COR says every document is Ready for submission, for an
-     * administrator as for anyone.
+     * Apply for COR says every document is Ready for submission. Anyone who
+     * moves a file there while that is untrue is shown what is missing; only
+     * an administrator may then acknowledge it and carry on.
      *
-     * The dated steps after it already refuse an unfinished pack whoever
-     * asks. An override straight to Apply for COR was the one way left to
-     * stand a file on that claim while it was untrue.
+     * A CRO / Reviewing officer is still refused outright, and is not offered
+     * the row. The administrator's move keeps the list on the audit row.
      */
-    public function test_apply_for_cor_cannot_be_reached_by_override_while_documents_are_outstanding(): void
+    public function test_apply_for_cor_warns_an_administrator_of_outstanding_documents_and_lets_them_continue(): void
     {
         Mail::fake();
         $staff = $this->staff();
         [$application] = $this->corFile($staff);
+        $officer = $this->staff(Role::REVIEWING_OFFICER);
 
         $this->assertNotContains(Status::APPLY_FOR_COR, Engine::availableTransitions($application->fresh(), $staff));
-        $this->assertNotContains(Status::APPLY_FOR_COR, Engine::availableOverrides($application->fresh(), $staff));
+        $this->assertContains(Status::APPLY_FOR_COR, Engine::availableOverrides($application->fresh(), $staff));
+        $this->assertNotContains(Status::APPLY_FOR_COR, Engine::availableOverrides($application->fresh(), $officer));
 
         $refused = $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::APPLY_FOR_COR,
-                'note' => 'The provider says the papers are on their way.',
             ])
-            ->assertStatus(422);
+            ->assertStatus(422)
+            ->assertJsonPath('canAcknowledge', true);
         $message = $refused->json('message');
 
         $this->assertStringContainsString('Ready for submission', $message);
         // Which ones, for the dialog: the Oath is one of the COR papers owed.
         $this->assertContains('Oath of Allegiance', array_column($refused->json('blockers'), 'label'));
         $this->assertSame(Status::POST_APPROVAL, $application->fresh()->status);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::APPLY_FOR_COR,
+                'acknowledge' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::APPLY_FOR_COR);
+
+        $event = CipEvent::query()
+            ->where('application_id', $application->id)
+            ->where('action', CipEvent::ACTION_STATUS_CHANGED)
+            ->latest('id')
+            ->first();
+        $this->assertSame(Status::APPLY_FOR_COR, $event->to_status);
+        $this->assertNotEmpty($event->meta['acknowledgedBlockers'] ?? []);
+        $this->assertTrue(collect($event->meta['acknowledgedBlockers'])
+            ->contains(fn (string $line) => str_contains($line, 'Oath of Allegiance')));
+        $application->forceFill(['status' => Status::POST_APPROVAL])->save();
 
         // Pulling a file BACK is untouched: that is what an override is for.
         $this->assertContains(Status::POST_APPROVAL, Engine::availableOverrides(
@@ -1390,6 +1460,87 @@ class CipPostApprovalTest extends TestCase
                 && $mail->attachment !== null
                 && $mail->attachment->name === 'certificate.pdf';
         });
+    }
+
+    public function test_a_certificate_added_when_the_cor_date_is_corrected_is_emailed(): void
+    {
+        Mail::fake();
+
+        $staff = $this->staff();
+        [$application] = $this->corFile($staff);
+        $this->fileRequiredCor($application, $staff);
+        $this->approveRequiredCor($application, $staff);
+        $contact = $this->contactOn($application, $staff);
+        Confirmation::confirm($application->fresh(), $contact);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                'stage' => Stages::COR_SUBMITTED,
+                'date' => '2026-08-20',
+            ])
+            ->assertOk();
+
+        // Recorded first without the certificate…
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                'stage' => Stages::COR_RECEIVED,
+                'date' => '2026-08-21',
+                'corNumber' => 'COR-12',
+            ])
+            ->assertOk();
+        $this->assertSame(Status::COR_RECEIVED, $application->fresh()->status);
+
+        Mail::fake();
+
+        // …then pressed again with it, asked to be emailed. The file stands
+        // still, but the certificate must still reach the provider.
+        $this->actingAs($staff)->post('/portal/cip/applications/'.$application->uuid.'/stage', [
+            'stage' => Stages::COR_RECEIVED,
+            'date' => '2026-08-22',
+            'corNumber' => 'COR-12',
+            'emailCertificate' => '1',
+            'attachment' => UploadedFile::fake()->createWithContent('certificate.pdf', '%PDF-1.4 certificate'),
+        ], [
+            'Accept' => 'application/json',
+            'X-Requested-With' => 'XMLHttpRequest',
+        ])->assertOk();
+
+        $this->assertSame(Status::COR_RECEIVED, $application->fresh()->status);
+        $this->assertSame(1, FileItem::query()->where('name', 'certificate.pdf')->count());
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($contact) {
+            return $mail->hasTo($contact->email)
+                && str_contains((string) $mail->subjectLine, 'COR RECEIVED')
+                && $mail->attachment !== null
+                && $mail->attachment->name === 'certificate.pdf';
+        });
+    }
+
+    public function test_correcting_a_stage_date_alone_sends_no_second_notice(): void
+    {
+        Mail::fake();
+
+        $staff = $this->staff();
+        [$application] = $this->corFile($staff);
+        $this->fileRequiredCor($application, $staff);
+        $this->approveRequiredCor($application, $staff);
+        Confirmation::confirm($application->fresh(), $this->contactOn($application, $staff));
+
+        foreach (['2026-08-20', '2026-08-23'] as $date) {
+            if ($date === '2026-08-23') {
+                Mail::fake();
+            }
+
+            $this->actingAs($staff)
+                ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
+                    'stage' => Stages::COR_SUBMITTED,
+                    'date' => $date,
+                ])
+                ->assertOk();
+        }
+
+        $this->assertSame(Status::PENDING_COR, $application->fresh()->status);
+        Mail::assertNothingQueued();
     }
 
     public function test_a_cor_certificate_stays_off_the_email_unless_the_user_sends_it(): void
@@ -3066,13 +3217,15 @@ class CipPostApprovalTest extends TestCase
 
         Mail::fake();
 
-        // Listed as an override, so it is taken like one: not without a reason.
-        $this->actingAs($staff)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', ['status' => Status::CLOSED])
-            ->assertStatus(422);
-        $this->assertSame(Status::POST_DENIED, $application->fresh()->status);
+        // Closing a refusal is the lane's last step forward: it is offered
+        // as one, not as an override.
+        $this->assertContains(Status::CLOSED, Engine::availableTransitions($application->fresh(), $staff));
+        // Nor is the approval lane a step "forward" from a refusal: going
+        // there undoes the outcome, which stays an override with a reason.
+        $choices = collect(Engine::overrideChoices($application->fresh(), $staff));
+        $this->assertFalse($choices->firstWhere('value', Status::APPLY_FOR_COR)['forward'] ?? false);
 
-        // And not by somebody who may not move the file at all.
+        // Not by somebody who may not move the file at all.
         $this->actingAs($this->contactOn($application, $staff))
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::CLOSED, 'note' => 'Please close this.',

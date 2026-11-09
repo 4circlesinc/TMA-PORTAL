@@ -2451,7 +2451,11 @@
 
     window.TMAPortalLightbox.open(
       viewable.map(function (i) {
-        return { url: i.url, name: i.name, mime: i.mime, size: i.size };
+        return {
+          url: i.url, name: i.name, mime: i.mime, size: i.size,
+          downloadUrl: attachmentDownloadUrl(i),
+          saveAttachment: i.id ? { kind: 'messaging', id: i.id } : null,
+        };
       }),
       target < 0 ? 0 : target
     );
@@ -3750,8 +3754,20 @@
    * icon plus name and size, the File Library's icons, not a second set.
    * ---------------------------------------------------------------- */
 
+  /* Where a file came down from, as a download rather than a tab. */
+  function attachmentDownloadUrl(attachment) {
+    var url = (attachment && attachment.url) || '';
+    if (!url) return '';
+
+    return url + (url.indexOf('?') === -1 ? '?' : '&') + 'download=1';
+  }
+
   function renderAttachment(msg, attachment) {
-    var open = ' data-messages-attachment="' + esc(attachment.id) + '"';
+    // Every kind carries its id, so a right-click on it can offer that file's
+    // Download and Save to Application Folder — videos and audio included,
+    // which play in place and have no "open" of their own.
+    var open = ' data-messages-attachment="' + esc(attachment.id) + '" data-messages-attachment-id="' + esc(attachment.id) + '"';
+    var tag = ' data-messages-attachment-id="' + esc(attachment.id) + '"';
 
     if (attachment.kind === 'image') {
       // Reserve the right box from the stored dimensions so the thread doesn't
@@ -3771,7 +3787,7 @@
 
     if (attachment.kind === 'video') {
       return (
-        '<div class="tma-dash__messages-attachment tma-dash__messages-attachment--video">' +
+        '<div class="tma-dash__messages-attachment tma-dash__messages-attachment--video"' + tag + '>' +
         '<video src="' + esc(attachment.url) + '" controls preload="metadata" playsinline></video>' +
         '</div>'
       );
@@ -3783,7 +3799,7 @@
 
     if (attachment.kind === 'audio') {
       return (
-        '<div class="tma-dash__messages-attachment tma-dash__messages-attachment--audio">' +
+        '<div class="tma-dash__messages-attachment tma-dash__messages-attachment--audio"' + tag + '>' +
         '<audio src="' + esc(attachment.url) + '" controls preload="metadata"></audio>' +
         '<span class="tma-dash__messages-attachment-name">' + esc(attachment.name) + '</span>' +
         '</div>'
@@ -3833,6 +3849,8 @@
           mime: a.mime,
           size: a.size,
           url: a.url,
+          downloadUrl: attachmentDownloadUrl(a),
+          saveAttachment: { kind: 'messaging', id: a.id },
         });
       });
     });
@@ -4540,10 +4558,9 @@
     var thread = state.selectedId ? findThread(state.selectedId) : null;
     if (!thread || !thread.caseFile || state.editing || state.recording) return '';
 
+    // The two choices name who reads the message; Messages carries no line
+    // under them spelling it out (the application's own thread still does).
     var lane = caseLane(state, state.selectedId);
-    var hint = lane === 'internal'
-      ? 'Only staff can see this. It stays off the service provider’s side.'
-      : 'The service provider can see this, on the file and in Messages.';
 
     function option(value, label) {
       return (
@@ -4561,7 +4578,6 @@
       option('internal', 'Internal') +
       option('provider', 'Service provider') +
       '</div>' +
-      '<p class="tma-dash__messages-composer-lane-hint" data-messages-case-lane-hint>' + esc(hint) + '</p>' +
       '</div>'
     );
   }
@@ -4764,12 +4780,6 @@
         if (!state.selectedId) return;
         if (!state.caseLaneById) state.caseLaneById = {};
         state.caseLaneById[state.selectedId] = laneInput.value;
-        var hint = composer.querySelector('[data-messages-case-lane-hint]');
-        if (hint) {
-          hint.textContent = laneInput.value === 'internal'
-            ? 'Only staff can see this. It stays off the service provider’s side.'
-            : 'The service provider can see this, on the file and in Messages.';
-        }
       });
     });
 
@@ -7785,9 +7795,11 @@
    */
   function applyPresence(payload, render) {
     var changed = false;
-    var online = payload.status
-      ? payload.status !== 'offline'
-      : !!payload.online;
+    // Said outright when the event carries it: a chosen status such as In
+    // Office outlives the connection, so "not offline" is not "online".
+    var online = typeof payload.online === 'boolean'
+      ? payload.online
+      : (payload.status ? payload.status !== 'offline' : false);
 
     (STORE.threads || []).forEach(function (row) {
       if (row.counterpartId && row.counterpartId === payload.userId) {
@@ -7800,6 +7812,10 @@
             statusMessage: payload.message,
             statusIcon: payload.icon,
           };
+          if (!online) {
+            row.presence.lastSeenAt = payload.lastSeenAt || null;
+            row.presence.lastSeen = payload.lastSeenLabel || 'Last seen recently';
+          }
         } else {
           row.presence = online
             ? { online: true, status: 'online', statusLabel: 'Online' }
@@ -9963,7 +9979,11 @@
       })
       .map(function (i, n) {
         if (i.id === attachmentId) index = n;
-        return { name: i.name, mime: i.mime, size: i.size, url: i.url };
+        return {
+          name: i.name, mime: i.mime, size: i.size, url: i.url,
+          downloadUrl: attachmentDownloadUrl(i),
+          saveAttachment: i.id ? { kind: 'messaging', id: i.id } : null,
+        };
       });
 
     if (all.length && window.TMAPortalLightbox) {
@@ -10699,7 +10719,9 @@
           el.classList.remove('is-highlighted', 'is-actions-open');
         });
         row.classList.add('is-highlighted', 'is-actions-open');
-        openMessageMenu(root, state, render, row, messageId, { x: e.clientX, y: e.clientY });
+        var onFile = e.target.closest('[data-messages-attachment-id]');
+        openMessageMenu(root, state, render, row, messageId, { x: e.clientX, y: e.clientY },
+          onFile ? onFile.getAttribute('data-messages-attachment-id') : null);
       });
 
       var pressTimer = null;
@@ -11463,11 +11485,21 @@
    * come from the server on each message (`msg.can`), never from hiding
    * buttons client-side alone.
    */
-  function openMessageMenu(root, state, render, anchor, messageId, position) {
+  function openMessageMenu(root, state, render, anchor, messageId, position, attachmentId) {
     closeMessageMenu();
 
     var msg = findMessageById(state.selectedId, messageId);
     if (!msg || msg.deleted) return;
+
+    /*
+     * The files on this message: the one right-clicked, or every one when
+     * the menu was opened on the message. Each can be downloaded, or filed
+     * straight into an applicant's folder without a trip through the
+     * computer's Downloads.
+     */
+    var files = (msg.attachments || []).filter(function (a) {
+      return a && a.url && (!attachmentId || a.id === attachmentId);
+    });
 
     // Words of this message already highlighted, read before the menu's own
     // tap can clear them.
@@ -11487,6 +11519,17 @@
       items.push({ action: 'copy', label: picked ? 'Copy selection' : 'Copy text' });
       items.push({ action: 'select', label: 'Select text' });
       items.push({ action: 'translate', label: 'Translate' });
+    }
+    if (files.length === 1) {
+      items.push({ action: 'download', label: 'Download' });
+      if (window.TMASaveToFolder) items.push({ action: 'save-folder', label: 'Save to Application Folder' });
+    } else if (files.length > 1) {
+      items.push({ action: 'download', label: 'Download all (' + files.length + ')' });
+      if (window.TMASaveToFolder) {
+        files.slice(0, 6).forEach(function (f, i) {
+          items.push({ action: 'save-folder:' + i, label: 'Save ' + f.name + ' to Application Folder' });
+        });
+      }
     }
     items.push({ action: 'pin', label: msg.starred ? 'Unpin message' : 'Pin message' });
     if (msg.can && msg.can.edit) items.push({ action: 'edit', label: 'Edit' });
@@ -11549,6 +11592,13 @@
         else if (action === 'forward') forwardMessage(root, state, render, msg);
         else if (action === 'pin') toggleMessagePin(root, state, render, msg);
         else if (action === 'translate') translateMessage(root, state, render, msg);
+        else if (action === 'download') downloadAttachments(files);
+        else if (action === 'save-folder' || action.indexOf('save-folder:') === 0) {
+          var which = files[parseInt(action.split(':')[1] || '0', 10) || 0];
+          if (which && window.TMASaveToFolder) {
+            window.TMASaveToFolder.open({ kind: 'messaging', id: which.id, name: which.name });
+          }
+        }
       });
     });
 
@@ -11556,6 +11606,27 @@
     setTimeout(function () {
       document.addEventListener('click', closeMessageMenuOnce, true);
     }, 0);
+  }
+
+  /*
+   * Save files to the computer. A link with `download` per file, fetched as
+   * an attachment (?download=1) so a photo or a video is saved rather than
+   * opened, in the desktop and phone apps as in a browser. Staggered: a
+   * browser asked for several downloads at once drops all but the first.
+   */
+  function downloadAttachments(files) {
+    (files || []).forEach(function (file, i) {
+      setTimeout(function () {
+        var a = document.createElement('a');
+        a.href = attachmentDownloadUrl(file);
+        a.download = file.name || '';
+        a.rel = 'noopener';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () { a.remove(); }, 1000);
+      }, i * 350);
+    });
   }
 
   /*
@@ -11868,6 +11939,25 @@
       window.addEventListener('focus', function () {
         if (document.hidden || !root.isConnected) return;
         refreshTabCounts(root, state, render);
+      });
+    }
+
+    /*
+     * The last open page closing says so, so the person turns grey within
+     * the minute rather than after their whole lease. A reload sends this
+     * too; the server only shortens the lease, and the page that comes
+     * straight back renews it. Another tab still open keeps quiet.
+     */
+    if (!window._tmaPresenceLeavingBound) {
+      window._tmaPresenceLeavingBound = true;
+      window.addEventListener('pagehide', function (e) {
+        if (!navigator.sendBeacon || (e && e.persisted)) return;
+        var rt = window.TMAMessagingRealtime;
+        if (rt && rt.hasOtherTab && rt.hasOtherTab()) return;
+        var form = new FormData();
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        form.append('_token', meta ? meta.getAttribute('content') : '');
+        try { navigator.sendBeacon('/portal/messaging/presence/leaving', form); } catch (err) { /* ignore */ }
       });
     }
 

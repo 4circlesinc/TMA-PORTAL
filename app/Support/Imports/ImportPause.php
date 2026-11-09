@@ -175,6 +175,7 @@ class ImportPause
             ->orderBy('id')
             ->get();
         $counts = self::itemCounts($libraries->pluck('id'));
+        $failures = self::failureSamples($libraries->pluck('id'));
 
         $rows = [];
 
@@ -201,7 +202,7 @@ class ImportPause
             'paused' => self::onedrive(),
             'state' => $driveLine['state'],
             'progress' => $driveLine['progress'],
-        ];
+        ] + self::failureFields($drives->pluck('id'), $counts, $failures);
 
         foreach ($libraries->where('drive_kind', '!=', 'onedrive') as $connection) {
             $name = $connection->folder?->name
@@ -217,10 +218,58 @@ class ImportPause
                 'paused' => self::library((string) $connection->uuid),
                 'state' => $line['state'],
                 'progress' => $line['progress'],
-            ];
+            ] + self::failureFields(collect([$connection->id]), $counts, $failures);
         }
 
         return $rows;
+    }
+
+    /** How many items the sweep could not sync, and the newest few of them. */
+    public const FAILURE_SAMPLE = 5;
+
+    /**
+     * Items that failed on these connections, by connection: the files
+     * Background Operations names under a source that "could not sync".
+     *
+     * @param  Collection<int, int>  $ids
+     * @return Collection<int, Collection<int, SharePointItem>>
+     */
+    private static function failureSamples(Collection $ids): Collection
+    {
+        if ($ids->isEmpty()) {
+            return collect();
+        }
+
+        return SharePointItem::query()
+            ->whereIn('connection_id', $ids)
+            ->where('sync_status', SharePointItem::FAILED)
+            ->orderByDesc('updated_at')
+            ->limit(200)
+            ->get(['connection_id', 'name', 'last_error', 'failure_count'])
+            ->groupBy(fn (SharePointItem $item) => (int) $item->connection_id);
+    }
+
+    /**
+     * @param  Collection<int, int>  $ids
+     * @param  Collection<int, object>  $counts
+     * @param  Collection<int, Collection<int, SharePointItem>>  $failures
+     * @return array{failedItems: int, failures: list<array{name: string, error: string}>}
+     */
+    private static function failureFields(Collection $ids, Collection $counts, Collection $failures): array
+    {
+        $failed = $ids->sum(fn (int $id) => (int) ($counts->get($id)->failed ?? 0));
+
+        $sample = $ids
+            ->flatMap(fn (int $id) => $failures->get($id, collect()))
+            ->take(self::FAILURE_SAMPLE)
+            ->map(fn (SharePointItem $item) => [
+                'name' => (string) ($item->name ?: 'Unnamed item'),
+                'error' => trim((string) $item->last_error),
+            ])
+            ->values()
+            ->all();
+
+        return ['failedItems' => $failed, 'failures' => $sample];
     }
 
     /**
@@ -235,7 +284,12 @@ class ImportPause
 
         return SharePointItem::query()
             ->whereIn('connection_id', $ids)
-            ->selectRaw('connection_id, count(*) as items, coalesce(sum(case when item_type = ? then child_count else 0 end), 0) as folder_children', ['folder'])
+            ->selectRaw(
+                'connection_id, count(*) as items, '.
+                'coalesce(sum(case when item_type = ? then child_count else 0 end), 0) as folder_children, '.
+                'coalesce(sum(case when sync_status = ? then 1 else 0 end), 0) as failed',
+                ['folder', SharePointItem::FAILED]
+            )
             ->groupBy('connection_id')
             ->get()
             ->keyBy(fn ($row) => (int) $row->connection_id);

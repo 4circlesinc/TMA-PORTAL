@@ -7,6 +7,7 @@ use App\Jobs\BackfillMailbox;
 use App\Jobs\ResolveSenderPhoto;
 use App\Jobs\SyncMailbox;
 use App\Models\ConnectedAccount;
+use App\Models\Folder;
 use App\Models\MailAttachment;
 use App\Models\MailDraft;
 use App\Models\MailLabel;
@@ -1973,6 +1974,50 @@ class MailController extends Controller
     }
 
     /** Streams attachment bytes straight from the provider. */
+    /**
+     * Save a copy of an email attachment into a folder of the document
+     * library. The bytes are fetched from the mailbox the same way a
+     * download is, and filed through the same checks an upload gets.
+     */
+    public function saveAttachment(Request $request, string $uuid): JsonResponse
+    {
+        $attachment = MailAttachment::where('uuid', $uuid)->firstOrFail();
+        $message = $attachment->message;
+
+        abort_unless($message && $message->user_id === $request->user()->id, 404);
+
+        $data = $request->validate(['folderId' => ['required', 'string', 'max:64']]);
+        $folder = Folder::query()->where('uuid', $data['folderId'])->firstOrFail();
+
+        try {
+            $bytes = Mailbox::provider($message->account)
+                ->getAttachment($message->remote_id, $attachment->remote_id);
+        } catch (\Throwable $e) {
+            logger()->error('mail: attachment save failed', [
+                'attachment_uuid' => $attachment->uuid,
+                'error' => $e->getMessage(),
+            ]);
+
+            abort(502, 'This attachment could not be fetched from the mail provider.');
+        }
+
+        $name = (string) ($attachment->name ?: 'Attachment');
+        $scratch = \App\Support\Files\Vault::scratchFromBytes((string) $bytes, pathinfo($name, PATHINFO_EXTENSION));
+
+        try {
+            $file = \App\Support\Files\SaveToFolder::fromPath($request->user(), $folder, $scratch, $name, 'mail');
+        } catch (\App\Support\Files\FileValidationException $e) {
+            abort(422, $e->getMessage());
+        } finally {
+            \App\Support\Files\Vault::cleanupLocalCopy($scratch);
+        }
+
+        return response()->json([
+            'file' => ['id' => $file->uuid, 'name' => $file->name],
+            'folder' => ['id' => $folder->uuid, 'name' => $folder->name],
+        ], 201);
+    }
+
     public function attachment(Request $request, string $uuid): SymfonyResponse
     {
         $attachment = MailAttachment::where('uuid', $uuid)->firstOrFail();

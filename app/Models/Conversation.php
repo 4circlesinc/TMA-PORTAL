@@ -84,6 +84,31 @@ class Conversation extends Model
         return $this->belongsTo(CipApplication::class);
     }
 
+    /**
+     * The application this conversation is the case chat for, if any.
+     *
+     * The one it was opened for, or, for a provider case that predates that
+     * link, the client's latest application. Anything else is not about an
+     * application and answers null.
+     */
+    public function caseApplication(): ?CipApplication
+    {
+        if ($this->cip_application_id) {
+            return $this->relationLoaded('cipApplication')
+                ? $this->cipApplication
+                : CipApplication::query()->find($this->cip_application_id);
+        }
+
+        if (! $this->isProviderCase() || ! $this->client_id) {
+            return null;
+        }
+
+        return CipApplication::query()
+            ->where('client_id', $this->client_id)
+            ->latest('id')
+            ->first();
+    }
+
     /** The shared case thread with the service provider about this applicant. */
     public function isProviderCase(): bool
     {

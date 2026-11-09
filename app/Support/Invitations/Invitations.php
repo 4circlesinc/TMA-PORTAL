@@ -382,7 +382,9 @@ final class Invitations
                 'message' => 'They now have access to '.$what.'.',
                 'subject' => $invitation,
                 'client' => $client,
-                'action_url' => $client ? Pages::application($client->uid) : '/users',
+                'action_url' => $client
+                    ? Pages::application($client->uid)
+                    : '/users?search='.rawurlencode((string) $user->email),
             ]);
         }
     }

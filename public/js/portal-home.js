@@ -2336,7 +2336,7 @@
         if (window.TMAPresence && window.TMAPresence.applyRemoteToPerson) {
           return window.TMAPresence.applyRemoteToPerson(person, p);
         }
-        person.online = p.status !== 'offline';
+        person.online = typeof p.online === 'boolean' ? p.online : p.status !== 'offline';
         person.statusLabel = p.label;
         return person;
       });

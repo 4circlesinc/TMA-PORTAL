@@ -5647,9 +5647,16 @@
         '<div class="tma-dash__email-attachment-tile-corner" aria-hidden="true"></div>' +
         '<div class="tma-dash__email-attachment-tile-hover">' +
         '<a class="tma-dash__email-attachment-tile-btn" href="' + esc(attachmentUrl(a, false)) + '" download="' + esc(a.name) + '"' +
-        ' aria-label="Download ' + esc(a.name) + '" data-email-attachment-download>' +
+        ' aria-label="Download ' + esc(a.name) + '" title="Download" data-email-attachment-download>' +
         '<img src="' + ICONS.ArrowLineDown + '" alt="">' +
         '</a>' +
+        // Straight into an applicant's folder, without downloading it first.
+        (window.TMASaveToFolder && a.id
+          ? '<button type="button" class="tma-dash__email-attachment-tile-btn" data-email-attachment-download' +
+            ' data-save-attachment="' + esc(a.id) + '" data-save-attachment-kind="mail" data-save-attachment-name="' + esc(a.name) + '"' +
+            ' aria-label="Save ' + esc(a.name) + ' to Application Folder" title="Save to Application Folder">' +
+            '<img src="images/icons/phosphor/FolderSimplePlus.svg" alt=""></button>'
+          : '') +
         '</div>' +
         '</div>' +
         '<div class="tma-dash__email-attachment-tile-bar">' +
@@ -5772,6 +5779,10 @@
         '<div class="tma-portal-lightbox__head-actions">' +
         '<a class="tma-portal-tool" data-lb-download href="' + esc(attachmentUrl(a, false)) + '" download="' + esc(a.name) + '">' +
         '<img src="' + ICONS.ArrowLineDown + '" alt="" width="16" height="16"><span>Download</span></a>' +
+        (window.TMASaveToFolder && a.id
+          ? '<button type="button" class="tma-portal-tool" data-mail-lb-save>' +
+            '<img src="images/icons/phosphor/FolderSimplePlus.svg" alt="" width="16" height="16"><span>Save to Application Folder</span></button>'
+          : '') +
         '<button type="button" class="tma-portal-tool tma-portal-tool--icon" data-lb-close aria-label="Close">' +
         '<img src="' + ICONS.X + '" alt="" width="16" height="16"></button>' +
         '</div></div>' +
@@ -5797,6 +5808,15 @@
 
     lb.addEventListener('click', function (e) {
       if (e.target.closest('[data-lb-close]')) { closeAttachmentLightbox(); return; }
+      if (e.target.closest('[data-mail-lb-save]')) {
+        var file = items[idx];
+        // The dialog would sit behind this viewer: put it away first.
+        closeAttachmentLightbox();
+        if (file && window.TMASaveToFolder) {
+          window.TMASaveToFolder.open({ kind: 'mail', id: file.id, name: file.name });
+        }
+        return;
+      }
       if (e.target.closest('[data-lb-prev]')) { go(-1); return; }
       if (e.target.closest('[data-lb-next]')) { go(1); return; }
       // Click-to-zoom for images: a simple toggle rather than full pinch/pan,

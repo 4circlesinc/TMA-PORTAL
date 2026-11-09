@@ -51,6 +51,17 @@ class UserStatusChanged implements ShouldBroadcastNow
             'expiresAt' => isset($this->status['expiresAt']) && $this->status['expiresAt']
                 ? $this->status['expiresAt']->toIso8601String()
                 : null,
+            /*
+             * Whether they are connected, said outright. The status is what
+             * they chose and outlives the connection — "In Office" stays
+             * "In Office" after the laptop closes — so a reader that worked
+             * "online" out of "status is not offline" kept them green for
+             * as long as the choice lasted.
+             */
+            'online' => (bool) ($this->status['online'] ?? ($this->status['status'] ?? null) !== 'offline'),
+            'lastSeenAt' => isset($this->status['lastSeenAt']) && $this->status['lastSeenAt']
+                ? $this->status['lastSeenAt']->toIso8601String()
+                : null,
         ];
     }
 }

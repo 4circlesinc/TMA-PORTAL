@@ -837,6 +837,67 @@ class Vault
         return $tmp;
     }
 
+    /**
+     * Plaintext bytes of something stored on a disk, as a scratch file.
+     *
+     * {@see localCopy()} for a library file; this is the same for bytes the
+     * library does not own yet — a chat attachment being saved into a
+     * folder. Always a scratch copy, never the stored path itself, so the
+     * caller may hand it to {@see store()} and then clean it up.
+     */
+    public static function scratchCopyOf(?string $diskName, string $path, string $ext = ''): ?string
+    {
+        $diskName = $diskName ?: self::diskName();
+        $disk = Storage::disk($diskName);
+        if ($path === '' || ! $disk->exists($path)) {
+            return null;
+        }
+
+        $tmpDir = self::tempRoot().'/tmp';
+        if (! is_dir($tmpDir)) {
+            @mkdir($tmpDir, 0775, true);
+        }
+        $tmp = $tmpDir.'/'.Str::uuid()->toString().($ext !== '' ? '.'.$ext : '');
+
+        $in = $disk->readStream($path);
+        if ($in === false || $in === null) {
+            return null;
+        }
+        $out = fopen($tmp, 'wb');
+        if ($out === false) {
+            fclose($in);
+
+            return null;
+        }
+        stream_copy_to_stream($in, $out);
+        fclose($in);
+        fclose($out);
+
+        if (Envelope::pathIsWrapped($tmp)) {
+            $plain = self::decryptToScratch($tmp);
+            @unlink($tmp);
+
+            return $plain;
+        }
+
+        return $tmp;
+    }
+
+    /** A scratch file holding these bytes, for content that arrives in memory. */
+    public static function scratchFromBytes(string $bytes, string $ext = ''): string
+    {
+        $tmpDir = self::tempRoot().'/tmp';
+        if (! is_dir($tmpDir)) {
+            @mkdir($tmpDir, 0775, true);
+        }
+        $tmp = $tmpDir.'/'.Str::uuid()->toString().($ext !== '' ? '.'.$ext : '');
+        if (file_put_contents($tmp, $bytes) === false) {
+            throw new FileValidationException('Storage unavailable, the file could not be saved.');
+        }
+
+        return $tmp;
+    }
+
     /** Delete a temp local copy (no-op for real local-disk paths). */
     public static function cleanupLocalCopy(?string $path): void
     {

@@ -225,4 +225,59 @@ class CipSubmissionTest extends TestCase
         $this->assertNull($application->fresh()->cip_number);
         $this->assertSame(0, CipEvent::where('action', CipEvent::ACTION_NUMBER_ASSIGNED)->count());
     }
+
+    /**
+     * An administrator may type the Unit's number in at any stage of the
+     * file, before the submission was ever recorded. The status does not
+     * move; the event trail says who entered it.
+     */
+    public function test_an_administrator_can_enter_a_cip_number_at_any_stage(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $application = Applications::create($this->provider($admin), $admin);
+        CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_MAIN_APPLICANT,
+            'first_name' => 'Chen',
+            'last_name' => 'Wei',
+        ]);
+        $this->assertSame(Status::NEW, $application->status);
+
+        $this->actingAs($admin)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->assertOk()
+            ->assertJsonPath('application.canAssignCipNumber', true);
+
+        $this->actingAs($admin)
+            ->patchJson('/portal/cip/applications/'.$application->uuid.'/cip-number', [
+                'cipNumber' => '10T1G99999P',
+            ])
+            ->assertOk()
+            ->assertJsonPath('application.cipNumber', '10T1G99999P')
+            ->assertJsonPath('application.status', Status::NEW);
+
+        $this->assertDatabaseHas('cip_events', [
+            'application_id' => $application->id,
+            'action' => CipEvent::ACTION_NUMBER_ASSIGNED,
+        ]);
+    }
+
+    /** The control is the administrator's alone. */
+    public function test_a_provider_contact_cannot_enter_a_cip_number(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $application = Applications::create($this->provider($admin), $admin);
+        $client = $this->user(Role::CLIENT, 'gil@galaxy.example', 'Gil Contact');
+
+        $this->assertFalse(CipAccess::canAssignCipNumber($client));
+        $this->assertFalse(Submission::mayCorrect($client));
+
+        $this->actingAs($client)
+            ->patchJson('/portal/cip/applications/'.$application->uuid.'/cip-number', [
+                'cipNumber' => '10T1G99999P',
+            ])
+            ->assertStatus(404);
+
+        $this->assertNull($application->fresh()->cip_number);
+    }
 }

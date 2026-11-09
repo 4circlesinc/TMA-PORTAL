@@ -587,6 +587,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
             ->name('applications.messages.share');
         Route::patch('/applications/{uuid}/messages/{message}', [CipThreadController::class, 'update'])
             ->name('applications.messages.update');
+        Route::delete('/applications/{uuid}/messages/{message}', [CipThreadController::class, 'destroy'])
+            ->name('applications.messages.destroy');
         // Multipart carries the files, and PHP only parses a body for POST —
         // so the update is posted with _method, the way every other form in
         // the portal that sends files does it.
@@ -1200,6 +1202,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/bulk', [MailController::class, 'bulk'])->name('bulk');
         Route::post('/hydrate-attachments', [MailController::class, 'hydrateAttachments'])->name('hydrate-attachments');
         Route::get('/attachments/{uuid}', [MailController::class, 'attachment'])->name('attachment');
+        Route::post('/attachments/{uuid}/save', [MailController::class, 'saveAttachment'])->name('attachment.save');
 
         // One conversation in its own browser / desktop window, rendered
         // server-side so a double-clicked message is readable immediately.
@@ -1466,6 +1469,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::patch('/groups/{uuid}/members/{userId}', [MessagingGroupController::class, 'updateMember'])->name('groups.members.update');
         Route::delete('/groups/{uuid}/members/{userId}', [MessagingGroupController::class, 'removeMember'])->name('groups.members.remove');
         Route::post('/heartbeat', [MessagingController::class, 'heartbeat'])->name('heartbeat');
+        // The last open page is closing: cut the lease short (sendBeacon).
+        Route::post('/presence/leaving', [MessagingController::class, 'leaving'])->name('presence.leaving');
         Route::get('/link-preview', [MessagingController::class, 'linkPreview'])->name('link-preview');
         // Grouped search across people, conversations, messages, files, links.
         Route::get('/search', [MessagingController::class, 'search'])->name('search');
@@ -1524,6 +1529,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::delete('/attachments/{uuid}', [MessagingController::class, 'destroyStagedAttachment'])->name('attachments.destroy');
 
         Route::get('/attachments/{uuid}', [MessagingAttachmentController::class, 'show'])->name('attachments.show');
+        // A copy into a document-library folder, without downloading it first.
+        Route::post('/attachments/{uuid}/save', [MessagingAttachmentController::class, 'save'])->name('attachments.save');
         Route::get('/attachments/{uuid}/thumb', [MessagingAttachmentController::class, 'thumb'])->name('attachments.thumb');
 
         /*

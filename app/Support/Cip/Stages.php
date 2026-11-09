@@ -4,11 +4,14 @@ namespace App\Support\Cip;
 
 use App\Models\CipApplication;
 use App\Models\CipEvent;
+use App\Models\FileItem;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * Date-driven hops after Apply for COR (brief section 6–section 12).
@@ -339,6 +342,7 @@ class Stages
         ?Carbon $date = null,
         ?string $corNumber = null,
         ?UploadedFile $certificate = null,
+        bool $acknowledged = false,
     ): CipApplication {
         $step = self::STEPS[$key] ?? null;
 
@@ -384,12 +388,26 @@ class Stages
          * requirements for owes nothing and may move, unless something
          * uploaded is still in Application review or Update required.
          */
+        /*
+         * An administrator is shown the same list and may carry on past it;
+         * what was missing goes on the audit row with the step.
+         */
+        $acknowledgedBlockers = [];
         if (in_array($key, [self::COR_SUBMITTED, self::NIC_SUBMITTED, self::PASSPORT_SUBMITTED], true)
             && ! Review::packageReady($application)) {
-            throw new NotReady(
+            $refusal = new NotReady(
                 'Every required document, and every document that has been uploaded, must be Ready for submission before this stage can be recorded.',
                 Review::blockerRows($application),
             );
+
+            if (! $acknowledged || ! CipAccess::canAcknowledgeBlockers($actor, $step['to'])) {
+                throw $refusal->acknowledgeableBy($actor, $step['to']);
+            }
+
+            $acknowledgedBlockers = array_values(array_map(
+                fn (array $row) => trim(($row['person'] ?? '').' — '.($row['label'] ?? '').' ('.($row['statusLabel'] ?? '').')', ' —'),
+                $refusal->blockers,
+            ));
         }
 
         $date ??= Carbon::now();
@@ -409,8 +427,9 @@ class Stages
             ));
         }
 
-        return DB::transaction(function () use ($application, $actor, $step, $date, $already, $key, $corNumber, $certificate) {
-            $stored = null;
+        $stored = null;
+
+        $application = DB::transaction(function () use ($application, $actor, $step, $date, $already, $key, $corNumber, $certificate, $acknowledgedBlockers, &$stored) {
             if ($key === self::COR_RECEIVED && $certificate !== null && $actor !== null) {
                 $stored = StatusAttachment::keep($application, $certificate, $actor);
             }
@@ -428,6 +447,9 @@ class Stages
                 'stage' => $key,
                 'date' => $date->toDateString(),
             ];
+            if ($acknowledgedBlockers !== []) {
+                $meta['acknowledgedBlockers'] = $acknowledgedBlockers;
+            }
 
             if (! $already) {
                 $notice = $meta;
@@ -441,5 +463,50 @@ class Stages
 
             return $application->refresh();
         });
+
+        if ($already && $actor !== null) {
+            self::sendFileOnCorrection($application, $actor, $step, $stored);
+        }
+
+        return $application;
+    }
+
+    /**
+     * A step recorded again, to correct its day, moves nothing and so sends
+     * no notice. When the dialog carried a file this time (the COR
+     * certificate added after the receipt was first recorded, say), that
+     * file was kept and never reached anybody. It goes out now, on the same
+     * notice the step sends, so an attachment is never silently left behind.
+     *
+     * @param  array<string, string>  $step
+     */
+    private static function sendFileOnCorrection(CipApplication $application, User $actor, array $step, ?FileItem $certificate): void
+    {
+        $file = $certificate ?? StatusAttachment::claimForNotice($application, $actor);
+        if ($file === null) {
+            return;
+        }
+
+        try {
+            DB::transaction(fn () => Notices::announce(
+                $application,
+                $step['to'],
+                $actor,
+                null,
+                $step['subject'] ?? null,
+                $file,
+                StatusCopies::take(),
+            ));
+
+            request()?->attributes->set('cip.status_notice_sent', true);
+            StatusAttachment::consumeClaim();
+        } catch (Throwable $e) {
+            // The day is recorded and the file is kept; only the email failed.
+            Log::error('CIP stage notice for an added file failed.', [
+                'application' => $application->getKey(),
+                'stage' => $step['to'],
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }

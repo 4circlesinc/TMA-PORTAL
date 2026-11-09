@@ -59,7 +59,9 @@ class RecordAuthEvent
                 'title' => $user->name.' requested access',
                 'message' => $user->email,
                 'subject' => $user,
-                'action_url' => '/users',
+                // The request itself, not the whole directory: the page
+                // opens filtered to this address (users.js, ?search=).
+                'action_url' => '/users?search='.rawurlencode((string) $user->email),
                 'dedupe_key' => 'account.pending:'.$user->id,
             ]);
             // …and tell the person who registered. They can't sign in yet, so

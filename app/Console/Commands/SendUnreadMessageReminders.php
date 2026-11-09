@@ -2,9 +2,11 @@
 
 namespace App\Console\Commands;
 
+use App\Models\CipApplication;
 use App\Models\ConversationParticipant;
 use App\Models\Message;
 use App\Models\User;
+use App\Support\Cip\Threads;
 use App\Support\Companies\NotificationEmail;
 use App\Support\Mail\Postcards;
 use App\Support\Messaging\MessagingPresenter;
@@ -95,18 +97,37 @@ class SendUnreadMessageReminders extends Command
         $wanted = NotificationEmail::wanted($user);
 
         if ($wanted) {
+            $application = $message->conversation?->caseApplication();
+
             Mail::to($user->email)->queue(Postcards::messageReminder(
                 $tier,
                 $message->sender?->name ?? 'A colleague',
                 $this->preview($message),
-                url('/social/messages'),
+                $this->linkFor($message, $application),
                 $this->groupLabel($message, $user),
+                $application?->displayNumber(),
             ));
         }
 
         $participant->forceFill(['reminder_tier' => $tier])->save();
 
         return $wanted;
+    }
+
+    /**
+     * Where "Read the message" goes: the application's Messages tab for a
+     * case chat, otherwise the conversation itself, never the bare inbox
+     * the reader would have to search.
+     */
+    private function linkFor(Message $message, ?CipApplication $application): string
+    {
+        if ($application !== null) {
+            return url(Threads::path($application));
+        }
+
+        $uuid = $message->conversation?->uuid;
+
+        return url($uuid ? '/social/messages?conversation='.rawurlencode($uuid) : '/social/messages');
     }
 
     private function tierFor(int $ageHours): int

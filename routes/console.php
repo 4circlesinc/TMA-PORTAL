@@ -161,6 +161,18 @@ Artisan::command('files:prune-presence', function () {
 Schedule::command('files:prune-presence')->everyThirtyMinutes();
 
 /*
+ * Who is online. Online is a heartbeat lease; one that lapses without a
+ * goodbye (a killed tab, a sleeping laptop, a phone off signal) is announced
+ * here, so every screen already showing that person green turns them grey
+ * instead of keeping the dot until it next reloads.
+ */
+Artisan::command('presence:expire', function () {
+    $this->info('Announced '.\App\Support\Messaging\PresenceService::expireLapsed().' lapsed presence(s) offline.');
+})->purpose('Announce people whose presence heartbeat lapsed as offline');
+
+Schedule::command('presence:expire')->everyMinute()->withoutOverlapping(5);
+
+/*
  * Each person's History retention choice (Settings → Privacy). Daily is
  * enough for a window measured in days, and it runs off-peak because it
  * touches every account.

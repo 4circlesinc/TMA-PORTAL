@@ -2,8 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\RetrySharePointFailures;
 use App\Jobs\SyncSharePointLibrary;
 use App\Models\SharePointConnection;
+use App\Models\SharePointItem;
 use App\Models\User;
 use App\Support\Imports\ImportPause;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -154,6 +156,84 @@ class BackgroundOperationsTest extends TestCase
             ->assertForbidden();
 
         Queue::assertNothingPushed();
+    }
+
+    private function item(SharePointConnection $lib, string $name, string $status, array $extra = []): SharePointItem
+    {
+        return SharePointItem::query()->create(array_merge([
+            'connection_id' => $lib->id,
+            'graph_item_id' => 'item-'.Str::random(10),
+            'item_type' => 'file',
+            'name' => $name,
+            'sync_status' => $status,
+        ], $extra));
+    }
+
+    /*
+     * Items a library could not sync used to show only as a card over every
+     * page. They are listed under their library here, named, with why.
+     */
+    public function test_items_that_could_not_sync_are_listed_under_their_library(): void
+    {
+        $admin = $this->user('Administrator');
+        $lib = $this->library($admin);
+        $this->item($lib, 'Passport scan.pdf', SharePointItem::FAILED, ['last_error' => 'Graph 504 Gateway Timeout', 'failure_count' => 6]);
+        $this->item($lib, 'Bank letter.pdf', SharePointItem::FAILED, ['last_error' => 'Item locked']);
+        $this->item($lib, 'Birth certificate.pdf', SharePointItem::SYNCED);
+
+        $targets = collect($this->actingAs($admin)->getJson('/admin/background-ops')
+            ->assertOk()
+            ->json('imports.targets'));
+        $row = $targets->firstWhere('id', 'library:'.$lib->uuid);
+
+        $this->assertSame(2, $row['failedItems']);
+        $this->assertEqualsCanonicalizing(
+            ['Passport scan.pdf', 'Bank letter.pdf'],
+            array_column($row['failures'], 'name')
+        );
+        $this->assertContains('Graph 504 Gateway Timeout', array_column($row['failures'], 'error'));
+        $this->assertSame(0, $targets->firstWhere('id', 'onedrive')['failedItems']);
+    }
+
+    public function test_try_again_hands_that_librarys_failed_items_back_to_the_retry_sweep(): void
+    {
+        Queue::fake();
+        $admin = $this->user('Administrator');
+        $lib = $this->library($admin);
+        $other = $this->library($admin);
+        $given = $this->item($lib, 'Passport scan.pdf', SharePointItem::FAILED, ['failure_count' => RetrySharePointFailures::MAX_ATTEMPTS]);
+        $fine = $this->item($lib, 'Birth certificate.pdf', SharePointItem::SYNCED, ['failure_count' => 2]);
+        $elsewhere = $this->item($other, 'Other.pdf', SharePointItem::FAILED, ['failure_count' => RetrySharePointFailures::MAX_ATTEMPTS]);
+
+        $this->actingAs($admin)
+            ->postJson('/admin/background-ops/imports-run', ['target' => 'library:'.$lib->uuid, 'retryFailed' => true])
+            ->assertOk()
+            ->assertJsonPath('retried', 1);
+
+        $given->refresh();
+        $this->assertSame(0, $given->failure_count);
+        $this->assertTrue($given->updated_at->lt(now()->subMinutes(30)), 'the sweep waits on updated_at, so it is moved back');
+        $this->assertSame(2, $fine->refresh()->failure_count);
+        $this->assertSame(RetrySharePointFailures::MAX_ATTEMPTS, $elsewhere->refresh()->failure_count);
+
+        Queue::assertPushed(RetrySharePointFailures::class);
+        Queue::assertPushed(SyncSharePointLibrary::class, fn ($job) => $job->connectionId === $lib->id);
+    }
+
+    public function test_running_an_import_without_try_again_leaves_failed_items_alone(): void
+    {
+        Queue::fake();
+        $admin = $this->user('Administrator');
+        $lib = $this->library($admin);
+        $failed = $this->item($lib, 'Passport scan.pdf', SharePointItem::FAILED, ['failure_count' => RetrySharePointFailures::MAX_ATTEMPTS]);
+
+        $this->actingAs($admin)
+            ->postJson('/admin/background-ops/imports-run', ['target' => 'library:'.$lib->uuid])
+            ->assertOk()
+            ->assertJsonPath('retried', 0);
+
+        $this->assertSame(RetrySharePointFailures::MAX_ATTEMPTS, $failed->refresh()->failure_count);
+        Queue::assertNotPushed(RetrySharePointFailures::class);
     }
 
     private function fakeGraphSite(): void

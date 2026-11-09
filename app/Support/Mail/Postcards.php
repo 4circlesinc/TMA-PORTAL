@@ -637,9 +637,17 @@ class Postcards
     /**
      * $tier: 1 (~1h), 2 (~20h), 3 (~24h, final).
      * $group is the conversation's name when the unread message is in a group.
+     * $application is the application number when the conversation is the
+     * case chat about one, so the reminder says what the message concerns.
      */
-    public static function messageReminder(int $tier, string $from, ?string $preview, string $url, ?string $group = null): Postcard
-    {
+    public static function messageReminder(
+        int $tier,
+        string $from,
+        ?string $preview,
+        string $url,
+        ?string $group = null,
+        ?string $application = null,
+    ): Postcard {
         $key = match ($tier) {
             2 => 'message-reminder-2',
             3 => 'message-reminder-3',
@@ -649,6 +657,7 @@ class Postcards
         return self::postcard($key, [
             'from' => $from,
             'group' => $group !== null && trim($group) !== '' ? $group : null,
+            'application' => $application !== null && trim($application) !== '' ? $application : null,
             'url' => $url,
         ], [
             'url' => $url,
@@ -717,6 +726,32 @@ class Postcards
             'provider' => $facts['provider'],
             'recipient' => self::firstName($recipientName),
         ];
+    }
+
+    /**
+     * Someone wrote about an application: in its Messages tab, or a file
+     * sent in the case chat that mirrors it.
+     *
+     * The subject says who wrote and which application, so the reader knows
+     * at a glance that this is about a file and not a general message. The
+     * button opens that application's Messages tab.
+     *
+     * @param  array{number:string, applicant:string, provider:string}  $facts
+     */
+    public static function cipMessage(array $facts, string $from, ?string $preview, string $url, ?string $recipientName = null): Postcard
+    {
+        return self::postcard('cip-message', self::cipVars($facts, $recipientName) + [
+            'from' => $from,
+            'url' => $url,
+        ], [
+            'url' => $url,
+            'quote' => $preview !== null && trim($preview) !== '' ? $preview : null,
+            'details' => [
+                ['Application', e($facts['number'])],
+                ['Applicant', e($facts['applicant'])],
+                ['From', e($from)],
+            ],
+        ]);
     }
 
     /**

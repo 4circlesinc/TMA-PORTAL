@@ -402,12 +402,14 @@ class CipReviewTest extends TestCase
     }
 
     /**
-     * The next step stays shut. The override does not.
+     * The next step stays shut. The warning does not.
      *
      * Every administrator and CRO / Reviewing officer can still move the
-     * file, with a reason, while a document is in Application review.
+     * file while a document is in Application review: the move is a step
+     * forward, so it is not an override, and the documents still in review
+     * are shown as a warning they may acknowledge and continue past.
      */
-    public function test_an_officer_may_override_to_ready_to_submit_while_a_document_is_still_in_review(): void
+    public function test_an_officer_may_continue_to_ready_to_submit_past_a_document_still_in_review(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
         $officer = $this->user(Role::REVIEWING_OFFICER, 'off@example.com', 'Otto Officer');
@@ -420,13 +422,39 @@ class CipReviewTest extends TestCase
         $this->assertContains(Status::READY_TO_SUBMIT, Engine::availableOverrides($fresh, $officer));
         $this->assertContains(Status::READY_TO_SUBMIT, Engine::availableOverrides($fresh, $admin));
 
+        $warned = $this->actingAs($officer)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::READY_TO_SUBMIT,
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('canAcknowledge', true);
+        $this->assertStringContainsString('Ready for submission', $warned->json('message'));
+        $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
+
         $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::READY_TO_SUBMIT,
-                'note' => 'The Unit already has this file.',
+                'acknowledge' => true,
             ])
             ->assertOk()
             ->assertJsonPath('application.status', Status::READY_TO_SUBMIT);
+    }
+
+    /**
+     * Skipping ahead is not an override: an administrator moving a file from
+     * New Applications straight to Assessment Feedback is asked for nothing.
+     */
+    public function test_a_forward_jump_needs_no_reason(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $application = $this->application($admin, Status::NEW);
+
+        $this->actingAs($admin)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
+                'status' => Status::ASSESSMENT_FEEDBACK,
+            ])
+            ->assertOk()
+            ->assertJsonPath('application.status', Status::ASSESSMENT_FEEDBACK);
     }
 
     public function test_moving_a_file_back_to_application_review_leaves_ready_to_submit(): void

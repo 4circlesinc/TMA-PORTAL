@@ -318,7 +318,9 @@ class GroupsController extends Controller
             if ($newlyAdded) {
                 User::whereIn('id', $newlyAdded)->where('id', '!=', $actor->id)->get()
                     ->each(fn (User $u) => Mail::to($u->email)->queue(
-                        Postcards::teamAdded($actor->name, $group->name, url('/groups'))
+                        // People → Distribution Groups is where teams live;
+                        // there is no /groups page for the button to open.
+                        Postcards::teamAdded($actor->name, $group->name, url('/people/distribution-groups'))
                     ));
             }
         }

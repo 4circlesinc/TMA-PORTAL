@@ -81,8 +81,7 @@ class FileReviewController extends BaseFilesController
                     'statusTone' => Status::tone($application->status),
                     'availableTransitions' => collect(Engine::availableTransitions($application, $user))
                         ->map($option)->values()->all(),
-                    'availableOverrides' => collect(Engine::availableOverrides($application, $user))
-                        ->map($option)->values()->all(),
+                    'availableOverrides' => Engine::overrideChoices($application, $user),
                     'lockedStatuses' => collect(Engine::lockedStatuses($application, $user))
                         ->map($option)->values()->all(),
                 ];

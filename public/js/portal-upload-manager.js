@@ -369,13 +369,15 @@
     if (syncPanel) { syncPanel.remove(); syncPanel = null; }
   }
 
-  // Start once the page is up. Staff-only is enforced server-side: the
-  // endpoint returns an empty list for a client, so nothing ever renders.
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () { setTimeout(syncPoll, 2000); });
-  } else {
-    setTimeout(syncPoll, 2000);
-  }
+  /*
+   * No poll at page load. It used to ask for library sync status two
+   * seconds into every page and put a card over the portal for whatever it
+   * found: "Importing …" while a library synced, "2 item(s) could not sync"
+   * for a failure nobody could act on from the card. Library sync is
+   * background work. Administrators follow it, failures included, in
+   * Settings → Background Operations, and the File Library shows its own
+   * libraries' state. The panel below still answers its own Retry.
+   */
 
   /* ── upload manager ───────────────────────────────────────────── */
 

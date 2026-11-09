@@ -1765,13 +1765,14 @@ class CipApplicationController extends Controller
     }
 
     /**
-     * Administrator-only jumps off the lifecycle map.
+     * Administrator-only jumps off the lifecycle map, each marked forward
+     * (a step ahead, confirmed like any move) or not (an override).
      *
-     * @return list<array{value:string,label:string,tone:string}>
+     * @return list<array{value:string,label:string,tone:string,forward:bool}>
      */
     private function overrides($application, User $viewer, bool $forListing = false): array
     {
-        return $this->statusChoices(Engine::availableOverrides($application, $viewer, $forListing));
+        return Engine::overrideChoices($application, $viewer, $forListing);
     }
 
     /**
@@ -2329,6 +2330,7 @@ class CipApplicationController extends Controller
             'submittedAt' => ['required', 'date'],
             'override' => ['nullable', 'boolean'],
             'note' => ['nullable', 'string', 'max:2000'],
+            'acknowledge' => ['nullable', 'boolean'],
         ], [
             'cipNumber.required' => $application->isAddOn()
                 ? 'Enter the CIP application number the Unit issued this Add-On.'
@@ -2344,6 +2346,7 @@ class CipApplicationController extends Controller
                 Carbon::parse($data['submittedAt']),
                 $request->boolean('override'),
                 trim($data['note'] ?? ''),
+                $request->boolean('acknowledge'),
             );
         } catch (\InvalidArgumentException $e) {
             NotReady::abort($e);
@@ -2567,7 +2570,10 @@ class CipApplicationController extends Controller
              * refuses anyone else. The flag lets the form ask instead of
              * offering a control that would be turned away.
              */
-            'canEditCipNumber' => CipAccess::can($viewer, 'cip.compliance'),
+            'canEditCipNumber' => Submission::mayCorrect($viewer),
+            // Administrators may enter the Unit's number at any stage, so
+            // the Overview offers the control even before it exists.
+            'canAssignCipNumber' => CipAccess::canAssignCipNumber($viewer),
             /*
              * Whether Save on the intake form will be accepted. Narrower than
              * canEditPeople (who may propose a name correction): a filed

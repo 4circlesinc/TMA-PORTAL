@@ -504,6 +504,21 @@ class MessagingController extends Controller
             'is_announcement' => $announcement,
         ], $staged);
 
+        /*
+         * A case-chat line the file could not take as text (a file, a voice
+         * note, an announcement, a very long message) is still filed on the
+         * application, so its Messages tab holds the whole conversation. It
+         * keeps the visibility the chat gave it.
+         */
+        if ($conversation->isProviderCase()) {
+            Threads::recordFromChat(
+                $conversation,
+                $message,
+                $user,
+                $message->lane ?? CipApplicationMessage::LANE_PROVIDER,
+            );
+        }
+
         $message->load(Posting::RELATIONS);
 
         Broadcaster::toOthers(new MessageSent($message));
@@ -1088,6 +1103,9 @@ class MessagingController extends Controller
         });
         $message->delete();
         Mentions::forget($message);
+        // A case-chat copy of a line on an application: the file loses it too,
+        // so the two histories stay one.
+        Threads::forgetChatCopy($message);
 
         Broadcaster::toOthers(new MessageDeleted($message));
 
@@ -1836,6 +1854,17 @@ class MessagingController extends Controller
     public function heartbeat(Request $request): JsonResponse
     {
         PresenceService::touch($request->user());
+
+        return response()->json(['ok' => true]);
+    }
+
+    /**
+     * The last page this browser had open is going away. Sent with
+     * sendBeacon, which cannot read an answer; see PresenceService::leaving.
+     */
+    public function leaving(Request $request): JsonResponse
+    {
+        PresenceService::leaving($request->user());
 
         return response()->json(['ok' => true]);
     }

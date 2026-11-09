@@ -45,7 +45,7 @@ class PresenceService
         $presence->online_until = now()->addSeconds(UserPresence::ONLINE_TTL_SECONDS);
         $presence->save();
 
-        AvailabilityService::recompute($user, $presence);
+        AvailabilityService::recompute($user, $presence, announce: ! $wasOnline);
 
         if (! $wasOnline) {
             self::announce($user, true);
@@ -64,10 +64,90 @@ class PresenceService
 
         $presence = UserPresence::where('user_id', $user->id)->first();
         if ($presence) {
-            AvailabilityService::recompute($user, $presence);
+            AvailabilityService::recompute($user, $presence, announce: true);
         }
 
         self::announce($user, false, self::label(now()));
+    }
+
+    /**
+     * How long a closed page keeps somebody online, in case it was a reload
+     * or another of their windows is about to renew.
+     */
+    public const LEAVING_GRACE_SECONDS = 10;
+
+    /**
+     * The last page this browser had open is closing.
+     *
+     * Not {@see release()}: a reload sends this too, and so does a window
+     * closing while the phone app is still open. The lease is cut to a few
+     * seconds instead, so a page that comes straight back renews it and
+     * nobody sees a flicker, and one that does not lapses and is announced
+     * by {@see expireLapsed()} within the minute rather than whenever the
+     * full lease would have run out.
+     */
+    public static function leaving(User $user): void
+    {
+        UserPresence::where('user_id', $user->id)
+            ->where('online_until', '>', now()->addSeconds(self::LEAVING_GRACE_SECONDS))
+            ->update(['online_until' => now()->addSeconds(self::LEAVING_GRACE_SECONDS)]);
+    }
+
+    /**
+     * Announce everyone whose heartbeat stopped without saying goodbye.
+     *
+     * Online is a lease the heartbeat renews. A tab that is killed, a laptop
+     * that sleeps, a phone that loses signal: none of them calls release(),
+     * so their lease lapsed in silence. Every reader that asked afterwards
+     * was told the truth, but every screen already showing them online — a
+     * conversation header, the team board, a group's faces — kept the green
+     * dot it had, because no event ever said otherwise. The scheduler runs
+     * this every minute.
+     *
+     * Each row is claimed with a conditional update before it is announced,
+     * so a heartbeat landing at the same moment wins and the person is not
+     * marked offline under it.
+     *
+     * @return int how many people were announced offline
+     */
+    public static function expireLapsed(int $limit = 500): int
+    {
+        $lapsed = UserPresence::query()
+            ->whereNotNull('online_until')
+            ->where('online_until', '<=', now())
+            ->orderBy('online_until')
+            ->limit($limit)
+            ->get();
+
+        $announced = 0;
+
+        foreach ($lapsed as $presence) {
+            $claimed = UserPresence::query()
+                ->whereKey($presence->getKey())
+                ->where('online_until', '<=', now())
+                ->update(['online_until' => null]);
+
+            if ($claimed !== 1) {
+                continue;
+            }
+
+            $user = User::find($presence->user_id);
+            if ($user === null) {
+                continue;
+            }
+
+            $presence->online_until = null;
+            $presence->syncOriginalAttribute('online_until');
+            AvailabilityService::recompute($user, $presence, announce: true);
+            self::announce(
+                $user,
+                false,
+                $presence->last_seen_at ? LastSeen::label($presence->last_seen_at) : null,
+            );
+            $announced++;
+        }
+
+        return $announced;
     }
 
     /**

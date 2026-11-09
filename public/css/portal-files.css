@@ -357,6 +357,14 @@
 .tma-portal-picker { min-width: 360px; }
 .tma-portal-picker__crumbs { font-size: var(--text-size-12); color: var(--color-text-secondary); margin-bottom: var(--space-8); }
 .tma-portal-picker__crumb { background: none; border: 0; padding: 0 2px; color: var(--color-text-link); cursor: pointer; font: inherit; }
+/* The folder the picker is showing: named, not a link back to itself. */
+.tma-portal-picker__crumb.is-current { color: var(--color-text-primary); font-weight: 600; cursor: default; }
+
+/* Save to Application Folder: search results say where each folder sits. */
+.tma-save-folder__name { display: inline-flex; flex-direction: column; min-width: 0; text-align: left; }
+.tma-save-folder__path { font-size: var(--text-size-12); color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tma-save-folder__where { margin-right: auto; font-size: var(--text-size-12); color: var(--color-text-secondary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tma-save-folder .tma-portal-picker__list { max-height: min(46vh, 360px); overflow-y: auto; }
 .tma-portal-picker__list { max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
 .tma-portal-picker__folder {
   display: flex; align-items: center; gap: var(--space-8); width: 100%;

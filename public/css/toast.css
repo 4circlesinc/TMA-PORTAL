@@ -793,3 +793,25 @@
 :root[data-theme="dark"] .tma-sync-toast__track {
   background: rgba(255, 255, 255, 0.14);
 }
+
+/* ── Swipe a toast away (toast-swipe.js) ─────────────────────────────────
+ *
+ * Sideways belongs to the swipe, up and down to the page: without pan-y a
+ * phone would take a sideways drag for itself and the card would never
+ * move. */
+.tma-notify-toast,
+.tma-sync-toast,
+.tma-toast-floating-host .tma-toast,
+.tma-dash__messages-toast,
+[data-settings-toast] {
+  touch-action: pan-y;
+}
+
+.tma-notify-toast.is-swiping,
+.tma-sync-toast.is-swiping,
+.tma-toast-floating-host .tma-toast.is-swiping,
+.tma-dash__messages-toast.is-swiping,
+[data-settings-toast].is-swiping {
+  -webkit-user-select: none;
+  user-select: none;
+}

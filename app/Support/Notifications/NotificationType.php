@@ -117,8 +117,8 @@ final class NotificationType
         // ── CIP Applications ───────────────────────────────────
         'cip.status' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO, 'icon' => 'AddressBook', 'priority' => 'normal', 'pref' => 'clients', 'action_label' => 'Open the application'],
         'cip.assigned' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO, 'icon' => 'UserGear', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Open the application'],
-        'cip.updates-required' => ['module' => 'clients', 'level' => Notification::LEVEL_ACTION, 'icon' => 'Warning', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Open the documents'],
-        'cip.comment' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO, 'icon' => 'ChatCircle', 'priority' => 'normal', 'pref' => 'clients', 'action_label' => 'Open the documents'],
+        'cip.updates-required' => ['module' => 'clients', 'level' => Notification::LEVEL_ACTION, 'icon' => 'Warning', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Upload updated documents'],
+        'cip.comment' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO, 'icon' => 'ChatCircle', 'priority' => 'normal', 'pref' => 'clients', 'action_label' => 'View the comment'],
         'cip.message' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO, 'icon' => 'ChatTeardropDots', 'priority' => 'normal', 'pref' => 'clients', 'action_label' => 'Open Messages'],
         'cip.ready-to-submit' => ['module' => 'clients', 'level' => Notification::LEVEL_ACTION, 'icon' => 'PaperPlaneTilt', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Confirm submission'],
         'cip.apply-for-cor' => ['module' => 'clients', 'level' => Notification::LEVEL_ACTION, 'icon' => 'PaperPlaneTilt', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Confirm submission'],
@@ -127,7 +127,7 @@ final class NotificationType
         'cip.background-check' => ['module' => 'clients', 'level' => Notification::LEVEL_INFO, 'icon' => 'MagnifyingGlass', 'priority' => 'normal', 'pref' => 'clients', 'action_label' => 'Open the application'],
         'cip.delayed' => ['module' => 'clients', 'level' => Notification::LEVEL_WARNING, 'icon' => 'ClockCountdown', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Open the application'],
         'cip.granted' => ['module' => 'clients', 'level' => Notification::LEVEL_SUCCESS, 'icon' => 'CheckCircle', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Open the application'],
-        'cip.post-approval' => ['module' => 'clients', 'level' => Notification::LEVEL_ACTION, 'icon' => 'AddressBook', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Open the documents'],
+        'cip.post-approval' => ['module' => 'clients', 'level' => Notification::LEVEL_ACTION, 'icon' => 'AddressBook', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Upload documents'],
         'cip.denied' => ['module' => 'clients', 'level' => Notification::LEVEL_WARNING, 'icon' => 'Xcircle', 'priority' => 'high', 'pref' => 'clients', 'action_label' => 'Open the application'],
         // Raised at Notices::personChanged with a path, but unregistered until
         // now, so the link it carried never rendered a button.

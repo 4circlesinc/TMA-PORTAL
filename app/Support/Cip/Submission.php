@@ -68,12 +68,13 @@ class Submission
         ?Carbon $submittedAt = null,
         bool $override = false,
         string $note = '',
+        bool $acknowledged = false,
     ): CipApplication {
         $number = self::clean((string) $cipNumber);
         self::assertFree($number, $application);
 
         if ($application->isAddOn()) {
-            return self::recordAddOn($application, $actor, $number, $submittedAt, $override, $note);
+            return self::recordAddOn($application, $actor, $number, $submittedAt, $override, $note, $acknowledged);
         }
 
         if (! $application->isLocked()) {
@@ -84,7 +85,7 @@ class Submission
 
         $submittedAt ??= Carbon::now();
 
-        return DB::transaction(function () use ($application, $actor, $number, $submittedAt, $override, $note) {
+        return DB::transaction(function () use ($application, $actor, $number, $submittedAt, $override, $note, $acknowledged) {
             /*
              * Written before the transition, so the trail names the
              * application by what it is called from now on. The internal
@@ -106,7 +107,7 @@ class Submission
             if (trim($note) !== '') {
                 $meta['note'] = trim($note);
             }
-            self::moveToPendingReview($application, $actor, $meta, $override);
+            self::moveToPendingReview($application, $actor, $meta, $override, $acknowledged);
 
             Engine::record($application, CipEvent::ACTION_NUMBER_ASSIGNED, $actor, [
                 'cipNumber' => $number,
@@ -127,9 +128,20 @@ class Submission
      *
      * @param  array<string, mixed>  $meta
      */
-    private static function moveToPendingReview(CipApplication $application, User $actor, array $meta, bool $override): void
+    private static function moveToPendingReview(CipApplication $application, User $actor, array $meta, bool $override, bool $acknowledged = false): void
     {
         $ordinary = in_array(Status::PENDING_REVIEW, Engine::availableTransitions($application, $actor), true);
+
+        /*
+         * Shown what is not Ready for submission and carrying on: the same
+         * move, through set(), with the list kept on the audit row. Who may
+         * do that is the engine's question, not this one's.
+         */
+        if ($acknowledged && ! $ordinary) {
+            Engine::set($application, Status::PENDING_REVIEW, $actor, array_merge($meta, ['acknowledged' => true]));
+
+            return;
+        }
 
         if ($ordinary || ! $override) {
             Engine::apply($application, Status::PENDING_REVIEW, $actor, $meta);
@@ -161,6 +173,7 @@ class Submission
         ?Carbon $submittedAt = null,
         bool $override = false,
         string $note = '',
+        bool $acknowledged = false,
     ): CipApplication {
         if (! $application->isLocked()) {
             throw ValidationException::withMessages([
@@ -171,7 +184,7 @@ class Submission
         $submittedAt ??= Carbon::now();
         $submittedBy = trim((string) $actor->name) !== '' ? (string) $actor->name : $actor->email;
 
-        return DB::transaction(function () use ($application, $actor, $number, $submittedAt, $submittedBy, $override, $note) {
+        return DB::transaction(function () use ($application, $actor, $number, $submittedAt, $submittedBy, $override, $note, $acknowledged) {
             $application->forceFill([
                 'cip_number' => $number,
                 'submitted_at' => $submittedAt,
@@ -189,7 +202,7 @@ class Submission
             if (trim($note) !== '') {
                 $meta['note'] = trim($note);
             }
-            self::moveToPendingReview($application, $actor, $meta, $override);
+            self::moveToPendingReview($application, $actor, $meta, $override, $acknowledged);
 
             Engine::record($application, CipEvent::ACTION_NUMBER_ASSIGNED, $actor, [
                 'cipNumber' => $number,
@@ -242,7 +255,7 @@ class Submission
      */
     public static function correct(CipApplication $application, User $actor, string $cipNumber): CipApplication
     {
-        abort_unless(CipAccess::can($actor, 'cip.compliance'), 403, 'You cannot change this application’s CIP number.');
+        abort_unless(self::mayCorrect($actor), 403, 'You cannot change this application’s CIP number.');
 
         $number = self::clean($cipNumber);
         self::assertFree($number, $application);
@@ -260,6 +273,19 @@ class Submission
 
             return $application;
         });
+    }
+
+    /**
+     * May this account type the CIP number in by hand?
+     *
+     * Compliance officers correct the number the submission recorded, as
+     * before. Administrators may enter one at any stage of the file,
+     * numbered or not; see {@see CipAccess::canAssignCipNumber()}.
+     */
+    public static function mayCorrect(?User $actor): bool
+    {
+        return $actor !== null
+            && (CipAccess::canAssignCipNumber($actor) || CipAccess::can($actor, 'cip.compliance'));
     }
 
     /**

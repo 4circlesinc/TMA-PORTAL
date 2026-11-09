@@ -1938,8 +1938,56 @@
       // Ready to submit / Apply for COR ask the provider to confirm; the
       // notification carries the intent so the dialog opens itself.
       confirm: params.get('confirm') === '1',
+      // A notice about one checklist document (sent back, commented on)
+      // names it, so the reader lands on that line and its Upload control
+      // rather than at the top of the person's tab.
+      doc: params.get('doc') || null,
     };
   })();
+
+  /*
+   * The checklist line a notice pointed at, marked for a few seconds so it
+   * is found without reading the list. Held here, not on the element, so a
+   * re-render while the mark is up draws it again instead of dropping it.
+   */
+  var NOTICE_TARGET = null;
+
+  var NOTICE_TARGET_MS = 2600;
+
+  function noticeRow(uuid) {
+    return document.querySelector('[data-key="doc-' + String(uuid).replace(/["\\]/g, '') + '"]');
+  }
+
+  function revealNoticeDocument(uuid) {
+    if (!uuid) return;
+    NOTICE_TARGET = { id: String(uuid), until: Date.now() + NOTICE_TARGET_MS };
+
+    var tries = 0;
+    (function find() {
+      var row = noticeRow(uuid);
+      // The panel is drawn after the tab is claimed; wait for it, briefly.
+      if (!row || row.offsetParent === null) {
+        if (++tries < 20) setTimeout(find, 100);
+        return;
+      }
+      row.classList.add('is-notice-target');
+      try {
+        var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        row.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+      } catch (e) {
+        row.scrollIntoView();
+      }
+      setTimeout(function () {
+        NOTICE_TARGET = null;
+        var still = noticeRow(uuid);
+        if (still) still.classList.remove('is-notice-target');
+      }, NOTICE_TARGET_MS);
+    })();
+  }
+
+  function isNoticeTarget(id) {
+    return !!(NOTICE_TARGET && id && NOTICE_TARGET.id === String(id) && Date.now() < NOTICE_TARGET.until);
+  }
 
   /* Taken, not read: a boot position applies to the screen it was typed for,
      and must not reapply when the reader moves on to another client. Each part
@@ -6748,9 +6796,13 @@
    * Built from the checklist's own rows and the documented dialog, so it
    * looks like the Documents list it is sending the reader back to.
    */
-  function openCipNotReadyDialog(rows) {
+  function openCipNotReadyDialog(rows, onContinue, message) {
     var ui = window.TMAPortalUI;
-    if (!ui || !ui.openModal || !rows || !rows.length) return false;
+    if (!ui || !ui.openModal) return false;
+    rows = rows || [];
+    // A warning the reader may continue past is shown even when the server
+    // could not list the documents, so the choice is never lost to a toast.
+    if (!rows.length && !onContinue) return false;
 
     var groups = [];
     var byPerson = {};
@@ -6768,9 +6820,11 @@
       cls: 'tma-cip-not-ready',
       body:
         '<p class="tma-portal-modal__text">' +
-        (rows.length === 1
-          ? 'This document must be Ready for submission first.'
-          : 'These documents must be Ready for submission first.') +
+        (!rows.length
+          ? esc(message || 'Some documents are not Ready for submission yet.')
+          : rows.length === 1
+            ? 'This document must be Ready for submission first.'
+            : 'These documents must be Ready for submission first.') +
         '</p>' +
         '<div class="tma-cip-not-ready__list">' +
         groups.map(function (group) {
@@ -6795,12 +6849,32 @@
             '</section>';
         }).join('') +
         '</div>' +
+        /*
+         * An administrator (or, for Ready to Submit and the Unit submission,
+         * a CRO / Reviewing officer) is warned rather than stopped: the list
+         * is the same, and they may carry on past it. The Activity tab keeps
+         * what was missing.
+         */
+        (onContinue
+          ? '<p class="tma-portal-modal__text">You can continue anyway. The Activity tab will note what was missing.</p>'
+          : '') +
         '<div class="tma-portal-modal__foot">' +
-        '<button type="button" class="tma-no-data__btn" data-cip-not-ready-close>Close</button>' +
+        (onContinue
+          ? '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-not-ready-close>Cancel</button>' +
+            '<button type="button" class="tma-no-data__btn" data-cip-not-ready-continue>Continue anyway</button>'
+          : '<button type="button" class="tma-no-data__btn" data-cip-not-ready-close>Close</button>') +
         '</div>',
       onMount: function (el) {
         var close = el.querySelector('[data-cip-not-ready-close]');
         if (close) close.addEventListener('click', function () { ui.closeModal(); });
+        var go = el.querySelector('[data-cip-not-ready-continue]');
+        if (go) {
+          go.addEventListener('click', function () {
+            go.disabled = true;
+            ui.closeModal();
+            onContinue();
+          });
+        }
       },
     });
 
@@ -6808,11 +6882,27 @@
   }
 
   /*
+   * The status attachment and CC a move was sent with, kept so the same
+   * move can be sent again once its warning has been acknowledged. The
+   * first send consumes both.
+   */
+  function cipKeepPendingStatusExtras() {
+    var file = cipPendingStatusFile;
+    var cc = cipPendingStatusCc;
+
+    return function () {
+      cipPendingStatusFile = file;
+      cipPendingStatusCc = cc;
+    };
+  }
+
+  /*
    * What a refused CIP step says to the reader: the documents it is waiting
    * on, listed, when that is why; otherwise the server's own sentence.
    */
-  function cipRefused(err, fallback) {
-    if (openCipNotReadyDialog(cipNotReadyRows(err))) return;
+  function cipRefused(err, fallback, retryAcknowledged) {
+    var mayContinue = !!(err && err.data && err.data.canAcknowledge && typeof retryAcknowledged === 'function');
+    if (openCipNotReadyDialog(cipNotReadyRows(err), mayContinue ? retryAcknowledged : null, err && err.message)) return;
     clientsToast((err && err.message) || fallback, 'negative');
   }
 
@@ -9140,6 +9230,27 @@
     return total ? filed + ' / ' + total : '';
   }
 
+  /*
+   * The CIP number row, and for an administrator the way to enter it.
+   *
+   * The number normally arrives with the submission, but an administrator
+   * may type it in at any stage — so the row is drawn for them even while
+   * it is empty, and the value itself is the control, the same as a
+   * Timeline date. Compliance officers correct a number already there.
+   */
+  function cipNumberOverviewRow(app) {
+    var mayEnter = !!app.canAssignCipNumber || (!!app.canEditCipNumber && !!app.cipNumber);
+    if (!mayEnter || app.status === 'draft') return overviewRow('CIP application number', app.cipNumber || '');
+
+    return overviewRow(
+      'CIP application number',
+      '<button type="button" class="tma-dash__cip-tl-edit' + (app.cipNumber ? '' : ' tma-dash__cip-tl-edit--empty') + '"' +
+        ' data-cip-edit-number title="' + (app.cipNumber ? 'Correct the CIP number' : 'Enter the CIP number') + '">' +
+        esc(app.cipNumber || 'Add number') + '</button>',
+      true
+    );
+  }
+
   function renderOverviewApplication(app) {
     var addOn = app.phase === 'add_on';
     return overviewList(
@@ -9147,7 +9258,7 @@
         addOn ? 'Add-On reference number' : 'Application number',
         app.internalNumber || app.number
       ) +
-      overviewRow('CIP application number', app.cipNumber || '') +
+      cipNumberOverviewRow(app) +
       overviewRow('Status', cipStatusChip(app), true) +
       (app.phase === 'add_on' && app.addonTypeLabel
         ? overviewRow('Add-On type', app.addonTypeLabel)
@@ -9794,15 +9905,17 @@
 
     MORPH.unwired(root, '[data-cip-slot-file]').forEach(function (input) {
       MORPH.on(input, 'change', function () {
-        var file = input.files && input.files[0];
+        var files = Array.prototype.slice.call(input.files || []);
         var id = input.getAttribute('data-cip-slot-file');
+        var open = input.hasAttribute('multiple');
         input.value = '';
-        // One file at a time from a checklist line; see checklistUploadSending.
-        if (file && cipSlotSending[id]) return;
-        if (file) {
-          checklistUploadSending(root, state, render, id,
-            uploadCipSlot(state, render, id, file, input.closest('[data-cip-slot-drop]')));
-        }
+        // One send at a time from a checklist line; see checklistUploadSending.
+        if (files.length && cipSlotSending[id]) return;
+        if (!files.length) return;
+        var zone = input.closest('[data-cip-slot-drop]');
+        checklistUploadSending(root, state, render, id, open
+          ? uploadCipSlotMany(state, render, id, files, zone)
+          : uploadCipSlot(state, render, id, files[0], zone));
       });
     });
 
@@ -9820,9 +9933,15 @@
         e.preventDefault();
         e.stopPropagation();
         zone.classList.remove('is-dragging');
-        var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        var dropped = Array.prototype.slice.call((e.dataTransfer && e.dataTransfer.files) || []);
         var id = zone.getAttribute('data-cip-slot-drop');
-        if (file && id) uploadCipSlot(state, render, id, file, zone);
+        if (!dropped.length || !id) return;
+        // The open Additional documents box takes every file dropped on it.
+        if (zone.hasAttribute('data-cip-slot-open')) {
+          uploadCipSlotMany(state, render, id, dropped, zone);
+        } else {
+          uploadCipSlot(state, render, id, dropped[0], zone);
+        }
       });
     });
 
@@ -9836,11 +9955,57 @@
     });
   }
 
-  function uploadCipSlot(state, render, slotId, file, zone) {
-    if (!slotId || !file) return;
+  /*
+   * The open Additional documents box takes as many papers as there are.
+   *
+   * The checklist line used to read only the first file chosen or dropped,
+   * which made the box hold one paper per trip through the file picker. Each
+   * file still goes up on its own request through the same door, with the
+   * same type and size checks, one after another so the server files them in
+   * the order they were chosen; one toast and one refresh close the set.
+   */
+  function uploadCipSlotMany(state, render, slotId, files, zone) {
+    var list = (files || []).filter(Boolean);
+    if (list.length < 2) return uploadCipSlot(state, render, slotId, list[0], zone);
+
+    var hint = zone && zone.querySelector('.tma-portal-drop__hint');
+    var previous = hint ? hint.textContent : '';
+    var sent = 0;
+    var failed = 0;
+    var chain = Promise.resolve();
+    list.forEach(function (file, index) {
+      chain = chain.then(function () {
+        if (hint) hint.textContent = 'Uploading ' + (index + 1) + ' of ' + list.length + '…';
+
+        return uploadCipSlot(state, render, slotId, file, null, { quiet: true })
+          .then(function (json) {
+            if (json) sent++;
+            else failed++;
+          });
+      });
+    });
+
+    return chain.then(function () {
+      if (hint) hint.textContent = previous || 'Drop files here, or choose them';
+      if (sent) {
+        clientsToast(sent === 1 ? 'Document uploaded.' : sent + ' documents uploaded.', failed ? 'neutral' : 'positive');
+        refreshCipAfterFileChange(state, render);
+      }
+      if (failed) {
+        clientsToast(failed === 1 ? 'One file could not be uploaded.' : failed + ' files could not be uploaded.', 'negative');
+      }
+
+      return sent ? { uploaded: sent } : null;
+    });
+  }
+
+  function uploadCipSlot(state, render, slotId, file, zone, opts) {
+    opts = opts || {};
+    if (!slotId || !file) return Promise.resolve(null);
     if (file.size > CIP_SLOT_MAX_MB * 1024 * 1024) {
-      clientsToast('That file is too large. Keep it under ' + CIP_SLOT_MAX_MB + 'MB.', 'negative');
-      return;
+      clientsToast((opts.quiet ? file.name + ' is too large. ' : 'That file is too large. ') +
+        'Keep it under ' + CIP_SLOT_MAX_MB + 'MB.', 'negative');
+      return Promise.resolve(null);
     }
 
     if (zone) zone.classList.add('is-filled');
@@ -9861,18 +10026,21 @@
       body: form,
     })
       .then(function (json) {
-        clientsToast('Document uploaded.', 'positive');
+        if (!opts.quiet) clientsToast('Document uploaded.', 'positive');
         if (json && json.application && state.selectedId) {
           paintCipApplicationStatus(state.selectedId, json.application.status, json.application);
         }
-        refreshCipAfterFileChange(state, render);
+        if (!opts.quiet) refreshCipAfterFileChange(state, render);
 
         // The answer, for a caller that asked to be told (a checklist line).
-        return json;
+        return json || {};
       })
       .catch(function (err) {
         if (hint) hint.textContent = previous || 'Drop a file here, or choose one';
-        clientsToast((err && err.message) || 'Could not upload this document.', 'negative');
+        clientsToast((opts.quiet && file.name ? file.name + ': ' : '') +
+          ((err && err.message) || 'Could not upload this document.'), 'negative');
+
+        return null;
       });
   }
 
@@ -10160,14 +10328,19 @@
     chip = checklistNewDocumentHtml(d) + chip;
 
     if (d.canUpload) {
-      return '<div class="tma-portal-drop' + (filed ? ' is-filled' : '') + '" data-cip-slot-drop="' + esc(d.id) + '">' +
+      var openBox = d.type === 'additional_documents';
+      return '<div class="tma-portal-drop' + (filed ? ' is-filled' : '') + '" data-cip-slot-drop="' + esc(d.id) + '"' +
+        (openBox ? ' data-cip-slot-open' : '') + '>' +
         label + help + nameField + reason +
         '<input type="file" accept="' + accept + '" class="tma-dash__clients-photo-input"' +
+        (openBox ? ' multiple' : '') +
         ' data-cip-slot-file="' + esc(d.id) + '" aria-hidden="true">' +
         '<button type="button" class="tma-portal-drop__zone" data-cip-slot-file-btn="' + esc(d.id) + '">' +
         '<img src="' + ICON + 'UploadSimple.svg" alt="" width="20" height="20">' +
         '<span class="tma-portal-drop__hint">' +
-        (filed ? 'Drop a replacement here, or choose one' : 'Drop a file here, or choose one') +
+        (openBox
+          ? 'Drop files here, or choose them'
+          : (filed ? 'Drop a replacement here, or choose one' : 'Drop a file here, or choose one')) +
         '</span>' +
         '<span class="tma-portal-drop__meta">' +
         (photo ? 'Square photo, 2 × 2 inch, up to 8MB' : 'PDF or image, up to 10MB') +
@@ -10313,6 +10486,7 @@
       : (d.type === 'additional_documents' ? 'Upload another' : 'Upload a replacement');
 
     return '<input type="file" accept="' + accept + '" class="tma-dash__clients-photo-input"' +
+      (d.type === 'additional_documents' ? ' multiple' : '') +
       ' data-cip-slot-file="' + esc(d.id) + '" aria-hidden="true" tabindex="-1">' +
       '<button type="button" class="tma-dash__clients-checklist-download tma-dash__clients-checklist-upload"' +
       ' data-cip-slot-file-btn="' + esc(d.id) + '" data-cip-slot-verb="' + esc(verb) + '"' +
@@ -10454,7 +10628,8 @@
     return (
       // --owed: this line carries Upload, which sits straight after the name
       // (where the pointer already is) instead of across the row by the status.
-      '<li class="tma-dash__clients-checklist-row' + (upload ? ' tma-dash__clients-checklist-row--owed' : '') + '"' +
+      '<li class="tma-dash__clients-checklist-row' + (upload ? ' tma-dash__clients-checklist-row--owed' : '') +
+      (isNoticeTarget(d.id) ? ' is-notice-target' : '') + '"' +
       (d.id ? ' data-key="doc-' + esc(d.id) + '"' : '') + '>' +
       '<input type="checkbox" class="tma-dash__check"' + (filed ? ' checked' : '') +
       ' disabled tabindex="-1" aria-hidden="true">' +
@@ -10630,12 +10805,26 @@
           '<img src="images/icons/phosphor/DownloadSimple.svg" alt=""><span>Request files</span></button>' +
           '<button type="button" class="tma-dash__clients-folders-add" data-clients-open-library>' +
           '<img src="' + ICONS.FolderNotch + '" alt=""><span>Open in File Library</span></button>' +
+          /*
+           * What is picked, and what can be done to it, in one place.
+           *
+           * The toolbar's own Download stood beside this bar's Download the
+           * moment anything was picked, so the tab showed two of them; it
+           * now steps aside while a selection exists (see
+           * paintClientFolderBulk), leaving one Download for the picked rows.
+           * Bulk actions holds the rest — Move, Copy, Delete — behind the
+           * same menu a right-click on the selection opens.
+           */
           '<div class="tma-dash__toolbar-bulk" data-clients-folder-bulk hidden>' +
           '<span class="tma-dash__toolbar-selection" data-clients-folder-bulk-count>0 Selected</span>' +
           '<button type="button" class="tma-dash__clients-folders-add" data-clients-folder-bulk-download>' +
           '<img src="images/icons/phosphor/ArrowLineDown.svg" alt=""><span>Download</span></button>' +
           '<button type="button" class="tma-dash__clients-folders-add" data-clients-folder-bulk-status>' +
           '<img src="images/icons/phosphor/Flag.svg" alt=""><span>Change status</span></button>' +
+          '<button type="button" class="tma-dash__clients-folders-add" data-clients-folder-bulk-actions aria-haspopup="menu">' +
+          '<img src="images/icons/phosphor/DotsThree.svg" alt=""><span>Bulk actions</span></button>' +
+          '<button type="button" class="tma-dash__clients-folders-add" data-clients-folder-bulk-clear>' +
+          '<img src="images/icons/phosphor/X.svg" alt=""><span>Deselect all</span></button>' +
           '</div>' +
           '<input type="file" multiple hidden data-clients-folder-fileinput>' +
           '</div>'
@@ -10801,15 +10990,37 @@
   function paintClientFolderSelection(root) {
     var canvas = clientFolderCanvas(root);
     if (!canvas) return;
+    var any = false;
     // Addressed by the two attributes only this list uses: `data-clients-row`
     // is also on the directory's own client rows, which are not files.
     canvas.querySelectorAll('[data-clients-subfolder], [data-clients-file]').forEach(function (el) {
       var id = el.getAttribute('data-clients-subfolder') || el.getAttribute('data-clients-file');
       var on = !!clientFolderSelected[id];
+      if (on) any = true;
       el.classList.toggle('is-selected', on);
       el.setAttribute('aria-pressed', on ? 'true' : 'false');
+      var check = el.querySelector('[data-clients-folder-check]');
+      if (check) check.setAttribute('aria-checked', on ? 'true' : 'false');
     });
+    // While anything is picked every row shows its box, so adding the next
+    // one is a single tap, on a phone as on a desk.
+    canvas.classList.toggle('has-selection', any);
     paintClientFolderBulk(root);
+  }
+
+  /*
+   * The tick on a row. Not drawn until it is wanted: on hover, on a picked
+   * row, or on every row while something is picked. Pressing it adds or
+   * removes that one row without touching the rest, which is also the only
+   * way to pick on a touch screen, where a tap opens.
+   */
+  function clientFolderCheckHtml(id, name) {
+    var on = !!clientFolderSelected[id];
+
+    return '<span class="tma-dash__clients-folder-check" data-clients-folder-check role="checkbox"' +
+      ' aria-checked="' + (on ? 'true' : 'false') + '" aria-label="' + esc('Select ' + (name || 'item')) + '" tabindex="-1">' +
+      '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+      '</span>';
   }
 
   function paintClientFolderBulk(root) {
@@ -10826,6 +11037,18 @@
     var files = picked.filter(function (r) { return r && r.type === 'file'; });
     var statusBtn = bar.querySelector('[data-clients-folder-bulk-status]');
     if (statusBtn) statusBtn.hidden = files.length === 0;
+
+    // One Download on screen at a time: the folder's, or the selection's.
+    var folderDownload = root.querySelector('[data-clients-folder-download]');
+    if (folderDownload) {
+      if (n > 0) {
+        folderDownload.setAttribute('data-hidden-for-selection', '1');
+        folderDownload.hidden = true;
+      } else if (folderDownload.getAttribute('data-hidden-for-selection')) {
+        folderDownload.removeAttribute('data-hidden-for-selection');
+        folderDownload.hidden = folderDownload.getAttribute('data-download-allowed') === '0';
+      }
+    }
   }
 
   function clientFolderCanvas(root) {
@@ -10879,6 +11102,7 @@
       html += '<button type="button" class="tma-dash__clients-folder' + (clientFolderSelected[f.id] ? ' is-selected' : '') +
         '" draggable="true" data-clients-row data-clients-subfolder="' + esc(f.id) + '" data-clients-subfolder-name="' + esc(f.name) + '"' +
         ' aria-pressed="' + (clientFolderSelected[f.id] ? 'true' : 'false') + '">' +
+        clientFolderCheckHtml(f.id, f.name) +
         '<span class="tma-dash__clients-folder-icon" aria-hidden="true">' + folderIcon + '</span>' +
         '<span class="tma-dash__clients-folder-main"><span class="tma-dash__clients-folder-name" data-clients-rename-name>' + esc(f.name) +
           clientCommentChip(f) + '</span>' +
@@ -10932,6 +11156,7 @@
       html += '<button type="button" class="tma-dash__clients-folder' + (clientFolderSelected[f.id] ? ' is-selected' : '') +
         '" draggable="true" data-clients-row data-clients-file="' + esc(f.id) + '"' +
         ' aria-pressed="' + (clientFolderSelected[f.id] ? 'true' : 'false') + '">' +
+        clientFolderCheckHtml(f.id, f.name) +
         '<span class="tma-dash__clients-folder-icon" aria-hidden="true">' + thumb + '</span>' +
         '<span class="tma-dash__clients-folder-main">' +
           '<span class="tma-dash__clients-folder-name" data-clients-rename-name>' + esc(f.name) +
@@ -10943,6 +11168,7 @@
         '</span></button>';
     });
     canvas.innerHTML = html;
+    canvas.classList.toggle('has-selection', clientFolderSelectedRows().length > 0);
   }
 
   function applyClientFolderWriteAccess(root, res) {
@@ -10966,7 +11192,10 @@
       if (btn) btn.hidden = !canUpload;
     });
     var downloadBtn = root.querySelector('[data-clients-folder-download]');
-    if (downloadBtn) downloadBtn.hidden = !canDownload;
+    if (downloadBtn) {
+      downloadBtn.setAttribute('data-download-allowed', canDownload ? '1' : '0');
+      downloadBtn.hidden = !canDownload || clientFolderSelectedRows().length > 0;
+    }
   }
 
   function clientFolderAllowsUpload(root, destId) {
@@ -11198,6 +11427,34 @@
       // streak of text across them.
       btn.addEventListener('mousedown', function (e) { if (e.shiftKey) e.preventDefault(); });
 
+      /*
+       * A long press picks the row on a touch screen, where a tap opens it.
+       * After that every row shows its tick, so the rest are single taps.
+       */
+      var pressTimer = null;
+      var cancelPress = function () {
+        if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+      };
+      btn.addEventListener('touchstart', function (e) {
+        if (!e.touches || e.touches.length !== 1) return;
+        cancelPress();
+        pressTimer = setTimeout(function () {
+          pressTimer = null;
+          var next = {};
+          Object.keys(clientFolderSelected).forEach(function (k) { if (clientFolderSelected[k]) next[k] = true; });
+          if (next[id]) delete next[id];
+          else next[id] = true;
+          clientFolderSelected = next;
+          clientFolderAnchor.id = id;
+          btn._suppressClick = true;
+          if (navigator.vibrate) { try { navigator.vibrate(10); } catch (err) { /* ignore */ } }
+          paintClientFolderSelection(root);
+        }, 500);
+      }, { passive: true });
+      btn.addEventListener('touchmove', cancelPress, { passive: true });
+      btn.addEventListener('touchend', cancelPress);
+      btn.addEventListener('touchcancel', cancelPress);
+
       btn.addEventListener('click', function (e) {
         // A drag that ended on this row raises a click nobody asked for.
         if (btn._suppressClick) { e.preventDefault(); e.stopPropagation(); btn._suppressClick = false; return; }
@@ -11207,6 +11464,20 @@
           e.preventDefault();
           e.stopPropagation();
           openClientFileStatusMenu(root, statusChip, id);
+          return;
+        }
+
+        // The row's tick: this one in or out, the rest left as they are.
+        if (e.target.closest('[data-clients-folder-check]')) {
+          e.preventDefault();
+          e.stopPropagation();
+          var next = {};
+          Object.keys(clientFolderSelected).forEach(function (k) { if (clientFolderSelected[k]) next[k] = true; });
+          if (next[id]) delete next[id];
+          else next[id] = true;
+          clientFolderSelected = next;
+          clientFolderAnchor.id = id;
+          paintClientFolderSelection(root);
           return;
         }
 
@@ -11221,8 +11492,21 @@
         }
         if (!window.TMAFileSelect) { openClientFolderItem(root, id); return; }
 
-        // On a touch layout the tap opens, as it does in every file list.
-        if (window.TMAFileSelect.tapOpens()) { openClientFolderItem(root, id); return; }
+        // On a touch layout the tap opens, as it does in every file list —
+        // unless the reader is picking, when a tap adds or removes the row.
+        if (window.TMAFileSelect.tapOpens()) {
+          if (clientFolderSelectedRows().length) {
+            var picking = {};
+            Object.keys(clientFolderSelected).forEach(function (k) { if (clientFolderSelected[k]) picking[k] = true; });
+            if (picking[id]) delete picking[id];
+            else picking[id] = true;
+            clientFolderSelected = picking;
+            paintClientFolderSelection(root);
+            return;
+          }
+          openClientFolderItem(root, id);
+          return;
+        }
 
         clientFolderSelected = window.TMAFileSelect.click({
           ids: clientFolderIds(), selected: clientFolderSelected, id: id,
@@ -11602,6 +11886,31 @@
 
     MORPH.unwired(root, '[data-clients-open-library]').forEach(function (btn) {
       btn.addEventListener('click', function () { openCurrentFolderInLibrary(root); });
+    });
+    MORPH.unwired(root, '[data-clients-folder-bulk-actions]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var acts = window.TMAFileActions;
+        var picked = clientFolderSelectedRows();
+        if (!acts || !picked.length) return;
+        var box = btn.getBoundingClientRect();
+        var done = function () {
+          clearClientFolderSelection();
+          loadClientFolder(root, { changed: true });
+        };
+        if (picked.length > 1 && acts.menuMulti) {
+          acts.menuMulti(box.left, box.bottom + 4, picked, done);
+        } else if (acts.menu) {
+          acts.menu(box.left, box.bottom + 4, picked[0], done);
+        }
+      });
+    });
+    MORPH.unwired(root, '[data-clients-folder-bulk-clear]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        clearClientFolderSelection();
+        paintClientFolderSelection(root);
+      });
     });
     MORPH.unwired(root, '[data-clients-folder-bulk-status]').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -12382,6 +12691,7 @@
       '<div class="tma-dash__messages-bubble tma-dash__messages-bubble--' + side + '">' +
       senderHtml +
       renderCipQuote(m.replyTo) +
+      renderCipAttachments(m) +
       '<div class="tma-dash__messages-bubble-text">' +
       '<p class="tma-dash__messages-bubble-line">' +
       '<span class="tma-dash__messages-bubble-copy">' + esc(m.body) + '</span>' +
@@ -12395,6 +12705,36 @@
       '</div></div></div>' +
       renderCipBubbleActions(m) +
       '</div>';
+  }
+
+  /*
+   * Files sent with a line in the case chat, on the file's own thread.
+   *
+   * Filed here as the chat sent them, so the application's Messages tab is
+   * the whole conversation. Each opens or downloads where the chat keeps it,
+   * and can be saved straight into a folder in the document library.
+   */
+  function renderCipAttachments(m) {
+    var files = (m && m.attachments) || [];
+    if (!files.length) return '';
+
+    return '<ul class="tma-cip-thread__files">' + files.map(function (file) {
+      return '<li class="tma-cip-thread__file">' +
+        '<a class="tma-cip-thread__file-name" href="' + esc(file.url) + '" target="_blank" rel="noopener"' +
+        ' data-message-attachment-id="' + esc(file.id) + '" data-message-attachment-name="' + esc(file.name) + '">' +
+        '<img src="' + ICON + (file.isImage ? 'Image.svg' : 'FileText.svg') + '" alt="" width="16" height="16">' +
+        '<span>' + esc(file.name) + '</span></a>' +
+        '<a class="tma-dash__messages-icon-btn tma-cip-thread__file-action" href="' + esc(file.downloadUrl || file.url) + '"' +
+        ' download="' + esc(file.name) + '" title="Download" aria-label="' + esc('Download ' + file.name) + '">' +
+        '<img src="' + ICON + 'DownloadSimple.svg" alt="" width="16" height="16"></a>' +
+        (window.TMASaveToFolder
+          ? '<button type="button" class="tma-dash__messages-icon-btn tma-cip-thread__file-action" data-save-attachment="' + esc(file.id) + '"' +
+            ' data-save-attachment-kind="messaging" data-save-attachment-name="' + esc(file.name) + '"' +
+            ' title="Save to Application Folder" aria-label="' + esc('Save ' + file.name + ' to a folder') + '">' +
+            '<img src="' + ICON + 'FolderSimplePlus.svg" alt="" width="16" height="16"></button>'
+          : '') +
+        '</li>';
+    }).join('') + '</ul>';
   }
 
   function cipQuickEmoji() {
@@ -12461,6 +12801,9 @@
     var draft = state.cipThreadDraft || '';
     var reply = state.cipReplyTo && state.cipReplyTo.applicationId === app.id ? state.cipReplyTo : null;
     var editing = state.cipEditing && state.cipEditing.applicationId === app.id ? state.cipEditing : null;
+    // A send still on its way draws the composer busy, so a redraw cannot
+    // hand the button back while the first press is in flight.
+    var sending = !editing && state.cipThreadSending === app.id;
     var seenByIndex = latestCipSeen(messages);
     var rows = messages.length
       ? '<div class="tma-cip-thread">' + messages.map(function (m, index) {
@@ -12494,10 +12837,20 @@
       renderCipReplyPreview(editing ? null : reply) +
       laneField +
       '<textarea class="tma-portal-textarea" data-cip-thread-body rows="3" maxlength="4000" placeholder="' +
-      esc(copy.placeholder) +
-      '">' + esc(draft) + '</textarea>' +
+      esc(copy.placeholder) + '"' + (sending ? ' readonly' : '') +
+      '>' + esc(draft) + '</textarea>' +
       '<div class="tma-portal-form-actions">' +
-      '<button type="submit" class="tma-no-data__btn">' + esc(copy.button) + '</button></div></form>';
+      '<button type="submit" class="tma-no-data__btn"' + (sending ? ' disabled aria-busy="true"' : '') + '>' +
+      (sending ? 'Sending…' : esc(copy.button)) + '</button></div></form>';
+  }
+
+  /** A key for one press of Send, so the server can file a repeat once. */
+  function cipSendKey() {
+    try {
+      if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+    } catch (e) { /* fall through */ }
+
+    return 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
   }
 
   function renderCipEditPreview(editing) {
@@ -13778,7 +14131,7 @@
       hint +
       '</p>' +
       (correcting ? '' : cipStatusAttachmentHtml(cipAttachmentPlace(app))) +
-      (!correcting && opts.override ? cipOverrideFieldsHtml() : '') +
+      (!correcting && opts.override ? cipOverrideFieldsHtml(opts.override) : '') +
       (correcting ? '' : cipStatusCcHtml()) +
       '<div class="tma-portal-modal__foot">' +
       '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-number>Cancel</button>' +
@@ -13787,7 +14140,7 @@
       '</div>';
 
     ui.openModal({
-      title: correcting ? 'Edit CIP number' : 'Record submission to the Unit',
+      title: correcting ? (app.cipNumber ? 'Edit CIP number' : 'Add CIP number') : 'Record submission to the Unit',
       body: body,
       onMount: function (el) {
         var input = el.querySelector('[data-cip-number]');
@@ -13832,8 +14185,24 @@
           save.textContent = 'Saving…';
 
           cipPendingStatusFile = correcting ? null : cipStatusFile(el);
-          submitCipNumber(app.id, number, correcting, dateEl ? dateEl.value : null, extra)
-            .then(function (json) {
+          var submittedOn = dateEl ? dateEl.value : null;
+          var sendNumber = function (acknowledge) {
+            var restorePending = cipKeepPendingStatusExtras();
+            var sent = extra;
+            if (acknowledge) {
+              sent = Object.assign({}, extra || {}, { acknowledge: true });
+            }
+
+            return submitCipNumber(app.id, number, correcting, submittedOn, sent)
+              .catch(function (err) {
+                err.retryAcknowledged = correcting ? null : function () {
+                  restorePending();
+                  sendNumber(true).then(onSaved, onFailed);
+                };
+                throw err;
+              });
+          };
+          var onSaved = function (json) {
               ui.closeModal();
               var record = json && json.application;
               var uid = (fromApp && fromApp.clientUid) || state.selectedId;
@@ -13848,12 +14217,13 @@
               } else {
                 repaintClients();
               }
-            })
-            .catch(function (err) {
+          };
+          var onFailed = function (err) {
               save.disabled = false;
               save.textContent = correcting ? 'Save number' : 'Record submission';
-              cipRefused(err, 'Could not save that number.');
-            });
+              cipRefused(err, 'Could not save that number.', err && err.retryAcknowledged);
+          };
+          sendNumber(false).then(onSaved, onFailed);
         });
       },
     });
@@ -13875,6 +14245,7 @@
       payload.override = true;
       payload.note = extra.note;
     }
+    if (extra && extra.acknowledge) payload.acknowledge = true;
 
     return cipPostWithAttachment(base + '/submission', payload);
   }
@@ -15490,7 +15861,14 @@
     return clientsFetch(url, { method: 'POST', body: form });
   }
 
-  function cipOverrideFieldsHtml() {
+  /*
+   * A step further along the file's own lane is not an override: the dialog
+   * that carries it confirms the move and asks for nothing typed. Only a
+   * pull back keeps the reason and the typed OVERRIDE.
+   */
+  function cipOverrideFieldsHtml(mode) {
+    if (mode === 'forward') return '';
+
     return '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
       '<label class="tma-dash__clients-field-label" for="cip-override-note">Reason</label>' +
       '<textarea id="cip-override-note" class="tma-dash__clients-field-textarea" data-cip-override-note rows="3" maxlength="2000" placeholder="Why this file is moving"></textarea>' +
@@ -15505,6 +15883,8 @@
   function cipOverrideFieldsRead(el) {
     var note = el.querySelector('[data-cip-override-note]');
     var word = el.querySelector('[data-cip-override-word]');
+    // Not drawn: a forward move, which has no reason to give.
+    if (!note && !word) return '';
     var reason = note && note.value ? note.value.trim() : '';
 
     if (!reason) {
@@ -15601,7 +15981,7 @@
     });
   }
 
-  function changeCipStatus(to, extra, clientUid, label, note, confirmed) {
+  function changeCipStatus(to, extra, clientUid, label, note, confirmed, moveOpts) {
     var source = cipMenuSource(extra, clientUid);
     var applicationId = (extra && extra.applicationId) || (source && source.id);
     if (!applicationId) {
@@ -15633,8 +16013,20 @@
      * went, so the dialog opens only for a file that has never been submitted.
      */
     var transitionValues = statusValues(source && source.availableTransitions);
-    var earlyOverride = statusValues(source && source.availableOverrides).indexOf(to) !== -1
-      && transitionValues.indexOf(to) === -1;
+    /*
+     * A status further along the file's own lane is a step forward, not an
+     * override: the server marks those rows `forward`, and they are taken
+     * with an ordinary confirmation. Only a pull back asks for the reason
+     * and the typed OVERRIDE. 'forward' still tells the verb's endpoint the
+     * move is off the map, so it goes through Engine::set.
+     */
+    var forwardValues = cipForwardValues(source);
+    var asOverride = function (value) {
+      if (statusValues(source && source.availableOverrides).indexOf(value) === -1) return false;
+
+      return forwardValues.indexOf(value) !== -1 ? 'forward' : true;
+    };
+    var earlyOverride = transitionValues.indexOf(to) === -1 ? asOverride(to) : false;
 
     if (to === 'pending_review' && !(source && source.submittedAt)) {
       if (!state) return;
@@ -15671,7 +16063,7 @@
      * override: the date dialog opens with the typed-confirmation strip so
      * the server's Engine::set can drive the move instead of refusing it.
      */
-    var pickedAsOverride = statusValues(source && source.availableOverrides).indexOf(to) !== -1;
+    var pickedAsOverride = asOverride(to);
 
     if (to === 'non_compliant') {
       openQueryDialog(applicationId, clientUid, pickedAsOverride);
@@ -15744,8 +16136,7 @@
     }
 
     var leftoverDraft = to === 'new' && source && source.status === 'draft';
-    var overrideValues = statusValues(source && source.availableOverrides);
-    if (!leftoverDraft && overrideValues.indexOf(to) !== -1 && !(note && String(note).trim())) {
+    if (!leftoverDraft && asOverride(to) === true && !(note && String(note).trim())) {
       openCipOverrideDialog(to, extra, clientUid, label);
 
       return;
@@ -15770,6 +16161,8 @@
 
     var fields = leftoverDraft ? {} : { status: to };
     if (!leftoverDraft && note && String(note).trim()) fields.note = String(note).trim();
+    if (!leftoverDraft && moveOpts && moveOpts.acknowledge) fields.acknowledge = true;
+    var restorePending = cipKeepPendingStatusExtras();
 
     cipPostWithAttachment(url, fields)
       .then(function (json) {
@@ -15792,9 +16185,19 @@
           var held = applicationFor(clientUid);
           if (held) held._statusPending = false;
         }
-        cipRefused(err, 'Could not change the status.');
+        cipRefused(err, 'Could not change the status.', leftoverDraft ? null : function () {
+          restorePending();
+          changeCipStatus(to, extra, clientUid, label, note, true, { acknowledge: true });
+        });
         if (state && render) render({ forceFull: true });
       });
+  }
+
+  /** The override rows the server marked as a step further along the lane. */
+  function cipForwardValues(source) {
+    return ((source && source.availableOverrides) || [])
+      .filter(function (t) { return t && t.forward; })
+      .map(function (t) { return t.value; });
   }
 
   /*
@@ -15825,7 +16228,7 @@
         '</div>' +
         '<p class="tma-portal-modal__text">' +
         'The application will move to Non-compliant. Response documents go in Additional Documents.</p>' +
-        (override ? cipOverrideFieldsHtml() : '') +
+        (override ? cipOverrideFieldsHtml(override) : '') +
         cipStatusAttachmentHtml(cipAttachmentPlace(applicationFor(clientUid))) +
         cipStatusCcHtml() +
         '<div class="tma-portal-modal__foot">' +
@@ -15919,7 +16322,7 @@
         '</div>' +
         '<p class="tma-portal-modal__text">' +
         'The application will move to DD Query. Response documents go in DD Query Responses.</p>' +
-        (override ? cipOverrideFieldsHtml() : '') +
+        (override ? cipOverrideFieldsHtml(override) : '') +
         cipStatusAttachmentHtml(cipAttachmentPlace(applicationFor(clientUid))) +
         cipStatusCcHtml() +
         '<div class="tma-portal-modal__foot">' +
@@ -16077,7 +16480,7 @@
         '<p class="tma-portal-modal__text">' +
         'The application will move to New Appeal. Appeal papers go in Appeal Documents, ' +
         'which is the only folder open for uploads while the appeal runs.</p>' +
-        (override ? cipOverrideFieldsHtml() : '') +
+        (override ? cipOverrideFieldsHtml(override) : '') +
         cipStatusCcHtml() +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-appeal>Cancel</button>' +
@@ -16163,7 +16566,7 @@
         '</div>' +
         '<p class="tma-portal-modal__text">' +
         'The service provider will be asked to confirm the appeal is ready on their end.</p>' +
-        (override ? cipOverrideFieldsHtml() : '') +
+        (override ? cipOverrideFieldsHtml(override) : '') +
         cipStatusCcHtml() +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-cancel-ready>Cancel</button>' +
@@ -16241,7 +16644,7 @@
         '</div>' +
         '<p class="tma-portal-modal__text">' +
         'The appeal will move to Appeal Submitted.</p>' +
-        (override ? cipOverrideFieldsHtml() : '') +
+        (override ? cipOverrideFieldsHtml(override) : '') +
         cipStatusAttachmentHtml(cipAttachmentPlace(applicationFor(clientUid))) +
         cipStatusCcHtml() +
         '<div class="tma-portal-modal__foot">' +
@@ -16381,20 +16784,31 @@
           save.disabled = true;
           save.textContent = 'Recording…';
 
-          cipPostWithAttachment('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/stage', payload, el)
-            .then(function (json) {
-              ui.closeModal();
-              clientsToast(saveLabel + ' recorded.', 'positive');
-              if (clientUid && json && json.application) {
-                paintCipApplicationStatus(clientUid, json.application.status, json.application);
-              }
-              refreshAfterCipMove(clientUid);
-            })
-            .catch(function (err) {
-              save.disabled = false;
-              save.textContent = saveLabel;
-              cipRefused(err, 'Could not record this date.');
+          var stageUrl = '/portal/cip/applications/' + encodeURIComponent(applicationId) + '/stage';
+          // Kept for a resend once a document warning has been acknowledged:
+          // by then this dialog has closed and its fields are gone.
+          var keptFile = cipStatusFile(el);
+          var keptCc = cipStatusCcValue(el);
+          var recorded = function (json) {
+            ui.closeModal();
+            clientsToast(saveLabel + ' recorded.', 'positive');
+            if (clientUid && json && json.application) {
+              paintCipApplicationStatus(clientUid, json.application.status, json.application);
+            }
+            refreshAfterCipMove(clientUid);
+          };
+          var refused = function (err) {
+            save.disabled = false;
+            save.textContent = saveLabel;
+            cipRefused(err, 'Could not record this date.', function () {
+              cipPendingStatusFile = keptFile;
+              cipPendingStatusCc = keptCc || [];
+              cipPostWithAttachment(stageUrl, Object.assign({}, payload, { acknowledge: true }))
+                .then(recorded, function (again) { cipRefused(again, 'Could not record this date.'); });
             });
+          };
+
+          cipPostWithAttachment(stageUrl, payload, el).then(recorded, refused);
         });
       },
     });
@@ -16426,7 +16840,7 @@
         '</div>' +
         '<p class="tma-portal-modal__text">' +
         'The application will move to Background check.</p>' +
-        (override ? cipOverrideFieldsHtml() : '') +
+        (override ? cipOverrideFieldsHtml(override) : '') +
         cipStatusAttachmentHtml(cipAttachmentPlace(applicationFor(clientUid))) +
         cipStatusCcHtml() +
         '<div class="tma-portal-modal__foot">' +
@@ -16648,7 +17062,7 @@
         // folders, and a filing has none yet: its own form takes the papers.
         (collecting ? '' : cipStatusAttachmentHtml(cipAttachmentPlace(held))) +
         (collecting ? '' : cipStatusCcHtml()) +
-        (opts.override ? cipOverrideFieldsHtml() : '') +
+        (opts.override ? cipOverrideFieldsHtml(opts.override) : '') +
         '<p class="tma-portal-modal__text">' +
         (collecting
           ? 'The application will be added as Approved or Denied.' + letterLine
@@ -19740,12 +20154,15 @@
             else render({ detailOnly: true });
             return;
           }
+          if (state.cipThreadSending) return;
+          state.cipThreadSending = 'edit';
           var saveEdit = threadForm.querySelector('button[type="submit"]');
           if (saveEdit) { saveEdit.disabled = true; saveEdit.textContent = 'Saving…'; }
           clientsFetch('/portal/cip/applications/' + encodeURIComponent(held.id) + '/messages/' + encodeURIComponent(editing.id), {
             method: 'PATCH',
             json: { body: body },
           }).then(function (row) {
+            state.cipThreadSending = null;
             state.cipThreadDraft = '';
             state.cipEditing = null;
             var list = (state.cipThread && state.cipThread.messages) || [];
@@ -19755,30 +20172,54 @@
             if (usesPagedClientsFlow(state)) render();
             else render({ detailOnly: true });
           }).catch(function (err) {
+            state.cipThreadSending = null;
             if (saveEdit) { saveEdit.disabled = false; saveEdit.textContent = 'Save'; }
             clientsToast((err && err.message) || 'This message could not be edited.', 'negative');
           });
           return;
         }
         var reply = state.cipReplyTo && state.cipReplyTo.applicationId === held.id ? state.cipReplyTo : null;
+        /*
+         * One press, one message. On a slow connection the button used to
+         * come back to life whenever the page redrew under the send (a
+         * colleague's message arriving, the file refreshing), with the words
+         * still in the box, and a second press filed the note twice. The
+         * flag outlives a redraw, the composer is drawn busy from it, and the
+         * key makes the server file a repeated press only once.
+         */
+        if (state.cipThreadSending) return;
+        state.cipThreadSending = held.id;
+        state.cipThreadKey = state.cipThreadKey || cipSendKey();
         var save = threadForm.querySelector('button[type="submit"]');
-        if (save) { save.disabled = true; save.textContent = 'Sending…'; }
+        if (save) { save.disabled = true; save.setAttribute('aria-busy', 'true'); save.textContent = 'Sending…'; }
+        if (bodyEl) bodyEl.readOnly = true;
         clientsFetch('/portal/cip/applications/' + encodeURIComponent(held.id) + '/messages', {
           method: 'POST',
-          json: { body: body, lane: lane, replyTo: reply ? reply.id : null },
+          json: { body: body, lane: lane, replyTo: reply ? reply.id : null, clientKey: state.cipThreadKey },
         }).then(function (row) {
+          state.cipThreadSending = null;
+          state.cipThreadKey = null;
           state.cipThreadDraft = '';
           state.cipReplyTo = null;
           state.cipThreadLane = lane;
           if (!state.cipThread) state.cipThread = { messages: [], canPostInternal: canInternal };
-          state.cipThread.messages = (state.cipThread.messages || []).concat([row]);
+          var have = (state.cipThread.messages || []).some(function (m) { return m && row && m.id === row.id; });
+          if (!have) state.cipThread.messages = (state.cipThread.messages || []).concat([row]);
           if (usesPagedClientsFlow(state)) render();
           else render({ detailOnly: true });
         }).catch(function (err) {
-          if (save) {
-            save.disabled = false;
-            save.textContent = cipComposerCopy(lane, reply, canInternal).button;
+          state.cipThreadSending = null;
+          // Still on its way from an earlier press: nothing to undo, and the
+          // key is kept so the retry is the same message.
+          if (err && err.status === 409) return;
+          var now = root.querySelector('[data-cip-thread-form] button[type="submit"]') || save;
+          if (now) {
+            now.disabled = false;
+            now.removeAttribute('aria-busy');
+            now.textContent = cipComposerCopy(lane, reply, canInternal).button;
           }
+          var box = root.querySelector('[data-cip-thread-body]') || bodyEl;
+          if (box) box.readOnly = false;
           clientsToast((err && err.message) || 'Could not send the message.', 'negative');
         });
       });
@@ -20018,6 +20459,9 @@
         if (message.canShare) {
           items += '<button type="button" class="tma-dash__messages-message-menu-item" data-cip-menu="share">Send to service provider</button>';
         }
+        if (message.canDelete) {
+          items += '<button type="button" class="tma-dash__messages-message-menu-item tma-dash__messages-message-menu-item--danger" data-cip-menu="delete">Delete</button>';
+        }
         menu.innerHTML = items;
         openCipFloating(menu, btn);
         menu.querySelector('[data-cip-menu="reply"]').addEventListener('click', function (ev) {
@@ -20045,8 +20489,66 @@
             shareCipMessage(id);
           });
         }
+        var deleteItem = menu.querySelector('[data-cip-menu="delete"]');
+        if (deleteItem) {
+          deleteItem.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            closeCipFloating();
+            deleteCipMessage(id);
+          });
+        }
       });
     });
+
+    /*
+     * Delete one line, here and in the case chat. Asked first: a message
+     * the other side has already read is not one to lose by a stray click.
+     */
+    function deleteCipMessage(messageId) {
+      var held = applicationFor(state.selectedId);
+      if (!held || !held.id || !messageId) return;
+      var go = function () {
+        clientsFetch('/portal/cip/applications/' + encodeURIComponent(held.id) + '/messages/' + encodeURIComponent(messageId), {
+          method: 'DELETE',
+        }).then(function () {
+          if (state.cipThread && state.cipThread.messages) {
+            state.cipThread.messages = state.cipThread.messages.filter(function (m) { return m.id !== messageId; });
+          }
+          if (state.cipEditing && state.cipEditing.id === messageId) state.cipEditing = null;
+          if (state.cipReplyTo && state.cipReplyTo.id === messageId) state.cipReplyTo = null;
+          clientsToast('Message deleted.', 'positive');
+          if (usesPagedClientsFlow(state)) render();
+          else render({ detailOnly: true });
+        }).catch(function (err) {
+          clientsToast((err && err.message) || 'This message could not be deleted.', 'negative');
+        });
+      };
+      var ui = window.TMAPortalUI;
+      if (!ui || !ui.openModal) {
+        if (window.confirm('Delete this message? It is removed here and from the conversation in Messages.')) go();
+        return;
+      }
+      ui.openModal({
+        title: 'Delete message',
+        body: '<p class="tma-portal-modal__text">This message is removed here and from the conversation in Messages.</p>' +
+          '<div class="tma-portal-modal__foot">' +
+          '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-delete-cancel>Cancel</button>' +
+          '<button type="button" class="tma-no-data__btn tma-portal-btn--danger" data-cip-delete-go>Delete</button></div>',
+        onMount: function (el) {
+          var cancel = el.querySelector('[data-cip-delete-cancel]');
+          if (cancel) cancel.addEventListener('click', function () { ui.closeModal(); });
+          var del = el.querySelector('[data-cip-delete-go]');
+          if (del) {
+            del.addEventListener('click', function () {
+              del.disabled = true;
+              ui.closeModal();
+              go();
+            });
+          }
+        },
+      });
+    }
 
     MORPH.unwired(root, '[data-cip-thread-reply]').forEach(function (btn) {
       MORPH.on(btn, 'click', function () {
@@ -20508,6 +21010,13 @@
         BOOT_POSITION.confirm = false;
         if (open) openConfirmSubmissionDialog(state, render);
       }
+
+      /*
+       * "Upload the updated document" or "View the comment" named one line
+       * of the checklist. Claimed here for the same reason as the dialog:
+       * the line is drawn from the application, which has only now arrived.
+       */
+      if (BOOT_POSITION.doc) revealNoticeDocument(takeBootPosition('doc'));
     };
 
     var request = window.TMAStore

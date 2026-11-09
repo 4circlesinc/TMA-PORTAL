@@ -50,6 +50,55 @@ class Engine
         Status::DENIED,
     ];
 
+    /**
+     * Where each status stands along the lifecycle, for telling a step ahead
+     * from a step back.
+     *
+     * The transition map answers "is this the next step"; it cannot answer
+     * "is this further on", and that is the question an administrator's
+     * move needs. Skipping Review Applications to land on Assessment
+     * Feedback is the file moving forward through its own work — asking for
+     * a typed OVERRIDE and a reason there read as though something
+     * irregular were happening. Pulling an Approved file back to Assessment
+     * Feedback is the irregular act, and stays an override.
+     *
+     * Updates Required is not listed: it is a hold, not a place in the
+     * lane, and {@see rank()} places it where the file was held.
+     *
+     * @var array<string, int>
+     */
+    private const ORDER = [
+        Status::NEW => 10,
+        Status::REVIEW_APPLICATION => 20,
+        Status::ASSESSMENT_FEEDBACK => 30,
+        Status::READY_TO_SUBMIT => 40,
+        Status::PENDING_REVIEW => 50,
+        Status::NON_COMPLIANT => 60,
+        Status::BACKGROUND_CHECK => 70,
+        Status::DD_QUERY => 80,
+        Status::DELAYED => 80,
+        Status::GRANTED => 90,
+        Status::DENIED => 90,
+        Status::POST_APPROVAL => 100,
+        Status::POST_APPROVED => 110,
+        Status::POST_DENIED => 110,
+        Status::APPLY_FOR_COR => 120,
+        Status::PENDING_COR => 130,
+        Status::COR_RECEIVED => 140,
+        Status::APPLY_FOR_NIC => 150,
+        Status::PENDING_NIC => 160,
+        Status::NIC_RECEIVED => 170,
+        Status::APPLY_FOR_PASSPORT => 180,
+        Status::PENDING_PASSPORT => 190,
+        Status::PASSPORT_RECEIVED => 200,
+        Status::PASSPORT_DELIVERED => 210,
+        Status::READY_FOR_DELIVERY => 200,
+        Status::CLOSED => 220,
+        Status::NEW_APPEAL => 300,
+        Status::APPEAL_READY => 310,
+        Status::APPEAL_SUBMITTED => 320,
+    ];
+
     /** from => the statuses it may move to. */
     private const TRANSITIONS = [
         Status::DRAFT => [Status::NEW],
@@ -293,6 +342,76 @@ class Engine
     }
 
     /**
+     * {@see availableOverrides()} as the rows a picker draws, each saying
+     * whether it is a step ahead (confirmed like any move) or a pull back
+     * (an override, with its reason).
+     *
+     * @return list<array{value:string,label:string,tone:string,forward:bool}>
+     */
+    public static function overrideChoices(CipApplication $application, ?User $actor, bool $forListing = false): array
+    {
+        return array_map(fn (string $status) => [
+            'value' => $status,
+            'label' => Status::label($status),
+            'tone' => Status::tone($status),
+            'forward' => self::isForward($application, $status),
+        ], self::availableOverrides($application, $actor, $forListing));
+    }
+
+    /**
+     * Is this off-map move a step further along the file's own lane?
+     *
+     * A forward jump is ordinary work — the reader is moving the file on,
+     * not undoing anything — so it is confirmed like any other move and
+     * does not ask for a typed OVERRIDE or a reason. Anything that goes
+     * back, crosses lanes backwards, or would clear a recorded decision is
+     * still an override. Updates Required is never "forward": it is the
+     * send-back.
+     */
+    public static function isForward(CipApplication $application, string $to): bool
+    {
+        $from = $application->status;
+
+        if ($to === $from || $to === Status::UPDATE_REQUIRED || $to === Status::DRAFT) {
+            return false;
+        }
+
+        if (Status::isDecided($from) && ! Status::isDecided($to) && ! self::staysInPostApproval($application, $to)) {
+            return false;
+        }
+
+        // A refusal goes on only to being closed or appealed. Anywhere on
+        // the approval path is the outcome being reversed.
+        if (in_array($from, [Status::DENIED, Status::POST_DENIED], true)) {
+            return $to === Status::CLOSED || in_array($to, Status::APPEAL_LANE, true);
+        }
+
+        $here = self::rank($application, $from);
+        $there = self::rank($application, $to);
+
+        return $here !== null && $there !== null && $there > $here;
+    }
+
+    /** Where a status stands for {@see isForward()}; Updates Required where the file was held. */
+    private static function rank(CipApplication $application, string $status): ?int
+    {
+        if ($status !== Status::UPDATE_REQUIRED) {
+            return self::ORDER[$status] ?? null;
+        }
+
+        if (($application->phase ?? Phase::PRE_APPROVAL) !== Phase::POST_APPROVAL) {
+            // Sent back from Assessment Feedback, before Ready to Submit.
+            return self::ORDER[Status::ASSESSMENT_FEEDBACK] + 5;
+        }
+
+        return match (Pack::current($application)) {
+            Pack::PASSPORT => self::ORDER[Status::APPLY_FOR_PASSPORT] + 5,
+            Pack::NIC => self::ORDER[Status::APPLY_FOR_NIC] + 5,
+            default => self::ORDER[Status::APPLY_FOR_COR] + 5,
+        };
+    }
+
+    /**
      * The same off-map statuses, shown locked, for a reader who may see the
      * lifecycle but may not set those statuses.
      *
@@ -392,7 +511,8 @@ class Engine
             fn (string $to) => $to !== $application->status
                 && ! in_array($to, $next, true)
                 && self::overrideFits($application, $to)
-                && self::packageAllowsOverride($application, $to, $forListing)
+                && (self::packageAllowsOverride($application, $to, $forListing)
+                    || CipAccess::canAcknowledgeBlockers($actor, $to))
                 && (! Stages::owns($to) || $strandedStage($to))
                 && ! Delay::owns($to),
         ));
@@ -632,7 +752,8 @@ class Engine
         }
 
         if (! self::checklistAllows($application, $to)) {
-            throw new NotReady(self::checklistRefusal($to), Review::blockerRows($application));
+            throw (new NotReady(self::checklistRefusal($to), Review::blockerRows($application)))
+                ->acknowledgeableBy($actor, $to);
         }
 
         /*
@@ -705,21 +826,52 @@ class Engine
             ));
         }
 
-        if ($actor !== null && ! self::packageAllowsOverride($application, $to)) {
-            throw new NotReady(self::checklistRefusal($to), Review::blockerRows($application));
+        $forward = self::isForward($application, $to);
+        $acknowledged = ! empty($meta['acknowledged']);
+        unset($meta['acknowledged']);
+
+        /*
+         * Documents that are not Ready for submission are a warning, not a
+         * wall, for the reader who may carry on past them: the refusal lists
+         * them and says so, and the same move sent back acknowledged goes
+         * through, with what was missing kept on the audit row.
+         *
+         * Apply for COR was refused outright; an administrator now gets the
+         * list and the choice. A forward jump to Ready to Submit or the Unit
+         * submission used to pass silently under its override reason; it is
+         * no longer an override, so it shows the list instead. A pull BACK
+         * with a reason stays as it was.
+         */
+        $packageShort = $actor !== null && (
+            ! self::packageAllowsOverride($application, $to)
+            || ($forward && ! self::checklistAllows($application, $to))
+        );
+
+        if ($packageShort) {
+            $refusal = new NotReady(self::checklistRefusal($to), Review::blockerRows($application));
+
+            if (! $acknowledged || ! CipAccess::canAcknowledgeBlockers($actor, $to)) {
+                throw $refusal->acknowledgeableBy($actor, $to);
+            }
+
+            $meta['acknowledgedBlockers'] = array_values(array_map(
+                fn (array $row) => trim(($row['person'] ?? '').' — '.($row['label'] ?? '').' ('.($row['statusLabel'] ?? '').')', ' —'),
+                $refusal->blockers,
+            ));
         }
 
         // Section 26: an administrator may type any listed status, but the audit
         // row has to say why. System writes (a null actor) skip this — the
         // checklist inferring Ready to submit is not a person changing a
-        // label by hand.
-        if ($actor !== null && trim((string) ($meta['note'] ?? '')) === '') {
+        // label by hand. A step further along the lane is not an override
+        // and needs no reason; see {@see isForward()}.
+        if ($actor !== null && ! $forward && trim((string) ($meta['note'] ?? '')) === '') {
             throw new \InvalidArgumentException('Give a reason for changing the status.');
         }
 
         $from = $application->status;
         $extra = [];
-        $meta = array_merge($meta, ['override' => true]);
+        $meta = array_merge($meta, $forward ? ['skippedAhead' => true] : ['override' => true]);
 
         if (Status::isDecided($from) && ! Status::isDecided($to) && ! self::staysInPostApproval($application, $to)) {
             $meta['clearedDecision'] = $application->decision;

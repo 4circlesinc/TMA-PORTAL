@@ -3,6 +3,7 @@
 namespace App\Support\Cip;
 
 use App\Models\CipApplication;
+use App\Models\CipDocument;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\CompanyLocation;
@@ -473,6 +474,27 @@ class Contacts
         $query = 'tab=folders';
 
         /*
+         * Documents sent back: open the checklist line that needs the new
+         * file, on its person's tab, where the Upload control is. The
+         * Documents tab is the file browser and has no checklist.
+         */
+        if ($status === Status::UPDATE_REQUIRED) {
+            $first = self::firstSentBack($application);
+            if ($first !== null) {
+                return self::documentPath($first);
+            }
+        }
+
+        /*
+         * A stage that asks for documents (Stage 1 COR, Stage 2 NIC, Stage 3
+         * passport): the checklist on the main applicant's tab, which is
+         * where those slots are uploaded. Each person's tab has their own.
+         */
+        if (in_array($status, [Status::POST_APPROVAL, Status::APPLY_FOR_NIC, Status::APPLY_FOR_PASSPORT], true)) {
+            $query = 'tab=applicant';
+        }
+
+        /*
          * Ready to submit / Apply for COR ask the provider to press Confirm
          * submission. Carry that intent so the button opens the confirm
          * dialog itself instead of dropping the reader on the folders tab to
@@ -497,11 +519,71 @@ class Contacts
             }
         }
 
+        // "Open Appeal Documents" opens that folder, the only one taking
+        // uploads while the file is under appeal.
+        if ($status === Status::NEW_APPEAL || $status === Status::APPEAL_READY) {
+            $appeal = Tree::appealFolder($application);
+            if ($appeal) {
+                $query .= '&folder='.$appeal->uuid;
+            }
+        }
+
         return Pages::application($application->client->uid, $query);
     }
 
     public static function url(CipApplication $application, ?string $status = null): string
     {
         return rtrim(config('app.url'), '/').self::path($application, $status);
+    }
+
+    /**
+     * One checklist line: its person's tab, with the line named so the page
+     * scrolls to it and marks it. Where a sent-back document is replaced and
+     * where its comments are read, so the email button lands on the upload.
+     */
+    public static function documentPath(CipDocument $document): string
+    {
+        $document->loadMissing(['application.client', 'person']);
+        $application = $document->application;
+
+        if (! $application?->client) {
+            return $application ? self::path($application) : Pages::home();
+        }
+
+        return Pages::application(
+            $application->client->uid,
+            'tab='.self::personTab($document->person).'&doc='.$document->uuid,
+        );
+    }
+
+    public static function documentUrl(CipDocument $document): string
+    {
+        return rtrim(config('app.url'), '/').self::documentPath($document);
+    }
+
+    /** The application tab a person's checklist sits on. */
+    public static function personTab(?CipPerson $person): string
+    {
+        return match ($person?->role) {
+            CipPerson::ROLE_SPONSOR => 'sponsor',
+            CipPerson::ROLE_DEPENDENT => 'dependents',
+            default => 'applicant',
+        };
+    }
+
+    /**
+     * The first document on the current checklist waiting for a new file,
+     * the one an Updates Required notice opens on.
+     */
+    private static function firstSentBack(CipApplication $application): ?CipDocument
+    {
+        return Review::constrainToCurrentChecklist(
+            CipDocument::query()->where('application_id', $application->id),
+            $application->phase ?? Phase::PRE_APPROVAL,
+            $application,
+        )
+            ->where('status', DocumentStatus::UPDATE_REQUIRED)
+            ->orderBy('id')
+            ->first();
     }
 }

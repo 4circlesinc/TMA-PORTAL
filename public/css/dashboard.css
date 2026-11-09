@@ -18444,13 +18444,6 @@ body:has(.tma-dash__messages-select-bar) .tma-bespoke:not(.is-open) {
   gap: var(--space-4);
 }
 
-.tma-dash__messages-composer-lane-hint {
-  margin: 0;
-  font-size: var(--text-size-12);
-  line-height: 16px;
-  color: var(--color-text-secondary);
-}
-
 .tma-dash__messages-bubble-lane {
   display: block;
   margin-bottom: 2px;
@@ -21013,6 +21006,58 @@ button.tma-file-status-chip:focus-visible,
   background: var(--color-hover);
 }
 
+/*
+ * The selection tick. Not a column of empty boxes beside every row: it sits
+ * on the corner of the row's picture and appears only when it means
+ * something — on hover, on a picked row, and on every row while anything is
+ * picked, so the next one is a single press. On a touch screen, where a tap
+ * opens, a long press picks the first row and the ticks then show on all.
+ */
+.tma-dash__clients-folder {
+  position: relative;
+}
+
+.tma-dash__clients-folder-check {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-4, 4px);
+  border: 1.5px solid var(--color-border-strong, #98a2b3);
+  background: var(--color-white);
+  color: transparent;
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  pointer-events: none;
+}
+
+.tma-dash__clients-folder:hover .tma-dash__clients-folder-check,
+.tma-dash__clients-folder:focus-visible .tma-dash__clients-folder-check,
+.tma-dash__clients-folder.is-selected .tma-dash__clients-folder-check,
+.has-selection > .tma-dash__clients-folder .tma-dash__clients-folder-check {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.tma-dash__clients-folder.is-selected .tma-dash__clients-folder-check {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-white);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tma-dash__clients-folder-check {
+    transition: none;
+  }
+}
+
 .tma-dash__clients-folder-icon {
   display: inline-flex;
   align-items: center;
@@ -22437,6 +22482,53 @@ a.tma-dash__clients-edit-btn--accent:visited {
   flex-direction: column;
   gap: var(--space-12);
   margin-top: var(--space-16);
+}
+
+/* Files a case-chat line carried, on the application's own thread. */
+.tma-cip-thread__files {
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.tma-cip-thread__file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-8);
+  border-radius: var(--radius-8);
+  background: var(--color-overlay-4);
+}
+
+.tma-cip-thread__file-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6);
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+  font-weight: 600;
+  color: inherit;
+  text-decoration: none;
+}
+
+.tma-cip-thread__file-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-cip-thread__file-name:hover span {
+  text-decoration: underline;
+}
+
+.tma-cip-thread__file-action {
+  flex: 0 0 auto;
 }
 
 .tma-cip-thread__composer .tma-portal-textarea {
@@ -39123,6 +39215,25 @@ span.tma-dash__messages-profile-avatar {
 
 .tma-dash__clients-checklist-row:first-child { padding-top: 0; }
 .tma-dash__clients-checklist-row:last-child { border-bottom: 0; padding-bottom: 0; }
+
+/* The line an email or a notification named ("sent back", "a comment on"):
+   the reader lands on it, and it is ringed for a moment so it is found
+   without reading the whole list. An outline, so nothing in the row moves. */
+.tma-dash__clients-checklist-row.is-notice-target {
+  border-radius: var(--radius-8);
+  outline: 2px solid var(--color-focus-ring, var(--color-primary));
+  outline-offset: 4px;
+  animation: tma-checklist-notice-flash 2.6s ease;
+}
+
+@keyframes tma-checklist-notice-flash {
+  0%, 100% { background-color: transparent; }
+  15%, 55% { background-color: var(--color-hover); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tma-dash__clients-checklist-row.is-notice-target { animation: none; }
+}
 
 /* Status, not a control: the documented checkbox, frozen so it cannot be
    toggled. Disabled must not fade it — the grey outline / filled tick are

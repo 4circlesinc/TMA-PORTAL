@@ -106,6 +106,7 @@
   var SVG = {
     close: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
     download: '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>',
+    saveFolder: '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5"/><path d="M9.5 13.5h5"/></svg>',
     prev: '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
     next: '<svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>',
     play: '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'
@@ -521,7 +522,15 @@
         (item.canDownload === false
           ? ''
           : '<a class="tma-lightbox__icon-btn" data-lb-download href="' + esc(download) +
-            '" download="' + esc(item.name) + '" aria-label="Download">' + SVG.download + '</a>') +
+            '" download="' + esc(item.name) + '" aria-label="Download" title="Download">' + SVG.download + '</a>') +
+        // A file that arrived in a message or an email can be filed straight
+        // into an applicant's folder (save-to-folder.js picks the click up).
+        (item.saveAttachment && window.TMASaveToFolder
+          ? '<button type="button" class="tma-lightbox__icon-btn" data-save-attachment="' + esc(item.saveAttachment.id) + '"' +
+            ' data-save-attachment-kind="' + esc(item.saveAttachment.kind || 'messaging') + '"' +
+            ' data-save-attachment-name="' + esc(item.name) + '"' +
+            ' aria-label="Save to Application Folder" title="Save to Application Folder">' + SVG.saveFolder + '</button>'
+          : '') +
         '</div>' +
         '</div>' +
         (many

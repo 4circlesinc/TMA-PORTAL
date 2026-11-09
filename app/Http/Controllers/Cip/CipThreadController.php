@@ -9,6 +9,7 @@ use App\Support\Cip\CipAccess;
 use App\Support\Cip\Threads;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * The application messaging centre (section 24).
@@ -49,17 +50,91 @@ class CipThreadController extends Controller
             'body' => ['required', 'string', 'max:'.Threads::MAX_LENGTH],
             'lane' => ['nullable', 'string', 'max:16'],
             'replyTo' => ['nullable', 'uuid'],
+            // One per press of Send. A slow connection that delivers the
+            // same press twice, or a second click while the first is still
+            // on its way, files one message, not two.
+            'clientKey' => ['nullable', 'string', 'max:64'],
         ]);
 
-        $message = Threads::create(
-            $application,
-            $user,
-            $data['body'],
-            (string) ($data['lane'] ?? ''),
-            $data['replyTo'] ?? null,
-        );
+        $sent = $this->alreadySent($application->id, $user->id, $data);
+        if ($sent !== null) {
+            return response()->json(Threads::present($sent->fresh()->load(['author', 'companyMember', 'replyTo']), $user), 200);
+        }
+
+        $claim = null;
+        if (! empty($data['clientKey'])) {
+            $claim = 'cip-thread-send:'.$user->id.':'.$application->id.':'.sha1($data['clientKey']);
+            // The same press still on its way: say so rather than file it twice.
+            abort_unless(Cache::add($claim.':pending', 1, 60), 409, 'This message is already being sent.');
+        }
+
+        try {
+            $message = Threads::create(
+                $application,
+                $user,
+                $data['body'],
+                (string) ($data['lane'] ?? ''),
+                $data['replyTo'] ?? null,
+            );
+        } finally {
+            if ($claim !== null) {
+                Cache::forget($claim.':pending');
+            }
+        }
+
+        if ($claim !== null) {
+            Cache::put($claim, $message->id, now()->addMinutes(10));
+        }
 
         return response()->json(Threads::present($message->fresh()->load(['author', 'companyMember', 'replyTo']), $user), 201);
+    }
+
+    /**
+     * The message this send already filed, if it is a repeat.
+     *
+     * By its key when the page sent one. Otherwise by what it says: the same
+     * words from the same person on the same lane of the same file inside a
+     * few seconds are one press delivered twice, not a second thought.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function alreadySent(int $applicationId, int $userId, array $data): ?CipApplicationMessage
+    {
+        if (! empty($data['clientKey'])) {
+            $id = Cache::get('cip-thread-send:'.$userId.':'.$applicationId.':'.sha1($data['clientKey']));
+            if ($id !== null) {
+                return CipApplicationMessage::query()->whereKey($id)->first();
+            }
+        }
+
+        return CipApplicationMessage::query()
+            ->where('application_id', $applicationId)
+            ->where('author_id', $userId)
+            ->where('body', trim((string) $data['body']))
+            ->when(! empty($data['lane']), fn ($query) => $query->where('lane', $data['lane']))
+            ->where('created_at', '>=', now()->subSeconds(self::REPEAT_WINDOW_SECONDS))
+            ->latest('id')
+            ->first();
+    }
+
+    /** Identical words inside this window are one press delivered twice. */
+    private const REPEAT_WINDOW_SECONDS = 10;
+
+    /** Delete one line: the author's own, or anyone's for an administrator. */
+    public function destroy(Request $request, string $uuid, string $message): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless(CipAccess::canReach($user), 404);
+
+        $application = ApplicationScope::findOrFail($user, $uuid);
+        $row = CipApplicationMessage::query()
+            ->where('application_id', $application->id)
+            ->where('uuid', $message)
+            ->firstOrFail();
+
+        Threads::remove($application, $row, $user);
+
+        return response()->json(['deleted' => true, 'id' => $message]);
     }
 
     public function share(Request $request, string $uuid, string $message): JsonResponse

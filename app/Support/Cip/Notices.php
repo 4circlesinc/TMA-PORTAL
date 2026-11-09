@@ -180,7 +180,9 @@ class Notices
     {
         $application = $document->loadMissing('application')->application;
         $facts = Contacts::facts($application);
-        $url = Contacts::url($application);
+        // The line itself, on its person's tab, where the new file goes.
+        $path = Contacts::documentPath($document);
+        $url = Contacts::documentUrl($document);
         $initials = self::initials($actor, $application);
         $subject = self::line($facts, Status::UPDATE_REQUIRED, $actor, $initials);
         $reason = trim($reason);
@@ -195,6 +197,7 @@ class Notices
             $facts['number'].': '.Status::label(Status::UPDATE_REQUIRED),
             $document->label.' was sent back'.($reason !== '' ? ': '.Str::limit($reason, 140) : '.'),
             Status::UPDATE_REQUIRED,
+            path: $path,
         );
     }
 
@@ -209,14 +212,16 @@ class Notices
     {
         $application = $document->loadMissing('application')->application;
         $facts = Contacts::facts($application);
-        $url = Contacts::url($application);
+        // The commented line, on its person's tab, where its thread opens.
+        $path = Contacts::documentPath($document);
+        $url = Contacts::documentUrl($document);
         $title = $author->name.' commented on '.$document->label.' ('.$facts['number'].')';
         $message = Str::limit(trim($body), 140);
 
         self::fanOut(
             $application,
             fn (?string $name) => Postcards::notification(
-                $title, $message, $url, 'Open the documents',
+                $title, $message, $url, 'View the comment',
                 $name ? (strtok($name, ' ') ?: $name) : null, 'CIP Applications',
             ),
             'cip-comment',
@@ -226,6 +231,7 @@ class Notices
             $message,
             Copies::COMMENT,
             $author->email,
+            $path,
         );
     }
 

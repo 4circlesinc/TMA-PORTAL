@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 
 /**
@@ -65,6 +66,16 @@ class CipApplicationMessage extends Model
     public function reactions(): HasMany
     {
         return $this->hasMany(CipApplicationMessageReaction::class, 'message_id');
+    }
+
+    /**
+     * The same line in the case chat. Its attachments are this message's:
+     * a file sent in Messages is filed on the application as this row, and
+     * the bytes stay where the chat keeps them.
+     */
+    public function chatCopy(): HasOne
+    {
+        return $this->hasOne(Message::class, 'cip_application_message_id');
     }
 
     public function isInternal(): bool

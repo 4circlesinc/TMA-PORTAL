@@ -150,16 +150,16 @@ class AvailabilityService
     }
 
     /** Drop expired states and apply schedules, then resolve primary. */
-    public static function recompute(User $user, ?UserPresence $presence = null): UserPresence
+    public static function recompute(User $user, ?UserPresence $presence = null, bool $announce = false): UserPresence
     {
-        return self::syncPrimary($user, $presence, true);
+        return self::syncPrimary($user, $presence, true, $announce);
     }
 
     /**
      * Resolve primary status. Persists and broadcasts only when it changed,
      * so list endpoints that read many users do not write per row.
      */
-    private static function syncPrimary(User $user, ?UserPresence $presence = null, bool $applySchedules = false): UserPresence
+    private static function syncPrimary(User $user, ?UserPresence $presence = null, bool $applySchedules = false, bool $announceAnyway = false): UserPresence
     {
         self::purgeExpired($user);
         self::collapseManual($user);
@@ -190,8 +190,20 @@ class AvailabilityService
                 'status_started_at' => $primary['startedAt'],
                 'status_expires_at' => $primary['expiresAt'],
             ])->save();
+        }
 
-            self::announce($user, $primary);
+        /*
+         * Coming online or dropping off is news even when the status is not.
+         *
+         * Somebody whose status is "In Office" stays "In Office" when their
+         * laptop closes, so the status alone never changed and nothing was
+         * sent: every board that had them green went on showing them online
+         * until it next polled, and the conversation header until a reload.
+         * The caller that knows the connection flipped asks for the announce,
+         * and the event says which way it went.
+         */
+        if ($changed || $announceAnyway) {
+            self::announce($user, $primary, $online, $presence);
         }
 
         return $presence;
@@ -610,11 +622,18 @@ class AvailabilityService
     }
 
     /** @param  array{status: string, source: ?string, message: ?string, label: string}  $primary */
-    private static function announce(User $user, array $primary): void
+    private static function announce(User $user, array $primary, bool $online, ?UserPresence $presence = null): void
     {
         if (MessagingSettings::get($user, 'onlineStatus') === MessagingSettings::NOBODY) {
             return;
         }
+
+        $primary['online'] = $online;
+        // Withheld when last-seen is hidden: the board then says "recently",
+        // which is what it says for them everywhere else.
+        $primary['lastSeenAt'] = MessagingSettings::get($user, 'lastSeen') === MessagingSettings::NOBODY
+            ? null
+            : $presence?->last_seen_at;
 
         Broadcaster::to(new UserStatusChanged($user, $primary));
     }

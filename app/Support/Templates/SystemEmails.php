@@ -1099,6 +1099,7 @@ class SystemEmails
         $vars = [
             'from' => 'Who the unread message is from',
             'group' => 'The group name, when the unread message was sent in a group. Empty for a direct message.',
+            'application' => 'The application number, when the conversation is about an application. Empty otherwise.',
             'url' => 'Where the button goes',
         ];
         $sample = ['from' => 'Dana Reed', 'group' => 'Tax team'];
@@ -1108,47 +1109,47 @@ class SystemEmails
             'message-reminder-1' => [
                 'name' => 'Unread message (1 hour)',
                 'category' => 'Messages',
-                'when' => 'Sent when a portal message has sat unread for about an hour. A preview of it rides along as a callout. The subject names the group when the message was sent there, and the sender when it was a direct message.',
+                'when' => 'Sent when a portal message has sat unread for about an hour. A preview of it rides along as a callout. The subject names the application when the conversation is about one, the group when the message was sent there, and the sender when it was a direct message.',
                 'variables' => $vars,
                 'sample' => $sample,
                 'sampleExtras' => $quote,
                 'copy' => [
-                    'subject' => '{{#group}}Reminder: unread message from {{from}} in {{group}}{{/group}}{{^group}}Reminder: unread message from {{from}}{{/group}}',
-                    'preheader' => '{{#group}}An unread message from {{from}} is waiting in {{group}}.{{/group}}{{^group}}An unread message from {{from}} is waiting.{{/group}}',
-                    'title' => '{{#group}}Unread message in {{group}}{{/group}}{{^group}}Unread message from {{from}}{{/group}}',
-                    'lead' => '{{#group}}{{from}} sent it about an hour ago.{{/group}}{{^group}}It arrived about an hour ago.{{/group}}',
+                    'subject' => '{{#application}}Reminder: unread message from {{from}} about application {{application}}{{/application}}{{^application}}{{#group}}Reminder: unread message from {{from}} in {{group}}{{/group}}{{^group}}Reminder: unread message from {{from}}{{/group}}{{/application}}',
+                    'preheader' => '{{#application}}{{from}} sent you a message about application {{application}}.{{/application}}{{^application}}{{#group}}An unread message from {{from}} is waiting in {{group}}.{{/group}}{{^group}}An unread message from {{from}} is waiting.{{/group}}{{/application}}',
+                    'title' => '{{#application}}Unread message about application {{application}}{{/application}}{{^application}}{{#group}}Unread message in {{group}}{{/group}}{{^group}}Unread message from {{from}}{{/group}}{{/application}}',
+                    'lead' => '{{#application}}{{from}} sent it about an hour ago.{{/application}}{{^application}}{{#group}}{{from}} sent it about an hour ago.{{/group}}{{^group}}It arrived about an hour ago.{{/group}}{{/application}}',
                     'button' => 'Read the message',
                 ],
             ],
             'message-reminder-2' => [
                 'name' => 'Unread message (next day)',
                 'category' => 'Messages',
-                'when' => 'The second nudge, sent when the message is still unread the next working day. The subject names the group when the message was sent there, and the sender when it was a direct message.',
+                'when' => 'The second nudge, sent when the message is still unread the next working day. The subject names the application when the conversation is about one, the group when the message was sent there, and the sender when it was a direct message.',
                 'variables' => $vars,
                 'sample' => $sample,
                 'sampleExtras' => $quote,
                 'copy' => [
-                    'subject' => "{{#group}}Reminder: {{from}}'s message in {{group}} is still unread{{/group}}{{^group}}Reminder: {{from}}'s message is still unread{{/group}}",
-                    'preheader' => "{{#group}}{{from}}'s message in {{group}} is still unread.{{/group}}{{^group}}{{from}}'s message is still unread.{{/group}}",
+                    'subject' => "{{#application}}Reminder: {{from}}'s message about application {{application}} is still unread{{/application}}{{^application}}{{#group}}Reminder: {{from}}'s message in {{group}} is still unread{{/group}}{{^group}}Reminder: {{from}}'s message is still unread{{/group}}{{/application}}",
+                    'preheader' => "{{#application}}{{from}}'s message about application {{application}} is still unread.{{/application}}{{^application}}{{#group}}{{from}}'s message in {{group}} is still unread.{{/group}}{{^group}}{{from}}'s message is still unread.{{/group}}{{/application}}",
                     'eyebrow' => 'Reminder',
-                    'title' => "{{#group}}{{group}} still has an unread message{{/group}}{{^group}}{{from}}'s message is still unread{{/group}}",
-                    'lead' => "{{#group}}{{from}} sent it.{{/group}}{{^group}}Here's what they sent.{{/group}}",
+                    'title' => "{{#application}}Unread message about application {{application}}{{/application}}{{^application}}{{#group}}{{group}} still has an unread message{{/group}}{{^group}}{{from}}'s message is still unread{{/group}}{{/application}}",
+                    'lead' => "{{#application}}{{from}} sent it.{{/application}}{{^application}}{{#group}}{{from}} sent it.{{/group}}{{^group}}Here's what they sent.{{/group}}{{/application}}",
                     'button' => 'Read and reply',
                 ],
             ],
             'message-reminder-3' => [
                 'name' => 'Unread message (final)',
                 'category' => 'Messages',
-                'when' => 'The last nudge, sent a full day after the message arrived. The subject names the group when the message was sent there, and the sender when it was a direct message.',
+                'when' => 'The last nudge, sent a full day after the message arrived. The subject names the application when the conversation is about one, the group when the message was sent there, and the sender when it was a direct message.',
                 'variables' => $vars,
                 'sample' => $sample,
                 'sampleExtras' => $quote,
                 'copy' => [
-                    'subject' => '{{#group}}Final reminder: unread message from {{from}} in {{group}}{{/group}}{{^group}}Final reminder: unread message from {{from}}{{/group}}',
-                    'preheader' => "{{#group}}One last reminder: {{from}}'s message in {{group}} is still unread.{{/group}}{{^group}}One last reminder: {{from}}'s message is still unread.{{/group}}",
+                    'subject' => '{{#application}}Final reminder: unread message from {{from}} about application {{application}}{{/application}}{{^application}}{{#group}}Final reminder: unread message from {{from}} in {{group}}{{/group}}{{^group}}Final reminder: unread message from {{from}}{{/group}}{{/application}}',
+                    'preheader' => "{{#application}}One last reminder: {{from}}'s message about application {{application}} is still unread.{{/application}}{{^application}}{{#group}}One last reminder: {{from}}'s message in {{group}} is still unread.{{/group}}{{^group}}One last reminder: {{from}}'s message is still unread.{{/group}}{{/application}}",
                     'eyebrow' => 'Final reminder',
-                    'title' => '{{#group}}Final reminder: unread message in {{group}}{{/group}}{{^group}}Final reminder: unread message from {{from}}{{/group}}',
-                    'lead' => "{{#group}}It's been a full day. {{from}} sent it.{{/group}}{{^group}}It's been a full day.{{/group}}",
+                    'title' => '{{#application}}Final reminder: unread message about application {{application}}{{/application}}{{^application}}{{#group}}Final reminder: unread message in {{group}}{{/group}}{{^group}}Final reminder: unread message from {{from}}{{/group}}{{/application}}',
+                    'lead' => "{{#application}}It's been a full day. {{from}} sent it.{{/application}}{{^application}}{{#group}}It's been a full day. {{from}} sent it.{{/group}}{{^group}}It's been a full day.{{/group}}{{/application}}",
                     'body' => "If now isn't a good time, no problem, the message will be waiting whenever you're ready.",
                     'button' => 'Open the conversation',
                 ],
@@ -1344,6 +1345,15 @@ Children receive a passport and owe the same originals except marriage and divor
             'cip-status-ready-for-delivery' => 'The passport for {{applicant}} has been received and the file is ready for delivery. Arrange collection or courier with T.M. Antoine Partners.',
             'cip-status-closed' => '{{applicant}}’s file is closed. No further documents can be uploaded on this application.',
         ];
+        /*
+         * A stage that asks for documents says so on its button, and the
+         * button opens the checklist where they are uploaded (Contacts::path).
+         */
+        $statusButtons = [
+            'cip-status-post-approval' => 'Upload documents',
+            'cip-status-apply-for-nic' => 'Upload documents',
+            'cip-status-apply-for-passport' => 'Open the checklist',
+        ];
         $statuses = [];
         foreach ([
             'cip-status-new' => ['New Application', 'New Applications', 'Sent when a file is registered as a new application.'],
@@ -1370,7 +1380,7 @@ Children receive a passport and owe the same originals except marriage and divor
                 'variables' => $vars + ['status' => 'The new status'],
                 'sample' => $sample + ['status' => $label],
                 'sampleExtras' => $details,
-                'copy' => array_merge($statusCopy, ['body' => $statusBodies[$key]]),
+                'copy' => array_merge($statusCopy, ['body' => $statusBodies[$key]], isset($statusButtons[$key]) ? ['button' => $statusButtons[$key]] : []),
             ];
         }
 
@@ -1415,7 +1425,7 @@ Children receive a passport and owe the same originals except marriage and divor
                     'title' => 'Updates required on {{number}}',
                     'lead' => 'The reviewing officer has assessed {{applicant}}’s documents and sent {{sent}} with notes.',
                     'body' => "Please replace or re-upload each item below. The reviewing officer's reason is next to the document name.\n\n{{documents}}",
-                    'button' => 'Open the documents',
+                    'button' => 'Upload updated documents',
                     'footNote' => self::CIP_FOOT,
                 ],
             ],
@@ -1598,6 +1608,33 @@ Children receive a passport and owe the same originals except marriage and divor
                 ],
             ],
         ] + $statuses + [
+            /*
+             * A message written on an application, in its Messages tab or in
+             * the case chat that mirrors it. The reader is told in the
+             * subject who wrote and which application it is about, so it is
+             * never mistaken for a general portal message.
+             */
+            'cip-message' => [
+                'name' => 'Message about an application',
+                'category' => 'CIP Applications',
+                'when' => 'Sent when someone writes a message on an application, in its Messages tab or in its case chat. The message itself rides along as a callout, and the button opens that application’s Messages tab.',
+                'variables' => $vars + ['from' => 'Who sent the message'],
+                'sample' => $sample + ['from' => 'Ada Officer'],
+                'sampleExtras' => [
+                    'quote' => 'Please send the certified copy of the passport bio page.',
+                    'details' => [['Application', 'GAL26-00001'], ['Applicant', 'Chen Wei'], ['From', 'Ada Officer']],
+                ],
+                'copy' => [
+                    'subject' => '{{from}} sent you a new message about application {{number}}',
+                    'preheader' => '{{from}} sent you a message about {{applicant}}’s application.',
+                    'eyebrow' => 'CIP Applications',
+                    'greeting' => self::CIP_HI,
+                    'title' => 'New message about application {{number}}',
+                    'lead' => '{{from}} sent you a message about {{applicant}}’s application.',
+                    'button' => 'Read and reply',
+                    'footNote' => self::CIP_FOOT,
+                ],
+            ],
             'cip-status' => [
                 'name' => 'Status changed (other)',
                 'category' => 'CIP Applications',

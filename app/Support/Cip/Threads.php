@@ -3,12 +3,15 @@
 namespace App\Support\Cip;
 
 use App\Events\CipThreadChanged;
+use App\Events\MessageDeleted;
 use App\Models\CipApplication;
 use App\Models\CipApplicationMessage;
 use App\Models\CipApplicationMessageReaction;
 use App\Models\CipApplicationMessageRead;
 use App\Models\CipApplicationMessageReceipt;
+use App\Models\Conversation;
 use App\Models\Message;
+use App\Models\MessageAttachment;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Companies\ContactIdentity;
@@ -17,11 +20,13 @@ use App\Support\Mail\Deliveries;
 use App\Support\Mail\Postcards;
 use App\Support\Messaging\Broadcaster;
 use App\Support\Messaging\ClientConversations;
+use App\Support\Messaging\Mentions;
 use App\Support\Messaging\MessagingPresenter;
 use App\Support\Notifications\Notifier;
 use App\Support\Realtime\Live;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -107,6 +112,161 @@ class Threads
         Live::users(Live::CIP, self::recipientUserIds($application, $message, $author));
 
         return $message;
+    }
+
+    /**
+     * The application a case chat belongs to.
+     */
+    public static function applicationForConversation(Conversation $conversation): ?CipApplication
+    {
+        if ($conversation->cip_application_id) {
+            $found = CipApplication::query()->find($conversation->cip_application_id);
+            if ($found) {
+                return $found;
+            }
+        }
+
+        if (! $conversation->client_id) {
+            return null;
+        }
+
+        return CipApplication::query()
+            ->where('client_id', $conversation->client_id)
+            ->latest('id')
+            ->first();
+    }
+
+    /**
+     * A line written in the case chat that the file could not take as text.
+     *
+     * Plain text sent in Messages is filed on the application first and
+     * copied back to the chat. A message with a file, a voice note, an
+     * announcement or a very long line was not, so the application's
+     * Messages tab never showed it while the chat did: two histories of one
+     * conversation. It is filed here as it stands — its words, if any, and
+     * its attachments read through the chat copy — and linked, so the chat
+     * never copies it back a second time. Nobody is mailed again: the chat
+     * already told everyone.
+     */
+    public static function recordFromChat(Conversation $conversation, Message $message, User $author, string $lane): ?CipApplicationMessage
+    {
+        if ($message->cip_application_message_id || $message->isSystem()) {
+            return null;
+        }
+
+        $application = self::applicationForConversation($conversation);
+        if ($application === null) {
+            return null;
+        }
+
+        $lane = in_array($lane, CipApplicationMessage::LANES, true) ? $lane : CipApplicationMessage::LANE_PROVIDER;
+        $application->loadMissing('provider');
+        $stamp = ContactIdentity::stamp($author, $application->provider?->company_id);
+        $parentId = $message->reply_to_id
+            ? Message::query()->whereKey($message->reply_to_id)->value('cip_application_message_id')
+            : null;
+
+        $filed = DB::transaction(function () use ($application, $author, $stamp, $lane, $message, $parentId) {
+            $filed = new CipApplicationMessage([
+                'application_id' => $application->id,
+                'author_id' => $author->id,
+                'company_member_id' => $stamp['company_member_id'],
+                'author_name' => $stamp['actor_name'] ?: $author->name,
+                'lane' => $lane,
+                'reply_to_id' => $parentId,
+                'body' => (string) ($message->body ?? ''),
+            ]);
+            $filed->timestamps = false;
+            $filed->created_at = $message->created_at ?? now();
+            $filed->updated_at = $filed->created_at;
+            $filed->save();
+
+            $message->forceFill([
+                'cip_application_message_id' => $filed->id,
+                'lane' => $message->lane ?? $lane,
+            ])->save();
+
+            return $filed;
+        });
+
+        self::markRead($application, $author, $filed->id);
+        self::signal($application, 'created');
+        Live::staff(Live::CIP);
+
+        return $filed;
+    }
+
+    /**
+     * The author takes their own message back; an administrator may remove
+     * anyone's, which is the moderation path. Gone from the case chat too.
+     */
+    public static function canDelete(CipApplicationMessage $message, User $viewer): bool
+    {
+        return (int) $message->author_id === (int) $viewer->id || Role::isAdmin($viewer);
+    }
+
+    public static function remove(CipApplication $application, CipApplicationMessage $message, User $actor): void
+    {
+        if ((int) $message->application_id !== (int) $application->id) {
+            abort(404);
+        }
+
+        if ($message->isInternal() && ! self::canPostInternal($actor)) {
+            abort(404);
+        }
+
+        if (! self::canDelete($message, $actor)) {
+            abort(403, 'You cannot delete this message.');
+        }
+
+        $copies = DB::transaction(function () use ($message, $actor) {
+            $copies = Message::query()->where('cip_application_message_id', $message->id)->get();
+
+            foreach ($copies as $copy) {
+                // The chat's own rule for a deleted message: the bubble stays a
+                // placeholder, its files go to the Recycle Bin.
+                $copy->attachments()->each(function (MessageAttachment $attachment) use ($actor) {
+                    $attachment->forceFill(['deleted_by' => $actor->id])->save();
+                    $attachment->delete();
+                });
+                $copy->delete();
+                Mentions::forget($copy);
+            }
+
+            $message->delete();
+
+            return $copies;
+        });
+
+        foreach ($copies as $copy) {
+            $copy->load('conversation');
+            if ($copy->conversation) {
+                Broadcaster::to(new MessageDeleted($copy));
+            }
+        }
+
+        self::signal($application, 'deleted');
+        Live::staff(Live::CIP);
+    }
+
+    /** A copy deleted in the case chat takes the file's line with it. */
+    public static function forgetChatCopy(Message $copy): void
+    {
+        if (! $copy->cip_application_message_id) {
+            return;
+        }
+
+        $file = CipApplicationMessage::query()->with('application')->find($copy->cip_application_message_id);
+        if ($file === null) {
+            return;
+        }
+
+        $application = $file->application;
+        $file->delete();
+
+        if ($application) {
+            self::signal($application, 'deleted');
+        }
     }
 
     /**
@@ -211,7 +371,7 @@ class Threads
         $messages = CipApplicationMessage::query()
             ->where('application_id', $application->id)
             ->whereIn('lane', $lanes)
-            ->with(['author', 'companyMember', 'replyTo', 'reactions.user'])
+            ->with(['author', 'companyMember', 'replyTo', 'reactions.user', 'chatCopy.attachments'])
             ->orderBy('id')
             ->get();
 
@@ -589,7 +749,9 @@ class Threads
         $application->loadMissing('client');
 
         if (! $application->client) {
-            return Pages::home('q='.urlencode($application->displayNumber()));
+            // `search`, not `q`: the applications list reads that one, see
+            // Contacts::path. A `q` link landed on the unfiltered list.
+            return Pages::home('search='.urlencode($application->displayNumber()));
         }
 
         return Pages::application($application->client->uid, 'tab=messages');
@@ -625,13 +787,42 @@ class Threads
                 $message->company_member_id,
             ),
             'canShare' => $message->isInternal() && self::canPostInternal($viewer),
-            'canEdit' => self::canEdit($message, $viewer),
+            'canEdit' => self::canEdit($message, $viewer) && trim((string) $message->body) !== '',
+            'canDelete' => self::canDelete($message, $viewer),
+            'attachments' => self::attachmentsOf($message),
             'edited' => $message->edited_at !== null,
             'replyTo' => self::presentReply($message, $viewer),
             'reactions' => self::reactions($message, $viewer),
             'seenBy' => $seenBy,
             'createdAt' => $message->created_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * The files a line carries, read off its case-chat copy.
+     *
+     * @return list<array{id: string, name: string, mime: ?string, size: int, isImage: bool, url: string, downloadUrl: string}>
+     */
+    private static function attachmentsOf(CipApplicationMessage $message): array
+    {
+        $copy = $message->relationLoaded('chatCopy') ? $message->chatCopy : $message->chatCopy()->with('attachments')->first();
+
+        if ($copy === null) {
+            return [];
+        }
+
+        return $copy->attachments
+            ->map(fn (MessageAttachment $attachment) => [
+                'id' => $attachment->uuid,
+                'name' => (string) $attachment->name,
+                'mime' => $attachment->mime,
+                'size' => (int) $attachment->size,
+                'isImage' => $attachment->isImage(),
+                'url' => '/portal/messaging/attachments/'.$attachment->uuid,
+                'downloadUrl' => '/portal/messaging/attachments/'.$attachment->uuid.'?download=1',
+            ])
+            ->values()
+            ->all();
     }
 
     /**
@@ -871,6 +1062,8 @@ class Threads
         $number = $application->displayNumber();
         $preview = Str::limit($message->body, 140);
         $title = $number.': new message';
+        $facts = Contacts::facts($application);
+        $from = trim((string) ($message->author_name ?: $author->name)) ?: 'Someone';
         $email = $message->lane === CipApplicationMessage::LANE_PROVIDER;
         // The case group chat the message was copied into (mirrorToCaseChat).
         $chat = Message::query()
@@ -882,14 +1075,15 @@ class Threads
             // A firm that chose one notification email: the rest of its
             // people get the bell below and not the postcard.
             if ($email && ! NotificationEmail::quiet($recipient)) {
+                // Who wrote, about which application: the reader must see
+                // at a glance that this concerns a file, not a general chat.
                 Deliveries::send(
-                    Postcards::notification(
-                        $title,
+                    Postcards::cipMessage(
+                        $facts,
+                        $from,
                         $preview,
                         $url,
-                        'Open Messages',
                         $recipient['name'] ? (strtok($recipient['name'], ' ') ?: $recipient['name']) : null,
-                        'CIP Applications',
                     ),
                     $recipient['email'],
                     $application,

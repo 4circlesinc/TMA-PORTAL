@@ -256,6 +256,12 @@
     this._bc.addEventListener('message', function (e) {
       var msg = e.data;
       if (!msg || !msg.id || msg.id === self._tabId) return;
+      // A tab saying goodbye is gone, not merely disconnected: a peer that
+      // kept its row would be counted as still open by hasOtherTab().
+      if (msg.gone) {
+        delete self._peers[msg.id];
+        return;
+      }
       self._peers[msg.id] = {
         at: Date.now(),
         connected: !!msg.connected,
@@ -271,7 +277,7 @@
       // Going away: tell the peers now rather than leaving them to wait out
       // the freshness window before one of them picks the socket back up.
       if (self._bc) {
-        try { self._bc.postMessage({ id: self._tabId, connected: false, visible: false }); } catch (err) { /* ignore */ }
+        try { self._bc.postMessage({ id: self._tabId, connected: false, visible: false, gone: true }); } catch (err) { /* ignore */ }
       }
     });
 
@@ -294,6 +300,21 @@
 
   Realtime.prototype.maybeBeat = function () {
     if (Date.now() - this._lastBeat >= HEARTBEAT_MS) this.beat();
+  };
+
+  /**
+   * Is another tab of this portal still open in this browser?
+   *
+   * Asked as a page closes: the last one tells the server its owner is
+   * leaving, so they turn grey within the minute; any other keeps quiet,
+   * because the person is still here in the tab that stays.
+   */
+  Realtime.prototype.hasOtherTab = function () {
+    var now = Date.now();
+    var self = this;
+    return Object.keys(this._peers || {}).some(function (id) {
+      return now - self._peers[id].at < PEER_FRESH_MS;
+    });
   };
 
   /** Is some other tab of this browser holding a live socket? */

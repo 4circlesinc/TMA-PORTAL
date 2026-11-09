@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\CipPerson;
+use App\Models\CipEvent;
 use App\Models\CipProvider;
 use App\Models\User;
 use App\Support\Access\Role;
@@ -219,14 +220,42 @@ class CipEngineTest extends TestCase
         ]);
     }
 
-    public function test_set_refuses_an_administrator_who_gives_no_reason(): void
+    /**
+     * A step ahead along the file's own lane is ordinary work. It is taken
+     * without a typed reason, and the audit row says it skipped ahead rather
+     * than that somebody overrode the status.
+     */
+    public function test_set_takes_a_forward_jump_without_a_reason_and_does_not_call_it_an_override(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
         $application = Applications::create($galaxy, $admin);
 
+        $this->assertTrue(Engine::isForward($application, Status::BACKGROUND_CHECK));
+        $this->assertTrue(collect(Engine::overrideChoices($application, $admin))
+            ->firstWhere('value', Status::ASSESSMENT_FEEDBACK)['forward']);
+
+        Engine::set($application, Status::ASSESSMENT_FEEDBACK, $admin);
+
+        $this->assertSame(Status::ASSESSMENT_FEEDBACK, $application->fresh()->status);
+        $event = CipEvent::query()->where('action', 'status_changed')->latest('id')->first();
+        $this->assertTrue($event->meta['skippedAhead'] ?? false);
+        $this->assertArrayNotHasKey('override', $event->meta);
+    }
+
+    public function test_set_refuses_an_administrator_who_pulls_a_file_back_without_a_reason(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+        $application = Applications::create($galaxy, $admin);
+        $application->forceFill(['status' => Status::BACKGROUND_CHECK])->save();
+
+        $this->assertFalse(Engine::isForward($application, Status::NEW));
+        $this->assertFalse(collect(Engine::overrideChoices($application, $admin))
+            ->firstWhere('value', Status::NEW)['forward']);
+
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Give a reason for changing the status.');
-        Engine::set($application, Status::BACKGROUND_CHECK, $admin);
+        Engine::set($application, Status::NEW, $admin);
     }
 }

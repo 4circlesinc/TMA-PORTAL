@@ -6,6 +6,21 @@
 (function () {
   'use strict';
 
+  /*
+   * A notice about one account ("Dana Reed requested access") links here
+   * with ?search=<their email>, so the page opens on that row instead of the
+   * whole directory. Read at load, before dashboard.js settles the route and
+   * the query is gone; taken once, by the page (not the Overview card).
+   */
+  var BOOT_SEARCH = (function () {
+    try {
+      if (!/^\/users\/?$/.test(window.location.pathname || '')) return '';
+      return String(new URLSearchParams(window.location.search || '').get('search') || '').trim();
+    } catch (e) {
+      return '';
+    }
+  })();
+
   var ICONS = {
     Add: 'images/icons/tma/Add.svg',
     FunnelSimple: 'images/icons/tma/FunnelSimple-16.svg',
@@ -796,6 +811,11 @@ if (state.filters.user) {
       infoPanelIndex: null,
       isOverview: isOverview,
     };
+
+    if (!isOverview && BOOT_SEARCH) {
+      state.search = BOOT_SEARCH;
+      BOOT_SEARCH = '';
+    }
 
     container.setAttribute('data-users-mounted', '');
     container.setAttribute('data-users-context', context);

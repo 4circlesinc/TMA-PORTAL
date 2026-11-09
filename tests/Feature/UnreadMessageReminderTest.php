@@ -132,6 +132,25 @@ class UnreadMessageReminderTest extends TestCase
         });
     }
 
+    public function test_the_reminder_opens_the_conversation_not_the_inbox(): void
+    {
+        Mail::fake();
+        $sender = $this->user('dana@example.com', 'Dana Reed');
+        $reader = $this->user('chen@example.com', 'Chen Wei');
+        $conversation = $this->conversation([$sender, $reader], Conversation::TYPE_DIRECT);
+        $this->leaveUnread($conversation, $sender);
+
+        $this->artisan('messaging:send-unread-reminders')->assertSuccessful();
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($reader, $conversation) {
+            return $mail->hasTo($reader->email)
+                && str_ends_with(
+                    (string) ($mail->payload['button']['url'] ?? ''),
+                    '/social/messages?conversation='.$conversation->uuid,
+                );
+        });
+    }
+
     public function test_later_reminders_keep_naming_the_group(): void
     {
         $group = Postcards::messageReminder(2, 'Dana Reed', 'Hello', 'https://portal.test/messages', 'Tax team');

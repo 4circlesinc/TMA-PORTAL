@@ -4,8 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Conversation;
 use App\Models\MessageAttachment;
+use App\Models\Folder;
 use App\Support\Files\FileAccess;
+use App\Support\Files\FileValidationException;
+use App\Support\Files\SaveToFolder;
 use App\Support\Files\Vault;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -32,8 +36,40 @@ class MessagingAttachmentController extends Controller
             $attachment->name,
             $attachment->mime,
             // Images, audio and video play inline; anything else downloads.
-            inline: $attachment->isImage() || $attachment->isAudio() || $attachment->isVideo(),
+            // ?download=1 is the Download action: a photo or a video saved
+            // to the computer, not opened in a tab.
+            inline: ! $request->boolean('download')
+                && ($attachment->isImage() || $attachment->isAudio() || $attachment->isVideo()),
         );
+    }
+
+    /**
+     * Save a copy of this attachment into a folder of the document library,
+     * without a round trip through the reader's computer.
+     */
+    public function save(Request $request, string $uuid): JsonResponse
+    {
+        $attachment = $this->attachmentFor($request, $uuid);
+        abort_if($attachment->trashed(), 404);
+
+        $data = $request->validate(['folderId' => ['required', 'string', 'max:64']]);
+        $folder = Folder::query()->where('uuid', $data['folderId'])->firstOrFail();
+
+        $scratch = Vault::scratchCopyOf($attachment->disk, (string) $attachment->path, (string) ($attachment->extension ?? ''));
+        abort_if($scratch === null, 410, 'This attachment is no longer available.');
+
+        try {
+            $file = SaveToFolder::fromPath($request->user(), $folder, $scratch, (string) $attachment->name, 'messaging');
+        } catch (FileValidationException $e) {
+            abort(422, $e->getMessage());
+        } finally {
+            Vault::cleanupLocalCopy($scratch);
+        }
+
+        return response()->json([
+            'file' => ['id' => $file->uuid, 'name' => $file->name],
+            'folder' => ['id' => $folder->uuid, 'name' => $folder->name],
+        ], 201);
     }
 
     public function thumb(Request $request, string $uuid): Response

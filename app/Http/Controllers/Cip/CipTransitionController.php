@@ -76,12 +76,18 @@ class CipTransitionController extends Controller
             // rather than a column: it belongs to one transition, not to the
             // application, and the next move has its own reason.
             'note' => ['nullable', 'string', 'max:2000'],
+            // Sent back after the reader was shown the documents that are
+            // not Ready for submission and chose to carry on.
+            'acknowledge' => ['nullable', 'boolean'],
         ]);
 
         $this->refuseIfItHasItsOwnVerb($application, $data['status']);
 
         $note = trim($data['note'] ?? '');
         $meta = $note === '' ? [] : ['note' => $note];
+        if ($request->boolean('acknowledge')) {
+            $meta['acknowledged'] = true;
+        }
 
         $application = $this->drive($application, $data['status'], $user, $meta);
         StatusAttachment::storeIfPresent($request, $application, $user);
@@ -180,9 +186,8 @@ class CipTransitionController extends Controller
          * only way to close a refusal.
          */
         if ($status === Status::CLOSED && $application->status === Status::POST_DENIED) {
-            // Listed as an override, so it is taken like one: with its reason.
-            abort_if(trim((string) request('note')) === '', 422, 'Give a reason for changing the status.');
-
+            // Closing a refusal is the lane's last step forward, so it is
+            // confirmed like one; see Engine::isForward().
             return;
         }
 
@@ -643,6 +648,7 @@ class CipTransitionController extends Controller
             'stage' => ['required', 'string', Rule::in(Stages::keys())],
             'date' => ['required', 'date'],
             'corNumber' => ['nullable', 'string', 'max:64'],
+            'acknowledge' => ['nullable', 'boolean'],
         ], [
             'date.required' => 'Enter the date for this step.',
         ]);
@@ -659,6 +665,7 @@ class CipTransitionController extends Controller
                 Carbon::parse($data['date']),
                 $data['corNumber'] ?? null,
                 $emailCertificate ? $request->file('attachment') : null,
+                $request->boolean('acknowledge'),
             );
         } catch (\InvalidArgumentException $e) {
             NotReady::abort($e);
@@ -703,12 +710,15 @@ class CipTransitionController extends Controller
              */
             $ordinary = in_array($to, Engine::availableTransitions($application, $actor), true);
             $stated = trim((string) ($meta['note'] ?? '')) !== '';
+            // Acknowledged: the reader has seen what is not Ready for
+            // submission and is carrying on, which only set() allows.
+            $acknowledged = ! empty($meta['acknowledged']);
             // The return from Updates Required is never an override: with a
             // reason or without, apply() is what asks whether a paper is
             // still sent back.
-            $application = ($ordinary
+            $application = (! $acknowledged && ($ordinary
                 || Engine::returnsFromUpdates($application, $to)
-                || (Engine::canTransition($application, $to) && ! $stated))
+                || (Engine::canTransition($application, $to) && ! $stated)))
                 ? Engine::apply($application, $to, $actor, $meta)
                 : Engine::set($application, $to, $actor, $meta);
         } catch (\InvalidArgumentException $e) {
@@ -806,12 +816,7 @@ class CipTransitionController extends Controller
                     'label' => Status::label($status),
                     'tone' => Status::tone($status),
                 ])->all(),
-            'availableOverrides' => collect(Engine::availableOverrides($application, $actor))
-                ->map(fn (string $status) => [
-                    'value' => $status,
-                    'label' => Status::label($status),
-                    'tone' => Status::tone($status),
-                ])->all(),
+            'availableOverrides' => Engine::overrideChoices($application, $actor),
             'lockedStatuses' => collect(Engine::lockedStatuses($application, $actor))
                 ->map(fn (string $status) => [
                     'value' => $status,

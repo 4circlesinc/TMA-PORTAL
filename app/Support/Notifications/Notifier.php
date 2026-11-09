@@ -3,6 +3,7 @@
 namespace App\Support\Notifications;
 
 use App\Events\PortalNotificationCreated;
+use App\Mail\Postcard;
 use App\Models\Client;
 use App\Models\Notification;
 use App\Models\User;
@@ -54,6 +55,10 @@ final class Notifier
      *                                       dedupe_key:   string|null
      *                                       dedupe_minutes: int|null
      *                                       metadata:     array|null
+     *                                       email_postcard: callable(User): Postcard|null
+     *                                                     the email to send instead of the
+     *                                                     plain twin, under the same rules
+     *                                                     (channel on, not online, firm mailbox)
      *                                       }
      */
     public static function send(array $attrs): ?Notification
@@ -183,7 +188,11 @@ final class Notifier
         // that already deliver their own, richer email (approval, invites),
         // where a second "you were approved" mail would read as a duplicate.
         if (($attrs['email'] ?? true) !== false) {
-            self::email($recipient, $notification);
+            self::email(
+                $recipient,
+                $notification,
+                is_callable($attrs['email_postcard'] ?? null) ? $attrs['email_postcard'] : null,
+            );
         }
 
         return $notification;
@@ -196,7 +205,11 @@ final class Notifier
      * email: a dedupe refresh never re-sends. Queued, so a mail hiccup can
      * never fail the action that raised the notification.
      */
-    private static function email(User $recipient, Notification $notification): void
+    /**
+     * @param  (callable(User): Postcard)|null  $postcard  a richer email for this
+     *                                                     notification, when the caller has one
+     */
+    private static function email(User $recipient, Notification $notification, ?callable $postcard = null): void
     {
         if (! $recipient->email) {
             return;
@@ -219,7 +232,9 @@ final class Notifier
         }
 
         try {
-            Mail::to($recipient->email)->queue(Postcards::notification(
+            $mail = $postcard !== null ? $postcard($recipient) : null;
+
+            Mail::to($recipient->email)->queue($mail instanceof Postcard ? $mail : Postcards::notification(
                 $notification->title,
                 $notification->message,
                 $notification->action_url,

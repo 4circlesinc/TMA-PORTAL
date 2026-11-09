@@ -139,6 +139,15 @@
   };
 
   function dotSlug(presence) {
+    /*
+     * Gone is grey, whatever they last chose. A status such as In Office is
+     * kept while they are away so it is still there when they come back, but
+     * a green dot under somebody whose laptop is shut tells the reader they
+     * can be reached when they cannot. Only an explicit `online: false`
+     * counts: the signed-in user's own pill carries no flag and keeps its
+     * colour.
+     */
+    if (presence && presence.online === false) return 'offline';
     var status = presence && presence.status;
     if (status === 'available' || status === 'online') return 'online';
     if (status === 'on_call') return 'on_call';
@@ -173,6 +182,17 @@
         return 'Offline · ' + ls.replace(/^Last seen /i, '');
       }
       var base = p.statusLabel || meta(p.status).label;
+      /*
+       * Not connected, but still wearing a chosen status: say both, so "In
+       * Office" under a grey dot does not read as somebody who is in.
+       */
+      if (p.online === false) {
+        var seenAt = p.lastSeenAt || p.last_seen_at || null;
+        var seen = seenAt && window.TMALastSeen
+          ? window.TMALastSeen.label(seenAt)
+          : (p.lastSeen || 'Last seen recently');
+        return base + ' · Offline, ' + seen.replace(/^Last seen /i, 'last seen ');
+      }
       if (p.statusMessage) return base + ': ' + p.statusMessage;
       return base;
     }
@@ -1360,7 +1380,14 @@
     person.statusSource = payload.source;
     person.statusMessage = payload.message;
     person.statusIcon = payload.icon;
-    person.online = payload.status !== 'offline';
+    // The event says whether they are connected; a chosen status outlives
+    // the connection, so it cannot be inferred from the status.
+    person.online = typeof payload.online === 'boolean' ? payload.online : payload.status !== 'offline';
+    if (person.online) {
+      person.lastSeenAt = new Date().toISOString();
+    } else if (payload.lastSeenAt) {
+      person.lastSeenAt = payload.lastSeenAt;
+    }
     return person;
   }
 

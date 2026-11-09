@@ -3,12 +3,16 @@
 namespace App\Support\Messaging;
 
 use App\Events\InboxUpdated;
+use App\Models\CipApplication;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\Message;
 use App\Models\Notification;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\Contacts;
+use App\Support\Cip\Threads;
+use App\Support\Mail\Postcards;
 use App\Support\Notifications\Notifier;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -120,6 +124,7 @@ final class MessageNotifier
         try {
             $preview = self::preview($message);
             $url = self::url($conversation);
+            $application = $conversation->caseApplication();
             $named = $mentioned['users'] ?? [];
             // An announcement addresses the whole group, whether or not it
             // says @all.
@@ -138,7 +143,7 @@ final class MessageNotifier
                 }
 
                 if ($byName || $everyone) {
-                    self::mention($conversation, $message, $sender, $recipient, $byName, $preview);
+                    self::mention($conversation, $message, $sender, $recipient, $byName, $preview, $application);
 
                     continue;
                 }
@@ -166,6 +171,7 @@ final class MessageNotifier
                         'pushBody' => $preview,
                     ],
                     'email' => $email,
+                    'email_postcard' => self::applicationEmail($application, $sender, $preview),
                 ]);
             }
         } catch (\Throwable $e) {
@@ -197,6 +203,7 @@ final class MessageNotifier
 
         try {
             $preview = self::preview($message);
+            $application = $conversation->caseApplication();
 
             foreach (self::others($conversation, $sender->id) as $participant) {
                 $recipient = $participant->user;
@@ -206,7 +213,7 @@ final class MessageNotifier
                     continue;
                 }
 
-                self::mention($conversation, $message, $sender, $recipient, $byName, $preview);
+                self::mention($conversation, $message, $sender, $recipient, $byName, $preview, $application);
             }
         } catch (\Throwable $e) {
             Log::warning('MessageNotifier.announceMentions failed', ['error' => $e->getMessage()]);
@@ -224,6 +231,7 @@ final class MessageNotifier
         User $recipient,
         bool $byName,
         string $preview,
+        ?CipApplication $application = null,
     ): void {
         Notifier::send([
             'user' => $recipient,
@@ -250,7 +258,30 @@ final class MessageNotifier
                     default => 'Mentioned everyone: ',
                 }.$preview,
             ],
+            'email_postcard' => self::applicationEmail($application, $sender, $preview),
         ]);
+    }
+
+    /**
+     * For a case chat, the email says who wrote about which application and
+     * opens that application's Messages tab, instead of the plain twin
+     * titled only with the group's name.
+     *
+     * @return (callable(User): \App\Mail\Postcard)|null
+     */
+    private static function applicationEmail(?CipApplication $application, User $sender, string $preview): ?callable
+    {
+        if ($application === null) {
+            return null;
+        }
+
+        return fn (User $recipient) => Postcards::cipMessage(
+            Contacts::facts($application),
+            $sender->name,
+            $preview,
+            rtrim(config('app.url'), '/').Threads::path($application),
+            $recipient->first_name ?: (strtok((string) $recipient->name, ' ') ?: null),
+        );
     }
 
     /**

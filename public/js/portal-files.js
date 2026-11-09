@@ -7766,13 +7766,13 @@
     if (all('move')) {
       out.push({
         label: 'Move to\u2026', icon: 'ArrowsOutCardinal',
-        fn: function () { bulkRun('move', payload, null, done, true); },
+        fn: function () { bulkRun('move', payload, null, done, true, pickerStartFor(list)); },
       });
     }
     if (all('copy')) {
       out.push({
         label: 'Copy to\u2026', icon: 'Copy',
-        fn: function () { bulkRun('copy', payload, null, done, true); },
+        fn: function () { bulkRun('copy', payload, null, done, true, pickerStartFor(list)); },
       });
     }
     out.push({ sep: true });
@@ -8144,19 +8144,41 @@
   }
 
   function bulkDestination(mode) {
-    bulkRun(mode, bulkPayload(), null, clearSelection, true);
+    bulkRun(mode, bulkPayload(), null, clearSelection, true, pickerStartFor(selectedItems()));
   }
 
   /* Run a bulk action; when pickTarget is true, open the destination picker. */
-  function bulkRun(action, payload, target, onDone, pickTarget) {
+  function bulkRun(action, payload, target, onDone, pickTarget, startFolder) {
     if (!payload.length) return;
     if ((action === 'move' || action === 'copy') && pickTarget) {
       openDestinationPicker(action === 'move' ? 'Move to' : 'Copy to', function (dest) {
         postBulk(action, payload, dest, onDone);
-      });
+      }, startFolder || pickerStartFor(payload));
       return;
     }
     postBulk(action, payload, target, onDone);
+  }
+
+  /*
+   * Where the destination picker opens: the folder the items are in.
+   *
+   * It used to open at the top of the library every time, so somebody
+   * already inside an applicant's Main Applicant folder, moving one scan into
+   * its subfolder, had to find the client, the application and the person
+   * again from the top. A file says which folder holds it and a folder says
+   * its parent; when the rows do not (a bare {type, id}), the folder this
+   * view has open is the same answer. The breadcrumb still climbs out.
+   */
+  function pickerStartFor(items) {
+    var list = items || [];
+    for (var i = 0; i < list.length; i++) {
+      var it = list[i] || {};
+      var full = it.name ? it : (findItem(it.id) || it);
+      if (full.type === 'file' && full.folder && full.folder.id) return full.folder.id;
+      if (full.type === 'folder' && full.parent && full.parent.id) return full.parent.id;
+    }
+
+    return state.folder || null;
   }
 
   function postBulk(action, payload, target, onDone, extra) {
@@ -8228,8 +8250,8 @@
 
   /* ── destination picker (mini folder browser) ───────── */
 
-  function openDestinationPicker(title, onPick) {
-    var pick = { folder: null, name: (SECTIONS[state.section] || SECTIONS.all).title, crumb: [] };
+  function openDestinationPicker(title, onPick, startFolder) {
+    var pick = { folder: startFolder || null, name: (SECTIONS[state.section] || SECTIONS.all).title, crumb: [] };
 
     var host = ui().openModal({
       title: title,
@@ -8251,8 +8273,12 @@
           net().fetchJSON(net().url('/?' + p.toString())).then(function (res) {
             pick.crumb = res.breadcrumb || [];
             var crumbHtml = '<button type="button" class="tma-portal-picker__crumb" data-pick-crumb="">Top level</button>';
-            (res.breadcrumb || []).forEach(function (c) {
-              crumbHtml += ' / <button type="button" class="tma-portal-picker__crumb" data-pick-crumb="' + esc(c.id) + '">' + esc(displayLibraryFolderName(c.name)) + '</button>';
+            var trail = res.breadcrumb || [];
+            trail.forEach(function (c, i) {
+              var here = i === trail.length - 1;
+              crumbHtml += ' / <button type="button" class="tma-portal-picker__crumb' + (here ? ' is-current' : '') + '"' +
+                (here ? ' aria-current="location"' : '') +
+                ' data-pick-crumb="' + esc(c.id) + '">' + esc(displayLibraryFolderName(c.name)) + '</button>';
             });
             var folders = (res.folders || []);
             var listHtml = folders.length
@@ -8586,12 +8612,14 @@
      * after the server confirms, so callers refresh from it rather than
      * guessing when the list changed.
      */
-    run: function (action, items, onDone) {
+    run: function (action, items, onDone, opts) {
       var payload = this.payload(items);
       if (!payload.length) return;
 
       var pickTarget = action === 'move' || action === 'copy';
-      bulkRun(action, payload, null, onDone || function () {}, pickTarget);
+      // The rows still carry their folder here; the payload does not.
+      var start = (opts && opts.startFolder) || pickerStartFor(items);
+      bulkRun(action, payload, null, onDone || function () {}, pickTarget, start);
     },
 
     canReviewBulk: function (items) {

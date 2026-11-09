@@ -5747,6 +5747,68 @@ label.tma-portal-check-row:hover {
   background: var(--color-white);
 }
 
+/* Background Operations: a source with the items it could not sync under
+   it. The divider moves from the row to the group so the list stays one
+   source to a band. */
+.tma-portal-connector-group {
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.tma-portal-connector-group:last-child { border-bottom: 0; }
+
+.tma-portal-connector-group > .tma-portal-connector { border-bottom: 0; }
+
+.tma-portal-sync-failures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  /* Lined up under the source's name: the row's padding, its 36px logo, the gap. */
+  padding: 0 var(--space-16) var(--space-12) calc(var(--space-16) + 36px + var(--space-16));
+}
+
+.tma-portal-sync-failures__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.tma-portal-sync-failures__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tma-portal-sync-failures__item {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: var(--text-size-12);
+  line-height: var(--text-lh-12);
+}
+
+.tma-portal-sync-failures__name {
+  color: var(--color-black);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.tma-portal-sync-failures__error,
+.tma-portal-sync-failures__more {
+  color: var(--color-text-secondary);
+  font-size: var(--text-size-12);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767px) {
+  .tma-portal-sync-failures {
+    padding: 0 var(--space-12) var(--space-12);
+  }
+}
+
 /* ── placeholder token chips (template and letter editors) ────────── */
 .tma-portal-token-chip {
   display: inline-block;

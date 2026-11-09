@@ -1,6 +1,6 @@
 {
-  "css": "app-3bce73f831b7.css",
-  "js": "app-4592d5fe34b5.js",
+  "css": "app-9f3dce9ac21a.css",
+  "js": "app-6bf87679d5b3.js",
   "sources": {
     "css": [
       "tokens.css",
@@ -94,6 +94,7 @@
       "toast-icons.js",
       "i18n.js",
       "toast.js",
+      "toast-swipe.js",
       "sync-toasts.js",
       "head-dropdown.js",
       "photo-adjuster.js",
@@ -128,6 +129,7 @@
       "portal-upload-manager.js",
       "person-card.js",
       "portal-file-requests.js",
+      "save-to-folder.js",
       "portal-files.js",
       "call-recordings.js",
       "fee-calculator.js",

@@ -206,7 +206,8 @@
           // One switch is the whole story: on = syncing (turning it on also
           // catches the source up immediately), off = paused.
           var progress = t.progress ? '<br>' + esc(t.progress) : '';
-          return '<div class="tma-portal-connector">' +
+          return '<div class="tma-portal-connector-group">' +
+            '<div class="tma-portal-connector">' +
             '<span class="tma-portal-connector__logo"><img src="' + icon + '" alt=""' + rounded + '></span>' +
             '<div class="tma-portal-connector__body">' +
             '<span class="tma-portal-connector__name">' + esc(t.name) +
@@ -216,8 +217,57 @@
             '<span class="tma-portal-connector__desc">' + esc(t.detail || '') + progress + '</span></div>' +
             '<div class="tma-portal-connector__actions" style="display:flex;align-items:center">' +
             ui().toggle(!t.paused, 'data-ops-import-switch="' + esc(t.id) + '"', 'Sync ' + t.name) +
-            '</div></div>';
+            '</div></div>' +
+            failuresBlock(t) +
+            '</div>';
         }).join('') + '</div>' + connectLibraryRow();
+      }
+
+      /*
+       * Items a source could not sync, under it. These used to surface only
+       * as a card over every page ("2 item(s) could not sync") with nothing
+       * here to explain it; they live here now, named, with the reason and a
+       * way to try them again.
+       */
+      function failuresBlock(t) {
+        var count = t.failedItems || 0;
+        if (!count) return '';
+        var list = (t.failures || []).map(function (f) {
+          return '<li class="tma-portal-sync-failures__item">' +
+            '<span class="tma-portal-sync-failures__name">' + esc(f.name) + '</span>' +
+            (f.error ? '<span class="tma-portal-sync-failures__error">' + esc(f.error) + '</span>' : '') +
+            '</li>';
+        }).join('');
+        var more = count > (t.failures || []).length
+          ? '<li class="tma-portal-sync-failures__more">and ' + (count - (t.failures || []).length) + ' more</li>'
+          : '';
+        return '<div class="tma-portal-sync-failures">' +
+          '<div class="tma-portal-sync-failures__head">' +
+          '<span class="tma-portal-status tma-portal-status--danger">' +
+          count + ' item' + (count === 1 ? '' : 's') + ' could not sync</span>' +
+          (t.paused ? '' : ui().btn({ label: 'Try again', small: true, variant: 'ghost', attrs: 'data-ops-retry-failed="' + esc(t.id) + '"' })) +
+          '</div>' +
+          (list || more ? '<ul class="tma-portal-sync-failures__list">' + list + more + '</ul>' : '') +
+          '</div>';
+      }
+
+      function wireRetryFailed() {
+        root.querySelectorAll('[data-ops-retry-failed]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            b.disabled = true;
+            secApi('POST', '/admin/background-ops/imports-run', {
+              target: b.getAttribute('data-ops-retry-failed'),
+              retryFailed: true,
+            }).then(function (res) {
+              ui().toast(res.ok ? 'Trying those items again' : 'Could not retry those items');
+              expectUntil = Date.now() + 60000;
+              load();
+            }).catch(function () {
+              ui().toast('Could not retry those items');
+              b.disabled = false;
+            });
+          });
+        });
       }
 
       var pollTimer = null;
@@ -234,6 +284,7 @@
               esc(d.driver || 'unknown') + '</strong> queue, which can\'t be inspected from here.</p>' +
               ui().section('Imports', pauseBlock);
             wirePause();
+            wireRetryFailed();
             wireConnectLibrary();
             armPoll(d);
             return;
@@ -291,6 +342,7 @@
                 : ''));
 
           wirePause();
+          wireRetryFailed();
           wireConnectLibrary();
 
           root.querySelectorAll('[data-ops-retry], [data-ops-forget]').forEach(function (b) {

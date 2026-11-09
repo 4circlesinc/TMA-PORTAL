@@ -12,10 +12,13 @@ use App\Models\Client;
 use App\Models\Company;
 use App\Models\CompanyMember;
 use App\Models\Conversation;
+use App\Models\ConversationParticipant;
+use App\Models\Message;
 use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Applications;
 use App\Support\Cip\Assignments;
+use App\Support\Messaging\MessageNotifier;
 use App\Support\Realtime\Live;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -194,6 +197,111 @@ class CipThreadTest extends TestCase
         $this->assertDatabaseMissing('portal_notifications', [
             'user_id' => $staff->id, 'type' => 'cip.message',
         ]);
+    }
+
+    public function test_a_message_email_says_who_wrote_about_which_application_and_opens_its_messages(): void
+    {
+        Mail::fake();
+
+        [$staff, , $application] = $this->filed();
+        $number = $application->displayNumber();
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/messages', [
+                'body' => 'Please send the original.',
+                'lane' => 'provider',
+            ])->assertCreated();
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($number) {
+            return $mail->hasTo('gil@galaxy.example')
+                && $mail->subjectLine === 'Ada Admin sent you a new message about application '.$number
+                && ($mail->payload['title'] ?? null) === 'New message about application '.$number
+                && ($mail->payload['lead'] ?? null) === 'Ada Admin sent you a message about CHEN WEI’s application.'
+                && ($mail->payload['quote'] ?? null) === 'Please send the original.'
+                && ($mail->payload['button']['label'] ?? null) === 'Read and reply'
+                && str_ends_with((string) ($mail->payload['button']['url'] ?? ''), '/citizenship-applications/chen-wei?tab=messages');
+        });
+    }
+
+    public function test_a_file_sent_in_the_case_chat_emails_about_the_application(): void
+    {
+        Mail::fake();
+
+        [$staff, $contact, $application] = $this->filed();
+        $conversation = $this->caseChat($application, $staff, $contact);
+
+        $message = Message::create([
+            'conversation_id' => $conversation->id,
+            'user_id' => $staff->id,
+            'type' => Message::TYPE_ATTACHMENT,
+            'body' => null,
+        ]);
+
+        MessageNotifier::announceMessage($conversation, $message, $staff);
+
+        // Not the plain twin titled with the group's name: the reader is told
+        // it concerns this application, and the button opens its Messages.
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($application) {
+            return $mail->hasTo('gil@galaxy.example')
+                && $mail->subjectLine === 'Ada Admin sent you a new message about application '.$application->displayNumber()
+                && ($mail->payload['quote'] ?? null) === 'Sent an attachment'
+                && str_ends_with((string) ($mail->payload['button']['url'] ?? ''), '/citizenship-applications/chen-wei?tab=messages');
+        });
+
+        // The bell still opens the chat itself, as it always has.
+        $this->assertDatabaseHas('portal_notifications', [
+            'user_id' => $contact->id,
+            'type' => 'message.group',
+            'action_url' => '/social/messages?conversation='.$conversation->uuid,
+        ]);
+    }
+
+    public function test_an_unread_case_chat_reminder_names_the_application(): void
+    {
+        Mail::fake();
+
+        [$staff, $contact, $application] = $this->filed();
+        $conversation = $this->caseChat($application, $staff, $contact);
+
+        Message::create([
+            'conversation_id' => $conversation->id,
+            'user_id' => $staff->id,
+            'type' => Message::TYPE_TEXT,
+            'body' => 'The bank letter is still missing.',
+        ])->forceFill(['created_at' => now()->subHours(2)])->save();
+
+        $this->artisan('messaging:send-unread-reminders')->assertSuccessful();
+
+        Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($application) {
+            return $mail->hasTo('gil@galaxy.example')
+                && $mail->subjectLine === 'Reminder: unread message from Ada Admin about application '.$application->displayNumber()
+                && str_ends_with((string) ($mail->payload['button']['url'] ?? ''), '/citizenship-applications/chen-wei?tab=messages');
+        });
+    }
+
+    /** The provider case chat Messages keeps for this application. */
+    private function caseChat(CipApplication $application, User $staff, User $contact): Conversation
+    {
+        $conversation = Conversation::create([
+            'type' => Conversation::TYPE_GROUP,
+            'name' => 'Chen Wei',
+            'created_by' => $staff->id,
+            'client_id' => $application->client_id,
+            'cip_application_id' => $application->id,
+            'subject' => Conversation::SUBJECT_PROVIDER,
+            'last_message_at' => now(),
+        ]);
+
+        foreach ([$staff, $contact] as $member) {
+            ConversationParticipant::create([
+                'conversation_id' => $conversation->id,
+                'user_id' => $member->id,
+                'role' => ConversationParticipant::ROLE_MEMBER,
+                'joined_at' => now(),
+            ]);
+        }
+
+        return $conversation;
     }
 
     public function test_an_internal_note_does_not_mail_the_provider(): void

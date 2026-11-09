@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\RetrySharePointFailures;
 use App\Jobs\SyncSharePointLibrary;
 use App\Models\SharePointConnection;
+use App\Models\SharePointItem;
 use App\Support\Access\Role;
 use App\Support\Imports\ImportPause;
 use App\Support\SharePoint\GraphException;
@@ -169,9 +171,14 @@ class BackgroundOperationsController extends Controller
                     $libraryIds,
                 )),
             ],
+            // "Try again" on items that could not sync: the retry sweep gave
+            // up on them (RetrySharePointFailures::MAX_ATTEMPTS), so they are
+            // handed back to it now rather than waiting for a human forever.
+            'retryFailed' => ['sometimes', 'boolean'],
         ]);
 
         $target = $data['target'];
+        $retryFailed = (bool) ($data['retryFailed'] ?? false);
 
         if ($target === ImportPause::TARGET_SMARTSHEET) {
             abort_if(ImportPause::smartsheet(), 422, 'Resume this import first.');
@@ -190,8 +197,9 @@ class BackgroundOperationsController extends Controller
                 ->where('sync_enabled', true)
                 ->pluck('id');
             $ids->each(fn (int $id) => SyncSharePointLibrary::dispatch($id));
+            $retried = $retryFailed ? $this->retryFailedItems($ids->all()) : 0;
 
-            return response()->json(['status' => 'ok', 'queued' => $ids->count()]);
+            return response()->json(['status' => 'ok', 'queued' => $ids->count(), 'retried' => $retried]);
         }
 
         $uuid = substr($target, strlen('library:'));
@@ -202,8 +210,39 @@ class BackgroundOperationsController extends Controller
             ->where('sync_enabled', true)
             ->firstOrFail();
         SyncSharePointLibrary::dispatch($connection->id);
+        $retried = $retryFailed ? $this->retryFailedItems([$connection->id]) : 0;
 
-        return response()->json(['status' => 'ok', 'queued' => 1]);
+        return response()->json(['status' => 'ok', 'queued' => 1, 'retried' => $retried]);
+    }
+
+    /**
+     * Hand failed items back to the retry sweep, at once.
+     *
+     * The sweep spaces attempts by failure_count and stops at MAX_ATTEMPTS;
+     * clearing the count and backdating the row lets its next pass, queued
+     * here, take them straight away.
+     *
+     * @param  list<int>  $connectionIds
+     */
+    private function retryFailedItems(array $connectionIds): int
+    {
+        if ($connectionIds === []) {
+            return 0;
+        }
+
+        $count = SharePointItem::query()
+            ->whereIn('connection_id', $connectionIds)
+            ->where('sync_status', SharePointItem::FAILED)
+            ->update([
+                'failure_count' => 0,
+                'updated_at' => now()->subHour(),
+            ]);
+
+        if ($count > 0) {
+            RetrySharePointFailures::dispatch();
+        }
+
+        return $count;
     }
 
     /**
