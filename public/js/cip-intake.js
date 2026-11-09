@@ -3894,6 +3894,17 @@
   }
 
   /*
+   * Stop saving this form as a draft, without touching the draft the server
+   * holds. What a parked filing needs: see park().
+   */
+  function stopDraft() {
+    if (state.draftTimer) { clearTimeout(state.draftTimer); state.draftTimer = null; }
+    state.draftSent = '';
+    state.draftSavedAt = null;
+    state.draftResumed = false;
+  }
+
+  /*
    * The application was filed, or the reader threw the form away.
    *
    * Fire and forget: the filing has already landed and a draft that outlives
@@ -3901,11 +3912,8 @@
    * is picked up by the next save, which overwrites it anyway.
    */
   function clearDraft() {
-    if (state.draftTimer) { clearTimeout(state.draftTimer); state.draftTimer = null; }
     var named = (editingDraft() && state.applicationId) ? state.applicationId : state.draftId;
-    state.draftSent = '';
-    state.draftSavedAt = null;
-    state.draftResumed = false;
+    stopDraft();
     // A filed application has no draft to discard. A draft discards itself
     // by name. Deleting "the latest draft of this phase" threw away a
     // different person's unfinished application.
@@ -4427,6 +4435,8 @@
       return;
     }
 
+    var queuedParts = sent || decisionParts().concat(parts());
+
     window.TMAQueue.add({
       kind: 'cip.application',
       label: editing
@@ -4436,7 +4446,16 @@
       url: url,
       // With the decision a post-approval filing records, letter included:
       // the replay is the request that files it.
-      parts: sent || decisionParts().concat(parts()),
+      parts: queuedParts,
+      /*
+       * A filing carries the key the wizard minted, and the server answers a
+       * second landing of it with the first. So the queue may keep trying it
+       * for as long as the firm cannot be reached, instead of giving up after
+       * two tries on a wifi with no internet behind it.
+       */
+      repeatable: queuedParts.some(function (part) {
+        return part && part.name === 'submissionId' && part.value;
+      }),
       // Everything drawn from this application, wherever it was cached. Two
       // prefixes because two screens ask different questions of the same
       // record: the profile keys on the client, the wizard on the application.
@@ -4444,17 +4463,25 @@
       // folders and creates the client record itself, and it runs through the
       // queue's own fetch rather than TMAFilesNet or clientsFetch, so
       // neither seam that invalidates every other write ever sees this one.
-      invalidate: ['cip:application:', 'cip:application-record:', 'files:listing:', 'clients:'],
+      // And the table pages kept on this device: `cip:application:` is not a
+      // prefix of `cip:applications:`, so they outlived the filing.
+      invalidate: ['cip:application:', 'cip:application-record:', 'cip:applications:', 'files:listing:', 'clients:'],
     }).then(function () {
       done();
       /*
-       * Queued counts as filed for the draft's purposes: the write is on the
-       * device and will land, so resuming it later would file it twice. The
-       * DELETE this sends is not delivered either — the reader is offline —
-       * so the server drops the draft itself when the queued filing lands,
-       * see CipApplicationController::store.
+       * The form stops saving itself, and the draft on the server is LEFT.
+       *
+       * It used to be deleted here, on the theory that the DELETE would not be
+       * delivered either. On a flaky line it was: the big filing failed, the
+       * small DELETE got through, and the scans already saved on that draft
+       * went with it. The filing waiting here does not re-send them (the
+       * server has them), so when it landed it was refused for documents the
+       * reader had attached, and was never filed. The queued filing names the
+       * draft, and completes that same row when it lands
+       * (CipApplicationController::store), so leaving it costs nothing and
+       * keeps the firm a copy if this device never comes back.
        */
-      clearDraft();
+      stopDraft();
       forgetRestored();
       if (state.onDone) state.onDone(editing ? optimistic() : null, { queued: true });
     }).catch(function () {

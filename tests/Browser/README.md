@@ -721,6 +721,39 @@ field placement and drawing, and computed CSS only exist in a browser.
   ```sh
   TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/cip-offline.mjs
   ```
+- **`cip-offline-filing.mjs`** — a NEW application filed on a line that
+  cannot carry it: the filing request is cut off, every small request gets
+  through. That is the line that lost applications. The old form deleted the
+  draft as it parked the filing, the DELETE got through, and the filing (which
+  does not re-send scans the draft already holds) was refused when it landed.
+  This pins that the draft is kept, that the table shows the filing once as
+  "Saved offline" without the draft's own row beside it, that it keeps
+  waiting with a reason rather than turning "Not sent", that opening it lands
+  on the draft with its scans in place, and that once the line is back it
+  files by itself, completing that same draft row, with a toast naming the
+  number. Same setup as `cip-intake.mjs`, a **fresh database** (it files Omar
+  Haddad), and an administrator who has not signed in on it before, or the
+  sign-in asks for an emailed code.
+
+  ```sh
+  TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/cip-offline-filing.mjs
+  ```
+- **`queue-delivery.mjs`** — the write queue's delivery rules, with no app
+  running: only `public/js/portal-queue.js` is loaded, on a small local
+  server whose answers the script switches. A filing on a wifi with no
+  internet behind it keeps waiting (it used to fail after two tries five
+  seconds apart and never go again) and lands by itself when the internet
+  returns; a write turned away to a page (a redirect to sign-in, a wifi login
+  page answering 200) is kept rather than deleted as "synced"; a server that
+  was briefly unwell, or a reply that was not the server's, is sent again by
+  itself on the next reconnect or return to the tab; a refusal on the merits
+  is kept for a person and never resent; an edit that got no answer goes to
+  the reader rather than being repeated; and a browser whose offline flag is
+  stuck still finds the firm within a minute. Takes about a minute and a half.
+
+  ```sh
+  node tests/Browser/queue-delivery.mjs
+  ```
 - **`cip-document-order.mjs`** — the order a person's documents read in
   on a CIP application: Update required, then Application review, then
   Ready for submission, then the empty Pending upload slots last, on the

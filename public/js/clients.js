@@ -5134,7 +5134,26 @@
       familyLabel: family ? ('+' + family) : '-',
       failed: failed,
       error: entry.error || '',
+      // The draft on the server this filing completes when it lands, if the
+      // form had saved one: see queuedDraftIds() and openQueuedApplication().
+      draftId: queuedPart(entry, 'draftId'),
     };
+  }
+
+  /*
+   * Drafts a filing waiting on this device stands for.
+   *
+   * The draft is left on the server when a filing is parked (cip-intake.js,
+   * park()), so the firm keeps the scans already saved. Shown as well, the
+   * same person read twice in one table, once "Saved offline" and once
+   * "Draft". The queued row is the one that says where the filing is, so the
+   * draft's row waits behind it until the filing lands and replaces both.
+   */
+  function queuedDraftIds() {
+    var ids = {};
+    QUEUED_APPS.forEach(function (a) { if (a.draftId) ids[a.draftId] = true; });
+
+    return ids;
   }
 
   function refreshQueuedApplications() {
@@ -5165,9 +5184,10 @@
   function queuedStatusChip(a) {
     var label = a.failed ? 'Not sent' : 'Saved offline';
     var tone = a.failed ? 'danger' : 'amber';
+    // A waiting filing that has already tried says why it has not gone yet.
     var title = a.failed
       ? (a.error || 'This application could not be sent.') + ' Open it to fix and file it.'
-      : 'Saved on this device. It is sent to the firm on its own.';
+      : 'Saved on this device. ' + (a.error || 'It is sent to the firm on its own.');
 
     return '<span class="tma-portal-status tma-portal-status--' + tone +
       ' tma-portal-status--inline" title="' + esc(title) + '">' + esc(label) + '</span>';
@@ -5201,12 +5221,35 @@
   /*
    * Open a queued filing in the form, filled in from what was queued. The
    * form reads the handoff as it opens (cip-intake.js, takeQueuedRestore).
+   *
+   * On its draft, when the server still has one. The queued request carries
+   * only the scans the draft did not already hold, so laid over an empty
+   * form it asked again for documents the reader had attached, and filing
+   * it from there meant attaching them all a second time. Opened on the
+   * draft, those scans are already in their slots. Offline, or with the
+   * draft gone, it is the empty form as before: the queued scans are all
+   * there is to show.
    */
   function openQueuedApplication(queuedId, phase) {
+    var known = QUEUED_APPS.filter(function (a) { return String(a.queuedId) === String(queuedId); })[0];
+    var draftId = known && known.draftId;
+    if (!draftId) return openQueuedInForm(queuedId, phase, null);
+
+    clientsFetch('/portal/cip/applications/' + encodeURIComponent(draftId)).then(function (json) {
+      var app = json && json.application;
+      openQueuedInForm(queuedId, phase, app && app.status === 'draft' ? draftId : null);
+    }, function () {
+      openQueuedInForm(queuedId, phase, null);
+    });
+
+    return true;
+  }
+
+  function openQueuedInForm(queuedId, phase, draftId) {
     try {
       window.sessionStorage.setItem('tma.cip.restoreQueued', JSON.stringify({
         id: Number(queuedId),
-        applicationId: null,
+        applicationId: draftId || null,
       }));
     } catch (e) {
       if (window.TMAPortalUI) window.TMAPortalUI.toastError('Couldn’t open this application on this device.');
@@ -5215,11 +5258,17 @@
     }
     var controller = clientsMountRoot && clientsMountRoot._clientsController;
     if (controller) {
-      controller.navigate('new-application', null, { applicationPhase: phase || 'pre_approval' });
+      if (draftId) {
+        controller.navigate('edit-application', null, { applicationId: draftId });
+      } else {
+        controller.navigate('new-application', null, { applicationPhase: phase || 'pre_approval' });
+      }
 
       return true;
     }
-    window.location.assign((window.__TMA_SITE_ROOT || '') + pathForNewApplication(phase || 'pre_approval'));
+    window.location.assign((window.__TMA_SITE_ROOT || '') + (draftId
+      ? pathForClientsScreen('edit-application', draftId)
+      : pathForNewApplication(phase || 'pre_approval')));
 
     return true;
   }
@@ -5249,9 +5298,12 @@
     }
 
     var postApproval = isPostApprovalApplicationsTab(state);
+    var standsFor = queuedDraftIds();
     var rows = queued.map(function (a) {
       return renderQueuedApplicationRow(a, state);
-    }).join('') + sortedApplicationRows().map(function (a) {
+    }).join('') + sortedApplicationRows().filter(function (a) {
+      return !(a.status === 'draft' && standsFor[a.id]);
+    }).map(function (a) {
       return renderApplicationTableRow(a, state, postApproval);
     }).join('');
 

@@ -64,16 +64,35 @@
 
   /* A request that never answers must not hold the queue forever. `running`
      stays true for as long as a send is in flight, so one hung upload used to
-     mean nothing behind it was ever sent again. Generous, because a queued
-     filing can carry scans. */
+     mean nothing behind it was ever sent again.
+
+     The allowance grows with what is being sent. A flat 30 seconds is plenty
+     for a message and nowhere near enough for a filing with its scans going
+     up over the connection somebody has just got back, a phone's hotspot or
+     a hotel: 15 MB at a slow uplink takes minutes. Cut off at 30 seconds, it
+     timed out twice and was handed back as "Not sent" every time, however
+     long the reader then stayed online. See timeoutFor(). */
   var REQUEST_TIMEOUT_MS = 30 * 1000;
+
+  /* Per megabyte of files, roughly a 320 kbit/s uplink. */
+  var TIMEOUT_PER_MB_MS = 25 * 1000;
+
+  var REQUEST_TIMEOUT_MAX_MS = 10 * 60 * 1000;
+
+  /* While the browser says there is no network, how soon to look anyway.
+     That flag can stay stuck after the connection is back, and without a
+     look nothing waiting would ever go. */
+  var PROBE_MS = 60 * 1000;
 
   /* How many attempts an entry gets while the browser has a network: the
      first send and ONE automatic retry. After that it goes to the reader with
      its reason and Try again / Discard, instead of sitting on "Waiting" with
-     no end and nothing to act on. Signed out, a stale token, a server error, a
-     timeout and a failed connection all count. Only a browser that says it is
-     offline does not: being offline is not a reason to give up. */
+     no end and nothing to act on. Signed out, a stale token, a server error
+     and a reply that was not the server's all count, and such an entry is put
+     back in the run by itself on the next wake (revive()). A failed connection
+     and a timeout count only for a change a repeat could apply twice: a
+     message or a new filing keeps waiting, with the reason beside it, because
+     being unable to reach the firm is not a reason to give up. */
   var MAX_SERVER_STALLS = 2;
 
   var dbPromise = null;
@@ -110,6 +129,8 @@
   var forceNext = false;
 
   var retryTimer = null;
+
+  var probeTimer = null;
 
   var retryDelay = RETRY_MS;
 
@@ -295,6 +316,10 @@
       // nonce), handed back when it lands or fails so the screen can settle
       // the thing it drew optimistically. Plain data: it is stored on disk.
       meta: intent.meta || null,
+      // The server makes a repeat of this land once (a message's nonce, a
+      // filing's submission key), so failing to reach it is never a reason
+      // to give up on it: see safeToRepeat().
+      repeatable: !!intent.repeatable,
       at: Date.now(),
       tries: 0,
       state: 'waiting',
@@ -423,7 +448,11 @@
      * `reachable` is what the last attempt learned, and the only way to
      * unlearn it is to try again.
      */
-    if (!force && !browserOnline()) return Promise.resolve(0);
+    if (!force && !browserOnline()) {
+      probeSoon();
+
+      return Promise.resolve(0);
+    }
 
     running = true;
     summary.syncing = true;
@@ -499,6 +528,56 @@
    * meaning the queue learned nothing about this entry, only that now is not
    * the time.
    */
+  /* How long this entry's send may take, by the size of the files in it. */
+  function timeoutFor(entry) {
+    var bytes = 0;
+    (entry.parts || []).forEach(function (part) {
+      if (part && part.file && part.file.size) bytes += part.file.size;
+    });
+
+    return Math.min(
+      REQUEST_TIMEOUT_MAX_MS,
+      REQUEST_TIMEOUT_MS + Math.ceil((bytes / (1024 * 1024)) * TIMEOUT_PER_MB_MS),
+    );
+  }
+
+  /*
+   * Whether sending this twice still makes one change.
+   *
+   * A message carries a nonce and a new filing carries the submission key the
+   * wizard minted; the server finds the first landing by either and answers
+   * with it. Those can go on being tried for as long as the server cannot be
+   * reached. An edit with scans in it cannot: a response lost on the way back
+   * and a retry would attach the same scans twice.
+   *
+   * The flag is set when the entry is queued. Filings queued before it
+   * existed are recognised by the key itself.
+   */
+  function safeToRepeat(entry) {
+    if (entry.repeatable || entry.kind === 'message') return true;
+
+    return entry.kind === 'cip.application' && (entry.parts || []).some(function (part) {
+      return part && part.name === 'submissionId' && part.value;
+    });
+  }
+
+  /*
+   * The server's own answer, and not something standing in for it.
+   *
+   * fetch follows redirects, so a write turned away to a page (the sign-in
+   * screen, "stay signed in?", a wifi login, a proxy's block page) came back
+   * as that page with a 200, and `res.ok` read it as delivered. The entry
+   * was deleted, "synced" was announced, and the application had never
+   * reached the firm. Every write here answers JSON, or nothing at all.
+   */
+  function answered(res) {
+    if (res.redirected) return false;
+    if (res.status === 204) return true;
+    var type = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
+
+    return type.indexOf('json') !== -1;
+  }
+
   function deliver(entry) {
     var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     var settled = false;
@@ -528,7 +607,7 @@
         var err = new Error('timeout');
         err.name = 'AbortError';
         reject(err);
-      }, REQUEST_TIMEOUT_MS);
+      }, timeoutFor(entry));
 
       work.then(function (res) {
         if (settled) return;
@@ -562,11 +641,20 @@
    * where the panel can show it, and once it has happened often enough hand
    * the entry to a person rather than leave it "Waiting" with no end.
    */
-  function stall(entry, reason) {
+  function stall(entry, reason, unsure) {
     entry.stalls = (entry.stalls || 0) + 1;
     entry.error = reason;
     if (entry.stalls >= MAX_SERVER_STALLS) {
       entry.state = 'failed';
+      /*
+       * Not the server's judgment of the change, only of the moment, so the
+       * next time the connection or the reader comes back it is tried again
+       * by itself (revive()), rather than waiting for somebody to find the
+       * button. Except when nobody knows whether it landed: an edit that got
+       * no answer at all may have been applied, and only a person should
+       * decide to send it again.
+       */
+      entry.transient = !unsure;
 
       return putEntry(entry).then(function () {
         document.dispatchEvent(new CustomEvent('tma:queue-failed', {
@@ -612,9 +700,14 @@
         return stall(entry, stallReason(res.status));
       }
 
+      if (res.ok && !answered(res)) {
+        return stall(entry, 'The firm didn’t confirm this was saved, so it is still on this device.');
+      }
+
       if (!res.ok) {
         return res.json().catch(function () { return {}; }).then(function (json) {
           entry.state = 'failed';
+          entry.transient = false;
           entry.error = messageFor(res.status, json);
 
           return putEntry(entry).then(function () {
@@ -631,6 +724,9 @@
         return deleteEntry(entry.id)
           .then(function () { return invalidateFor(entry); })
           .then(function () {
+            // A new filing (it carries its key) became an application; an
+            // edit changed one. The toast says which, as the form does.
+            lastApplied = { json: json, filing: entry.kind === 'cip.application' && safeToRepeat(entry) };
             document.dispatchEvent(new CustomEvent('tma:queue-applied', {
               detail: { kind: entry.kind, label: entry.label, meta: entry.meta || null, response: json },
             }));
@@ -644,9 +740,15 @@
        * Gave up waiting. The browser says there is a network, so this is the
        * server not answering in time, and it counts like any other stall,
        * otherwise an upload the server never finishes would retry for ever.
+       *
+       * Unless a repeat is harmless. A filing whose scans were still going up
+       * on a slow line is not refused, it is slow, and the next try finds the
+       * first landing by its key if the server did finish it.
        */
       if (err && err.name === 'AbortError' && navigator.onLine !== false) {
-        return stall(entry, 'The server took too long to answer.');
+        if (safeToRepeat(entry)) return wait(entry, 'The connection is slow. It keeps trying by itself.');
+
+        return stall(entry, 'The server took too long to answer.', true);
       }
 
       /*
@@ -657,18 +759,42 @@
        * to the reader with Try again and Discard.
        */
       /*
-       * A message is small and safe to repeat (its nonce makes a replay land
-       * once), so it does what a messenger does: keeps trying, further apart
-       * each time, until it is delivered or the server refuses it on its
-       * merits. A filing with scans in it is not safe to retry for ever.
+       * A message is safe to repeat (its nonce makes a replay land once), and
+       * so is a new filing (its submission key does the same), so they do
+       * what a messenger does: keep trying, further apart each time, until
+       * they are delivered or the server refuses them on their merits.
+       *
+       * This is the case that lost applications. A laptop on a wifi with no
+       * internet behind it says it is online, so the filing failed twice in
+       * five seconds, was marked "Not sent", and was never tried again when
+       * the internet did come back. Only an edit, which a repeat could apply
+       * twice, still goes to the reader after its one retry.
        */
-      if (navigator.onLine !== false && entry.kind !== 'message') {
-        return stall(entry, 'Could not send this to the server.');
+      if (navigator.onLine !== false && !safeToRepeat(entry)) {
+        return stall(entry, 'Could not send this to the server.', true);
       }
 
       // Nothing was delivered. Whether that is a dead wifi or a dropped
       // tunnel does not matter: the entry is untouched and the run stops.
-      reachable = false;
+      return wait(entry, 'Waiting for a connection to the firm. It sends by itself.');
+    });
+  }
+
+  /*
+   * Nothing reached the server and nothing is wrong with the change. It stays
+   * waiting, with a line saying why so "Waiting" is never the whole story,
+   * and the run stops and backs off.
+   */
+  function wait(entry, reason) {
+    reachable = false;
+    if (entry.error === reason) {
+      notify();
+
+      return Promise.resolve('stop');
+    }
+    entry.error = reason;
+
+    return putEntry(entry).then(function () {
       notify();
 
       return 'stop';
@@ -683,8 +809,25 @@
     return 'This change could not be saved.';
   }
 
+  /* The server's answer to the last entry that landed, for announce(). */
+  var lastApplied = null;
+
   function announce(count) {
     if (!window.TMAPortalUI || !window.TMAPortalUI.toast) return;
+    /*
+     * A filing says which application it became. "Your offline change has
+     * been synced" left the reader looking for something with no name, in a
+     * table that by then was showing it under a number they had never seen.
+     */
+    var landed = count === 1 && lastApplied;
+    var app = landed && landed.json && landed.json.application;
+    var number = app && (app.number || app.internalNumber);
+    lastApplied = null;
+    if (number) {
+      window.TMAPortalUI.toast('Application ' + number + (landed.filing ? ' created' : ' saved'));
+
+      return;
+    }
     window.TMAPortalUI.toast(count === 1
       ? 'Your offline change has been synced'
       : count + ' offline changes have been synced');
@@ -696,6 +839,68 @@
       retryTimer = null;
       flush();
     }, ms);
+  }
+
+  /*
+   * The browser says there is no network. Look for the firm anyway, once a
+   * minute and then less often, while something is waiting: that flag can
+   * stay stuck after the connection is back, and without this nothing would
+   * be sent until somebody happened to click. Any answer at all means there
+   * is a way through, so the queue is sent as if the person had asked.
+   */
+  var probeDelay = PROBE_MS;
+
+  function probeSoon() {
+    if (probeTimer || summary.waiting === 0) return;
+    probeTimer = setTimeout(function () {
+      probeTimer = null;
+      if (browserOnline() || summary.waiting === 0) {
+        probeDelay = PROBE_MS;
+
+        return;
+      }
+      refreshToken().then(function (through) {
+        if (through) {
+          probeDelay = PROBE_MS;
+          reached = true;
+          forceNext = true;
+          flush();
+
+          return;
+        }
+        probeDelay = Math.min(probeDelay * 2, RETRY_MAX_MS);
+        probeSoon();
+      });
+    }, probeDelay);
+  }
+
+  /*
+   * Back into the run: entries handed to the reader for reasons that were
+   * about the moment, not the change (signed out, the server unwell, a reply
+   * that was not the server's). Asked for when the connection returns, the
+   * tab comes back to the front, or somebody signs in, which is when such a
+   * reason is most likely to have gone away. A change the server refused on
+   * its merits stays where it is: trying it again would only be refused again.
+   */
+  function revive() {
+    return all().then(function (entries) {
+      var back = entries.filter(function (e) { return e.state === 'failed' && e.transient; });
+
+      return Promise.all(back.map(function (e) {
+        e.state = 'waiting';
+        e.stalls = 0;
+        e.transient = false;
+
+        return putEntry(e);
+      })).then(function () {
+        return back.length ? recount().then(function () { return back.length; }) : 0;
+      });
+    });
+  }
+
+  /* Somebody or something says now is a good moment: try what is waiting. */
+  function wake() {
+    return revive().then(function () { return flush(); }, function () { return flush(); });
   }
 
   /* ── the failed pile ────────────────────────────────────────────── */
@@ -785,7 +990,8 @@
     return claimUnstamped().then(recount).then(function () {
       if (accountId != null && markAccountKnown) markAccountKnown();
 
-      return flush();
+      // Signed in: "You were signed out" is no longer true of anything held.
+      return accountId != null ? wake() : flush();
     });
   }
 
@@ -837,8 +1043,10 @@
   window.addEventListener('online', function () {
     reachable = true;
     retryDelay = RETRY_MS;
+    probeDelay = PROBE_MS;
+    if (probeTimer) { clearTimeout(probeTimer); probeTimer = null; }
     notify();
-    flush();
+    wake();
   });
 
   window.addEventListener('offline', function () {
@@ -850,7 +1058,7 @@
   /* A tab that comes back to the front after a laptop was shut is the most
      common way a connection returns without an `online` event firing. */
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible') flush();
+    if (document.visibilityState === 'visible') wake();
   });
 
   window.TMAQueue = {
