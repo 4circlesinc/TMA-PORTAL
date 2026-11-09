@@ -4781,9 +4781,30 @@
     return CIP_PERSON_STATUSES;
   }
 
+  /*
+   * A file with nobody on it but the main applicant has one status: the
+   * application's. A separate person status only means something when there
+   * is a family to move at different paces — a spouse, dependants. Shown
+   * beside the application's own chip on a solo file, the person's step read
+   * as a second, contradicting status ("Post-Approval" in the header,
+   * "Apply for COR" on the card).
+   */
+  function cipStatusFollowsApplication(app) {
+    return !!app && !((app.dependents || []).length);
+  }
+
   function cipPersonStatusChip(member, app, clickable) {
     var appRecord = app || {};
     var person = member;
+
+    // Solo file: the main applicant wears the application's status, and the
+    // chip opens the application's menu.
+    if (cipStatusFollowsApplication(appRecord) && appRecord.statusLabel && appRecord.id) {
+      return clickable
+        ? cipStatusChip(appRecord)
+        : '<span class="tma-portal-status tma-portal-status--' + esc(appRecord.statusTone || 'neutral') +
+          ' tma-portal-status--inline">' + esc(appRecord.statusLabel) + '</span>';
+    }
 
     /*
      * A person with no status of their own yet stands where the file does.
