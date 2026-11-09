@@ -129,7 +129,8 @@ class CipStatusOverrideTest extends TestCase
         Assignments::assign($application->fresh(), $officer, $admin);
 
         $this->assertSame([], Engine::availableOverrides($application->fresh(), $officer));
-        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::lockedStatuses($application->fresh(), $officer));
+        // Nor shown the list greyed out: overrides are not theirs to see.
+        $this->assertSame([], Engine::lockedStatuses($application->fresh(), $officer));
 
         $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [

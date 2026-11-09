@@ -135,6 +135,9 @@ class Engine
         Status::APPLY_FOR_PASSPORT => [Status::PENDING_PASSPORT, Status::UPDATE_REQUIRED],
         Status::PENDING_PASSPORT => [Status::PASSPORT_RECEIVED],
         Status::PASSPORT_RECEIVED => [Status::PASSPORT_DELIVERED],
+        // The end of the lane: a delivered passport is closed off, and that
+        // is the one move left (offMapStatuses offers nothing else here).
+        Status::PASSPORT_DELIVERED => [Status::CLOSED],
         Status::DENIED => [Status::NEW_APPEAL],
 
         /*
@@ -451,27 +454,21 @@ class Engine
     }
 
     /**
-     * The same off-map statuses, shown locked, for a reader who may see the
-     * lifecycle but may not set those statuses.
+     * The off-map statuses, shown locked, to a reader who may not set them.
      *
-     * Empty for an administrator, whose
-     * copy of this list is actionable and arrives through
-     * {@see availableOverrides()}, and for anyone who may not change status
-     * at all.
+     * Always empty now. Workers were shown the whole override list greyed
+     * out — the "Pre-approval override" row on a post-approval file, and the
+     * earlier statuses of their own lane — which read as choices they were
+     * being refused. Overrides are the administrators' alone, and so is the
+     * list: everyone else sees their next steps and the dated steps of the
+     * lane, nothing more. Kept as a method so every payload that sends the
+     * key still sends it.
      *
      * @return list<string>
      */
     public static function lockedStatuses(CipApplication $application, ?User $actor, bool $forListing = false): array
     {
-        if ($actor === null || CipAccess::canOverrideStatus($actor)) {
-            return [];
-        }
-
-        if (! CipAccess::canChangeApplicationStatus($actor)) {
-            return [];
-        }
-
-        return self::offMapStatuses($application, $actor, $forListing);
+        return [];
     }
 
     /**
@@ -499,6 +496,12 @@ class Engine
             return [];
         }
 
+        // Every dated step is behind a delivered passport; Closed is all
+        // that is left, and the menu shows only that.
+        if ($application->status === Status::PASSPORT_DELIVERED) {
+            return [];
+        }
+
         $lane = ($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL
             ? Phase::POST_APPROVAL
             : Phase::PRE_APPROVAL;
@@ -523,6 +526,15 @@ class Engine
          * applicant's documents first — see CipTransitionController::submit.
          */
         if ($application->status === Status::DRAFT) {
+            return [];
+        }
+
+        /*
+         * Nor has a delivered passport. The file's work is done; the one
+         * thing left is to close it off, which is its mapped next step, and
+         * no other status is offered — not even to an administrator.
+         */
+        if ($application->status === Status::PASSPORT_DELIVERED) {
             return [];
         }
 

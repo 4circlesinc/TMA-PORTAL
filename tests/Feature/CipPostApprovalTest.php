@@ -2702,7 +2702,9 @@ class CipPostApprovalTest extends TestCase
         $this->assertSame('ink', $recorded['statusTone']);
         $this->assertSame('2026-08-26', $recorded['passportDeliveredAt']);
         $this->assertNull($recorded['stageAction']);
-        $this->assertSame([], $recorded['availableTransitions']);
+        // Closed off is the one move left, offered as the next step.
+        $this->assertSame([Status::CLOSED], array_column($recorded['availableTransitions'], 'value'));
+        $this->assertSame([], $recorded['availableOverrides']);
         $this->assertTrue($application->fresh()->isClosed());
         $this->assertSame(CipApplication::DECISION_GRANTED, $application->fresh()->decision);
         $this->assertSame(Phase::POST_APPROVAL, $application->fresh()->phase);

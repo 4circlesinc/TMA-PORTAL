@@ -15031,10 +15031,23 @@
      * own lane, because they are reachable from where it stands.
      */
     var lane = cipLaneOf(source);
-    var reachable = next.concat(overrides, stageRows);
     var inLane = function (status) {
       return status.lane === lane || !status.lane;
     };
+    /*
+     * The override row holds overrides, and only an administrator has any.
+     * A mapped next step is never behind it, even when it belongs to the
+     * other lane (Approved → Post-Approval): it is the file's next step, so
+     * it is in the list, and a worker's menu never shows the override row.
+     */
+    var mapped = next.concat(stageRows);
+    var mappedValues = mapped.map(function (status) { return status.value; });
+    var ownOverrides = overrides.filter(function (status) {
+      return inLane(status) && mappedValues.indexOf(status.value) === -1;
+    });
+    var otherOverrides = overrides.filter(function (status) {
+      return status.lane && status.lane !== lane && mappedValues.indexOf(status.value) === -1;
+    });
 
     /*
      * Lifecycle order, not "next step, then everything else".
@@ -15051,10 +15064,8 @@
       next: next,
       overrides: overrides,
       locked: locked,
-      own: reachable.filter(inLane),
-      other: reachable.filter(function (status) {
-        return status.lane && status.lane !== lane;
-      }),
+      own: mapped.concat(ownOverrides),
+      other: otherOverrides,
       ownLocked: all.filter(function (status) {
         if (!inLane(status)) return false;
 

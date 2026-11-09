@@ -480,9 +480,9 @@ class CipTransitionTest extends TestCase
             Engine::availableTransitions($granted, $officer),
         );
         $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::availableOverrides($granted, $admin));
-        // Overrides are the administrators' alone; the officer sees them locked.
+        // Overrides are the administrators' alone; the officer does not see them at all.
         $this->assertSame([], Engine::availableOverrides($granted, $officer));
-        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::lockedStatuses($granted, $officer));
+        $this->assertSame([], Engine::lockedStatuses($granted, $officer));
 
         $post = $this->at($this->application($admin), Status::POST_APPROVAL);
         $post->forceFill(['phase' => Phase::POST_APPROVAL])->save();
@@ -552,6 +552,35 @@ class CipTransitionTest extends TestCase
      * lane. An officer drives the mapped next steps and sees the rest of the
      * lifecycle locked.
      */
+    /**
+     * After the passport is delivered the one status left is Closed: offered
+     * as the ordinary next step (not a greyed-out override), and nothing
+     * else at all — no override list for an administrator, no greyed rows
+     * for anyone.
+     */
+    public function test_a_delivered_passport_has_closed_as_its_only_next_status(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $officer = $this->user(Role::REVIEWING_OFFICER);
+
+        $delivered = $this->at($this->application($admin), Status::PASSPORT_DELIVERED);
+        $delivered->forceFill(['phase' => Phase::POST_APPROVAL])->save();
+        $delivered = $delivered->fresh();
+
+        foreach ([$admin, $officer] as $reader) {
+            $this->assertSame([Status::CLOSED], Engine::availableTransitions($delivered, $reader));
+            $this->assertSame([], Engine::availableOverrides($delivered, $reader));
+            $this->assertSame([], Engine::lockedStatuses($delivered, $reader));
+            $this->assertSame([], Engine::stageStatuses($delivered, $reader));
+        }
+
+        // Closed is a normal move: no override, no reason asked for.
+        $this->actingAs($admin)
+            ->postJson('/portal/cip/applications/'.$delivered->uuid.'/status', ['status' => Status::CLOSED])
+            ->assertOk();
+        $this->assertSame(Status::CLOSED, $delivered->fresh()->status);
+    }
+
     public function test_only_an_administrator_may_set_statuses_off_the_map(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
@@ -565,7 +594,7 @@ class CipTransitionTest extends TestCase
         $granted = $this->at($this->application($admin), Status::GRANTED);
         $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::availableOverrides($granted, $admin));
         $this->assertSame([], Engine::availableOverrides($granted, $officer));
-        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::lockedStatuses($granted, $officer));
+        $this->assertSame([], Engine::lockedStatuses($granted, $officer));
         $this->assertSame([], Engine::lockedStatuses($granted, $admin));
 
         // A new file's next step is still the officer's to drive.
@@ -577,7 +606,7 @@ class CipTransitionTest extends TestCase
         $post->forceFill(['phase' => Phase::POST_APPROVAL])->save();
         $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::availableOverrides($post, $admin));
         $this->assertSame([], Engine::availableOverrides($post, $officer));
-        $this->assertContains(Status::ASSESSMENT_FEEDBACK, Engine::lockedStatuses($post, $officer));
+        $this->assertSame([], Engine::lockedStatuses($post, $officer));
 
         $working = $this->at($this->application($admin), Status::APPLY_FOR_COR);
         $working->forceFill(['phase' => Phase::POST_APPROVAL])->save();

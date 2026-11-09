@@ -477,6 +477,13 @@ class CipPersonStatusTest extends TestCase
         foreach ([$main, $spouse, $child] as $person) {
             $this->assertSame(PersonStatus::PASSPORT_DELIVERED, $person->post_approval_status);
         }
+
+        // Each person, like the file, has Closed left and nothing else.
+        $body = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications/'.$application->uuid)
+            ->json('application');
+        $this->assertSame([PersonStatus::CLOSED], array_column($body['applicant']['availableStatuses'], 'value'));
+        $this->assertSame([], $body['applicant']['lockedStatuses']);
     }
 
     /* ── a step recorded for one person ─────────────────────────────── */

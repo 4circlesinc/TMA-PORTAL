@@ -384,6 +384,12 @@ class PersonStatus
             return [];
         }
 
+        // Past a delivered passport there is nothing to grey out: Closed is
+        // the only status left, and it is offered.
+        if (self::current($person) === self::PASSPORT_DELIVERED) {
+            return [];
+        }
+
         $open = array_merge(
             [self::current($person)],
             array_column(self::availableTransitions($person, $actor, $forListing), 'value'),
@@ -901,6 +907,11 @@ class PersonStatus
 
         if ($person->post_approval_apart !== null || $status === self::CLOSED || $file === self::POST_DENIED) {
             return [];
+        }
+
+        // Their passport is in their hands: closing off is all that is left.
+        if ($status === self::PASSPORT_DELIVERED) {
+            return [self::CLOSED => null];
         }
 
         $next = [];
