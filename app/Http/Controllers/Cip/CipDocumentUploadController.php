@@ -137,8 +137,13 @@ class CipDocumentUploadController extends Controller
             'documents' => ['required', 'array', 'min:1', 'max:60'],
             'documents.*' => ['string', 'max:64'],
             'to' => ['required', 'in:provider,someone'],
-            'recipientName' => ['nullable', 'required_if:to,someone', 'string', 'max:120'],
-            'recipientEmail' => ['nullable', 'required_if:to,someone', 'email', 'max:191'],
+            // Someone else: one or more addresses, entered like the status
+            // dialog's CC. The service provider: its own contacts, plus any
+            // addresses copied in.
+            'emails' => ['nullable', 'required_if:to,someone', 'array', 'max:20'],
+            'emails.*' => ['email', 'max:191'],
+            'cc' => ['nullable', 'array', 'max:20'],
+            'cc.*' => ['email', 'max:191'],
             'message' => ['nullable', 'string', 'max:2000'],
             'allowedExtensions' => ['nullable', 'array', 'max:64'],
             'allowedExtensions.*' => ['string', 'max:32'],
@@ -146,8 +151,9 @@ class CipDocumentUploadController extends Controller
             'send' => ['nullable', 'boolean'],
         ], [
             'documents.required' => 'Choose at least one document to ask for.',
-            'recipientName.required_if' => 'Enter the name of the person you are asking.',
-            'recipientEmail.required_if' => 'Enter the email address of the person you are asking.',
+            'emails.required_if' => 'Enter the email address of the person you are asking.',
+            'emails.*.email' => 'One of those is not an email address.',
+            'cc.*.email' => 'One of the CC addresses is not an email address.',
         ]);
 
         $slots = CipDocument::query()
@@ -160,19 +166,31 @@ class CipDocumentUploadController extends Controller
         }
 
         // Who it goes to: the service provider's contacts on this file, or
-        // the one person named.
+        // the addresses entered. Copied addresses join either list; anyone
+        // with a portal login is also told in the portal.
+        $byEmail = function (string $email): array {
+            return [
+                'email' => $email,
+                'name' => null,
+                'userId' => \App\Models\User::query()
+                    ->whereRaw('LOWER(email) = ?', [mb_strtolower($email)])
+                    ->value('id'),
+            ];
+        };
         $recipients = $data['to'] === 'provider'
             ? array_values(array_filter(
                 \App\Support\Cip\Contacts::providerSide($application),
                 fn (array $r) => ($r['mail'] ?? true) !== false && trim((string) $r['email']) !== '',
             ))
-            : [[
-                'email' => $data['recipientEmail'],
-                'name' => $data['recipientName'],
-                'userId' => \App\Models\User::query()
-                    ->whereRaw('LOWER(email) = ?', [mb_strtolower((string) $data['recipientEmail'])])
-                    ->value('id'),
-            ]];
+            : array_map($byEmail, $data['emails'] ?? []);
+
+        $seen = array_map(fn (array $r) => mb_strtolower((string) $r['email']), $recipients);
+        foreach ($data['cc'] ?? [] as $copy) {
+            if (! in_array(mb_strtolower($copy), $seen, true)) {
+                $recipients[] = $byEmail($copy);
+                $seen[] = mb_strtolower($copy);
+            }
+        }
 
         if ($recipients === []) {
             throw ValidationException::withMessages([
@@ -186,7 +204,7 @@ class CipDocumentUploadController extends Controller
             'message' => trim((string) ($data['message'] ?? '')) ?: null,
             'recipient_name' => $data['to'] === 'provider'
                 ? ($application->provider?->name ?: $first['name'])
-                : $first['name'],
+                : null,
             'recipient_email' => count($recipients) === 1 ? $first['email'] : null,
             'recipient_user_id' => count($recipients) === 1 ? ($first['userId'] ?? null) : null,
             'allowed_extensions' => FileRequests::normalizeExtensions($data['allowedExtensions'] ?? null),

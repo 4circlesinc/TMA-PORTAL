@@ -2183,6 +2183,18 @@
 
 .tma-cip-not-ready .tma-portal-modal__foot { margin-top: 0; }
 
+/* Request documents: wide enough that a long document name and its status
+   chip sit side by side, without the reader scrolling sideways. */
+.tma-portal-modal__card.tma-cip-docreq {
+  width: min(760px, calc(100vw - 32px));
+  max-width: none;
+}
+
+.tma-cip-docreq .tma-dash__clients-checklist-row .tma-portal-check-row {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .tma-portal-request {
   display: flex;
   flex-direction: column;

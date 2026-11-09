@@ -10334,7 +10334,7 @@
           '<ul class="tma-dash__clients-checklist">' +
           group.docs.map(function (d) {
             return '<li class="tma-dash__clients-checklist-row">' +
-              '<label class="tma-portal-check-row">' +
+              '<label class="tma-portal-check-row tma-dash__clients-checklist-label">' +
               '<input type="checkbox" class="tma-dash__check" data-docreq-doc="' + esc(d.id) + '"' +
               (checkedFor(group.person) ? ' checked' : '') + '>' +
               '<span>' + esc(d.label || 'Document') +
@@ -10357,11 +10357,19 @@
       '<label class="tma-portal-radio"><input type="radio" name="cip-docreq-to" value="someone" data-docreq-to' + (provider ? '' : ' checked') + '>' +
       '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Someone else</label>' +
       '</div></div>' +
-      '<div class="tma-dash__clients-field" data-docreq-someone' + (provider ? ' hidden' : '') + '>' +
-      '<label class="tma-dash__clients-field-label" for="cip-docreq-name">Name</label>' +
-      '<input type="text" id="cip-docreq-name" class="tma-dash__clients-field-input" data-docreq-name maxlength="120" placeholder="Jane Doe" autocomplete="off">' +
-      '<label class="tma-dash__clients-field-label" for="cip-docreq-email">Email address</label>' +
-      '<input type="email" id="cip-docreq-email" class="tma-dash__clients-field-input" data-docreq-email maxlength="191" placeholder="jane@example.com" autocomplete="off">' +
+      /*
+       * One address box, the status dialog's CC field: type an address and
+       * it becomes a chip, as many as needed. For the service provider it is
+       * CC (optional, their own contacts are already on the list); for
+       * someone else it is who is being asked.
+       */
+      '<div class="tma-dash__clients-field">' +
+      '<label class="tma-dash__clients-field-label" for="cip-status-cc" data-docreq-cc-label>' +
+      (provider ? 'CC' : 'Email addresses') + '</label>' +
+      '<div class="tma-cip-cc" data-cip-status-cc-box>' +
+      '<input type="text" id="cip-status-cc" class="tma-cip-cc__input" data-cip-status-cc' +
+      ' placeholder="name@firm.com" autocomplete="off" enterkeyhint="done">' +
+      '</div>' +
       '</div>' +
       '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
       '<label class="tma-dash__clients-field-label" for="cip-docreq-message">Instructions</label>' +
@@ -10378,13 +10386,14 @@
 
     ui.openModal({
       title: 'Request documents',
-      cls: 'tma-cip-not-ready',
+      cls: 'tma-cip-not-ready tma-cip-docreq',
       body: body,
       onMount: function (el) {
-        var someone = el.querySelector('[data-docreq-someone]');
+        var ccLabel = el.querySelector('[data-docreq-cc-label]');
         el.querySelectorAll('[data-docreq-to]').forEach(function (radio) {
           radio.addEventListener('change', function () {
-            someone.hidden = radio.value !== 'someone' || !radio.checked;
+            if (!radio.checked || !ccLabel) return;
+            ccLabel.textContent = radio.value === 'someone' ? 'Email addresses' : 'CC';
           });
         });
         el.querySelector('[data-docreq-cancel]').addEventListener('click', function () { ui.closeModal(); });
@@ -10408,13 +10417,20 @@
             expiresAt: el.querySelector('[data-docreq-expiry]').value || null,
             send: true,
           };
+          // The chips and anything still being typed, checked as the
+          // status dialog checks its CC.
+          var addresses = cipStatusCcValue(el);
+          if (addresses === null) return;
           if (to === 'someone') {
-            payload.recipientName = (el.querySelector('[data-docreq-name]').value || '').trim();
-            payload.recipientEmail = (el.querySelector('[data-docreq-email]').value || '').trim();
-            if (!payload.recipientName || !payload.recipientEmail) {
-              clientsToast('Enter the name and email address of the person you are asking.', 'negative');
+            if (!addresses.length) {
+              clientsToast('Enter the email address of the person you are asking.', 'negative');
+              var box = el.querySelector('[data-cip-status-cc]');
+              if (box) box.focus();
               return;
             }
+            payload.emails = addresses;
+          } else if (addresses.length) {
+            payload.cc = addresses;
           }
 
           send.disabled = true;

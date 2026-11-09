@@ -163,17 +163,33 @@ class CipDocumentListRequestTest extends TestCase
         $this->assertSame(2, DB::table('file_request_documents')->where('file_request_id', $request->id)->whereNotNull('file_id')->count());
     }
 
-    public function test_someone_else_needs_a_name_and_an_email(): void
+    public function test_someone_else_needs_at_least_one_email_and_may_have_several(): void
     {
         [$staff, , $application, $oath] = $this->file();
 
         $this->request($staff, $application, [$oath->uuid], ['to' => 'someone'])
             ->assertStatus(422)
-            ->assertJsonValidationErrors(['recipientName', 'recipientEmail']);
+            ->assertJsonValidationErrors(['emails']);
+
+        $this->request($staff, $application, [$oath->uuid], ['to' => 'someone', 'emails' => ['not-an-email']])
+            ->assertStatus(422);
 
         $this->request($staff, $application, [$oath->uuid], [
-            'to' => 'someone', 'recipientName' => 'Jane Doe', 'recipientEmail' => 'jane@example.com',
-        ])->assertCreated()->assertJsonPath('recipients.0', 'Jane Doe');
+            'to' => 'someone', 'emails' => ['jane@example.com', 'sam@example.com'],
+        ])->assertCreated()
+            ->assertJsonPath('emailed', 2)
+            ->assertJsonPath('recipients', ['jane@example.com', 'sam@example.com']);
+    }
+
+    /** The provider's contacts, plus anyone copied in. */
+    public function test_the_service_provider_request_can_copy_other_addresses(): void
+    {
+        [$staff, , $application, $oath] = $this->file();
+
+        $this->request($staff, $application, [$oath->uuid], ['cc' => ['lawyer@example.com', 'gil@galaxy.example']])
+            ->assertCreated()
+            // The contact is not mailed twice for being copied as well.
+            ->assertJsonPath('emailed', 2);
     }
 
     public function test_only_staff_may_ask(): void
