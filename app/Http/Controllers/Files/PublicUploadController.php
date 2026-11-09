@@ -155,6 +155,9 @@ class PublicUploadController extends Controller
             if (DocumentRequests::received($fileRequest, $listed)) {
                 return response()->json(['message' => 'This document has already been received.'], 422);
             }
+            if (Package::locksDocument($listed)) {
+                return response()->json(['message' => 'This document is no longer being collected.'], 422);
+            }
         }
 
         $stored = Vault::store($upload->getRealPath(), $meta['extension']);
@@ -311,6 +314,7 @@ class PublicUploadController extends Controller
                 'person' => $row['slot']->person ? \App\Models\CipPerson::upperName($row['slot']->person->fullName()) : null,
                 'help' => $row['slot']->requirement?->help,
                 'received' => $row['received'],
+                'closed' => $row['closed'],
             ])->all(),
             // Who it was sent to is already known: the page does not ask again.
             'knownSender' => trim((string) $fileRequest->recipient_name) !== ''

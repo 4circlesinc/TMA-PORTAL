@@ -173,6 +173,9 @@ class DocumentRequests
                 'slot' => $slots->get($row->document_id),
                 'received' => $row->file_id !== null,
                 'fileId' => $row->file_id !== null ? (int) $row->file_id : null,
+                // Frozen since it was asked for (its package was confirmed):
+                // shown, but no longer taking a file.
+                'closed' => $row->file_id === null && Package::locksDocument($slots->get($row->document_id)),
             ])
             ->values();
     }

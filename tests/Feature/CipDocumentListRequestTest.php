@@ -209,4 +209,49 @@ class CipDocumentListRequestTest extends TestCase
             ->assertStatus(422)
             ->assertJsonValidationErrors(['documents']);
     }
+
+    /**
+     * The bug: on a post-approval file the original package is confirmed and
+     * the application's own folder frozen, and a list request — which names
+     * that folder as where files go — was refused as "withdrawn" the moment
+     * it was sent, though the COR papers it asks for are still open. A list
+     * request is judged by its documents.
+     */
+    public function test_a_request_for_cor_papers_on_a_confirmed_file_opens_and_takes_them(): void
+    {
+        (new \Database\Seeders\CipDocumentRequirementSeeder)->syncPostApproval();
+        [$staff, , $application] = $this->file();
+        $application->forceFill([
+            'status' => \App\Support\Cip\Status::GRANTED,
+            'decision' => CipApplication::DECISION_GRANTED,
+            'decided_at' => now(),
+            'locked_at' => now(),
+        ])->save();
+        \App\Support\Cip\Tree::provision($application->fresh(), $staff);
+        \App\Support\Cip\PostApproval::enter($application->fresh(['people']), $staff);
+        \App\Support\Cip\Package::forget();
+
+        $application = $application->fresh();
+        $oath = CipDocument::query()
+            ->where('application_id', $application->id)
+            ->where('type', \App\Support\Cip\CorRequirements::OATH_OF_ALLEGIANCE)
+            ->firstOrFail();
+        $root = Folder::findOrFail($application->folder_id);
+        $this->assertTrue(\App\Support\Cip\Package::locksFolder($root), 'the application folder is frozen, as in production');
+        $this->assertFalse(\App\Support\Cip\Package::locksDocument($oath), 'the oath is still being collected');
+
+        $this->request($staff, $application, [$oath->uuid])->assertCreated();
+        $request = FileRequest::query()->latest('id')->firstOrFail();
+
+        auth()->logout();
+        $this->get('/r/'.$request->token)
+            ->assertOk()
+            ->assertSee('Oath of Allegiance')
+            ->assertDontSee('withdrawn');
+
+        $this->upload($request->token, $oath->uuid)->assertCreated();
+        $oath->refresh();
+        $this->assertNotNull($oath->file_id);
+        $this->assertStringEndsWith('Oath of Allegiance.pdf', $oath->file->name);
+    }
 }

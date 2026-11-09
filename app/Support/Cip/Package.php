@@ -2,6 +2,7 @@
 
 namespace App\Support\Cip;
 
+use Illuminate\Support\Facades\DB;
 use App\Models\CipApplication;
 use App\Models\CipDocument;
 use App\Models\CipPerson;
@@ -126,6 +127,29 @@ class Package
      */
     public static function refusesRequest(FileRequest $request): bool
     {
+        /*
+         * A request for a list of documents is judged by its documents.
+         *
+         * Its folder is only where the request says files go — the
+         * application's own folder, which the original package freezes once
+         * confirmed — while every file lands in its own document's drawer.
+         * Judged by that folder, every list request on a confirmed file read
+         * "This upload link has been withdrawn" the moment it was sent. It is
+         * withdrawn only when nothing it asks for can still be filed.
+         */
+        $listed = DB::table('file_request_documents')
+            ->where('file_request_id', $request->id)
+            ->pluck('document_id');
+
+        if ($listed->isNotEmpty()) {
+            $slots = CipDocument::query()
+                ->whereIn('id', $listed)
+                ->with(['application', 'requirement', 'file'])
+                ->get();
+
+            return $slots->isEmpty() || $slots->every(fn (CipDocument $slot) => self::locksDocument($slot));
+        }
+
         if ($request->document_id) {
             $slot = CipDocument::query()
                 ->whereKey($request->document_id)

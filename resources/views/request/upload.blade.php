@@ -61,6 +61,8 @@
             </span>
             @if($doc['received'])
               <span class="tma-request__state is-done">Received</span>
+            @elseif(!empty($doc['closed']))
+              <span class="tma-request__state">No longer needed</span>
             @else
               <button type="button" class="tma-auth__link-btn" data-doc-pick aria-label="Upload {{ $doc['label'] }}">Upload</button>
               <span class="tma-request__state" data-doc-state hidden></span>
