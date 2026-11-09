@@ -1,6 +1,6 @@
 {
-  "css": "app-d4601eb63ee4.css",
-  "js": "app-35967fd4066b.js",
+  "css": "app-830097997325.css",
+  "js": "app-3c59a37dfbe8.js",
   "sources": {
     "css": [
       "tokens.css",
@@ -143,6 +143,7 @@
       "dashboard.js",
       "glass-chrome.js",
       "pull-refresh.js",
+      "page-scroll.js",
       "phone-input.js",
       "presence-status.js",
       "authenticator-nudge.js",

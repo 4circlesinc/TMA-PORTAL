@@ -2827,6 +2827,24 @@ node tests/Browser/glass-chrome.mjs
 TMA_BROWSER=webkit node tests/Browser/glass-chrome.mjs
 ```
 
+- **`page-scroll.mjs`** — the page never scrolls; the box does
+  (`public/js/page-scroll.js` and "The page itself never scrolls" in
+  `dashboard-tma-overrides.css`). On a mocked CIP application, whose
+  applicant and documents card scrolls inside itself: the document is no
+  taller than the window (the owed row's hidden upload input used to stretch
+  it by ~700px); a wheel over the tabs, the title, the gap above the card or
+  the header bar scrolls the card and the document stays put; the card
+  still scrolls under its own wheel and past its end nothing else moves;
+  focusing the hidden input leaves the page where it was; a document a
+  script scrolls is put back; the sidebar and `data-scroll-own` keep their
+  wheel. On Overview, where the main column itself scrolls, its content
+  scrolls as before and the header scrolls it too. No portal seed required.
+
+```sh
+node tests/Browser/page-scroll.mjs
+TMA_BROWSER=webkit node tests/Browser/page-scroll.mjs
+```
+
 - **`messaging-mobile-list.mjs`** — phone inbox layout: Favorites / Chats
   group labels must not sit over a blank column. The list body is a flex
   column; mobile rows live in a swipe wrap with `overflow: hidden`, which

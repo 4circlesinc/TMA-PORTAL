@@ -21628,8 +21628,14 @@ button.tma-file-status-chip:focus-visible,
   height: 20px;
 }
 
+/* Pinned to its containing block's corner. Left at its own place in the
+   flow, the input in a long checklist sat far below the card that clips the
+   list (nothing between the two is positioned), stretched the document to
+   reach it, and a focus on it scrolled the whole portal up by that much. */
 .tma-dash__clients-photo-input {
   position: absolute;
+  top: 0;
+  left: 0;
   width: 1px;
   height: 1px;
   opacity: 0;

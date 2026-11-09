@@ -1168,6 +1168,36 @@ body {
   max-width: 100%;
 }
 
+/*
+ * The page itself never scrolls; each view scrolls inside its own box.
+ *
+ * The shell is exactly one screen tall and scrolls inside the main column or
+ * a box within it, so there is never anything below it to scroll to. The
+ * document could still grow, though: an absolutely placed element with no
+ * positioned ancestor escapes the shell's clip and stretches the page to
+ * wherever it would have sat in an unscrolled list. A wheel turned over a
+ * view's title or tabs then dragged the whole portal up past a blank band
+ * (a CIP application's checklist did it by 700px). So the document holds
+ * still, as the compose and mail pop-out windows already make it, and
+ * page-scroll.js hands that wheel to the box it was meant for and puts the
+ * page back if a script moves it.
+ *
+ * `clip` on the shell rather than `hidden`: a hidden box can still be
+ * scrolled by a focus or scrollIntoView, which shifted the whole shell up in
+ * the same way. Screens only, so a printout is not cut to one window.
+ */
+@media screen {
+  html:has(> body > .tma-dash) {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  body > .tma-dash {
+    overflow: hidden;
+    overflow: clip;
+  }
+}
+
 html,
 body,
 .tma-dash,
