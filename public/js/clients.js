@@ -4797,14 +4797,9 @@
     var appRecord = app || {};
     var person = member;
 
-    // Solo file: the main applicant wears the application's status, and the
-    // chip opens the application's menu.
-    if (cipStatusFollowsApplication(appRecord) && appRecord.statusLabel && appRecord.id) {
-      return clickable
-        ? cipStatusChip(appRecord)
-        : '<span class="tma-portal-status tma-portal-status--' + esc(appRecord.statusTone || 'neutral') +
-          ' tma-portal-status--inline">' + esc(appRecord.statusLabel) + '</span>';
-    }
+    // Solo file: no status of the person's own. The application's chip in
+    // the header is the one status this file has.
+    if (cipStatusFollowsApplication(appRecord)) return '';
 
     /*
      * A person with no status of their own yet stands where the file does.
@@ -4918,6 +4913,7 @@
 
   function renderCipPersonStatusBar(person, app) {
     if (!person || !app || app.phase !== 'post_approval') return '';
+    if (cipStatusFollowsApplication(app)) return '';
 
     return '<div class="tma-dash__cip-person-status">' +
       cipPersonStatusChip(person, app, true) + '</div>';
@@ -14654,6 +14650,33 @@
     return cipSourceFor(extra, clientUid);
   }
 
+  /*
+   * Where each status sits in the picker: the order a file actually travels.
+   *
+   * The server's list keeps the post-approval lane's outcomes, Approved and
+   * Denied, after Closed, so the picker drew them at the foot of the lane —
+   * under Apply for COR and every COR, NIC and passport step — although the
+   * lane decides FIRST (Post-Approval → Approved / Denied → Apply for COR;
+   * see Engine::TRANSITIONS). The row a reader looked at first was then one
+   * they could not take, and the step that was ready sat out of sight. The
+   * outcomes are read right after Post-Approval.
+   */
+  function cipLifecycleIndex(all) {
+    var values = (all || []).map(function (status) { return status.value; });
+    var lifted = ['post_approved', 'post_denied'].filter(function (v) { return values.indexOf(v) !== -1; });
+    var seq = values.filter(function (v) { return lifted.indexOf(v) === -1; });
+    var at = seq.indexOf('post_approval');
+    if (at !== -1) {
+      Array.prototype.splice.apply(seq, [at + 1, 0].concat(lifted));
+    } else {
+      seq = seq.concat(lifted);
+    }
+    var order = {};
+    seq.forEach(function (value, index) { order[value] = index; });
+
+    return order;
+  }
+
   function statusValues(list) {
     return (list || []).map(function (t) { return t.value || t; });
   }
@@ -14728,8 +14751,7 @@
      * so sorting back onto that index puts each lane in the order the
      * lifecycle actually runs.
      */
-    var order = {};
-    all.forEach(function (status, index) { order[status.value] = index; });
+    var order = cipLifecycleIndex(all);
 
     return {
       next: next,
@@ -15111,8 +15133,7 @@
 
     // The lane's own order, so a step that can be taken sits where it
     // falls in the lifecycle rather than above everything that cannot.
-    var order = {};
-    all.forEach(function (status, index) { order[status.value] = index; });
+    var order = cipLifecycleIndex(all);
 
     /*
      * The COR goes to the Unit as one package and comes back for the family,
