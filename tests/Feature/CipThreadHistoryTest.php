@@ -214,4 +214,33 @@ class CipThreadHistoryTest extends TestCase
 
         $this->assertNull(CipApplicationMessage::find($row->id));
     }
+
+    /**
+     * A chat copy deleted in Messages before the file's line went with it
+     * (older data) must not stop the case chat from opening: the copy step
+     * used to look past the deleted row, try to write a second copy of the
+     * same line, and hit the unique link — a server error on "Message …
+     * about …" for that application from then on.
+     */
+    public function test_a_copy_deleted_in_the_chat_does_not_stop_the_case_chat_opening(): void
+    {
+        [$staff, , $application] = $this->filed();
+        $id = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/messages', ['body' => 'Older line.', 'lane' => 'provider'])
+            ->assertCreated()
+            ->json('id');
+        $row = CipApplicationMessage::where('uuid', $id)->firstOrFail();
+
+        // As the chat's own delete used to leave things: the copy gone, the
+        // file's line still there.
+        Message::where('cip_application_message_id', $row->id)->firstOrFail()->delete();
+
+        $client = $application->client;
+        $this->actingAs($staff)
+            ->postJson('/portal/clients/'.$client->uid.'/conversations', ['with' => 'provider'])
+            ->assertCreated();
+
+        // The deleted copy stays deleted; no second copy of the line appears.
+        $this->assertSame(1, Message::withTrashed()->where('cip_application_message_id', $row->id)->count());
+    }
 }

@@ -819,7 +819,19 @@ class ClientConversations
 
     private static function copyProviderMessage(Conversation $conversation, CipApplicationMessage $source, bool $broadcast): bool
     {
-        $existing = Message::query()->where('cip_application_message_id', $source->id)->first();
+        /*
+         * Deleted copies count. A copy deleted in the chat keeps its link —
+         * the column is unique, deleted rows included — so a check that looked
+         * past it went on to write a second copy of the same line, hit that
+         * unique link, and failed the whole case chat: every "Message … about
+         * …" on the application answered with a server error from then on.
+         * Deleted in the chat means deleted; it is not copied back.
+         */
+        $existing = Message::withTrashed()->where('cip_application_message_id', $source->id)->first();
+
+        if ($existing && $existing->trashed()) {
+            return false;
+        }
 
         if ($existing) {
             if ($existing->lane === null) {
