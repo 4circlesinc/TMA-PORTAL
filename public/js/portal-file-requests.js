@@ -248,10 +248,10 @@
       (draft.offerDocuments
         ? '<div class="tma-portal-request__section">' +
           '<h3 class="tma-portal-request__heading">What are you asking for?</h3>' +
-          '<div class="tma-portal-radio-row">' +
-          '<label class="tma-portal-radio"><input type="radio" name="tma-req-kind" value="files" data-req-kind checked>' +
+          '<div class="tma-portal-radio-row tma-portal-radio-row--tiles">' +
+          '<label class="tma-portal-radio tma-portal-radio--tile"><input type="radio" name="tma-req-kind" value="files" data-req-kind checked>' +
           '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Any files, into a folder</label>' +
-          '<label class="tma-portal-radio"><input type="radio" name="tma-req-kind" value="documents" data-req-kind>' +
+          '<label class="tma-portal-radio tma-portal-radio--tile"><input type="radio" name="tma-req-kind" value="documents" data-req-kind>' +
           '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Documents on an application</label>' +
           '</div></div>'
         : '') +
@@ -285,10 +285,10 @@
       // ── who it goes to
       '<div class="tma-portal-request__section">' +
       '<h3 class="tma-portal-request__heading">Who you are asking</h3>' +
-      '<div class="tma-portal-radio-row">' +
-      '<label class="tma-portal-radio"><input type="radio" name="tma-req-who" value="user" data-req-who checked>' +
+      '<div class="tma-portal-radio-row tma-portal-radio-row--tiles">' +
+      '<label class="tma-portal-radio tma-portal-radio--tile"><input type="radio" name="tma-req-who" value="user" data-req-who checked>' +
       '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Someone on the portal</label>' +
-      '<label class="tma-portal-radio"><input type="radio" name="tma-req-who" value="external" data-req-who>' +
+      '<label class="tma-portal-radio tma-portal-radio--tile"><input type="radio" name="tma-req-who" value="external" data-req-who>' +
       '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Someone else</label>' +
       '</div>' +
       // Somebody on the portal: found by name or address, their own details used.
@@ -320,7 +320,7 @@
         EXTENSIONS.map(function (e) {
           var src = extIconSrc(e.ext);
           return '<label class="tma-portal-request__chip">' +
-            '<input type="checkbox" data-req-group="' + esc(e.ext) + '"' + (draft.groups[e.ext] ? ' checked' : '') + '>' +
+            '<input type="checkbox" class="tma-dash__check" data-req-group="' + esc(e.ext) + '"' + (draft.groups[e.ext] ? ' checked' : '') + '>' +
             '<img class="' + extIconClass(src) + '" src="' + esc(src) + '"' +
             ' alt="" width="16" height="16" aria-hidden="true">' +
             '<span>' + esc(e.label) + '</span></label>';

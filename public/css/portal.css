@@ -2331,10 +2331,12 @@
   user-select: none;
 }
 
+/* Picked: outlined in black, the way a chosen tile is, with the site's own
+   checkbox inside rather than the browser's blue one. */
 .tma-portal-request__chip:has(input:checked) {
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft, rgba(19, 109, 160, 0.1));
-  color: var(--color-primary-dark, var(--color-primary));
+  border-color: var(--color-black);
+  background: var(--color-white);
+  color: var(--color-text-primary);
 }
 
 /* The file mark rides at the label's own size. Most are brand marks (Acrobat
@@ -8300,11 +8302,17 @@ body:has(.tma-dash.is-sidebar-collapsed) .tma-sync-pill {
   min-height: 160px;
 }
 
-/* Approved / Denied as two choices the height of an input beside them. */
+/* Choices as outlined tiles (Approved / Denied, and Request Files' who and
+   what): side by side at one height, one to a row on a narrow phone. */
 .tma-portal-radio-row--tiles {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-8);
+  align-items: stretch;
+}
+
+@media (max-width: 480px) {
+  .tma-portal-modal .tma-portal-radio-row--tiles { grid-template-columns: minmax(0, 1fr); }
 }
 
 .tma-portal-radio--tile {
