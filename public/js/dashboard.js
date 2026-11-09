@@ -16,6 +16,13 @@
   // Its preload sets this before the first paint; this covers an app from before.
   if (window.TMADesktop && window.TMADesktop.isIOS) {
     document.documentElement.classList.add('tma-ios');
+    // Typing in a box does not zoom the page in, as it does in an app. iOS
+    // zooms on a field whose text is under 16pt unless the page's scale is
+    // capped; its preload does the same from the first byte on newer builds.
+    var viewport = document.querySelector('meta[name="viewport"]');
+    if (viewport && !/maximum-scale/.test(viewport.content || '')) {
+      viewport.content = (viewport.content || 'width=device-width, initial-scale=1') + ', maximum-scale=1';
+    }
   }
 
   var NAV_SHELL_VERSION = '2026-09-11-bespoke-menu-wash';

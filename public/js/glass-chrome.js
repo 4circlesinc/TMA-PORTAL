@@ -393,6 +393,34 @@
     document.fonts.ready.then(function () { waitingForFonts = false; schedule(); });
   }
 
+  /*
+   * Whether the text can be drawn in its own font yet.
+   *
+   * Inter is served in pieces by character range, and a piece loads only when
+   * text the page shows needs it. The page's own copy of a search bar's words
+   * is hidden behind the glass, so nothing ever asked for its piece:
+   * `fonts.ready` resolved with it still missing, the check failed on every
+   * pass, and the bar showed no words at all, not even "Search". So the
+   * faces this text needs are asked for outright, and if they have still not
+   * come after a moment the words are drawn in whatever the font stack has:
+   * a slightly different letter shape beats an empty search bar.
+   */
+  var FONT_GRACE_MS = 1200;
+  var fontAsked = {};
+  function fontReady(font, text) {
+    if (!document.fonts || !document.fonts.check) return true;
+    if (document.fonts.check(font, text)) return true;
+    var key = font + '|' + text;
+    if (!fontAsked[key]) {
+      fontAsked[key] = Date.now();
+      if (document.fonts.load) document.fonts.load(font, text).then(schedule, schedule);
+      setTimeout(schedule, FONT_GRACE_MS + 50);
+      whenFontsLoad();
+      return false;
+    }
+    return Date.now() - fontAsked[key] >= FONT_GRACE_MS;
+  }
+
   /* Text goes to the app drawn in the page's own font (Inter, which the app
      doesn't carry), as a mask the glass inks like its symbols. */
   function drawText(text, font, w, h, align) {
@@ -419,10 +447,7 @@
   function textMark(text, el, r, origin, tone) {
     var cs = getComputedStyle(el);
     var font = cs.fontStyle + ' ' + cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
-    if (document.fonts && document.fonts.check && !document.fonts.check(font, text)) {
-      whenFontsLoad();
-      return null;
-    }
+    if (!fontReady(font, text)) return null;
     var w = Math.max(1, Math.round(r.width));
     var h = Math.max(1, Math.round(r.height));
     var id = 't' + hash(text + '|' + font + '|' + w + 'x' + h + '|' + cs.textAlign);

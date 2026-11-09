@@ -102,6 +102,9 @@ final class PortalModel: NSObject, ObservableObject {
         // entry (phone-screens.js); on a page of its own the drag opens the
         // menu. The page switches this through setEdgeBack ("edgeBack").
         webView.allowsBackForwardNavigationGestures = false
+        // Typing as in an app: no arrows-and-tick bar over the keyboard, and
+        // dragging the page down puts the keyboard away (WebKeyboard.swift).
+        WebKeyboard.plain(webView)
         webView.scrollView.contentInsetAdjustmentBehavior = .automatic
         webView.isOpaque = false
         webView.backgroundColor = UIColor(red: 0x13 / 255, green: 0x6D / 255, blue: 0xA0 / 255, alpha: 1)

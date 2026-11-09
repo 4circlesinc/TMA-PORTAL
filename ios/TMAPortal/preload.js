@@ -14,6 +14,25 @@
   // The iPhone app's look (liquid-glass bar and header, dashboard-tma-overrides.css),
   // set before the first paint so the page never flashes the plain dock.
   try { document.documentElement.classList.add('tma-ios'); } catch (e) { /* no document yet */ }
+
+  // Typing in a box never zooms the page in, the way it doesn't in an app:
+  // iOS zooms on a field whose text is under 16pt unless the scale is capped.
+  // Every page, sign-in included, as soon as its viewport tag exists.
+  function capZoom(loaded) {
+    var tag = document.querySelector('meta[name="viewport"]');
+    if (!tag) {
+      // Only once the page is in: one added earlier would be followed by the
+      // page's own, which would win.
+      if (!loaded || !document.head) return false;
+      tag = document.createElement('meta');
+      tag.name = 'viewport';
+      tag.content = 'width=device-width, initial-scale=1';
+      document.head.appendChild(tag);
+    }
+    if (!/maximum-scale/.test(tag.content || '')) tag.content = (tag.content || '') + ', maximum-scale=1';
+    return true;
+  }
+  if (!capZoom(false)) document.addEventListener('DOMContentLoaded', function () { capZoom(true); }, { once: true });
   var notificationsAllowed = __TMA_NOTIFICATIONS__;
 
   function post(op, extra) {

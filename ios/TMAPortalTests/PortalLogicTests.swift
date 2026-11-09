@@ -1,4 +1,5 @@
 import UserNotifications
+import WebKit
 import XCTest
 @testable import TMAPortal
 
@@ -172,6 +173,21 @@ final class PortalLogicTests: XCTestCase {
 
         XCTAssertNil(MessageReply.request(for: message, text: "   ", device: "tok"), "nothing typed")
         XCTAssertNil(MessageReply.request(for: message, text: "Hi", device: nil), "no token: the server would refuse it")
+    }
+
+    @MainActor
+    func testTypingHasNoBarOverTheKeyboard() {
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 320, height: 640))
+        WebKeyboard.plain(webView)
+        XCTAssertTrue(WebKeyboard.accessoryBarHidden(in: webView), "no arrows-and-tick bar above the keyboard")
+        XCTAssertEqual(webView.scrollView.keyboardDismissMode, .interactive, "dragging down puts the keyboard away")
+
+        WebKeyboard.plain(webView)
+        XCTAssertTrue(WebKeyboard.accessoryBarHidden(in: webView), "doing it twice is harmless")
+
+        let another = WKWebView(frame: .zero)
+        WebKeyboard.plain(another)
+        XCTAssertTrue(WebKeyboard.accessoryBarHidden(in: another), "the class made once serves the next web view")
     }
 
     func testMessagesCarryAReplyBox() {
