@@ -1203,7 +1203,30 @@
       '<div class="tma-portal-drops">' +
       fields.map(function (doc) { return documentField(prefix + doc.field); }).join('') +
       '</div>',
-      { modifier: 'tma-dash__clients-card--docs' });
+      { modifier: 'tma-dash__clients-card--docs', action: requestDocumentsAction(prefix) });
+  }
+
+  /*
+   * "Request documents" on a filed application: ask the service provider
+   * (or anyone) for this person's outstanding papers in one link; each is
+   * renamed and filed in its slot as it arrives. Staff only, and only once
+   * the application exists, since the request is aimed at its slots.
+   */
+  function requestDocumentsAction(prefix) {
+    if (!state.applicationId || editingDraft() || !state.record || !window.TMACipDocumentRequests) return '';
+    var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
+    if (!me || !me.isStaff) return '';
+    var who = padPersonForPrefix(prefix);
+    if (!who || !who.id) return '';
+    var outstanding = (who.documents || []).some(function (d) {
+      return d && d.id && d.type !== 'additional_documents'
+        && (!d.status || d.status === 'pending_upload' || d.status === 'update_required');
+    });
+    if (!outstanding) return '';
+
+    return '<button type="button" class="tma-portal-link tma-dash__clients-card-action" data-cip-request-docs' +
+      ' data-cip-app="' + esc(state.record.id) + '" data-cip-client="' + esc(state.record.clientUid || '') + '"' +
+      ' data-cip-person="' + esc(who.id) + '">Request documents</button>';
   }
 
   /*
@@ -4760,6 +4783,7 @@
 
     loadRecord.then(function (record) {
       state.record = record || null;
+      window.TMACipIntakeRecord = state.record;
       if (record && (record.phase === 'post_approval' || record.phase === 'pre_approval' || record.phase === 'add_on')) {
         state.phase = record.phase;
       }
@@ -4874,6 +4898,7 @@
     var was = (state.record && state.record.providerId) || '';
     var untouched = !state.providerPicked || !state.draft.providerId || state.draft.providerId === was;
     state.record = record;
+    window.TMACipIntakeRecord = state.record;
     if (untouched && editingFiled()) {
       state.draft.providerId = record.providerId || '';
       state.providerPicked = false;

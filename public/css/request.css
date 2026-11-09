@@ -137,3 +137,15 @@
   background: color-mix(in srgb, var(--color-red) 10%, transparent);
   color: var(--color-red);
 }
+
+/* A request for named documents: each row is one document, with its own upload. */
+.tma-request__doc .tma-request__name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  white-space: normal;
+}
+
+.tma-request__doc-label {
+  font-weight: 600;
+}

@@ -76,6 +76,7 @@ final class NotificationType
         'file.comment_resolved' => ['module' => 'files', 'level' => Notification::LEVEL_SUCCESS, 'icon' => 'CheckCircle',           'priority' => 'low',    'pref' => 'files', 'action_label' => 'View comment'],
         'file.approval_requested' => ['module' => 'files', 'level' => Notification::LEVEL_ACTION,  'icon' => 'Clipboard', 'priority' => 'high',   'pref' => 'files', 'action_label' => 'Open request'],
         'file.approval_decision' => ['module' => 'files', 'level' => Notification::LEVEL_INFO,    'icon' => 'Clipboard', 'priority' => 'normal', 'pref' => 'files', 'action_label' => 'View file'],
+        'files.request_received' => ['module' => 'files', 'level' => Notification::LEVEL_ACTION, 'icon' => 'UploadSimple', 'priority' => 'high', 'pref' => 'files', 'action_label' => 'Upload documents'],
         'file.approval_reminder' => ['module' => 'files', 'level' => Notification::LEVEL_REMINDER, 'icon' => 'ClockCountdown', 'priority' => 'high',   'pref' => 'files', 'action_label' => 'Open request'],
         'file.workflow_superseded' => ['module' => 'files', 'level' => Notification::LEVEL_WARNING, 'icon' => 'Warning',       'priority' => 'high',   'pref' => 'files', 'action_label' => 'Review request'],
         'file.version' => ['module' => 'files', 'level' => Notification::LEVEL_INFO,    'icon' => 'ClockCounterClockwise', 'priority' => 'normal', 'pref' => 'files', 'action_label' => 'View version'],

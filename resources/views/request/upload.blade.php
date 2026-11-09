@@ -6,12 +6,15 @@
 
   // The rules, one line. Three bullets read as a form's small print; one
   // quiet line under the drop zone reads as a caption to it.
+  $documents = $documents ?? [];
   $rules = array_values(array_filter([
       $allowedLabel ? ucfirst($allowedLabel).' only' : null,
       'Up to '.Presenter::humanSize($maxBytes).' per file',
-      $multiple
-          ? $remaining.' '.\Illuminate\Support\Str::plural('file', $remaining).' can still be added'
-          : 'One file',
+      $documents !== []
+          ? 'One file for each document'
+          : ($multiple
+              ? $remaining.' '.\Illuminate\Support\Str::plural('file', $remaining).' can still be added'
+              : 'One file'),
   ]));
 @endphp
 <section class="tma-auth__card" aria-labelledby="request-title">
@@ -33,23 +36,50 @@
   <div class="tma-auth__form">
     <div data-banner></div>
 
-    <label class="tma-auth__field">
-      <input class="tma-auth__input" type="text" data-uploader-name value="{{ $request->recipient_name }}" placeholder="Your name" aria-label="Your name" autocomplete="name">
-    </label>
-    <label class="tma-auth__field">
-      <input class="tma-auth__input" type="email" data-uploader-email value="{{ $request->recipient_email }}" placeholder="Your email (optional)" aria-label="Your email (optional)" autocomplete="email">
-    </label>
+    {{-- Who it was sent to is already known: the page does not ask again. --}}
+    @if(!empty($knownSender))
+      <input type="hidden" data-uploader-name value="{{ $request->recipient_name }}">
+      <input type="hidden" data-uploader-email value="{{ $request->recipient_email }}">
+    @else
+      <label class="tma-auth__field">
+        <input class="tma-auth__input" type="text" data-uploader-name value="{{ $request->recipient_name }}" placeholder="Your name" aria-label="Your name" autocomplete="name">
+      </label>
+      <label class="tma-auth__field">
+        <input class="tma-auth__input" type="email" data-uploader-email value="{{ $request->recipient_email }}" placeholder="Your email (optional)" aria-label="Your email (optional)" autocomplete="email">
+      </label>
+    @endif
 
-    <div class="tma-request__drop" data-drop tabindex="0" role="button" aria-label="Choose files to upload">
-      <img src="/images/icons/phosphor/CloudArrowUp.svg" alt="" width="32" height="32" aria-hidden="true">
-      <p class="tma-request__drop-title">Drop {{ $multiple ? 'files' : 'a file' }} here</p>
-      <p class="tma-auth__hint">or click to browse your device</p>
-    </div>
-    <p class="tma-auth__hint tma-request__rules">{{ implode(' · ', $rules) }}</p>
-
-    <input type="file" data-picker hidden @if($multiple) multiple @endif @if($accept) accept="{{ $accept }}" @endif>
-
-    <ul class="tma-request__queue" data-queue></ul>
+    @if($documents !== [])
+      {{-- One row per document asked for, each with its own upload. --}}
+      <ul class="tma-request__queue tma-request__docs" data-docs>
+        @foreach($documents as $doc)
+          <li class="tma-request__row tma-request__doc" data-doc="{{ $doc['id'] }}">
+            <span class="tma-request__name">
+              <span class="tma-request__doc-label">{{ $doc['label'] }}</span>
+              @if($doc['person'])<span class="tma-auth__hint">{{ $doc['person'] }}</span>@endif
+              @if(!empty($doc['help']))<span class="tma-auth__hint">{{ $doc['help'] }}</span>@endif
+            </span>
+            @if($doc['received'])
+              <span class="tma-request__state is-done">Received</span>
+            @else
+              <button type="button" class="tma-auth__link-btn" data-doc-pick aria-label="Upload {{ $doc['label'] }}">Upload</button>
+              <span class="tma-request__state" data-doc-state hidden></span>
+              <input type="file" data-doc-input hidden @if($accept) accept="{{ $accept }}" @endif>
+            @endif
+          </li>
+        @endforeach
+      </ul>
+      <p class="tma-auth__hint tma-request__rules">{{ implode(' · ', $rules) }}</p>
+    @else
+      <div class="tma-request__drop" data-drop tabindex="0" role="button" aria-label="Choose files to upload">
+        <img src="/images/icons/phosphor/CloudArrowUp.svg" alt="" width="32" height="32" aria-hidden="true">
+        <p class="tma-request__drop-title">Drop {{ $multiple ? 'files' : 'a file' }} here</p>
+        <p class="tma-auth__hint">or click to browse your device</p>
+      </div>
+      <p class="tma-auth__hint tma-request__rules">{{ implode(' · ', $rules) }}</p>
+      <input type="file" data-picker hidden @if($multiple) multiple @endif @if($accept) accept="{{ $accept }}" @endif>
+      <ul class="tma-request__queue" data-queue></ul>
+    @endif
   </div>
 </section>
 
@@ -136,9 +166,10 @@
     return state;
   }
 
-  function send(file, state) {
+  function send(file, state, documentId) {
     var body = new FormData();
     body.append('file', file);
+    if (documentId) body.append('document', documentId);
     body.append('name', (document.querySelector('[data-uploader-name]').value || '').trim());
     body.append('email', (document.querySelector('[data-uploader-email]').value || '').trim());
 
@@ -200,6 +231,50 @@
           : sent + ' files were sent to ' + @json($requester) + '. Thank you.');
       }
     });
+  }
+
+  /*
+   * A request for named documents: each row uploads its own file, which the
+   * firm files under that document's name.
+   */
+  var docs = document.querySelector('[data-docs]');
+  if (docs) {
+    var refreshDone = function () {
+      if (!docs.querySelectorAll('[data-doc-pick]').length) {
+        banner('ok', 'Every document was received. Thank you.');
+      }
+    };
+    docs.querySelectorAll('[data-doc]').forEach(function (row) {
+      var pick = row.querySelector('[data-doc-pick]');
+      var input = row.querySelector('[data-doc-input]');
+      var state = row.querySelector('[data-doc-state]');
+      if (!pick || !input || !state) return;
+      pick.addEventListener('click', function () { input.click(); });
+      input.addEventListener('change', function () {
+        var file = input.files && input.files[0];
+        input.value = '';
+        if (!file) return;
+        var reason = localReason(file);
+        state.hidden = false;
+        if (reason) {
+          state.textContent = reason;
+          state.className = 'tma-request__state is-error';
+          return;
+        }
+        pick.disabled = true;
+        send(file, state, row.getAttribute('data-doc')).then(function () {
+          if (state.className.indexOf('is-done') !== -1) {
+            state.textContent = 'Received';
+            pick.remove();
+            banner('ok', 'Thank you. ' + file.name + ' was received.');
+            refreshDone();
+          } else {
+            pick.disabled = false;
+          }
+        });
+      });
+    });
+    return;
   }
 
   drop.addEventListener('click', function () { picker.click(); });

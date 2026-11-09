@@ -19,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'uuid', 'token', 'title', 'message', 'folder_id', 'client_id', 'created_by',
     'recipient_email', 'recipient_name', 'allowed_extensions', 'max_bytes',
     'max_files', 'allow_multiple', 'password_hash', 'expires_at', 'closed_at',
-    'revoked_at', 'opened_at',
+    'revoked_at', 'opened_at', 'recipient_user_id',
 ])]
 #[Hidden(['password_hash', 'token'])]
 class FileRequest extends Model

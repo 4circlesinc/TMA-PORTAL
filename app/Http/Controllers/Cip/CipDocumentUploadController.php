@@ -11,6 +11,7 @@ use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Confirmation;
 use App\Support\Cip\Contacts;
+use App\Support\Cip\DocumentRequests;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
@@ -18,8 +19,15 @@ use App\Support\Cip\Intake;
 use App\Support\Cip\Package;
 use App\Support\Cip\Status;
 use App\Support\Realtime\Live;
+use App\Models\FileRequest;
+use App\Support\Access\Role;
+use App\Support\Files\FileRequests;
+use App\Support\Mail\Deliveries;
+use App\Support\Mail\Postcards;
+use App\Support\Notifications\Notifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Filing one checklist slot from the application page.
@@ -109,6 +117,152 @@ class CipDocumentUploadController extends Controller
                 ...Appeal::payload($application, $user),
             ],
         ]);
+    }
+
+    /**
+     * Ask for several checklist documents in one request.
+     *
+     * From the application's checklist or the edit screen: tick the papers
+     * that are missing, send one request to the service provider (or to
+     * anyone, by name and email). Each upload is renamed to the document's
+     * filed name and lands in its own slot. Staff only.
+     */
+    public function requestDocuments(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($user && Role::isStaff($user), 403, 'Only staff can request documents.');
+        $application = ApplicationScope::findOrFail($user, $uuid);
+
+        $data = $request->validate([
+            'documents' => ['required', 'array', 'min:1', 'max:60'],
+            'documents.*' => ['string', 'max:64'],
+            'to' => ['required', 'in:provider,someone'],
+            'recipientName' => ['nullable', 'required_if:to,someone', 'string', 'max:120'],
+            'recipientEmail' => ['nullable', 'required_if:to,someone', 'email', 'max:191'],
+            'message' => ['nullable', 'string', 'max:2000'],
+            'allowedExtensions' => ['nullable', 'array', 'max:64'],
+            'allowedExtensions.*' => ['string', 'max:32'],
+            'expiresAt' => ['nullable', 'date', 'after:today'],
+            'send' => ['nullable', 'boolean'],
+        ], [
+            'documents.required' => 'Choose at least one document to ask for.',
+            'recipientName.required_if' => 'Enter the name of the person you are asking.',
+            'recipientEmail.required_if' => 'Enter the email address of the person you are asking.',
+        ]);
+
+        $slots = CipDocument::query()
+            ->where('application_id', $application->id)
+            ->whereIn('uuid', $data['documents'])
+            ->get();
+
+        if ($slots->count() !== count(array_unique($data['documents']))) {
+            throw ValidationException::withMessages(['documents' => 'Some of those documents are not on this application.']);
+        }
+
+        // Who it goes to: the service provider's contacts on this file, or
+        // the one person named.
+        $recipients = $data['to'] === 'provider'
+            ? array_values(array_filter(
+                \App\Support\Cip\Contacts::providerSide($application),
+                fn (array $r) => ($r['mail'] ?? true) !== false && trim((string) $r['email']) !== '',
+            ))
+            : [[
+                'email' => $data['recipientEmail'],
+                'name' => $data['recipientName'],
+                'userId' => \App\Models\User::query()
+                    ->whereRaw('LOWER(email) = ?', [mb_strtolower((string) $data['recipientEmail'])])
+                    ->value('id'),
+            ]];
+
+        if ($recipients === []) {
+            throw ValidationException::withMessages([
+                'to' => 'Nobody at the service provider has an email address on this application. Ask someone by name and email instead.',
+            ]);
+        }
+
+        $application->loadMissing('provider');
+        $first = $recipients[0];
+        $options = array_filter([
+            'message' => trim((string) ($data['message'] ?? '')) ?: null,
+            'recipient_name' => $data['to'] === 'provider'
+                ? ($application->provider?->name ?: $first['name'])
+                : $first['name'],
+            'recipient_email' => count($recipients) === 1 ? $first['email'] : null,
+            'recipient_user_id' => count($recipients) === 1 ? ($first['userId'] ?? null) : null,
+            'allowed_extensions' => FileRequests::normalizeExtensions($data['allowedExtensions'] ?? null),
+            'expires_at' => $data['expiresAt'] ?? now()->addDays(14)->toDateString(),
+        ], fn ($value) => $value !== null);
+
+        try {
+            $fileRequest = DocumentRequests::forMany($application, $slots, $user, $options);
+        } catch (\InvalidArgumentException $e) {
+            abort(422, $e->getMessage());
+        }
+
+        $emailed = 0;
+        if ($request->boolean('send', true)) {
+            foreach ($recipients as $recipient) {
+                $emailed += $this->sendDocumentRequest($fileRequest, $recipient, $user) ? 1 : 0;
+            }
+        }
+
+        Live::staffAnd(Live::CIP, Contacts::providerUserIds($application));
+
+        return response()->json([
+            'request' => FileRequests::present($fileRequest->fresh(['folder:id,uuid,name', 'client:id,uid,name', 'creator:id,name'])),
+            'documents' => $slots->count(),
+            'emailed' => $emailed,
+            'recipients' => array_map(fn (array $r) => $r['name'] ?: $r['email'], $recipients),
+        ], 201);
+    }
+
+    /**
+     * One recipient of a document request: the email with the link, and for
+     * somebody with a portal account, the same in their notifications.
+     *
+     * @param  array{email:string, name:?string, userId:?int}  $recipient
+     */
+    private function sendDocumentRequest(FileRequest $fileRequest, array $recipient, User $sender): bool
+    {
+        $url = FileRequests::url($fileRequest);
+        $listed = DocumentRequests::listFor($fileRequest)
+            ->map(fn (array $row) => DocumentTypes::present((string) $row['slot']->label))
+            ->all();
+        $details = [['Documents', implode(', ', $listed)]];
+        if ($fileRequest->expires_at) {
+            $details[] = ['Upload by', $fileRequest->expires_at->format('j M Y')];
+        }
+
+        $delivery = Deliveries::send(
+            Postcards::fileRequest(
+                $fileRequest->title,
+                $sender->name ?: Postcards::site(),
+                $fileRequest->message,
+                $url,
+                $recipient['name'] ?? null,
+                $details,
+            ),
+            (string) $recipient['email'],
+            $fileRequest,
+            'fileRequest',
+            immediate: true,
+        );
+
+        if (! empty($recipient['userId'])) {
+            Notifier::send([
+                'user' => $recipient['userId'],
+                'actor' => $sender,
+                'type' => 'files.request_received',
+                'title' => $fileRequest->title,
+                'message' => 'Requested by '.($sender->name ?: 'the firm').': '.implode(', ', $listed),
+                'subject' => $fileRequest,
+                'action_url' => '/r/'.$fileRequest->token,
+                // The request email above is the email.
+                'email' => false,
+            ]);
+        }
+
+        return $delivery === null || $delivery->status !== \App\Models\EmailDelivery::STATUS_FAILED;
     }
 
     public static function canUpload(CipDocument $document, ?User $viewer): bool

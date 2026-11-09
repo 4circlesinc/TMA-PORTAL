@@ -689,6 +689,32 @@ class DocumentSlots
      * files of one name are settled anywhere else in the library, rather than
      * by a stem-and-number scheme that would overwrite that description.
      */
+    /**
+     * The name a file arriving for this slot is filed under — the same one a
+     * portal upload into the slot gets ("CHEN WEI - Oath of Allegiance.pdf"),
+     * so a document that came in through a request link reads exactly like
+     * one staff uploaded.
+     */
+    public static function filedNameFor(CipDocument $slot, string $extension, ?string $originalName = null): string
+    {
+        $slot->loadMissing('person');
+        $person = $slot->person;
+
+        if ($person === null) {
+            return Naming::clean((string) $originalName) ?: 'Document.'.$extension;
+        }
+
+        return self::documentName(
+            $person,
+            (string) $slot->type,
+            $extension,
+            null,
+            self::template($person, (string) $slot->type),
+            AddOnRequirements::isAdditional((string) $slot->type) ? $slot->label : null,
+            $originalName,
+        );
+    }
+
     private static function documentName(
         CipPerson $person,
         string $type,

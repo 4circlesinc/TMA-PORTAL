@@ -141,6 +141,22 @@ class PublicUploadController extends Controller
                 ->exists(),
         );
 
+        /*
+         * A request for several documents: the upload names which one it
+         * answers. One file per document; a document already received through
+         * this link is not taken twice.
+         */
+        $listed = null;
+        if (DocumentRequests::isList($fileRequest)) {
+            $listed = DocumentRequests::listedSlot($fileRequest, (string) $request->input('document', ''));
+            if ($listed === null) {
+                return response()->json(['message' => 'Choose which document this file is.'], 422);
+            }
+            if (DocumentRequests::received($fileRequest, $listed)) {
+                return response()->json(['message' => 'This document has already been received.'], 422);
+            }
+        }
+
         $stored = Vault::store($upload->getRealPath(), $meta['extension']);
 
         /*
@@ -153,7 +169,7 @@ class PublicUploadController extends Controller
          * DocumentRequests owns that difference, including moving the slot on
          * through the engine.
          */
-        if ($slot = DocumentRequests::slotFor($fileRequest)) {
+        if ($slot = ($listed ?? DocumentRequests::slotFor($fileRequest))) {
             $file = DocumentRequests::land(
                 $slot,
                 $fileRequest,
@@ -284,6 +300,21 @@ class PublicUploadController extends Controller
             'maxFiles' => (int) $fileRequest->max_files,
             'remaining' => $fileRequest->remainingUploads(),
             'multiple' => (bool) $fileRequest->allow_multiple,
+            /*
+             * A request for named checklist documents: one row each, with its
+             * own upload, so the sender answers "the Oath of Allegiance" rather
+             * than dropping a pile of files for somebody to sort.
+             */
+            'documents' => DocumentRequests::listFor($fileRequest)->map(fn (array $row) => [
+                'id' => $row['slot']->uuid,
+                'label' => \App\Support\Cip\DocumentTypes::present((string) $row['slot']->label),
+                'person' => $row['slot']->person ? \App\Models\CipPerson::upperName($row['slot']->person->fullName()) : null,
+                'help' => $row['slot']->requirement?->help,
+                'received' => $row['received'],
+            ])->all(),
+            // Who it was sent to is already known: the page does not ask again.
+            'knownSender' => trim((string) $fileRequest->recipient_name) !== ''
+                || trim((string) $fileRequest->recipient_email) !== '',
         ];
     }
 

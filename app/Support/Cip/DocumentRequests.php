@@ -2,14 +2,18 @@
 
 namespace App\Support\Cip;
 
+use App\Models\CipApplication;
 use App\Models\CipDocument;
 use App\Models\FileItem;
 use App\Models\FileRequest;
 use App\Models\FileRequestUpload;
 use App\Models\User;
 use App\Support\Files\FileRequests;
+use App\Support\Files\Naming;
 use App\Support\Files\Versions;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Str;
 
 /**
@@ -75,6 +79,149 @@ class DocumentRequests
         return $request;
     }
 
+    /**
+     * One link that asks for several checklist documents at once.
+     *
+     * Asking a service provider for an Oath of Allegiance, a proof of payment
+     * and a passport photo used to be three links. Now it is one request
+     * listing the three; the upload page shows each as its own row, and each
+     * file lands in its own slot under that slot's filed name, exactly as if
+     * staff had uploaded it.
+     *
+     * @param  iterable<CipDocument>  $slots
+     * @param  array<string, mixed>  $options  title, message, recipient_*, allowed_extensions, max_bytes, expires_at, password
+     */
+    public static function forMany(CipApplication $application, iterable $slots, User $creator, array $options = []): FileRequest
+    {
+        $slots = collect($slots)->unique('id')->values();
+
+        if ($slots->isEmpty()) {
+            throw ValidationException::withMessages(['documents' => 'Choose at least one document to ask for.']);
+        }
+
+        foreach ($slots as $slot) {
+            if ((int) $slot->application_id !== (int) $application->id) {
+                throw ValidationException::withMessages(['documents' => 'Every document must belong to this application.']);
+            }
+            // The original package is frozen once confirmed: a request for a
+            // paper inside it would only be refused when it arrived.
+            Confirmation::guardDocument($slot);
+        }
+
+        $application->loadMissing('client');
+        $labels = $slots->map(fn (CipDocument $slot) => DocumentTypes::present((string) $slot->label))->all();
+        $who = $application->client?->name ?: $application->displayNumber();
+
+        return DB::transaction(function () use ($application, $slots, $creator, $options, $labels, $who) {
+            $request = new FileRequest(array_merge([
+                'uuid' => (string) Str::uuid(),
+                'token' => FileRequests::token(),
+                'title' => count($labels) === 1
+                    ? $labels[0].' for '.$who
+                    : 'Documents for '.$who,
+                'message' => 'Please upload '.self::listed($labels).' for '.$who.'.',
+                // Shown as where the files go; each one still lands in its
+                // own slot's folder.
+                'folder_id' => $application->folder_id,
+                'client_id' => $application->client_id,
+                'created_by' => $creator->id,
+                // One file per document asked for.
+                'max_files' => $slots->count(),
+                'allow_multiple' => $slots->count() > 1,
+            ], array_diff_key($options, ['password' => true])));
+
+            FileRequests::setPassword($request, $options['password'] ?? null);
+            $request->save();
+
+            $now = now();
+            DB::table('file_request_documents')->insert($slots->map(fn (CipDocument $slot) => [
+                'file_request_id' => $request->id,
+                'document_id' => $slot->id,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ])->all());
+
+            return $request;
+        });
+    }
+
+    /**
+     * The documents a request asks for, each with whether it has arrived.
+     *
+     * @return Collection<int, array{slot: CipDocument, received: bool, fileId: ?int}>
+     */
+    public static function listFor(FileRequest $request): Collection
+    {
+        $rows = DB::table('file_request_documents')
+            ->where('file_request_id', $request->id)
+            ->orderBy('id')
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return collect();
+        }
+
+        $slots = CipDocument::query()
+            ->with('person')
+            ->whereIn('id', $rows->pluck('document_id'))
+            ->get()
+            ->keyBy('id');
+
+        return $rows
+            ->filter(fn ($row) => $slots->has($row->document_id))
+            ->map(fn ($row) => [
+                'slot' => $slots->get($row->document_id),
+                'received' => $row->file_id !== null,
+                'fileId' => $row->file_id !== null ? (int) $row->file_id : null,
+            ])
+            ->values();
+    }
+
+    /** Does this request carry a list of documents? */
+    public static function isList(FileRequest $request): bool
+    {
+        return DB::table('file_request_documents')->where('file_request_id', $request->id)->exists();
+    }
+
+    /** One document of a list request, by the slot's uuid; null if it is not on the list. */
+    public static function listedSlot(FileRequest $request, string $slotUuid): ?CipDocument
+    {
+        $slot = CipDocument::query()->where('uuid', $slotUuid)->first();
+
+        if ($slot === null) {
+            return null;
+        }
+
+        $onList = DB::table('file_request_documents')
+            ->where('file_request_id', $request->id)
+            ->where('document_id', $slot->id)
+            ->exists();
+
+        return $onList ? $slot : null;
+    }
+
+    /** Has this document of the list already been answered through the link? */
+    public static function received(FileRequest $request, CipDocument $slot): bool
+    {
+        return DB::table('file_request_documents')
+            ->where('file_request_id', $request->id)
+            ->where('document_id', $slot->id)
+            ->whereNotNull('file_id')
+            ->exists();
+    }
+
+    /** @param  list<string>  $labels */
+    private static function listed(array $labels): string
+    {
+        if (count($labels) <= 1) {
+            return $labels[0] ?? 'the documents';
+        }
+
+        $last = array_pop($labels);
+
+        return implode(', ', $labels).' and '.$last;
+    }
+
     /** Is this link aimed at a checklist slot rather than a folder? */
     public static function slotFor(FileRequest $request): ?CipDocument
     {
@@ -132,11 +279,27 @@ class DocumentRequests
                 Versions::addStored($existing, $owner, $stored, $meta, self::note($uploaderName), null, $name);
                 $file = $existing;
             } else {
+                /*
+                 * Filed under the slot's own name, not the visitor's: what
+                 * the requester asked for was "the Oath of Allegiance", and
+                 * that is what the folder should say, the same name a portal
+                 * upload into the slot would be given.
+                 */
+                $folderId = DocumentSlots::destinationForSlot($slot, $owner);
+                $filed = DocumentSlots::filedNameFor($slot, (string) $meta['extension'], $name);
+                $name = Naming::nextAvailable(
+                    $filed,
+                    fn (string $candidate) => FileItem::query()
+                        ->where('folder_id', $folderId)
+                        ->whereRaw('LOWER(name) = ?', [mb_strtolower($candidate)])
+                        ->exists(),
+                );
+
                 // The link names its slot; the file must not also be
                 // adopted by name into a different one on the way in.
                 $file = DocumentSlots::filing(fn () => FileItem::create([
                     'uuid' => $stored['uuid'],
-                    'folder_id' => DocumentSlots::destinationForSlot($slot, $owner),
+                    'folder_id' => $folderId,
                     'name' => $name,
                     'extension' => $meta['extension'],
                     'mime_type' => $meta['mime'],
@@ -174,6 +337,12 @@ class DocumentRequests
                 'upload_count' => $request->upload_count + 1,
                 'last_upload_at' => now(),
             ])->save();
+
+            // A list request: this document has been answered.
+            DB::table('file_request_documents')
+                ->where('file_request_id', $request->id)
+                ->where('document_id', $slot->id)
+                ->update(['file_id' => $file->id, 'uploaded_at' => now(), 'updated_at' => now()]);
 
             return $file;
         });

@@ -751,6 +751,9 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
          * files cannot use Edit application once the original package is
          * locked, so this is the door the person Documents list uses.
          */
+        // Several checklist documents in one request link.
+        Route::post('/applications/{uuid}/document-requests', [CipDocumentUploadController::class, 'requestDocuments'])
+            ->name('applications.document-requests');
         Route::post('/documents/{uuid}/file', [CipDocumentUploadController::class, 'store'])
             ->name('documents.file');
 

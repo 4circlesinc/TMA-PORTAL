@@ -10211,6 +10211,7 @@
           '<header class="tma-dash__clients-card-head">' +
           '<h3 class="tma-dash__clients-card-title">Documents</h3>' +
           checklistTallyChip(docs) +
+          cipRequestDocsButton(person, app, docs) +
           '</header>' +
           '<ul class="tma-dash__clients-checklist">' +
           docs.map(renderChecklistRow).join('') +
@@ -10268,10 +10269,224 @@
 
     return '<section class="tma-dash__clients-card tma-dash__clients-card--docs">' +
       '<header class="tma-dash__clients-card-head">' +
-      '<h3 class="tma-dash__clients-card-title">Documents</h3></header>' +
+      '<h3 class="tma-dash__clients-card-title">Documents</h3>' +
+      cipRequestDocsButton(person, app, docs) + '</header>' +
       note + body +
       '</section>';
   }
+
+  /* ── Request documents ─────────────────────────────────────────────
+   *
+   * Ask the service provider (or anyone) for checklist documents, several
+   * at once, in one link. Each file is renamed to its document's filed name
+   * and lands in that document's own slot and folder when it arrives.
+   * Built from the dialogs and checklist rows the portal already draws.
+   */
+  function cipOutstandingDocs(docs) {
+    return (docs || []).filter(function (d) {
+      return d && d.id && d.type !== 'additional_documents'
+        && (!d.status || d.status === 'pending_upload' || d.status === 'update_required');
+    });
+  }
+
+  function cipRequestDocsButton(person, app, docs) {
+    if (!app || !app.id || isExternalCipUser()) return '';
+    if (!cipOutstandingDocs(docs).length) return '';
+
+    return '<button type="button" class="tma-portal-link tma-dash__clients-card-action" data-cip-request-docs' +
+      ' data-cip-app="' + esc(app.id) + '" data-cip-client="' + esc(app.clientUid || '') + '"' +
+      ' data-cip-person="' + esc((person && person.id) || '') + '">Request documents</button>';
+  }
+
+  /**
+   * @param {object} app  the application record (people with their documents)
+   * @param {object} [opts]  personId: preselect that person's outstanding documents
+   */
+  function openCipDocumentRequestDialog(app, opts) {
+    opts = opts || {};
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal || !app || !app.id) return;
+
+    var groups = cipFamily(app).map(function (person) {
+      return { person: person, docs: cipOutstandingDocs(person.documents) };
+    }).filter(function (g) { return g.docs.length; });
+
+    if (!groups.length) {
+      clientsToast('Every document on this application has been uploaded.', 'neutral');
+      return;
+    }
+
+    var provider = app.provider || '';
+    var expiry = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+    var checkedFor = function (person) {
+      return !opts.personId || opts.personId === person.id;
+    };
+
+    var body =
+      '<p class="tma-portal-modal__text">Choose the documents you need. Each one is renamed and filed in its place on the checklist when it arrives.</p>' +
+      '<div class="tma-cip-not-ready__list" data-docreq-list>' +
+      groups.map(function (group) {
+        return '<section class="tma-cip-not-ready__group">' +
+          '<header class="tma-dash__clients-card-head">' +
+          '<h3 class="tma-dash__clients-card-title">' + esc(cipUpperName(group.person.name) || group.person.label || 'Applicant') + '</h3>' +
+          '<span class="tma-tab__count">' + esc(String(group.docs.length)) + '</span>' +
+          '</header>' +
+          '<ul class="tma-dash__clients-checklist">' +
+          group.docs.map(function (d) {
+            return '<li class="tma-dash__clients-checklist-row">' +
+              '<label class="tma-portal-check-row">' +
+              '<input type="checkbox" class="tma-dash__check" data-docreq-doc="' + esc(d.id) + '"' +
+              (checkedFor(group.person) ? ' checked' : '') + '>' +
+              '<span>' + esc(d.label || 'Document') +
+              (d.required === false ? ' <span class="tma-dash__clients-checklist-optional">Optional</span>' : '') +
+              '</span></label>' +
+              '<span class="tma-portal-status tma-portal-status--' + esc(d.statusTone || 'neutral') +
+              ' tma-portal-status--inline">' + esc(d.statusLabel || 'Pending upload') + '</span>' +
+              '</li>';
+          }).join('') +
+          '</ul></section>';
+      }).join('') +
+      '</div>' +
+      '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
+      '<span class="tma-dash__clients-field-label">Ask</span>' +
+      '<div class="tma-portal-radio-row">' +
+      (provider
+        ? '<label class="tma-portal-radio"><input type="radio" name="cip-docreq-to" value="provider" data-docreq-to checked>' +
+          '<span class="tma-portal-radio__dot" aria-hidden="true"></span> ' + esc(provider) + ' (service provider)</label>'
+        : '') +
+      '<label class="tma-portal-radio"><input type="radio" name="cip-docreq-to" value="someone" data-docreq-to' + (provider ? '' : ' checked') + '>' +
+      '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Someone else</label>' +
+      '</div></div>' +
+      '<div class="tma-dash__clients-field" data-docreq-someone' + (provider ? ' hidden' : '') + '>' +
+      '<label class="tma-dash__clients-field-label" for="cip-docreq-name">Name</label>' +
+      '<input type="text" id="cip-docreq-name" class="tma-dash__clients-field-input" data-docreq-name maxlength="120" placeholder="Jane Doe" autocomplete="off">' +
+      '<label class="tma-dash__clients-field-label" for="cip-docreq-email">Email address</label>' +
+      '<input type="email" id="cip-docreq-email" class="tma-dash__clients-field-input" data-docreq-email maxlength="191" placeholder="jane@example.com" autocomplete="off">' +
+      '</div>' +
+      '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
+      '<label class="tma-dash__clients-field-label" for="cip-docreq-message">Instructions</label>' +
+      '<textarea id="cip-docreq-message" class="tma-dash__clients-field-textarea" data-docreq-message rows="3" maxlength="2000" placeholder="Anything they should know about these documents"></textarea>' +
+      '</div>' +
+      '<div class="tma-dash__clients-field">' +
+      '<label class="tma-dash__clients-field-label" for="cip-docreq-expiry">Upload by</label>' +
+      '<input type="date" id="cip-docreq-expiry" class="tma-dash__clients-field-input" data-docreq-expiry value="' + esc(expiry) + '">' +
+      '</div>' +
+      '<div class="tma-portal-modal__foot">' +
+      '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-docreq-cancel>Cancel</button>' +
+      '<button type="button" class="tma-no-data__btn" data-docreq-send>Send request</button>' +
+      '</div>';
+
+    ui.openModal({
+      title: 'Request documents',
+      cls: 'tma-cip-not-ready',
+      body: body,
+      onMount: function (el) {
+        var someone = el.querySelector('[data-docreq-someone]');
+        el.querySelectorAll('[data-docreq-to]').forEach(function (radio) {
+          radio.addEventListener('change', function () {
+            someone.hidden = radio.value !== 'someone' || !radio.checked;
+          });
+        });
+        el.querySelector('[data-docreq-cancel]').addEventListener('click', function () { ui.closeModal(); });
+
+        var send = el.querySelector('[data-docreq-send]');
+        send.addEventListener('click', function () {
+          var picked = [];
+          el.querySelectorAll('[data-docreq-doc]').forEach(function (box) {
+            if (box.checked) picked.push(box.getAttribute('data-docreq-doc'));
+          });
+          if (!picked.length) {
+            clientsToast('Choose at least one document to ask for.', 'negative');
+            return;
+          }
+          var toEl = el.querySelector('[data-docreq-to]:checked');
+          var to = toEl ? toEl.value : 'someone';
+          var payload = {
+            documents: picked,
+            to: to,
+            message: (el.querySelector('[data-docreq-message]').value || '').trim() || null,
+            expiresAt: el.querySelector('[data-docreq-expiry]').value || null,
+            send: true,
+          };
+          if (to === 'someone') {
+            payload.recipientName = (el.querySelector('[data-docreq-name]').value || '').trim();
+            payload.recipientEmail = (el.querySelector('[data-docreq-email]').value || '').trim();
+            if (!payload.recipientName || !payload.recipientEmail) {
+              clientsToast('Enter the name and email address of the person you are asking.', 'negative');
+              return;
+            }
+          }
+
+          send.disabled = true;
+          send.textContent = 'Sending…';
+          clientsFetch('/portal/cip/applications/' + encodeURIComponent(app.id) + '/document-requests', {
+            method: 'POST',
+            json: payload,
+          }).then(function (res) {
+            var who = (res && res.recipients && res.recipients.length) ? res.recipients.join(', ') : 'them';
+            var link = (res && res.request && res.request.link) || '';
+            ui.closeModal();
+            ui.openModal({
+              title: 'Request sent',
+              body:
+                '<p class="tma-portal-modal__text">Asked ' + esc(who) + ' for ' +
+                esc(String(res.documents)) + (res.documents === 1 ? ' document' : ' documents') +
+                '. Each one is filed in its place on the checklist when it arrives.</p>' +
+                (link
+                  ? '<div class="tma-portal-share__link-row">' +
+                    '<input type="text" class="tma-portal-share__link" data-docreq-link readonly value="' + esc(link) + '">' +
+                    '<button type="button" class="tma-no-data__btn" data-docreq-copy>Copy</button></div>'
+                  : '') +
+                '<div class="tma-portal-modal__foot">' +
+                '<button type="button" class="tma-no-data__btn" data-docreq-done>Done</button></div>',
+              onMount: function (done) {
+                var copy = done.querySelector('[data-docreq-copy]');
+                if (copy) {
+                  copy.addEventListener('click', function () {
+                    var input = done.querySelector('[data-docreq-link]');
+                    if (navigator.clipboard) navigator.clipboard.writeText(input.value).catch(function () {});
+                    else { input.select(); document.execCommand('copy'); }
+                    copy.textContent = 'Copied';
+                  });
+                }
+                done.querySelector('[data-docreq-done]').addEventListener('click', function () { ui.closeModal(); });
+              },
+            });
+            clientsToast('Request sent to ' + who, 'positive');
+          }).catch(function (err) {
+            send.disabled = false;
+            send.textContent = 'Send request';
+            clientsToast((err && err.message) || 'Could not send the request.', 'negative');
+          });
+        });
+      },
+    });
+  }
+
+  window.TMACipDocumentRequests = {
+    /**
+     * @param {object|string} target  the application record, or its client uid
+     * @param {object} [opts]  personId to preselect one person's documents
+     */
+    open: function (target, opts) {
+      var app = typeof target === 'string' ? applicationFor(target) : target;
+      openCipDocumentRequestDialog(app, opts);
+    },
+  };
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target && e.target.closest && e.target.closest('[data-cip-request-docs]');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var app = applicationFor(btn.getAttribute('data-cip-client'));
+    if (!app || app.id !== btn.getAttribute('data-cip-app')) {
+      app = (window.TMACipIntakeRecord && window.TMACipIntakeRecord.id === btn.getAttribute('data-cip-app'))
+        ? window.TMACipIntakeRecord
+        : app;
+    }
+    openCipDocumentRequestDialog(app, { personId: btn.getAttribute('data-cip-person') || null });
+  });
 
   window.TMACipSlots = {
     docsCard: renderPadDocumentsCard,
@@ -11889,6 +12104,41 @@
         var clientId = panel ? panel.getAttribute('data-clients-panel-client') : null;
         var contact = clientId ? contactFor(clientId) : null;
         var name = contact && contact.name;
+
+        /*
+         * On an application there are two kinds of request: named checklist
+         * documents (each renamed and filed in its slot as it arrives), or
+         * any files into the folder on screen, as before.
+         */
+        var app = clientId ? applicationFor(clientId) : null;
+        var ui = window.TMAPortalUI;
+        if (app && app.id && isApplicationProfile(app) && !isExternalCipUser() && ui && ui.openModal
+          && !requestBtn._chosenFolder) {
+          ui.openModal({
+            title: 'Request Files',
+            body:
+              '<p class="tma-portal-modal__text">What are you asking for?</p>' +
+              '<div class="tma-portal-modal__foot">' +
+              '<button type="button" class="tma-no-data__btn" data-req-kind="documents">Documents on the checklist</button>' +
+              '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-req-kind="folder">Any files, into this folder</button>' +
+              '</div>',
+            onMount: function (el) {
+              el.querySelectorAll('[data-req-kind]').forEach(function (b) {
+                b.addEventListener('click', function () {
+                  ui.closeModal();
+                  if (b.getAttribute('data-req-kind') === 'documents') {
+                    openCipDocumentRequestDialog(app);
+                    return;
+                  }
+                  requestBtn._chosenFolder = true;
+                  requestBtn.click();
+                  requestBtn._chosenFolder = false;
+                });
+              });
+            },
+          });
+          return;
+        }
 
         window.TMAFileRequests.open({
           folderId: here.uuid,
