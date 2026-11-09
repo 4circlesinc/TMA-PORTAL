@@ -2589,6 +2589,9 @@ class CipApplicationController extends Controller
             'decision' => $application->decision,
             'decidedAt' => $application->decided_at?->toDateString(),
             'decisionLetter' => $this->decisionLetter($application),
+            // The firm's own notes on the decision: staff read them back on
+            // the form; the service provider is not shown them.
+            'decisionNote' => Role::isStaff($viewer) ? $application->decision_note : null,
             'status' => $application->status,
             'statusLabel' => Status::label($application->status),
             'statusTone' => Status::tone($application->status),

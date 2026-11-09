@@ -115,6 +115,7 @@ class PostApproval
             'status' => $decision,
             'decision' => $decision,
             'decided_at' => $decidedAt,
+            'decision_note' => $note !== '' ? $note : $application->decision_note,
         ])->save();
 
         $meta = [

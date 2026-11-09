@@ -1639,10 +1639,17 @@ class Intake
         }
 
         $day = $data[self::DECIDED_AT] ?? null;
-        $application->forceFill([
+        $fill = [
             'decision' => $decision,
             'decided_at' => $day ? Carbon::parse($day) : $application->decided_at,
-        ])->save();
+        ];
+        // The notes are kept with the rest of the decision, so a draft
+        // reopened shows them; an empty box is notes taken away.
+        if (array_key_exists(self::DECISION_NOTE, $data)) {
+            $note = trim((string) $data[self::DECISION_NOTE]);
+            $fill['decision_note'] = $note === '' ? null : $note;
+        }
+        $application->forceFill($fill)->save();
     }
 
     /**
@@ -1666,6 +1673,10 @@ class Intake
 
         if (empty($data[self::DECIDED_AT]) && $application->decided_at) {
             $data[self::DECIDED_AT] = $application->decided_at->toDateString();
+        }
+
+        if (trim((string) ($data[self::DECISION_NOTE] ?? '')) === '' && filled($application->decision_note)) {
+            $data[self::DECISION_NOTE] = $application->decision_note;
         }
 
         return $data;

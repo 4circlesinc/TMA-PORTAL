@@ -1120,6 +1120,87 @@ class CipApplicationDraftTest extends TestCase
     }
 
     /**
+     * Item 5: the Decision card's notes. Kept on the draft with the rest of
+     * the decision, read back by staff (not by the provider side), emptied
+     * when the box is emptied, and recorded with the decision when the
+     * draft is filed — without the form having to send them again.
+     */
+    public function test_decision_notes_are_kept_on_the_draft_and_recorded_when_it_is_filed(): void
+    {
+        Storage::fake('local');
+        \Illuminate\Support\Facades\Mail::fake();
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider();
+        $draftBody = $this->answers($provider, [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12701P',
+            'firstName' => 'Layla',
+            'lastName' => 'Smith',
+            'gender' => 'Female',
+            'dateOfBirth' => '1985-04-12',
+            'countryOfBirth' => 'Lebanon',
+            'countryOfResidence' => 'United Arab Emirates',
+            'occupation' => 'Engineer',
+            'passportNumber' => 'X1270100',
+            'decision_note' => '  Approved subject to the bank letter being re-signed.  ',
+        ]);
+
+        $this->actingAs($staff)->post('/portal/cip/applications/draft', $draftBody + [
+            'passportPhoto' => $this->photo(),
+            'oathOfAllegiance' => [UploadedFile::fake()->create('oath.pdf', 40, 'application/pdf')],
+            'proofOfPayment' => [UploadedFile::fake()->create('payment.pdf', 40, 'application/pdf')],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $draft = CipApplication::query()->where('cip_number', '10T1G12701P')->firstOrFail();
+        $this->assertSame('Approved subject to the bank letter being re-signed.', $draft->decision_note);
+
+        $this->actingAs($staff)->getJson('/portal/cip/applications/'.$draft->uuid)
+            ->assertOk()
+            ->assertJsonPath('application.decisionNote', 'Approved subject to the bank letter being re-signed.');
+
+        // Emptied on the form, emptied on the draft.
+        $this->actingAs($staff)->post('/portal/cip/applications/draft', array_merge($draftBody, [
+            'decision_note' => '',
+            'decision_letter' => null,
+        ]), ['Accept' => 'application/json'])->assertOk();
+        $this->assertNull($draft->fresh()->decision_note);
+
+        // Written again, then filed with no notes in the filing itself.
+        $this->actingAs($staff)->post('/portal/cip/applications/draft', array_merge($draftBody, [
+            'decision_note' => 'Letter dated 18 September.',
+            'decision_letter' => null,
+        ]), ['Accept' => 'application/json'])->assertOk();
+
+        $filing = $this->filing($provider) + [
+            'phase' => Phase::POST_APPROVAL,
+            'cipNumber' => '10T1G12701P',
+            'draftId' => $draft->uuid,
+        ];
+        $filing['firstName'] = 'Layla';
+        $filing['gender'] = 'Female';
+        $filing['passportNumber'] = 'X1270100';
+        unset(
+            $filing['passportPhoto'],
+            $filing['passportBioPage'],
+            $filing['birthCertificate'],
+            $filing['policeCertificate'],
+            $filing['proofOfAddress'],
+        );
+        $this->actingAs($staff)->post('/portal/cip/applications', $filing, ['Accept' => 'application/json'])->assertCreated();
+
+        $filed = $draft->fresh();
+        $this->assertSame(Status::POST_APPROVED, $filed->status);
+        $this->assertSame('Letter dated 18 September.', $filed->decision_note);
+
+        $event = \App\Models\CipEvent::query()
+            ->where('application_id', $filed->id)
+            ->where('action', \App\Models\CipEvent::ACTION_DECISION_RECORDED)
+            ->latest('id')
+            ->firstOrFail();
+        $this->assertSame('Letter dated 18 September.', $event->meta['note'] ?? null);
+    }
+
+    /**
      * Filing a draft with its decision lands whole or not at all.
      *
      * The decision stores its letter. A letter that could not be stored used

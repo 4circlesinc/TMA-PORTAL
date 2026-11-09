@@ -325,6 +325,7 @@
     cipNumber: 'CIP application number',
     outcome: 'Decision',
     decided_at: 'Decision date',
+    decision_note: 'Decision notes',
     decision_letter: 'Decision letter',
     internalNumber: 'Application number',
     parentCipNumber: 'Main application CIP number',
@@ -1427,7 +1428,6 @@
       (showsCipNumber()
         ? textField('cipNumber', { placeholder: 'As printed on the approval letter' })
         : '') +
-      (asksOpeningDecision() ? openingDecisionFields() : '') +
       '</div>');
   }
 
@@ -1535,31 +1535,98 @@
     return isFiling() && isPostApprovalIntake() && !isAddOnIntake() && recordsDecision();
   }
 
-  function openingDecisionFields() {
-    return selectField('outcome', [
-      { value: 'approved', label: 'Approved' },
-      { value: 'denied', label: 'Denied' },
-    ], 'Approved or denied') +
+  /*
+   * The decision, in a card of its own above Investment (item 5).
+   *
+   * A post-approval file staff add is one the Unit has already decided, so
+   * the decision is the first thing on the form: Approved or Denied, notes
+   * on it, the day, and the Unit's letter, which is required. The same four
+   * the status menu's Record decision asks, labelled the same way, and the
+   * letter taken in the same drop box. A service provider's form never has
+   * this card (recordsDecision).
+   */
+  function decisionCard() {
+    if (!asksOpeningDecision()) return '';
+
+    return card('Decision',
+      '<div class="tma-portal-form-grid">' +
+      selectField('outcome', [
+        { value: 'approved', label: 'Approved' },
+        { value: 'denied', label: 'Denied' },
+      ], 'Approved or denied') +
+      '</div>' +
+      decisionNoteField() +
+      '<div class="tma-portal-form-grid">' +
       textField('decided_at', { type: 'date' }) +
-      decisionLetterField();
+      '</div>' +
+      decisionLetterField(),
+      { modifier: 'tma-dash__clients-card--decision' });
   }
 
+  function decisionNoteField() {
+    var value = state.draft.decision_note || '';
+    if (fieldsLocked()) return lockedField('decision_note', value);
+
+    return '<label class="tma-portal-field' + (state.errors.decision_note ? ' is-invalid' : '') + '"' +
+      ' data-key="field:decision_note">' +
+      fieldLabel('decision_note', labelFor('decision_note')) +
+      '<textarea class="tma-portal-textarea" rows="3" maxlength="2000"' +
+      ' data-key="input:decision_note" data-cip-field="decision_note"' +
+      ' placeholder="Optional notes on this decision">' + esc(value) + '</textarea>' +
+      fieldError('decision_note') +
+      '</label>';
+  }
+
+  /*
+   * The Unit's letter, in the drop box every decision letter in the portal
+   * is taken in (clients.js, Record decision): "Decision letter (PDF)", the
+   * zone, PDF only, and the chosen file as a row that can be taken away.
+   */
   function decisionLetterField() {
-    var name = '';
-    if (state.files.decision_letter) name = state.files.decision_letter.name || '';
-    else if (state.filed.decision_letter) name = state.decisionLetterName || 'Decision letter.pdf';
+    var chosen = state.files.decision_letter || null;
+    var onFile = !chosen && state.filed.decision_letter ? (state.decisionLetterName || 'Decision letter.pdf') : '';
     if (fieldsLocked()) {
-      return lockedField('decision_letter', name, { label: 'Decision letter' });
+      return lockedField('decision_letter', chosen ? chosen.name : onFile, { label: 'Decision letter' });
     }
 
-    return '<label class="tma-portal-field' + (state.errors.decision_letter ? ' is-invalid' : '') + '"' +
-      ' data-key="field:decision_letter">' +
-      fieldLabel('decision_letter', 'Decision letter') +
-      '<input type="file" accept="application/pdf,.pdf" class="tma-portal-input"' +
-      ' data-cip-letter data-key="letter:decision"' + requiredAttr('decision_letter') + '>' +
-      (name ? '<span class="tma-portal-note">' + esc(name) + '</span>' : '') +
+    var icon = (window.TMAFileIcons && window.TMAFileIcons.fileIconSrc && chosen)
+      ? window.TMAFileIcons.fileIconSrc('', chosen.name)
+      : ICON + 'File.svg';
+
+    return '<div class="tma-portal-drop' + (chosen || onFile ? ' is-filled' : '') +
+      (state.errors.decision_letter ? ' is-invalid' : '') + '"' +
+      ' data-key="field:decision_letter" data-cip-letter-drop>' +
+      fieldLabel('decision_letter', 'Decision letter (PDF)') +
+      (onFile ? '<p class="tma-portal-drop__meta">On file: ' + esc(onFile) + '</p>' : '') +
+      '<input type="file" accept="application/pdf,.pdf" class="tma-dash__clients-photo-input"' +
+      ' data-cip-letter data-key="letter:decision" aria-hidden="true" tabindex="-1"' + requiredAttr('decision_letter') + '>' +
+      '<button type="button" class="tma-portal-drop__zone" data-cip-letter-btn>' +
+      '<img src="' + ICON + 'UploadSimple.svg" alt="" width="20" height="20">' +
+      '<span class="tma-portal-drop__hint">Drop the letter here, or choose one</span>' +
+      '<span class="tma-portal-drop__meta">PDF only</span>' +
+      '</button>' +
+      (chosen
+        ? '<ul class="tma-portal-drop__files">' +
+          '<li class="tma-portal-drop__file">' +
+          '<img class="tma-portal-drop__file-icon" src="' + esc(icon) + '" alt="" width="20" height="20">' +
+          '<span class="tma-portal-drop__file-name">' + esc(chosen.name) + '</span>' +
+          '<button type="button" class="tma-portal-drop__file-remove" data-cip-letter-remove' +
+          ' aria-label="Remove ' + esc(chosen.name) + '">' +
+          '<img src="' + ICON + 'Xcircle.svg" alt="" width="16" height="16"></button>' +
+          '</li></ul>'
+        : '') +
       fieldError('decision_letter') +
-      '</label>';
+      '</div>';
+  }
+
+  /* What Record decision accepts as a letter: a PDF, never a Word file. */
+  function isPdfLetter(file) {
+    if (!file) return false;
+    var name = String(file.name || '').toLowerCase();
+    if (/\.(docx?|rtf|pages|odt)$/.test(name)) return false;
+    if (/\.pdf$/.test(name)) return true;
+
+    return String(file.type || '').toLowerCase() === 'application/pdf';
   }
 
   function openingGaps() {
@@ -1676,6 +1743,7 @@
 
   function preApprovalFormBody() {
     return '<div class="tma-dash__clients-cards tma-dash__clients-cards--intake">' +
+      decisionCard() +
       investmentCard() +
       applicantCard() +
       documentsCard('') +
@@ -1685,9 +1753,8 @@
   }
 
   /*
-   * The same page as pre-approval. The decision, its date and the letter
-   * are the first card's last row, drawn only while the file is still a
-   * filing. See openingDecisionFields().
+   * The same page as pre-approval, with the Decision card above Investment
+   * while the file is still a filing. See decisionCard().
    */
   function postApprovalFormBody() {
     return preApprovalFormBody();
@@ -2375,16 +2442,68 @@
    * than after filling in eight more fields and pressing Add.
    */
   function wireDecisionLetter(root) {
+    var take = function (file) {
+      if (!file) return;
+      if (!isPdfLetter(file)) {
+        ui().toastError('Upload the decision letter as a PDF.');
+        // A letter already chosen stays; only an empty box is marked.
+        if (!state.files.decision_letter && !state.filed.decision_letter) {
+          state.errors.decision_letter = 'Upload the decision letter as a PDF.';
+          render(root);
+        }
+
+        return;
+      }
+      state.files.decision_letter = keepFile(file);
+      state.decisionLetterName = file.name || 'Decision letter.pdf';
+      state.filed.decision_letter = false;
+      delete state.errors.decision_letter;
+      touchDraft();
+      render(root);
+    };
+
     MORPH.unwired(root, '[data-cip-letter]').forEach(function (el) {
       el.addEventListener('change', function () {
-        var file = el.files && el.files[0] ? keepFile(el.files[0]) : null;
-        if (!file) return;
-        state.files.decision_letter = file;
-        state.decisionLetterName = file.name || 'Decision letter.pdf';
-        state.filed.decision_letter = false;
-        delete state.errors.decision_letter;
+        var file = el.files && el.files[0] ? el.files[0] : null;
+        el.value = '';
+        take(file);
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-letter-btn]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var box = btn.closest('[data-cip-letter-drop]');
+        var input = box && box.querySelector('[data-cip-letter]');
+        if (input) input.click();
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-letter-remove]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.files.decision_letter = null;
         touchDraft();
         render(root);
+      });
+    });
+
+    MORPH.unwired(root, '[data-cip-letter-drop]').forEach(function (zone) {
+      ['dragenter', 'dragover'].forEach(function (type) {
+        zone.addEventListener(type, function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          zone.classList.add('is-dragging');
+        });
+      });
+      zone.addEventListener('dragleave', function (e) {
+        if (zone.contains(e.relatedTarget)) return;
+        zone.classList.remove('is-dragging');
+      });
+      zone.addEventListener('drop', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        zone.classList.remove('is-dragging');
+        var files = e.dataTransfer && e.dataTransfer.files;
+        take(files && files[0]);
       });
     });
   }
@@ -3008,6 +3127,7 @@
     if (!decision && asksOpeningDecision() && state.draft.outcome) {
       decision = {
         decidedAt: state.draft.decided_at || '',
+        note: state.draft.decision_note || '',
         letter: state.files.decision_letter || null,
       };
     }
@@ -3021,7 +3141,11 @@
       out.push({ name: 'decision_letter', file: decision.letter, filename: decision.letter.name || 'decision-letter.pdf' });
     }
     if (decision.decidedAt) out.push({ name: 'decided_at', value: decision.decidedAt });
-    if (decision.note) out.push({ name: 'decision_note', value: decision.note });
+    // Sent even when empty on the inline form, so clearing the box clears
+    // the notes kept on the draft.
+    if (decision.note || asksOpeningDecision()) {
+      out.push({ name: 'decision_note', value: decision.note || '' });
+    }
 
     return out;
   }
@@ -3971,7 +4095,7 @@
       state.decision = {
         decision: state.draft.outcome === 'approved' ? 'granted' : 'denied',
         decidedAt: state.draft.decided_at || '',
-        note: '',
+        note: state.draft.decision_note || '',
         letter: state.filed.decision_letter ? null : (state.files.decision_letter || null),
       };
     }
@@ -4646,6 +4770,7 @@
     if (app.decision === 'post_approved' || app.decision === 'granted') state.draft.outcome = 'approved';
     else if (app.decision === 'post_denied' || app.decision === 'denied') state.draft.outcome = 'denied';
     if (app.decidedAt) state.draft.decided_at = app.decidedAt;
+    if (app.decisionNote) state.draft.decision_note = app.decisionNote;
     if (app.decisionLetter && app.decisionLetter.fileId) {
       state.filed.decision_letter = true;
       state.decisionLetterName = app.decisionLetter.fileName || 'Decision letter.pdf';
