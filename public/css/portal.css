@@ -7746,6 +7746,19 @@ body:has(.tma-dash.is-sidebar-collapsed) .tma-sync-pill {
 
 .tma-cip-cc:focus-within { border-color: var(--color-text-secondary); }
 
+/*
+ * As long as its row, beside its label: the status dialog's CC and the
+ * Request documents addresses. It grows taller by itself as addresses are
+ * added — the chips wrap onto new lines and the box follows them.
+ */
+.tma-dash__clients-field > .tma-cip-cc {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  height: auto;
+}
+
 .tma-cip-cc__input {
   flex: 1 1 140px;
   min-width: 8em;
