@@ -173,6 +173,16 @@ Artisan::command('presence:expire', function () {
 Schedule::command('presence:expire')->everyMinute()->withoutOverlapping(5);
 
 /*
+ * Personal reminders on calendar entries: each due reminder is sent once per
+ * occurrence, to the bell and by email (App\Support\Calendar\Reminders).
+ */
+Artisan::command('calendar:send-reminders', function () {
+    $this->info('Sent '.\App\Support\Calendar\Reminders::sendDue().' calendar reminder(s).');
+})->purpose('Send personal reminders for calendar entries that are due');
+
+Schedule::command('calendar:send-reminders')->everyMinute()->withoutOverlapping(5);
+
+/*
  * Each person's History retention choice (Settings → Privacy). Daily is
  * enough for a window measured in days, and it runs off-peak because it
  * touches every account.
@@ -422,6 +432,9 @@ Artisan::command('mail:wake-snoozed', function () {
                 'from_email' => mb_strtolower((string) ($message->from_email ?? '')),
                 'from_name' => (string) ($message->from_name ?: $message->from_email ?: 'Sender'),
             ],
+            // A reminder reaches them by both routes: the email goes out
+            // even while they are in the portal.
+            'email_always' => true,
             // One reminder per snooze; re-snoozing later makes a new key window.
             'dedupe_key' => 'email.snooze_due:'.$message->id,
             'dedupe_minutes' => 5,

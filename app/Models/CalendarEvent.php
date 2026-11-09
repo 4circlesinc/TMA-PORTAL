@@ -24,7 +24,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'external_recurrence_id', 'external_etag', 'external_synced_at',
     'external_synced_local_at', 'external_local_fingerprint',
     'conflict_snapshot', 'conflict_at',
-    'completed_at', 'created_by', 'updated_by',
+    'completed_at', 'created_by', 'updated_by', 'reminder_minutes',
 ])]
 class CalendarEvent extends Model
 {
@@ -54,6 +54,7 @@ class CalendarEvent extends Model
             'all_day' => 'boolean',
             'recurrence_exdates' => 'array',
             'deleted_at' => 'datetime',
+            'reminder_minutes' => 'integer',
         ];
     }
 
@@ -127,6 +128,9 @@ class CalendarEvent extends Model
             'location' => $this->location,
             'visibility' => $this->visibility,
             'meetingUrl' => $this->meeting_url,
+            // When the owner is reminded: minutes before it starts, 0 at the
+            // time, null for no reminder.
+            'reminderMinutes' => $this->reminder_minutes,
             'organizerId' => $this->organizer_id,
             'organizerName' => $this->organizer?->name,
             'clientId' => $this->client?->uid,

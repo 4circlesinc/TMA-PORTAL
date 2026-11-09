@@ -23,6 +23,7 @@
     Trash: ICON + 'Trash.svg',
     PencilSimpleLine: ICON + 'PencilSimpleLine.svg',
     MapPin: ICON + 'MapPin.svg',
+    Alarm: ICON + 'Alarm.svg',
     Note: ICON + 'Note.svg',
     Users: ICON + 'Users.svg',
     DotsThree: ICON + 'DotsThreeVertical.svg',
@@ -979,6 +980,7 @@
 
     var links = [
       renderDetailLink(ICONS.MapPin, event.location),
+      renderDetailLink(ICONS.Alarm, reminderLabel(event.reminderMinutes)),
       renderDetailLink(ICONS.Note, event.description, true),
       renderDetailLink(ICONS.Users, event.organizerName ? event.organizerName + ' (organizer)' : ''),
     ].filter(Boolean).join('');
@@ -1425,6 +1427,7 @@
       '</div></div>' +
 
       renderRecurrenceField(draft) +
+      renderReminderField(draft) +
       renderGuestPicker(draft) +
 
       '<label class="tma-dash__clients-form-field tma-dash__clients-form-field--full">' +
@@ -1445,6 +1448,52 @@
       '<button type="button" class="tma-dash__calendar-panel-btn" data-calendar-panel-close>Cancel</button>' +
       '</div></aside>'
     );
+  }
+
+  /*
+   * When to be reminded. The reminder arrives as a portal notification and
+   * by email, to the owner and to every guest who has not declined.
+   */
+  var REMINDER_CHOICES = [
+    { value: '', label: 'No reminder' },
+    { value: '0', label: 'At the time' },
+    { value: '5', label: '5 minutes before' },
+    { value: '15', label: '15 minutes before' },
+    { value: '30', label: '30 minutes before' },
+    { value: '60', label: '1 hour before' },
+    { value: '120', label: '2 hours before' },
+    { value: '1440', label: '1 day before' },
+    { value: '2880', label: '2 days before' },
+    { value: '10080', label: '1 week before' },
+  ];
+
+  /* "Reminder 15 minutes before", for the entry's own panel. */
+  function reminderLabel(minutes) {
+    if (minutes == null || minutes === '') return '';
+    var value = String(minutes);
+    for (var i = 0; i < REMINDER_CHOICES.length; i++) {
+      if (REMINDER_CHOICES[i].value === value) {
+        return 'Reminder ' + REMINDER_CHOICES[i].label.charAt(0).toLowerCase() + REMINDER_CHOICES[i].label.slice(1);
+      }
+    }
+
+    return 'Reminder ' + value + ' minutes before';
+  }
+
+  function renderReminderField(draft) {
+    var current = draft.reminderMinutes == null ? '' : String(draft.reminderMinutes);
+    var known = REMINDER_CHOICES.some(function (c) { return c.value === current; });
+    var choices = known ? REMINDER_CHOICES : REMINDER_CHOICES.concat([{ value: current, label: current + ' minutes before' }]);
+
+    return '<label class="tma-dash__clients-form-field tma-dash__clients-form-field--full">' +
+      '<span class="tma-dash__clients-form-label">Reminder</span>' +
+      '<select class="tma-dash__clients-field-input" data-calendar-field="reminderMinutes">' +
+      choices.map(function (c) {
+        return '<option value="' + esc(c.value) + '"' + (c.value === current ? ' selected' : '') + '>' + esc(c.label) + '</option>';
+      }).join('') +
+      '</select>' +
+      '<span class="tma-dash__calendar-field-hint">Sent as a portal notification and by email.</span>' +
+      '</label>';
   }
 
   function renderCalendarForm(draft, isEdit) {
@@ -2183,6 +2232,9 @@
       description: '',
       recurrence: { freq: 'NONE', interval: 1, byDay: [], count: null, until: null },
       guests: [],
+      // No reminder unless one is asked for; a "Reminder" entry starts at
+      // "At the time" (see the quick-add kinds).
+      reminderMinutes: null,
     };
   }
 
@@ -2201,6 +2253,7 @@
       description: event.description || '',
       recurrence: parseRule(event.recurrenceRule),
       guests: [],
+      reminderMinutes: event.reminderMinutes == null ? null : Number(event.reminderMinutes),
     };
   }
 
@@ -2248,6 +2301,11 @@
       allDay: !!(allDayEl && allDayEl.checked),
       location: (get('location') || {}).value ? get('location').value.trim() : '',
       description: (get('description') || {}).value ? get('description').value.trim() : '',
+      reminderMinutes: (function () {
+        var el = get('reminderMinutes');
+        if (!el) return state.panel && state.panel.draft ? state.panel.draft.reminderMinutes : null;
+        return el.value === '' ? null : Number(el.value);
+      })(),
       // Held in state rather than the DOM: the swatches are buttons, not inputs.
       colour: state.panel && state.panel.draft ? state.panel.draft.colour : '',
       // Likewise the guest chips, they are not form controls.
@@ -2318,6 +2376,7 @@
       startsAt: toIso(draft.date, draft.allDay ? 0 : draft.start),
       endsAt: toIso(draft.date, draft.allDay ? 0 : draft.end),
       recurrence: draftRecurrence(draft),
+      reminderMinutes: draft.reminderMinutes == null ? null : draft.reminderMinutes,
     };
 
     if (scope) payload.scope = scope;
@@ -4133,7 +4192,7 @@
         }
         var draft = defaultDraft(dateKey);
         if (kind === 'meeting') draft.title = 'Meeting';
-        if (kind === 'reminder') { draft.title = 'Reminder'; draft.end = draft.start + 0.25; }
+        if (kind === 'reminder') { draft.title = 'Reminder'; draft.end = draft.start + 0.25; draft.reminderMinutes = 0; }
         if (kind === 'note') draft.title = 'Note';
         state.panel = { mode: 'create', draft: draft };
         state.selectedEventId = null;
@@ -4367,6 +4426,7 @@
       state.selectedEventId = eventId;
       state.panel = { mode: 'view', eventId: eventId };
       render();
+      loadEventDetail(eventId);
       return true;
     }
     if (window.__TMA_OPEN_DAY) {
@@ -4388,6 +4448,9 @@
     state.selectedEventId = eventId;
     state.panel = { mode: 'view', eventId: eventId };
     render();
+    // It may lie outside the dates on screen (a reminder for next week):
+    // fetch it, so the panel has something to show.
+    loadEventDetail(eventId);
   }
 
   function openDay(dateKey) {
@@ -4417,8 +4480,35 @@
     });
   }
 
+  /*
+   * ?event=<uuid>, how a reminder (or any notification) names the entry it
+   * is about. Read when the script loads as well as on activation, because
+   * the shell rewrites the address bar to the bare page path as it shows a
+   * view, and the parameter can be gone by the time the calendar is asked.
+   */
+  var eventFromUrl = (function () {
+    try {
+      return new URLSearchParams(window.location.search).get('event') || '';
+    } catch (e) { return ''; }
+  })();
+
+  function takeEventFromAddress() {
+    var id = '';
+    try {
+      if (/\/calendar(\/|$)/.test(window.location.pathname)) {
+        id = new URLSearchParams(window.location.search).get('event') || '';
+      }
+    } catch (e) { /* ignore */ }
+    id = id || eventFromUrl;
+    eventFromUrl = '';
+
+    return id;
+  }
+
   function activate() {
     if (!state.el) return;
+    var wantedEvent = takeEventFromAddress();
+    if (wantedEvent) window.__TMA_OPEN_EVENT = wantedEvent;
     if (!firstLoadStarted && runFirstLoad) { runFirstLoad(); return; }
     if (consumePendingOpens()) return;
     if (isEditingCalendar()) return;

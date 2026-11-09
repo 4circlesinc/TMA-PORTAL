@@ -192,6 +192,7 @@ final class Notifier
                 $recipient,
                 $notification,
                 is_callable($attrs['email_postcard'] ?? null) ? $attrs['email_postcard'] : null,
+                (bool) ($attrs['email_always'] ?? false),
             );
         }
 
@@ -209,7 +210,12 @@ final class Notifier
      * @param  (callable(User): Postcard)|null  $postcard  a richer email for this
      *                                                     notification, when the caller has one
      */
-    private static function email(User $recipient, Notification $notification, ?callable $postcard = null): void
+    /**
+     * @param  bool  $evenOnline  a reminder: emailed even while they are in the
+     *                            portal, so it reaches them by both routes. The
+     *                            channel preference still decides.
+     */
+    private static function email(User $recipient, Notification $notification, ?callable $postcard = null, bool $evenOnline = false): void
     {
         if (! $recipient->email) {
             return;
@@ -219,7 +225,7 @@ final class Notifier
             return;
         }
 
-        $always = (bool) data_get($recipient->preferences, 'notifyAlwaysEmail', false);
+        $always = $evenOnline || (bool) data_get($recipient->preferences, 'notifyAlwaysEmail', false);
         if (! $always && self::isActivelyOnline($recipient)) {
             return;
         }

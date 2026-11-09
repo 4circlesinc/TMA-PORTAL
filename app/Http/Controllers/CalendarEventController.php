@@ -183,6 +183,7 @@ class CalendarEventController extends Controller
             'visibility' => $data['visibility'] ?? 'default',
             'colour' => $data['colour'] ?? null,
             'meeting_url' => $data['meetingUrl'] ?? null,
+            'reminder_minutes' => $data['reminderMinutes'] ?? null,
             'organizer_id' => $user->id,
             'created_by' => $user->id,
             'updated_by' => $user->id,
@@ -261,6 +262,7 @@ class CalendarEventController extends Controller
             'visibility' => 'visibility',
             'colour' => 'colour',
             'meetingUrl' => 'meeting_url',
+            'reminderMinutes' => 'reminder_minutes',
         ] as $input => $column) {
             if (array_key_exists($input, $data)) {
                 $event->{$column} = $data[$input];
@@ -768,6 +770,10 @@ class CalendarEventController extends Controller
             'visibility' => ['sometimes', Rule::in(CalendarEvent::VISIBILITIES)],
             'colour' => ['sometimes', 'nullable', Rule::in(CalendarColours::keys())],
             'meetingUrl' => ['sometimes', 'nullable', 'url', 'max:2048'],
+            // Minutes before the start to remind the owner and the guests
+            // who are coming; 0 is at the time, null is no reminder. Four
+            // weeks is the longest lead the picker offers.
+            'reminderMinutes' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:40320'],
 
             // Recurrence arrives as the form's shape and is turned into an
             // RRULE by RecurrenceRule::build().

@@ -21316,6 +21316,13 @@ button.tma-file-status-chip:focus-visible,
   color: var(--color-text-secondary);
 }
 
+/* A line under a calendar field saying what it will do. */
+.tma-dash__calendar-field-hint {
+  font-size: var(--text-size-12);
+  line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
 .tma-dash__clients-form-rows {
   display: flex;
   flex-direction: column;
