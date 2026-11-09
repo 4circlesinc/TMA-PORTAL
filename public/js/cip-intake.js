@@ -1549,18 +1549,43 @@
     if (!asksOpeningDecision()) return '';
 
     return card('Decision',
-      '<div class="tma-portal-form-grid">' +
-      selectField('outcome', [
-        { value: 'approved', label: 'Approved' },
-        { value: 'denied', label: 'Denied' },
-      ], 'Approved or denied') +
-      '</div>' +
-      decisionNoteField() +
-      '<div class="tma-portal-form-grid">' +
+      '<div class="tma-cip-decision">' +
+      '<div class="tma-cip-decision__main">' +
+      '<div class="tma-cip-decision__pair">' +
+      decisionOutcomeField() +
       textField('decided_at', { type: 'date' }) +
       '</div>' +
-      decisionLetterField(),
+      decisionNoteField() +
+      '</div>' +
+      '<div class="tma-cip-decision__letter">' + decisionLetterField() + '</div>' +
+      '</div>',
       { modifier: 'tma-dash__clients-card--decision' });
+  }
+
+  /* Approved or Denied, the radios Record decision asks with. */
+  function decisionOutcomeField() {
+    var value = state.draft.outcome || '';
+    if (fieldsLocked()) {
+      return lockedField('outcome', value === 'approved' ? 'Approved' : (value === 'denied' ? 'Denied' : ''));
+    }
+
+    var option = function (choice, label) {
+      return '<label class="tma-portal-radio tma-portal-radio--tile">' +
+        '<input type="radio" name="cip-opening-outcome" value="' + choice + '"' +
+        ' data-cip-field="outcome" data-key="input:outcome:' + choice + '"' +
+        (value === choice ? ' checked' : '') + requiredAttr('outcome') + '>' +
+        '<span class="tma-portal-radio__dot" aria-hidden="true"></span>' + esc(label) + '</label>';
+    };
+
+    return '<div class="tma-portal-field' + (state.errors.outcome ? ' is-invalid' : '') + '"' +
+      ' data-key="field:outcome" role="radiogroup" aria-label="' + esc(labelFor('outcome')) + '">' +
+      fieldLabel('outcome', labelFor('outcome')) +
+      '<div class="tma-portal-radio-row tma-portal-radio-row--tiles">' +
+      option('approved', 'Approved') +
+      option('denied', 'Denied') +
+      '</div>' +
+      fieldError('outcome') +
+      '</div>';
   }
 
   function decisionNoteField() {

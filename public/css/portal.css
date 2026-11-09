@@ -8249,3 +8249,83 @@ body:has(.tma-dash.is-sidebar-collapsed) .tma-sync-pill {
   .tma-tour__hole { transition: none; }
   .tma-tour__hole::after { animation: none; }
 }
+
+/*
+ * The Decision card on a post-approval filing (cip-intake.js decisionCard).
+ *
+ * The four answers Record decision asks, laid out for a page rather than a
+ * dialog: the decision and its day side by side with the notes under them
+ * on the left, the letter on the right at the same height. One column on a
+ * narrow screen.
+ */
+.tma-cip-decision {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: var(--space-20) var(--space-24);
+  align-items: stretch;
+}
+
+.tma-cip-decision__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  min-width: 0;
+}
+
+.tma-cip-decision__pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-16);
+  align-items: start;
+}
+
+.tma-cip-decision .tma-portal-input,
+.tma-cip-decision .tma-portal-textarea { max-width: none; }
+
+.tma-cip-decision .tma-portal-textarea { min-height: 112px; }
+
+/* A date control draws 2px taller than a select; level with the choices. */
+.tma-cip-decision__pair .tma-portal-input { height: 36px; }
+
+.tma-cip-decision__letter {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tma-cip-decision__letter > .tma-portal-drop { flex: 1 1 auto; }
+
+.tma-cip-decision__letter .tma-portal-drop__zone {
+  flex: 1 1 auto;
+  min-height: 160px;
+}
+
+/* Approved / Denied as two choices the height of an input beside them. */
+.tma-portal-radio-row--tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-8);
+}
+
+.tma-portal-radio--tile {
+  position: relative;
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-12);
+  background: var(--color-white);
+  box-sizing: border-box;
+  transition: border-color var(--transition-fast);
+}
+
+.tma-portal-radio--tile:hover { border-color: var(--color-border-medium); }
+.tma-portal-radio--tile:has(input:checked) { border-color: var(--color-black); }
+.tma-portal-field.is-invalid .tma-portal-radio--tile { border-color: var(--color-red); }
+
+@media (max-width: 900px) {
+  .tma-cip-decision { grid-template-columns: minmax(0, 1fr); }
+  .tma-cip-decision__letter .tma-portal-drop__zone { min-height: 104px; }
+}
+
+@media (max-width: 480px) {
+  .tma-cip-decision__pair { grid-template-columns: minmax(0, 1fr); }
+}
