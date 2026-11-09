@@ -1,6 +1,6 @@
 {
   "css": "app-186fe1d9f3f8.css",
-  "js": "app-bc269aeea6f4.js",
+  "js": "app-b507257f738d.js",
   "sources": {
     "css": [
       "tokens.css",
@@ -64,6 +64,7 @@
       "overview-employees.js",
       "overview-activity.js",
       "overview-recycle.js",
+      "overview-requests.js",
       "overview-notifications.js",
       "overview.js",
       "table-b.js",

@@ -33,6 +33,9 @@ class FileRequestController extends BaseFilesController
             // Administrators oversee the firm's collection links; everybody
             // else sees the ones they issued.
             ->when(! FileAccess::isAdmin($user), fn ($q) => $q->where('created_by', $user->id))
+            // The requester's own list (Overview → Requested Files): only
+            // what they sent, administrators included.
+            ->when($request->boolean('mine'), fn ($q) => $q->where('created_by', $user->id))
             ->when($request->filled('folder'), function ($q) use ($request) {
                 $folder = $this->findFolder((string) $request->input('folder'));
                 $q->where('folder_id', $folder->id);
@@ -46,7 +49,14 @@ class FileRequestController extends BaseFilesController
             ->get();
 
         return response()->json([
-            'requests' => $requests->map(fn (FileRequest $r) => FileRequests::present($r))->values(),
+            'requests' => $requests->map(function (FileRequest $r) use ($request) {
+                $row = FileRequests::present($r);
+                if ($request->boolean('progress')) {
+                    $row['progress'] = FileRequests::progress($r);
+                }
+
+                return $row;
+            })->values(),
             'sizeChoices' => FileRequests::SIZE_CHOICES,
             'typeGroups' => FileRequests::TYPE_GROUPS,
             'maxBytes' => FileRequests::MAX_BYTES_CEILING,

@@ -254,4 +254,38 @@ class CipDocumentListRequestTest extends TestCase
         $this->assertNotNull($oath->file_id);
         $this->assertStringEndsWith('Oath of Allegiance.pdf', $oath->file->name);
     }
+
+    /** Overview → Requested Files: what was sent, and how far it has got. */
+    public function test_the_requesters_list_shows_progress_per_document(): void
+    {
+        [$staff, , $application, $oath, $payment] = $this->file();
+        $this->request($staff, $application, [$oath->uuid, $payment->uuid])->assertCreated();
+        $request = FileRequest::query()->latest('id')->firstOrFail();
+        $this->upload($request->token, $oath->uuid)->assertCreated();
+
+        $row = $this->actingAs($staff)
+            ->getJson('/portal/files/requests?mine=1&progress=1')
+            ->assertOk()
+            ->json('requests.0');
+
+        $this->assertSame($request->uuid, $row['id']);
+        $this->assertSame('partial', $row['progress']['status']);
+        $this->assertSame('In progress', $row['progress']['statusLabel']);
+        $this->assertSame(1, $row['progress']['received']);
+        $this->assertSame(2, $row['progress']['total']);
+
+        $items = collect($row['progress']['items']);
+        $got = $items->firstWhere('label', 'Oath of Allegiance');
+        $this->assertTrue($got['received']);
+        $this->assertSame($oath->fresh()->file->uuid, $got['file']['id']);
+        $this->assertNotNull($got['file']['folderId']);
+        $this->assertNotNull($got['uploadedAt']);
+        $this->assertFalse($items->firstWhere('label', 'Proof of Payment')['received']);
+
+        // Somebody else's requests are not on my list.
+        $other = $this->user(Role::ADMINISTRATOR, 'bea@example.com', 'Bea Admin');
+        $this->actingAs($other)->getJson('/portal/files/requests?mine=1&progress=1')
+            ->assertOk()
+            ->assertJsonCount(0, 'requests');
+    }
 }

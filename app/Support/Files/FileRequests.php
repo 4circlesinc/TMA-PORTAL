@@ -220,6 +220,73 @@ final class FileRequests
      * Safe JSON for the portal side. Includes the link, because the person
      * asking is the person who needs to send it.
      */
+    /**
+     * How far a request has got, for the requester's own list (Overview →
+     * Requested Files): each document asked for and whether it arrived, or
+     * for a folder request the files that came in, with where each was
+     * filed so the row can open it.
+     *
+     * @return array{status: string, statusLabel: string, received: int, total: ?int, items: list<array<string, mixed>>}
+     */
+    public static function progress(FileRequest $request): array
+    {
+        $listed = \App\Support\Cip\DocumentRequests::listFor($request);
+        $files = \App\Models\FileItem::query()
+            ->with('folder:id,uuid')
+            ->whereIn('id', $listed->isNotEmpty()
+                ? $listed->pluck('fileId')->filter()->all()
+                : $request->uploads()->latest('id')->limit(10)->pluck('file_id')->filter()->all())
+            ->get()
+            ->keyBy('id');
+        $fileRef = fn (?int $id) => $id && $files->has($id) ? [
+            'id' => $files[$id]->uuid,
+            'name' => $files[$id]->name,
+            'folderId' => $files[$id]->folder?->uuid,
+        ] : null;
+
+        if ($listed->isNotEmpty()) {
+            $items = $listed->map(fn (array $row) => [
+                'label' => \App\Support\Cip\DocumentTypes::present((string) $row['slot']->label),
+                'person' => $row['slot']->person ? \App\Models\CipPerson::upperName($row['slot']->person->fullName()) : null,
+                'received' => $row['received'],
+                'closed' => $row['closed'],
+                'uploadedAt' => $row['uploadedAt'] ? \Illuminate\Support\Carbon::parse($row['uploadedAt'])->toIso8601String() : null,
+                'file' => $fileRef($row['fileId']),
+            ])->values()->all();
+            $received = count(array_filter($items, fn ($i) => $i['received']));
+            $total = count($items);
+            $complete = $received >= $total;
+        } else {
+            $items = $request->uploads()->latest('id')->limit(10)->get()->map(fn ($upload) => [
+                'label' => $upload->name,
+                'person' => $upload->uploader_name ?: $upload->uploader_email,
+                'received' => true,
+                'closed' => false,
+                'uploadedAt' => optional($upload->created_at)->toIso8601String(),
+                'file' => $fileRef($upload->file_id ? (int) $upload->file_id : null),
+            ])->values()->all();
+            $received = (int) $request->upload_count;
+            $total = $request->allow_multiple ? (int) $request->max_files : 1;
+            $complete = $request->isFull();
+        }
+
+        [$status, $label] = match (true) {
+            $complete => ['complete', 'Complete'],
+            $request->closedReason() === 'expired' => ['expired', 'Expired'],
+            $request->closedReason() !== null => ['closed', 'Closed'],
+            $received > 0 => ['partial', 'In progress'],
+            default => ['waiting', 'Waiting'],
+        };
+
+        return [
+            'status' => $status,
+            'statusLabel' => $label,
+            'received' => $received,
+            'total' => $total,
+            'items' => $items,
+        ];
+    }
+
     public static function present(FileRequest $request): array
     {
         $folder = $request->folder;
