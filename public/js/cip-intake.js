@@ -1548,7 +1548,8 @@
   function decisionCard() {
     if (!asksOpeningDecision()) return '';
 
-    return card('Decision',
+    // Named above its card, the way Main applicant is.
+    return titledCard('Decision',
       '<div class="tma-cip-decision">' +
       '<div class="tma-cip-decision__main">' +
       '<div class="tma-cip-decision__pair">' +
@@ -1559,7 +1560,7 @@
       '</div>' +
       '<div class="tma-cip-decision__letter">' + decisionLetterField() + '</div>' +
       '</div>',
-      { modifier: 'tma-dash__clients-card--decision' });
+      { modifier: 'tma-portal-section--decision' });
   }
 
   /* Approved or Denied, the radios Record decision asks with. */
