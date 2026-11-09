@@ -41206,3 +41206,546 @@ span.tma-dash__messages-profile-avatar {
 }
 
 @media (prefers-reduced-motion: reduce) { .tma-overview-requests__caret { transition: none; } }
+
+/* ── Messages: picking chats for a bulk action ────────────────────────
+ *
+ * As in the mail inbox, a chat's picture is its checkbox: tapped, it takes a
+ * ring and a tick in its corner and the photo stays. While picking, every
+ * picture shows the empty tick, so it is plain the rows now pick rather than
+ * open. The search bar gives way to "N selected" and Select all; the
+ * navigation at the foot of the column gives way to the actions.
+ */
+.tma-dash__messages-row-pick {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+  grid-row: 1 / span 2;
+  grid-column: 1;
+  align-self: center;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* The click lands on the picker, never on the photo inside it. */
+.tma-dash__messages-row-pick > :not(.tma-dash__messages-row-pick-tick) {
+  pointer-events: none;
+}
+
+.tma-dash__messages-row-pick::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--color-primary, #03a5e9);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+@media (hover: hover) {
+  .tma-dash__messages-row-pick:hover::after {
+    opacity: 0.35;
+  }
+}
+
+.tma-dash__messages-row-pick.is-checked::after {
+  opacity: 1;
+}
+
+.tma-dash__messages-row-pick-tick {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 2px solid var(--color-bg-card, #fff);
+  background: var(--color-bg-card, #fff);
+  box-shadow: inset 0 0 0 1.5px var(--color-overlay-24, rgba(0, 0, 0, 0.24));
+  opacity: 0;
+  transform: scale(0.6);
+  pointer-events: none;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.tma-dash__messages-list--picking .tma-dash__messages-row-pick-tick {
+  opacity: 1;
+  transform: none;
+}
+
+.tma-dash__messages-row-pick.is-checked .tma-dash__messages-row-pick-tick {
+  opacity: 1;
+  transform: none;
+  box-shadow: none;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.2 8.4l2.4 2.4 5.2-5.3' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px 14px no-repeat,
+    var(--color-primary, #03a5e9);
+}
+
+/* The tick takes the corner the presence dot sits in. */
+.tma-dash__messages-list--picking .tma-dash__messages-row-pick .tma-dash__messages-row-status-dot,
+.tma-dash__messages-row-pick.is-checked .tma-dash__messages-row-status-dot {
+  opacity: 0;
+}
+
+.tma-dash__messages-list .tma-dash__messages-row.tma-dash__messages-row--picked {
+  background: color-mix(in srgb, var(--color-primary, #03a5e9) 9%, var(--color-bg-card, #fff));
+}
+
+/* A held row is the finger's: no callout, no word selection under it. */
+.tma-dash__messages-list-body .tma-dash__messages-row {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.tma-dash__messages-pick-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  flex-shrink: 0;
+  min-height: 52px;
+  padding: var(--space-8);
+  box-sizing: border-box;
+  background: var(--color-bg-card);
+  border-radius: var(--radius-16);
+}
+
+.tma-dash__messages-pick-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.tma-dash__messages-pick-cancel:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__messages-pick-cancel img {
+  width: 18px;
+  height: 18px;
+  opacity: 0.8;
+}
+
+.tma-dash__messages-pick-count {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-size-15, 15px);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__messages-pick-all {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0 var(--space-12);
+  border: 0;
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-size-14, 14px);
+  font-weight: 600;
+  color: var(--color-primary, #03a5e9);
+  cursor: pointer;
+}
+
+.tma-dash__messages-pick-all:hover {
+  background: var(--color-hover);
+}
+
+.tma-dash__messages-pick-cancel:focus-visible,
+.tma-dash__messages-pick-all:focus-visible,
+.tma-dash__messages-row-pick:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Actions, not places: their names read at full strength. */
+.tma-dash__messages-pick-act .tma-dash__messages-nav-label {
+  color: var(--color-text-primary);
+}
+
+.tma-dash__messages-pick-act img {
+  opacity: 0.85;
+}
+
+.tma-dash__messages-pick-act--danger .tma-dash__messages-nav-label {
+  color: var(--color-red, #d92d20);
+}
+
+@media (max-width: 1024px) {
+  .tma-dash__messages-pick-head {
+    margin: var(--space-8) max(var(--dash-mobile-gutter, var(--space-16)), env(safe-area-inset-right, 0px)) var(--space-4) max(var(--dash-mobile-gutter, var(--space-16)), env(safe-area-inset-left, 0px));
+    min-height: 56px;
+  }
+
+  .tma-dash__messages-pick-cancel {
+    width: 44px;
+    height: 44px;
+  }
+
+  .tma-dash__messages-pick-all {
+    min-height: 44px;
+  }
+
+  /* The actions take the tab bar's place: the bar goes while picking, the
+     way it goes while a chat is open, and the floating assistant with it. */
+  .tma-dash--messages-picking .tma-dash__tabbar {
+    display: none;
+  }
+
+  body:has(.tma-dash--messages-picking) .tma-bespoke:not(.is-open) {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .tma-dash--messages-mobile .tma-dash__messages-list-body:has(~ .tma-dash__messages-pick-actions) {
+    padding-bottom: var(--space-8);
+  }
+
+  .tma-dash--messages-mobile .tma-dash__messages-list-foot.tma-dash__messages-pick-actions {
+    padding: var(--space-4) max(var(--space-8), env(safe-area-inset-right, 0px)) calc(var(--space-4) + env(safe-area-inset-bottom, 0px)) max(var(--space-8), env(safe-area-inset-left, 0px));
+    border-radius: var(--radius-20) var(--radius-20) 0 0;
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.06);
+  }
+
+  .tma-dash--messages-mobile .tma-dash__messages-pick-act {
+    min-height: 52px;
+    justify-content: center;
+  }
+
+  .tma-dash--messages-mobile .tma-dash__messages-pick-act .tma-dash__messages-nav-label {
+    font-size: 11px;
+  }
+
+  /* The iPhone app: a capsule of glass where its bar floats. */
+  html.tma-ios .tma-dash--messages-mobile .tma-dash__messages-list-foot.tma-dash__messages-pick-actions {
+    margin: 0 max(var(--space-16), env(safe-area-inset-right, 0px)) max(var(--space-12), calc(env(safe-area-inset-bottom, 0px) - var(--space-12))) max(var(--space-16), env(safe-area-inset-left, 0px));
+    padding: var(--space-4) var(--space-8);
+    border: 0;
+    border-radius: var(--radius-pill, 999px);
+    background: var(--tma-glass-fill, var(--color-bg-card));
+    box-shadow:
+      var(--tma-glass-shadow, 0 12px 32px rgba(0, 0, 0, 0.12)),
+      inset 0 1px 0 var(--tma-glass-rim, rgba(255, 255, 255, 0.6)),
+      inset 0 -1px 0 var(--tma-glass-rim-low, rgba(255, 255, 255, 0.2));
+    -webkit-backdrop-filter: var(--tma-glass-blur, blur(20px));
+    backdrop-filter: var(--tma-glass-blur, blur(20px));
+  }
+
+  /* iOS 26 and later: the app draws that capsule in its own Liquid Glass
+     (glass-chrome.js, group "chat-pick"), icons only, as its toolbars are;
+     the page's copy holds the place and is not painted. */
+  html.tma-native-glass .tma-dash--messages-picking .tma-dash__messages-pick-act-label {
+    display: none;
+  }
+
+  html.tma-native-glass .tma-dash--messages-picking .tma-dash__messages-pick-act {
+    min-height: 48px;
+  }
+
+  html.tma-native-glass .tma-dash--messages-picking .tma-dash__messages-list-foot.tma-dash__messages-pick-actions {
+    opacity: 0 !important;
+    background: none !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
+/* ── Messages: press and hold a chat ──────────────────────────────────
+ * Its latest messages in a small box over the dimmed screen, the chat's
+ * actions under it. Looking does not read the chat. */
+.tma-dash__messages-peek {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding:
+    max(var(--space-16), env(safe-area-inset-top, 0px))
+    max(var(--space-16), env(safe-area-inset-right, 0px))
+    max(var(--space-16), env(safe-area-inset-bottom, 0px))
+    max(var(--space-16), env(safe-area-inset-left, 0px));
+  box-sizing: border-box;
+}
+
+.tma-dash__messages-peek-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 18, 24, 0.32);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
+  backdrop-filter: blur(14px) saturate(120%);
+  opacity: 0;
+  touch-action: none;
+  transition: opacity 160ms ease;
+}
+
+.tma-dash__messages-peek-stack {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  width: min(360px, 100%);
+  max-height: 100%;
+  min-height: 0;
+  opacity: 0;
+  transform: scale(0.94);
+  transition: opacity 160ms ease, transform 200ms cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+
+.tma-dash__messages-peek.is-open .tma-dash__messages-peek-scrim,
+.tma-dash__messages-peek.is-open .tma-dash__messages-peek-stack {
+  opacity: 1;
+}
+
+.tma-dash__messages-peek.is-open .tma-dash__messages-peek-stack {
+  transform: none;
+}
+
+.tma-dash__messages-peek-card {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--radius-20, 20px);
+  background: var(--color-bg-card, #fff);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tma-dash__messages-peek-card:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.tma-dash__messages-peek-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10, 10px);
+  padding: var(--space-12) var(--space-14, 14px);
+  border-bottom: 0.5px solid var(--color-overlay-8, rgba(0, 0, 0, 0.08));
+}
+
+.tma-dash__messages-peek-title {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tma-dash__messages-peek-name,
+.tma-dash__messages-peek-about {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tma-dash__messages-peek-name {
+  font-size: var(--text-size-15, 15px);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.tma-dash__messages-peek-about {
+  font-size: var(--text-size-12, 12px);
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__messages-peek-unread {
+  flex-shrink: 0;
+  padding: 2px var(--space-8);
+  border-radius: var(--radius-pill, 999px);
+  background: color-mix(in srgb, var(--color-primary, #03a5e9) 12%, transparent);
+  font-size: var(--text-size-12, 12px);
+  font-weight: 600;
+  color: var(--color-primary, #03a5e9);
+}
+
+.tma-dash__messages-peek-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-height: 72px;
+  max-height: min(42vh, 320px);
+  padding: var(--space-12);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.tma-dash__messages-peek-msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 82%;
+}
+
+.tma-dash__messages-peek-msg--in {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.tma-dash__messages-peek-msg--out {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.tma-dash__messages-peek-sender {
+  margin: var(--space-4) var(--space-4) 2px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__messages-peek-bubble {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 6;
+  overflow: hidden;
+  padding: 6px 10px;
+  font-size: var(--text-size-14, 14px);
+  line-height: 1.35;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.tma-dash__messages-peek-msg--in .tma-dash__messages-peek-bubble {
+  background: var(--color-1);
+  border-radius: var(--radius-8) var(--radius-8) var(--radius-8) var(--radius-4);
+}
+
+.tma-dash__messages-peek-msg--out .tma-dash__messages-peek-bubble {
+  background: var(--color-2);
+  border-radius: var(--radius-8) var(--radius-8) var(--radius-4) var(--radius-8);
+}
+
+.tma-dash__messages-peek-bubble.is-deleted {
+  font-style: italic;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__messages-peek-system,
+.tma-dash__messages-peek-empty {
+  margin: var(--space-4) 0;
+  text-align: center;
+  font-size: var(--text-size-12, 12px);
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__messages-peek-empty {
+  margin: auto 0;
+}
+
+.tma-dash__messages-peek-menu {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: var(--radius-16, 16px);
+  background: var(--color-bg-card, #fff);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+}
+
+.tma-dash__messages-peek-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  min-height: 44px;
+  padding: 0 var(--space-16);
+  border: 0;
+  border-top: 0.5px solid var(--color-overlay-8, rgba(0, 0, 0, 0.08));
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-size-15, 15px);
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tma-dash__messages-peek-item:first-child {
+  border-top: 0;
+}
+
+.tma-dash__messages-peek-item:hover,
+.tma-dash__messages-peek-item:focus-visible {
+  background: var(--color-hover);
+  outline: none;
+}
+
+.tma-dash__messages-peek-item-label {
+  flex: 1 1 auto;
+}
+
+.tma-dash__messages-peek-item img {
+  width: 20px;
+  height: 20px;
+  opacity: 0.8;
+}
+
+.tma-dash__messages-peek-item--danger {
+  color: var(--color-red, #d92d20);
+}
+
+/* Nothing floats over the box: the assistant's button steps aside. */
+body:has(.tma-dash__messages-peek) .tma-bespoke:not(.is-open) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* A short screen keeps the menu whole and gives the box what is left. */
+@media (max-height: 640px) {
+  .tma-dash__messages-peek-body {
+    max-height: 24vh;
+  }
+
+  .tma-dash__messages-peek-item {
+    min-height: 40px;
+  }
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__messages-row-pick-tick,
+:root[data-theme="dark"] .tma-dash__messages-row-pick-tick {
+  border-color: var(--color-bg-card, #1c1c1c);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.45);
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__messages-list .tma-dash__messages-row.tma-dash__messages-row--picked,
+:root[data-theme="dark"] .tma-dash__messages-list .tma-dash__messages-row.tma-dash__messages-row--picked {
+  background: color-mix(in srgb, var(--color-primary, #03a5e9) 20%, var(--color-bg-card, #1c1c1c));
+}
+
+.tma-dash[data-theme="dark"] .tma-dash__messages-peek-item img,
+:root[data-theme="dark"] .tma-dash__messages-peek-item img,
+.tma-dash[data-theme="dark"] .tma-dash__messages-pick-cancel img,
+:root[data-theme="dark"] .tma-dash__messages-pick-cancel img {
+  filter: invert(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tma-dash__messages-peek-scrim,
+  .tma-dash__messages-peek-stack,
+  .tma-dash__messages-row-pick::after,
+  .tma-dash__messages-row-pick-tick {
+    transition: none;
+  }
+
+  .tma-dash__messages-peek-stack {
+    transform: none;
+  }
+}

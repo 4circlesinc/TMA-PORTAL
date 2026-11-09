@@ -39,7 +39,9 @@
     { id: 'mail', selector: '.tma-dash__header .tma-dash__email-header-tools', items: 'button, a[href]' },
     /* Reading a message, or with messages selected: back (or clear), and the actions. */
     { id: 'mail-back', selector: '.tma-dash__header .tma-dash__email-header-reading-back-btn', items: 'button' },
-    { id: 'mail-actions', selector: '.tma-dash__header .tma-dash__email-header-reading-tools-group', items: 'button' }
+    { id: 'mail-actions', selector: '.tma-dash__header .tma-dash__email-header-reading-tools-group', items: 'button' },
+    /* Chats picked in Messages: their actions, where the bar was. */
+    { id: 'chat-pick', selector: '.tma-dash--messages-picking .tma-dash__messages-pick-actions', items: 'button' }
   ];
   var BADGE = '.tma-dash__tab-badge, .tma-dash__icon-btn-badge';
   /* Icons from the portal's own sets are symbols, drawn in the glass's ink;

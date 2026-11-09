@@ -63,6 +63,12 @@
     Copy: ICON + 'Copy.svg',
     Translate: ICON + 'Translate.svg',
     X: ICON + 'X.svg',
+    Bell: ICON + 'Bell.svg',
+    ArchiveTray: ICON + 'ArchiveTray.svg',
+    EnvelopeSimple: ICON + 'EnvelopeSimple.svg',
+    EnvelopeSimpleOpen: ICON + 'EnvelopeSimpleOpen.svg',
+    CheckSquare: ICON + 'CheckSquare.svg',
+    ListChecks: ICON + 'ListChecks.svg',
   };
 
   var MESSAGES_MOBILE_MQ = '(max-width: 1024px)';
@@ -1418,12 +1424,30 @@
     });
   }
 
+  /*
+   * The chat's picture is also its checkbox, as in the mail inbox: a tap on
+   * it picks the chat for a bulk action, and a picked chat keeps its photo
+   * with a ring and a tick in the corner. Hidden from screen readers: the
+   * row itself says whether it is picked (aria-pressed while picking), and
+   * its menu carries Select.
+   */
+  function renderRowPicker(row, state) {
+    var picked = isChatPicked(state, row.id);
+    return (
+      '<span class="tma-dash__messages-row-pick' + (picked ? ' is-checked' : '') + '"' +
+      ' data-messages-row-pick="' + esc(row.id) + '" title="Select" aria-hidden="true">' +
+      renderInboxThreadIcon(row) +
+      '<span class="tma-dash__messages-row-pick-tick"></span>' +
+      '</span>'
+    );
+  }
+
   function buildMessagesRowInner(row, state) {
     var item = resolveThread(row);
     var pinned = row.pinned;
     var muted = row.muted;
     return (
-      renderInboxThreadIcon(row) +
+      renderRowPicker(row, state) +
       '<span class="tma-dash__messages-row-text">' +
       '<span class="tma-dash__messages-row-name">' +
       '<span class="tma-dash__messages-row-name-text">' + esc(item.name) + '</span>' +
@@ -1477,13 +1501,14 @@
       'tma-dash__messages-row' +
       (active ? ' tma-dash__messages-row--active' : '') +
       (pinned ? ' tma-dash__messages-row--pinned' : '') +
-      (muted ? ' tma-dash__messages-row--muted' : '');
+      (muted ? ' tma-dash__messages-row--muted' : '') +
+      (isChatPicked(state, row.id) ? ' tma-dash__messages-row--picked' : '');
     return (
       '<div class="' +
       rowCls +
       '" data-messages-row="' +
       esc(row.id) +
-      '" role="button" tabindex="0">' +
+      '" role="button" tabindex="0"' + rowPickedAttr(row, state) + '>' +
       buildMessagesRowInner(row, state) +
       '</div>'
     );
@@ -2048,17 +2073,345 @@
       (active ? ' tma-dash__messages-row--active' : '') +
       (row.pinned ? ' tma-dash__messages-row--pinned' : '') +
       (row.muted ? ' tma-dash__messages-row--muted' : '') +
+      (isChatPicked(state, row.id) ? ' tma-dash__messages-row--picked' : '') +
       '" data-messages-row="' +
       esc(row.id) +
-      '">' +
+      '"' + rowPickedAttr(row, state) + '>' +
       buildMessagesRowInner(row, state) +
       '</button>'
     );
   }
 
+  /* While picking, a tap on a row picks it rather than opening it. */
+  function rowPickedAttr(row, state) {
+    if (!state.chatSelect) return '';
+    return ' aria-pressed="' + (isChatPicked(state, row.id) ? 'true' : 'false') + '"';
+  }
+
+  /* ------------------------------------------------------------------
+   * Picking chats for a bulk action
+   *
+   * `state.chatSelect` is null, or `{ ids: { <id>: true } }` while chats are
+   * being picked. Picking starts from a chat's picture, from Select in a
+   * chat's menu (hold a row on a phone, right-click it on a computer), and
+   * ends when the last chat is let go, on Cancel, on Escape, or after an
+   * action has been applied to them.
+   * ---------------------------------------------------------------- */
+
+  function isChatPicked(state, id) {
+    return !!(state && state.chatSelect && state.chatSelect.ids[id]);
+  }
+
+  function pickedChatIds(state) {
+    return state.chatSelect ? Object.keys(state.chatSelect.ids) : [];
+  }
+
+  function pickedChatRows(state) {
+    return pickedChatIds(state).map(findThread).filter(Boolean);
+  }
+
+  function startChatSelect(root, state, render, id) {
+    closeChatPeek();
+    closeMessageMenu();
+    closeMessagesRowSwipes(root);
+    state.chatSelect = { ids: {} };
+    if (id) state.chatSelect.ids[id] = true;
+    render();
+  }
+
+  function toggleChatPicked(root, state, render, id) {
+    if (!id) return;
+    if (!state.chatSelect) {
+      startChatSelect(root, state, render, id);
+      return;
+    }
+    if (state.chatSelect.ids[id]) delete state.chatSelect.ids[id];
+    else state.chatSelect.ids[id] = true;
+    // Letting go of the last one is the end of picking, as in the mail inbox.
+    if (!pickedChatIds(state).length) state.chatSelect = null;
+    render();
+  }
+
+  function endChatSelect(state, render) {
+    if (!state.chatSelect) return;
+    state.chatSelect = null;
+    render();
+  }
+
+  /* Every chat the list is showing: the tab and the search it is under. */
+  function pickAllChats(root, state, render) {
+    if (!state.chatSelect) state.chatSelect = { ids: {} };
+    getVisibleThreads(state).forEach(function (row) { state.chatSelect.ids[row.id] = true; });
+    closeChatPeek();
+    render();
+  }
+
+  /*
+   * A picked chat that has left the list (archived elsewhere, deleted, moved
+   * to another tab) is no longer picked; picking ends with the last of them,
+   * and whenever the column turns to search, Media or Calls.
+   */
+  function prunePickedChats(state, rows) {
+    if (!state.chatSelect) return;
+    if (state.searchMode || state.mediaMode || state.callsMode || state.settingsOpen || state.composeOpen || state.groupOpen) {
+      state.chatSelect = null;
+      return;
+    }
+    var shown = {};
+    rows.forEach(function (row) { shown[row.id] = true; });
+    Object.keys(state.chatSelect.ids).forEach(function (id) {
+      if (!shown[id]) delete state.chatSelect.ids[id];
+    });
+    if (!pickedChatIds(state).length) state.chatSelect = null;
+  }
+
+  /*
+   * What each bulk action would do to the chats picked. A mixed pick goes the
+   * way that changes something: one chat not yet a favourite makes the button
+   * Favorite, and only an all-favourite pick offers Unfavorite.
+   */
+  function chatBulkActions(state) {
+    var rows = pickedChatRows(state);
+    var anyUnpinned = rows.some(function (r) { return !r.pinned; });
+    var anyUnread = rows.some(function (r) { return r.unread || r.markedUnread; });
+    var anyUnmuted = rows.some(function (r) { return !r.muted; });
+    var archived = state.tab === 'archived';
+    return [
+      anyUnread
+        ? { id: 'read', label: 'Read', title: 'Mark as read', icon: 'EnvelopeSimpleOpen' }
+        : { id: 'unread', label: 'Unread', title: 'Mark as unread', icon: 'EnvelopeSimple' },
+      anyUnpinned
+        ? { id: 'pin', label: 'Favorite', title: 'Add to favorites', icon: 'Star' }
+        : { id: 'unpin', label: 'Unfavorite', title: 'Remove from favorites', icon: 'StarFilled' },
+      anyUnmuted
+        ? { id: 'mute', label: 'Mute', title: 'Mute notifications', icon: 'BellSlash' }
+        : { id: 'unmute', label: 'Unmute', title: 'Unmute notifications', icon: 'Bell' },
+      archived
+        ? { id: 'unarchive', label: 'Unarchive', title: 'Move back to chats', icon: 'ArchiveTray' }
+        : { id: 'archive', label: 'Archive', title: 'Archive', icon: 'Archive' },
+      { id: 'delete', label: 'Delete', title: 'Delete or leave', icon: 'Trash', danger: true },
+    ];
+  }
+
+  /* Takes the search bar's place at the top of the column while picking. */
+  function renderChatPickHead(state) {
+    var count = pickedChatIds(state).length;
+    var all = getVisibleThreads(state).length;
+    var everything = count > 0 && count >= all;
+    return (
+      '<div class="tma-dash__messages-pick-head" data-messages-pick-head>' +
+      '<button type="button" class="tma-dash__messages-pick-cancel" data-messages-pick-cancel' +
+      ' aria-label="Cancel selection" title="Cancel">' +
+      '<img src="' + ICONS.X + '" alt="">' +
+      '</button>' +
+      '<span class="tma-dash__messages-pick-count" role="status" aria-live="polite">' +
+      count + ' selected</span>' +
+      '<button type="button" class="tma-dash__messages-pick-all" data-messages-pick-all="' +
+      (everything ? 'none' : 'all') + '">' +
+      (everything ? 'Deselect all' : 'Select all') +
+      '</button>' +
+      '</div>'
+    );
+  }
+
+  /* Takes the navigation's place at the foot of the column while picking. */
+  function renderChatPickActions(state) {
+    return (
+      '<div class="tma-dash__messages-list-foot tma-dash__messages-pick-actions" data-messages-pick-actions' +
+      ' role="toolbar" aria-label="Actions for the selected chats">' +
+      chatBulkActions(state).map(function (action) {
+        return (
+          '<button type="button" class="tma-dash__messages-nav-btn tma-dash__messages-pick-act' +
+          (action.danger ? ' tma-dash__messages-pick-act--danger' : '') + '"' +
+          ' data-messages-pick-action="' + action.id + '"' +
+          ' aria-label="' + esc(action.title) + '" title="' + esc(action.title) + '">' +
+          '<span class="tma-dash__messages-nav-icon"><img src="' + ICONS[action.icon] + '" alt=""></span>' +
+          '<span class="tma-dash__messages-nav-label tma-dash__messages-pick-act-label">' + esc(action.label) + '</span>' +
+          '</button>'
+        );
+      }).join('') +
+      '</div>'
+    );
+  }
+
+  function chatCountLabel(n) {
+    return n + ' ' + (n === 1 ? 'chat' : 'chats');
+  }
+
+  /* At most `limit` requests in flight; resolves with how many failed. */
+  function runLimited(tasks, limit) {
+    return new Promise(function (resolve) {
+      if (!tasks.length) { resolve(0); return; }
+      var next = 0;
+      var active = 0;
+      var done = 0;
+      var failed = 0;
+      function pump() {
+        while (active < limit && next < tasks.length) {
+          var task = tasks[next++];
+          active++;
+          Promise.resolve()
+            .then(task)
+            .catch(function () { failed++; })
+            .then(function () {
+              active--;
+              done++;
+              if (done === tasks.length) resolve(failed);
+              else pump();
+            });
+        }
+      }
+      pump();
+    });
+  }
+
+  /*
+   * One action on every picked chat. Applied on screen at once, then saved
+   * chat by chat (a few at a time, through the same calls a single chat
+   * uses, so other tabs hear about each change as usual). A chat whose save
+   * fails goes back to how it was, and the toast says how many did.
+   */
+  function runChatBulkAction(root, state, render, action) {
+    var rows = pickedChatRows(state);
+    if (!rows.length) { endChatSelect(state, render); return; }
+    var api = window.TMAMessagingAPI;
+    var n = rows.length;
+    var tasks = [];
+    var message = '';
+
+    function setFlag(field, value, changes) {
+      rows.forEach(function (row) {
+        if (!!row[field] === value) return;
+        var before = row[field];
+        row[field] = value;
+        tasks.push(function () {
+          return api.updateConversation(row.id, changes).catch(function (err) {
+            row[field] = before;
+            throw err;
+          });
+        });
+      });
+    }
+
+    if (action === 'pin' || action === 'unpin') {
+      var pin = action === 'pin';
+      setFlag('pinned', pin, { pinned: pin });
+      message = pin ? 'Added to favorites' : 'Removed from favorites';
+    } else if (action === 'mute' || action === 'unmute') {
+      var mute = action === 'mute';
+      // null mutes until unmuted; 0 unmutes.
+      setFlag('muted', mute, { muteMinutes: mute ? null : 0 });
+      message = chatCountLabel(n) + (mute ? ' muted' : ' unmuted');
+    } else if (action === 'archive' || action === 'unarchive') {
+      var archive = action === 'archive';
+      setFlag('archived', archive, { archived: archive });
+      message = chatCountLabel(n) + (archive ? ' archived' : ' moved back to chats');
+    } else if (action === 'read') {
+      rows.forEach(function (row) {
+        if (!row.unread && !row.markedUnread) return;
+        var before = { unread: row.unread, markedUnread: row.markedUnread };
+        row.unread = 0;
+        row.markedUnread = false;
+        tasks.push(function () {
+          return api.markRead(row.id).catch(function (err) {
+            row.unread = before.unread;
+            row.markedUnread = before.markedUnread;
+            throw err;
+          });
+        });
+      });
+      message = chatCountLabel(n) + ' marked as read';
+    } else if (action === 'unread') {
+      rows.forEach(function (row) {
+        var before = { unread: row.unread, markedUnread: row.markedUnread };
+        row.unread = row.unread || 1;
+        row.markedUnread = true;
+        tasks.push(function () {
+          return api.markUnread(row.id).catch(function (err) {
+            row.unread = before.unread;
+            row.markedUnread = before.markedUnread;
+            throw err;
+          });
+        });
+      });
+      message = chatCountLabel(n) + ' marked as unread';
+    } else if (action === 'delete') {
+      deletePickedChats(root, state, render, rows);
+      return;
+    } else {
+      return;
+    }
+
+    state.chatSelect = null;
+    render();
+    syncTabBarBadges();
+    showMessagesToast(root, message);
+
+    runLimited(tasks, 4).then(function (failed) {
+      if (!failed) {
+        if (action === 'read' && window.TMANotifications && window.TMANotifications.refreshCount) {
+          window.TMANotifications.refreshCount();
+        }
+        return;
+      }
+      render();
+      syncTabBarBadges();
+      showMessagesToast(root, failed === tasks.length
+        ? 'That change could not be saved'
+        : failed + ' of ' + tasks.length + ' could not be changed');
+    });
+  }
+
+  /*
+   * Delete leaves each chat for this user (the others keep theirs), as the
+   * single Delete does; a group is left. Asked once for the lot. The firm's
+   * own chat cannot be left; it stays, and the toast says so.
+   */
+  function deletePickedChats(root, state, render, rows) {
+    var groups = rows.filter(function (r) { return r.type === 'group'; }).length;
+    var n = rows.length;
+    var prompt = n === 1
+      ? (groups ? 'Leave this group? You will stop receiving its messages.'
+        : 'Delete this conversation? It is removed for you; the other person keeps their copy.')
+      : 'Delete ' + n + ' chats? They are removed for you; the others keep their copies.' +
+        (groups === 1 ? ' One of them is a group, which you will leave.'
+          : groups > 1 ? ' ' + groups + ' of them are groups, which you will leave.' : '');
+    if (!window.confirm(prompt)) return;
+
+    var api = window.TMAMessagingAPI;
+    state.chatSelect = null;
+    render();
+
+    var gone = 0;
+    var tasks = rows.map(function (row) {
+      return function () {
+        return api.leaveConversation(row.id).then(function () {
+          gone++;
+          STORE.threads = STORE.threads.filter(function (r) { return r.id !== row.id; });
+          delete STORE.threadMessages[row.id];
+          if (state.selectedId === row.id) closeConversation(root, state, render);
+          else render();
+        });
+      };
+    });
+
+    runLimited(tasks, 4).then(function (failed) {
+      syncTabBarBadges();
+      if (!failed) {
+        showMessagesToast(root, n === 1 ? (groups ? 'You left the group' : 'Conversation deleted') : chatCountLabel(gone) + ' deleted');
+      } else {
+        showMessagesToast(root, gone
+          ? chatCountLabel(gone) + ' deleted; ' + failed + ' could not be'
+          : (n === 1 ? 'That could not be completed' : 'Those chats could not be deleted'));
+      }
+    });
+  }
+
   function renderList(state) {
     var mobile = isMessagesMobile();
     var rows = getVisibleThreads(state);
+    prunePickedChats(state, rows);
+    var picking = !!state.chatSelect;
     var favorites = rows.filter(function (row) { return row.pinned; });
     var chats = rows.filter(function (row) { return !row.pinned; });
 
@@ -2094,13 +2447,15 @@
     }
 
     return (
-      '<div class="tma-dash__messages-list">' +
-      (mobile ? renderListMobileHead(state) : renderListHead(state)) +
+      '<div class="tma-dash__messages-list' + (picking ? ' tma-dash__messages-list--picking' : '') + '">' +
+      (picking
+        ? renderChatPickHead(state)
+        : (mobile ? renderListMobileHead(state) : renderListHead(state))) +
       renderComposePanel(state) +
       renderSettingsPanel(state) +
       // Only over the chat list: pulling down inside Media or Calls should
       // not produce a shelf belonging to a list that isn't on screen.
-      (state.searchMode || state.mediaMode ||
+      (picking || state.searchMode || state.mediaMode ||
         state.callsMode || state.tab === 'archived'
         ? ''
         : renderArchivedReveal(state)) +
@@ -2118,8 +2473,8 @@
               (rows.length ? body : (people ? '' : body)) + people)) +
       '</div>' +
       // Between the scrolling body and the nav bar, so it floats clear of both.
-      renderComposeFab() +
-      renderListFoot(state) +
+      (picking ? '' : renderComposeFab()) +
+      (picking ? renderChatPickActions(state) : renderListFoot(state)) +
       '</div>'
     );
   }
@@ -5815,6 +6170,9 @@
 
     dash.classList.toggle('tma-dash--messages-mobile', isMessagesMobile());
     dash.classList.toggle('tma-dash--messages-mobile-reading', isMessagesReading(state));
+    // Picking chats on a phone: the bar of actions takes the tab bar's place.
+    dash.classList.toggle('tma-dash--messages-picking',
+      isMessagesMobile() && !!state.chatSelect && !isMessagesReading(state));
 
     if (typeof dash._syncSidebarToggleIcon === 'function') dash._syncSidebarToggleIcon();
   }
@@ -5822,7 +6180,7 @@
   function clearMessagesMobileHeader() {
     var dash = getMessagesDashRoot();
     if (!dash) return;
-    dash.classList.remove('tma-dash--messages-mobile', 'tma-dash--messages-mobile-reading');
+    dash.classList.remove('tma-dash--messages-mobile', 'tma-dash--messages-mobile-reading', 'tma-dash--messages-picking');
     if (typeof dash._syncSidebarToggleIcon === 'function') dash._syncSidebarToggleIcon();
   }
 
@@ -6384,6 +6742,7 @@
       var startOffset = 0;
       var dragging = false;
       var moved = false;
+      var startedOnPick = false;
       var wheelEndTimer = null;
       /*
        * Same axis gate as bubble swipe-to-reply. The inbox used to treat any
@@ -6558,6 +6917,11 @@
         startX = e.clientX;
         startY = e.clientY;
         startOffset = getCurrentOffset();
+        // The pointer is held from here on, so later events say the track,
+        // not what was under the finger: note now whether it was the
+        // picture (a tap there picks the chat).
+        startedOnPick = !!(e.target.closest && e.target.closest('[data-messages-row-pick]'));
+        wrap._peeked = false;
         // A prior scroll on this row left swipeMoved set so the synthetic
         // click after lift could not open the chat. Clear it for a fresh
         // gesture so a real tap still works.
@@ -6570,13 +6934,17 @@
         'pointermove',
         function (e) {
           if (!dragging) return;
+          // Held long enough to open the preview: the row stays put under it.
+          if (wrap._peeked) return;
           var dx = e.clientX - startX;
           var dy = e.clientY - startY;
 
           if (!moved) {
             if (Math.abs(dx) < DEAD_ZONE && Math.abs(dy) < DEAD_ZONE) return;
 
-            if (Math.abs(dx) < Math.abs(dy) * AXIS_RATIO) {
+            // While chats are being picked a row does not swipe: any real
+            // movement is the list scrolling, as below.
+            if (state.chatSelect || Math.abs(dx) < Math.abs(dy) * AXIS_RATIO) {
               // A scroll, not a swipe. Give the pointer back so the list
               // actually scrolls; holding capture here left the gesture dead
               // and the later pointerup opened the row as a "tap".
@@ -6614,6 +6982,24 @@
         if (e && track.hasPointerCapture(e.pointerId)) track.releasePointerCapture(e.pointerId);
 
         var wasTap = !moved;
+
+        // The lift after a press-and-hold: the preview is open, nothing else.
+        if (wrap._peeked) {
+          wrap._peeked = false;
+          closeSwipe();
+          markTapHandled();
+          return;
+        }
+
+        // A tap on the picture, or on any row while picking, picks the chat.
+        if (wasTap && (state.chatSelect || startedOnPick) &&
+          !wrap.classList.contains('is-open-left') && !wrap.classList.contains('is-open-right')) {
+          closeSwipe();
+          markTapHandled();
+          toggleChatPicked(root, state, render, wrap.getAttribute('data-messages-row-swipe'));
+          return;
+        }
+
         if (resolveInboxSwipe()) return;
 
         if (
@@ -6632,11 +7018,16 @@
           closeMessagesRowSwipes(root);
           return;
         }
+        markTapHandled();
+        openThreadFromSwipe(wrap.getAttribute('data-messages-row-swipe'));
+      }
+
+      // The click that follows the lift must not act on the tap a second time.
+      function markTapHandled() {
         wrap.dataset.tapHandled = '1';
         window.requestAnimationFrame(function () {
           delete wrap.dataset.tapHandled;
         });
-        openThreadFromSwipe(wrap.getAttribute('data-messages-row-swipe'));
       }
 
       track.addEventListener('pointerup', endDrag);
@@ -6645,7 +7036,7 @@
       track.addEventListener(
         'wheel',
         function (e) {
-          if (dragging) return;
+          if (dragging || state.chatSelect) return;
 
           var dx = messagesWheelDeltaX(e, track.clientWidth || wrap.offsetWidth || 320);
           var dy = e.deltaY;
@@ -7449,6 +7840,9 @@
 
     // Words being picked from a message belong to the thread they are in.
     state.textSelect = null;
+    // Opening a chat ends picking chats in the list, and puts the preview away.
+    state.chatSelect = null;
+    closeChatPeek();
 
     // Leaving a thread retracts the indicator there; announceTyping would do
     // it on the next keystroke, but only if there is one.
@@ -10386,7 +10780,10 @@
       { action: 'pin', label: row.pinned ? 'Remove from favorites' : 'Add to favorites' },
       { action: 'mute', label: row.muted ? 'Unmute notifications' : 'Mute notifications' },
       { action: 'archive', label: row.archived ? 'Unarchive conversation' : 'Archive conversation' },
-      { action: 'unread', label: 'Mark as unread' },
+      // Names what it is about to do, as the swipe's button does.
+      row.unread || row.markedUnread
+        ? { action: 'read', label: 'Mark as read' }
+        : { action: 'unread', label: 'Mark as unread' },
       { action: 'export', label: 'Export chat' },
       { action: 'clear', label: 'Clear messages', danger: true },
     ];
@@ -10418,7 +10815,7 @@
     return items;
   }
 
-  function openConversationMenu(root, state, render, anchor, conversationId, position) {
+  function openConversationMenu(root, state, render, anchor, conversationId, position, extra) {
     closeMessageMenu();
 
     var row = findThread(conversationId);
@@ -10427,7 +10824,8 @@
     var menu = document.createElement('div');
     menu.className = 'tma-dash__messages-message-menu';
     menu.setAttribute('role', 'menu');
-    menu.innerHTML = conversationMenuItems(row)
+    // A row in the list adds what only makes sense there (Select).
+    menu.innerHTML = (extra || []).concat(conversationMenuItems(row))
       .map(function (item) {
         return (
           '<button type="button" role="menuitem" class="tma-dash__messages-message-menu-item' +
@@ -10454,14 +10852,299 @@
     }, 0);
   }
 
+  /* ------------------------------------------------------------------
+   * Press and hold a chat: a look inside, and its menu
+   *
+   * A finger held still on a row for a moment opens a small box with the
+   * chat's latest messages over a dimmed screen, and the chat's actions
+   * under it, Select first. Looking does not read it: the box is filled
+   * from what this device already holds, or from the history call, which
+   * has no side effects; nothing here marks the chat read. A tap on the box
+   * opens the chat (and that does read it), a tap outside puts it away.
+   * ---------------------------------------------------------------- */
+
+  var CHAT_PEEK_HOLD_MS = 450;
+  var CHAT_PEEK_MESSAGES = 8;
+  var chatPeekEl = null;
+  var chatPeekId = null;
+  /* The click that follows the lift of a hold must not land on anything. */
+  var peekSwallowClicksUntil = 0;
+
+  function closeChatPeek() {
+    if (!chatPeekEl) return;
+    var el = chatPeekEl;
+    chatPeekEl = null;
+    chatPeekId = null;
+    el.classList.remove('is-open');
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 160);
+  }
+
+  function peekLineText(msg) {
+    if (msg.type === 'system') return systemMessageText(msg);
+    if (msg.deleted) return 'This message was deleted';
+    var body = (msg.body || '').trim();
+    if (body) return body;
+    var files = (msg.attachments || []).length;
+    if (!files) return '';
+    var image = (msg.attachments || []).every(function (a) { return /^image\//.test(a.mime || ''); });
+    if (files === 1) return image ? 'Photo' : 'File';
+    return files + (image ? ' photos' : ' files');
+  }
+
+  function renderPeekMessages(row, messages) {
+    var shown = (messages || []).filter(function (m) { return !!peekLineText(m); }).slice(-CHAT_PEEK_MESSAGES);
+    if (!shown.length) {
+      return '<p class="tma-dash__messages-peek-empty">No messages yet</p>';
+    }
+    var group = row.type === 'group';
+    var lastSender = null;
+    return shown.map(function (msg) {
+      if (msg.type === 'system') {
+        lastSender = null;
+        return '<p class="tma-dash__messages-peek-system">' + esc(peekLineText(msg)) + '</p>';
+      }
+      var out = msg.direction === 'out';
+      var senderId = msg.sender ? msg.sender.id : null;
+      var sender = group && !out && msg.sender && senderId !== lastSender
+        ? '<span class="tma-dash__messages-peek-sender">' + esc(msg.sender.name || '') + '</span>'
+        : '';
+      lastSender = out ? null : senderId;
+      var text = peekLineText(msg);
+      if (text.length > 280) text = text.slice(0, 279) + '…';
+      return (
+        '<div class="tma-dash__messages-peek-msg tma-dash__messages-peek-msg--' + (out ? 'out' : 'in') + '">' +
+        sender +
+        '<span class="tma-dash__messages-peek-bubble' + (msg.deleted ? ' is-deleted' : '') + '">' +
+        esc(text) + '</span>' +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  function chatPeekMenuItems(row) {
+    var unread = row.unread || row.markedUnread;
+    return [
+      { action: 'select', label: 'Select', icon: 'CheckCircle' },
+      { action: 'select-all', label: 'Select all', icon: 'ListChecks' },
+      unread
+        ? { action: 'read', label: 'Mark as read', icon: 'EnvelopeSimpleOpen' }
+        : { action: 'unread', label: 'Mark as unread', icon: 'EnvelopeSimple' },
+      { action: 'pin', label: row.pinned ? 'Remove from favorites' : 'Add to favorites', icon: row.pinned ? 'StarFilled' : 'Star' },
+      { action: 'mute', label: row.muted ? 'Unmute' : 'Mute', icon: row.muted ? 'Bell' : 'BellSlash' },
+      { action: 'archive', label: row.archived ? 'Unarchive' : 'Archive', icon: row.archived ? 'ArchiveTray' : 'Archive' },
+      { action: 'leave', label: row.type === 'group' ? 'Leave group' : 'Delete conversation', icon: 'Trash', danger: true },
+    ];
+  }
+
+  function openChatPeek(root, state, render, id) {
+    closeChatPeek();
+    closeMessageMenu();
+    var row = findThread(id);
+    if (!row) return;
+    var item = resolveThread(row);
+    var about = counterpartRole(item) || (item.type === 'group' && item.memberCount ? groupCountLabel(item) : '');
+
+    var held = STORE.threadMessages[id];
+    var have = held && held.loaded && held.messages && held.messages.length ? held.messages : null;
+
+    var el = document.createElement('div');
+    el.className = 'tma-dash__messages-peek';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    el.setAttribute('aria-label', 'Preview of ' + (item.name || 'conversation'));
+    el.innerHTML =
+      '<div class="tma-dash__messages-peek-scrim" data-peek-close></div>' +
+      '<div class="tma-dash__messages-peek-stack">' +
+      '<div class="tma-dash__messages-peek-card" data-peek-open role="button" tabindex="0"' +
+      ' aria-label="Open conversation with ' + esc(item.name || '') + '">' +
+      '<div class="tma-dash__messages-peek-head">' +
+      threadIcon(item) +
+      '<span class="tma-dash__messages-peek-title">' +
+      '<span class="tma-dash__messages-peek-name">' + esc(item.name || '') + '</span>' +
+      (about ? '<span class="tma-dash__messages-peek-about">' + esc(about) + '</span>' : '') +
+      '</span>' +
+      (row.unread ? '<span class="tma-dash__messages-peek-unread">' + esc(row.unread) + ' unread</span>' : '') +
+      '</div>' +
+      '<div class="tma-dash__messages-peek-body" data-peek-body>' +
+      (have ? renderPeekMessages(row, have) : '<p class="tma-dash__messages-peek-empty">Loading…</p>') +
+      '</div>' +
+      '</div>' +
+      '<div class="tma-dash__messages-peek-menu" role="menu">' +
+      chatPeekMenuItems(row).map(function (it) {
+        return (
+          '<button type="button" role="menuitem" class="tma-dash__messages-peek-item' +
+          (it.danger ? ' tma-dash__messages-peek-item--danger' : '') + '" data-peek-action="' + it.action + '">' +
+          '<span class="tma-dash__messages-peek-item-label">' + esc(it.label) + '</span>' +
+          '<img src="' + ICONS[it.icon] + '" alt="">' +
+          '</button>'
+        );
+      }).join('') +
+      '</div>' +
+      '</div>';
+
+    document.body.appendChild(el);
+    chatPeekEl = el;
+    chatPeekId = id;
+
+    function scrollToEnd() {
+      var body = el.querySelector('[data-peek-body]');
+      if (body) body.scrollTop = body.scrollHeight;
+    }
+    scrollToEnd();
+    window.requestAnimationFrame(function () { el.classList.add('is-open'); });
+
+    // Not on the device yet: ask for the newest page. Reading history is not
+    // reading the chat; only opening it is.
+    if (!have) {
+      window.TMAMessagingAPI.messages(id).then(function (data) {
+        if (chatPeekEl !== el) return;
+        var body = el.querySelector('[data-peek-body]');
+        if (body) body.innerHTML = renderPeekMessages(row, (data && data.messages) || []);
+        scrollToEnd();
+      }).catch(function () {
+        if (chatPeekEl !== el) return;
+        var body = el.querySelector('[data-peek-body]');
+        if (body) body.innerHTML = '<p class="tma-dash__messages-peek-empty">The messages could not be loaded</p>';
+      });
+    }
+
+    el.addEventListener('click', function (e) {
+      if (Date.now() < peekSwallowClicksUntil) return;
+      if (e.target.closest('[data-peek-close]')) {
+        closeChatPeek();
+        return;
+      }
+      var action = e.target.closest('[data-peek-action]');
+      if (action) {
+        var what = action.getAttribute('data-peek-action');
+        closeChatPeek();
+        runConversationAction(root, state, render, id, what);
+        return;
+      }
+      if (e.target.closest('[data-peek-open]')) {
+        closeChatPeek();
+        openConversation(root, state, render, id);
+      }
+    });
+
+    el.addEventListener('keydown', function (e) {
+      if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-peek-open]')) {
+        e.preventDefault();
+        closeChatPeek();
+        openConversation(root, state, render, id);
+      }
+    });
+
+    // The list behind does not scroll while the box is up.
+    el.querySelector('[data-peek-close]').addEventListener('touchmove', function (e) {
+      if (e.cancelable) e.preventDefault();
+    }, { passive: false });
+
+    var first = el.querySelector('[data-peek-action]');
+    if (first) {
+      try { first.focus({ preventScroll: true }); } catch (err) { /* older WebKit */ }
+    }
+  }
+
+  /*
+   * The hold itself, read once for the whole column. A finger (or pen) held
+   * on a row without moving for CHAT_PEEK_HOLD_MS opens the preview; a mouse
+   * has right-click instead. Pointer events reach here even while a phone's
+   * row holds the pointer for its swipe, so one reader serves both layouts.
+   */
+  function wireChatPeek(root, state, render) {
+    if (root._chatPeekBound) return;
+    root._chatPeekBound = true;
+
+    var press = null;
+
+    function cancel() {
+      if (press && press.timer) clearTimeout(press.timer);
+      press = null;
+    }
+
+    function fire(p) {
+      if (!p || !p.rowEl.isConnected) return;
+      p.fired = true;
+      if (p.timer) clearTimeout(p.timer);
+      p.timer = null;
+      var wrap = p.rowEl.closest('[data-messages-row-swipe]');
+      if (wrap) wrap._peeked = true;
+      if (navigator.vibrate) {
+        try { navigator.vibrate(8); } catch (err) { /* not allowed here */ }
+      }
+      openChatPeek(root, state, render, p.id);
+    }
+
+    root.addEventListener('pointerdown', function (e) {
+      cancel();
+      root._chatPeekPointer = e.pointerType || 'mouse';
+      if (e.pointerType === 'mouse' || e.button > 0) return;
+      if (state.chatSelect || state.searchMode) return;
+      var rowEl = e.target.closest && e.target.closest('[data-messages-row]');
+      if (!rowEl || !rowEl.closest('[data-messages-list-body]')) return;
+      if (e.target.closest('[data-messages-row-swipe-action]')) return;
+      var wrap = rowEl.closest('[data-messages-row-swipe]');
+      if (wrap && (wrap.classList.contains('is-open-left') || wrap.classList.contains('is-open-right'))) return;
+      press = {
+        id: rowEl.getAttribute('data-messages-row'),
+        rowEl: rowEl,
+        pointerId: e.pointerId,
+        x: e.clientX,
+        y: e.clientY,
+        fired: false,
+      };
+      var mine = press;
+      press.timer = setTimeout(function () { if (press === mine) fire(mine); }, CHAT_PEEK_HOLD_MS);
+    }, true);
+
+    root.addEventListener('pointermove', function (e) {
+      if (!press || press.fired || e.pointerId !== press.pointerId) return;
+      // Any real movement is a scroll or a swipe, not a hold.
+      if (Math.abs(e.clientX - press.x) > 8 || Math.abs(e.clientY - press.y) > 8) cancel();
+    }, true);
+
+    function lift(e) {
+      if (!press || e.pointerId !== press.pointerId) return;
+      if (press.fired) peekSwallowClicksUntil = Date.now() + 450;
+      cancel();
+    }
+    root.addEventListener('pointerup', lift, true);
+    root.addEventListener('pointercancel', function (e) {
+      // A cancel after the box is up is the system taking the touch back
+      // (the box now lies over it); the box stays.
+      lift(e);
+    }, true);
+
+    // Android reports a long press as a right-click: open the box at once
+    // rather than wait for the timer, which that right-click may cancel.
+    root._chatPeekNow = function (rowEl) {
+      if (press && press.rowEl === rowEl && !press.fired) fire(press);
+      else if (!chatPeekEl && !state.chatSelect && rowEl.closest('[data-messages-list-body]')) {
+        fire({ id: rowEl.getAttribute('data-messages-row'), rowEl: rowEl });
+      }
+    };
+  }
+
   function runConversationAction(root, state, render, conversationId, action) {
     var row = findThread(conversationId);
     if (!row) return;
     var api = window.TMAMessagingAPI;
 
     // Pin / mute / archive already have optimistic handling.
-    if (action === 'pin' || action === 'mute' || action === 'archive') {
+    if (action === 'pin' || action === 'mute' || action === 'archive' || action === 'read') {
       commitMessagesRowAction(root, state, render, conversationId, action);
+      return;
+    }
+
+    if (action === 'select') {
+      startChatSelect(root, state, render, conversationId);
+      return;
+    }
+
+    if (action === 'select-all') {
+      startChatSelect(root, state, render, conversationId);
+      pickAllChats(root, state, render);
       return;
     }
 
@@ -10560,9 +11243,18 @@
 
     MORPH.unwired(root, '[data-messages-row]').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
+        // The lift that ends a press-and-hold is not a tap on the row.
+        if (Date.now() < peekSwallowClicksUntil) { e.preventDefault(); return; }
         var wrap = btn.closest('[data-messages-row-swipe]');
+        if (!wrap && state.chatSelect) {
+          e.preventDefault();
+          toggleChatPicked(root, state, render, btn.getAttribute('data-messages-row'));
+          return;
+        }
         if (wrap) {
           if (wrap.dataset.tapHandled || wrap.dataset.swipeMoved) return;
+          // A phone's rows are picked in the swipe handler's tap (above).
+          if (state.chatSelect) return;
           if (
             wrap.classList.contains('is-open-left') ||
             wrap.classList.contains('is-open-right') ||
@@ -10576,6 +11268,52 @@
         openConversation(root, state, render, btn.getAttribute('data-messages-row'));
       });
     });
+
+    // A chat's picture picks it (a computer's click; a phone's tap on it is
+    // read by the swipe handler, which holds the pointer).
+    MORPH.unwired(root, '[data-messages-row-pick]').forEach(function (pick) {
+      pick.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (Date.now() < peekSwallowClicksUntil) return;
+        var wrap = pick.closest('[data-messages-row-swipe]');
+        if (wrap && (wrap.dataset.tapHandled || wrap.dataset.swipeMoved)) return;
+        toggleChatPicked(root, state, render, pick.getAttribute('data-messages-row-pick'));
+      });
+    });
+
+    var pickCancel = MORPH.unwiredOne(root, '[data-messages-pick-cancel]');
+    if (pickCancel) {
+      pickCancel.addEventListener('click', function () { endChatSelect(state, render); });
+    }
+
+    var pickAll = MORPH.unwiredOne(root, '[data-messages-pick-all]');
+    if (pickAll) {
+      pickAll.addEventListener('click', function () {
+        // Read at click time: the same button turns into Deselect all.
+        if (pickAll.getAttribute('data-messages-pick-all') === 'none') endChatSelect(state, render);
+        else pickAllChats(root, state, render);
+      });
+    }
+
+    MORPH.unwired(root, '[data-messages-pick-action]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        runChatBulkAction(root, state, render, btn.getAttribute('data-messages-pick-action'));
+      });
+    });
+
+    if (!root._messagesPickKeys) {
+      root._messagesPickKeys = true;
+      document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        if (chatPeekEl) { closeChatPeek(); return; }
+        if (state.chatSelect && !document.querySelector('.tma-dash__messages-message-menu')) {
+          endChatSelect(state, render);
+        }
+      });
+    }
+
+    wireChatPeek(root, state, render);
 
     MORPH.unwired(root, '[data-messages-reply]').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
@@ -10834,10 +11572,22 @@
     MORPH.unwired(root, '[data-messages-row]', 'contextmenu').forEach(function (rowEl) {
       rowEl.addEventListener('contextmenu', function (e) {
         e.preventDefault();
+        // A finger's long press (Android sends it as a right-click) opens the
+        // preview instead; see wireChatPeek.
+        if (root._chatPeekPointer && root._chatPeekPointer !== 'mouse') {
+          if (typeof root._chatPeekNow === 'function') root._chatPeekNow(rowEl);
+          return;
+        }
+        var id = rowEl.getAttribute('data-messages-row');
+        // While picking, a right-click picks too; the actions are in the bar.
+        if (state.chatSelect) {
+          toggleChatPicked(root, state, render, id);
+          return;
+        }
         openConversationMenu(
-          root, state, render, rowEl,
-          rowEl.getAttribute('data-messages-row'),
-          { x: e.clientX, y: e.clientY }
+          root, state, render, rowEl, id,
+          { x: e.clientX, y: e.clientY },
+          [{ action: 'select', label: 'Select' }]
         );
       });
     });

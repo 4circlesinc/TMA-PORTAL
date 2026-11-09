@@ -36,6 +36,10 @@ const PUBLIC = join(ROOT, 'public');
 const SHELL = readFileSync(join(ROOT, 'resources/views/pages/dashboard.html'), 'utf8');
 const TYPES = { '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.woff2': 'font/woff2', '.json': 'application/json', '.webp': 'image/webp' };
 const ME = { id: 1, name: 'Bruce Wayne', firstName: 'Bruce', email: 'bruce@wayne.test', accountType: 'Administrator', status: 'approved', preferences: {}, desktopNotifications: { enabled: false }, permissions: [], pages: [] };
+/* Two chats, so Messages has rows to pick. Nothing unread: the count check
+   sets its own. */
+const chat = (id, name) => ({ id, type: 'direct', name, subtitle: '', photo: null, members: [], memberCount: 2, preview: 'Hello', time: '9:41 AM', timestamp: new Date().toISOString(), unread: 0, mentioned: false, pinned: false, archived: false, muted: false, markedUnread: false, draft: null, role: 'member', presence: null });
+const CHATS = [chat('g-1', 'Ada Lovelace'), chat('g-2', 'Alan Turing')];
 
 const server = createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
@@ -51,6 +55,10 @@ const server = createServer((req, res) => {
     return;
   }
   res.writeHead(200, { 'Content-Type': 'application/json' });
+  if (url.pathname === '/portal/messaging/conversations') {
+    res.end(JSON.stringify({ conversations: CHATS, me: { id: 1, name: 'Bruce Wayne', photo: null }, settings: {}, tabCounts: {}, realtime: { enabled: false }, limits: {} }));
+    return;
+  }
   res.end(url.pathname === '/me' ? JSON.stringify(ME) : '{}');
 });
 await new Promise((done) => server.listen(0, '127.0.0.1', done));
@@ -243,6 +251,24 @@ try {
   const blurred = await page.evaluate(() => { const el = document.querySelector('.tma-dash__messages-search'); return { mark: el.getAttribute('data-glass'), opacity: getComputedStyle(el).opacity, value: el.querySelector('input').value }; });
   check('and stays the page\'s field on blur, showing what was typed', blurred.mark === 'field' && blurred.opacity === '1' && blurred.value === 'Ada', JSON.stringify(blurred));
   await page.evaluate(() => { const i = document.querySelector('.tma-dash__messages-search-input'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); });
+
+  // Picking chats: their actions take the bar's place, in the same glass.
+  // Out of search, back to the chats.
+  await page.evaluate(() => { const exit = document.querySelector('[data-messages-search-exit]'); if (exit) exit.click(); });
+  await page.waitForSelector('[data-messages-row-pick="g-1"]');
+  await page.evaluate(() => document.querySelector('[data-messages-row-pick="g-1"]').click());
+  ({ state } = await until(page, (s) => !!group(s, 'chat-pick') && !group(s, 'bar')));
+  const pick = group(state, 'chat-pick');
+  const pickPage = await page.evaluate(() => {
+    const el = document.querySelector('.tma-dash__messages-pick-actions');
+    const r = el.getBoundingClientRect();
+    return { rect: [r.left, r.top, r.width, r.height].map((n) => Math.round(n * 2) / 2), opacity: getComputedStyle(el).opacity };
+  });
+  check('picking a chat: its actions are described where the bar was, and the bar goes', pick && !group(state, 'bar') && JSON.stringify(pick.rect) === JSON.stringify(pickPage.rect), `${pick && pick.rect} vs ${pickPage.rect}`);
+  check('the actions are icons with their names for VoiceOver; the page\'s copy stops painting', pick && pick.items.length === 5 && pick.items.every((i) => i.icon && i.label) && pickPage.opacity === '0', pick && pick.items.map((i) => i.label).join(', '));
+  await page.evaluate(() => window.__tmaGlassChrome.tap('chat-pick:messages-pick-action=pin'));
+  ({ state } = await until(page, (s) => !!group(s, 'bar') && !group(s, 'chat-pick')));
+  check('a tap on an action runs it, picking ends, and the bar is back', !!group(state, 'bar') && !group(state, 'chat-pick'));
 
   // Which inputs count: a search box by name wears the glass; a form field
   // that only starts its placeholder with "Search" doesn't.
