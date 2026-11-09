@@ -153,6 +153,9 @@
       usePassword: false,
       expiresAt: defaultExpiry(),
       useExpiry: true,
+      // Staff may also ask for named checklist documents on an application,
+      // found by search; offered where no application is already in hand.
+      offerDocuments: !ctx.clientId && canRequestDocuments(),
     };
 
     ui().openModal({
@@ -160,6 +163,15 @@
       body: '<div class="tma-portal-request" data-request-body>' + formHtml(draft) + '</div>',
       onMount: function (host) { wireForm(host, draft, ctx); },
     });
+  }
+
+  function canRequestDocuments() {
+    if (!window.TMACipDocumentRequests) return false;
+    var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
+    if (!me || !me.isStaff) return false;
+    var access = window.TMAPortalAccess;
+
+    return !access || !access.can || access.can('cip.view') || access.can('clients.view');
   }
 
   function optionRow(label, hint, controlHtml) {
@@ -181,6 +193,18 @@
       // One wrapper so the destination picker can hide the whole form without
       // destroying it, see pickDestination.
       '<div data-req-form>' +
+
+      // ── which kind of request
+      (draft.offerDocuments
+        ? '<div class="tma-portal-request__section">' +
+          '<h3 class="tma-portal-request__heading">What are you asking for?</h3>' +
+          '<div class="tma-portal-radio-row">' +
+          '<label class="tma-portal-radio"><input type="radio" name="tma-req-kind" value="files" data-req-kind checked>' +
+          '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Any files, into a folder</label>' +
+          '<label class="tma-portal-radio"><input type="radio" name="tma-req-kind" value="documents" data-req-kind>' +
+          '<span class="tma-portal-radio__dot" aria-hidden="true"></span> Documents on an application</label>' +
+          '</div></div>'
+        : '') +
 
       // ── what you are asking for
       '<div class="tma-portal-request__section">' +
@@ -351,6 +375,12 @@
       pickDestination(host, draft);
     });
 
+    host.querySelectorAll('[data-req-kind]').forEach(function (radio) {
+      radio.addEventListener('change', function () {
+        if (radio.checked && radio.value === 'documents') pickApplication(host);
+      });
+    });
+
     function collect() {
       var groups = [];
       host.querySelectorAll('[data-req-group]').forEach(function (box) {
@@ -470,6 +500,119 @@
    * recipient, because those live in the DOM, not in `draft`. Hiding it
    * instead means coming back lands on the form exactly as it was left.
    */
+  /*
+   * Documents on an application: find it by applicant, number or provider —
+   * each result with the applicant's own picture, as the applications table
+   * shows them — then choose the documents in the checklist dialog.
+   */
+  function applicantFace(row) {
+    var src = row && row.photo;
+    if (!src && window.TMACurrentUser && window.TMACurrentUser.initialsFor && row && row.applicantName) {
+      src = window.TMACurrentUser.initialsFor(row.applicantName, row.id || row.applicantName);
+    }
+
+    return src
+      ? '<img class="tma-cip-table__applicant-face" src="' + esc(src) + '" alt="" width="26" height="26">'
+      : '<span class="tma-cip-table__applicant-face" aria-hidden="true"></span>';
+  }
+
+  function pickApplication(host) {
+    var body = host.querySelector('[data-request-body]');
+    var form = body.querySelector('[data-req-form]');
+
+    var panel = document.createElement('div');
+    panel.className = 'tma-portal-request__picker';
+    panel.innerHTML =
+      '<h3 class="tma-portal-request__heading">Find the application</h3>' +
+      ui().field('Applicant, application number or provider', ui().input({
+        type: 'search',
+        placeholder: 'Search',
+        attrs: 'data-req-app-search autocomplete="off" spellcheck="false"',
+      })) +
+      '<div class="tma-portal-picker" data-req-app-results>' +
+      '<p class="tma-portal-picker__empty">Type a name or a number.</p></div>' +
+      '<div class="tma-portal-form-actions tma-portal-form-actions--start">' +
+      ui().btn({ label: 'Back', variant: 'ghost', attrs: ' data-req-app-back' }) +
+      '</div>';
+
+    form.hidden = true;
+    body.appendChild(panel);
+
+    var input = panel.querySelector('[data-req-app-search]');
+    var results = panel.querySelector('[data-req-app-results]');
+    var seq = 0;
+    var timer = null;
+
+    function back() {
+      panel.remove();
+      form.hidden = false;
+      var files = form.querySelector('[data-req-kind][value="files"]');
+      if (files) files.checked = true;
+    }
+
+    function choose(row) {
+      results.innerHTML = ui().loading({ count: 2 });
+      net().fetchJSON('/portal/cip/applications/' + encodeURIComponent(row.id))
+        .then(function (res) {
+          var record = res && res.application;
+          if (!record) throw new Error('Could not open this application.');
+          ui().closeModal();
+          window.TMACipDocumentRequests.open(record);
+        })
+        .catch(function (err) {
+          results.innerHTML = '<p class="tma-portal-picker__empty">' + esc((err && err.message) || 'Could not open this application.') + '</p>';
+        });
+    }
+
+    function search(q) {
+      var mine = ++seq;
+      results.innerHTML = ui().loading({ count: 3 });
+      var p = new URLSearchParams();
+      p.set('q', q);
+      p.set('perPage', '12');
+      net().fetchJSON('/portal/cip/applications?' + p.toString())
+        .then(function (res) {
+          if (mine !== seq) return;
+          var rows = (res && res.applications) || [];
+          if (!rows.length) {
+            results.innerHTML = '<p class="tma-portal-picker__empty">No applications match.</p>';
+            return;
+          }
+          results.innerHTML = '<div class="tma-portal-picker__list">' + rows.map(function (row, i) {
+            var meta = [row.number, row.provider].filter(Boolean).join(' · ');
+            return '<button type="button" class="tma-portal-picker__folder" data-req-app="' + i + '">' +
+              applicantFace(row) +
+              '<span class="tma-save-folder__name">' + esc(row.applicantName || row.number || 'Application') +
+              (meta ? '<span class="tma-save-folder__path">' + esc(meta) + '</span>' : '') +
+              '</span>' +
+              (row.statusLabel
+                ? '<span class="tma-portal-status tma-portal-status--' + esc(row.statusTone || 'neutral') +
+                  ' tma-portal-status--inline">' + esc(row.statusLabel) + '</span>'
+                : '') +
+              '</button>';
+          }).join('') + '</div>';
+          results.querySelectorAll('[data-req-app]').forEach(function (b) {
+            b.addEventListener('click', function () { choose(rows[parseInt(b.getAttribute('data-req-app'), 10)]); });
+          });
+        })
+        .catch(function () {
+          if (mine !== seq) return;
+          results.innerHTML = '<p class="tma-portal-picker__empty">Could not search applications.</p>';
+        });
+    }
+
+    input.addEventListener('input', function () {
+      var q = input.value.trim();
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(function () {
+        if (q.length >= 2) search(q);
+        else results.innerHTML = '<p class="tma-portal-picker__empty">Type a name or a number.</p>';
+      }, 250);
+    });
+    panel.querySelector('[data-req-app-back]').addEventListener('click', back);
+    input.focus();
+  }
+
   function pickDestination(host, draft) {
     var body = host.querySelector('[data-request-body]');
     var form = body.querySelector('[data-req-form]');
