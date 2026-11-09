@@ -291,6 +291,10 @@
       url: intent.url,
       parts: intent.parts || [],
       invalidate: intent.invalidate || [],
+      // The screen's own note of what this is (a message's conversation and
+      // nonce), handed back when it lands or fails so the screen can settle
+      // the thing it drew optimistically. Plain data: it is stored on disk.
+      meta: intent.meta || null,
       at: Date.now(),
       tries: 0,
       state: 'waiting',
@@ -564,7 +568,13 @@
     if (entry.stalls >= MAX_SERVER_STALLS) {
       entry.state = 'failed';
 
-      return putEntry(entry).then(function () { return 'failed'; });
+      return putEntry(entry).then(function () {
+        document.dispatchEvent(new CustomEvent('tma:queue-failed', {
+          detail: { kind: entry.kind, label: entry.label, meta: entry.meta || null, error: entry.error },
+        }));
+
+        return 'failed';
+      });
     }
 
     return putEntry(entry).then(function () { return 'stop'; });
@@ -607,7 +617,13 @@
           entry.state = 'failed';
           entry.error = messageFor(res.status, json);
 
-          return putEntry(entry).then(function () { return 'failed'; });
+          return putEntry(entry).then(function () {
+            document.dispatchEvent(new CustomEvent('tma:queue-failed', {
+              detail: { kind: entry.kind, label: entry.label, meta: entry.meta || null, error: entry.error },
+            }));
+
+            return 'failed';
+          });
         });
       }
 
@@ -616,7 +632,7 @@
           .then(function () { return invalidateFor(entry); })
           .then(function () {
             document.dispatchEvent(new CustomEvent('tma:queue-applied', {
-              detail: { kind: entry.kind, label: entry.label, response: json },
+              detail: { kind: entry.kind, label: entry.label, meta: entry.meta || null, response: json },
             }));
 
             return 'applied';
@@ -640,7 +656,13 @@
        * never said why. It gets its one retry like everything else, then goes
        * to the reader with Try again and Discard.
        */
-      if (navigator.onLine !== false) {
+      /*
+       * A message is small and safe to repeat (its nonce makes a replay land
+       * once), so it does what a messenger does: keeps trying, further apart
+       * each time, until it is delivered or the server refuses it on its
+       * merits. A filing with scans in it is not safe to retry for ever.
+       */
+      if (navigator.onLine !== false && entry.kind !== 'message') {
         return stall(entry, 'Could not send this to the server.');
       }
 
@@ -703,7 +725,21 @@
 
   /** Throw one away. Only ever a person's decision, never the queue's. */
   function forget(id) {
-    return deleteEntry(id).then(recount).then(function () { return true; });
+    // Said, so a screen showing it optimistically (a message waiting to send)
+    // can turn it into "Not sent" with the words kept, not just lose it.
+    return all().then(function (entries) {
+      var entry = entries.filter(function (e) { return e.id === id; })[0] || null;
+
+      return deleteEntry(id).then(recount).then(function () {
+        if (entry) {
+          document.dispatchEvent(new CustomEvent('tma:queue-discarded', {
+            detail: { kind: entry.kind, label: entry.label, meta: entry.meta || null },
+          }));
+        }
+
+        return true;
+      });
+    });
   }
 
   /* ── account, and waking up ─────────────────────────────────────── */

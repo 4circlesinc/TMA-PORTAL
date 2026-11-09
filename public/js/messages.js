@@ -250,18 +250,153 @@
       fresh.push(msg);
     });
 
-    if (!fresh.length) return bucket;
+    if (fresh.length) {
+      bucket.messages = atFront ? fresh.concat(bucket.messages) : bucket.messages.concat(fresh);
+      bucket.messages.sort(function (a, b) {
+        // Pending sends have no seq yet and belong last, in arrival order.
+        var aSeq = a.seq || Number.MAX_SAFE_INTEGER;
+        var bSeq = b.seq || Number.MAX_SAFE_INTEGER;
+        return aSeq - bSeq;
+      });
+    }
 
-    bucket.messages = atFront ? fresh.concat(bucket.messages) : bucket.messages.concat(fresh);
-    bucket.messages.sort(function (a, b) {
-      // Pending sends have no seq yet and belong last, in arrival order.
-      var aSeq = a.seq || Number.MAX_SAFE_INTEGER;
-      var bSeq = b.seq || Number.MAX_SAFE_INTEGER;
-      return aSeq - bSeq;
-    });
+    if (bucket.loaded) persistThread(id);
 
     return bucket;
   }
+
+  /* ------------------------------------------------------------------
+   * Conversations kept on the device.
+   *
+   * A conversation's newest messages are kept in TMAStore (on disk in the
+   * Mac, Windows, iPhone and Android apps, in this tab in a browser), so it
+   * opens at once, and with no connection, from what was last seen, and only
+   * what is new is fetched behind it. Messages written with no connection
+   * live in the write queue (TMAQueue) until they are sent, and are drawn
+   * from there, "Waiting to send", across a restart; the server's nonce makes
+   * a replayed send land once.
+   * ---------------------------------------------------------------- */
+
+  var THREAD_KEEP = 100;
+  var threadSaveTimers = {};
+
+  function threadKey(id) {
+    return 'messages:thread:' + id;
+  }
+
+  function persistThread(id) {
+    if (!id || !window.TMAStore) return;
+    if (threadSaveTimers[id]) clearTimeout(threadSaveTimers[id]);
+    threadSaveTimers[id] = setTimeout(function () {
+      delete threadSaveTimers[id];
+      var bucket = STORE.threadMessages[id];
+      if (!bucket || !bucket.loaded) return;
+      // What the server has, not what is still on its way to it.
+      var kept = bucket.messages.filter(function (m) {
+        return m && !m.pending && !m.queued && !m.failed && String(m.id).indexOf('pending-') !== 0;
+      });
+      var tail = kept.slice(-THREAD_KEEP);
+      try {
+        Promise.resolve(window.TMAStore.put(threadKey(id), {
+          messages: tail,
+          hasMore: !!bucket.hasMore || kept.length > tail.length,
+        })).catch(function () { /* a full disk costs the copy, not the thread */ });
+      } catch (e) { /* as above */ }
+    }, 800);
+  }
+
+  /*
+   * The copy is kept under the signed-in account, so a read in the first
+   * moments of a launch, before /me has said who that is, looks in the wrong
+   * place and misses. Wait for it, briefly: usually it is already known (the
+   * apps remember /me), and a slow /me must not hold the conversation back.
+   */
+  function accountReady(ms) {
+    if (!window.TMAStore || typeof window.TMAStore.whenAccount !== 'function') return Promise.resolve();
+
+    return Promise.race([
+      Promise.resolve(window.TMAStore.whenAccount()),
+      new Promise(function (resolve) { setTimeout(resolve, ms); }),
+    ]);
+  }
+
+  /* The kept copy, painted before the network answers. Resolves either way. */
+  function hydrateThread(id) {
+    var bucket = threadBucket(id);
+    if (bucket.loaded || !window.TMAStore) return Promise.resolve(false);
+
+    return accountReady(1500).then(function () {
+      return window.TMAStore.get(threadKey(id));
+    }).then(function (snap) {
+      if (bucket.loaded || !snap || !snap.messages || !snap.messages.length) return false;
+      mergeMessages(id, snap.messages, false);
+      bucket.hasMore = !!snap.hasMore;
+      bucket.loaded = true;
+      bucket.fromDevice = true;
+
+      return true;
+    }).catch(function () { return false; });
+  }
+
+  /* Messages this person wrote with no connection, back in their conversation. */
+  function restoreQueued(id, render) {
+    if (!window.TMAQueue) return;
+    window.TMAQueue.all().then(function (entries) {
+      var bubbles = entries.filter(function (entry) {
+        return entry.kind === 'message' && entry.meta && entry.meta.conversation === id && entry.meta.bubble;
+      }).map(function (entry) {
+        var bubble = Object.assign({}, entry.meta.bubble);
+        bubble.pending = false;
+        bubble.queued = entry.state !== 'failed';
+        bubble.failed = entry.state === 'failed';
+
+        return bubble;
+      });
+      if (!bubbles.length) return;
+      mergeMessages(id, bubbles, false);
+      if (render) render();
+    }).catch(function () { /* nothing waiting, or no queue */ });
+  }
+
+  /* Settle the bubble a queued send drew: sent, failed or discarded. */
+  function settleQueued(detail, outcome) {
+    if (!detail || detail.kind !== 'message' || !detail.meta) return;
+    var id = detail.meta.conversation;
+    var nonce = detail.meta.nonce;
+    var bucket = STORE.threadMessages[id];
+    if (!bucket) return;
+
+    for (var i = 0; i < bucket.messages.length; i++) {
+      if (bucket.messages[i].nonce !== nonce) continue;
+      if (outcome === 'sent' && detail.response && detail.response.message) {
+        var confirmed = detail.response.message;
+        confirmed.nonce = nonce;
+        bucket.messages[i] = confirmed;
+        var row = findThread(id);
+        if (row) {
+          row.preview = 'You: ' + messagePreview(confirmed);
+          row.timestamp = confirmed.sentAt;
+          row.listed = true;
+        }
+      } else {
+        bucket.messages[i].queued = false;
+        bucket.messages[i].pending = false;
+        bucket.messages[i].failed = true;
+      }
+      break;
+    }
+
+    persistThread(id);
+    if (lastThreadRender) lastThreadRender();
+  }
+
+  // The Messages view's render, from the last thread it loaded: a queued send
+  // can land while nothing else is asking it to draw.
+  var lastThreadRender = null;
+
+  document.addEventListener('tma:queue-applied', function (e) { settleQueued(e.detail, 'sent'); });
+  document.addEventListener('tma:queue-failed', function (e) { settleQueued(e.detail, 'failed'); });
+  document.addEventListener('tma:queue-discarded', function (e) { settleQueued(e.detail, 'failed'); });
 
   /*
    * Bring a thread that is held but not on screen up to its newest page.
@@ -3146,7 +3281,7 @@
   }
 
   function messageDeliveryState(msg) {
-    return msg.failed ? 'failed' : msg.pending ? 'pending' : msg.status || 'sent';
+    return msg.failed ? 'failed' : msg.queued ? 'queued' : msg.pending ? 'pending' : msg.status || 'sent';
   }
 
   /*
@@ -3172,12 +3307,16 @@
 
     var label = {
       pending: 'Sending',
+      // Kept on this device until there is a connection, then sent.
+      queued: 'Waiting to send',
       failed: 'Not sent',
       sent: 'Sent',
       delivered: 'Delivered',
     }[state] || 'Sent';
 
-    var title = state === 'failed' ? 'Not sent, tap to retry' : label;
+    var title = state === 'failed'
+      ? 'Not sent, tap to retry'
+      : state === 'queued' ? 'Saved on this device. It sends when you are back online.' : label;
 
     return (
       '<span class="tma-dash__messages-bubble-status tma-dash__messages-bubble-status--' + state +
@@ -3860,7 +3999,7 @@
       (announcementHtml ? ' tma-dash__messages-bubble--announcement' : '') +
       (isReplyTarget ? ' tma-dash__messages-bubble--reply-target' : '') +
       (msg.failed ? ' tma-dash__messages-bubble--failed' : '') +
-      (msg.pending ? ' tma-dash__messages-bubble--pending' : '') +
+      (msg.pending || msg.queued ? ' tma-dash__messages-bubble--pending' : '') +
       '">' +
       senderHtml +
       laneHtml +
@@ -3905,7 +4044,7 @@
 
   /* Hover actions on a bubble: quick reacts, edit/reply, and the overflow menu. */
   function renderBubbleActions(msg, index) {
-    if (msg.deleted || msg.pending) return '';
+    if (msg.deleted || msg.pending || msg.queued) return '';
     var quick = (emojiData().quick || []).slice(0, 4);
     var mine = (msg.reactions || [])
       .filter(function (r) { return r.mine; })
@@ -6795,6 +6934,7 @@
   function loadThread(root, state, render, conversationId, options) {
     options = options || {};
     var bucket = threadBucket(conversationId);
+    lastThreadRender = render;
 
     if (bucket.loading) return Promise.resolve();
     bucket.loading = true;
@@ -6803,12 +6943,23 @@
 
     if (options.before) render();
 
-    return window.TMAMessagingAPI.messages(conversationId, options.before)
+    // The copy kept on the device first: the conversation is on screen before
+    // the network answers, and is still there if it never does.
+    var kept = options.before ? Promise.resolve(false) : hydrateThread(conversationId).then(function (painted) {
+      if (painted) render({ chatToBottom: true });
+      restoreQueued(conversationId, render);
+
+      return painted;
+    });
+
+    return kept.then(function () { return window.TMAMessagingAPI.messages(conversationId, options.before); })
       .then(function (data) {
         bucket.loading = false;
         bucket.loadingOlder = false;
+        var fromDevice = !!bucket.fromDevice;
+        bucket.fromDevice = false;
 
-        if (options.quiet && bucket.loaded && !options.before) {
+        if ((options.quiet || fromDevice) && bucket.loaded && !options.before) {
           // Catching up on a thread already held. How far back it reaches
           // is still what it was, unless the page no longer joins up with it.
           mergeNewestPage(conversationId, data);
@@ -6842,9 +6993,11 @@
             return row.id !== conversationId;
           });
           if (state.selectedId === conversationId) state.selectedId = null;
-        } else if (options.quiet && bucket.messages.length) {
-          // A refresh behind a thread that is already up. What is on screen
-          // is the last known truth; an error card in its place would not be.
+        } else if ((options.quiet || bucket.fromDevice) && bucket.messages.length) {
+          // A refresh behind a thread that is already up, or one painted from
+          // the device with no connection. What is on screen is the last known
+          // truth; an error card in its place would not be.
+          bucket.fromDevice = false;
           bucket.stale = true;
         } else {
           bucket.error = err;
@@ -7037,6 +7190,41 @@
         render({ chatToBottom: true });
       })
       .catch(function (err) {
+        // No connection (no status: the request never reached the server):
+        // the message waits on this device and sends when the connection is
+        // back, the server's nonce making a repeat land once.
+        if (!err.status && window.TMAQueue && window.TMAQueue.usable()) {
+          var parts = [{ name: 'body', value: text }, { name: 'nonce', value: nonce }];
+          if (replyTo) parts.push({ name: 'replyTo', value: replyTo });
+          if (lane) parts.push({ name: 'lane', value: lane });
+          attachmentIds.forEach(function (attachmentId) { parts.push({ name: 'attachments[]', value: attachmentId }); });
+          var waiting = Object.assign({}, pending, { pending: false, queued: true });
+          var title = thread && (thread.name || thread.title);
+
+          window.TMAQueue.add({
+            kind: 'message',
+            label: title ? 'Message to ' + title : 'Message',
+            url: '/portal/messaging/conversations/' + encodeURIComponent(conversationId) + '/messages',
+            parts: parts,
+            meta: { conversation: conversationId, nonce: nonce, bubble: waiting },
+          }).then(function () {
+            var held = threadBucket(conversationId);
+            for (var q = 0; q < held.messages.length; q++) {
+              if (held.messages[q].nonce === nonce) {
+                held.messages[q].pending = false;
+                held.messages[q].queued = true;
+                break;
+              }
+            }
+            render();
+          }).catch(function () {
+            markSendFailed();
+          });
+          return;
+        }
+        markSendFailed();
+
+        function markSendFailed() {
         // Mark the bubble failed and put the text back in the composer so a
         // failed send never silently loses what was written.
         var bucket = threadBucket(conversationId);
@@ -7052,6 +7240,7 @@
           root,
           err.status === 403 ? 'You cannot send to this conversation' : 'Message not sent'
         );
+        }
       });
   }
 
@@ -7106,7 +7295,38 @@
         subscribeToConversation(root, state, render, conversationId);
         ringConversation(conversationId, media);
       })
-      .catch(function () {});
+      .catch(function () {
+        // No answer (no connection): open it from what this device kept.
+        openFromDevice(root, state, render, conversationId);
+      });
+  }
+
+  /*
+   * A conversation opened by its link (a notification, a reopened app) with
+   * no answer from the server: its row from the kept list, its messages from
+   * the kept copy. Nothing kept, nothing opened, as before.
+   */
+  function openFromDevice(root, state, render, conversationId) {
+    if (!window.TMAStore) return;
+    accountReady(1500).then(function () {
+      if (findThread(conversationId)) return null;
+
+      return window.TMAStore.get('messages:warm');
+    }).then(function (snap) {
+      var rows = (snap && snap.threads) || [];
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i] && rows[i].id === conversationId && !findThread(conversationId)) {
+          STORE.threads.push(rows[i]);
+          break;
+        }
+      }
+
+      return hydrateThread(conversationId);
+    }).then(function (painted) {
+      if (!painted && !findThread(conversationId)) return;
+      openConversation(root, state, render, conversationId);
+      render({ chatToBottom: true });
+    }).catch(function () { /* nothing kept to open */ });
   }
 
   /* The same start the call buttons use; see startConversationWith. */

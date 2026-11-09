@@ -33610,6 +33610,12 @@ button.tma-dash__header-popup-item:focus-visible {
   font-style: italic;
 }
 
+/* Written with no connection: kept on this device, sent when it is back. */
+.tma-dash__messages-bubble-status--queued {
+  opacity: 0.8;
+  font-style: italic;
+}
+
 .tma-dash__messages-bubble-status--failed {
   color: var(--color-danger, #d92d20);
   font-weight: 600;

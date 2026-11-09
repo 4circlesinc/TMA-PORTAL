@@ -145,6 +145,20 @@ kept across deploys. What it deliberately is not: a proactive download of
 every byte the account may see — that is a different decision with a real
 disk bill, and the firm has not made it.
 
+**7. Messages (all four apps).** ✅ *Shipped 8 Nov 2026.* An opened
+conversation's newest 100 messages are kept in TMAStore (`messages:thread:*`:
+on disk in the apps, in the tab in a browser), so it opens at once and with
+no connection, and only what is new is fetched behind it. A conversation
+opened by its link with no answer from the server (a notification, a reopened
+app) opens from its kept row and messages. A message written with no
+connection goes into the write queue with its nonce, says "Waiting to send",
+and is redrawn from the queue across a restart; it sends on its own when the
+connection is back, and the server's nonce makes a replay land once (the
+lost-answer case included). Unlike a filing, a message is never parked for
+failing to reach the server: it keeps trying, further apart each time, until
+delivered or refused on its merits. `tests/Browser/messaging-offline.mjs`
+drives all of it, as an installed app and (`TMA_AS_BROWSER=1`) as a browser.
+
 ## What offline applications do and do not do today
 
 Works: opening an application that has been opened before, editing it with no
