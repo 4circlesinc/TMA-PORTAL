@@ -1,5 +1,6 @@
 import AuthenticationServices
 import CryptoKit
+import Intents
 import Network
 import SafariServices
 import UIKit
@@ -478,14 +479,103 @@ final class PortalModel: NSObject, ObservableObject {
         content.sound = NotificationSound.sound(for: object["sound"] as? String, silent: (object["silent"] as? Bool) == true)
         content.userInfo = ["id": id, "url": object["url"] as? String ?? "", "source": "page"]
         if let tag = object["tag"] as? String, !tag.isEmpty { content.threadIdentifier = tag }
-        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "page-\(id)", content: content, trigger: nil))
+
+        // The page's layout (notify-store.js): the picture and the middle
+        // line ride separately, so the banner is drawn the way the push's
+        // extension draws one — the picture with the app's mark in its
+        // corner, the name, the line under it, then the text. An older page
+        // sends neither and keeps the plain title and body.
+        let subtitle = (object["subtitle"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        let text = (object["text"] as? String) ?? content.body
+        let picture = Self.imageData(fromDataURL: object["icon"] as? String)
+        guard subtitle != nil || picture != nil else {
+            UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "page-\(id)", content: content, trigger: nil))
+            return
+        }
+
+        content.body = text
+        let conversation = content.threadIdentifier.isEmpty ? "page-\(id)" : content.threadIdentifier
+        Task {
+            let styled = await Self.communicationContent(content, sender: content.title, subtitle: subtitle, picture: picture, conversation: conversation)
+            try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "page-\(id)", content: styled, trigger: nil))
+        }
+    }
+
+    /// The bytes of a `data:image/...;base64,` picture, or nil.
+    private static func imageData(fromDataURL raw: String?) -> Data? {
+        guard let raw, raw.hasPrefix("data:image/"), let comma = raw.firstIndex(of: ",") else { return nil }
+        let data = Data(base64Encoded: String(raw[raw.index(after: comma)...]), options: .ignoreUnknownCharacters)
+        return (data?.isEmpty ?? true) ? nil : data
+    }
+
+    /// The same communication notification the push extension builds
+    /// (TMAPortalNotifications/NotificationService.swift): one person, or a
+    /// "conversation" named by the middle line, under the picture.
+    private static func communicationContent(_ content: UNMutableNotificationContent, sender name: String, subtitle: String?, picture: Data?, conversation: String) async -> UNNotificationContent {
+        let image = picture.map { INImage(imageData: $0) }
+        let person = INPerson(
+            personHandle: INPersonHandle(value: name, type: .unknown),
+            nameComponents: PersonNameComponentsFormatter().personNameComponents(from: name),
+            displayName: name,
+            image: image,
+            contactIdentifier: nil,
+            customIdentifier: name,
+            isMe: false,
+            suggestionType: .none
+        )
+        let me = INPerson(
+            personHandle: INPersonHandle(value: "me", type: .unknown),
+            nameComponents: nil, displayName: nil, image: nil,
+            contactIdentifier: nil, customIdentifier: nil, isMe: true, suggestionType: .none
+        )
+
+        let intent: INSendMessageIntent
+        if let subtitle {
+            intent = INSendMessageIntent(
+                recipients: [me, person],
+                outgoingMessageType: .outgoingMessageText,
+                content: content.body,
+                speakableGroupName: INSpeakableString(spokenPhrase: subtitle),
+                // iOS remembers a conversation's name; a new middle line is
+                // its own conversation.
+                conversationIdentifier: "\(conversation)|\(subtitle)",
+                serviceName: nil,
+                sender: person,
+                attachments: nil
+            )
+            if let image { intent.setImage(image, forParameterNamed: \.speakableGroupName) }
+        } else {
+            intent = INSendMessageIntent(
+                recipients: [me],
+                outgoingMessageType: .outgoingMessageText,
+                content: content.body,
+                speakableGroupName: nil,
+                conversationIdentifier: conversation,
+                serviceName: nil,
+                sender: person,
+                attachments: nil
+            )
+        }
+
+        let interaction = INInteraction(intent: intent, response: nil)
+        interaction.direction = .incoming
+        try? await interaction.donate()
+
+        return (try? content.updating(from: intent)) ?? content
     }
 
     private func registerPush(token: String) async {
         let cookies = await cookies()
         guard let session = sessionCookie(in: cookies) else { return }
         let stamp = sha256(token + "|" + session.value)
-        if UserDefaults.standard.string(forKey: "push.registered") == stamp { return }
+        if UserDefaults.standard.string(forKey: "push.registered") == stamp {
+            // Already registered: still tell this page load, which starts out
+            // believing push is off. Without it every launch after the first
+            // had the page post its own plain banner beside (or instead of)
+            // the push, with no photo and no file line.
+            evaluate("window.TMADesktop && (window.TMADesktop.pushEnabled = true)")
+            return
+        }
         guard let url = URL(string: PortalConfig.url("/me/devices")) else { return }
         let body: [String: String] = [
             "platform": PortalConfig.pushPlatform,

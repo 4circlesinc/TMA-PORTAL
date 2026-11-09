@@ -727,6 +727,11 @@
             // Read only by the iPhone app's Notification (ios preload.js);
             // browsers ignore it and play their own sound.
             sound: prefs.sounds.iphone,
+            // Also only the iPhone app's: the middle line and the text apart,
+            // so it can lay the banner out like a message under the picture
+            // instead of one run of body text.
+            subtitle: v.subtitle || '',
+            text: text,
           });
           note.onclick = function () {
             note.close();

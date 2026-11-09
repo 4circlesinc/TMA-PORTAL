@@ -10,6 +10,7 @@ use App\Models\CipPerson;
 use App\Models\CipProvider;
 use App\Models\Company;
 use App\Models\CompanyMember;
+use App\Models\DeviceToken;
 use App\Models\Folder;
 use App\Models\Notification;
 use App\Models\User;
@@ -22,6 +23,7 @@ use App\Support\Cip\Milestones;
 use App\Support\Cip\Status;
 use App\Support\Cip\Tree;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -173,6 +175,51 @@ class CipDdQueryTest extends TestCase
         Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($path) {
             return str_contains((string) data_get($mail->payload, 'button.url'), $path);
         });
+    }
+
+    public function test_the_providers_iphone_hears_whose_file_it_is_under_the_applicants_picture(): void
+    {
+        Mail::fake();
+        $ec = openssl_pkey_new(['private_key_type' => OPENSSL_KEYTYPE_EC, 'curve_name' => 'prime256v1']);
+        openssl_pkey_export($ec, $pem);
+        config([
+            'services.fcm.project_id' => null,
+            'services.apns.key_id' => 'APNSKEY123', 'services.apns.team_id' => 'TEAM123456',
+            'services.apns.bundle_id' => 'com.tmantoinelaw.portal', 'services.apns.private_key' => $pem,
+        ]);
+        Http::fake(['api.push.apple.com/*' => Http::response('', 200)]);
+
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $company = null;
+        $application = $this->inBackgroundCheck($staff, $company);
+        $contact = $this->user(Role::CLIENT, 'gil@galaxy.example', 'Gil Contact');
+        CompanyMember::create([
+            'company_id' => $company->id, 'user_id' => $contact->id,
+            'name' => 'Gil Contact', 'email' => 'gil@galaxy.example',
+            'role' => 'member', 'status' => CompanyMember::STATUS_ACTIVE,
+            'invited_by' => $staff->id,
+        ]);
+        DeviceToken::create(['user_id' => $contact->id, 'platform' => DeviceToken::PLATFORM_IOS, 'token' => str_repeat('ab', 32)]);
+
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/dd-query', [
+                'queryReceivedAt' => '2026-08-18',
+            ])
+            ->assertOk();
+
+        $sent = Http::recorded(fn ($request) => str_contains($request->url(), '/3/device/'.str_repeat('ab', 32)));
+        $this->assertNotEmpty($sent, 'the provider contact’s iPhone was pushed');
+        $body = $sent->last()[0]->data();
+
+        $this->assertSame('Ada Admin', $body['aps']['alert']['title']);
+        $this->assertSame('10T1G12661P (Chen): DD Query', $body['aps']['alert']['subtitle']);
+        $this->assertSame(1, $body['aps']['mutable-content'], 'the extension draws the picture');
+
+        $msg = json_decode($body['msg'], true);
+        $this->assertSame('activity', $msg['kind']);
+        // No photo on this file: the applicant's initials, never the officer.
+        $this->assertStringContainsString('/media/cip/applicants/'.$application->uuid.'/initials?expires=', $msg['photo']);
+        $this->assertStringContainsString('/media/cip/applicants/'.$application->uuid.'/initials?expires=', $msg['groupPhoto']);
     }
 
     public function test_the_officers_message_rides_along_in_the_notice(): void

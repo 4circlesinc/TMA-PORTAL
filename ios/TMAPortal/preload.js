@@ -221,7 +221,14 @@
     live[this.__id] = this;
     var url = '';
     try { url = options.data && options.data.url ? String(options.data.url) : ''; } catch (e) { /* ignore */ }
-    post('notify', { json: JSON.stringify({ id: this.__id, title: this.title, body: this.body, tag: this.tag, silent: this.silent, sound: this.sound, url: url, icon: options.icon || '' }) });
+    // subtitle and text are notify-store's layout (not part of the web API):
+    // the app draws them as a message, under the picture in icon.
+    post('notify', { json: JSON.stringify({
+      id: this.__id, title: this.title, body: this.body, tag: this.tag, silent: this.silent, sound: this.sound, url: url,
+      icon: options.icon || '',
+      subtitle: typeof options.subtitle === 'string' ? options.subtitle : '',
+      text: typeof options.text === 'string' ? options.text : this.body,
+    }) });
   }
   IOSNotification.permission = notificationsAllowed ? 'granted' : 'default';
   IOSNotification.requestPermission = function (cb) {
