@@ -2195,6 +2195,19 @@
   min-width: 0;
 }
 
+/* The numbers the file is known by, side by side under the applicant. */
+.tma-cip-docreq__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-12) var(--space-32, 32px);
+}
+
+/* A person's face beside their name over their documents. */
+.tma-cip-docreq__person {
+  justify-content: flex-start;
+  gap: var(--space-8);
+}
+
 .tma-portal-request {
   display: flex;
   flex-direction: column;

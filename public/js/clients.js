@@ -10322,12 +10322,40 @@
       return !opts.personId || opts.personId === person.id;
     };
 
+    /*
+     * Whose file this is, before anything is ticked: the applicant's face
+     * and name, then the numbers the firm and the Unit know it by, drawn as
+     * the facts on the application's own page.
+     */
+    var faceFor = function (person, size) {
+      var src = cipPersonPhotoSrc(person) || initialsAvatarUri((person && person.name) || '', (person && person.id) || '');
+      return src
+        ? '<img class="' + (size === 'lg' ? 'tma-dash__clients-card-person-face' : 'tma-cip-table__applicant-face') + '" src="' + esc(src) + '" alt=""' +
+          (size === 'lg' ? ' width="40" height="40"' : ' width="26" height="26"') + '>'
+        : '';
+    };
+    var main = app.applicant || (groups[0] && groups[0].person) || null;
+    var identity =
+      '<header class="tma-dash__clients-card-head tma-dash__clients-card-head--person">' +
+      '<div class="tma-dash__clients-card-person">' +
+      faceFor(main, 'lg') +
+      '<div class="tma-dash__clients-card-person-text">' +
+      '<h3 class="tma-dash__clients-card-title">' + esc(cipUpperName(main && main.name) || 'Application') + '</h3>' +
+      (provider ? '<span class="tma-dash__clients-card-person-name">' + esc(provider) + '</span>' : '') +
+      '</div></div></header>' +
+      '<div class="tma-cip-docreq__facts">' +
+      cipFact('CIP application number', app.cipNumber || '—') +
+      cipFact(app.phase === 'add_on' ? 'Add-On reference number' : 'Application number', app.internalNumber || app.number || '—') +
+      '</div>';
+
     var body =
+      identity +
       '<p class="tma-portal-modal__text">Choose the documents you need. Each one is renamed and filed in its place on the checklist when it arrives.</p>' +
       '<div class="tma-cip-not-ready__list" data-docreq-list>' +
       groups.map(function (group) {
         return '<section class="tma-cip-not-ready__group">' +
-          '<header class="tma-dash__clients-card-head">' +
+          '<header class="tma-dash__clients-card-head tma-cip-docreq__person">' +
+          faceFor(group.person) +
           '<h3 class="tma-dash__clients-card-title">' + esc(cipUpperName(group.person.name) || group.person.label || 'Applicant') + '</h3>' +
           '<span class="tma-tab__count">' + esc(String(group.docs.length)) + '</span>' +
           '</header>' +
