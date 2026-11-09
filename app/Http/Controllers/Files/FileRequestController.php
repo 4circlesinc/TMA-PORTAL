@@ -80,8 +80,8 @@ class FileRequestController extends BaseFilesController
         /*
          * Item 8: a request says what it is for and what may be sent, so the
          * instructions and at least one file type are required; the person
-         * asked is either somebody on the portal (recipientUserId) or a
-         * name and an email address together.
+         * asked is either somebody on the portal (recipientUserId) or an
+         * email address.
          */
         $data = $request->validate([
             'title' => ['required', 'string', 'max:150'],
@@ -89,8 +89,9 @@ class FileRequestController extends BaseFilesController
             'folder' => ['nullable', 'string', 'max:64'],
             'client' => ['nullable', 'string', 'max:64'],
             'recipientUserId' => ['nullable', 'integer'],
-            'recipientEmail' => ['nullable', 'required_with:recipientName', 'email', 'max:191'],
-            'recipientName' => ['nullable', 'required_with:recipientEmail', 'string', 'max:120'],
+            // Someone not on the portal is asked by their email address alone.
+            'recipientEmail' => ['nullable', 'email', 'max:191'],
+            'recipientName' => ['nullable', 'string', 'max:120'],
             'allowedExtensions' => ['required', 'array', 'min:1', 'max:64'],
             'allowedExtensions.*' => ['string', 'max:32'],
             'maxBytes' => ['nullable', 'integer', 'min:1'],
@@ -104,8 +105,6 @@ class FileRequestController extends BaseFilesController
             'message.required' => 'Add instructions so they know exactly what to upload.',
             'allowedExtensions.required' => 'Choose at least one file type they may upload.',
             'allowedExtensions.min' => 'Choose at least one file type they may upload.',
-            'recipientName.required_with' => 'Add the name of the person you are asking.',
-            'recipientEmail.required_with' => 'Add the email address of the person you are asking.',
         ]);
 
         $user = $this->user($request);

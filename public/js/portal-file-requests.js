@@ -305,12 +305,9 @@
       '</div>' +
       '<p class="tma-portal-request__note">They get the email, and a message and a notification in the portal, each with the link.</p>' +
       '</div>' +
-      // Anybody else: a name and an address, both needed.
+      // Anybody else: their email address is all it takes.
       '<div data-req-who-external hidden>' +
-      '<div class="tma-portal-request__pair">' +
-      requiredField('Name', ui().input({ value: draft.recipientName, placeholder: 'Jane Doe', attrs: 'data-req-rname maxlength="120"' })) +
       requiredField('Email address', ui().input({ type: 'email', value: draft.recipientEmail, placeholder: 'jane@example.com', attrs: 'data-req-remail' })) +
-      '</div>' +
       '</div>' +
       '</div>' +
 
@@ -479,7 +476,7 @@
         folder: draft.folder,
         client: draft.client,
         recipientUserId: who === 'user' && draft.person ? draft.person.id : null,
-        recipientName: who === 'external' ? ((host.querySelector('[data-req-rname]').value || '').trim() || null) : null,
+        recipientName: null,
         recipientEmail: who === 'external' ? ((host.querySelector('[data-req-remail]').value || '').trim() || null) : null,
         allowedExtensions: groups.length ? groups : null,
         maxBytes: size || null,
@@ -510,9 +507,9 @@
         if (find) find.focus();
         return;
       }
-      if (payload.who === 'external' && (!payload.recipientName || !payload.recipientEmail)) {
-        showError(host, payload.recipientName ? 'Add their email address.' : 'Add the name of the person you are asking.');
-        host.querySelector(payload.recipientName ? '[data-req-remail]' : '[data-req-rname]').focus();
+      if (payload.who === 'external' && !payload.recipientEmail) {
+        showError(host, 'Add the email address of the person you are asking.');
+        host.querySelector('[data-req-remail]').focus();
         return;
       }
       if (!payload.allowedExtensions) {

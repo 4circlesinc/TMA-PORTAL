@@ -66,10 +66,12 @@ class FileRequestRemindersTest extends TestCase
             ->assertStatus(422)
             ->assertJsonValidationErrors(['message', 'allowedExtensions']);
 
-        // A name without an address (or the other way round) is not a recipient.
-        $this->create($staff, ['recipientName' => 'Jane Doe'])
+        // Someone not on the portal is asked by their email address alone.
+        $this->create($staff, ['recipientEmail' => 'not-an-address'])
             ->assertStatus(422)
             ->assertJsonValidationErrors(['recipientEmail']);
+        $this->create($staff, ['recipientEmail' => 'jane@example.com'])->assertCreated();
+        FileRequest::query()->delete();
 
         $this->create($staff)->assertCreated();
         $request = FileRequest::query()->latest('id')->firstOrFail();
@@ -160,7 +162,7 @@ class FileRequestRemindersTest extends TestCase
     public function test_a_reminder_can_be_sent_by_hand_while_the_request_is_outstanding(): void
     {
         $staff = $this->user(Role::REVIEWING_OFFICER, 'sam@firm.test', 'Sam Staff');
-        $this->create($staff, ['recipientName' => 'Jane Doe', 'recipientEmail' => 'jane@example.com', 'send' => true])->assertCreated();
+        $this->create($staff, ['recipientEmail' => 'jane@example.com', 'send' => true])->assertCreated();
         $request = FileRequest::query()->latest('id')->firstOrFail();
 
         $this->actingAs($staff)->postJson('/portal/files/requests/'.$request->uuid.'/remind')
