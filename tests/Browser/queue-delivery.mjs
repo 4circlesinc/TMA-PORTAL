@@ -17,8 +17,8 @@ import { createServer } from 'node:http';
  *
  *   node tests/Browser/queue-delivery.mjs
  *
- * The stuck-flag case waits out the queue's one-minute look, so a full run
- * takes a little over a minute and a half.
+ * The stuck-flag and Windows cases wait out the queue's 15-second look, so a
+ * full run takes about two minutes.
  */
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const QUEUE_JS = readFileSync(join(ROOT, 'public/js/portal-queue.js'), 'utf8');
@@ -291,10 +291,74 @@ for (const how of ['redirect', 'html']) {
   const id = await add(filing('Gu'));
   await page.waitForTimeout(1500);
   check(hits.filing === 0 && !!(await one(id)), 'stuck flag: nothing sent while the browser says it is offline');
-  // The queue looks for the firm once a minute while something waits.
+  // The queue looks for the firm every 15 seconds while something waits.
   const landed = await until(async () => !(await one(id)), 75000, 'probe');
   check(landed, 'stuck flag: the queue found the firm by itself and sent the filing');
   await page.evaluate(() => { window.__online = true; });
+  await reset();
+}
+
+/* ── 8. Windows: the wifi is off and the browser still says online ──── */
+{
+  /*
+   * A Hyper-V, WSL or VPN adapter keeps navigator.onLine true on Windows
+   * with the wifi switched off, and no `online` event fires when it comes
+   * back. Nothing reaches the server, /me included. The edit used to be
+   * read as "the firm didn't answer" and go to "Not sent" after two tries.
+   */
+  await page.evaluate(() => { window.__online = true; });
+  mode.edit = 'abort';
+  mode.filing = 'abort';
+  mode.me = 'abort';
+  hits.edit = 0;
+  hits.filing = 0;
+  const editId = await add({
+    kind: 'cip.application',
+    label: 'Changes to application GLO26-00002',
+    url: '/portal/cip/applications/def',
+    parts: [{ name: 'firstName', value: 'Jo' }],
+  });
+  const fileId = await add(filing('Ky'));
+  await until(async () => hits.edit >= 1, 6000, 'the edit to be tried');
+  // Long enough for the old queue's retry and give-up.
+  await page.waitForTimeout(9000);
+  const edit = await one(editId);
+  const filed = await one(fileId);
+  check(edit && edit.state === 'waiting', 'windows, wifi off: the edit is still waiting, not "Not sent" (' + (edit && edit.state) + ')');
+  check(filed && filed.state === 'waiting', 'windows, wifi off: the new filing is still waiting');
+  check(edit && /connection/i.test(edit.error || ''), 'windows, wifi off: says it is waiting for a connection (' + (edit && edit.error) + ')');
+  check(await events('failed') === 0, 'windows, wifi off: nothing announced as failed');
+  check((await page.evaluate(() => window.TMAQueue.state().online)) === false, 'windows, wifi off: the pill says offline although the browser says online');
+  check(hits.edit <= 2, 'windows, wifi off: the queue looks at the firm instead of resending (' + hits.edit + ' tries)');
+
+  // The wifi comes back. No `online` event: the queue's own look finds it.
+  mode.edit = 'ok';
+  mode.filing = 'ok';
+  mode.me = 'ok';
+  const landed = await until(async () => !(await one(editId)) && !(await one(fileId)), 40000, 'both to land');
+  check(landed, 'windows, wifi back: the edit and the filing landed by themselves, no event, no click');
+  check((await page.evaluate(() => window.TMAQueue.state().online)) === true, 'windows, wifi back: the pill says online again');
+  await reset();
+}
+
+/* ── 9. Windows: a screen's read tells the pill there is no way through ─ */
+{
+  mode.me = 'abort';
+  const through = await page.evaluate(() => window.TMAQueue.check());
+  check(through === false && (await page.evaluate(() => window.TMAQueue.state().online)) === false,
+    'windows, a read got no answer: the look failed too, the pill says offline with nothing queued');
+  mode.me = 'ok';
+  // Bringing the window to the front looks straight away.
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  check(await until(() => page.evaluate(() => window.TMAQueue.state().online), 4000, 'online again'),
+    'windows, the window comes to the front: one look and the pill says online again');
+
+  // A read that is answered is proof enough on its own.
+  mode.me = 'abort';
+  await page.evaluate(() => window.TMAQueue.check());
+  await page.evaluate(() => window.TMAQueue.answered());
+  check((await page.evaluate(() => window.TMAQueue.state().online)) === true, 'windows, a read was answered: the pill says online at once');
+  mode.me = 'ok';
   await reset();
 }
 

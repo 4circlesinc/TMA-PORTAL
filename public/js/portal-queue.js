@@ -79,12 +79,23 @@
 
   var REQUEST_TIMEOUT_MAX_MS = 10 * 60 * 1000;
 
-  /* While the browser says there is no network, how soon to look anyway.
-     That flag can stay stuck after the connection is back, and without a
-     look nothing waiting would ever go. */
-  var PROBE_MS = 60 * 1000;
+  /* While there is no way through to the firm, how soon to look again, and
+     the longest gap between looks. Two things need the look. The browser's
+     "offline" can stay stuck after the connection is back. And on Windows
+     there is often no "offline" at all: a Hyper-V, WSL, VPN or VirtualBox
+     adapter keeps navigator.onLine true with the wifi switched off, so no
+     `online` event ever says the connection came back either. The look is
+     the only thing that notices, and a minute is the longest anybody waits
+     for their work to go once it has. */
+  var PROBE_MS = 15 * 1000;
 
-  /* How many attempts an entry gets while the browser has a network: the
+  var PROBE_MAX_MS = 60 * 1000;
+
+  /* How long a look may take. A hotel wifi that has not been paid for holds
+     a request open rather than refusing it. */
+  var PROBE_TIMEOUT_MS = 8 * 1000;
+
+  /* How many attempts an entry gets while the firm can be reached: the
      first send and ONE automatic retry. After that it goes to the reader with
      its reason and Try again / Discard, instead of sitting on "Waiting" with
      no end and nothing to act on. Signed out, a stale token, a server error
@@ -111,6 +122,13 @@
      must not be described as having no connection when another filing just
      got an answer from the firm. */
   var reached = false;
+
+  /* Our own finding that nothing gets through to the firm: a request failed
+     with no answer and a look at the firm failed too. It stands in for
+     navigator.onLine where that flag never goes false (Windows, see
+     PROBE_MS), and only an answer from the firm, or the browser's `online`
+     event, clears it. */
+  var linkDown = false;
 
   var running = false;
 
@@ -244,11 +262,18 @@
     return typeof navigator === 'undefined' || navigator.onLine !== false;
   }
 
+  /* No way through right now, by the browser's word or by our own look. */
+  function offline() {
+    return linkDown || !browserOnline();
+  }
+
   function online() {
     // The sentence in the panel. A thrown send used to clear `reachable`
     // and the panel then said you were offline, including after the firm
-    // had just answered. The browser flag is the only "no network" signal,
-    // and a real answer overrides it when that flag is stuck.
+    // had just answered. So one failed request proves nothing: offline is
+    // the browser's flag, or a look at the firm that also got no answer.
+    // A real answer overrides the flag when it is stuck.
+    if (linkDown) return false;
     if (browserOnline()) return true;
 
     return reached;
@@ -443,12 +468,11 @@
     var force = forceNext;
     forceNext = false;
     /*
-     * Only the browser's own "no network" skips the attempt, and a click
-     * does not: the person is looking at the list and asking to send.
-     * `reachable` is what the last attempt learned, and the only way to
-     * unlearn it is to try again.
+     * No way through skips the attempt, and a click does not: the person is
+     * looking at the list and asking to send. The looks (probeSoon) are what
+     * notice the connection is back, and send it all then.
      */
-    if (!force && !browserOnline()) {
+    if (!force && offline()) {
       probeSoon();
 
       return Promise.resolve(0);
@@ -637,6 +661,88 @@
   }
 
   /*
+   * Is there a way through to the firm at all? Any answer, a 401 included,
+   * says yes; no answer within the time says no. It goes to /me, so the yes
+   * also brings the fresh XSRF cookie the replay is about to need.
+   */
+  function reach() {
+    var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = null;
+
+    return new Promise(function (resolve) {
+      timer = setTimeout(function () {
+        if (controller) {
+          try { controller.abort(); } catch (e) { /* already over */ }
+        }
+        resolve(false);
+      }, PROBE_TIMEOUT_MS);
+      fetch((window.__TMA_SITE_ROOT || '') + '/me', {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        signal: controller ? controller.signal : undefined,
+      }).then(function () { resolve(true); }, function () { resolve(false); });
+    }).then(function (through) {
+      clearTimeout(timer);
+
+      return through;
+    });
+  }
+
+  /* The firm answered after a spell with no way through. */
+  function cameBack() {
+    var was = linkDown;
+    linkDown = false;
+    reachable = true;
+    reached = true;
+    probeDelay = PROBE_MS;
+    retryDelay = RETRY_MS;
+    if (probeTimer) { clearTimeout(probeTimer); probeTimer = null; }
+    if (was) notify();
+    // The browser's flag may still say offline, and is not asked.
+    forceNext = true;
+    wake();
+  }
+
+  /* Nothing gets through: say so, and start looking for the way back. */
+  function wentDown() {
+    var was = linkDown;
+    linkDown = true;
+    reachable = false;
+    if (!was) notify();
+    probeSoon();
+  }
+
+  /*
+   * A screen's read got no answer at all. Not proof of anything (the server
+   * can drop one request), so look, and only a failed look says offline.
+   * One look at a time, and not more than one every few seconds however many
+   * screens ask.
+   */
+  var checking = null;
+  var checkedAt = 0;
+
+  function check() {
+    if (linkDown || !browserOnline()) return Promise.resolve(false);
+    if (checking) return checking;
+    if (Date.now() - checkedAt < RETRY_MS) return Promise.resolve(true);
+    checking = reach().then(function (through) {
+      checking = null;
+      checkedAt = Date.now();
+      if (!through) wentDown();
+
+      return through;
+    });
+
+    return checking;
+  }
+
+  /* A screen's read was answered: proof enough, if we thought otherwise. */
+  function answeredByFirm() {
+    if (linkDown) cameBack();
+  }
+
+  /*
    * The server answered, but not about this entry. Count it, keep the reason
    * where the panel can show it, and once it has happened often enough hand
    * the entry to a person rather than leave it "Waiting" with no end.
@@ -736,47 +842,58 @@
       });
     }).catch(function (err) {
       if (mine !== attempt) return 'skipped';
-      /*
-       * Gave up waiting. The browser says there is a network, so this is the
-       * server not answering in time, and it counts like any other stall,
-       * otherwise an upload the server never finishes would retry for ever.
-       *
-       * Unless a repeat is harmless. A filing whose scans were still going up
-       * on a slow line is not refused, it is slow, and the next try finds the
-       * first landing by its key if the server did finish it.
-       */
-      if (err && err.name === 'AbortError' && navigator.onLine !== false) {
-        if (safeToRepeat(entry)) return wait(entry, 'The connection is slow. It keeps trying by itself.');
-
-        return stall(entry, 'The server took too long to answer.', true);
-      }
+      var timedOut = !!(err && err.name === 'AbortError');
 
       /*
-       * The browser has a network and the send still failed: a refused
-       * connection, a dropped tunnel, a scan that could not be read back off
-       * the disk. Left uncounted, this was the "Waiting" that never ended and
-       * never said why. It gets its one retry like everything else, then goes
-       * to the reader with Try again and Discard.
+       * No answer. First: is there a way through at all? The browser's flag
+       * cannot be the judge. On Windows it says online with the wifi off, so
+       * every change made offline there was read as "the firm didn't answer":
+       * an edit went to "Not sent" after two tries and stayed there, and the
+       * pill said nothing was wrong. A look at the firm decides instead.
        */
-      /*
-       * A message is safe to repeat (its nonce makes a replay land once), and
-       * so is a new filing (its submission key does the same), so they do
-       * what a messenger does: keep trying, further apart each time, until
-       * they are delivered or the server refuses them on their merits.
-       *
-       * This is the case that lost applications. A laptop on a wifi with no
-       * internet behind it says it is online, so the filing failed twice in
-       * five seconds, was marked "Not sent", and was never tried again when
-       * the internet did come back. Only an edit, which a repeat could apply
-       * twice, still goes to the reader after its one retry.
-       */
-      if (navigator.onLine !== false && !safeToRepeat(entry)) {
-        return stall(entry, 'Could not send this to the server.', true);
-      }
+      return (browserOnline() ? reach() : Promise.resolve(false)).then(function (through) {
+        if (mine !== attempt) return 'skipped';
 
-      // Nothing was delivered. Whether that is a dead wifi or a dropped
-      // tunnel does not matter: the entry is untouched and the run stops.
-      return wait(entry, 'Waiting for a connection to the firm. It sends by itself.');
+        // Nothing was delivered. Whether that is a dead wifi or a dropped
+        // tunnel does not matter: the entry is untouched and the run stops,
+        // and the looks send it when the firm answers again.
+        if (!through) {
+          wentDown();
+
+          return wait(entry, 'Waiting for a connection to the firm. It sends by itself.');
+        }
+
+        /*
+         * The firm answers, so it was this request. Gave up waiting: the
+         * server not answering in time, and it counts like any other stall,
+         * otherwise an upload the server never finishes would retry for ever.
+         *
+         * Unless a repeat is harmless. A filing whose scans were still going
+         * up on a slow line is not refused, it is slow, and the next try
+         * finds the first landing by its key if the server did finish it.
+         */
+        if (timedOut) {
+          if (safeToRepeat(entry)) return wait(entry, 'The connection is slow. It keeps trying by itself.');
+
+          return stall(entry, 'The server took too long to answer.', true);
+        }
+
+        /*
+         * A refused connection, a dropped tunnel, a scan that could not be
+         * read back off the disk. Left uncounted, this was the "Waiting" that
+         * never ended and never said why.
+         *
+         * A message is safe to repeat (its nonce makes a replay land once),
+         * and so is a new filing (its submission key does the same), so they
+         * do what a messenger does: keep trying, further apart each time,
+         * until they are delivered or the server refuses them on their
+         * merits. Only an edit, which a repeat could apply twice, goes to the
+         * reader after its one retry, with Try again and Discard.
+         */
+        if (!safeToRepeat(entry)) return stall(entry, 'Could not send this to the server.', true);
+
+        return wait(entry, 'Waiting for a connection to the firm. It sends by itself.');
+      });
     });
   }
 
@@ -842,36 +959,54 @@
   }
 
   /*
-   * The browser says there is no network. Look for the firm anyway, once a
-   * minute and then less often, while something is waiting: that flag can
-   * stay stuck after the connection is back, and without this nothing would
-   * be sent until somebody happened to click. Any answer at all means there
-   * is a way through, so the queue is sent as if the person had asked.
+   * No way through to the firm. Look for it anyway, every 15 seconds and
+   * then up to a minute apart, for as long as something is waiting or we
+   * have said "offline": the browser's flag can stay stuck after the
+   * connection is back, and on Windows it often never moved at all, so no
+   * event will say so. Without this nothing would be sent until somebody
+   * happened to click. Any answer at all means there is a way through, so
+   * the queue is sent as if the person had asked.
    */
   var probeDelay = PROBE_MS;
 
+  function wanted() {
+    return offline() && (linkDown || summary.waiting > 0);
+  }
+
   function probeSoon() {
-    if (probeTimer || summary.waiting === 0) return;
+    if (probeTimer || !wanted()) return;
     probeTimer = setTimeout(function () {
       probeTimer = null;
-      if (browserOnline() || summary.waiting === 0) {
+      if (!wanted()) {
         probeDelay = PROBE_MS;
 
         return;
       }
-      refreshToken().then(function (through) {
+      reach().then(function (through) {
         if (through) {
-          probeDelay = PROBE_MS;
-          reached = true;
-          forceNext = true;
-          flush();
+          cameBack();
 
           return;
         }
-        probeDelay = Math.min(probeDelay * 2, RETRY_MAX_MS);
+        probeDelay = Math.min(probeDelay * 2, PROBE_MAX_MS);
         probeSoon();
       });
     }, probeDelay);
+  }
+
+  /* Look now rather than at the next tick: the reader just did something
+     that suggests the connection may be back. */
+  var probing = false;
+
+  function probeNow() {
+    if (probing || !wanted()) return;
+    if (probeTimer) { clearTimeout(probeTimer); probeTimer = null; }
+    probing = true;
+    reach().then(function (through) {
+      probing = false;
+      if (through) cameBack();
+      else probeSoon();
+    });
   }
 
   /*
@@ -1053,6 +1188,7 @@
 
   window.addEventListener('online', function () {
     reachable = true;
+    linkDown = false;
     retryDelay = RETRY_MS;
     probeDelay = PROBE_MS;
     if (probeTimer) { clearTimeout(probeTimer); probeTimer = null; }
@@ -1067,9 +1203,19 @@
   });
 
   /* A tab that comes back to the front after a laptop was shut is the most
-     common way a connection returns without an `online` event firing. */
+     common way a connection returns without an `online` event firing. With
+     no way through, the look goes first: the run itself would only be
+     skipped until the next tick. */
   document.addEventListener('visibilitychange', function () {
-    if (document.visibilityState === 'visible') wake();
+    if (document.visibilityState !== 'visible') return;
+    if (wanted()) probeNow();
+    else wake();
+  });
+
+  /* Window focus too: the desktop app's window coming to the front is not a
+     visibility change when it was only behind another window. */
+  window.addEventListener('focus', function () {
+    if (wanted()) probeNow();
   });
 
   window.TMAQueue = {
@@ -1080,6 +1226,10 @@
     forget: forget,
     state: state,
     online: online,
+    // For screens that read through the network (TMAStore.swr): a read that
+    // got no answer asks for a look, and one that was answered says so.
+    check: check,
+    answered: answeredByFirm,
     usable: usable,
     onChange: onChange,
     setAccount: setAccount,

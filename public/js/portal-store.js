@@ -575,10 +575,18 @@
       finished = true;
       put(key, value);
       if (onData) onData(value, { stale: false });
+      if (window.TMAQueue && window.TMAQueue.answered) window.TMAQueue.answered();
 
       return value;
     }).catch(function (err) {
       finished = true;
+      /*
+       * No status means no answer, not a refusal. The queue looks at the
+       * firm and says "offline" only if that fails too, which is the one
+       * way the pill can know on Windows, where the browser's own flag
+       * stays online with the wifi off.
+       */
+      if (!(err && err.status) && window.TMAQueue && window.TMAQueue.check) window.TMAQueue.check();
       if (delivered) return undefined;
 
       throw err;

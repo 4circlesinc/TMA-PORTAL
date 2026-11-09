@@ -748,8 +748,12 @@ field placement and drawing, and computed CSS only exist in a browser.
   was briefly unwell, or a reply that was not the server's, is sent again by
   itself on the next reconnect or return to the tab; a refusal on the merits
   is kept for a person and never resent; an edit that got no answer goes to
-  the reader rather than being repeated; and a browser whose offline flag is
-  stuck still finds the firm within a minute. Takes about a minute and a half.
+  the reader rather than being repeated; a browser whose offline flag is
+  stuck still finds the firm within a minute; and Windows, where the flag
+  says online with the wifi off (a Hyper-V, WSL or VPN adapter), keeps an
+  edit and a filing waiting rather than "Not sent", says offline in the pill,
+  and sends both by itself when the firm answers again, with no `online`
+  event to say so. Takes about two minutes.
 
   ```sh
   node tests/Browser/queue-delivery.mjs
