@@ -54,19 +54,8 @@
     return isServiceProviderAdmin() || !isProviderContact();
   }
 
-  /* Staff send requests, so staff have the tab that tracks them. */
-  function seesRequests() {
-    var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
-    return !!(me && (me.isStaff || me.isAdmin));
-  }
-
   function visibleTabs() {
-    var tabs = (isAdminUser() ? ADMIN_TABS : BASE_TABS).slice();
-    if (seesRequests()) {
-      var at = tabs.indexOf('Files');
-      tabs.splice(at === -1 ? tabs.length : at + 1, 0, 'Requested Files');
-    }
-    return tabs;
+    return (isAdminUser() ? ADMIN_TABS : BASE_TABS).slice();
   }
 
   function dateKeyOf(d) {
@@ -374,7 +363,6 @@
     Notifications: '.tma-dash__overview-notifications-tab',
     Activity: '.tma-dash__overview-activity-tab',
     'Recycle Bin': '.tma-dash__overview-recycle-tab',
-    'Requested Files': '.tma-dash__overview-requests-tab',
   };
 
   function esc(s) {
@@ -651,19 +639,6 @@
       '<div class="tma-dash__files" data-files-overview></div></div>';
   }
 
-  function renderRequestsTab(activeTab) {
-    if (!seesRequests()) return '';
-    return '<div class="tma-dash__overview-requests-tab"' + (activeTab !== 'Requested Files' ? ' hidden' : '') + '>' +
-      '<div class="tma-dash__requests" data-requests-overview></div></div>';
-  }
-
-  function mountRequestsTab(container) {
-    if (!seesRequests()) return;
-    var mountEl = container.querySelector('[data-requests-overview]');
-    if (!mountEl || !window.TMAOverviewRequests || typeof window.TMAOverviewRequests.mount !== 'function') return;
-    window.TMAOverviewRequests.mount(mountEl);
-  }
-
   function mountEmployeesTab(container) {
     if (!isAdminUser()) return;
     var mountEl = container.querySelector('[data-employees-overview]');
@@ -747,7 +722,6 @@
       renderNotificationsTab(tab) +
       renderActivityTab(tab) +
       renderRecycleTab(tab) +
-      renderRequestsTab(tab) +
       '</div>';
   }
 
@@ -774,14 +748,12 @@
     if (tab === 'Notifications') mountNotificationsTab(container);
     if (tab === 'Activity') mountActivityTab(container);
     if (tab === 'Recycle Bin') mountRecycleTab(container);
-    if (tab === 'Requested Files') mountRequestsTab(container);
     syncOverviewChrome(tab);
 
     // Keep the URL in sync so See all / refresh / share land on the same tab.
     try {
       var key = String(tab || 'Overview').toLowerCase();
       if (key === 'recycle bin') key = 'recycle-bin';
-      if (key === 'requested files') key = 'requested-files';
       var url = new URL(window.location.href);
       if (key === 'overview') url.searchParams.delete('tab');
       else url.searchParams.set('tab', key);
@@ -816,9 +788,6 @@
       activities: 'Activity',
       recycle: 'Recycle Bin',
       'recycle-bin': 'Recycle Bin',
-      'requested-files': 'Requested Files',
-      requests: 'Requested Files',
-      requested: 'Requested Files',
       recyclebin: 'Recycle Bin',
       trash: 'Recycle Bin',
       bin: 'Recycle Bin',
@@ -1107,12 +1076,10 @@
   }
 
   function remountTabsForAdmin(container, requestedTab) {
-    if (!container || !(isAdminUser() || seesRequests())) return;
+    if (!container || !isAdminUser()) return;
     var overview = container.querySelector('.tma-dash__overview');
     if (!overview) return;
-    var adminDone = !isAdminUser() || overview.querySelector('[data-overview-tab="Recycle Bin"]');
-    var requestsDone = !seesRequests() || overview.querySelector('[data-overview-tab="Requested Files"]');
-    if (adminDone && requestsDone) return;
+    if (overview.querySelector('[data-overview-tab="Recycle Bin"]')) return;
     var current = overview.querySelector('[role="tab"][aria-selected="true"]');
     var tab = (current && current.getAttribute('data-overview-tab')) || 'Overview';
     var toolbar = overview.querySelector('.tma-dash__overview-toolbar');
@@ -1125,9 +1092,6 @@
     }
     if (!overview.querySelector('.tma-dash__overview-recycle-tab')) {
       overview.insertAdjacentHTML('beforeend', renderRecycleTab(tab));
-    }
-    if (!overview.querySelector('.tma-dash__overview-requests-tab')) {
-      overview.insertAdjacentHTML('beforeend', renderRequestsTab(tab));
     }
     // A deep link to an admin tab that arrived before /me resolved was parked
     // on Overview; honour it now that the tab exists.
@@ -1155,7 +1119,6 @@
     if (activeTab === 'Notifications') mountNotificationsTab(container);
     if (activeTab === 'Activity') mountActivityTab(container);
     if (activeTab === 'Recycle Bin') mountRecycleTab(container);
-    if (activeTab === 'Requested Files') mountRequestsTab(container);
     setActiveTab(container, activeTab);
 
     OVERVIEW_CONTAINER = container;

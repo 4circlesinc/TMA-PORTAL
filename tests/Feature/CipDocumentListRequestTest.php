@@ -258,7 +258,7 @@ class CipDocumentListRequestTest extends TestCase
         $this->assertStringEndsWith('Oath of Allegiance.pdf', $oath->file->name);
     }
 
-    /** Overview → Requested Files: what was sent, and how far it has got. */
+    /** Workflows → Requests → Requested Files: what was sent, and how far it has got. */
     public function test_the_requesters_list_shows_progress_per_document(): void
     {
         [$staff, , $application, $oath, $payment] = $this->file();

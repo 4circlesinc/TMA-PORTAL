@@ -1,16 +1,17 @@
 /*
- * Overview → Requested Files.
+ * Requested Files (Workflows → Requests → Requested Files).
  *
  * Every request the signed-in person has sent, and how far each has got:
  * which documents have arrived and which are still outstanding, when each
  * came in, and a click straight to where it was filed. Outstanding first,
- * completed after; refreshed as uploads land (on return to the tab, and
- * every half minute while it is open).
+ * completed after; refreshed as uploads land (on return to the window, and
+ * every half minute while it is on screen).
  *
- * Drawn with the portal's own cards, checklist rows and status chips — the
- * same pieces the application's Documents list uses.
+ * Drawn with the Files table's rows and the checklist rows the application's
+ * Documents list uses. Embedded (opts.embedded), the page around it owns the
+ * tabs, the search and the Show filter, and this draws the table alone.
  *
- * Global: window.TMAOverviewRequests
+ * Global: window.TMAOverviewRequests (the name it was first mounted under).
  */
 (function () {
   'use strict';
@@ -168,7 +169,10 @@
   function render(state) {
     var el = state.el;
     if (!el) return;
-    el.className = 'tma-dash__files tma-dash__files--overview';
+    // The Files table's own scope, so its rows and columns apply; embedded,
+    // the page's own class on the host stays as well.
+    if (state.embedded) el.classList.add('tma-dash__files', 'tma-dash__files--overview');
+    else el.className = 'tma-dash__files tma-dash__files--overview';
 
     var rows = state.rows || [];
     var open = rows.filter(outstanding);
@@ -208,8 +212,9 @@
       && document.activeElement.hasAttribute('data-req-search');
     var caret = focused ? document.activeElement.selectionStart : null;
 
-    el.innerHTML = renderTabs(state, { open: open.length, done: done.length, all: rows.length }) +
-      renderToolbar(state) + body;
+    el.innerHTML = state.embedded
+      ? body
+      : renderTabs(state, { open: open.length, done: done.length, all: rows.length }) + renderToolbar(state) + body;
 
     if (focused) {
       var input = el.querySelector('[data-req-search]');
@@ -222,8 +227,9 @@
     if (!quiet && !state.rows) render(state);
     net().fetchJSON('/portal/files/requests?mine=1&progress=1')
       .then(function (res) {
-        var first = state.rows === null;
-        state.rows = (res && res.requests) || [];
+        var first = !state.loadedAt;
+        state.rows = cache = (res && res.requests) || [];
+        state.loadedAt = Date.now();
         state.error = null;
         if (first) {
           var lead = state.rows.filter(outstanding)[0];
@@ -330,11 +336,20 @@
       'file=' + encodeURIComponent(fileId);
   }
 
-  function mount(el) {
+  /* The last list read, so arriving back on the tab draws it at once. */
+  var cache = null;
+
+  /**
+   * @param {Element} el
+   * @param {{embedded?: boolean, filter?: 'open'|'done'|'all', search?: string}} [opts]
+   */
+  function mount(el, opts) {
     if (!el) return;
+    opts = opts || {};
     var state = el._requestsState;
+    var fresh = !state;
     if (!state) {
-      state = el._requestsState = { el: el, rows: null, error: null, filter: 'open', timer: null, search: '', expanded: {} };
+      state = el._requestsState = { el: el, rows: cache, error: null, filter: 'open', timer: null, search: '', expanded: {}, embedded: false, loadedAt: 0 };
 
       el.addEventListener('input', function (e) {
         if (!e.target.hasAttribute('data-req-search')) return;
@@ -392,7 +407,17 @@
       }, POLL_MS);
     }
 
-    load(state, !!state.rows);
+    if (opts.embedded) {
+      state.embedded = true;
+      if (opts.filter) state.filter = opts.filter;
+      if (typeof opts.search === 'string') state.search = opts.search.trim();
+    }
+
+    // Embedded, the page calls this on every repaint (a keystroke in its
+    // search, a change of filter): draw from what is held, and read again
+    // only when it is getting old — the half-minute poll keeps it current.
+    if (state.rows) render(state);
+    if (fresh || Date.now() - state.loadedAt > 5000) load(state, !!state.rows);
   }
 
   window.TMAOverviewRequests = { mount: mount };

@@ -6927,6 +6927,27 @@ label.tma-portal-check-row:hover {
   margin-top: 0;
 }
 
+/* One line of tabs, as the Overview's: on a phone the four (Waiting on you,
+   Sent by you, All requests, Requested Files) scroll sideways rather than
+   wrapping onto a second row. */
+.tma-portal-page--workflows .tma-tab-group--underline {
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+
+.tma-portal-page--workflows .tma-tab-group--underline::-webkit-scrollbar {
+  display: none;
+}
+
+.tma-portal-page--workflows .tma-tab-group--underline .tma-tab {
+  flex: 0 0 auto;
+}
+
 .tma-portal-wf-body {
   margin-top: 0;
 }

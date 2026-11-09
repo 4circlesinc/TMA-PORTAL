@@ -221,7 +221,7 @@ final class FileRequests
      * asking is the person who needs to send it.
      */
     /**
-     * How far a request has got, for the requester's own list (Overview →
+     * How far a request has got, for the requester's own list (Workflows →
      * Requested Files): each document asked for and whether it arrived, or
      * for a folder request the files that came in, with where each was
      * filed so the row can open it.

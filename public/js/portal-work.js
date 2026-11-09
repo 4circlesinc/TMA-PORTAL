@@ -36,7 +36,28 @@
     { key: 'inbox', label: 'Waiting on you' },
     { key: 'sent', label: 'Sent by you' },
     { key: 'all', label: 'All requests', staffOnly: true },
+    // Upload links staff sent for files and checklist documents, and how far
+    // each has got (overview-requests.js draws the list).
+    { key: 'files', label: 'Requested Files', fileRequests: true },
   ];
+
+  var WF_FILE_STATES = [
+    { value: 'open', label: 'Outstanding' },
+    { value: 'done', label: 'Completed' },
+    { value: 'all', label: 'All' },
+  ];
+
+  /* Staff send file requests, so staff have the tab that tracks them. */
+  function seesFileRequests() {
+    var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
+    if (me && (me.isStaff || me.isAdmin)) return true;
+
+    return isAdminUser();
+  }
+
+  function onFileRequests() {
+    return wf.page === 'requests' && wfActiveTab() === 'files';
+  }
 
   var WF_COMMENT_TABS = [
     { key: 'mine', label: 'Involving you' },
@@ -91,7 +112,7 @@
   var wf = {
     el: null, page: 'requests', tab: 'inbox', commentTab: 'mine',
     commentTabPicked: false,
-    search: '', type: '', state: 'open',
+    search: '', type: '', state: 'open', fileState: 'open',
     items: [], comments: [], counts: null, canSeeAll: false,
     cursor: null, loading: false, loadingMore: false, loaded: false,
     error: null, seq: 0, replyingTo: null, searchTimer: null,
@@ -145,6 +166,7 @@
     // lands too: hiding it made wfActiveTab fall back to Involving you, and
     // the request went out as mine — which is why past comments vanished.
     return all.filter(function (t) {
+      if (t.fileRequests) return wf.page === 'requests' && seesFileRequests();
       if (!t.staffOnly) return true;
       if (wf.canSeeAll) return true;
       return wf.page === 'comments' && t.key === 'all' && isAdminUser();
@@ -181,10 +203,16 @@
 
     var isComments = wf.page === 'comments';
     var isUpdates = wf.page === 'updates';
-    var body = isUpdates ? wfUpdatesBody() : isComments ? wfCommentsBody() : wfRequestsBody();
+    var isFiles = onFileRequests();
+    // Self-managing: the list draws and refreshes itself, so a repaint of the
+    // page around it leaves it alone (data-morph-skip).
+    var body = isUpdates ? wfUpdatesBody() : isComments ? wfCommentsBody()
+      : isFiles ? '<div class="tma-portal-wf-file-requests" data-wfh-file-requests data-morph-skip></div>'
+        : wfRequestsBody();
     var searchLabel = isUpdates ? 'Search by document or person'
       : isComments ? 'Search comments'
-        : 'Search by file name';
+        : isFiles ? 'Search requests'
+          : 'Search by file name';
 
     var html =
       '<div class="tma-portal-page tma-portal-page--workflows">' +
@@ -196,7 +224,15 @@
       '<div class="tma-portal-toolbar__group tma-portal-toolbar__group--search">' +
       ui().searchInput(searchLabel, 'data-wfh-search', wf.search) +
       '</div>' +
-      ((isComments || isUpdates) ? '' :
+      (isFiles
+        ? '<div class="tma-portal-toolbar__group tma-portal-toolbar__group--filters">' +
+          '<div class="tma-portal-field">' +
+          '<span class="tma-portal-field__label">Show</span>' +
+          ui().select(WF_FILE_STATES, wf.fileState, 'data-wfh-file-state', 'Which requested files to show') +
+          '</div>' +
+          '</div>'
+        : '') +
+      ((isComments || isUpdates || isFiles) ? '' :
         '<div class="tma-portal-toolbar__group tma-portal-toolbar__group--filters">' +
         '<div class="tma-portal-field">' +
         '<span class="tma-portal-field__label">Type</span>' +
@@ -217,6 +253,27 @@
     else wf.el.innerHTML = html;
 
     wireWorkflows();
+    wfRevealActiveTab();
+
+    if (isFiles) {
+      var host = wf.el.querySelector('[data-wfh-file-requests]');
+      if (host && window.TMAOverviewRequests) {
+        window.TMAOverviewRequests.mount(host, { embedded: true, filter: wf.fileState, search: wf.search });
+      }
+    }
+  }
+
+  /* On a phone the tab row scrolls sideways; keep the chosen tab in sight
+     (Requested Files, the last of four, is otherwise off the edge). */
+  function wfRevealActiveTab() {
+    var group = wf.el && wf.el.querySelector('[data-wfh-tabs] .tma-tab-group');
+    var active = group && group.querySelector('.tma-tab.is-active, [aria-selected="true"]');
+    if (!group || !active || group.scrollWidth <= group.clientWidth) return;
+
+    var g = group.getBoundingClientRect();
+    var a = active.getBoundingClientRect();
+    if (a.left < g.left) group.scrollLeft -= (g.left - a.left) + 16;
+    else if (a.right > g.right) group.scrollLeft += (a.right - g.right) + 16;
   }
 
   function wfRequestsBody() {
@@ -716,6 +773,17 @@
     opts = opts || {};
     var seq = ++wf.seq;
 
+    // Requested Files reads its own list (/portal/files/requests); there is
+    // no workflow scope for it to ask the server for.
+    if (onFileRequests()) {
+      wf.loading = false;
+      wf.loadingMore = false;
+      wf.loaded = true;
+      wf.error = null;
+      renderWorkflows();
+      return Promise.resolve();
+    }
+
     var path = wf.page === 'comments' ? '/workflows/comments'
       : wf.page === 'updates' ? '/workflows/updates'
         : '/workflows';
@@ -1024,6 +1092,15 @@
         wf.type = type.value;
         wf.cursor = null;
         loadWorkflows();
+      });
+    }
+
+    var fileState = root.querySelector('[data-wfh-file-state]');
+    if (fileState && !fileState._wfWired) {
+      fileState._wfWired = true;
+      fileState.addEventListener('change', function () {
+        wf.fileState = fileState.value;
+        renderWorkflows();
       });
     }
 

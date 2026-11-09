@@ -33,7 +33,7 @@ class FileRequestController extends BaseFilesController
             // Administrators oversee the firm's collection links; everybody
             // else sees the ones they issued.
             ->when(! FileAccess::isAdmin($user), fn ($q) => $q->where('created_by', $user->id))
-            // The requester's own list (Overview → Requested Files): only
+            // The requester's own list (Workflows → Requested Files): only
             // what they sent, administrators included.
             ->when($request->boolean('mine'), fn ($q) => $q->where('created_by', $user->id))
             ->when($request->filled('folder'), function ($q) use ($request) {
