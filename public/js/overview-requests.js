@@ -56,9 +56,10 @@
       : '';
 
     return '<li class="tma-dash__clients-checklist-row">' +
-      '<span class="tma-dash__clients-checklist-label">' + esc(item.label || 'Document') +
-      (item.person ? ' <span class="tma-dash__clients-checklist-optional">' + esc(item.person) + '</span>' : '') +
-      (when ? ' <span class="tma-dash__clients-checklist-optional">' + esc(when) + '</span>' : '') +
+      '<span class="tma-dash__clients-checklist-label">' +
+      '<span class="tma-dash__cc-truncate">' + esc(item.label || 'Document') + '</span>' +
+      (item.person ? '<span class="tma-dash__clients-checklist-optional tma-overview-requests__person">' + esc(item.person) + '</span>' : '') +
+      (when ? '<span class="tma-dash__clients-checklist-optional tma-overview-requests__when">' + esc(when) + '</span>' : '') +
       '</span>' + open + state + '</li>';
   }
 
@@ -91,8 +92,7 @@
         return '<button type="button" class="tma-tab' + (on ? ' is-active' : '') + '" role="tab"' +
           ' data-tab-index="' + i + '" data-tab-key="' + t.key + '" data-req-filter="' + t.key + '"' +
           ' aria-selected="' + on + '" tabindex="' + (on ? 0 : -1) + '">' +
-          '<span class="tma-tab__label">' + esc(t.label) + '</span>' +
-          '<span class="tma-tab__count">' + t.n + '</span>' +
+          '<span class="tma-tab__label">' + esc(t.label) + '<span class="tma-tab__count">' + t.n + '</span></span>' +
           '<span class="tma-tab__indicator" aria-hidden="true"></span></button>';
       }).join('') +
       '</div>';
@@ -119,28 +119,34 @@
     var who = req.recipientName || req.recipientEmail || (req.client && req.client.name) || '—';
     var count = p.total ? p.received + ' of ' + p.total : String(p.received);
 
+    var sent = shortDate(req.createdAt);
+    var meta = [who, count + ' received', sent ? 'Sent ' + sent : ''].filter(Boolean).join(' · ');
+
     var row = '<div class="tma-dash__ctr tma-dash__ctr--body tma-dash__ctr--overview' + (open ? ' tma-dash__ctr--selected' : '') + '"' +
       ' role="row" data-req-row="' + esc(req.id) + '" aria-expanded="' + (open ? 'true' : 'false') + '" tabindex="0">' +
       '<div class="tma-dash__cc tma-dash__cc--filename">' +
       '<img class="tma-overview-requests__caret' + (open ? ' is-open' : '') + '" src="' + TOOL.Caret + '" alt="" width="16" height="16">' +
-      '<span class="tma-dash__cc-truncate">' + esc(req.title || 'Request') + '</span></div>' +
+      '<span class="tma-dash__files-library-copy">' +
+      '<span class="tma-dash__cc-truncate">' + esc(req.title || 'Request') + '</span>' +
+      '<span class="tma-dash__files-library-meta">' + esc(meta) + '</span>' +
+      '</span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--folder"><span class="tma-dash__cc-truncate">' + esc(who) + '</span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--size"><span class="tma-dash__cc-truncate">' + esc(count) + ' received</span></div>' +
-      '<div class="tma-dash__cc tma-dash__cc--date"><img src="' + TOOL.Calendar + '" alt="">' + esc(shortDate(req.createdAt)) + '</div>' +
-      '<div class="tma-dash__cc tma-dash__cc--date"><span class="tma-dash__cc-truncate">' + esc(req.lastUploadAt ? shortDate(req.lastUploadAt) : '—') + '</span></div>' +
+      '<div class="tma-dash__cc tma-dash__cc--date tma-overview-requests__sent"><img src="' + TOOL.Calendar + '" alt=""><span class="tma-dash__cc-truncate">' + esc(sent || '—') + '</span></div>' +
+      '<div class="tma-dash__cc tma-dash__cc--date tma-overview-requests__last"><span class="tma-dash__cc-truncate">' + esc(req.lastUploadAt ? shortDate(req.lastUploadAt) : '—') + '</span></div>' +
       '<div class="tma-dash__cc tma-dash__cc--shared">' + chip(p.statusLabel || 'Waiting', TONES[p.status]) + '</div>' +
       '</div>';
 
     if (!open) return row;
 
-    var meta = [
+    var detailMeta = [
       req.expiresAt && p.status !== 'complete' ? 'Upload by ' + shortDate(req.expiresAt) : null,
       req.client && req.client.name ? 'Filed under ' + req.client.name : null,
     ].filter(Boolean).join(' · ');
 
     return row +
       '<div class="tma-overview-requests__detail" role="row">' +
-      (meta ? '<p class="tma-dash__clients-checklist-empty">' + esc(meta) + '</p>' : '') +
+      (detailMeta ? '<p class="tma-dash__clients-checklist-empty">' + esc(detailMeta) + '</p>' : '') +
       ((p.items || []).length
         ? '<ul class="tma-dash__clients-checklist">' + p.items.map(itemRow).join('') + '</ul>'
         : '<p class="tma-dash__clients-checklist-empty">Nothing has arrived yet.</p>') +
@@ -185,13 +191,13 @@
       : '<p class="tma-dash__overview-empty">' + esc(emptyText) + '</p>';
 
     var body = list.length
-      ? '<div class="tma-dash__ctable tma-dash__ctable--overview" role="table" aria-label="Requested files">' +
+      ? '<div class="tma-dash__ctable tma-dash__ctable--overview tma-dash__ctable--requests" role="table" aria-label="Requested files">' +
         '<div class="tma-dash__ctr tma-dash__ctr--head tma-dash__ctr--overview">' +
         '<div class="tma-dash__cc tma-dash__cc--filename tma-dash__cc--head">Request</div>' +
         '<div class="tma-dash__cc tma-dash__cc--folder tma-dash__cc--head">Sent to</div>' +
         '<div class="tma-dash__cc tma-dash__cc--size tma-dash__cc--head">Progress</div>' +
-        '<div class="tma-dash__cc tma-dash__cc--date tma-dash__cc--head">Sent</div>' +
-        '<div class="tma-dash__cc tma-dash__cc--date tma-dash__cc--head">Last upload</div>' +
+        '<div class="tma-dash__cc tma-dash__cc--date tma-dash__cc--head tma-overview-requests__sent">Sent</div>' +
+        '<div class="tma-dash__cc tma-dash__cc--date tma-dash__cc--head tma-overview-requests__last">Last upload</div>' +
         '<div class="tma-dash__cc tma-dash__cc--shared tma-dash__cc--head">Status</div>' +
         '</div>' +
         list.map(function (r) { return renderRow(r, !!state.expanded[r.id]); }).join('') +

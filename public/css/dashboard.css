@@ -41105,15 +41105,104 @@ span.tma-dash__messages-profile-avatar {
   }
 }
 
-/* Overview → Requested Files: a request row opens onto its documents. */
+/*
+ * Overview → Requested Files: a request row opens onto its documents.
+ *
+ * The Files table's rows and cells, with its own columns: the Files grid is
+ * nine columns wide (name, type, folder, size…) and a request row laid onto
+ * it put the date in the 72px size column, three lines tall. Every cell here
+ * is one line and ellipsises.
+ */
 [data-req-row] { cursor: pointer; }
 .tma-overview-requests__caret { flex: 0 0 16px; opacity: 0.6; transform: rotate(-90deg); transition: transform 0.15s ease; }
 .tma-overview-requests__caret.is-open { transform: none; }
+
+.tma-dash__files--overview .tma-dash__ctable--requests .tma-dash__cc {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.tma-dash__files--overview .tma-dash__ctable--requests .tma-dash__cc--filename .tma-dash__files-library-copy {
+  overflow: hidden;
+}
+
+.tma-dash__files--overview .tma-dash__ctable--requests .tma-dash__cc--shared .tma-portal-status {
+  white-space: nowrap;
+}
+
+@media (min-width: 1025px) {
+  .tma-dash__files--overview .tma-dash__ctable--requests .tma-dash__ctr.tma-dash__ctr--head,
+  .tma-dash__files--overview .tma-dash__ctable--requests .tma-dash__ctr.tma-dash__ctr--body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 128px 132px 132px 136px;
+    align-items: center;
+    width: 100%;
+  }
+}
+
+/* At 1024px and under the compact two-line row lives in
+   dashboard-tma-overrides.css, beside the Files rows it is a variant of. */
+
 .tma-overview-requests__detail {
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
   padding: var(--space-8) var(--space-16) var(--space-16) 44px;
   border-bottom: 0.5px solid var(--color-border-soft);
+  min-width: 0;
 }
+
+.tma-overview-requests__detail > .tma-dash__clients-checklist-empty {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Each document on one line: the name gives way, then who it is for. */
+.tma-overview-requests__detail .tma-dash__clients-checklist-row {
+  flex-wrap: nowrap;
+}
+
+/* display is said outright: on a phone the checklist's label is a two-line
+   clamp box, and here every document is one line. */
+.tma-overview-requests__detail .tma-dash__clients-checklist-label {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: var(--space-8);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.tma-overview-requests__detail .tma-dash__clients-checklist-label > .tma-dash__cc-truncate {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* Who it is for gives way long before what the document is. Scoped to the
+   panel so it outranks the phone checklist's own (later) flex: none. */
+.tma-overview-requests__detail .tma-overview-requests__person {
+  flex: 0 20 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tma-overview-requests__detail .tma-overview-requests__when { flex: 0 0 auto; }
+
+.tma-overview-requests__detail .tma-dash__clients-checklist-row > .tma-portal-link,
+.tma-overview-requests__detail .tma-dash__clients-checklist-row > .tma-portal-status {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+@media (max-width: 767px) {
+  .tma-overview-requests__detail {
+    padding: var(--space-8) var(--space-8) var(--space-16) 28px;
+  }
+
+  .tma-overview-requests__detail .tma-overview-requests__when { display: none; }
+}
+
 @media (prefers-reduced-motion: reduce) { .tma-overview-requests__caret { transition: none; } }
