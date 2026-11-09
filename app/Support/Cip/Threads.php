@@ -1088,8 +1088,8 @@ class Threads
         $url = rtrim(config('app.url'), '/').$path;
         $number = $application->displayNumber();
         $preview = Str::limit($message->body, 140);
-        $title = $number.': new message';
         $facts = Contacts::facts($application);
+        $title = Contacts::label($facts).': new message';
         $from = trim((string) ($message->author_name ?: $author->name)) ?: 'Someone';
         $email = $message->lane === CipApplicationMessage::LANE_PROVIDER;
         // The case group chat the message was copied into (mirrorToCaseChat).

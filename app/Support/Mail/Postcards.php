@@ -5,6 +5,7 @@ namespace App\Support\Mail;
 use App\Mail\Postcard;
 use App\Models\FileItem;
 use App\Models\User;
+use App\Support\Cip\Contacts;
 use App\Support\Cip\Notices;
 use App\Support\Cip\Status;
 use App\Support\Security\CountryList;
@@ -722,6 +723,9 @@ class Postcards
     {
         return [
             'number' => $facts['number'],
+            // The number with the applicant's first name, "10T1234902PT (Vernon)",
+            // for the lines a phone shows before the email is opened.
+            'file' => Contacts::label($facts),
             'applicant' => $facts['applicant'],
             'provider' => $facts['provider'],
             'recipient' => self::firstName($recipientName),

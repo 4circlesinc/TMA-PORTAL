@@ -16,6 +16,8 @@ use Illuminate\Support\Facades\URL;
  *   group message    the group's photo; who wrote, the group, the message
  *   CIP file thread  the chat's photo; who wrote, the group chat, the message
  *   email            the sender's photo; their name, the subject, its start
+ *   activity         the person's photo; their name, what happened, its line
+ *                    (a status change, a comment, a share; no Reply box)
  *
  * Tapping it opens the conversation (a CIP thread's group chat, the email);
  * replying sends a message there, or an email back (NotificationReply).
@@ -52,7 +54,9 @@ final class MessagePush
         }
 
         return self::filled([
-            'kind' => $d['kind'] === 'email' ? 'email' : null,
+            // email and activity change how the phone lays it out; a message
+            // or a group is the default.
+            'kind' => in_array($d['kind'], ['email', 'activity'], true) ? $d['kind'] : null,
             'conversation' => $d['thread'],
             'message' => $d['kind'] === 'email' ? $d['reply']['message'] : null,
             'sender' => $d['sender'],
@@ -64,7 +68,7 @@ final class MessagePush
             'subtitle' => $d['subtitle'],
             'body' => $d['body'],
             'url' => $d['url'],
-            'reply' => self::signedReply($recipient, $d['reply']),
+            'reply' => $d['reply'] !== null ? self::signedReply($recipient, $d['reply']) : null,
         ]);
     }
 
@@ -118,7 +122,7 @@ final class MessagePush
 
         $conversation = $meta['conversationId'] ?? null;
         if (! str_starts_with($type, 'message') || ! is_string($conversation) || $conversation === '') {
-            return null;
+            return self::describeActivity($notification, $actor, $actionUrl);
         }
 
         $title = (string) ($notification['title'] ?? '');
@@ -221,6 +225,56 @@ final class MessagePush
             'groupConversation' => $chat,
             'clientPhoto' => self::clientPhoto($application),
             'reply' => ['kind' => 'cip', 'application' => $application, 'lane' => $lane],
+        ];
+    }
+
+    /**
+     * Anything else a person did: a status change on a file, a comment, a
+     * share. Shown under that person's photo (or their initials) with the
+     * app's mark in the corner, the way a message is, so the reader sees who
+     * it came from before reading it: their name, then the notification's
+     * own title, then its line. There is nothing to reply to, so no Reply
+     * box. Notices the system raised by itself (no person) stay plain.
+     *
+     * @param  array<string, mixed>  $notification
+     * @param  array<string, mixed>  $actor
+     * @return array<string, mixed>|null
+     */
+    private static function describeActivity(array $notification, array $actor, ?string $actionUrl): ?array
+    {
+        $name = trim((string) ($actor['name'] ?? ''));
+        $title = self::oneLine($notification['title'] ?? '');
+        if ($name === '' || ! isset($actor['id']) || $title === '') {
+            return null;
+        }
+
+        // "Ada Admin commented on …" under "Ada Admin" says the name twice.
+        if (mb_stripos($title, $name.' ') === 0) {
+            $rest = trim(mb_substr($title, mb_strlen($name)));
+            $title = $rest !== '' ? mb_strtoupper(mb_substr($rest, 0, 1)).mb_substr($rest, 1) : $title;
+        }
+
+        $message = self::oneLine($notification['message'] ?? '');
+        $subjectType = self::string($notification['subjectType'] ?? null);
+        $subjectId = $notification['subjectId'] ?? null;
+
+        return [
+            'kind' => 'activity',
+            // Stacked by what it is about: one file's notices together.
+            'thread' => $subjectType !== null && $subjectId !== null && $subjectId !== ''
+                ? 'activity:'.mb_strtolower($subjectType).':'.$subjectId
+                : 'activity:'.((string) ($notification['id'] ?? '') ?: md5($title)),
+            'sender' => (string) $actor['id'],
+            'name' => $name,
+            'title' => $name,
+            'subtitle' => $message !== '' ? $title : null,
+            'group' => $message !== '' ? $title : null,
+            'body' => $message !== '' ? $message : $title,
+            'url' => $actionUrl,
+            'photo' => self::string($actor['avatar'] ?? null),
+            'groupConversation' => null,
+            'clientPhoto' => null,
+            'reply' => null,
         ];
     }
 

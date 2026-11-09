@@ -424,6 +424,11 @@ class Contacts
             // the CIP number rather than instead of it (an Add-On's row).
             'internalNumber' => (string) ($application->internal_number ?? ''),
             'applicant' => $name !== null && $name !== '' ? $name : 'Unnamed applicant',
+            // The main applicant's first name as a person would write it,
+            // so a number on a lock screen also says whose file it is.
+            'firstName' => self::firstNameOf(
+                (string) ($applicant?->first_name ?: strtok((string) ($application->client?->name ?? ''), ' ')),
+            ),
             'provider' => $application->provider?->name ?? 'Private client',
             'familySize' => $application->familySize(),
         ];
@@ -458,6 +463,38 @@ class Contacts
             : 'Unnamed applicant';
 
         return $facts;
+    }
+
+    /**
+     * How a notice names the file in a title or a lock-screen line: the
+     * number with the main applicant's first name, "10T1234902PT (Vernon)".
+     * A number alone says nothing to someone who knows the family by name.
+     *
+     * @param  array<string, mixed>  $facts  {@see self::facts()}
+     */
+    public static function label(array $facts): string
+    {
+        $number = (string) ($facts['number'] ?? '');
+        $first = trim((string) ($facts['firstName'] ?? ''));
+
+        return $first !== '' ? $number.' ('.$first.')' : $number;
+    }
+
+    /**
+     * A first name in the case it would be written in a sentence. Names keyed
+     * in capitals ("VERNON") are softened; anything already mixed-case
+     * ("McKenzie") is left exactly as typed.
+     */
+    private static function firstNameOf(string $name): string
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return '';
+        }
+
+        return $name === mb_strtoupper($name) || $name === mb_strtolower($name)
+            ? mb_convert_case(mb_strtolower($name), MB_CASE_TITLE)
+            : $name;
     }
 
     /** The portal path a notice's button opens. */

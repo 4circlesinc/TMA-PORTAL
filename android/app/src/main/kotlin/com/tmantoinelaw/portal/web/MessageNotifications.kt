@@ -26,6 +26,8 @@ import java.util.concurrent.TimeUnit
  *   direct message   the sender's photo, their name, the message
  *   group message    the group's name over "who: message", the group's photo
  *   email            the subject over "sender: start of the email"
+ *   activity         what happened over "who: its line", the person's photo
+ *                    (a file's status, a comment); no Reply, nothing to answer
  *
  * A tap opens the conversation (a CIP thread's group chat, the email); the
  * inline Reply posts to the push's signed reply link with this phone's push
@@ -77,7 +79,7 @@ object MessageNotifications {
             .setStyle(style)
             .setContentTitle(subtitle ?: title)
             .setContentText(if (subtitle != null) "$title: $body" else body)
-            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setCategory(if (msg.optString("kind") == "activity") NotificationCompat.CATEGORY_STATUS else NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
             .setContentIntent(open)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

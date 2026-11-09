@@ -182,6 +182,62 @@ class MessagePushTest extends TestCase
         $this->assertArrayNotHasKey('mutable-content', $body['aps']);
     }
 
+    public function test_a_notice_a_person_caused_shows_their_photo_and_no_reply_box(): void
+    {
+        $officer = $this->user('ada@example.com', ['name' => 'Ada Officer', 'avatar_url' => '/media/avatars/'.self::PHOTO]);
+        $recipient = $this->user('gil@galaxy.example');
+        DeviceToken::create(['user_id' => $recipient->id, 'platform' => DeviceToken::PLATFORM_IOS, 'token' => self::PHONE]);
+
+        Notifier::send([
+            'user' => $recipient,
+            'actor' => $officer,
+            'type' => 'cip.dd-query',
+            'title' => '10T1234902PT (Vernon): DD Query',
+            'message' => 'The Unit has requested additional documents during the background check.',
+            'action_url' => '/citizenship-applications/vernon-francis?tab=folders',
+            'email' => false,
+        ]);
+
+        $body = $this->pushed();
+        // Who, then the file and what happened, then the line: under their photo.
+        $this->assertSame([
+            'title' => 'Ada Officer',
+            'subtitle' => '10T1234902PT (Vernon): DD Query',
+            'body' => 'The Unit has requested additional documents during the background check.',
+        ], $body['aps']['alert']);
+        $this->assertSame(1, $body['aps']['mutable-content'], 'wakes the extension that adds the photo');
+        $this->assertArrayNotHasKey('category', $body['aps'], 'nothing to reply to');
+
+        $msg = json_decode($body['msg'], true);
+        $this->assertSame('activity', $msg['kind']);
+        $this->assertSame('Ada Officer', $msg['name']);
+        $this->assertSame((string) $officer->id, $msg['sender']);
+        $this->assertStringContainsString('/media/avatars/'.self::PHOTO.'/push?expires=', $msg['photo']);
+        $this->assertArrayNotHasKey('reply', $msg);
+        $this->assertSame('/citizenship-applications/vernon-francis?tab=folders', $msg['url']);
+    }
+
+    public function test_a_notice_titled_with_its_author_does_not_say_their_name_twice(): void
+    {
+        $author = $this->user('dana@example.com', ['name' => 'Dana Reed']);
+        $recipient = $this->user('gil@galaxy.example');
+        DeviceToken::create(['user_id' => $recipient->id, 'platform' => DeviceToken::PLATFORM_IOS, 'token' => self::PHONE]);
+
+        Notifier::send([
+            'user' => $recipient,
+            'actor' => $author,
+            'type' => 'cip.comment',
+            'title' => 'Dana Reed commented on Birth certificate · GAL26-00001 (Chen)',
+            'message' => 'The stamp is not legible.',
+            'email' => false,
+        ]);
+
+        $alert = $this->pushed()['aps']['alert'];
+        $this->assertSame('Dana Reed', $alert['title']);
+        $this->assertSame('Commented on Birth certificate · GAL26-00001 (Chen)', $alert['subtitle']);
+        $this->assertSame('The stamp is not legible.', $alert['body']);
+    }
+
     /** @return array{0: Conversation, 1: User, 2: User} */
     private function replyable(): array
     {

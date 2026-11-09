@@ -8,6 +8,8 @@ import UserNotifications
 ///   direct message   the sender's photo; their name, then the message
 ///   group message    the group's photo; who wrote, the group, the message
 ///   email            the sender's photo; their name, the subject, its start
+///   activity         the person's photo; their name, what happened (a file
+///                    and its status, a comment), its line. No Reply box.
 ///
 /// The three-line layout is the one iOS gives a group conversation (more than
 /// one recipient and a group name): the sender's name, then the group's name,
@@ -71,6 +73,9 @@ struct IncomingMessage {
     let photo: URL?
     let groupPhoto: URL?
     let isEmail: Bool
+    /// Something a person did that is not a message: shown under their
+    /// photo the same way, but with nothing to reply to.
+    let isActivity: Bool
     let message: String?
 
     init?(userInfo: [AnyHashable: Any]) {
@@ -87,6 +92,7 @@ struct IncomingMessage {
         self.sender = text("sender") ?? name
         self.name = text("title") ?? name
         self.isEmail = text("kind") == "email"
+        self.isActivity = text("kind") == "activity"
         self.subtitle = text("subtitle") ?? text("group")
         self.body = (fields["body"] as? String) ?? ""
         self.photo = text("photo").flatMap(URL.init(string:))
@@ -112,7 +118,9 @@ struct IncomingMessage {
         mutable.subtitle = subtitle ?? ""
         mutable.body = body
         mutable.threadIdentifier = conversation
-        mutable.categoryIdentifier = "MESSAGE"
+        // The Reply box belongs to messages and emails; an activity opens the
+        // portal where it happened when tapped, and that is all.
+        mutable.categoryIdentifier = isActivity ? "" : "MESSAGE"
 
         let person = INPerson(
             personHandle: INPersonHandle(value: sender, type: .unknown),
@@ -141,12 +149,16 @@ struct IncomingMessage {
                 outgoingMessageType: .outgoingMessageText,
                 content: body,
                 speakableGroupName: INSpeakableString(spokenPhrase: subtitle),
-                conversationIdentifier: isEmail ? "\(conversation)|\(message ?? subtitle)" : conversation,
+                // iOS remembers a conversation's name, so an email or an
+                // activity whose middle line changes is its own conversation.
+                conversationIdentifier: (isEmail || isActivity) ? "\(conversation)|\(message ?? subtitle)" : conversation,
                 serviceName: nil,
                 sender: person,
                 attachments: nil
             )
-            let picture = isEmail ? senderPhoto : (groupPhoto ?? senderPhoto)
+            // An email or an activity is about the person, so the picture is
+            // theirs; a group shows the group's.
+            let picture = (isEmail || isActivity) ? senderPhoto : (groupPhoto ?? senderPhoto)
             if let picture {
                 intent.setImage(INImage(imageData: picture), forParameterNamed: \.speakableGroupName)
             }

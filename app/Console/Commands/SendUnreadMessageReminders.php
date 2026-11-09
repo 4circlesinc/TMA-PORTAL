@@ -6,6 +6,7 @@ use App\Models\CipApplication;
 use App\Models\ConversationParticipant;
 use App\Models\Message;
 use App\Models\User;
+use App\Support\Cip\Contacts;
 use App\Support\Cip\Threads;
 use App\Support\Companies\NotificationEmail;
 use App\Support\Mail\Postcards;
@@ -105,7 +106,7 @@ class SendUnreadMessageReminders extends Command
                 $this->preview($message),
                 $this->linkFor($message, $application),
                 $this->groupLabel($message, $user),
-                $application?->displayNumber(),
+                $application ? Contacts::label(Contacts::facts($application)) : null,
             ));
         }
 

@@ -167,7 +167,11 @@ class ApnsClient
         )];
         if (is_array($message)) {
             $aps['mutable-content'] = 1;
-            $aps['category'] = 'MESSAGE';
+            // An activity (a status change, a comment) gets the person's
+            // photo too, but there is nothing to answer, so no Reply box.
+            if (($message['kind'] ?? null) !== 'activity') {
+                $aps['category'] = 'MESSAGE';
+            }
             if (! empty($message['conversation'])) {
                 $aps['thread-id'] = (string) $message['conversation'];
             }

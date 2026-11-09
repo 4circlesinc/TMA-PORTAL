@@ -24,7 +24,9 @@ class PushService : FirebaseMessagingService() {
         when (data["kind"]) {
             "notification" -> {
                 // A message, group message, CIP file thread or email: a
-                // conversation notification with the photo and a Reply.
+                // conversation notification with the photo and a Reply. An
+                // activity (a status change, a comment) gets the person's
+                // photo the same way, without the Reply.
                 val msg = runCatching { JSONObject(data["msg"] ?: "") }.getOrNull()
                 if (msg != null && msg.optString("conversation").isNotBlank()) {
                     MessageNotifications.show(this, msg)

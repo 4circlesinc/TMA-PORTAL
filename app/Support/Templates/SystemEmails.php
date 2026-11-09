@@ -1264,12 +1264,13 @@ class SystemEmails
     {
         $vars = [
             'number' => 'Application number, or CIP application number once assigned',
+            'file' => 'The number with the main applicant’s first name, e.g. GAL26-00001 (Chen)',
             'applicant' => "Main applicant's name",
             'provider' => 'Service provider',
             'recipient' => 'First name of the person this copy is addressed to, when known',
         ];
         $when = 'The subject keeps the standard CIP filing format and is not editable here.';
-        $sample = ['number' => 'GAL26-00001', 'applicant' => 'Chen Wei', 'provider' => 'Galaxy Consultants', 'recipient' => 'Priya'];
+        $sample = ['number' => 'GAL26-00001', 'file' => 'GAL26-00001 (Chen)', 'applicant' => 'Chen Wei', 'provider' => 'Galaxy Consultants', 'recipient' => 'Priya'];
         $details = ['details' => [['Application', 'GAL26-00001'], ['Applicant', 'Chen Wei'], ['Service provider', 'Galaxy Consultants']]];
 
         // The plain status-change notice, one template per section 22 status so each
@@ -1278,10 +1279,10 @@ class SystemEmails
         // email leaves the others alone. Postcards::cipStatus picks
         // cip-status-<status> and falls back to cip-status.
         $statusCopy = [
-            'preheader' => '{{number}} now stands at {{status}}.',
+            'preheader' => '{{file}} now stands at {{status}}.',
             'eyebrow' => 'CIP Applications',
             'greeting' => self::CIP_HI,
-            'title' => '{{number}}: {{status}}',
+            'title' => '{{file}}: {{status}}',
             'lead' => '{{applicant}}’s application now stands at {{status}}.',
             'body' => '{{applicant}}’s Citizenship by Investment application with {{provider}} is now at **{{status}}**. Open the application in the portal for the current checklist, comments and next step.',
             'button' => 'Open the application',
@@ -1393,10 +1394,10 @@ Children receive a passport and owe the same originals except marriage and divor
                 'sample' => $sample + ['status' => 'Review Application'],
                 'sampleExtras' => $details,
                 'copy' => [
-                    'preheader' => '{{number}}: {{applicant}} is now at {{status}}.',
+                    'preheader' => '{{file}} is now at {{status}}.',
                     'eyebrow' => 'CIP Applications',
                     'greeting' => self::CIP_HI,
-                    'title' => '{{number}} is in review',
+                    'title' => '{{file}} is in review',
                     'lead' => '{{number}} stands at {{status}}.',
                     'body' => 'This Citizenship by Investment file has been assigned for review. Open the application to begin the document assessment for {{applicant}} ({{provider}}).',
                     'button' => 'Open the application',
@@ -1419,10 +1420,10 @@ Children receive a passport and owe the same originals except marriage and divor
                 ],
                 'sampleExtras' => $details,
                 'copy' => [
-                    'preheader' => '{{number}}: {{docsNeed}} an update.',
+                    'preheader' => '{{file}}: {{docsNeed}} an update.',
                     'eyebrow' => 'CIP Applications',
                     'greeting' => self::CIP_HI,
-                    'title' => 'Updates required on {{number}}',
+                    'title' => 'Updates required on {{file}}',
                     'lead' => 'The reviewing officer has assessed {{applicant}}’s documents and sent {{sent}} with notes.',
                     'body' => "Please replace or re-upload each item below. The reviewing officer's reason is next to the document name.\n\n{{documents}}",
                     'button' => 'Upload updated documents',
@@ -1437,10 +1438,10 @@ Children receive a passport and owe the same originals except marriage and divor
                 'sample' => $sample,
                 'sampleExtras' => $details,
                 'copy' => [
-                    'preheader' => '{{number}} is ready to submit, confirm to lock the original package.',
+                    'preheader' => '{{file}} is ready to submit, confirm to lock the original package.',
                     'eyebrow' => 'CIP Applications',
                     'greeting' => self::CIP_HI,
-                    'title' => '{{number}} is ready to submit',
+                    'title' => '{{file}} is ready to submit',
                     'lead' => '{{applicant}}’s file is ready to submit. Confirm submission to lock the original package.',
                     'body' => '{{applicant}}’s file ({{provider}}) is ready to submit. Confirm submission to lock the original package. After that, the originals cannot be replaced; further Unit requests go through Additional Documents.',
                     'button' => 'Confirm submission',
@@ -1455,10 +1456,10 @@ Children receive a passport and owe the same originals except marriage and divor
                 'sample' => $sample,
                 'sampleExtras' => $details,
                 'copy' => [
-                    'preheader' => '{{number}} is ready to apply for the COR, confirm to lock the Certificate of Registration package.',
+                    'preheader' => '{{file}} is ready to apply for the COR, confirm to lock the Certificate of Registration package.',
                     'eyebrow' => 'CIP Applications',
                     'greeting' => self::CIP_HI,
-                    'title' => '{{number}} is ready to apply for the COR',
+                    'title' => '{{file}} is ready to apply for the COR',
                     'lead' => 'Every required Certificate of Registration document on {{applicant}}’s file is ready. Confirm submission to lock the COR package.',
                     'body' => 'Every required COR document on {{applicant}}’s file ({{provider}}) has been accepted. Confirm submission to lock the Certificate of Registration package. After that, those documents cannot be replaced. Additional Documents stays open for anything the Unit asks later.',
                     'button' => 'Confirm submission',
@@ -1473,10 +1474,10 @@ Children receive a passport and owe the same originals except marriage and divor
                 'sample' => $sample,
                 'sampleExtras' => $details,
                 'copy' => [
-                    'preheader' => '{{number}} is non-compliant, the Unit has requested additional information.',
+                    'preheader' => '{{file}} is non-compliant, the Unit has requested additional information.',
                     'eyebrow' => 'CIP Applications',
                     'greeting' => self::CIP_HI,
-                    'title' => '{{number}} is non-compliant',
+                    'title' => '{{file}} is non-compliant',
                     'lead' => 'The Unit has requested additional information on {{applicant}}’s file. Upload the required documents through Additional Documents.',
                     'body' => 'Use Additional Documents on {{applicant}}’s application ({{provider}}). Do not replace files in the original submission package.',
                     'button' => 'Open Additional Documents',
@@ -1491,10 +1492,10 @@ Children receive a passport and owe the same originals except marriage and divor
                 'sample' => $sample,
                 'sampleExtras' => $details,
                 'copy' => [
-                    'preheader' => '{{number}} has a DD query, the Unit has requested additional documents.',
+                    'preheader' => '{{file}} has a DD query, the Unit has requested additional documents.',
                     'eyebrow' => 'CIP Applications',
                     'greeting' => self::CIP_HI,
-                    'title' => '{{number}} has a DD query',
+                    'title' => '{{file}} has a DD query',
                     'lead' => 'The Unit has requested additional documents on {{applicant}}’s file during the background check. Upload them through DD Query Responses in Additional Documents.',
                     'body' => 'Use the DD Query Responses folder on {{applicant}}’s application ({{provider}}). Do not replace files in the original submission package.',
                     'button' => 'Open DD Query Responses',
@@ -1509,10 +1510,10 @@ Children receive a passport and owe the same originals except marriage and divor
                 'sample' => $sample,
                 'sampleExtras' => $details,
                 'copy' => [
-                    'preheader' => 'An appeal has been lodged on {{number}}.',
+                    'preheader' => 'An appeal has been lodged on {{file}}.',
                     'eyebrow' => 'CIP Applications',
                     'greeting' => self::CIP_HI,
-                    'title' => 'An appeal has been lodged on {{number}}',
+                    'title' => 'An appeal has been lodged on {{file}}',
                     'lead' => 'The decision on {{applicant}}’s file is being appealed. Supporting documents go in Appeal Documents.',
                     'body' => 'Use the Appeal Documents folder on {{applicant}}’s application ({{provider}}) for everything the appeal needs. While the file is under appeal that folder is the only one open for uploads, so the bundle that goes to the Unit is exactly what was meant to go.',
                     'button' => 'Open Appeal Documents',
@@ -1527,10 +1528,10 @@ Children receive a passport and owe the same originals except marriage and divor
                 'sample' => $sample,
                 'sampleExtras' => $details,
                 'copy' => [
-                    'preheader' => '{{number}}’s appeal is ready — please confirm.',
+                    'preheader' => 'The appeal on {{file}} is ready — please confirm.',
                     'eyebrow' => 'CIP Applications',
                     'greeting' => self::CIP_HI,
-                    'title' => '{{number}}’s appeal is ready',
+                    'title' => 'The appeal on {{file}} is ready',
                     'lead' => 'The appeal on {{applicant}}’s file is ready to go. Please confirm everything is right on your end.',
                     'body' => 'Check the Appeal Documents folder on {{applicant}}’s application ({{provider}}). If anything is missing or wrong, add it now — once you confirm, the appeal is submitted to the Unit and the bundle is what they receive.',
                     'button' => 'Review the appeal',
@@ -1545,10 +1546,10 @@ Children receive a passport and owe the same originals except marriage and divor
                 'sample' => $sample,
                 'sampleExtras' => $details,
                 'copy' => [
-                    'preheader' => '{{number}}’s appeal has been submitted to the Unit.',
+                    'preheader' => 'The appeal on {{file}} has been submitted to the Unit.',
                     'eyebrow' => 'CIP Applications',
                     'greeting' => self::CIP_HI,
-                    'title' => '{{number}}’s appeal has been submitted',
+                    'title' => 'The appeal on {{file}} has been submitted',
                     'lead' => 'The appeal on {{applicant}}’s file has gone to the Unit. Nothing further is needed for now.',
                     'body' => 'The appeal on {{applicant}}’s application ({{provider}}) is with the Unit. You will be told as soon as they answer it; if they ask for anything in the meantime it goes in Appeal Documents.',
                     'button' => 'Open the application',
@@ -1563,10 +1564,10 @@ Children receive a passport and owe the same originals except marriage and divor
                 'sample' => $sample + ['days' => '180'],
                 'sampleExtras' => $details,
                 'copy' => [
-                    'preheader' => '{{number}} is delayed, {{days}} days with no decision.',
+                    'preheader' => '{{file}} is delayed, {{days}} days with no decision.',
                     'eyebrow' => 'CIP Applications',
                     'greeting' => self::CIP_HI,
-                    'title' => '{{number}} is delayed',
+                    'title' => '{{file}} is delayed',
                     'lead' => '{{days}} days have passed since {{applicant}}’s file was accepted for processing, and no decision has been recorded.',
                     'body' => 'Please review {{applicant}}’s file with {{provider}} and follow up with the Unit. The application stays open until a decision is recorded.',
                     'button' => 'Open the application',
@@ -1597,7 +1598,7 @@ Children receive a passport and owe the same originals except marriage and divor
                 ],
                 'sampleExtras' => ['details' => [['Application', 'GAL26-00001'], ['Applicant', 'Chen Wei'], ['Service provider', 'Galaxy Consultants'], ['Decision', 'Granted']]],
                 'copy' => [
-                    'preheader' => '{{number}} was {{decisionLower}}.',
+                    'preheader' => '{{file}} was {{decisionLower}}.',
                     'eyebrow' => 'CIP Applications',
                     'greeting' => '{{#recipient}}Dear {{recipient}},{{/recipient}}{{^recipient}}Dear Sir/Madam,{{/recipient}}',
                     'title' => '{{letterTitle}}',
@@ -1625,11 +1626,11 @@ Children receive a passport and owe the same originals except marriage and divor
                     'details' => [['Application', 'GAL26-00001'], ['Applicant', 'Chen Wei'], ['From', 'Ada Officer']],
                 ],
                 'copy' => [
-                    'subject' => '{{from}} sent you a new message about application {{number}}',
+                    'subject' => '{{from}} sent you a new message about application {{file}}',
                     'preheader' => '{{from}} sent you a message about {{applicant}}’s application.',
                     'eyebrow' => 'CIP Applications',
                     'greeting' => self::CIP_HI,
-                    'title' => 'New message about application {{number}}',
+                    'title' => 'New message about application {{file}}',
                     'lead' => '{{from}} sent you a message about {{applicant}}’s application.',
                     'button' => 'Read and reply',
                     'footNote' => self::CIP_FOOT,

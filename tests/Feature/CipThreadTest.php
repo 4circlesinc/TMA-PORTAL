@@ -214,13 +214,19 @@ class CipThreadTest extends TestCase
 
         Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($number) {
             return $mail->hasTo('gil@galaxy.example')
-                && $mail->subjectLine === 'Ada Admin sent you a new message about application '.$number
-                && ($mail->payload['title'] ?? null) === 'New message about application '.$number
+                && $mail->subjectLine === 'Ada Admin sent you a new message about application '.$number.' (Chen)'
+                && ($mail->payload['title'] ?? null) === 'New message about application '.$number.' (Chen)'
                 && ($mail->payload['lead'] ?? null) === 'Ada Admin sent you a message about CHEN WEI’s application.'
                 && ($mail->payload['quote'] ?? null) === 'Please send the original.'
                 && ($mail->payload['button']['label'] ?? null) === 'Read and reply'
                 && str_ends_with((string) ($mail->payload['button']['url'] ?? ''), '/citizenship-applications/chen-wei?tab=messages');
         });
+
+        // The bell (and the phone) name whose file it is, not the number alone.
+        $this->assertDatabaseHas('portal_notifications', [
+            'type' => 'cip.message',
+            'title' => $number.' (Chen): new message',
+        ]);
     }
 
     public function test_a_file_sent_in_the_case_chat_emails_about_the_application(): void
@@ -243,7 +249,7 @@ class CipThreadTest extends TestCase
         // it concerns this application, and the button opens its Messages.
         Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($application) {
             return $mail->hasTo('gil@galaxy.example')
-                && $mail->subjectLine === 'Ada Admin sent you a new message about application '.$application->displayNumber()
+                && $mail->subjectLine === 'Ada Admin sent you a new message about application '.$application->displayNumber().' (Chen)'
                 && ($mail->payload['quote'] ?? null) === 'Sent an attachment'
                 && str_ends_with((string) ($mail->payload['button']['url'] ?? ''), '/citizenship-applications/chen-wei?tab=messages');
         });
@@ -274,7 +280,7 @@ class CipThreadTest extends TestCase
 
         Mail::assertQueued(Postcard::class, function (Postcard $mail) use ($application) {
             return $mail->hasTo('gil@galaxy.example')
-                && $mail->subjectLine === 'Reminder: unread message from Ada Admin about application '.$application->displayNumber()
+                && $mail->subjectLine === 'Reminder: unread message from Ada Admin about application '.$application->displayNumber().' (Chen)'
                 && str_ends_with((string) ($mail->payload['button']['url'] ?? ''), '/citizenship-applications/chen-wei?tab=messages');
         });
     }

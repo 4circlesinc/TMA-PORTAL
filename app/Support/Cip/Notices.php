@@ -103,7 +103,7 @@ class Notices
             $confirmed ? 'cip-status' : self::template($to),
             $confirmed ? 'cip.status' : self::bellType($to),
             $actor,
-            $facts['number'].': '.Status::label($to),
+            Contacts::label($facts).': '.Status::label($to),
             self::bellMessage($application, $to, $facts),
             $to,
             path: $path,
@@ -139,7 +139,7 @@ class Notices
         $url = Contacts::url($application);
         $who = $person->fullName();
         $label = PersonStatus::label($to);
-        $title = $facts['number'].': '.$who;
+        $title = Contacts::label($facts).': '.$who;
         $message = $who.' moved from '.PersonStatus::label($from).' to '.$label.'.';
 
         self::fanOut(
@@ -194,7 +194,7 @@ class Notices
             self::template(Status::UPDATE_REQUIRED),
             self::bellType(Status::UPDATE_REQUIRED),
             $actor,
-            $facts['number'].': '.Status::label(Status::UPDATE_REQUIRED),
+            Contacts::label($facts).': '.Status::label(Status::UPDATE_REQUIRED),
             $document->label.' was sent back'.($reason !== '' ? ': '.Str::limit($reason, 140) : '.'),
             Status::UPDATE_REQUIRED,
             path: $path,
@@ -215,7 +215,7 @@ class Notices
         // The commented line, on its person's tab, where its thread opens.
         $path = Contacts::documentPath($document);
         $url = Contacts::documentUrl($document);
-        $title = $author->name.' commented on '.$document->label.' ('.$facts['number'].')';
+        $title = $author->name.' commented on '.$document->label.' · '.Contacts::label($facts);
         $message = Str::limit(trim($body), 140);
 
         self::fanOut(
@@ -246,7 +246,7 @@ class Notices
     {
         $facts = Contacts::facts($application);
         $url = Contacts::url($application);
-        $title = $facts['number'].': appeal requested';
+        $title = Contacts::label($facts).': appeal requested';
         $message = trim((string) $reason) !== ''
             ? Str::limit(trim((string) $reason), 140)
             : $author->name.' asked the firm to appeal this decision.';
@@ -284,7 +284,7 @@ class Notices
         $facts = Contacts::facts($application);
         $url = Contacts::url($application);
         $who = trim(($person->first_name ?? '').' '.($person->last_name ?? '')) ?: 'somebody on the file';
-        $title = $facts['number'].': change requested for '.$who;
+        $title = Contacts::label($facts).': change requested for '.$who;
         $fields = implode(', ', array_keys(PersonEdits::describe($request)));
         $message = $author->name.' asked to change '.($fields !== '' ? $fields : 'these details').'.';
 
@@ -330,7 +330,7 @@ class Notices
     public static function deletionRequested(CipApplication $application, User $author, string $reason): void
     {
         $facts = Contacts::facts($application);
-        $title = $facts['number'].': deletion requested';
+        $title = Contacts::label($facts).': deletion requested';
         $message = $author->name.' asked to delete this application: '.Str::limit(trim($reason), 140);
 
         foreach (Contacts::administrators() as $admin) {
@@ -374,7 +374,7 @@ class Notices
         }
 
         $facts = Contacts::facts($application);
-        $title = $facts['number'].': deletion '.($approved ? 'approved' : 'declined');
+        $title = Contacts::label($facts).': deletion '.($approved ? 'approved' : 'declined');
         $message = trim((string) $note) !== ''
             ? trim((string) $note)
             : ($approved
@@ -418,7 +418,7 @@ class Notices
 
         $facts = Contacts::facts($application);
         $approved = $request->status === CipPersonChangeRequest::STATUS_APPROVED;
-        $title = $facts['number'].': change '.($approved ? 'approved' : 'declined');
+        $title = Contacts::label($facts).': change '.($approved ? 'approved' : 'declined');
         $message = trim((string) $request->decision_note) !== ''
             ? trim((string) $request->decision_note)
             : ($approved

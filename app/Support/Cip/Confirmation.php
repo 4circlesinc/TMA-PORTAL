@@ -261,7 +261,7 @@ class Confirmation
                 $application,
                 $actor,
                 'cip.cor_package_confirmed',
-                $application->displayNumber().' COR package confirmed',
+                Contacts::label(Contacts::facts($application)).': COR package confirmed',
                 $override
                     ? 'An administrator confirmed the Certificate of Registration package on the provider’s behalf. Record the COR submission.'
                     : 'The service provider confirmed the Certificate of Registration package. Record the COR submission.',
