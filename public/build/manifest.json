@@ -1,6 +1,6 @@
 {
-  "css": "app-65c7f463ba7e.css",
-  "js": "app-8ce72938b9c1.js",
+  "css": "app-d4601eb63ee4.css",
+  "js": "app-35967fd4066b.js",
   "sources": {
     "css": [
       "tokens.css",
@@ -131,6 +131,7 @@
       "person-card.js",
       "portal-file-requests.js",
       "save-to-folder.js",
+      "spotlight-tour.js",
       "portal-files.js",
       "call-recordings.js",
       "fee-calculator.js",

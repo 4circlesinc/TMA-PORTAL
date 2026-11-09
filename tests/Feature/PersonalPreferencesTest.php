@@ -41,6 +41,25 @@ class PersonalPreferencesTest extends TestCase
             ->assertJsonPath('dashboardWorkflowStrip', true);
     }
 
+    /** The Version history walkthrough: offered until it has been seen, then never again. */
+    public function test_version_tour_seen_round_trips_and_starts_unseen(): void
+    {
+        $user = $this->user();
+
+        $this->actingAs($user)->getJson('/me/preferences')
+            ->assertOk()
+            ->assertJsonPath('versionTourSeen', false);
+
+        $this->actingAs($user)->putJson('/me/preferences', ['versionTourSeen' => true])
+            ->assertOk()
+            ->assertJsonPath('versionTourSeen', true);
+
+        $this->assertTrue($user->fresh()->preferences['versionTourSeen']);
+
+        $this->actingAs($user)->putJson('/me/preferences', ['versionTourSeen' => 'yes please'])
+            ->assertStatus(422);
+    }
+
     public function test_dashboard_workflow_strip_round_trips(): void
     {
         $user = $this->user();

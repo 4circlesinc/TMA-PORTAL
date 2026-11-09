@@ -457,6 +457,8 @@
     'tma.plugins.list': 'plugins',
     'tma.files.syncNoticeDismissed': 'fileSyncNoticeDismissed',
     'tma.cip.documentSort': 'cipDocumentSort',
+    // portal-files.js: the Version history walkthrough, once seen.
+    'tma.tour.versionHistory': 'versionTourSeen',
   };
 
   /* localStorage only holds strings, but the API is typed. Keys listed here
@@ -486,6 +488,7 @@
     // Without a codec this round-trips as the string "true"/"false", and the
     // column wants a real boolean, the validator rejects the string.
     fileSyncNoticeDismissed: prefBoolCodec(),
+    versionTourSeen: prefBoolCodec(),
     fontScale: prefIntCodec(3),
     historyDays: prefIntCodec(30),
     // The plugin list rides in localStorage as JSON text; the column wants

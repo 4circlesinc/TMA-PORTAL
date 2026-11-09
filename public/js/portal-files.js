@@ -2511,6 +2511,44 @@
     });
   }
 
+  /*
+   * Service-provider training: Version History.
+   *
+   * A provider who has an updated copy of a document tends to upload it as a
+   * new file, which leaves the reviewer two documents and no history. The
+   * viewer's Version history keeps one document with every version in it.
+   * The first time a service provider opens a document they are walked
+   * through it (spotlight-tour.js); anyone can replay it from the Version
+   * history panel. Seen is stored on the account, like the sync notice, so
+   * it is not shown again on the next browser.
+   */
+  var VERSION_TOUR_KEY = 'tma.tour.versionHistory';
+  var versionTourOffered = false;
+
+  function versionTourSeen() {
+    try { if (localStorage.getItem(VERSION_TOUR_KEY) === '1') return true; } catch (e) { /* private mode */ }
+    var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
+    return !!(me && me.preferences && me.preferences.versionTourSeen);
+  }
+
+  function markVersionTourSeen() {
+    var prev = null;
+    try {
+      prev = localStorage.getItem(VERSION_TOUR_KEY);
+      localStorage.setItem(VERSION_TOUR_KEY, '1');
+    } catch (e) { /* the account copy below still records it */ }
+    if (window.TMAPrefs && window.TMAPrefs.push) {
+      try { window.TMAPrefs.push(VERSION_TOUR_KEY, '1', prev); } catch (e) { /* retried on the next change */ }
+    }
+  }
+
+  function isServiceProvider() {
+    var access = window.TMAPortalAccess;
+    if (access && access.isProviderContact) return !!access.isProviderContact();
+    var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
+    return !!(me && me.isProviderContact);
+  }
+
   function openLightbox(file) {
     // Quietly: the close is an implementation detail of reopening, and letting
     // it write the URL would push a fileless entry between the two files and
@@ -4222,14 +4260,17 @@
        * and the alternative, dragging onto the file list behind, adds a
        * separate file to the folder rather than a version of this one.
        */
-      var head = data.canAddVersion
+      var head = (data.canAddVersion
         ? '<div class="tma-portal-viewer__vdrop" data-lb-vdrop>' +
             '<button type="button" class="tma-portal-viewer__btn tma-portal-viewer__version-add" data-lb-newversion>' +
               'Upload new version</button>' +
             '<p class="tma-portal-viewer__vdrop-hint">or drop a file here</p>' +
           '</div>' +
           '<input type="file" hidden data-lb-versionfile>'
-        : '';
+        : '') +
+        (window.TMATour
+          ? '<p class="tma-portal-viewer__vtour"><button type="button" class="tma-portal-link" data-lb-version-tour>How versions work</button></p>'
+          : '');
 
       var viewing = entry(f).viewingVersion;
 
@@ -5746,6 +5787,11 @@
       if (e.target.closest('[data-lb-pdf-zoom-in]')) { pdfZoomIn(current()); return; }
       if (e.target.closest('[data-lb-pdf-zoom-out]')) { pdfZoomOut(current()); return; }
 
+      if (e.target.closest('[data-lb-version-tour]')) {
+        if (lb && lb._startVersionTour) lb._startVersionTour();
+        return;
+      }
+
       var tab = e.target.closest('[data-lb-tab]');
       if (tab) { viewerPrefs.tab = tab.getAttribute('data-lb-tab'); paintPanel(); return; }
 
@@ -6099,7 +6145,154 @@
       openContextMenu(box.right, box.bottom + 4, f, list);
     }
 
+    /*
+     * The walkthrough itself. Every lit control is the real one, and the
+     * steps that open something are done by clicking it (or Next, which
+     * clicks it for the reader). On a phone the Version history button is
+     * folded away, so the route there is the details button and its
+     * Versions tab instead.
+     */
+    function versionsShowing() {
+      var panel = lb && lb.querySelector('[data-lb-panel]');
+      return !!(panel && !panel.hidden && viewerPrefs.tab === 'versions');
+    }
+
+    function panelShowing() {
+      var panel = lb && lb.querySelector('[data-lb-panel]');
+      return !!(panel && !panel.hidden);
+    }
+
+    function toolbarVersionsButton() {
+      var btn = lb && lb.querySelector('.tma-portal-viewer__tools [data-lb-act="versions"]');
+      return btn && btn.offsetParent !== null ? btn : null;
+    }
+
+    function openVersionsForTour() {
+      if (!lb || versionsShowing()) return;
+      viewerPrefs.tab = 'versions';
+      viewerPrefs.panel = true;
+      var panel = lb.querySelector('[data-lb-panel]');
+      if (panel) panel.hidden = false;
+      var head = lb.querySelector('.tma-portal-viewer__head');
+      if (head) head.outerHTML = viewerHead(current());
+      paintPanel();
+      paintCommentsPanel();
+    }
+
+    function startVersionTour() {
+      if (!window.TMATour || !lb) return;
+      var scope = lb;
+      // The route is settled now, so "Step 3 of 6" does not turn into
+      // "3 of 5" as panels open: a desk opens Version history from the
+      // toolbar, a phone from the details panel's Versions tab, and a reader
+      // already looking at the versions skips straight to them.
+      var desk = !!toolbarVersionsButton();
+      var already = versionsShowing();
+      var panelOpen = panelShowing();
+      var verb = desk ? 'Click' : 'Tap';
+
+      window.TMATour.start([
+        {
+          title: 'Updating a document? Use Version history',
+          body: '<p>Every document here keeps its own history. When you have an updated copy, ' +
+            'add it to the document you already uploaded as a <strong>new version</strong> — ' +
+            'not as a separate file.</p>',
+          nextLabel: 'Show me how',
+        },
+        {
+          target: '.tma-portal-viewer__identity',
+          title: 'Why it matters',
+          body: '<p>The reviewer sees one document with its whole history, instead of two copies to compare.</p>' +
+            '<p>Nothing is replaced or lost: the earlier version stays and can still be opened, downloaded or restored.</p>',
+          placement: 'bottom',
+        },
+        {
+          target: function () { return toolbarVersionsButton(); },
+          skip: function () { return !desk || already; },
+          title: 'Open Version history',
+          body: '<p>This button opens the document’s versions. <strong>Click it</strong> to carry on.</p>',
+          action: true,
+          placement: 'bottom',
+        },
+        {
+          target: '.tma-portal-viewer__tools [data-lb-act="panel"]',
+          skip: function () { return desk || already || panelOpen; },
+          title: 'Open the document details',
+          body: '<p>Tap the <strong>details</strong> button to open the panel that holds the versions.</p>',
+          action: true,
+        },
+        {
+          target: '.tma-portal-viewer__tabs [data-lb-tab="versions"]',
+          skip: function () { return desk || already; },
+          before: function () { if (!panelShowing()) openVersionsForTour(); },
+          title: 'Choose Versions',
+          body: '<p>Tap <strong>Versions</strong>.</p>',
+          action: true,
+        },
+        {
+          target: '[data-lb-vdrop]',
+          before: function () { openVersionsForTour(); },
+          wait: 4000,
+          title: 'Upload new version',
+          body: '<p>' + verb + ' <strong>Upload new version</strong>' + (desk ? ', or drop the updated file onto this box' : '') + '.</p>' +
+            '<p>You’ll be asked for a short note on what changed — the reviewer reads it beside the version.</p>',
+          placement: 'left',
+        },
+        {
+          target: ['.tma-portal-viewer__version.is-current', '[data-lb-versions]'],
+          before: function () { openVersionsForTour(); },
+          wait: 4000,
+          optional: true,
+          title: 'Every version is recorded',
+          body: '<p>Each version is listed with its number, who uploaded it, when, and its note. ' +
+            'The newest is marked <strong>Current</strong>.</p>',
+          placement: 'left',
+        },
+        {
+          title: 'That’s it',
+          body: '<p>When you upload an updated copy here, it becomes the next version — v2, v3 and so on — ' +
+            'and is marked Current. The previous version stays in the history with its date and who uploaded it, ' +
+            'so nothing is replaced or lost.</p>' +
+            '<p>You can see this again any time from <strong>How versions work</strong> in Version history.</p>',
+          nextLabel: 'Got it',
+        },
+      ], {
+        scope: scope,
+        // A step can lead to the upload dialog; the tour steps aside for it.
+        pauseWhen: function () { return !!document.querySelector('.tma-portal-modal'); },
+        onEnd: function () { markVersionTourSeen(); },
+      });
+    }
+
+    /* Offered once per visit, the first time a service provider opens a
+       document, and only until they have seen or skipped it. */
+    function maybeStartVersionTour() {
+      if (versionTourOffered || !window.TMATour || !isServiceProvider() || versionTourSeen()) return;
+      versionTourOffered = true;
+
+      // This browser may not have the account's copy yet (a document opened
+      // straight from a link, before preferences load): ask the account.
+      var asked = net() && net().fetchJSON
+        ? net().fetchJSON('/me/preferences')
+          .then(function (p) { return !!(p && p.versionTourSeen); })
+          .catch(function () { return false; })
+        : Promise.resolve(false);
+
+      asked.then(function (seen) {
+        if (seen) {
+          try { localStorage.setItem(VERSION_TOUR_KEY, '1'); } catch (e) { /* asked again next visit */ }
+          return;
+        }
+        setTimeout(function () {
+          if (lb && lb.isConnected && !window.TMATour.isRunning()) startVersionTour();
+        }, 700);
+      });
+    }
+
+    lb._startVersionTour = startVersionTour;
+
     paintShell();
+    maybeStartVersionTour();
 
     /* When the item was opened from outside the File Library (e.g. cip-intake's
      * "Open filed document") it arrives as a bare { id } stub with no category,

@@ -82,6 +82,12 @@ class PreferencesController extends Controller
          * turning it off gives the arrangement back untouched.
          */
         'cipDocumentSort' => 'manual',
+        /*
+         * The Version history walkthrough a service provider is shown the
+         * first time they open a document, once they have seen or skipped
+         * it. On the account so it is not offered again on the next browser.
+         */
+        'versionTourSeen' => false,
     ];
 
     private const RULES = [
@@ -113,6 +119,7 @@ class PreferencesController extends Controller
         'fileSyncNoticeDismissed' => ['boolean'],
         'dashboardWorkflowStrip' => ['boolean'],
         'cipDocumentSort' => ['string', 'in:manual,alpha'],
+        'versionTourSeen' => ['boolean'],
         // Nested toast prefs, validated + cleaned by ToastSettings.
         'toasts' => ['array'],
         'toasts.enabled' => ['boolean'],
@@ -206,7 +213,7 @@ class PreferencesController extends Controller
         $current = $user->preferences ?? [];
         $booleans = [
             'autoTimezone', 'calendarSidebarOpen', 'notifyAlwaysEmail',
-            'notifyProviderCopies', 'dashboardWorkflowStrip',
+            'notifyProviderCopies', 'dashboardWorkflowStrip', 'versionTourSeen',
         ];
         foreach ($data as $key => $value) {
             if ($key === 'toasts' || $key === 'notifyProviderCopies' || $key === 'cipCopies') {
