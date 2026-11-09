@@ -158,24 +158,10 @@
 
     syncLastBusy = busy.length > 0;
 
-    var pausedLibs = (data.connections || []).filter(function (c) { return c.importsPaused; });
-
-    // Finished since last time: say so briefly, then get out of the way.
+    // Finished since last time: say so briefly, then get out of the way. A
+    // paused library is a choice somebody made, not news, so it gets no card;
+    // Settings → Background Operations shows it.
     if (!busy.length && !failed.length) {
-      if (pausedLibs.length && !syncDismissed) {
-        ensureSyncPanel();
-        delete syncPanel.dataset.done;
-        var p = pausedLibs[0];
-        paintSyncPanel(
-          (pausedLibs.length === 1 ? p.name : 'Libraries') + ' paused',
-          'Resume in Settings → Background Operations.',
-          false,
-          false,
-          null,
-          true
-        );
-        return;
-      }
       if (syncPanel && !syncPanel.dataset.done) {
         syncPanel.dataset.done = '1';
         paintSyncPanel('Library up to date', '', false, true, 100);

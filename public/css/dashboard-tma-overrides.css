@@ -1579,6 +1579,134 @@ body::-webkit-scrollbar,
   .tma-portal-table:not(.tma-cip-table) td.tma-portal-cell--tight {
     grid-column: 1 / -1;
   }
+
+  /* Document requirements. The two-column card stacked seven tick boxes two
+     to a row, a screen of "Required / Pre / Post…" before the reader learnt
+     which document it was, with the name at the bottom and its actions
+     after. Each requirement is now its name first, the seven ticks in one
+     row under it, each captioned like its desktop column, and the actions
+     along the foot. */
+  .tma-portal-table.tma-portal-table--cipdocs:not(.tma-cip-table) tbody tr {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: var(--space-10) 2px;
+    padding: var(--space-12);
+  }
+
+  /* The sheet's fixed column widths (4.25rem a tick) would overflow seven
+     to a row; the grid sizes them here. */
+  .tma-portal-table.tma-portal-table--cipdocs:not(.tma-cip-table) tbody tr td {
+    width: auto;
+    min-width: 0;
+  }
+
+  .tma-portal-table.tma-portal-table--cipdocs:not(.tma-cip-table) tbody tr td.tma-portal-cell--wrap {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    font-size: var(--text-size-14);
+    line-height: 20px;
+  }
+
+  .tma-portal-table.tma-portal-table--cipdocs:not(.tma-cip-table) tbody tr td.tma-portal-cell--wrap::before {
+    display: none;
+  }
+
+  .tma-portal-table.tma-portal-table--cipdocs:not(.tma-cip-table) tbody tr td.tma-portal-table__check {
+    grid-row: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-4);
+    min-width: 0;
+    text-align: center;
+  }
+
+  /* A retired requirement has no ticks to show, only their captions. */
+  .tma-portal-table.tma-portal-table--cipdocs:not(.tma-cip-table) tbody tr td.tma-portal-table__check:empty {
+    display: none;
+  }
+
+  .tma-portal-table.tma-portal-table--cipdocs:not(.tma-cip-table) tbody tr td.tma-portal-table__check::before {
+    margin: 0;
+    font-size: 10px;
+    line-height: 12px;
+    white-space: nowrap;
+  }
+
+  .tma-portal-table.tma-portal-table--cipdocs:not(.tma-cip-table) tbody tr td:last-child {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    padding-top: var(--space-8);
+    border-top: 1px solid var(--color-overlay-4);
+  }
+
+  .tma-portal-table.tma-portal-table--cipdocs:not(.tma-cip-table) tbody tr td:last-child::before {
+    display: none;
+  }
+
+  .tma-portal-table.tma-portal-table--cipdocs:not(.tma-cip-table) tbody tr td:last-child:empty {
+    display: none;
+  }
+
+  .tma-portal-table.tma-portal-table--cipdocs:not(.tma-cip-table) .tma-portal-row-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-4);
+  }
+
+  /* The key reads one entry to a line rather than two squeezed columns. */
+  .tma-portal-cipdocs-key {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Settings rows: a label and whatever sits beside it (a switch, a time,
+     Retry and Dismiss). They never wrapped, so anything wider than the space
+     left by the label ran off the screen: Background Operations' failed jobs
+     lost their Dismiss button past the right edge. A label and a switch
+     still share a line; a cluster that does not fit drops under the label,
+     kept to the right. */
+  .tma-portal-toggle-row {
+    flex-wrap: wrap;
+    row-gap: var(--space-8);
+  }
+
+  .tma-portal-toggle-row > * {
+    min-width: 0;
+  }
+
+  .tma-portal-toggle-row__label {
+    flex: 1 1 180px;
+    overflow-wrap: anywhere;
+  }
+
+  .tma-portal-toggle-row > :not(.tma-portal-toggle-row__label) {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    margin-left: auto;
+  }
+
+  /* A connected source's address or detail breaks instead of sliding under
+     its switch. */
+  .tma-portal-connector {
+    gap: var(--space-12);
+    padding: var(--space-12);
+  }
+
+  .tma-portal-connector__name,
+  .tma-portal-connector__desc {
+    overflow-wrap: anywhere;
+  }
+
+  /* No settings field wider than the phone. */
+  .tma-portal-admin__content input:not([type="checkbox"]):not([type="radio"]),
+  .tma-portal-admin__content select,
+  .tma-portal-admin__content textarea {
+    max-width: 100%;
+  }
+
+  .tma-portal-admin__content .tma-portal-note,
+  .tma-portal-admin__content .tma-portal-subtitle {
+    overflow-wrap: anywhere;
+  }
 }
 
 /* ── Clients / providers / contacts ctable cards: cells that never got a
@@ -2304,12 +2432,6 @@ body::-webkit-scrollbar,
     padding-left: calc(24px + var(--space-8));
   }
 
-  /* The line names the person, and the icon says what kind of event it is. */
-  .tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--user,
-  .tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--overview .tma-dash__cc--module {
-    display: none;
-  }
-
   .tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--head {
     display: none;
   }
@@ -2317,6 +2439,223 @@ body::-webkit-scrollbar,
   /* Nothing waits for a hover on a phone. */
   .tma-dash__activity--overview .tma-dash__row-more {
     opacity: 1;
+  }
+}
+
+/* ── The activity log on touch widths: the desktop row, stacked ─────────
+ *
+ * Supersedes the two-line list above for the log itself. The desktop log
+ * reads across: what happened, who, the module, when. Hiding who and the
+ * module left a phone reading "Changed status to Assigned" with no idea by
+ * whom, and nothing like the log on a computer. Each entry says the same four
+ * things, in the same order, stacked:
+ *
+ *   [icon] What happened, wrapping                       [⋯]
+ *          details · where
+ *          (face) Who   [Module]   when
+ *
+ * Flex with wrap rather than a grid: who, module and when are three cells of
+ * the row, and wrapping lines them up under the sentence. The cells carry
+ * `html body` and the body-row class because the generic ctable card rules
+ * they replace are written with stacked :has() and outrank anything shorter.
+ */
+.tma-dash__actlog-filter-panel[hidden] {
+  /* Its display: flex outranked the hidden attribute, so the filters stood
+     open on every visit with the button saying they were shut. */
+  display: none !important;
+}
+
+@media (max-width: 1024px) {
+  .tma-dash__actlog .tma-dash__ctable--overview {
+    padding: var(--space-4) var(--space-12);
+    gap: 0;
+  }
+
+  html body .tma-dash__actlog.tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--body.tma-dash__ctr--overview.tma-dash__actlog-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--space-6) var(--space-8);
+    min-height: 0;
+    margin: 0;
+    padding: var(--space-12) 0;
+    border: none;
+    border-bottom: 1px solid var(--color-overlay-4);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  html body .tma-dash__actlog.tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--body.tma-dash__actlog-row .tma-dash__cc {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  /* Line 1: the icon and what happened, the row menu at the far right. */
+  html body .tma-dash__actlog.tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--body.tma-dash__actlog-row .tma-dash__cc--activity {
+    order: 1;
+    flex: 1 1 calc(100% - 40px);
+    align-items: flex-start;
+    gap: var(--space-10);
+  }
+
+  html body .tma-dash__actlog.tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--body.tma-dash__actlog-row .tma-dash__overview-file-icon {
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+  }
+
+  html body .tma-dash__actlog.tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--body.tma-dash__actlog-row .tma-dash__actlog-desc {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  html body .tma-dash__actlog.tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--body.tma-dash__actlog-row .tma-dash__actlog-desc > .tma-dash__cc-truncate {
+    display: block;
+    overflow: visible;
+    font-size: var(--text-size-14);
+    line-height: 20px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  html body .tma-dash__actlog.tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--body.tma-dash__actlog-row .tma-dash__actlog-where {
+    font-size: var(--text-size-12);
+    line-height: 16px;
+    color: var(--color-text-secondary);
+  }
+
+  html body .tma-dash__actlog.tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--body.tma-dash__actlog-row .tma-dash__cc--actions {
+    order: 2;
+    flex: 0 0 32px;
+    justify-content: flex-end;
+  }
+
+  /* Line 2: who, the module, when, lined up under the sentence. */
+  html body .tma-dash__actlog.tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--body.tma-dash__actlog-row .tma-dash__cc--user,
+  html body .tma-dash__actlog.tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--body.tma-dash__actlog-row .tma-dash__cc--module,
+  html body .tma-dash__actlog.tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--body.tma-dash__actlog-row .tma-dash__cc--date {
+    display: flex;
+    grid-column: auto;
+    grid-row: auto;
+    font-size: var(--text-size-12);
+    line-height: 16px;
+    color: var(--color-text-secondary);
+  }
+
+  html body .tma-dash__actlog.tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--body.tma-dash__actlog-row .tma-dash__cc--user {
+    order: 3;
+    flex-direction: row;
+    gap: var(--space-6);
+    max-width: 45%;
+    margin-left: 38px;
+  }
+
+  html body .tma-dash__actlog.tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--body.tma-dash__actlog-row .tma-dash__cc--user img,
+  html body .tma-dash__actlog.tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--body.tma-dash__actlog-row .tma-dash__actlog-system-chip {
+    flex: 0 0 18px;
+    width: 18px;
+    height: 18px;
+  }
+
+  html body .tma-dash__actlog.tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--body.tma-dash__actlog-row .tma-dash__actlog-system-chip img {
+    width: 11px;
+    height: 11px;
+  }
+
+  html body .tma-dash__actlog.tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--body.tma-dash__actlog-row .tma-dash__cc--user .tma-dash__cc-truncate {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--text-size-13);
+    font-weight: 500;
+    color: var(--color-text-primary);
+  }
+
+  html body .tma-dash__actlog.tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--body.tma-dash__actlog-row .tma-dash__cc--module {
+    order: 4;
+  }
+
+  html body .tma-dash__actlog.tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--body.tma-dash__actlog-row .tma-dash__cc--date {
+    order: 5;
+    padding-left: 0;
+    gap: var(--space-4);
+    white-space: nowrap;
+  }
+
+  html body .tma-dash__actlog.tma-dash__activity--overview .tma-dash__ctable--overview .tma-dash__ctr--body.tma-dash__actlog-row .tma-dash__cc--date img {
+    display: none;
+  }
+
+  /* A row's details, opened from its menu: label over value, so a long value
+     (a change set, an address) wraps instead of pushing the page sideways. */
+  .tma-dash__actlog .tma-dash__actlog-detail {
+    padding: 0 0 var(--space-12) 38px;
+  }
+
+  .tma-dash__actlog .tma-dash__actlog-detail-line {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-4) 0;
+    font-size: var(--text-size-12);
+  }
+
+  .tma-dash__actlog .tma-dash__actlog-detail-line code,
+  .tma-dash__actlog .tma-dash__actlog-detail-line a {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  /* The filters two to a row at full width, not a strip of fixed 140px
+     boxes running off the side. */
+  .tma-dash__actlog .tma-dash__actlog-filter-panel {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: end;
+  }
+
+  .tma-dash__actlog .tma-dash__actlog-field select,
+  .tma-dash__actlog .tma-dash__actlog-field input {
+    min-width: 0;
+    width: 100%;
+  }
+
+  /* An application's own Activity tab: the time under the sentence, not a
+     column squeezing the sentence into a strip a few words wide. */
+  .tma-dash__cip-activity-row {
+    grid-template-columns: 28px minmax(0, 1fr);
+    align-items: start;
+    gap: 2px var(--space-10);
+    padding: var(--space-10) 0;
+  }
+
+  .tma-dash__cip-activity-face {
+    grid-row: 1 / span 2;
+    width: 28px;
+    height: 28px;
+  }
+
+  .tma-dash__cip-activity-what {
+    line-height: 20px;
+    overflow-wrap: anywhere;
+  }
+
+  .tma-dash__cip-activity-when {
+    grid-column: 2;
+    white-space: normal;
   }
 }
 

@@ -154,6 +154,7 @@
     var card = cards[key];
     if (!card || !card.el) return;
     card.dismissed = true;
+    card.watched = false;
     card.pendingUntil = 0;
     card.el.classList.add('tma-sync-toast--closing');
     (function (el) {
@@ -164,7 +165,7 @@
 
   function cardFor(key) {
     return cards[key] || (cards[key] = {
-      el: null, minimized: false, dismissed: false, doneTimer: null, pendingUntil: 0,
+      el: null, minimized: false, dismissed: false, doneTimer: null, pendingUntil: 0, watched: false,
     });
   }
 
@@ -187,6 +188,18 @@
       return;
     }
 
+    // Paused is a choice somebody made, not news: never a card for it. Its
+    // state lives on Settings → Background Operations.
+    if (s.state === 'paused' || s.importsPaused) {
+      if (card.el) dismiss(key);
+      return;
+    }
+
+    // Background work stays in the background. A card is only for a run the
+    // reader started here (watch()): what the server happens to be syncing
+    // when the portal opens is not worth a toast on every load.
+    if (!card.watched) return;
+
     // A run started from this page is queued, not running yet: keep the card
     // saying "syncing" until the server confirms one, or the grace runs out.
     if (card.pendingUntil) {
@@ -208,9 +221,9 @@
       }
     }
 
-    // Only surface done/error/paused for a service we watched syncing, a
-    // mailbox that finished importing last week doesn't need a toast on every load.
-    if (!card.el && s.state !== 'syncing' && s.state !== 'paused') return;
+    // Only surface done/error for a service we watched syncing, a mailbox
+    // that finished importing last week doesn't need a toast on every load.
+    if (!card.el && s.state !== 'syncing') return;
 
     if (!card.el) card.el = buildCard(key);
     var el = card.el;
@@ -265,10 +278,9 @@
     });
   }
 
-  function anyPaused(data) {
-    if (data.importsPaused) return true;
-    return Object.keys(SERVICES).some(function (key) {
-      return data[key] && (data[key].state === 'paused' || data[key].importsPaused);
+  function anyWatched() {
+    return Object.keys(cards).some(function (key) {
+      return cards[key].watched;
     });
   }
 
@@ -281,9 +293,10 @@
   /* Smartsheet document import can run for hours; the short lifetime that
      covers mailbox/calendar first-connect must not kill that card mid-run. */
   function shouldKeepPolling(data) {
+    // Nothing on screen to keep current: the loop has no one to report to.
+    if (!anyWatched()) return false;
     if (data.smartsheet && data.smartsheet.state === 'syncing') return true;
     if (data.libraries && data.libraries.state === 'syncing') return true;
-    if (anyPaused(data)) return true;
     if (anyPending()) return true;
     return anySyncing(data) && Date.now() - startedAt < MAX_LIFETIME_MS;
   }
@@ -338,6 +351,7 @@
 
     var card = cardFor(key);
     card.dismissed = false;
+    card.watched = true;
     card.pendingUntil = 0;
     if (card.doneTimer) { clearTimeout(card.doneTimer); card.doneTimer = null; }
 
@@ -352,21 +366,13 @@
     poll();
   }
 
-  function boot() {
-    if (!document.body) return;
-    // No page paints from this: the first poll waits for the shell to go
-    // quiet. watch() still polls at once for a sync the reader just started,
-    // and then this one has nothing left to start.
-    var first = function () { if (!timer && !startedByWatch) poll(); };
-    if (window.TMABoot && window.TMABoot.afterIdle) window.TMABoot.afterIdle(first);
-    else first();
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
-  } else {
-    boot();
-  }
+  /*
+   * No poll at boot. Opening the portal used to ask what was syncing and put
+   * a card up for it, "Syncing email…" on every launch, "Email paused" for a
+   * sync someone had paused on purpose. Background work stays in the
+   * background; Settings → Background Operations is where an administrator
+   * watches it. watch() still follows a run the reader starts.
+   */
 
   window.TMASyncToasts = {
     poll: poll,

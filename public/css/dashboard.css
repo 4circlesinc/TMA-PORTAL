@@ -18158,6 +18158,88 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   -webkit-user-select: none;
 }
 
+/* ── Highlighting a message's words ──────────────────────────────────────
+ *
+ * A message's text can be highlighted and copied in part (messages.js,
+ * "Highlighting part of a message"). The time and ticks stay out of a
+ * highlight, so dragging across a few bubbles copies what was said, not
+ * "10:42 PM" after every line. */
+.tma-dash__messages-bubble-time {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* A press-and-hold on a phone opens the message menu; the system's own
+   long-press selection would open on top of it. */
+.tma-dash__messages-bubble-row.is-pressing .tma-dash__messages-bubble,
+.tma-dash__messages-bubble-row.is-pressing .tma-dash__messages-bubble-copy {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Select text: this one message's words are open to the selection handles. */
+.tma-dash__messages-bubble-row.is-selecting .tma-dash__messages-bubble-copy {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+.tma-dash__messages-bubble-row.is-selecting .tma-dash__messages-bubble-track {
+  touch-action: auto;
+}
+
+.tma-dash__messages-bubble-row.is-selecting .tma-dash__messages-bubble {
+  box-shadow: 0 0 0 2px var(--color-primary, #136da0);
+}
+
+/* The assistant's button sits where the bar's Done is; it steps aside
+   while words are being picked. */
+body:has(.tma-dash__messages-select-bar) .tma-bespoke:not(.is-open) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tma-dash__messages-select-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin: 0 var(--space-12) var(--space-8);
+  padding: var(--space-6) var(--space-6) var(--space-6) var(--space-14, 14px);
+  border: 0.5px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+  background: var(--color-white);
+  box-shadow: var(--shadow-popup);
+}
+
+.tma-dash__messages-select-bar-hint {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-size-13);
+  line-height: 18px;
+  color: var(--color-text-secondary);
+}
+
+.tma-dash__messages-select-bar-btn {
+  appearance: none;
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 var(--space-14, 14px);
+  border: 0;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--color-hover);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: var(--text-size-13);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tma-dash__messages-select-bar-btn--primary {
+  background: var(--color-primary, #136da0);
+  color: #fff;
+}
+
 .tma-dash__messages-chat-body.is-swipe-dragging {
   overflow: hidden;
   touch-action: none;
@@ -24882,6 +24964,55 @@ a.tma-dash__clients-edit-btn--accent:visited {
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
+  }
+
+  /* The application form scrolls with the page (.tma-dash__clients-page--flowing
+     takes the height clamps off the whole chain for that). The two rules above
+     clipped the shell's main region and the view on a phone, so on a phone
+     the form ran off the bottom of a page that would not move: creating an
+     application could not scroll past the first few fields. Here the main
+     region is the scroller, as it is on a desktop. */
+  .tma-dash--clients .tma-dash__main:has(.tma-dash__clients-page--flowing) {
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tma-dash--clients .tma-dash__view[data-view="clients"]:not([hidden]):has(.tma-dash__clients-page--flowing) {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  /* The way out stays in reach while the form scrolls: its head (back,
+     title, Cancel and Add) pins under the app's header instead of scrolling
+     away with the first field. */
+  .tma-dash--clients .tma-dash__main:has(.tma-dash__clients-page--flowing) .tma-dash__main-head {
+    position: sticky;
+    /* Measured inside the main region's top padding, which already clears
+       the app's header. */
+    top: 0;
+    z-index: 5;
+    margin-left: calc(-1 * var(--dash-mobile-gutter, 16px));
+    margin-right: calc(-1 * var(--dash-mobile-gutter, 16px));
+    padding: var(--space-8) var(--dash-mobile-gutter, 16px);
+    background: var(--color-white);
+  }
+
+  /* An 18px arrow is not something a thumb finds: a full 44px target, drawn
+     where the arrow always was. */
+  .tma-dash__clients-back-arrow {
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    margin: -13px var(--space-4) -13px -13px;
+  }
+
+  .tma-dash__clients-back-arrow img {
+    width: 22px;
+    height: 22px;
+    opacity: 0.8;
   }
 
   .tma-dash--clients .tma-dash__footer {
@@ -40438,6 +40569,52 @@ span.tma-dash__messages-profile-avatar {
   border: solid #fff;
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
+}
+
+/* Phone: Status, Assigned to, Service provider and the unread box on one
+   line. The box drops its words (its aria-label still names it) and the
+   dropdowns give up width before anything wraps. */
+@media (max-width: 767px) {
+  .tma-dash__toolbar-filters {
+    flex-wrap: nowrap;
+    gap: 6px;
+    width: 100%;
+  }
+
+  .tma-dash__toolbar-filters .tma-dash__filter-drop {
+    flex: 0 1 auto;
+    min-width: 0;
+    gap: 2px;
+    padding: 0 var(--space-4, 4px);
+  }
+
+  /* "Status" is short; it keeps its word while the longer two give way. */
+  .tma-dash__toolbar-filters .tma-dash__filter-drop:first-child {
+    flex-shrink: 0;
+  }
+
+  .tma-dash__toolbar-filters .tma-dash__filter-drop-caret {
+    width: 12px;
+    height: 12px;
+  }
+
+  .tma-dash__toolbar-filters .tma-dash__filter-drop-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+  }
+
+  .tma-dash__unread-first {
+    flex: 0 0 auto;
+    width: 28px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .tma-dash__unread-first-label {
+    display: none;
+  }
 }
 
 .tma-dash__filter-drop:focus-visible {

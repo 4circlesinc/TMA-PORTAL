@@ -237,12 +237,26 @@
       if (msg.nonce) byNonce[msg.nonce] = index;
     });
 
+    var adopted = {};
     var fresh = [];
     incoming.forEach(function (msg) {
       // A confirmed send replaces its own optimistic placeholder in place, so
       // the bubble never jumps position when the server answers.
       var existing = bySeq[msg.seq];
       if (existing === undefined && msg.nonce !== undefined) existing = byNonce[msg.nonce];
+
+      // This person's own message, read back from the server before the send
+      // that wrote it has answered (the arrival event reaches the sender too,
+      // and a pulled page carries no nonce). It is the bubble already showing,
+      // not a second message: without this a group send drew twice.
+      if (existing === undefined && msg.seq && msg.direction === 'out') {
+        existing = ownPlaceholderFor(bucket.messages, msg, adopted);
+        if (existing !== undefined) {
+          adopted[existing] = true;
+          msg.nonce = bucket.messages[existing].nonce;
+        }
+      }
+
       if (existing !== undefined) {
         bucket.messages[existing] = msg;
         return;
@@ -260,9 +274,47 @@
       });
     }
 
+    dropSeqDuplicates(bucket);
+
     if (bucket.loaded) persistThread(id);
 
     return bucket;
+  }
+
+  /* The unsent bubble (no seq yet) a server copy of the same words stands for. */
+  function ownPlaceholderFor(messages, msg, adopted) {
+    var body = (msg.body || '').trim();
+    var files = (msg.attachments || []).length;
+    for (var i = 0; i < messages.length; i++) {
+      var held = messages[i];
+      if (adopted[i] || held.seq || !held.nonce) continue;
+      if (!held.pending && !held.queued) continue;
+      if ((held.body || '').trim() !== body) continue;
+      if ((held.attachments || []).length !== files) continue;
+
+      return i;
+    }
+
+    return undefined;
+  }
+
+  /* One bubble per stored message, whichever way each copy arrived. */
+  function dropSeqDuplicates(bucket) {
+    var seen = {};
+    var kept = [];
+    for (var i = 0; i < bucket.messages.length; i++) {
+      var msg = bucket.messages[i];
+      if (msg.seq) {
+        if (seen[msg.seq] !== undefined) {
+          // Keep the copy carrying the nonce: it is the one sends reconcile on.
+          if (msg.nonce && !kept[seen[msg.seq]].nonce) kept[seen[msg.seq]] = msg;
+          continue;
+        }
+        seen[msg.seq] = kept.length;
+      }
+      kept.push(msg);
+    }
+    if (kept.length !== bucket.messages.length) bucket.messages = kept;
   }
 
   /* ------------------------------------------------------------------
@@ -4015,6 +4067,7 @@
     return (
       '<div class="tma-dash__messages-bubble-row tma-dash__messages-bubble-row--' +
       side +
+      (opts.selecting ? ' is-selecting' : '') +
       '" data-messages-swipe="' +
       side +
       '" data-messages-index="' +
@@ -4781,6 +4834,9 @@
         }
 
         if (e.key !== 'Enter') return;
+        // The keyboard is still composing a word (predictive text, IME): this
+        // Enter accepts it, it is not a send.
+        if (e.isComposing) return;
 
         // Enter's behaviour follows the user's own setting: either Enter sends
         // and Shift+Enter breaks the line, or Enter always breaks the line and
@@ -5185,6 +5241,7 @@
         showAvatar: msg.direction === 'in' && endsRun,
         showReceipt: index === seenIndex && !seenHasLaterFaces,
         receiptPeople: receiptByIndex[index] || [],
+        selecting: isTextSelecting(state, msg.id),
       }, render);
     });
 
@@ -5590,6 +5647,7 @@
       '" data-messages-chat-body>' +
       renderChatBody(state, row, render) +
       '</div>' +
+      renderTextSelectBar(state) +
       '<div class="tma-dash__messages-composer' +
       (state.replyTo && state.replyTo.threadId === state.selectedId ? ' tma-dash__messages-composer--reply' : '') +
       '">' +
@@ -5883,6 +5941,10 @@
         return messagesWheelDeltaX(e, track.clientWidth || wrap.offsetWidth || 320);
       }
 
+      /* Nothing is held or locked until the gesture is known to be a swipe
+         (moveDrag commits it): taking the pointer and switching selection
+         off on touch-down is what made a message's words impossible to
+         highlight. */
       function beginDrag(clientX, clientY) {
         clearWheelEndTimer();
         dragging = true;
@@ -5890,7 +5952,6 @@
         startX = clientX;
         startY = clientY;
         startOffset = getCurrentOffset();
-        track.classList.add('is-dragging');
       }
 
       /*
@@ -5926,6 +5987,10 @@
           }
 
           moved = true;
+          track.classList.add('is-dragging');
+          if (pointerId !== undefined && !track.hasPointerCapture(pointerId)) {
+            try { track.setPointerCapture(pointerId); } catch (err) { /* pointer already gone */ }
+          }
           if (chatBody) chatBody.classList.add('is-swipe-dragging');
         }
 
@@ -5961,13 +6026,18 @@
       }
 
       track.addEventListener('pointerdown', function (e) {
-        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        // A mouse drag across a message is someone highlighting its words,
+        // the way it is everywhere else on a computer. The trackpad's swipe
+        // to reply comes through the wheel path below, untouched.
+        if (e.pointerType === 'mouse') return;
+        // A message being picked from (Select text) belongs to the finger
+        // moving its selection handles, not to a swipe.
+        if (track.closest('.is-selecting')) return;
         // Interactive controls inside a bubble (react / reply / menu, and a
         // quoted reply) must keep their click. Starting a swipe here would
         // capture the pointer and the click would never arrive.
         if (e.target.closest(INTERACTIVE_IN_BUBBLE)) return;
         beginDrag(e.clientX, e.clientY);
-        track.setPointerCapture(e.pointerId);
       });
 
       track.addEventListener(
@@ -7171,13 +7241,16 @@
         var confirmed = data.message;
         confirmed.nonce = nonce;
 
-        // Replace the placeholder in place so the bubble does not jump.
+        // Replace the placeholder in place so the bubble does not jump. A copy
+        // the arrival event already brought in goes, so the message shows once.
         for (var i = 0; i < bucket.messages.length; i++) {
           if (bucket.messages[i].nonce === nonce) {
             bucket.messages[i] = confirmed;
             break;
           }
         }
+        dropSeqDuplicates(bucket);
+        persistThread(conversationId);
 
         var row = findThread(conversationId);
         if (row) {
@@ -7190,6 +7263,16 @@
         render({ chatToBottom: true });
       })
       .catch(function (err) {
+        // The answer was lost but the message is already here from the server
+        // (the arrival event brought it): it was sent, nothing to retry.
+        var landed = threadBucket(conversationId).messages.some(function (m) {
+          return m.nonce === nonce && m.seq;
+        });
+        if (landed) {
+          render();
+          return;
+        }
+
         // No connection (no status: the request never reached the server):
         // the message waits on this device and sends when the connection is
         // back, the server's nonce making a repeat land once.
@@ -7353,6 +7436,9 @@
     // Persist the outgoing conversation's draft before switching, so it stays
     // with the conversation it was written in.
     if (state.selectedId) flushDraft(state.selectedId, getComposerDraft(state));
+
+    // Words being picked from a message belong to the thread they are in.
+    state.textSelect = null;
 
     // Leaving a thread retracts the indicator there; announceTyping would do
     // it on the next keystroke, but only if there is one.
@@ -8189,15 +8275,120 @@
     return String(value).replace(/["\\]/g, '\\$&');
   }
 
-  function copyMessageText(root, msg) {
-    var text = msg.body || '';
+  /* ------------------------------------------------------------------
+   * Highlighting part of a message.
+   *
+   * On a computer the words are dragged over like any other text. On a
+   * phone a press-and-hold opens the message menu, so the menu's "Select
+   * text" puts that one message into a picking state: its words become
+   * selectable, start out all highlighted, and the selection handles take
+   * them in or out. A bar over the message box copies just what is
+   * highlighted, or ends it. Copy text from the menu copies the highlight
+   * too, when there is one, and the whole message only when there is not.
+   * ---------------------------------------------------------------- */
+
+  function isTextSelecting(state, messageId) {
+    return !!(state.textSelect &&
+      state.textSelect.threadId === state.selectedId &&
+      state.textSelect.messageId === messageId);
+  }
+
+  function renderTextSelectBar(state) {
+    if (!state.textSelect || state.textSelect.threadId !== state.selectedId) return '';
+
+    return (
+      '<div class="tma-dash__messages-select-bar" role="toolbar" aria-label="Choose words to copy">' +
+      '<span class="tma-dash__messages-select-bar-hint">Drag to choose words</span>' +
+      '<button type="button" class="tma-dash__messages-select-bar-btn tma-dash__messages-select-bar-btn--primary"' +
+      ' data-messages-select-copy>Copy</button>' +
+      '<button type="button" class="tma-dash__messages-select-bar-btn" data-messages-select-done>Done</button>' +
+      '</div>'
+    );
+  }
+
+  /* The words of this message that are highlighted right now, or ''. */
+  function highlightedTextIn(root, messageId) {
+    var sel = window.getSelection ? window.getSelection() : null;
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return '';
+    var host = root.querySelector('[data-messages-id="' + cssEscape(messageId) + '"] .tma-dash__messages-bubble-copy');
+    if (!host) return '';
+    var range = sel.getRangeAt(0);
+    if (!host.contains(range.commonAncestorContainer) && !range.intersectsNode(host)) return '';
+    // Only the part of the selection that lies in this message's words.
+    var clipped = range.cloneRange();
+    var whole = document.createRange();
+    whole.selectNodeContents(host);
+    if (clipped.compareBoundaryPoints(Range.START_TO_START, whole) < 0) {
+      clipped.setStart(whole.startContainer, whole.startOffset);
+    }
+    if (clipped.compareBoundaryPoints(Range.END_TO_END, whole) > 0) {
+      clipped.setEnd(whole.endContainer, whole.endOffset);
+    }
+    return String(clipped.toString() || '').trim();
+  }
+
+  /*
+   * The last highlight made inside a message. Tapping a button can drop the
+   * page's selection before the click lands (iOS does), so the words are
+   * remembered as they are chosen and Copy uses them.
+   */
+  var lastHighlight = null;
+
+  document.addEventListener('selectionchange', function () {
+    var sel = window.getSelection ? window.getSelection() : null;
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+    var node = sel.getRangeAt(0).commonAncestorContainer;
+    var el = node && (node.nodeType === 1 ? node : node.parentElement);
+    var row = el && el.closest ? el.closest('[data-messages-id]') : null;
+    if (!row) return;
+    var root = row.closest('[data-messages]') || document;
+    var id = row.getAttribute('data-messages-id');
+    var text = highlightedTextIn(root, id);
+    if (text) lastHighlight = { messageId: id, text: text, at: Date.now() };
+  });
+
+  function rememberedHighlight(messageId) {
+    if (!lastHighlight || lastHighlight.messageId !== messageId) return '';
+    // A highlight from a while ago is not what this tap is about.
+    return Date.now() - lastHighlight.at < 120000 ? lastHighlight.text : '';
+  }
+
+  function startTextSelect(root, state, render, msg) {
+    state.textSelect = { threadId: state.selectedId, messageId: msg.id };
+    lastHighlight = null;
+    render();
+
+    // Start with the whole message highlighted; the handles narrow it.
+    var host = root.querySelector('[data-messages-id="' + cssEscape(msg.id) + '"] .tma-dash__messages-bubble-copy');
+    var sel = window.getSelection ? window.getSelection() : null;
+    if (!host || !sel) return;
+    var range = document.createRange();
+    range.selectNodeContents(host);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  function endTextSelect(state, render) {
+    if (!state.textSelect) return;
+    state.textSelect = null;
+    lastHighlight = null;
+    var sel = window.getSelection ? window.getSelection() : null;
+    if (sel) sel.removeAllRanges();
+    if (render) render();
+  }
+
+  /* `text`, when given, is the part of the message that was highlighted. */
+  function copyMessageText(root, msg, text) {
+    var picked = !!text;
+    text = text || msg.body || '';
     if (!text) return;
+    var done = picked ? 'Copied' : 'Message copied';
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard
         .writeText(text)
         .then(function () {
-          showMessagesToast(root, 'Message copied');
+          showMessagesToast(root, done);
         })
         .catch(function () {
           showMessagesToast(root, 'Could not copy message');
@@ -8215,7 +8406,7 @@
     area.select();
     try {
       document.execCommand('copy');
-      showMessagesToast(root, 'Message copied');
+      showMessagesToast(root, done);
     } catch (err) {
       showMessagesToast(root, 'Could not copy message');
     }
@@ -10518,6 +10709,7 @@
         if (pressTimer) clearTimeout(pressTimer);
         pressTimer = null;
         pressOrigin = null;
+        row.classList.remove('is-pressing');
         if (clearHighlight) {
           row.classList.remove('is-actions-open', 'is-highlighted');
         }
@@ -10525,7 +10717,13 @@
 
       row.addEventListener('pointerdown', function (e) {
         if (e.pointerType === 'mouse') return; // right-click covers desktop
+        // Picking words from this message (Select text): a hold here moves
+        // the selection, it is not a request for the menu.
+        if (row.classList.contains('is-selecting')) return;
         pressOrigin = { x: e.clientX, y: e.clientY };
+        // While the finger is down the hold is ours: the system's own
+        // long-press selection would otherwise open on top of the menu.
+        row.classList.add('is-pressing');
         pressTimer = setTimeout(function () {
           pressTimer = null;
           root.querySelectorAll('.tma-dash__messages-bubble-row.is-highlighted').forEach(function (el) {
@@ -10547,6 +10745,35 @@
       row.addEventListener('pointerup', function () { cancelPress(false); });
       row.addEventListener('pointercancel', function () { cancelPress(true); });
     });
+
+    // Picking words from a message: Copy takes just what is highlighted.
+    var selectCopy = MORPH.unwiredOne(root, '[data-messages-select-copy]');
+    if (selectCopy) {
+      // Keep the highlight where a mouse press on the button would clear it.
+      selectCopy.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      selectCopy.addEventListener('click', function () {
+        var picking = state.textSelect;
+        var msg = picking && findMessageById(picking.threadId, picking.messageId);
+        if (!msg) { endTextSelect(state, render); return; }
+        var text = highlightedTextIn(root, msg.id) || rememberedHighlight(msg.id);
+        copyMessageText(root, msg, text);
+        endTextSelect(state, render);
+      });
+    }
+
+    var selectDone = MORPH.unwiredOne(root, '[data-messages-select-done]');
+    if (selectDone) {
+      selectDone.addEventListener('click', function () {
+        endTextSelect(state, render);
+      });
+    }
+
+    if (!root._messagesTextSelectKeys) {
+      root._messagesTextSelectKeys = true;
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && state.textSelect) endTextSelect(state, render);
+      });
+    }
 
     // Announcements waiting above the message box. The id is read at click
     // time: a reconciled row can come to stand for a different one.
@@ -11242,6 +11469,10 @@
     var msg = findMessageById(state.selectedId, messageId);
     if (!msg || msg.deleted) return;
 
+    // Words of this message already highlighted, read before the menu's own
+    // tap can clear them.
+    var picked = msg.body ? (highlightedTextIn(root, messageId) || rememberedHighlight(messageId)) : '';
+
     var items = [
       { action: 'reply', label: 'Reply' },
       { action: 'forward', label: 'Forward' },
@@ -11253,7 +11484,8 @@
       items.splice(1, 0, { action: 'reply-private', label: 'Reply privately' });
     }
     if (msg.body) {
-      items.push({ action: 'copy', label: 'Copy text' });
+      items.push({ action: 'copy', label: picked ? 'Copy selection' : 'Copy text' });
+      items.push({ action: 'select', label: 'Select text' });
       items.push({ action: 'translate', label: 'Translate' });
     }
     items.push({ action: 'pin', label: msg.starred ? 'Unpin message' : 'Pin message' });
@@ -11310,7 +11542,8 @@
           render();
           focusComposerInput(root);
         } else if (action === 'reply-private') replyPrivately(root, state, render, msg);
-        else if (action === 'copy') copyMessageText(root, msg);
+        else if (action === 'copy') copyMessageText(root, msg, picked);
+        else if (action === 'select') startTextSelect(root, state, render, msg);
         else if (action === 'edit') startEditingMessage(root, state, render, msg);
         else if (action === 'delete') deleteMessage(root, state, render, msg);
         else if (action === 'forward') forwardMessage(root, state, render, msg);

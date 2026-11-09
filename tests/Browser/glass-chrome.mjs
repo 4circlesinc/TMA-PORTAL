@@ -205,13 +205,14 @@ try {
   await page.evaluate(() => { const s = document.querySelector('.tma-dash__scrim'); if (s) s.click(); });
   await page.waitForTimeout(400);
 
-  // A search input: glass that lets taps through to the page's input.
+  // A search input is the page's own field, in the glass look, never a
+  // picture of it: the real input takes the tap, the caret and the keyboard.
   await page.evaluate(() => window.__tmaGlassChrome.tap('bar:messages'));
-  ({ state, icons } = await until(page, (s) => fieldGroups(s).some((g) => /conversations/i.test(g.items[0].label))));
-  const messagesSearch = fieldGroups(state).find((g) => /conversations/i.test(g.items[0].label));
-  const shell = await page.evaluate(() => { const el = document.querySelector('.tma-dash__messages-search'); return { mark: el.getAttribute('data-glass'), opacity: getComputedStyle(el).opacity }; });
-  check('the Messages search bar is drawn as glass, letting taps through', !!messagesSearch && messagesSearch.inert === true && messagesSearch.shown === true, messagesSearch && messagesSearch.id);
-  check('the page\'s own field hides while the glass is drawn', shell.mark === 'drawn' && shell.opacity === '0', `data-glass ${shell.mark}, opacity ${shell.opacity}`);
+  await page.waitForSelector('.tma-dash__messages-search[data-glass="field"]');
+  ({ state } = await until(page, (s) => !!s));
+  const shell = await page.evaluate(() => { const el = document.querySelector('.tma-dash__messages-search'); return { mark: el.getAttribute('data-glass'), opacity: getComputedStyle(el).opacity, fill: getComputedStyle(el).backdropFilter || getComputedStyle(el).webkitBackdropFilter }; });
+  check('the Messages search input is not drawn by the app', !fieldGroups(state).some((g) => g.inert));
+  check('the page\'s own field shows, in the glass look', shell.mark === 'field' && shell.opacity === '1' && /blur/.test(shell.fill || ''), JSON.stringify(shell));
   // Messages re-renders through TMAMorph, which resets attributes to its markup.
   const kept = await page.evaluate(() => {
     const el = document.querySelector('.tma-dash__messages-search');
@@ -222,15 +223,9 @@ try {
     const after = document.querySelector('.tma-dash__messages-search');
     return { same: after === el, mark: after.getAttribute('data-glass'), opacity: getComputedStyle(after).opacity };
   });
-  check('a re-render through TMAMorph keeps the mark, so the field doesn\'t flash', kept.same && kept.mark === 'drawn' && kept.opacity === '0', JSON.stringify(kept));
-  const words = messagesSearch.items[0].marks.find((m) => m.icon.startsWith('t'));
-  check('its placeholder is drawn by the page, in its own font, as a PNG', !!words && words.tone === 'secondary' && /^data:image\/png;base64,/.test(icons[words.icon] || ''), words && JSON.stringify(words));
-  check('and its magnifier comes as a symbol', messagesSearch.items[0].marks.some((m) => /MagnifyingGlass/.test(m.icon) && m.tone === 'secondary'));
+  check('a re-render through TMAMorph keeps the mark, so the field doesn\'t flash', kept.same && kept.mark === 'field' && kept.opacity === '1', JSON.stringify(kept));
 
   await page.focus('.tma-dash__messages-search-input');
-  ({ state } = await until(page, (s) => !fieldGroups(s).some((g) => g.id === messagesSearch.id)));
-  const typing = await page.evaluate(() => getComputedStyle(document.querySelector('.tma-dash__messages-search')).opacity);
-  check('typing in it, the glass hands over to the page\'s field', !fieldGroups(state).some((g) => g.id === messagesSearch.id) && typing === '1', `opacity ${typing}`);
   await page.keyboard.type('Ada');
   // A re-render mid-word must patch the marked field, not rebuild it: a new
   // input would drop the focus and the keyboard after one letter.
@@ -244,14 +239,13 @@ try {
   });
   check('a re-render while typing keeps the input, its focus and what is typed', midWord.focused && midWord.value === 'Ada' && midWord.mark === 'field', JSON.stringify(midWord));
   await page.evaluate(() => document.activeElement.blur());
-  ({ state } = await until(page, (s) => fieldGroups(s).some((g) => g.id === messagesSearch.id)));
-  const back = fieldGroups(state).find((g) => g.id === messagesSearch.id);
-  const typed = back && back.items[0].marks.find((m) => m.icon.startsWith('t'));
-  check('and takes back over on blur, showing what was typed', !!typed && typed.tone === 'primary' && typed.icon !== words.icon);
+  await page.waitForTimeout(300);
+  const blurred = await page.evaluate(() => { const el = document.querySelector('.tma-dash__messages-search'); return { mark: el.getAttribute('data-glass'), opacity: getComputedStyle(el).opacity, value: el.querySelector('input').value }; });
+  check('and stays the page\'s field on blur, showing what was typed', blurred.mark === 'field' && blurred.opacity === '1' && blurred.value === 'Ada', JSON.stringify(blurred));
   await page.evaluate(() => { const i = document.querySelector('.tma-dash__messages-search-input'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); });
 
-  // Which inputs count: a search box by name does; a form field that only
-  // starts its placeholder with "Search" doesn't.
+  // Which inputs count: a search box by name wears the glass; a form field
+  // that only starts its placeholder with "Search" doesn't.
   await page.evaluate(() => {
     const main = document.querySelector('.tma-dash__main');
     const a = document.createElement('div');
@@ -263,9 +257,13 @@ try {
     b.innerHTML = '<input id="glass-test-address" placeholder="Search for an address…" style="width:180px;margin:6px 10px;border:0;background:transparent">';
     main.append(a, b);
   });
-  ({ state } = await until(page, (s) => fieldGroups(s).some((g) => g.rect[1] === 300)));
-  check('a search box by name is a search bar', fieldGroups(state).some((g) => g.rect[1] === 300));
-  check('an address field is not', !fieldGroups(state).some((g) => g.rect[1] === 360));
+  await page.waitForSelector('.glass-test-search[data-glass="field"]');
+  const marks = await page.evaluate(() => ({
+    search: document.querySelector('.glass-test-search').getAttribute('data-glass'),
+    address: document.querySelector('#glass-test-address').parentElement.getAttribute('data-glass'),
+  }));
+  check('a search box by name is a search bar', marks.search === 'field', JSON.stringify(marks));
+  check('an address field is not', marks.address === null, JSON.stringify(marks));
 
   // Desktop width: nothing to draw, and the page's own copies are heard again.
   await page.setViewportSize({ width: 1280, height: 900 });

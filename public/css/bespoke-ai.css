@@ -207,8 +207,9 @@
   bottom: calc(48px + var(--space-12));
   display: flex;
   flex-direction: column;
-  width: 420px;
-  height: 560px;
+  /* A floating box beside its mark, not a column of the page. */
+  width: 380px;
+  height: 540px;
   max-height: calc(100vh - 96px);
   max-width: calc(100vw - 32px);
   border: 0.5px solid var(--color-border-soft);
@@ -1279,17 +1280,21 @@ body:has(.tma-dash.is-rb-open) .tma-bespoke:not(.is-open) {
     bottom: calc(var(--dash-tabbar-block-h, 68px) + var(--space-20) + env(safe-area-inset-bottom, 0px));
   }
 
+  /* Still a floating box on a phone: clear of every edge, rounded all round,
+     sat above the bar on the mark's side, rather than a sheet the width of
+     the screen glued to the tab bar. */
   .tma-bespoke__panel {
     position: fixed;
-    left: 0;
-    right: 0;
-    bottom: calc(var(--dash-tabbar-block-h, 68px) + env(safe-area-inset-bottom, 0px));
-    width: 100%;
+    left: auto;
+    right: var(--space-16);
+    bottom: calc(var(--dash-tabbar-block-h, 68px) + var(--space-12) + env(safe-area-inset-bottom, 0px));
+    width: min(360px, calc(100vw - 32px));
     max-width: none;
-    height: min(560px, calc(100vh - 96px - var(--dash-tabbar-block-h, 68px)));
-    max-height: calc(100dvh - 96px - var(--dash-tabbar-block-h, 68px));
-    border-radius: var(--radius-16) var(--radius-16) 0 0;
-    transform-origin: bottom center;
+    height: min(520px, calc(100vh - 140px - var(--dash-tabbar-block-h, 68px)));
+    max-height: calc(100dvh - 140px - var(--dash-tabbar-block-h, 68px) - env(safe-area-inset-top, 0px));
+    border-radius: var(--radius-16);
+    box-shadow: var(--shadow-popup), 0 12px 40px rgba(15, 23, 42, 0.18);
+    transform-origin: bottom right;
   }
 
   .tma-bespoke.is-open .tma-bespoke__fab {

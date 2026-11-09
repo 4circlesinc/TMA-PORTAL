@@ -603,14 +603,16 @@
       drawnEls.push(g.el);
     });
 
-    /* Search bars. One being typed in is left to the page (the app can't put
-     * a caret in the page's input); one something lies over is too. An input's
-     * glass lets taps through to it, so the page's input takes the focus and
-     * brings up the keyboard; a search button's glass is tapped like any other
-     * button. */
+    /* Search bars. A search button's glass is drawn by the app and tapped like
+     * any other button. A search input is never drawn: the page's own field
+     * stays on screen in the same glass look (data-glass="field"). Drawing it
+     * meant hiding the real input under a picture of it and handing over on
+     * focus, and in the app that hand-over lost taps, hid the caret (WebKit
+     * suppresses it in a transparent field) and left bars with no words: the
+     * search boxes didn't work. A real field just works. */
     var drawnFieldEls = [];
     fields.forEach(function (f) {
-      if (f.input && (document.activeElement === f.input || f.el.contains(document.activeElement))) return;
+      if (f.input) return;
       var opacity = fade(f.el, groupEls);
       var seen = opacity > 0 ? exposure(f.el, f.r) : 'covered';
       if (seen === 'covered') return;

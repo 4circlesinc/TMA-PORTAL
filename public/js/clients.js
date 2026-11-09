@@ -2541,10 +2541,13 @@
   function renderUnreadFirstToggle() {
     var on = !!APP_TABLE.unreadFirst;
 
+    // On a phone it is the box alone, on the filters' line; the name stays for
+    // VoiceOver and as the hover title.
     return '<button type="button" class="tma-dash__filter-drop tma-dash__unread-first" data-cip-unread-first' +
-      ' role="checkbox" aria-checked="' + (on ? 'true' : 'false') + '">' +
+      ' role="checkbox" aria-checked="' + (on ? 'true' : 'false') + '"' +
+      ' aria-label="Unread messages first" title="Unread messages first">' +
       '<span class="tma-filter-popover__check" aria-hidden="true"></span>' +
-      '<span>Unread messages</span></button>';
+      '<span class="tma-dash__unread-first-label">Unread messages</span></button>';
   }
 
   function setUnreadFirst(on) {

@@ -24,7 +24,6 @@
    * lost — it is in History, which is where a reader looks for it.
    */
   var LS_CONV = 'tma.bespoke.conversationId';
-  var LS_HELLO = 'tma.bespoke.helloDismissed';
   var MARK = 'images/brand/tma/bespoke-ai-mark.png';
   var PLUS = 'images/icons/phosphor/Plus.svg';
   var CLOSE = 'images/icons/phosphor/X.svg';
@@ -1151,7 +1150,6 @@
       if (Array.isArray(data.allowedPaths) && data.allowedPaths.length) allowedPaths = data.allowedPaths;
       if (ctx && ctx.bannerEl) ctx.bannerEl.hidden = configured;
       if (ctx && ctx.subEl) ctx.subEl.textContent = data.subtitle || 'How can I help?';
-      if (ctx === widget) refreshHello(data.subtitle || '');
       if (ctx) renderChips(ctx, data.chips || []);
       if (window.TMACurrentUser && window.TMACurrentUser.get) {
         var me = window.TMACurrentUser.get();
@@ -3327,11 +3325,9 @@
   /* ── Corner launcher ───────────────────────────────────────── */
 
   function widgetMarkup() {
-    return '<div class="tma-bespoke__hello" data-bespoke-hello hidden>' +
-      '<button type="button" class="tma-bespoke__hello-text" data-bespoke-hello-open></button>' +
-      '<button type="button" class="tma-bespoke__hello-close" data-bespoke-hello-close aria-label="Dismiss"><img src="' + CLOSE + '" alt="" width="10" height="10"></button>' +
-      '</div>' +
-      '<button type="button" class="tma-bespoke__fab" data-bespoke-fab aria-label="Open Bespoke AI Assistant" aria-expanded="false" aria-controls="tma-bespoke-panel">' +
+    // No greeting beside the mark: the launcher waits to be opened rather
+    // than saying hello on every page.
+    return '<button type="button" class="tma-bespoke__fab" data-bespoke-fab aria-label="Open Bespoke AI Assistant" aria-expanded="false" aria-controls="tma-bespoke-panel">' +
       '<img class="tma-bespoke__mark" src="' + MARK + '" alt="" width="32" height="32">' +
       '</button>' +
       '<div class="tma-bespoke__panel" id="tma-bespoke-panel" role="dialog" aria-modal="true" aria-labelledby="tma-bespoke-title" aria-hidden="true" inert>' +
@@ -3373,53 +3369,6 @@
           '<button type="submit" class="tma-bespoke__send" data-bespoke-send disabled aria-label="Send"><img src="' + SEND + '" alt=""></button>' +
         '</form>' +
       '</div>';
-  }
-
-  /* ── Greeting beside the launcher ─────────────────────────────
-   * One line, to the left of the mark, until the reader opens the panel or
-   * dismisses it. A dismissal lasts the day; the next day it says hello
-   * again. Never on the Bespoke page itself, where the mark is hidden. */
-  function todayKey() {
-    var d = new Date();
-    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
-  }
-
-  function helloDismissed() {
-    return storeGet(LS_HELLO, '') === todayKey();
-  }
-
-  function dismissHello() {
-    storeSet(LS_HELLO, todayKey());
-    var el = host && host.querySelector('[data-bespoke-hello]');
-    if (el) el.hidden = true;
-  }
-
-  function firstName() {
-    if (window.TMACurrentUser && window.TMACurrentUser.get) {
-      var me = window.TMACurrentUser.get();
-      var name = me && (me.firstName || me.name);
-      if (name) return String(name).trim().split(/\s+/)[0];
-    }
-    return '';
-  }
-
-  function helloText(subtitle) {
-    var name = firstName();
-    var line = subtitle && subtitle !== 'How can I help?' ? subtitle : 'Need a hand?';
-    return (name ? 'Hi ' + name + '. ' : '') + line;
-  }
-
-  function refreshHello(subtitle) {
-    if (!host) return;
-    var el = host.querySelector('[data-bespoke-hello]');
-    var text = host.querySelector('[data-bespoke-hello-open]');
-    if (!el || !text) return;
-    if (open || isPagePath() || helloDismissed()) {
-      el.hidden = true;
-      return;
-    }
-    text.textContent = helloText(subtitle || (widget && widget.subEl ? widget.subEl.textContent : ''));
-    el.hidden = false;
   }
 
   function newWidgetChat() {
@@ -3556,7 +3505,6 @@
     if ('inert' in panel) panel.inert = !open;
     if (open) {
       lastFocus = document.activeElement;
-      dismissHello();
       refreshSuggestions(widget);
       setTimeout(function () {
         if (widget && widget.inputEl) widget.inputEl.focus();
@@ -3633,7 +3581,6 @@
       // The page's dictation ends with the page; the launcher's rides along.
       if (page && page.dictation && page.dictation.active && !isPagePath()) stopDictation(page);
       if (open && widget) refreshSuggestions(widget);
-      else refreshHello('');
     });
   }
 
@@ -3674,12 +3621,6 @@
     };
 
     fab.addEventListener('click', toggle);
-    host.querySelector('[data-bespoke-hello-open]').addEventListener('click', function () { setOpen(true); });
-    host.querySelector('[data-bespoke-hello-close]').addEventListener('click', function (e) {
-      e.stopPropagation();
-      dismissHello();
-    });
-    setTimeout(function () { refreshHello(''); }, 1200);
     host.querySelector('[data-bespoke-close]').addEventListener('click', function () { setOpen(false); });
     host.querySelector('[data-bespoke-new]').addEventListener('click', newWidgetChat);
     host.querySelector('[data-bespoke-history]').addEventListener('click', function () {

@@ -345,13 +345,11 @@
                   sw.disabled = false;
                   return;
                 }
-                // Switching a source on also catches it up right away.
+                // Switching a source on also catches it up right away. Its
+                // progress shows on this page, not as a card over the portal.
                 if (active) {
                   expectUntil = Date.now() + 60000;
                   secApi('POST', '/admin/background-ops/imports-run', { target: target });
-                  if (window.TMASyncToasts && window.TMASyncToasts.watch) {
-                    window.TMASyncToasts.watch(target.indexOf('library:') === 0 ? 'libraries' : target);
-                  }
                 }
                 ui().toast(active ? 'Syncing' : 'Sync paused');
                 load();
