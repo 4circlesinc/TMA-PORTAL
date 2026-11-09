@@ -58,10 +58,9 @@ class TemplatesController extends Controller
                 'fields' => $fields,
                 'defaults' => $defaults,
                 'editable' => $editable,
-                'variables' => collect(SystemEmails::variables($key))
-                    ->map(fn (string $meaning, string $token) => ['token' => $token, 'meaning' => $meaning])
-                    ->values()
-                    ->all(),
+                // Every code this email may use, grouped for the picker:
+                // its own, the application's, the firm's.
+                'variables' => SystemEmails::codes($key),
             ];
         }
 

@@ -729,7 +729,7 @@ class Postcards
             'applicant' => $facts['applicant'],
             'provider' => $facts['provider'],
             'recipient' => self::firstName($recipientName),
-        ];
+        ] + ($facts['codes'] ?? []);
     }
 
     /**

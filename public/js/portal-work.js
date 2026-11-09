@@ -1716,6 +1716,19 @@
     number: 'Application or CIP number', application: 'Application number', actionLabel: 'Button label',
     letterTitle: 'Letter title', letterLead: 'Letter opening line', letterBody: 'Letter text',
     days: 'Days passed', item: 'File or folder name', group: 'Group name',
+    applicationNumber: 'Application number', cipNumber: 'CIP number', applicant: 'Main applicant',
+    applicantFirstName: 'Main applicant first name', spouse: 'Spouse', dependents: 'Dependants',
+    dependentCount: 'Number of dependants', familyMembers: 'Everyone on the application',
+    familySize: 'Family size', provider: 'Service provider', investmentType: 'Investment type',
+    applicationStatus: 'Application status', phase: 'Phase', decisionDate: 'Decision date',
+    corNumber: 'COR number', supportEmail: 'Support email', portalUrl: 'Portal link',
+    today: "Today's date", year: 'Year',
+  };
+
+  /* Said once under a group's heading rather than on every code in it. */
+  var CODE_GROUP_HINTS = {
+    Application: 'Filled in when the email is about an application; empty otherwise.',
+    Firm: 'Filled in on every email.',
   };
 
   function codeName(token) {
@@ -1775,13 +1788,30 @@
         if (name.indexOf(needle) !== -1 || c.token.toLowerCase().indexOf(needle) !== -1) return 1;
         return String(c.meaning || '').toLowerCase().indexOf(needle) !== -1 ? 2 : 3;
       };
+      var order = [];
+      codes.forEach(function (c) {
+        var g = c.group || '';
+        if (order.indexOf(g) === -1) order.push(g);
+      });
       var hits = codes.filter(function (c) { return rank(c) < 3; })
-        .map(function (c, i) { return { c: c, r: rank(c), i: i }; })
-        .sort(function (a, b) { return a.r - b.r || a.i - b.i; })
+        .map(function (c, i) { return { c: c, r: rank(c), i: i, g: order.indexOf(c.group || '') }; })
+        // In their groups (this email, the application, the firm); within a
+        // group, the best match first.
+        .sort(function (a, b) { return a.g - b.g || a.r - b.r || a.i - b.i; })
         .map(function (x) { return x.c; });
       if (!hits.length) return '<p class="tma-portal-codes__empty">No code matches.</p>';
+      var shownGroup = null;
       return hits.map(function (c) {
-        return '<button type="button" class="tma-portal-context-menu__item tma-portal-codes__item" data-code="' + ui().esc(c.token) + '">' +
+        var head = '';
+        if (order.length > 1 && (c.group || '') !== shownGroup) {
+          shownGroup = c.group || '';
+          head = '<p class="tma-portal-codes__group">' + ui().esc(shownGroup || 'Codes') +
+            (CODE_GROUP_HINTS[shownGroup]
+              ? '<span class="tma-portal-codes__group-hint">' + ui().esc(CODE_GROUP_HINTS[shownGroup]) + '</span>'
+              : '') + '</p>';
+        }
+        return head +
+          '<button type="button" class="tma-portal-context-menu__item tma-portal-codes__item" data-code="' + ui().esc(c.token) + '">' +
           '<span class="tma-portal-codes__text">' +
           '<span class="tma-portal-codes__name">' + ui().esc(codeName(c.token)) + '</span>' +
           (c.meaning ? '<span class="tma-portal-codes__meaning">' + ui().esc(c.meaning) + '</span>' : '') +

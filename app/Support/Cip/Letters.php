@@ -40,6 +40,25 @@ class Letters
     }
 
     /**
+     * The letter's own placeholders, then every other application code an
+     * email may use (CIP number, spouse, dependants…), for the picker.
+     *
+     * @return list<array{token:string, meaning:string, group:string}>
+     */
+    public static function codes(): array
+    {
+        $own = array_map(fn (array $p) => $p + ['group' => 'This letter'], self::placeholders());
+        $taken = array_column($own, 'token');
+        foreach (\App\Support\Templates\SystemEmails::APPLICATION_CODES as $token => $meaning) {
+            if (! in_array($token, $taken, true)) {
+                $own[] = ['token' => $token, 'meaning' => $meaning, 'group' => 'Application'];
+            }
+        }
+
+        return $own;
+    }
+
+    /**
      * The sentence the post-approval letters end on.
      *
      * A decision recorded from the status menu always has its letter. One
@@ -314,7 +333,7 @@ class Letters
                 ?? $application->decided_at?->toDateString()
                 ?? '',
             'recipient' => (string) ($recipientName ?? ''),
-        ];
+        ] + \App\Support\Templates\SystemEmails::applicationValues($application);
     }
 
     /**

@@ -431,6 +431,9 @@ class Contacts
             ),
             'provider' => $application->provider?->name ?? 'Private client',
             'familySize' => $application->familySize(),
+            // Every application code an email may use (numbers, applicant,
+            // spouse, dependants…), see SystemEmails::APPLICATION_CODES.
+            'codes' => \App\Support\Templates\SystemEmails::applicationValues($application),
         ];
 
         if (! $application->isAddOn()) {

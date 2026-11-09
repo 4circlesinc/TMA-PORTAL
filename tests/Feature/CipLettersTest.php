@@ -96,7 +96,8 @@ class CipLettersTest extends TestCase
         $this->assertSame(array_values(InvestmentType::ALL), array_column($types, 'label'));
         $this->assertCount(5, $types);
         $this->assertSame(
-            array_column(Letters::placeholders(), 'token'),
+            // The letter's own codes, then every other application code.
+            array_column(Letters::codes(), 'token'),
             array_column($payload['placeholders'], 'token'),
         );
 

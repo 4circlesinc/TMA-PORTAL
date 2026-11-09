@@ -92,6 +92,49 @@ class SystemEmailTemplatesTest extends TestCase
         }
     }
 
+    /**
+     * Every email may use every application code (numbers, applicant,
+     * spouse, dependants…) and the firm's. An email about an application
+     * fills them from it; one that is not leaves them empty — never a raw
+     * {{code}} in somebody's inbox.
+     */
+    public function test_application_and_firm_codes_fill_in_every_email(): void
+    {
+        $admin = \App\Models\User::factory()->create(['status' => 'approved', 'account_type' => \App\Support\Access\Role::ADMINISTRATOR, 'email_verified_at' => now(), 'profile_completed_at' => now(), 'onboarding_completed_at' => now()]);
+        $company = \App\Models\Company::create(['uid' => 'galaxy', 'name' => 'Galaxy', 'created_by' => $admin->id]);
+        $provider = \App\Models\CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL', 'company_id' => $company->id]);
+        $application = \App\Support\Cip\Applications::create($provider, $admin);
+        $application->forceFill(['cip_number' => '10T1G55555P'])->save();
+        foreach ([
+            [\App\Models\CipPerson::ROLE_MAIN_APPLICANT, null, 'Chen', 'Wei'],
+            [\App\Models\CipPerson::ROLE_DEPENDENT, \App\Models\CipPerson::RELATIONSHIP_SPOUSE, 'Li', 'Na'],
+            [\App\Models\CipPerson::ROLE_DEPENDENT, \App\Models\CipPerson::RELATIONSHIP_SON, 'Chen', 'Junior'],
+        ] as [$role, $relationship, $first, $last]) {
+            \App\Models\CipPerson::create(['application_id' => $application->id, 'role' => $role, 'relationship' => $relationship, 'first_name' => $first, 'last_name' => $last]);
+        }
+
+        $copy = ['title' => '{{cipNumber}} · {{applicant}} · {{spouse}} · {{dependents}} · {{supportEmail}}'];
+        $values = SystemEmails::applicationValues($application->fresh());
+        $cip = SystemEmails::payload('login-code', $values, [], $copy);
+        $this->assertSame('10T1G55555P · CHEN WEI · LI NA · CHEN JUNIOR · support@tmantoinelaw.com', $cip['payload']['title']);
+
+        // Not about an application: the application codes are empty, the firm's filled.
+        $plain = SystemEmails::payload('login-code', [], [], $copy);
+        $this->assertStringNotContainsString('{{', $plain['payload']['title']);
+        $this->assertStringContainsString('support@tmantoinelaw.com', $plain['payload']['title']);
+
+        // Listed for every email, in their groups, and accepted on save.
+        $groups = array_unique(array_column(SystemEmails::codes('verify-email'), 'group'));
+        $this->assertSame(['This email', 'Application', 'Firm'], array_values($groups));
+        $tokens = array_column(SystemEmails::codes('verify-email'), 'token');
+        foreach (['applicationNumber', 'cipNumber', 'applicant', 'spouse', 'dependents', 'site'] as $code) {
+            $this->assertContains($code, $tokens);
+        }
+        $this->actingAs($admin)->patchJson('/portal/templates/system-emails/verify-email', [
+            'fields' => ['title' => 'Confirm your email for {{cipNumber}}'],
+        ])->assertOk();
+    }
+
     public function test_an_edit_changes_what_is_sent(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);

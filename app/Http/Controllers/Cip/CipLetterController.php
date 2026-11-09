@@ -37,7 +37,8 @@ class CipLetterController extends Controller
 
         return response()->json([
             'canEdit' => CipAccess::can($request->user(), 'cip.configure'),
-            'placeholders' => Letters::placeholders(),
+            // The letter's own codes, then every application code (grouped).
+            'placeholders' => Letters::codes(),
             /*
              * Grouped by lane inside each investment type. Approved and
              * Denied exist on both sides of the decision and say different

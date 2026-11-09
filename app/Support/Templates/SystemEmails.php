@@ -124,14 +124,148 @@ class SystemEmails
         ));
     }
 
+    /*
+     * Codes every email may use, whatever it is about.
+     *
+     * An email's own codes are what its event supplies (who invited them,
+     * the new status). These are the rest: the firm's, filled in every email,
+     * and the application's — its numbers, the applicant, the spouse and the
+     * dependants, the provider — filled in any email about an application
+     * and left empty in one that is not, so a code never reaches an inbox
+     * as {{code}}.
+     */
+    public const APPLICATION_CODES = [
+        'number' => 'Application number, or CIP application number once assigned',
+        'applicationNumber' => "The firm's application number, e.g. GAL-26-00001",
+        'cipNumber' => 'The CIP application number, once the Unit has issued it',
+        'applicant' => "Main applicant's full name",
+        'applicantFirstName' => "Main applicant's first name",
+        'spouse' => "The spouse's name, when there is one",
+        'dependents' => "The dependants' names, as a list",
+        'dependentCount' => 'How many dependants are on the application',
+        'familyMembers' => 'Everyone on the application, as a list',
+        'familySize' => 'How many people are on the application',
+        'provider' => 'The service provider',
+        'investmentType' => 'The investment type',
+        'applicationStatus' => "The application's current status",
+        'phase' => 'Pre-approval, Post-approval or Add-On',
+        'decisionDate' => 'When the decision was made',
+        'corNumber' => 'The Certificate of Registration number, once issued',
+    ];
+
+    public const FIRM_CODES = [
+        'site' => "The firm's name",
+        'supportEmail' => "The firm's support email address",
+        'portalUrl' => "The portal's web address",
+        'today' => "Today's date",
+        'year' => 'The current year',
+    ];
+
+    /** What the preview fills the application codes with. */
+    private const APPLICATION_SAMPLE = [
+        'number' => '10T1G12345P',
+        'applicationNumber' => 'GAL-26-00001',
+        'cipNumber' => '10T1G12345P',
+        'applicant' => 'CHEN WEI',
+        'applicantFirstName' => 'Chen',
+        'spouse' => 'LI NA',
+        'dependents' => 'CHEN JUNIOR, CHEN MEI',
+        'dependentCount' => '2',
+        'familyMembers' => 'CHEN WEI, LI NA, CHEN JUNIOR, CHEN MEI',
+        'familySize' => '4',
+        'provider' => 'Galaxy Advisory',
+        'investmentType' => 'Real Estate',
+        'applicationStatus' => 'Background Check',
+        'phase' => 'Pre-approval',
+        'decisionDate' => '18 Sep 2026',
+        'corNumber' => 'COR-2026-0042',
+    ];
+
     /**
-     * Placeholder tokens this template may use, token => meaning.
+     * Placeholder tokens this template may use, token => meaning: its own,
+     * then every application and firm code.
      *
      * @return array<string, string>
      */
     public static function variables(string $key): array
     {
-        return self::definition($key)['variables'] + ['site' => "The firm's name"];
+        return self::definition($key)['variables'] + self::APPLICATION_CODES + self::FIRM_CODES;
+    }
+
+    /**
+     * The same codes as the editor lists them, each in its group: this
+     * email's own, the application's, the firm's.
+     *
+     * @return list<array{token: string, meaning: string, group: string}>
+     */
+    public static function codes(string $key): array
+    {
+        $own = self::definition($key)['variables'];
+        $out = [];
+        foreach ($own as $token => $meaning) {
+            if (! isset(self::FIRM_CODES[$token])) {
+                $out[] = ['token' => $token, 'meaning' => $meaning, 'group' => 'This email'];
+            }
+        }
+        foreach (self::APPLICATION_CODES as $token => $meaning) {
+            if (! isset($own[$token])) {
+                $out[] = ['token' => $token, 'meaning' => $meaning, 'group' => 'Application'];
+            }
+        }
+        foreach (self::FIRM_CODES as $token => $meaning) {
+            $out[] = ['token' => $token, 'meaning' => $meaning, 'group' => 'Firm'];
+        }
+
+        return $out;
+    }
+
+    /** The firm codes, as sent. @return array<string, string> */
+    public static function firmValues(): array
+    {
+        return [
+            'site' => Postcards::site(),
+            'supportEmail' => 'support@tmantoinelaw.com',
+            'portalUrl' => url('/'),
+            'today' => now()->format('j M Y'),
+            'year' => now()->format('Y'),
+        ];
+    }
+
+    /**
+     * The application codes for one application.
+     *
+     * @return array<string, string>
+     */
+    public static function applicationValues(\App\Models\CipApplication $application): array
+    {
+        $application->loadMissing(['provider', 'client', 'people']);
+        $people = $application->people;
+        $main = $people->firstWhere('role', \App\Models\CipPerson::ROLE_MAIN_APPLICANT);
+        $dependents = $people->where('role', \App\Models\CipPerson::ROLE_DEPENDENT);
+        $spouse = $dependents->firstWhere('relationship', \App\Models\CipPerson::RELATIONSHIP_SPOUSE);
+        $children = $dependents->filter(fn ($p) => $p->relationship !== \App\Models\CipPerson::RELATIONSHIP_SPOUSE);
+        $name = fn ($p) => (string) \App\Models\CipPerson::upperName($p->fullName());
+        $applicant = $main ? $name($main) : (string) \App\Models\CipPerson::upperName((string) ($application->client?->name ?? ''));
+        $family = collect([$main])->merge($people->where('role', \App\Models\CipPerson::ROLE_DEPENDENT))->filter()->map($name)->filter()->values();
+
+        return [
+            'number' => (string) $application->displayNumber(),
+            'applicationNumber' => (string) ($application->internal_number ?? ''),
+            'cipNumber' => (string) ($application->cip_number ?? ''),
+            'applicant' => $applicant,
+            'applicantFirstName' => $main ? ucfirst(mb_strtolower((string) $main->first_name)) : '',
+            'spouse' => $spouse ? $name($spouse) : '',
+            'dependents' => $children->map($name)->filter()->implode(', '),
+            'dependentCount' => (string) $children->count(),
+            'familyMembers' => $family->implode(', '),
+            'familySize' => (string) $application->familySize(),
+            'provider' => (string) ($application->provider?->name ?? 'Private client'),
+            'investmentType' => \App\Support\Cip\InvestmentType::display($application->investment_type, $application->investment_type_other),
+            'applicationStatus' => \App\Support\Cip\Status::label((string) $application->status),
+            'phase' => \App\Support\Cip\Phase::label((string) ($application->phase ?? \App\Support\Cip\Phase::PRE_APPROVAL)),
+            'decisionDate' => $application->decided_at?->format('j M Y') ?? '',
+            'corNumber' => (string) ($application->cor_number ?? ''),
+        ];
     }
 
     /**
@@ -146,7 +280,10 @@ class SystemEmails
     public static function payload(string $key, array $vars, array $extras = [], ?array $copy = null): array
     {
         $copy ??= self::copy($key);
-        $vars += ['site' => Postcards::site()];
+        // The firm's codes in every email; the application's, empty unless
+        // the caller filled them, so neither ever shows as {{code}}.
+        $vars += self::firmValues();
+        $vars += array_fill_keys(array_keys(self::APPLICATION_CODES), '');
 
         $rendered = [];
         foreach (self::FIELDS as $field) {
@@ -203,7 +340,7 @@ class SystemEmails
         }
 
         $extras = ($definition['sampleExtras'] ?? []) + ['url' => url('/')];
-        $built = self::payload($key, $definition['sample'] + ['url' => url('/')], $extras, $copy);
+        $built = self::payload($key, $definition['sample'] + ['url' => url('/')] + self::APPLICATION_SAMPLE, $extras, $copy);
 
         if (! isset($built['payload']['title'])) {
             $built['payload']['title'] = $definition['name'];

@@ -8373,13 +8373,16 @@ body:has(.tma-dash.is-sidebar-collapsed) .tma-sync-pill {
 .tma-portal-codes__search .tma-portal-input { max-width: none; }
 
 .tma-portal-codes__list {
-  display: flex;
-  flex-direction: column;
+  /* A block that scrolls, not a flex column: a column squeezed into the
+     menu's height shrank its rows on top of each other. */
+  display: block;
   padding: var(--space-4);
   overflow-y: auto;
   min-height: 0;
   flex: 1 1 auto;
 }
+
+.tma-portal-codes__list > * { flex: 0 0 auto; }
 
 .tma-portal-context-menu__item.tma-portal-codes__item {
   align-items: flex-start;
@@ -8440,6 +8443,27 @@ body:has(.tma-dash.is-sidebar-collapsed) .tma-sync-pill {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
   line-height: 16px;
+  color: var(--color-text-secondary);
+}
+
+.tma-portal-codes__group-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.tma-portal-codes__group {
+  margin: 0;
+  padding: var(--space-8) var(--space-12) var(--space-4);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
   color: var(--color-text-secondary);
 }
 
