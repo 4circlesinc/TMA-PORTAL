@@ -4185,6 +4185,7 @@
     // when the network finally gives up.
     var sent = decisionParts().concat(batch.parts);
 
+    var delivered = false;
     fetch(url, {
       method: 'POST',
       credentials: 'same-origin',
@@ -4195,6 +4196,11 @@
       // posting in turns, and a filing flushed its scans above.
       body: body(sent),
     }).then(function (res) {
+      // The desktop app answers a dead network with its own 502: that is
+      // "never arrived", like a rejected fetch, not the server saying no.
+      if (res.headers && res.headers.get('x-tma-offline') === '1') throw new TypeError('offline');
+      delivered = true;
+
       return res.json().catch(function () { return {}; }).then(function (json) {
         state.saving = false;
         if (state.onSaving) state.onSaving(false);
@@ -4268,7 +4274,22 @@
         state.moved = null;
         if (state.onDone) state.onDone(json.application, { moved: moved });
       });
-    }).catch(function () {
+    }).catch(function (err) {
+      /*
+       * The server answered and something after that went wrong here. That
+       * is not offline: it used to be read as offline, and a filing the firm
+       * already had was parked as "saved on this device". The table and the
+       * form are put back in step with the firm instead.
+       */
+      if (delivered) {
+        if (window.console) console.error('[cip-intake] after the answer', err);
+        state.saving = false;
+        if (state.onSaving) state.onSaving(false);
+        dropStoredListings();
+        ui().toastError(isFiling() ? 'Filed, but this screen could not catch up. Refresh to see it.' : 'Saved, but this screen could not catch up. Refresh to see it.');
+
+        return;
+      }
       /*
        * Nothing was delivered. Not "the server said no", the request never
        * arrived, which is the offline case and the whole reason the queue

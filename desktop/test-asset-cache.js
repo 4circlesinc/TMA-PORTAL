@@ -202,6 +202,41 @@ app.whenReady().then(async () => {
   check('a deploy that lands while the app is open is noticed', !!after, true);
   check('and the bundle stops being served against it', after && after.active, false);
 
+  /* ── a form with files goes out whole ──────────────────────────── */
+  // An upload used to be passed on as a stream: chunked, no length. On
+  // Windows that failed with the connection fine, and a new application was
+  // parked as "saved on this device" and never reached the firm.
+  let landed = null;
+  const firm = http.createServer((req, res) => {
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => {
+      landed = {
+        method: req.method,
+        length: req.headers['content-length'] || null,
+        chunked: /chunked/i.test(req.headers['transfer-encoding'] || ''),
+        bytes: Buffer.concat(chunks).length,
+        type: req.headers['content-type'] || '',
+      };
+      res.writeHead(201, { 'Content-Type': 'application/json' });
+      res.end('{"application":{"id":1}}');
+    });
+  });
+  await new Promise((r) => firm.listen(0, '127.0.0.1', r));
+  const form = new FormData();
+  form.append('firstName', 'Chen');
+  form.append('passport', new Blob([Buffer.alloc(300 * 1024, 7)], { type: 'image/jpeg' }), 'passport.jpg');
+  const filed = await assetCache.handle(new Request(`http://127.0.0.1:${firm.address().port}/portal/cip/applications`, {
+    method: 'POST',
+    body: form,
+  }));
+  check('a filing with a scan is answered by the firm, not "offline"', filed.status, 201);
+  check('it went out with its length', !!(landed && landed.length && Number(landed.length) === landed.bytes), true);
+  check('not as a chunked stream', landed && landed.chunked, false);
+  check('every byte of the scan arrived', landed && landed.bytes > 300 * 1024, true);
+  check('as the form the browser built', /^multipart\/form-data; boundary=/.test(landed && landed.type), true);
+  firm.close();
+
   live.close();
   console.log(failures ? `\n${failures} FAILED` : '\nALL PASS');
   app.exit(failures ? 1 : 0);

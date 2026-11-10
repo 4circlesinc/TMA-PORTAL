@@ -681,7 +681,10 @@
         cache: 'no-store',
         headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         signal: controller ? controller.signal : undefined,
-      }).then(function () { resolve(true); }, function () { resolve(false); });
+      }).then(function (res) {
+        // The desktop app's offline stand-in is not the firm answering.
+        resolve(!(res && res.headers && res.headers.get('x-tma-offline') === '1'));
+      }, function () { resolve(false); });
     }).then(function (through) {
       clearTimeout(timer);
 
@@ -795,6 +798,13 @@
     }).then(function (res) {
       if (res === 'skipped') return res;
       if (mine !== attempt) return 'skipped';
+      // The desktop app's own stand-in for "nothing answered" is not the firm
+      // answering: it goes where a dead network goes, not to "reached".
+      if (res && res.headers && res.headers.get && res.headers.get('x-tma-offline') === '1') {
+        var undelivered = new TypeError('No answer from the firm');
+        undelivered.reason = res.headers.get('x-tma-offline-reason') || '';
+        throw undelivered;
+      }
       reachable = true;
       reached = true;
 
@@ -890,9 +900,14 @@
          * merits. Only an edit, which a repeat could apply twice, goes to the
          * reader after its one retry, with Try again and Discard.
          */
-        if (!safeToRepeat(entry)) return stall(entry, 'Could not send this to the server.', true);
+        // The firm answers, so "waiting for a connection" would be untrue:
+        // say what went wrong with this one, so it can be reported.
+        var why = err && err.reason ? ' (' + err.reason + ')' : '';
+        if (!safeToRepeat(entry)) return stall(entry, 'Could not send this to the server' + why + '.', true);
 
-        return wait(entry, 'Waiting for a connection to the firm. It sends by itself.');
+        return wait(entry, why
+          ? 'The firm is reachable but this could not be sent' + why + '. It keeps trying by itself.'
+          : 'Waiting for a connection to the firm. It sends by itself.');
       });
     });
   }

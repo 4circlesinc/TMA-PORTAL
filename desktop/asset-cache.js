@@ -151,11 +151,20 @@ function sanitizeRequestHeaders(headers) {
  */
 const OFFLINE_HEADER = 'x-tma-offline';
 
-function offlineResponse() {
+function offlineResponse(err) {
+  const headers = { [OFFLINE_HEADER]: '1' };
+  /*
+   * Why, for the page: "offline" with the wifi up is a request that failed
+   * for a reason (a reset, a certificate, a proxy), and without the reason
+   * it read as "waiting for a connection" for ever. Printable ASCII only.
+   */
+  const reason = err && (err.code || err.message);
+  if (reason) headers['x-tma-offline-reason'] = String(reason).replace(/[^\x20-\x7e]/g, '?').slice(0, 160);
+
   return new Response('', {
     status: 502,
     statusText: 'Bad Gateway',
-    headers: { [OFFLINE_HEADER]: '1' },
+    headers: headers,
   });
 }
 
@@ -173,13 +182,28 @@ function networkFetch(request) {
       headers: headers,
       bypassCustomProtocolHandlers: true,
     };
-    if (request.method !== 'GET' && request.method !== 'HEAD') {
-      init.body = request.body;
-      init.duplex = 'half';
-    }
-
-    return net.fetch(request.url, init).catch((err) => {
+    const send = () => net.fetch(request.url, init).catch((err) => {
       console.error('[asset-cache] network fetch failed', request.url, err);
+
+      return offlineResponse(err);
+    });
+    if (request.method === 'GET' || request.method === 'HEAD') return send();
+
+    /*
+     * The body is read whole and sent with its length, the way the browser
+     * itself sends a form. It used to be passed on as a stream (duplex
+     * 'half'), which goes out chunked with no length, and on Windows an
+     * upload sent that way failed while the connection was fine: the
+     * failure came back as "offline", a new application was parked as
+     * saved on this device, and every replay failed the same way, so it
+     * never reached the table.
+     */
+    return request.arrayBuffer().then((buffer) => {
+      if (buffer.byteLength) init.body = Buffer.from(buffer);
+
+      return send();
+    }, (err) => {
+      console.error('[asset-cache] request body unreadable', request.url, err);
 
       return offlineResponse();
     });
