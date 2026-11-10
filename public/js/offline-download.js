@@ -1,31 +1,33 @@
 /*
- * TMA. The apps' copy for offline, downloaded behind the screen.
+ * TMA. The apps' copy for offline, downloaded once, kept up to date.
  *
- * What WhatsApp and Gmail do: once connected, everything a person reads is
- * on the phone, not only what they happened to open. The first-run download
- * (portal-replica.js) already keeps every application, client and file
- * record. This keeps the rest a person reads every day:
+ * What WhatsApp and Gmail do: once connected, everything is on the phone,
+ * not only what was opened. The first-run download (portal-replica.js)
+ * already keeps every application, client and file record, and
+ * offline-fetch.js keeps every answer any screen has been given. This
+ * fetches the rest ahead of time, and keeps all of it fresh:
  *
- *   - Messages: the conversation list, and the newest page of each recent
- *     conversation (`messages:warm`, `messages:thread:<id>`, the same keys
- *     messages.js reads and writes).
- *   - Email: the inbox's first pages and the newest conversations, bodies
- *     included, through TMAEmailAPI's kept reads (email-api.js).
- *   - Your profile and security settings, as Settings asks for them
- *     (`settings:get:<url>`, portal-admin.js).
+ *   - Settings: every page (an administrator's too; a page the account may
+ *     not open is skipped), as Settings asks for them.
+ *   - Messages: the whole conversation list, and the newest page of every
+ *     conversation (`messages:warm`, `messages:thread:<id>`).
+ *   - Email: the newest MAIL_TARGET conversations with their bodies, and
+ *     the folder pages they are listed on (kept by email-api.js).
+ *   - Everything any screen has read before (the `http:` answers): fetched
+ *     again, so the Feed, the Calendar, Signatures, Reporting and every tab
+ *     a person has opened is current, not just present.
+ *   - Files: the newest documents' bytes, newest first, up to FILE_BUDGET,
+ *     each app keeping them in its own file store (desktop/file-cache.js;
+ *     FileStore.swift on the iPhone, through TMADesktop.keepFiles; Android's
+ *     WebView store). A file is fetched again only when it changes.
  *
- * Bounded so a phone is not filled: the newest page (100 messages) of the 50
- * most recent conversations, the newest 40 email conversations, a folder's
- * first pages. Files are not downloaded here: a document is kept when it is
- * opened (and on the desktop by its own cache), which is what the firm asked.
+ * Shown as the dashboard's first section ("Downloading for offline…" with
+ * its parts, then "Ready offline"), above the greeting. Runs a little after
+ * the app opens, when the connection comes back, and every half hour; one
+ * run at a time, a breath between requests, so the screen in front always
+ * comes first. The apps only: a browser keeps no client data on its disk.
  *
- * Shown as a card beside the email sync ("Downloading for offline…", then
- * "Ready offline") the first time a device makes its copy, and after a long
- * time away; every later run is silent. Runs a little after the app opens,
- * when the connection comes back, and every half hour while it is open.
- * The apps only: a browser keeps no client data on its disk.
- *
- * Global: window.TMAOfflineDownload ({ run })
+ * Global: window.TMAOfflineDownload ({ run, paint, state })
  */
 (function () {
   'use strict';
@@ -34,17 +36,26 @@
 
   var START_AFTER_MS = 6000;
   var EVERY_MS = 30 * 60 * 1000;
-  var SHOW_AGAIN_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
-  var THREADS = 50;
   var THREAD_KEEP = 100;
   var THREAD_FRESH_MS = 10 * 60 * 1000;
-  var MAIL_THREADS = 40;
-  var SETTINGS = ['/me/profile', '/security-settings/data'];
+  var MAIL_TARGET = 500;
+  var REFRESH_LIMIT = 400;
+  // The device's file store holds 2.5 GB; the download fills most of it and
+  // leaves the rest for what a person opens.
+  var FILE_BUDGET = 2.2 * 1024 * 1024 * 1024;
+  var FILE_MAX = 100 * 1024 * 1024;
+  var SETTINGS = [
+    '/me/profile', '/security-settings/data',
+    '/admin/branding', '/admin/client-hub', '/admin/connectors', '/admin/notification-history',
+    '/admin/permissions', '/admin/reports', '/admin/security-policies', '/admin/storage-usage',
+    '/admin/background-ops',
+  ];
   var DONE_KEY = 'offline:complete';
+  var FILES_KEY = 'offline:files';
 
   var running = false;
-  var shown = false;
-  var progress = { synced: 0, total: 0, what: '' };
+  // What the dashboard shows. `parts` in the order they run.
+  var state = { phase: 'idle', parts: [], finishedAt: null };
 
   function store() {
     var s = window.TMAStore;
@@ -57,42 +68,91 @@
     return !(queue && queue.online && !queue.online());
   }
 
-  function report(state) {
-    if (!shown || !window.TMASyncToasts || !window.TMASyncToasts.update) return;
-    // Cut short by the connection going: not a problem to pin on screen.
-    // It is not marked done, so the next run with a connection says so again.
-    if (state === 'error') {
-      if (window.TMASyncToasts.dismiss) window.TMASyncToasts.dismiss('offline', { again: true });
+  /* ── the dashboard's first section ─────────────────────────────── */
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function size(bytes) {
+    if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+    return Math.max(1, Math.round(bytes / (1024 * 1024))) + ' MB';
+  }
+
+  function partLine(part) {
+    if (part.bytes) return part.label + ' ' + size(part.doneBytes || 0) + ' of ' + size(part.bytes);
+    if (!part.total) return part.label;
+    return part.label + ' ' + Math.min(part.done, part.total) + ' of ' + part.total;
+  }
+
+  function percent() {
+    var done = 0;
+    state.parts.forEach(function (part) {
+      if (part.finished) done += 1;
+      else if (part.bytes) done += Math.min(1, (part.doneBytes || 0) / part.bytes);
+      else if (part.total) done += Math.min(1, part.done / part.total);
+    });
+    // Five parts in all; the bar is the share of them done.
+    return Math.round((done / 5) * 100);
+  }
+
+  function paint() {
+    var mount = document.querySelector('[data-offline-status-mount]');
+    if (!mount) return;
+    if (state.phase === 'idle') {
+      mount.innerHTML = '';
       return;
     }
-    window.TMASyncToasts.update('offline', {
-      state: state, synced: progress.synced, total: progress.total, what: progress.what,
-    });
+    var done = state.phase === 'done';
+    var current = state.parts.filter(function (p) { return !p.finished; })[0];
+    var finished = state.parts.filter(function (p) { return p.finished; }).map(function (p) { return p.label; });
+    var detail = done
+      ? 'Messages, email, applications, settings and files open with no connection.'
+      : (current ? partLine(current) : 'Getting ready…');
+    mount.innerHTML =
+      '<section class="tma-offline-status' + (done ? ' tma-offline-status--done' : '') + '" role="status" aria-live="polite">' +
+      '<img class="tma-offline-status__icon" src="/images/icons/phosphor/' + (done ? 'CheckCircle' : 'CloudArrowDown') + '.svg" alt="">' +
+      '<div class="tma-offline-status__body">' +
+      '<div class="tma-offline-status__title">' + (done ? 'Ready offline' : 'Downloading for offline') + '</div>' +
+      '<div class="tma-offline-status__detail">' + esc(detail) +
+      (!done && finished.length ? '<span class="tma-offline-status__done"> · ' + esc(finished.join(', ')) + ' done</span>' : '') +
+      '</div>' +
+      (done ? '' : '<div class="tma-offline-status__track"><div class="tma-offline-status__fill" style="width:' + Math.max(3, percent()) + '%"></div></div>') +
+      '</div>' +
+      (done ? '<button type="button" class="tma-offline-status__close" data-offline-status-close aria-label="Dismiss">×</button>' : '') +
+      '</section>';
+    var close = mount.querySelector('[data-offline-status-close]');
+    if (close) {
+      close.addEventListener('click', function () {
+        state.phase = 'idle';
+        paint();
+      });
+    }
   }
 
-  function step(what, total) {
-    progress.what = what;
-    progress.total += total;
-    report('syncing');
+  function part(key, label) {
+    var p = { key: key, label: label, done: 0, total: 0, finished: false };
+    state.parts.push(p);
+    paint();
+    return p;
   }
 
-  function done(n) {
-    progress.synced += n || 1;
-    report('syncing');
+  function tick(p, n) {
+    p.done += n || 1;
+    paint();
   }
 
-  function text(url) {
-    return fetch(url, {
-      credentials: 'same-origin',
-      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-    }).then(function (res) {
-      if (res.headers.get('x-tma-offline') === '1') throw new TypeError('offline');
-      return res.ok ? res.text().then(function (body) { return { status: res.status, body: body }; }) : null;
-    });
+  function finish(p) {
+    p.finished = true;
+    paint();
   }
+
+  /* ── the work ──────────────────────────────────────────────────── */
 
   /* One after another, a breath apart: the screen in front comes first. */
-  function each(items, fn) {
+  function each(items, fn, gapMs) {
     var i = 0;
     return new Promise(function (resolve) {
       var next = function () {
@@ -101,27 +161,39 @@
           return;
         }
         var item = items[i++];
-        Promise.resolve().then(function () { return fn(item); }).catch(function () { /* next */ }).then(function () {
-          setTimeout(next, 120);
+        Promise.resolve().then(function () { return fn(item); }).catch(function () { /* the next */ }).then(function () {
+          setTimeout(next, gapMs == null ? 80 : gapMs);
         });
       };
       next();
     });
   }
 
-  function settings(kept) {
-    step('Your profile', SETTINGS.length);
-    return each(SETTINGS, function (url) {
-      return text(url).then(function (answer) {
-        if (answer) kept.put('settings:get:' + url, answer);
-        done();
-      });
+  function getJSON(url) {
+    return fetch(url, {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
     });
+  }
+
+  function settings(kept) {
+    var p = part('settings', 'Settings');
+    p.total = SETTINGS.length;
+    return each(SETTINGS, function (url) {
+      return getJSON(url).then(function (res) {
+        // Only the firm's own answer; never a copy of a copy.
+        if (!res.ok || res.headers.get('x-tma-kept') === '1' || res.headers.get('x-tma-offline') === '1') return null;
+        return res.text().then(function (body) {
+          kept.put('settings:get:' + url, { status: res.status, body: body });
+        });
+      }).then(function () { tick(p); });
+    }).then(function () { finish(p); });
   }
 
   function messages(kept) {
     var api = window.TMAMessagingAPI;
     if (!api || !api.conversations || !api.messages) return Promise.resolve();
+    var p = part('messages', 'Messages');
 
     return api.conversations().then(function (data) {
       var rows = (data && data.conversations) || [];
@@ -131,10 +203,10 @@
         settings: data.settings || {},
         tabCounts: data.tabCounts || {},
       });
-      var recent = rows.slice(0, THREADS);
-      step('Messages', recent.length);
+      p.total = rows.length;
+      paint();
 
-      return each(recent, function (row) {
+      return each(rows, function (row) {
         var key = 'messages:thread:' + row.id;
         return kept.get(key).then(function (held) {
           if (held && held.keptAt && Date.now() - held.keptAt < THREAD_FRESH_MS) return null;
@@ -148,74 +220,178 @@
               keptAt: Date.now(),
             });
           });
-        }).then(function () { done(); });
+        }).then(function () { tick(p); });
       });
-    }).catch(function () { /* the next run */ });
+    }).catch(function () { /* the next run */ }).then(function () { finish(p); });
+  }
+
+  function mailPerPage() {
+    try {
+      var saved = parseInt(localStorage.getItem('tma.mail.perPage.v1'), 10);
+      if ([25, 50, 100, 200].indexOf(saved) !== -1) return saved;
+    } catch (e) { /* the default */ }
+    return 50;
   }
 
   function mail(kept) {
     var api = window.TMAEmailAPI;
     if (!api || !api.listMessages || !api.getThread) return Promise.resolve();
+    var p = part('email', 'Email');
+    var perPage = mailPerPage();
+    var rows = [];
 
-    // Kept by the reads themselves (email-api.js): the first pages, then the
-    // newest conversations a person has not opened here yet.
-    // Asked exactly as the Email screen asks (its page size included), so
-    // the kept pages are the ones it finds.
-    var perPage = 50;
-    try {
-      var saved = parseInt(localStorage.getItem('tma.mail.perPage.v1'), 10);
-      if ([25, 50, 100, 200].indexOf(saved) !== -1) perPage = saved;
-    } catch (e) { /* the default */ }
-    return api.listMessages({ folder: 'inbox', page: 1, perPage: perPage }).then(function (data) {
-      var rows = (data && data.messages) || [];
-      return api.listMessages({ folder: 'inbox', page: 2, perPage: perPage }).catch(function () { return null; }).then(function () {
-        return rows.slice(0, MAIL_THREADS);
+    // The pages, asked exactly as the Email screen asks, so they are the
+    // ones it finds; then each conversation, bodies included.
+    var page = function (n) {
+      return api.listMessages({ folder: 'inbox', page: n, perPage: perPage }).then(function (data) {
+        var got = (data && data.messages) || [];
+        rows = rows.concat(got);
+        var last = data && (data.lastPage || data.last_page);
+        var more = got.length >= perPage && rows.length < MAIL_TARGET && (!last || n < last);
+        return more ? page(n + 1) : null;
       });
-    }).then(function (rows) {
-      step('Email', rows.length);
-      return each(rows, function (row) {
-        if (!row || row.id == null) return done();
+    };
+
+    return page(1).then(function () {
+      var wanted = rows.slice(0, MAIL_TARGET);
+      p.total = wanted.length;
+      paint();
+      return each(wanted, function (row) {
+        if (!row || row.id == null) {
+          tick(p);
+          return null;
+        }
         return kept.get('mail:thread:' + row.id).then(function (held) {
-          if (held) return null;
-          return api.getThread(row.id);
-        }).then(function () { done(); });
+          return held ? null : api.getThread(row.id);
+        }).then(function () { tick(p); });
+      }, 120);
+    }).catch(function () { /* no mailbox, or it needs reconnecting */ }).then(function () { finish(p); });
+  }
+
+  /* Everything any screen has read before, fetched again (offline-fetch.js keeps the answers). */
+  function refresh(kept) {
+    if (!kept.list) return Promise.resolve();
+    var p = part('everything', 'Everything you have opened');
+
+    return kept.list('http:').then(function (held) {
+      var paths = Object.keys(held || {}).map(function (k) {
+        return k.slice(k.indexOf('http:') + 5);
+      }).filter(Boolean).slice(0, REFRESH_LIMIT);
+      p.total = paths.length;
+      paint();
+      return each(paths, function (path) {
+        return getJSON(path).then(function () { tick(p); }, function () { tick(p); });
+      }, 60);
+    }).catch(function () {}).then(function () { finish(p); });
+  }
+
+  /* The newest documents, within the budget, each fetched again only when it changes. */
+  function files(kept) {
+    if (!kept.list) return Promise.resolve();
+    var host = window.TMADesktop || {};
+    var p = part('files', 'Files');
+    var had = {};
+
+    return Promise.all([kept.list('files:item:'), kept.get(FILES_KEY)]).then(function (got) {
+      var held = got[0] || {};
+      had = got[1] || {};
+      var records = Object.keys(held).map(function (k) { return held[k]; }).filter(function (r) {
+        return r && r.id && !r.deleted && r.previewable !== false && (r.size || 0) > 0 && r.size <= FILE_MAX;
+      }).sort(function (a, b) {
+        return String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''));
       });
-    }).catch(function () { /* no mailbox connected, or it needs reconnecting */ });
+
+      var chosen = [];
+      var bytes = 0;
+      records.forEach(function (r) {
+        if (bytes + r.size > FILE_BUDGET) return;
+        bytes += r.size;
+        chosen.push(r);
+      });
+      var stale = chosen.filter(function (r) { return had[r.id] !== (r.updatedAt || ''); });
+      p.bytes = bytes;
+      p.doneBytes = bytes - stale.reduce(function (n, r) { return n + r.size; }, 0);
+      paint();
+      if (!stale.length) return null;
+
+      var path = function (r) { return '/portal/files/files/' + r.id + '/preview'; };
+      var mark = function (r) {
+        had[r.id] = r.updatedAt || '';
+        p.doneBytes += r.size;
+        paint();
+      };
+
+      // The iPhone keeps them natively, downloading in its own session.
+      if (typeof host.keepFiles === 'function') {
+        return new Promise(function (resolve) {
+          host.keepFiles(stale.map(function (r) {
+            return { path: path(r), version: r.updatedAt || '', size: r.size };
+          }), function (index, ok) {
+            if (ok && stale[index]) mark(stale[index]);
+          }, resolve);
+        });
+      }
+
+      // The desktop and Android keep what passes through them: read it whole.
+      return each(stale, function (r) {
+        return fetch(path(r), { credentials: 'same-origin' }).then(function (res) {
+          if (!res.ok || res.headers.get('x-tma-offline') === '1') return null;
+          return res.arrayBuffer().then(function () { mark(r); });
+        });
+      }, 150);
+    }).catch(function () {}).then(function () {
+      kept.put(FILES_KEY, had);
+      finish(p);
+    });
   }
 
   function run() {
     var kept = store();
     if (running || !kept || !online()) return Promise.resolve();
     running = true;
-    progress = { synced: 0, total: 0, what: '' };
+    state = { phase: 'running', parts: [], finishedAt: null };
+    paint();
+    var before = null;
 
     return kept.get(DONE_KEY).then(function (last) {
-      // A card the first time this device makes its copy, and after a long
-      // time away; otherwise this is quiet upkeep.
-      shown = !last || !last.at || Date.now() - last.at > SHOW_AGAIN_AFTER_MS;
-      report('syncing');
-
-      return settings(kept)
-        .then(function () { return messages(kept); })
-        .then(function () { return mail(kept); });
-    }).then(function () {
-      if (!online()) {
-        report('error');
-        return;
-      }
-      progress.what = '';
-      kept.put(DONE_KEY, { at: Date.now() });
-      report('done');
-    }).catch(function () {
-      report('error');
-    }).then(function () {
-      running = false;
-      shown = false;
-    });
+      before = last || null;
+      return settings(kept);
+    })
+      .then(function () { return messages(kept); })
+      .then(function () { return mail(kept); })
+      .then(function () { return refresh(kept); })
+      .then(function () { return files(kept); })
+      .then(function () {
+        if (!online()) {
+          // Cut short by the connection: nothing to pin on screen. Not marked
+          // done, so the next run with a connection carries on.
+          state.phase = 'idle';
+          return;
+        }
+        kept.put(DONE_KEY, { at: Date.now() });
+        state.phase = 'done';
+        state.finishedAt = Date.now();
+        // The first copy on this device stays said until dismissed; keeping
+        // it up to date afterwards says so briefly and steps away.
+        if (before) {
+          var finishedAt = state.finishedAt;
+          setTimeout(function () {
+            if (state.phase === 'done' && state.finishedAt === finishedAt) {
+              state.phase = 'idle';
+              paint();
+            }
+          }, 10000);
+        }
+      })
+      .catch(function () { state.phase = 'idle'; })
+      .then(function () {
+        running = false;
+        paint();
+      });
   }
 
   if (!(window.TMADesktop && window.TMADesktop.isDesktop)) {
-    window.TMAOfflineDownload = { run: function () { return Promise.resolve(); } };
+    window.TMAOfflineDownload = { run: function () { return Promise.resolve(); }, paint: function () {}, state: function () { return state; } };
     return;
   }
 
@@ -229,5 +405,5 @@
   if (document.readyState === 'complete') start();
   else window.addEventListener('load', start);
 
-  window.TMAOfflineDownload = { run: run };
+  window.TMAOfflineDownload = { run: run, paint: paint, state: function () { return state; } };
 })();

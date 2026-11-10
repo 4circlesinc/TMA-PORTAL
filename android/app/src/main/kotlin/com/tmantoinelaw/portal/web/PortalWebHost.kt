@@ -75,6 +75,8 @@ class PortalWebHost(
     private val rules = NavigationRules(origin)
     private val appContext = context.applicationContext
     val shellCache = ShellCache(appContext.filesDir, origin, client, userAgent())
+    /** Documents kept on the phone for offline (FileStore.kt). */
+    val fileStore = FileStore(appContext.filesDir, origin, client, userAgent())
 
     /** The loading layer (desktop/splash.js): up from a main-frame navigation until the page finished. */
     private val _loading = MutableStateFlow(true)
@@ -227,6 +229,8 @@ class PortalWebHost(
 
         /** Offline, a navigation to a page the kept shell covers is answered from disk (shellCache.maybeServe). */
         override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+            // A document or a photo: kept on the phone, and answered from it offline.
+            if (!request.isForMainFrame) fileStore.intercept(request, online)?.let { return it }
             if (!request.isForMainFrame || request.method != "GET" || online) return null
             val url = request.url
             if (!rules.isPortalUrl(url.toString())) return null
@@ -237,6 +241,8 @@ class PortalWebHost(
 
         override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
             if (!url.startsWith("file:") && !url.startsWith("data:")) _loading.value = true
+            // Signing out or in: the documents kept for offline are never the next person's.
+            if (rules.isPortalUrl(url) && (Uri.parse(url).path ?: "").startsWith("/auth")) io.execute { fileStore.clear() }
             if (!startScriptsSupported) view.evaluateJavascript(preload + "\n" + hostBridge, null)
         }
 

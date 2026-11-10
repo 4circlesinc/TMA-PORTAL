@@ -37,6 +37,8 @@ final class PortalModel: NSObject, ObservableObject {
     let glass = GlassChrome()
     private let rules: NavigationRules
     private let shell: ShellCache
+    /// Documents kept on the phone for offline (FileStore.swift).
+    private let files: FileStore
     private let bridge = ScriptBridge()
     private let monitor = NWPathMonitor()
     private var online = true
@@ -78,10 +80,14 @@ final class PortalModel: NSObject, ObservableObject {
         let rules = NavigationRules(origin: PortalConfig.origin)
         self.rules = rules
         shell = ShellCache(origin: PortalConfig.origin)
+        files = FileStore(origin: PortalConfig.origin)
 
         let content = WKUserContentController()
         let config = WKWebViewConfiguration()
         config.userContentController = content
+        // A document kept on the phone, read by its path when nothing answers
+        // for it (TMADesktop.readKeptFile, offline-fetch.js).
+        content.addScriptMessageHandler(files, contentWorld: .page, name: FileStore.handlerName)
         config.websiteDataStore = .default()
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
@@ -349,6 +355,10 @@ final class PortalModel: NSObject, ObservableObject {
         switch op {
         case "relay":
             relay(dict["channel"] as? String ?? "", value: "\(dict["value"] ?? "")")
+        case "keepFiles":
+            keepFiles(call: dict["call"] as? String ?? "", list: dict["files"] as? [[String: Any]] ?? [])
+        case "clearFiles":
+            files.clear()
         case "notify":
             if let json = dict["json"] as? String { showPageNotification(json) }
         case "tone":
@@ -530,6 +540,7 @@ final class PortalModel: NSObject, ObservableObject {
             pendingBrowserURL = nil
             // A new sign-in: whatever shell was kept belonged to the session before.
             shell.invalidate()
+            files.clear()
             await importCookies(cookies)
             loadPortal()
         case .noVerifier:
@@ -872,6 +883,23 @@ final class PortalModel: NSObject, ObservableObject {
         }
     }
 
+    /// The page asked for documents to be kept (offline-download.js).
+    private func keepFiles(call: String, list: [[String: Any]]) {
+        let wanted = list.compactMap { item -> FileStore.Wanted? in
+            guard let path = item["path"] as? String, path.hasPrefix("/portal/files/") else { return nil }
+            let size = (item["size"] as? NSNumber)?.int64Value ?? 0
+            return FileStore.Wanted(path: path, version: item["version"] as? String ?? "", size: size)
+        }
+        Task { @MainActor in
+            let header = self.cookieHeader(await self.cookies())
+            self.files.keep(wanted, cookieHeader: header, userAgent: PortalConfig.userAgent, progress: { [weak self] i, ok in
+                self?.evaluate("window.__tmaFileStore && __tmaFileStore.progress(\(jsString(call)), \(i), \(ok))")
+            }, done: { [weak self] in
+                self?.evaluate("window.__tmaFileStore && __tmaFileStore.done(\(jsString(call)))")
+            })
+        }
+    }
+
     private func cookies() async -> [HTTPCookie] {
         await withCheckedContinuation { cont in
             webView.configuration.websiteDataStore.httpCookieStore.getAllCookies { cont.resume(returning: $0) }
@@ -976,6 +1004,8 @@ extension PortalModel: WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, A
                 // portal, and must never open as the next person's.
                 if segment == "auth" || segment == "sign-in" || segment == "sign-up" {
                     shell.invalidate()
+                    // And the documents kept for offline: never the next person's.
+                    files.clear()
                 }
                 // A reload of a page painted from the phone is somebody asking
                 // for the portal afresh: that is the network's to answer.

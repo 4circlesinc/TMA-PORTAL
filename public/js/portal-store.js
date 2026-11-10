@@ -53,9 +53,10 @@
   var STORE = 'cache';
 
   /* Entries older than this are ignored on read and dropped on the next sweep.
-     A week is long enough that a fortnight away still opens instantly, and
-     short enough that a record deleted while away does not haunt the screen. */
-  var MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+     A month: an app that has been offline for a fortnight still opens on
+     everything it had (the WhatsApp test). Online every read is revalidated
+     anyway, so the age only ever matters with no connection. */
+  var MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
   function isDesktop() {
     return !!(window.TMADesktop && window.TMADesktop.isDesktop);
@@ -441,7 +442,7 @@
    * download keeps for every client and file: those are thousands, and are
    * read when opened.
    */
-  var BULK = /^(files:folder:|files:item:|clients:record:|cip:application-record:|mail:message:|mail:thread:)|sync-cursor/;
+  var BULK = /^(files:folder:|files:item:|clients:record:|cip:application-record:|mail:message:|mail:thread:|http:)|sync-cursor/;
   var preloading = null;
 
   function preload() {

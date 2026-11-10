@@ -1,6 +1,6 @@
 {
-  "css": "app-b77a943bdd91.css",
-  "js": "app-0f7a7c1bc7fe.js",
+  "css": "app-2f040c82270d.css",
+  "js": "app-e920e1786189.js",
   "sources": {
     "css": [
       "tokens.css",
@@ -77,6 +77,7 @@
       "email-api.js",
       "portal-store.js",
       "portal-queue.js",
+      "offline-fetch.js",
       "portal-sync-status.js",
       "email-open-links.js",
       "email.js",

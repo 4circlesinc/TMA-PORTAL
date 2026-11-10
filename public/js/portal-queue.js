@@ -742,6 +742,9 @@
 
   /* A screen's read was answered: proof enough, if we thought otherwise. */
   function answeredByFirm() {
+    // A read answered from the device's copy (offline-fetch.js) is not the firm.
+    var copies = window.TMAOfflineFetch;
+    if (copies && copies.keptRecently && copies.keptRecently()) return;
     if (linkDown) cameBack();
   }
 

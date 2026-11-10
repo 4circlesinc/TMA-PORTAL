@@ -154,6 +154,8 @@ const SECTIONS = [
   { name: 'Feed', path: '/social/feed' },
   { name: 'Email', path: '/email' },
   { name: 'Settings', path: '/account-settings' },
+  { name: 'Signatures', path: '/signatures' },
+  { name: 'Reporting', path: '/reporting' },
 ];
 
 const report = (s, seen) => {
@@ -185,13 +187,24 @@ try {
   await api(page, `/portal/messaging/conversations/${unopened}/messages`, { method: 'POST', json: { body: UNOPENED, nonce: crypto.randomUUID() } });
   SECTIONS.push({ name: 'A chat never opened before', path: `/social/messages?conversation=${unopened}`, expect: 'twice:' + UNOPENED, unopened: true });
 
-  // The copy for offline starts by itself, and the first time it says so.
-  let cardSeen = false;
-  for (let i = 0; i < 40 && !cardSeen; i++) {
-    cardSeen = await page.evaluate(() => !!document.querySelector('.tma-sync-toast[data-sync-key="offline"]'));
-    if (!cardSeen) await page.waitForTimeout(250);
+  // The copy for offline starts by itself, and says so as the dashboard's first section.
+  let section = null;
+  for (let i = 0; i < 40 && !(section && section.shown); i++) {
+    section = await page.evaluate(() => {
+      const el = document.querySelector('[data-offline-status-mount] .tma-offline-status');
+      const mount = el && el.closest('[data-offline-status-mount]');
+      return {
+        shown: !!el,
+        first: !!mount && mount === mount.parentElement.firstElementChild,
+        aboveHello: !!mount && !!mount.nextElementSibling && mount.nextElementSibling.classList.contains('tma-portal-hello'),
+        text: el ? el.innerText.replace(/\s+/g, ' ') : '',
+      };
+    });
+    if (!section.shown) await page.waitForTimeout(250);
   }
-  check(cardSeen, 'a card says the app is downloading for offline');
+  check(section.shown && /Downloading for offline/.test(section.text), `the dashboard says it is downloading for offline ("${section.text.slice(0, 80)}")`);
+  check(section.first && section.aboveHello, 'as its very first section, above the greeting');
+  check(!(await page.evaluate(() => !!document.querySelector('.tma-sync-toast'))), 'and not as a toast');
 
   step(2, 'Visit every section, as someone using the app would');
   for (const s of SECTIONS.filter((x) => !x.unopened)) {

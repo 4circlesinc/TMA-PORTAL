@@ -61,8 +61,8 @@ android {
         applicationId = "com.tmantoinelaw.portal"
         minSdk = 26
         targetSdk = 37
-        versionCode = 6
-        versionName = "0.1.5"
+        versionCode = 7
+        versionName = "0.1.6"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Push (docs/android-app-prompt.md §13); all blank = off.
         buildConfigField("String", "FIREBASE_PROJECT_ID", "\"${firebase("projectId")}\"")

@@ -33,19 +33,11 @@
       syncing: 'Syncing SharePoint…',
       icon: '/images/icons/brands/SharePoint40.svg',
     },
-    // The apps' copy for offline (offline-download.js): reported here, not
-    // polled from the server, so it needs no "watch" to be shown.
-    offline: {
-      label: 'Offline copy',
-      syncing: 'Downloading for offline…',
-      icon: '/images/icons/phosphor/CloudArrowDown.svg',
-      local: true,
-    },
   };
 
   /* File-library toasts show only while a run is actually walking Graph.
      Smartsheet stays on the Background Operations page. */
-  var SHOWN = { email: 1, calendar: 1, libraries: 1, offline: 1 };
+  var SHOWN = { email: 1, calendar: 1, libraries: 1 };
 
   var host = null;
   var cards = {}; // key -> { el, minimized, dismissed, doneTimer }
@@ -72,7 +64,6 @@
     var svc = SERVICES[key];
     if (s.state === 'paused' || s.importsPaused) return svc.label + ' paused';
     if (s.state === 'done') {
-      if (key === 'offline') return 'Ready offline';
       return key === 'smartsheet' ? 'Documents imported' : (svc.label + ' synced');
     }
     if (s.state === 'error') return svc.label + ' sync problem';
@@ -84,11 +75,6 @@
   function detail(key, s) {
     if (s.state === 'paused' || s.importsPaused) {
       return 'Resume in Settings → Background Operations.';
-    }
-    if (key === 'offline') {
-      if (s.state === 'done') return 'Messages, email and applications open with no connection.';
-      if (s.state === 'error') return 'It carries on when the connection is back.';
-      return (s.what ? s.what + ' · ' : '') + fmt(s.synced) + (s.total ? ' of ' + fmt(s.total) : '') + ' items';
     }
     if (s.state === 'error') return 'Check Settings → Connectors.';
     // A run we started locally has no counts yet, say so rather than "0".

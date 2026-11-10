@@ -39,8 +39,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 
-/* 512 MB. See the note above — a placeholder for the firm's answer. */
-const DEFAULT_BUDGET = 512 * 1024 * 1024;
+/* 2.5 GB, the firm's answer (10 Nov 2026): documents are downloaded ahead
+   for offline (public/js/offline-download.js), not only kept when opened. */
+const DEFAULT_BUDGET = 2.5 * 1024 * 1024 * 1024;
 
 /*
  * What is worth keeping: the bytes behind the viewer. Thumbs ride along —

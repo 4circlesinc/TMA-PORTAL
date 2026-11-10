@@ -126,7 +126,7 @@
         }));
       };
       // A folder's first pages are kept; a search is a question, not mail.
-      if (opts.search || (opts.page || 1) > 5) return request();
+      if (opts.search || (opts.page || 1) > 20) return request();
 
       return keptRead('mail:list:' + (opts.folder || 'inbox') + ':' + (opts.label || '') + ':' +
         (opts.page || 1) + ':' + (opts.perPage || ''), request);

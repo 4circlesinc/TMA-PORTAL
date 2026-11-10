@@ -35,6 +35,24 @@
   if (!capZoom(false)) document.addEventListener('DOMContentLoaded', function () { capZoom(true); }, { once: true });
   var notificationsAllowed = __TMA_NOTIFICATIONS__;
 
+  var fileCalls = 0;
+  var fileCallbacks = {};
+  window.__tmaFileStore = {
+    progress: function (call, index, ok) {
+      var c = fileCallbacks[call];
+      if (c && typeof c.each === 'function') {
+        try { c.each(index, ok); } catch (e) { /* the page's own */ }
+      }
+    },
+    done: function (call) {
+      var c = fileCallbacks[call];
+      delete fileCallbacks[call];
+      if (c && typeof c.done === 'function') {
+        try { c.done(); } catch (e) { /* the page's own */ }
+      }
+    },
+  };
+
   function post(op, extra) {
     try {
       var body = extra || {};
@@ -55,6 +73,37 @@
     openInBrowser: function (url) {
       if (typeof url !== 'string') return;
       post('openInBrowser', { url: url });
+    },
+    /*
+     * Documents kept on the phone (FileStore.swift). keepFiles downloads the
+     * ones missing or changed in the app's own session, telling onEach(i, ok)
+     * as each one lands and onDone() at the end (offline-download.js);
+     * readKeptFile gives a kept one back, as a Blob (or null), when nothing
+     * answers for it (offline-fetch.js, offline-pictures.js).
+     */
+    keepFiles: function (files, onEach, onDone) {
+      var call = 'files-' + (++fileCalls);
+      fileCallbacks[call] = { each: onEach, done: onDone };
+      post('keepFiles', { call: call, files: Array.isArray(files) ? files : [] });
+    },
+    readKeptFile: function (path) {
+      var handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.tmaFiles;
+      if (!handler) return Promise.resolve(null);
+      try {
+        return handler.postMessage({ path: String(path) }).then(function (reply) {
+          if (!reply || !reply.data) return null;
+          // Decoded here: WebKit will not fetch a data: address for this page.
+          var raw = atob(reply.data);
+          var bytes = new Uint8Array(raw.length);
+          for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+          return new Blob([bytes], { type: reply.type || 'application/octet-stream' });
+        }).catch(function () { return null; });
+      } catch (e) {
+        return Promise.resolve(null);
+      }
+    },
+    clearFiles: function () {
+      post('clearFiles');
     },
     openLocationSettings: function () {
       post('openLocationSettings');

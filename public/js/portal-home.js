@@ -3914,6 +3914,9 @@
 
     var html =
       '<div class="tma-portal-page" data-node-id="portal-home">' +
+      // The apps' copy for offline, first of all (offline-download.js fills
+      // it; the morph leaves what it drew alone).
+      '<div class="tma-offline-status-mount" data-offline-status-mount data-morph-skip data-key="offline-status"></div>' +
       '<div class="tma-portal-hello">' +
       '<div class="tma-portal-hello__main">' +
       heroAvatarHtml +
@@ -3977,6 +3980,7 @@
       else el.innerHTML = html;
       el._homeHtml = html;
     }
+    if (window.TMAOfflineDownload && window.TMAOfflineDownload.paint) window.TMAOfflineDownload.paint();
 
     // Shell hides .tma-dash__main-head on Dashboard, so park the Today control
     // in the hello actions. Hello / Change picture / Today / Edit Dashboard

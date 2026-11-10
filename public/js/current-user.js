@@ -38,6 +38,9 @@
          There it shows only for a wait long enough to be one. */
       (window.TMADesktop && window.TMADesktop.isDesktop
         ? '.tma-skeleton-stack{animation:tma-skeleton-late 0s linear 240ms both}' +
+          // Every skeleton, the shimmer kept: a screen's own (the mailbox's,
+          // a profile's) flashed for the frames its kept copy took to read.
+          '.tma-skeleton{animation:tma-shimmer 1.4s ease infinite,tma-skeleton-late 0s linear 240ms both!important}' +
           '@keyframes tma-skeleton-late{from{visibility:hidden}to{visibility:visible}}'
         : '') +
       '.tma-skeleton-row{display:flex;align-items:center;gap:12px;padding:10px 4px}' +

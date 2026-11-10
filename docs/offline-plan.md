@@ -196,6 +196,22 @@ waits in the write queue and shows at once. Files stay as before: kept when
 opened. Bounded throughout, so a phone is not filled; apps only, by the
 firm's disk decision.
 
+**10. Everything, once, and the files on every device.** ✅ *Shipped 10 Nov
+2026.* `offline-fetch.js` sits under every screen in the apps: each JSON
+answer the firm gives is kept (`http:<path?query>`), and a read that gets no
+answer at all is given the kept one, so the Feed, Calendar, Signatures,
+Reporting, every Settings page and every tab work offline once seen, with no
+per-screen code. `offline-download.js` now fetches every conversation, the
+newest 500 emails with their bodies, every Settings page, everything already
+kept (refreshed), and the newest documents' bytes up to 2.2 GB. Its progress
+is the dashboard's first section, above the greeting. Kept data is good for
+30 days. Files, by platform: the desktop's `file-cache.js` (budget raised to
+2.5 GB, the firm's answer to the phase 6 question); the iPhone's
+`FileStore.swift` (Application Support, encrypted by the phone, out of iCloud
+backups, served to the page as `tma-file://kept/<path>`); Android's
+`FileStore.kt` (the app's private files, answered in shouldInterceptRequest
+like the desktop). All three wiped at sign-out.
+
 ## What offline applications do and do not do today
 
 Works: opening an application that has been opened before, editing it with no
@@ -225,7 +241,7 @@ Does not work yet, and each is a phase above rather than a bug:
 - Conflict resolution for two staff editing one applicant. The queue replays
   last-writer-wins today, which is the honest state of it — finishing phase 5
   needs the firm's answer on who should win.
-- Disk budget for phase 6.
+- ~~Disk budget for phase 6.~~ 2.5 GB per device (10 Nov 2026).
 - Whether a signed-out desktop should retain its cache for the next sign-in by
   the same account, or wipe it. (The write queue already keeps its entries
   across sign-out, scoped to the account that made them: unsent work belongs to

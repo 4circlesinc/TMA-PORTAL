@@ -25,6 +25,11 @@
   var PICTURE_LIMIT = 600;
   var PICTURES = /^\/(media\/avatars\/|portal\/mail\/sender-photo\/|portal\/messaging\/conversations\/[^/]+\/photo|portal\/cip\/people\/[^/]+\/passport-photo|portal\/feed\/channels\/[^/]+\/image\/)/;
 
+  // A document's thumbnail or preview: kept by the app's own file store, not
+  // here (the desktop and Android answer it themselves; the iPhone is asked).
+  var FILES = /^\/portal\/files\/files\/[a-f0-9-]{36}\/(preview|thumb)$/;
+  var host = window.TMADesktop;
+
   var kept = Object.create(null); // url -> true once kept this session
   var opening = null;
 
@@ -97,9 +102,29 @@
   document.addEventListener('error', function (e) {
     var img = e.target;
     if (!img || img.tagName !== 'IMG' || img.hasAttribute('data-tma-kept-picture')) return;
-    var key = pictureKey(img.currentSrc || img.getAttribute('src'));
+    var src = img.currentSrc || img.getAttribute('src');
+    var file = fileKey(src);
+    if (file) {
+      if (typeof host.readKeptFile !== 'function') return;
+      img.setAttribute('data-tma-kept-picture', file);
+      host.readKeptFile(file).then(function (blob) {
+        if (blob && img.isConnected) img.src = URL.createObjectURL(blob);
+      });
+      return;
+    }
+    var key = pictureKey(src);
     if (key) restore(img, key);
   }, true);
+
+  function fileKey(src) {
+    if (!src) return null;
+    try {
+      var url = new URL(src, location.href);
+      return url.origin === location.origin && FILES.test(url.pathname) ? url.pathname : null;
+    } catch (e) {
+      return null;
+    }
+  }
 
   window.TMAOfflinePictures = { keep: keep, restore: restore, key: pictureKey };
 })();
