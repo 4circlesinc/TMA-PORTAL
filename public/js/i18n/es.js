@@ -114,6 +114,7 @@ window.TMAI18nDict = {
     "Seen": "Visto", "This message was deleted": "Este mensaje fue eliminado",
     "No archived chats": "No hay chats archivados", "No recent calls": "No hay llamadas recientes",
     "No recent emoji yet": "Aún no hay emojis recientes", "Conversation info": "Información de la conversación",
+    "Pin": "Fijar", "Unpin": "Desfijar", "Pinned": "Fijadas", "Unpinned": "Desfijada", "Pin conversation": "Fijar conversación", "Unpin conversation": "Desfijar conversación", "Pin to the top": "Fijar arriba",
     "Favorite conversation": "Conversación favorita", "Chat background": "Fondo del chat",
     "Group": "Grupo", "Change group photo": "Cambiar foto del grupo",
     "Messages settings": "Ajustes de mensajes", "Your status": "Tu estado",

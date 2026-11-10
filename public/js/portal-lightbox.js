@@ -239,7 +239,9 @@
       doc.getPage(num).then(function (page) {
         if (dead) return;
         var cssWidth = Math.min(host.clientWidth || 820, 900);
-        var dpr = window.devicePixelRatio || 1;
+        // Two times is sharp on a phone; three is nine times the memory of
+        // one, and enough pages of it is more than iOS lets the page hold.
+        var dpr = Math.min(window.devicePixelRatio || 1, window.innerWidth <= 768 ? 2 : 3);
         var unscaled = page.getViewport({ scale: 1 });
         var viewport = page.getViewport({ scale: Math.max(1, cssWidth * dpr) / unscaled.width });
         var canvas = document.createElement('canvas');
@@ -309,6 +311,8 @@
         try { io.disconnect(); } catch (e) { /* ignore */ }
         io = null;
       }
+      // The pages' pixels go back now, not when the canvases are collected.
+      host.querySelectorAll('canvas').forEach(function (c) { c.width = 0; c.height = 0; });
       if (doc) {
         try { doc.destroy(); } catch (e) { /* ignore */ }
         doc = null;

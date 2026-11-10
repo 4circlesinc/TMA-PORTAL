@@ -5312,7 +5312,16 @@
     }
 
     function showAt(next) {
-      if (gallery[idx]) entry(gallery[idx]).viewingVersion = null;
+      if (gallery[idx]) {
+        entry(gallery[idx]).viewingVersion = null;
+        // The document being left lets go of its memory now. Kept, every PDF
+        // flicked past stayed loaded behind the next one, and a few in a row
+        // were more than a phone lets the page hold.
+        if (next !== idx) {
+          lb.querySelectorAll('[data-lb-pdf-scroll] canvas, [data-lb-pages] canvas').forEach(releasePdfCanvas);
+          releasePdfEntry(entry(gallery[idx]));
+        }
+      }
       idx = next;
       var f = current();
       entry(f).viewingVersion = null;
@@ -5498,7 +5507,60 @@
       renderAllPdfPages(f);
     }
 
-    /* Render all pages into the scroll container as a vertical stack. */
+    /*
+     * How sharp a page is drawn, and how much of the page's memory it may use.
+     *
+     * Every page of every document used to be drawn at once, at the screen's
+     * full density (3× on an iPhone, nine times the pixels of 1×), and each
+     * document opened stayed loaded behind the next. Flick through a few PDFs
+     * and the page went past what iOS lets a web page hold: iOS took it away
+     * and the app was left on its own blue background. Two times is sharp on
+     * a phone; no page's canvas goes past eight million pixels; and only the
+     * pages near the screen are drawn at all (renderAllPdfPages).
+     */
+    var PDF_MAX_CANVAS_PX = 8 * 1024 * 1024;
+
+    function pdfPixelRatio() {
+      var dpr = window.devicePixelRatio || 1;
+      return phoneViewer() ? Math.min(dpr, 2) : Math.min(dpr, 3);
+    }
+
+    /* A canvas's memory goes back at once, not whenever it is collected:
+       WebKit holds a removed canvas's pixels until then. */
+    function releasePdfCanvas(canvas) {
+      if (!canvas) return;
+      if (canvas._pdfTask) {
+        try { canvas._pdfTask.cancel(); } catch (err) { /* finished */ }
+        canvas._pdfTask = null;
+      }
+      canvas._pdfDrawn = false;
+      canvas._pdfDrawing = false;
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+
+    /* A document no longer on screen: its pages, its canvases, its worker copy. */
+    function releasePdfEntry(e) {
+      if (!e) return;
+      if (e.pdfObserver) {
+        try { e.pdfObserver.disconnect(); } catch (err) { /* gone */ }
+        e.pdfObserver = null;
+      }
+      if (e.pdfDoc && e.pdfDoc.destroy) {
+        try { e.pdfDoc.destroy(); } catch (err) { /* already */ }
+      }
+      e.pdfDoc = null;
+      e.pdfUrl = null;
+    }
+
+    /* Everything the viewer drew or loaded, for closing it. */
+    lb._releasePdfs = function () {
+      lb.querySelectorAll('canvas').forEach(releasePdfCanvas);
+      Object.keys(cache).forEach(function (id) { releasePdfEntry(cache[id]); });
+    };
+
+    /* Render the pages into the scroll container as a vertical stack, each
+       drawn as it comes near the screen and let go of when it is far away. */
     function renderAllPdfPages(f) {
       var e = entry(f);
       var pdf = e.pdfDoc;
@@ -5512,44 +5574,75 @@
         if (current().id !== f.id || e.pdfUrl !== expectedUrl) return;
         var vp1 = firstPage.getViewport({ scale: 1 });
         var scale = pdfEffectiveScale(e, scroll, vp1);
-        var dpr = window.devicePixelRatio || 1;
+        var ratio = pdfPixelRatio();
 
-        // Remove old canvases, rebuild.
+        // The old canvases give their memory back before new ones are made.
+        if (e.pdfObserver) { e.pdfObserver.disconnect(); e.pdfObserver = null; }
+        scroll.querySelectorAll('canvas').forEach(releasePdfCanvas);
         scroll.innerHTML = '';
 
+        var canvases = [];
         for (var p = 1; p <= pdf.numPages; p++) {
-          (function (pageNum) {
-            var canvas = document.createElement('canvas');
-            canvas.className = 'tma-portal-viewer__pdf-canvas';
-            canvas.setAttribute('data-lb-pdf-canvas', pageNum);
-            canvas.style.display = 'block';
-            canvas.style.margin = '0 auto';
-            canvas.style.borderRadius = '0';
-            canvas.style.colorScheme = 'light';
-            scroll.appendChild(canvas);
+          var canvas = document.createElement('canvas');
+          canvas.className = 'tma-portal-viewer__pdf-canvas';
+          canvas.setAttribute('data-lb-pdf-canvas', p);
+          canvas.style.display = 'block';
+          canvas.style.margin = '0 auto';
+          canvas.style.borderRadius = '0';
+          canvas.style.colorScheme = 'light';
+          // Sized before it is drawn, so the stack scrolls true and the page
+          // indicator reads right while pages further down are still blank.
+          canvas.style.width = Math.floor(vp1.width * scale) + 'px';
+          canvas.style.height = Math.floor(vp1.height * scale) + 'px';
+          // No pixels of its own until it is drawn (a new canvas is 300×150).
+          canvas.width = 0;
+          canvas.height = 0;
+          canvas._pdfPage = p;
+          scroll.appendChild(canvas);
+          canvases.push(canvas);
+        }
 
-            pdf.getPage(pageNum).then(function (page) {
-              if (current().id !== f.id || e.pdfUrl !== expectedUrl) return;
-              var viewport = page.getViewport({ scale: scale * dpr });
-              canvas.width = Math.floor(viewport.width);
-              canvas.height = Math.floor(viewport.height);
-              canvas.style.width = Math.floor(viewport.width / dpr) + 'px';
-              canvas.style.height = Math.floor(viewport.height / dpr) + 'px';
-              if (canvas._pdfTask) canvas._pdfTask.cancel();
-              // pdf.js 6: the element, not a 2d context already taken from it.
-              // render() then calls getContext({ alpha: false }); a prior
-              // getContext('2d') makes that return null and the page stays white.
-              var task = page.render({ canvas: canvas, viewport: viewport, background: '#ffffff' });
-              canvas._pdfTask = task;
-              return task.promise.then(
-                function () { canvas._pdfTask = null; },
-                function (err) {
-                  canvas._pdfTask = null;
-                  if (err && err.name !== 'RenderingCancelledException') throw err;
-                }
-              );
-            }).catch(function () { /* best-effort */ });
-          })(p);
+        function draw(canvas) {
+          if (canvas._pdfDrawn || canvas._pdfDrawing) return;
+          canvas._pdfDrawing = true;
+          pdf.getPage(canvas._pdfPage).then(function (page) {
+            if (current().id !== f.id || e.pdfUrl !== expectedUrl || !canvas._pdfDrawing) return;
+            var css = page.getViewport({ scale: scale });
+            var r = ratio;
+            if (css.width * css.height * r * r > PDF_MAX_CANVAS_PX) {
+              r = Math.sqrt(PDF_MAX_CANVAS_PX / (css.width * css.height));
+            }
+            var viewport = page.getViewport({ scale: scale * r });
+            canvas.width = Math.floor(viewport.width);
+            canvas.height = Math.floor(viewport.height);
+            canvas.style.width = Math.floor(css.width) + 'px';
+            canvas.style.height = Math.floor(css.height) + 'px';
+            // pdf.js 6: the element, not a 2d context already taken from it.
+            // render() then calls getContext({ alpha: false }); a prior
+            // getContext('2d') makes that return null and the page stays white.
+            var task = page.render({ canvas: canvas, viewport: viewport, background: '#ffffff' });
+            canvas._pdfTask = task;
+            return task.promise.then(
+              function () { canvas._pdfTask = null; canvas._pdfDrawing = false; canvas._pdfDrawn = true; },
+              function (err) {
+                canvas._pdfTask = null;
+                canvas._pdfDrawing = false;
+                if (err && err.name !== 'RenderingCancelledException') throw err;
+              }
+            );
+          }).catch(function () { canvas._pdfDrawing = false; /* best-effort */ });
+        }
+
+        if (typeof IntersectionObserver === 'function') {
+          e.pdfObserver = new IntersectionObserver(function (seen) {
+            seen.forEach(function (en) {
+              if (en.isIntersecting) draw(en.target);
+              else if (en.target._pdfDrawn || en.target._pdfDrawing) releasePdfCanvas(en.target);
+            });
+          }, { root: scroll, rootMargin: '150% 0px' });
+          canvases.forEach(function (c) { e.pdfObserver.observe(c); });
+        } else {
+          canvases.forEach(draw);
         }
 
         pdfUpdateToolbar(f);
@@ -5663,7 +5756,9 @@
 
     function paintPdfThumbs(f, pdf) {
       var rail = lb.querySelector('[data-lb-pages]');
-      if (!rail) return;
+      // A rail nobody can see (a phone) draws no thumbnails: every page drawn
+      // twice was memory the document's own pages needed.
+      if (!rail || !rail.clientWidth) return;
       var e = entry(f);
       var html = '';
       for (var i = 1; i <= pdf.numPages; i++) {
@@ -6431,10 +6526,9 @@
     if (lb._channel && window.TMAMessagingRealtime) {
       window.TMAMessagingRealtime.leave(lb._channel);
     }
-    // Drop any in-flight pdf.js document so closing the viewer frees memory.
+    // Every pdf.js document and canvas the viewer made goes with it, at once.
     try {
-      var pdfHost = lb.querySelector('[data-lb-pdf-canvas]');
-      if (pdfHost && pdfHost._pdfTask) pdfHost._pdfTask.cancel();
+      if (lb._releasePdfs) lb._releasePdfs();
     } catch (err) { /* ignore */ }
     lb.remove();
     lb = null;

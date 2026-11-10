@@ -864,13 +864,36 @@
          both at once dragged the menu out under the swipe and left it stuck.
          An app too old to switch keeps the edge for back whenever it can go
          back (canGoBack), and ☰ opens the menu. */
+      /* The left edge is back on a screen opened inside a page, and on a page
+         that is itself one step into a section (phone-screens.js): a chat,
+         an application, a client, an open folder. Only a section's own page
+         gives the edge to the menu. */
+      function edgeWantsBack() {
+        var screens = window.TMAPhoneScreens;
+        if (!screens) return false;
+        return screens.showing() > 0 || (typeof screens.detailPage === 'function' && screens.detailPage());
+      }
       function edgeIsBack() {
         var host = window.TMADesktop;
-        if (!host || !host.isIOS) return false;
-        if (typeof host.setEdgeBack === 'function') {
-          return !!(window.TMAPhoneScreens && window.TMAPhoneScreens.showing() > 0);
+        if (host && host.isIOS) {
+          if (typeof host.setEdgeBack === 'function') return edgeWantsBack();
+          return host.canGoBack !== false;
         }
-        return host.canGoBack !== false;
+        return edgeWantsBack();
+      }
+      /* The iPhone app moves the page itself (WebKit's own back swipe); anywhere
+         else the page does: Android with three-button navigation, a tablet. */
+      function edgeBackIsNative() {
+        var host = window.TMADesktop;
+        return !!(host && host.isIOS);
+      }
+      function backView() {
+        return root.querySelector('.tma-dash__main');
+      }
+      function goBack() {
+        var screens = window.TMAPhoneScreens;
+        if (screens && screens.back()) return;
+        history.back();
       }
 
       function onStart(e) {
@@ -884,7 +907,13 @@
           var onDrawer = el.contains(e.target);
           var onScrim = !!(e.target.closest && e.target.closest('[data-dash-scrim], [data-email-mobile-scrim]'));
           if (!onDrawer && !onScrim) return;
-        } else if (t.clientX > EDGE || edgeIsBack()) {
+        } else if (t.clientX > EDGE) {
+          return;
+        } else if (edgeIsBack()) {
+          if (edgeBackIsNative()) return;
+          var view = backView();
+          if (!view) return;
+          gesture = { back: true, x: t.clientX, y: t.clientY, el: view, engaged: false, dead: false, dx: 0, w: 0, at: Date.now() };
           return;
         }
         gesture = { x: t.clientX, y: t.clientY, open: open, el: el, engaged: false, dead: false, dx: 0, w: 0 };
@@ -899,12 +928,17 @@
           // A scroll is a scroll; only a sideways move is a drawer gesture.
           if (Math.abs(dy) > SLOP && Math.abs(dy) > Math.abs(dx)) { gesture.dead = true; return; }
           if (Math.abs(dx) <= SLOP) return;
-          if (gesture.open ? dx > 0 : dx < 0) { gesture.dead = true; return; }
+          if (gesture.back ? dx < 0 : (gesture.open ? dx > 0 : dx < 0)) { gesture.dead = true; return; }
           gesture.engaged = true;
           gesture.w = gesture.el.getBoundingClientRect().width || 280;
           gesture.el.style.transition = 'none';
         }
         gesture.dx = dx;
+        if (gesture.back) {
+          // The screen goes with the finger toward the one behind it.
+          gesture.el.style.transform = 'translate3d(' + Math.round(Math.max(0, dx)) + 'px,0,0)';
+          return;
+        }
         var offset = gesture.open ? Math.min(0, dx) : Math.min(0, dx - gesture.w);
         gesture.el.style.transform = 'translateX(' + Math.round(offset) + 'px)';
       }
@@ -913,6 +947,24 @@
         var g = gesture;
         gesture = null;
         if (!g || !g.engaged) return;
+        if (g.back) {
+          var quick = g.dx > 24 && (Date.now() - g.at) < 250;
+          var el2 = g.el;
+          el2.style.transition = 'transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)';
+          if (g.dx > g.w * 0.33 || quick) {
+            el2.style.transform = 'translate3d(' + g.w + 'px,0,0)';
+            setTimeout(function () {
+              goBack();
+              el2.style.transition = 'none';
+              el2.style.transform = '';
+              setTimeout(function () { el2.style.transition = ''; }, 0);
+            }, 200);
+          } else {
+            el2.style.transform = '';
+            setTimeout(function () { el2.style.transition = ''; }, 240);
+          }
+          return;
+        }
         // Back to the stylesheet's transform; with the transition restored
         // the drawer glides on from wherever the finger left it.
         g.el.style.transition = '';

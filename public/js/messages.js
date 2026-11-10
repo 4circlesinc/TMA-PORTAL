@@ -49,6 +49,7 @@
     CaretLeft: ICON + 'CaretLeft.svg',
     FolderOpen: ICON + 'FolderOpen.svg',
     PushPin: ICON + 'PushPin.svg',
+    PushPinSlash: ICON + 'PushPinSlash.svg',
     Star: ICON + 'Star.svg',
     StarFilled: ICON + 'StarFilled.svg',
     BellSlash: ICON + 'BellSlash.svg',
@@ -1527,12 +1528,12 @@
       ' data-messages-row-swipe-action="pin" data-messages-row-id="' +
       esc(rowId) +
       '" aria-label="' +
-      (pinned ? 'Remove from favorites' : 'Add to favorites') +
+      (pinned ? 'Unpin conversation' : 'Pin conversation') +
       '">' +
       '<img class="tma-dash__messages-row-swipe-action-icon" src="' +
-      ICONS.Star +
+      (pinned ? ICONS.PushPinSlash : ICONS.PushPin) +
       '" alt="" width="18" height="18">' +
-      (pinned ? 'Unfavorite' : 'Favorite') +
+      (pinned ? 'Unpin' : 'Pin') +
       '</button>' +
       '<button type="button" class="tma-dash__messages-row-swipe-action tma-dash__messages-row-swipe-action--mute"' +
       ' data-messages-row-swipe-action="mute" data-messages-row-id="' +
@@ -2167,8 +2168,8 @@
 
   /*
    * What each bulk action would do to the chats picked. A mixed pick goes the
-   * way that changes something: one chat not yet a favourite makes the button
-   * Favorite, and only an all-favourite pick offers Unfavorite.
+   * way that changes something: one chat not yet pinned makes the button
+   * Pin, and only an all-pinned pick offers Unpin.
    */
   function chatBulkActions(state) {
     var rows = pickedChatRows(state);
@@ -2181,8 +2182,8 @@
         ? { id: 'read', label: 'Read', title: 'Mark as read', icon: 'EnvelopeSimpleOpen' }
         : { id: 'unread', label: 'Unread', title: 'Mark as unread', icon: 'EnvelopeSimple' },
       anyUnpinned
-        ? { id: 'pin', label: 'Favorite', title: 'Add to favorites', icon: 'Star' }
-        : { id: 'unpin', label: 'Unfavorite', title: 'Remove from favorites', icon: 'StarFilled' },
+        ? { id: 'pin', label: 'Pin', title: 'Pin to the top', icon: 'PushPin' }
+        : { id: 'unpin', label: 'Unpin', title: 'Unpin', icon: 'PushPinSlash' },
       anyUnmuted
         ? { id: 'mute', label: 'Mute', title: 'Mute notifications', icon: 'BellSlash' }
         : { id: 'unmute', label: 'Unmute', title: 'Unmute notifications', icon: 'Bell' },
@@ -2296,7 +2297,7 @@
     if (action === 'pin' || action === 'unpin') {
       var pin = action === 'pin';
       setFlag('pinned', pin, { pinned: pin });
-      message = pin ? 'Added to favorites' : 'Removed from favorites';
+      message = pin ? 'Pinned' : 'Unpinned';
     } else if (action === 'mute' || action === 'unmute') {
       var mute = action === 'mute';
       // null mutes until unmuted; 0 unmutes.
@@ -2423,7 +2424,7 @@
     } else {
       if (favorites.length) {
         body +=
-          '<div class="tma-dash__messages-list-group">Favorites</div>' +
+          '<div class="tma-dash__messages-list-group">Pinned</div>' +
           favorites.map(function (row) { return renderInboxRow(row, state, mobile); }).join('');
       }
       if (chats.length) {
@@ -5884,7 +5885,7 @@
       'data-messages-profile-mute' + (row.muted ? ' checked' : '') + '></label>' +
       '<label class="tma-dash__messages-setting">' +
       '<span class="tma-dash__messages-setting-text">' +
-      '<span class="tma-dash__messages-setting-label">Favorite conversation</span></span>' +
+      '<span class="tma-dash__messages-setting-label">Pin conversation</span></span>' +
       '<input type="checkbox" class="tma-dash__messages-setting-input" ' +
       'data-messages-profile-pin' + (row.pinned ? ' checked' : '') + '></label>' +
       '<label class="tma-dash__messages-setting">' +
@@ -6205,6 +6206,7 @@
       var startOffset = 0;
       var dragging = false;
       var moved = false;
+      var armed = false;
       var wheelEndTimer = null;
       // When a trackpad swipe fires the reply, its momentum keeps emitting
       // wheel events; without a cooldown those re-open the gesture and fire
@@ -6212,40 +6214,70 @@
       var wheelFiredAt = 0;
 
       function getCurrentOffset() {
-        var match = /translateX\((-?\d+(?:\.\d+)?)px\)/.exec(track.style.transform || '');
+        if (pendingOffset !== null) return banded(pendingOffset);
+        var match = /translate(?:X|3d)\((-?\d+(?:\.\d+)?)px/.exec(track.style.transform || '');
         return match ? parseFloat(match[1]) : 0;
       }
 
-      function setOffset(px) {
-        var clamped =
-          side === 'in'
-            ? Math.max(0, Math.min(REPLY_SWIPE_MAX, px))
-            : Math.min(0, Math.max(-REPLY_SWIPE_MAX, px));
-        var progress = Math.abs(clamped) / REPLY_SWIPE_MAX;
-
-        if (Math.abs(clamped) < 1) {
-          track.style.transform = '';
-          swipe.classList.remove('is-replying');
-          if (replyIcon) replyIcon.style.opacity = '';
-          return 0;
-        }
-
-        track.style.transform = 'translateX(' + clamped + 'px)';
-        swipe.classList.toggle('is-replying', progress > 0.12);
-        if (replyIcon) replyIcon.style.opacity = String(Math.min(1, progress * 1.35));
-        return clamped;
+      /*
+       * Where the bubble sits for a finger `px` along. It goes with the finger
+       * one for one up to the reply point, then follows with resistance, the
+       * way a bubble is pulled in WhatsApp, rather than stopping dead at a
+       * wall the finger keeps moving past.
+       */
+      function banded(px) {
+        var forward = side === 'in' ? Math.max(0, px) : Math.max(0, -px);
+        var limit = REPLY_SWIPE_MAX;
+        var shown = forward <= limit ? forward : limit + (forward - limit) * 0.3;
+        shown = Math.min(shown, limit + 36);
+        return side === 'in' ? shown : -shown;
       }
 
-      function resetSwipe(animate) {
-        track.classList.remove('is-dragging');
-        swipe.classList.remove('is-replying');
-        if (replyIcon) replyIcon.style.opacity = '';
-        if (chatBody) chatBody.classList.remove('is-swipe-dragging');
-        if (animate) {
+      /* One write per frame: pointer events arrive faster than the screen
+         draws on some phones, and every write is a style recalculation. */
+      var pendingOffset = null;
+      var frame = 0;
+      function paintOffset() {
+        frame = 0;
+        if (pendingOffset === null) return;
+        var px = pendingOffset;
+        pendingOffset = null;
+        var shown = banded(px);
+        var progress = Math.min(1, Math.abs(shown) / getReplySwipeTrigger());
+
+        if (Math.abs(shown) < 1) {
           track.style.transform = '';
+          swipe.classList.remove('is-replying');
+          if (replyIcon) { replyIcon.style.opacity = ''; replyIcon.style.transform = ''; }
           return;
         }
-        setOffset(0);
+
+        track.style.transform = 'translate3d(' + shown.toFixed(1) + 'px,0,0)';
+        swipe.classList.toggle('is-replying', progress >= 1);
+        if (replyIcon) {
+          replyIcon.style.opacity = String(progress);
+          // The arrow grows into place as the reply point nears.
+          replyIcon.style.transform = 'translateY(-50%) scale(' + (0.6 + 0.4 * progress).toFixed(3) + ')';
+        }
+      }
+
+      function setOffset(px) {
+        pendingOffset = px;
+        if (!frame) frame = window.requestAnimationFrame(paintOffset);
+        return banded(px);
+      }
+
+      function resetSwipe() {
+        if (frame) { window.cancelAnimationFrame(frame); frame = 0; }
+        pendingOffset = null;
+        armed = false;
+        track.classList.remove('is-dragging');
+        swipe.classList.remove('is-replying');
+        if (replyIcon) { replyIcon.style.opacity = ''; replyIcon.style.transform = ''; }
+        if (chatBody) chatBody.classList.remove('is-swipe-dragging');
+        // With the transition back on, the bubble springs home from wherever
+        // the finger left it.
+        track.style.transform = '';
       }
 
       function clearWheelEndTimer() {
@@ -6259,7 +6291,7 @@
         if (!track.isConnected) return;
         track.classList.remove('is-dragging');
         if (chatBody) chatBody.classList.remove('is-swipe-dragging');
-        var current = getCurrentOffset();
+        var current = pendingOffset !== null ? banded(pendingOffset) : getCurrentOffset();
         var trigger = getReplySwipeTrigger();
 
         if (side === 'in' && current >= trigger) {
@@ -6271,7 +6303,7 @@
           return;
         }
 
-        resetSwipe(true);
+        resetSwipe();
       }
 
       function scheduleWheelEnd() {
@@ -6295,12 +6327,12 @@
         // preview never appeared.
         var msg = getMessages(state.selectedId)[index];
         if (!msg) {
-          resetSwipe(true);
+          resetSwipe();
           return;
         }
 
         setReplyTo(state, msg.id);
-        resetSwipe(true);
+        resetSwipe();
         render();
         focusComposerInput(root);
       }
@@ -6359,28 +6391,27 @@
           if (pointerId !== undefined && !track.hasPointerCapture(pointerId)) {
             try { track.setPointerCapture(pointerId); } catch (err) { /* pointer already gone */ }
           }
-          if (chatBody) chatBody.classList.add('is-swipe-dragging');
+          // The chat stays still under a sideways drag through touchmove
+          // below. Switching its overflow off for the drag, as it used to,
+          // relaid the whole list out mid-gesture, and the bubble stuttered.
         }
 
         if (prevent) prevent();
 
-        var raw = startOffset + dx;
         var trigger = getReplySwipeTrigger();
-        var offset = setOffset(raw);
+        var offset = setOffset(startOffset + dx);
 
-        // Reaching the trigger IS the gesture: fire there and then, mid-drag,
-        // rather than making the finger also let go, the wait for pointerup
-        // was read as lag. The pointer is handed back so nothing else of this
-        // drag is swallowed; dragging=false makes the trailing pointerup a
-        // no-op instead of a second trigger.
-        if (side === 'in' ? offset >= trigger : offset <= -trigger) {
-          dragging = false;
-          if (pointerId !== undefined && track.hasPointerCapture(pointerId)) {
-            track.releasePointerCapture(pointerId);
-          }
-          if (chatBody) chatBody.classList.remove('is-swipe-dragging');
-          triggerReply();
-        }
+        /*
+         * The reply is the lift, the way it is in WhatsApp: past the reply
+         * point the phone knocks once and the arrow fills, and letting go
+         * there replies. It used to fire the moment the point was reached,
+         * mid-drag, and snap the bubble back out from under a finger that
+         * was still moving, which is the roughness people felt. Drawing
+         * back before lifting calls it off.
+         */
+        var past = side === 'in' ? offset >= trigger : offset <= -trigger;
+        if (past && !armed) haptic('light');
+        armed = past;
       }
 
       function endDrag() {
@@ -6428,6 +6459,11 @@
         if (track.hasPointerCapture(e.pointerId)) track.releasePointerCapture(e.pointerId);
         endDrag();
       });
+
+      // Once the drag is sideways the chat must not scroll under it.
+      track.addEventListener('touchmove', function (e) {
+        if (dragging && moved && e.cancelable) e.preventDefault();
+      }, { passive: false });
 
       track.addEventListener('pointercancel', function (e) {
         if (track.hasPointerCapture(e.pointerId)) track.releasePointerCapture(e.pointerId);
@@ -6663,7 +6699,7 @@
     if (action === 'pin') {
       row.pinned = !row.pinned;
       changes = { pinned: row.pinned };
-      message = row.pinned ? 'Added to favorites' : 'Removed from favorites';
+      message = row.pinned ? 'Pinned' : 'Unpinned';
     } else if (action === 'mute') {
       row.muted = !row.muted;
       // null = mute indefinitely, 0 = unmute.
@@ -6759,8 +6795,58 @@
       }
 
       function getCurrentOffset() {
-        var match = /translateX\((-?\d+(?:\.\d+)?)px\)/.exec(track.style.transform || '');
+        if (pendingRow !== null) {
+          var max = swipeMaxWidth();
+          return Math.max(-max, Math.min(max, pendingRow));
+        }
+        var match = /translate(?:X|3d)\((-?\d+(?:\.\d+)?)px/.exec(track.style.transform || '');
         return match ? parseFloat(match[1]) : 0;
+      }
+
+      /* One write per frame, as the bubble's swipe does: a 120 Hz screen
+         sends twice the moves it can draw, and each write lays the row's
+         actions out again. */
+      var pendingRow = null;
+      var rowFrame = 0;
+      function setOffset(px) {
+        pendingRow = px;
+        if (!rowFrame) {
+          rowFrame = window.requestAnimationFrame(function () {
+            rowFrame = 0;
+            if (pendingRow === null) return;
+            var next = pendingRow;
+            pendingRow = null;
+            applyOffset(next);
+          });
+        }
+        var max = swipeMaxWidth();
+        return Math.max(-max, Math.min(max, px));
+      }
+      function settleFrame() {
+        if (rowFrame) { window.cancelAnimationFrame(rowFrame); rowFrame = 0; }
+        pendingRow = null;
+      }
+
+      /* How fast the finger was going as it lifted, px/ms, from the last
+         stretch of the drag: a flick opens the actions as a long drag does. */
+      var samples = [];
+      function sample(e) {
+        samples.push({ t: e.timeStamp || Date.now(), x: e.clientX });
+        if (samples.length > 6) samples.shift();
+      }
+      function velocity() {
+        if (samples.length < 2) return 0;
+        var last = samples[samples.length - 1];
+        var first = samples[0];
+        for (var i = samples.length - 2; i >= 0; i--) {
+          if (last.t - samples[i].t > 90) break;
+          first = samples[i];
+        }
+        var dt = last.t - first.t;
+        var dist = last.x - first.x;
+        // Moves the system delivered together are as fast as a flick gets.
+        if (dt <= 0) return dist === 0 ? 0 : (dist > 0 ? 10 : -10);
+        return dist / dt;
       }
 
       function clearWheelEndTimer() {
@@ -6814,7 +6900,7 @@
         wrap.classList.remove('is-right-wide');
       }
 
-      function setOffset(px) {
+      function applyOffset(px) {
         var max = swipeMaxWidth();
         var clamped = Math.max(-max, Math.min(max, px));
 
@@ -6829,7 +6915,7 @@
         if (clamped > 0) {
           resetRightReveal();
           var leftReveal = syncLeftReveal(clamped);
-          track.style.transform = 'translateX(' + leftReveal + 'px)';
+          track.style.transform = 'translate3d(' + leftReveal + 'px,0,0)';
           wrap.classList.toggle('is-open-left', leftReveal > 8);
           wrap.classList.remove('is-open-right');
           return leftReveal;
@@ -6837,7 +6923,7 @@
 
         resetLeftReveal();
         var rightReveal = syncRightReveal(Math.abs(clamped));
-        track.style.transform = 'translateX(-' + rightReveal + 'px)';
+        track.style.transform = 'translate3d(-' + rightReveal + 'px,0,0)';
         wrap.classList.remove('is-open-left');
         wrap.classList.toggle('is-open-right', rightReveal > 8);
         return -rightReveal;
@@ -6848,17 +6934,18 @@
         if (direction === 'left') {
           var snap = leftSnapWidth();
           syncLeftReveal(snap);
-          track.style.transform = 'translateX(' + snap + 'px)';
+          track.style.transform = 'translate3d(' + snap + 'px,0,0)';
           wrap.classList.add('is-open-left');
         } else if (direction === 'right') {
           var deleteSnap = rightSnapWidth();
           syncRightReveal(deleteSnap);
-          track.style.transform = 'translateX(-' + deleteSnap + 'px)';
+          track.style.transform = 'translate3d(-' + deleteSnap + 'px,0,0)';
           wrap.classList.add('is-open-right');
         }
       }
 
       function closeSwipe() {
+        settleFrame();
         wrap.classList.remove(
           'is-open-left',
           'is-open-right',
@@ -6872,12 +6959,17 @@
       }
 
       function resolveInboxSwipe() {
+        var current = getCurrentOffset();
+        settleFrame();
+        // The finger's last position is drawn before the glide takes over.
+        applyOffset(current);
         wrap.classList.remove('is-dragging');
         if (listBody) listBody.classList.remove('is-swipe-dragging');
 
-        var current = getCurrentOffset();
         var max = swipeMaxWidth();
         var id = wrap.getAttribute('data-messages-row-swipe');
+        var v = velocity();
+        samples = [];
 
         // A hidden or not-yet-laid-out row reports width 0. 0 >= 0 would
         // treat a tap as a completed pin swipe and never open the chat.
@@ -6891,8 +6983,12 @@
           return true;
         }
 
-        if (current > max * 0.35) snapOpen('left');
-        else if (current < -max * 0.35) snapOpen('right');
+        // A flick decides by its direction; a slow drag by how far it got.
+        if (current > 8 && v > 0.45) snapOpen('left');
+        else if (current < -8 && v < -0.45) snapOpen('right');
+        else if ((current > 0 && v < -0.45) || (current < 0 && v > 0.45)) closeSwipe();
+        else if (current > max * 0.3) snapOpen('left');
+        else if (current < -max * 0.3) snapOpen('right');
         else closeSwipe();
         return false;
       }
@@ -6926,7 +7022,11 @@
         // click after lift could not open the chat. Clear it for a fresh
         // gesture so a real tap still works.
         delete wrap.dataset.swipeMoved;
-        wrap.classList.add('is-dragging');
+        samples = [];
+        sample(e);
+        // Nothing about the row changes yet: a tap or a scroll that starts
+        // here must not lay the row's actions out (is-dragging is added once
+        // the drag is known to be sideways).
         track.setPointerCapture(e.pointerId);
       });
 
@@ -6959,14 +7059,27 @@
             }
 
             moved = true;
-            if (listBody) listBody.classList.add('is-swipe-dragging');
+            wrap.classList.add('is-dragging');
+            // The list stays still under a sideways drag through touchmove
+            // below; switching its overflow off relaid the whole inbox out.
           }
 
+          sample(e);
           e.preventDefault();
-          setOffset(startOffset + dx);
+          // A row swiped open closes on the way back and stops there: one
+          // gesture never carries on through closed into the other side's
+          // actions (a quick swipe back used to land on Delete).
+          var nextOffset = startOffset + dx;
+          if (startOffset > 0) nextOffset = Math.max(0, nextOffset);
+          else if (startOffset < 0) nextOffset = Math.min(0, nextOffset);
+          setOffset(nextOffset);
         },
         { passive: false }
       );
+
+      track.addEventListener('touchmove', function (e) {
+        if (dragging && moved && e.cancelable) e.preventDefault();
+      }, { passive: false });
 
       function openThreadFromSwipe(id) {
         openConversation(root, state, render, id);
@@ -7848,6 +7961,25 @@
     // it on the next keystroke, but only if there is one.
     stopTyping();
 
+    /*
+     * On a phone a chat is a screen over the inbox, the way it is in every
+     * messaging app: back is one step, to the list. The iPhone's edge swipe,
+     * Android's back and the header's arrow all mean that. Without a history
+     * entry of its own the edge swipe opened the menu over the chat and
+     * Android's back left Messages altogether. Opened before the chat is
+     * drawn, so the snapshot the iPhone keeps for the swipe is the inbox.
+     */
+    if (isMessagesMobile() && !state.reading && !state.chatScreen && window.TMAPhoneScreens) {
+      var screenFor = conversationId;
+      state.chatScreen = window.TMAPhoneScreens.open(function () {
+        state.chatScreen = null;
+        closeConversation(root, state, render, { fromHistory: true });
+      }, function (screen) {
+        state.chatScreen = screen;
+        openConversation(root, state, render, screenFor);
+      });
+    }
+
     state.selectedId = conversationId;
     state.reading = true;
     clearReplyTo(state);
@@ -7880,7 +8012,14 @@
    * search text, filters, so closing a chat returns you to exactly the list
    * you were looking at rather than a reset one.
    */
-  function closeConversation(root, state, render) {
+  function closeConversation(root, state, render, opts) {
+    // The chat's screen goes with it: the header's arrow or a closing chat
+    // takes its history entry, so the next back is not spent on nothing.
+    if (state.chatScreen && !(opts && opts.fromHistory) && window.TMAPhoneScreens) {
+      var screen = state.chatScreen;
+      state.chatScreen = null;
+      window.TMAPhoneScreens.closed(screen);
+    }
     if (!state.selectedId) return;
 
     flushDraft(state.selectedId, getComposerDraft(state));
@@ -10777,7 +10916,7 @@
 
   function conversationMenuItems(row) {
     var items = [
-      { action: 'pin', label: row.pinned ? 'Remove from favorites' : 'Add to favorites' },
+      { action: 'pin', label: row.pinned ? 'Unpin conversation' : 'Pin conversation' },
       { action: 'mute', label: row.muted ? 'Unmute notifications' : 'Mute notifications' },
       { action: 'archive', label: row.archived ? 'Unarchive conversation' : 'Archive conversation' },
       // Names what it is about to do, as the swipe's button does.
@@ -10863,7 +11002,36 @@
    * opens the chat (and that does read it), a tap outside puts it away.
    * ---------------------------------------------------------------- */
 
-  var CHAT_PEEK_HOLD_MS = 450;
+  /*
+   * How long a finger rests on a chat or a message before its menu opens.
+   * 450 ms was as long as the phone's own press-to-select, so the two raced:
+   * the menu opened over a word already highlighted, and the hold felt slow.
+   * WhatsApp's is about a third of a second.
+   */
+  var CHAT_PEEK_HOLD_MS = 300;
+  var MESSAGE_HOLD_MS = 300;
+
+  /* The small knock a phone gives when a hold or a swipe takes. The iPhone
+     app has the Taptic Engine; a browser on Android has vibrate. */
+  function haptic(style) {
+    var host = window.TMADesktop;
+    if (host && typeof host.haptic === 'function') {
+      try { host.haptic(style || 'light'); } catch (err) { /* older app */ }
+      return;
+    }
+    if (navigator.vibrate) {
+      try { navigator.vibrate(style === 'medium' ? 12 : 8); } catch (err) { /* not allowed here */ }
+    }
+  }
+
+  /* A hold is not a request to pick words: whatever the system began to
+     highlight under the finger goes as the menu opens. */
+  function dropTouchSelection() {
+    try {
+      var sel = window.getSelection && window.getSelection();
+      if (sel && sel.rangeCount) sel.removeAllRanges();
+    } catch (err) { /* nothing selected */ }
+  }
   var CHAT_PEEK_MESSAGES = 8;
   var chatPeekEl = null;
   var chatPeekId = null;
@@ -10929,7 +11097,7 @@
       unread
         ? { action: 'read', label: 'Mark as read', icon: 'EnvelopeSimpleOpen' }
         : { action: 'unread', label: 'Mark as unread', icon: 'EnvelopeSimple' },
-      { action: 'pin', label: row.pinned ? 'Remove from favorites' : 'Add to favorites', icon: row.pinned ? 'StarFilled' : 'Star' },
+      { action: 'pin', label: row.pinned ? 'Unpin' : 'Pin', icon: row.pinned ? 'PushPinSlash' : 'PushPin' },
       { action: 'mute', label: row.muted ? 'Unmute' : 'Mute', icon: row.muted ? 'Bell' : 'BellSlash' },
       { action: 'archive', label: row.archived ? 'Unarchive' : 'Archive', icon: row.archived ? 'ArchiveTray' : 'Archive' },
       { action: 'leave', label: row.type === 'group' ? 'Leave group' : 'Delete conversation', icon: 'Trash', danger: true },
@@ -11070,9 +11238,8 @@
       p.timer = null;
       var wrap = p.rowEl.closest('[data-messages-row-swipe]');
       if (wrap) wrap._peeked = true;
-      if (navigator.vibrate) {
-        try { navigator.vibrate(8); } catch (err) { /* not allowed here */ }
-      }
+      haptic('medium');
+      dropTouchSelection();
       openChatPeek(root, state, render, p.id);
     }
 
@@ -11490,8 +11657,10 @@
             el.classList.remove('is-highlighted', 'is-actions-open');
           });
           row.classList.add('is-actions-open', 'is-highlighted');
+          haptic('medium');
+          dropTouchSelection();
           openMessageMenu(root, state, render, row, messageId, pressOrigin);
-        }, 450);
+        }, MESSAGE_HOLD_MS);
       });
 
       row.addEventListener('pointermove', function (e) {

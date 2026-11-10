@@ -114,6 +114,7 @@ window.TMAI18nDict = {
     "Seen": "已读", "This message was deleted": "此消息已被删除",
     "No archived chats": "没有已归档的聊天", "No recent calls": "暂无通话记录",
     "No recent emoji yet": "暂无最近使用的表情", "Conversation info": "对话信息",
+    "Pin": "置顶", "Unpin": "取消置顶", "Pinned": "已置顶", "Unpinned": "已取消置顶", "Pin conversation": "置顶会话", "Unpin conversation": "取消置顶会话", "Pin to the top": "置顶",
     "Favorite conversation": "收藏对话", "Chat background": "聊天背景",
     "Group": "群组", "Change group photo": "更换群组头像",
     "Messages settings": "消息设置", "Your status": "你的状态",

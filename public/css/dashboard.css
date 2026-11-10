@@ -18147,7 +18147,8 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   width: fit-content;
   max-width: 100%;
   touch-action: pan-y;
-  transition: transform 0.22s ease;
+  /* The glide home after a swipe: quick off the mark, settling softly. */
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
 }
 
@@ -18176,6 +18177,23 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+}
+
+/* On a touch screen a hold is the menu, never the phone's own word picker.
+   Switching selection off only while the finger was down came too late: the
+   system's press-to-select had already begun, and words came up highlighted
+   under the menu, the menu's own words with them. Select text (below) is how
+   a message's words are picked on a phone. */
+@media (hover: none) and (pointer: coarse) {
+  .tma-dash__messages-bubble,
+  .tma-dash__messages-bubble-copy,
+  .tma-dash__messages-row,
+  .tma-dash__messages-message-menu,
+  .tma-dash__messages-peek {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
 }
 
 /* Select text: this one message's words are open to the selection handles. */
@@ -18973,7 +18991,7 @@ body:has(.tma-dash__messages-select-bar) .tma-bespoke:not(.is-open) {
     padding-right: 0;
     box-sizing: border-box;
     overflow: hidden;
-    transition: width 0.22s cubic-bezier(0.2, 0, 0, 1);
+    transition: width 0.3s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .tma-dash__messages-row-swipe.is-open-left .tma-dash__messages-row-swipe-actions--left,
@@ -18995,7 +19013,7 @@ body:has(.tma-dash__messages-select-bar) .tma-bespoke:not(.is-open) {
     padding-right: 0;
     box-sizing: border-box;
     overflow: hidden;
-    transition: width 0.22s cubic-bezier(0.2, 0, 0, 1);
+    transition: width 0.3s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .tma-dash__messages-row-swipe.is-open-right .tma-dash__messages-row-swipe-actions--right,
@@ -19089,7 +19107,7 @@ body:has(.tma-dash__messages-select-bar) .tma-bespoke:not(.is-open) {
     z-index: 1;
     width: 100%;
     touch-action: pan-y;
-    transition: transform 0.22s cubic-bezier(0.2, 0, 0, 1);
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
     will-change: transform;
   }
 

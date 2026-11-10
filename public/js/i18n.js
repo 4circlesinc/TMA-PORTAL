@@ -166,7 +166,7 @@
   }
 
   var script = document.createElement('script');
-  script.src = (window.__TMA_SITE_ROOT || '') + '/js/i18n/' + lang + '.js?v=3';
+  script.src = (window.__TMA_SITE_ROOT || '') + '/js/i18n/' + lang + '.js?v=4';
   script.onload = function () {
     var data = window.TMAI18nDict || {};
     dict = data.strings || {};

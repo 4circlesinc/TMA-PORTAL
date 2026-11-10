@@ -127,6 +127,8 @@
     var changed = wf.el !== el || wf.page !== page;
 
     wf.el = el;
+    // A new row starts at its left edge: show the chosen tab on it once.
+    wfRevealedTab = null;
     wf.page = page;
 
     // Arriving from the sidebar is a fresh instruction; re-rendering the same
@@ -268,15 +270,40 @@
 
   /* On a phone the tab row scrolls sideways; keep the chosen tab in sight
      (Requested Files, the last of four, is otherwise off the edge). */
+  /*
+   * Only when the chosen tab has changed, and never under a finger.
+   *
+   * This ran on every repaint, and the page repaints whenever its lists load
+   * or anything live arrives: the row jumped back to the chosen tab in the
+   * middle of somebody swiping it, which read as a choppy, broken scroll on
+   * the iPhone. A new choice is the one moment it is wanted.
+   */
+  var wfRevealedTab = null;
+  var wfTabsTouched = false;
+
   function wfRevealActiveTab() {
     var group = wf.el && wf.el.querySelector('[data-wfh-tabs] .tma-tab-group');
     var active = group && group.querySelector('.tma-tab.is-active, [aria-selected="true"]');
-    if (!group || !active || group.scrollWidth <= group.clientWidth) return;
+    if (!group || !active) return;
+    if (!group._wfTouchWatch) {
+      group._wfTouchWatch = true;
+      group.addEventListener('touchstart', function () { wfTabsTouched = true; }, { passive: true });
+      var lift = function () { setTimeout(function () { wfTabsTouched = false; }, 400); };
+      group.addEventListener('touchend', lift, { passive: true });
+      group.addEventListener('touchcancel', lift, { passive: true });
+    }
+    var key = wfActiveTab();
+    if (key === wfRevealedTab || wfTabsTouched) return;
+    if (group.scrollWidth <= group.clientWidth) { wfRevealedTab = key; return; }
+    wfRevealedTab = key;
 
     var g = group.getBoundingClientRect();
     var a = active.getBoundingClientRect();
-    if (a.left < g.left) group.scrollLeft -= (g.left - a.left) + 16;
-    else if (a.right > g.right) group.scrollLeft += (a.right - g.right) + 16;
+    var by = 0;
+    if (a.left < g.left) by = -((g.left - a.left) + 16);
+    else if (a.right > g.right) by = (a.right - g.right) + 16;
+    if (!by) return;
+    try { group.scrollBy({ left: by, behavior: 'smooth' }); } catch (e) { group.scrollLeft += by; }
   }
 
   function wfRequestsBody() {

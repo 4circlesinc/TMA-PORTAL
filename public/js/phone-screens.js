@@ -23,9 +23,11 @@
  *   TMAPhoneScreens.showing()
  *       How many screens are open on this page.
  *
- * The left-edge swipe means back only while a screen is open; on a page of
- * its own it opens the menu (dashboard.js). The iPhone app's back swipe is
- * switched to match (TMADesktop.setEdgeBack), so the two never both move.
+ * The left-edge swipe means back while a screen is open, and on any page
+ * that is itself one step into a section (an application, a client, an open
+ * folder or file: detailPage). On a section's own page it opens the menu
+ * (dashboard.js). The iPhone app's back swipe is switched to match
+ * (TMADesktop.setEdgeBack), so the two never both move.
  *
  * Global: window.TMAPhoneScreens
  */
@@ -57,10 +59,50 @@
     return n;
   }
 
+  /*
+   * The pages the menu leads to, by their addresses. Anything beneath one
+   * of them (an application under CIP Applications) is a step into it.
+   */
+  var roots = null;
+  function sectionRoots() {
+    if (roots && roots.length) return roots;
+    var found = [];
+    var links = document.querySelectorAll('.tma-dash__nav-item[href^="/"], .tma-dash__nav-leaf[href^="/"], [data-nav][href^="/"]');
+    for (var i = 0; i < links.length; i++) {
+      var href = (links[i].getAttribute('href') || '').split(/[?#]/)[0].replace(/\/+$/, '') || '/';
+      if (found.indexOf(href) === -1) found.push(href);
+    }
+    roots = found;
+    return roots;
+  }
+
+  /*
+   * This page is a detail of a section, not the section itself: an
+   * application, a client, a company (beneath the section's address), or a
+   * folder or file open in the File Library (named in the query). On a phone
+   * the left edge is back there, the way it is on every app's detail screen;
+   * it used to open the menu over the application instead.
+   */
+  function detailPage() {
+    if (history.length < 2) return false;
+    var path = location.pathname.replace(/\/+$/, '') || '/';
+    var query = location.search || '';
+    var list = sectionRoots();
+    if (!list.length) return false;
+    if (/[?&](folder|file)=/.test(query)) return true;
+    for (var i = 0; i < list.length; i++) {
+      if (path === list[i]) return false;
+    }
+    for (var j = 0; j < list.length; j++) {
+      if (list[j] !== '/' && path.indexOf(list[j] + '/') === 0) return true;
+    }
+    return false;
+  }
+
   var edgeBack = null;
   /* Tell the iPhone app whether its edge swipe is back right now. */
   function syncEdge() {
-    var on = showing() > 0;
+    var on = showing() > 0 || detailPage();
     if (on === edgeBack) return;
     edgeBack = on;
     var host = window.TMADesktop;
@@ -174,6 +216,17 @@
     syncEdge();
   }
 
+  ['pushState', 'replaceState'].forEach(function (name) {
+    var original = history[name];
+    if (typeof original !== 'function') return;
+    history[name] = function () {
+      var result = original.apply(this, arguments);
+      // After the page has moved, not before: syncEdge reads the address.
+      try { setTimeout(syncEdge, 0); } catch (e) { /* the swipe keeps its last state */ }
+      return result;
+    };
+  });
+
   window.TMAPhoneScreens = {
     open: open,
     back: back,
@@ -181,6 +234,8 @@
     handlePop: handlePop,
     left: left,
     showing: showing,
+    detailPage: detailPage,
+    sync: syncEdge,
     depth: function () { return at.depth; },
   };
   syncEdge();
