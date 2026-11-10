@@ -13485,7 +13485,9 @@
      * the tabs sit on the page and each panel is whatever it is.
      */
     return (
-      '<div class="tma-dash__clients-detail">' +
+      // A sideways swipe across the panels moves through these tabs
+      // (tab-swipe.js), the nearer row beating the list's in the page head.
+      '<div class="tma-dash__clients-detail" data-tab-swipe=".tma-dash__clients-profile-tablist">' +
       toolbar +
       '<div class="tma-tab-group tma-tab-group--underline tma-dash__clients-profile-tablist" role="tablist" aria-label="Client sections">' +
       renderProfileTabs(state, activeTab) +

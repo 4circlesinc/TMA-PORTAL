@@ -1,6 +1,6 @@
 {
-  "css": "app-71f4de2b52de.css",
-  "js": "app-75c320f6d4e3.js",
+  "css": "app-19c06d6cdbf6.css",
+  "js": "app-003184db4500.js",
   "sources": {
     "css": [
       "tokens.css",
@@ -105,6 +105,7 @@
       "files-sync.js",
       "clients-sync.js",
       "clients.js",
+      "tab-swipe.js",
       "calendar.js",
       "pricing.js",
       "two-step-countries.js",

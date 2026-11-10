@@ -18196,6 +18196,17 @@ html.tma-dash--mail-window .tma-dash__email-detail-tools .tma-dash__toolbar-acti
   }
 }
 
+/* A sideways swipe across these moves between their tabs (tab-swipe.js).
+   The browser keeps the vertical scroll and never starts a sideways one of
+   its own, which on Android it did a few pixels before the swipe could
+   claim the finger, and the swipe then lost it. Anything inside that scrolls
+   sideways (the tab row) still does: touch-action starts over at a scroller. */
+@media (hover: none) and (pointer: coarse) {
+  [data-tab-swipe] {
+    touch-action: pan-y pinch-zoom;
+  }
+}
+
 /* Select text: this one message's words are open to the selection handles. */
 .tma-dash__messages-bubble-row.is-selecting .tma-dash__messages-bubble-copy {
   -webkit-user-select: text;
