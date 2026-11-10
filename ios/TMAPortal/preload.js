@@ -73,6 +73,11 @@
     setEdgeBack: function (on) {
       post('edgeBack', { on: !!on });
     },
+    // The Taptic Engine's knock for a hold that opens a menu or a swipe that
+    // reaches its point (navigator.vibrate does nothing on an iPhone).
+    haptic: function (style) {
+      post('haptic', { style: String(style || 'light') });
+    },
     // iOS 26 and later: the app draws the bottom bar and the header's bubbles
     // in the system's Liquid Glass (GlassChrome.swift), which follows the
     // device's Liquid Glass and accessibility settings. glass-chrome.js tells

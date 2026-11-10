@@ -30,6 +30,35 @@ Debug builds talk to `http://127.0.0.1:8001` and may use plain HTTP, including a
 | Push | FCM, platform `android` | APNs, platform `ios` (release) or `ios-sandbox` (debug) |
 | Bottom bar and header bubbles | the page's own | `GlassChrome.swift` on iOS 26+, in the system's Liquid Glass |
 
+## Opening like an installed app
+
+The portal's front end lives on the phone. `ShellCache.swift` keeps the last
+shell the server served together with every script and stylesheet it names
+(`Application Support/shell-cache`), and a launch paints that copy with its
+files inlined (`instant`); the page then fetches only data. The one question
+asked of the network first, for at most 0.4 s inside the splash, is whether
+the portal has deployed since: a moved deploy, no session, or a missing file
+means the network, as before. After the page is up the shell and its files
+are fetched again in the background for the next launch, and if the server
+answers with anything but the shell (signed out, onboarding) the kept copy is
+dropped and the server's page shown. Signing in or out drops it too.
+
+Three things that used to rebuild the portal in front of the reader, and no
+longer do:
+
+- **A connection coming back.** It reloaded whatever was on screen; now only
+  the app's own offline or error page is reloaded. The page reconnects itself.
+- **iOS taking the page away** (memory, a long time in the background). That
+  left the web view's own blue background with nothing on it; now the page
+  comes back where it was, from the kept shell (`webViewWebContentProcessDidTerminate`).
+- **The forward swipe.** WebKit's navigation gestures are both edges; the right
+  edge's is switched off, so a hard swipe in from the right no longer reopens
+  the screen just closed. The left edge is back on any screen opened inside a
+  page and on any detail page (phone-screens.js decides, `setEdgeBack`).
+
+`ShellCacheTests` covers what is inlined, when a launch may use it, and the
+back-only swipe.
+
 ## Liquid Glass
 
 On iOS 26 and later the app draws the bottom bar and the header's bubbles itself, with SwiftUI's `glassEffect`, over the page. A page can only imitate the material, and it cannot see what changes it: the look chosen in Settings > Display & Brightness > Liquid Glass (Clear or Tinted), Reduce Transparency, Increase Contrast and Reduce Motion. Apple applies those to its own material and has no API for the first, so only the system's glass follows them.

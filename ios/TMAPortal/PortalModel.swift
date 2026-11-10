@@ -42,6 +42,16 @@ final class PortalModel: NSObject, ObservableObject {
     private var online = true
     private var quietLoad = false
     private var servedFromShell = false
+    /// The document on screen came from the kept shell (a launch, or a page
+    /// the system took away), not from a navigation.
+    private var instantDocument = false
+    /// The app's own offline or error page is up, not the portal. Only then
+    /// does a connection coming back reload anything.
+    private var showingStandIn = false
+    /// A portal link waiting for the page to be ready (a notification tapped
+    /// while the app was starting): opened in place once it is.
+    private var pendingPath: String?
+    private var pageIsReady = false
     private var splash = SplashGate()
     private var callInfo: String?
     private var authSession: ASWebAuthenticationSession?
@@ -133,7 +143,71 @@ final class PortalModel: NSObject, ObservableObject {
             refreshSplash()
         }
         refreshNotificationPermission()
-        loadPortal()
+        bootPortal()
+    }
+
+    /**
+     The first page: from the phone, the way an installed app opens.
+
+     The kept shell and its bundles paint the portal at once, and the page
+     then fetches only data. The one thing worth asking the network first is
+     whether the portal has deployed since that copy was kept, and that is
+     asked for at most 0.4 s, inside the splash's own minimum. A deploy that
+     moved, no session, or a copy missing a file: the network, as before.
+     */
+    private func bootPortal() {
+        guard let url = URL(string: PortalConfig.url("/")) else { return }
+        Task {
+            let hasSession = self.sessionCookie(in: await self.cookies()) != nil
+            if self.online, hasSession, self.shell.canBootInstantly {
+                let kept = self.shell.keptBuild
+                let remote = await self.briefBuildCheck()
+                if remote == nil || remote == kept, self.openFromShell(url, anyRoute: false) {
+                    return
+                }
+            }
+            self.load(url)
+        }
+    }
+
+    /// The deploy's name if the portal answers within 0.4 s, nil otherwise.
+    private func briefBuildCheck() async -> String? {
+        final class Once { var done = false }
+        let once = Once()
+        return await withCheckedContinuation { (cont: CheckedContinuation<String?, Never>) in
+            let finish: (String?) -> Void = { value in
+                if once.done { return }
+                once.done = true
+                cont.resume(returning: value)
+            }
+            Task { @MainActor in finish(await self.shell.refreshBuild(timeout: 3)) }
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 400_000_000)
+                finish(nil)
+            }
+        }
+    }
+
+    /// Paint the kept shell for `url` with nothing from the network. False when
+    /// it cannot (no session cookie is checked here; callers do).
+    @discardableResult
+    private func openFromShell(_ url: URL, anyRoute: Bool) -> Bool {
+        let path = url.path.isEmpty ? "/" : url.path
+        guard let html = shell.instant(path: path, hasSession: true, anyRoute: anyRoute) else { return false }
+        servedFromShell = true
+        instantDocument = true
+        showingStandIn = false
+        quietLoad = true
+        webView.loadHTMLString(html, baseURL: url)
+        return true
+    }
+
+    /// One of the app's own pages (offline, or a load error) instead of the portal.
+    private func showStandIn(_ html: String, baseURL: URL?) {
+        quietLoad = true
+        showingStandIn = true
+        instantDocument = false
+        webView.loadHTMLString(html, baseURL: baseURL)
     }
 
     func goBack() {
@@ -151,6 +225,9 @@ final class PortalModel: NSObject, ObservableObject {
             return
         }
         quietLoad = false
+        showingStandIn = false
+        instantDocument = false
+        pageIsReady = false
         webView.load(URLRequest(url: url))
     }
 
@@ -208,12 +285,34 @@ final class PortalModel: NSObject, ObservableObject {
 
     /// A portal link from outside the page (a notification): in place when the
     /// portal is up, so nothing reloads; loaded when it is not yet.
-    private func openPortalPath(_ path: String) {
+    private func openPortalPath(_ path: String, attempt: Int = 0) {
+        // Tapped while the app was still opening: loading the link now would
+        // throw away the page painting from the phone and fetch it all again.
+        // It waits for the page instead, and opens in place.
+        if !pageIsReady, attempt == 0 {
+            pendingPath = path
+            return
+        }
         let quoted = (try? JSONSerialization.data(withJSONObject: [path])).flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
         evaluate("(function(u){var r=document.querySelector('.tma-dash');if(r&&r._portalNavigate){r._portalNavigate(u);return true}return false})(\(quoted)[0])") { [weak self] result in
             guard let self, result != "true" else { return }
+            // The router may not be up yet a moment after the document is.
+            if attempt < 8, self.webView.url.map({ self.rules.isPortalURL($0) }) == true {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self.openPortalPath(path, attempt: attempt + 1) }
+                return
+            }
             guard let target = URL(string: path.hasPrefix("http") ? path : PortalConfig.url(path)) else { return }
             self.load(target)
+        }
+    }
+
+    /// The page is up: open the link that was waiting for it.
+    private func pageBecameReady() {
+        guard !pageIsReady else { return }
+        pageIsReady = true
+        if let path = pendingPath {
+            pendingPath = nil
+            openPortalPath(path, attempt: 1)
         }
     }
 
@@ -256,7 +355,10 @@ final class PortalModel: NSObject, ObservableObject {
             PageTone.play(dict["name"] as? String ?? "")
         case "edgeBack":
             // The back swipe while a screen is open; the menu's drag otherwise.
-            webView.allowsBackForwardNavigationGestures = (dict["on"] as? Bool) == true
+            setEdgeBack((dict["on"] as? Bool) == true)
+        case "haptic":
+            let style: UIImpactFeedbackGenerator.FeedbackStyle = (dict["style"] as? String) == "medium" ? .medium : .light
+            UIImpactFeedbackGenerator(style: style).impactOccurred()
         case "glass":
             // What the bar and the header's bubbles hold (glass-chrome.js).
             if let json = dict["json"] as? String { glass.receive(json) }
@@ -283,6 +385,7 @@ final class PortalModel: NSObject, ObservableObject {
             // are still arriving. Enough to lift the boot splash.
             splash.pageReady()
             refreshSplash()
+            pageBecameReady()
         default:
             break
         }
@@ -425,6 +528,8 @@ final class PortalModel: NSObject, ObservableObject {
             authSession?.cancel()
             authSession = nil
             pendingBrowserURL = nil
+            // A new sign-in: whatever shell was kept belonged to the session before.
+            shell.invalidate()
             await importCookies(cookies)
             loadPortal()
         case .noVerifier:
@@ -690,22 +795,66 @@ final class PortalModel: NSObject, ObservableObject {
         """
     }
 
+    /*
+     * The connection came back. Only the app's own offline or error page has
+     * anything to reload; the portal itself was never gone. It used to reload
+     * whatever was on screen, and a phone's connection drops and returns all
+     * the time (wifi to cellular, a lift, the lock screen), so opening the app
+     * often meant watching the whole portal rebuild itself from nothing, with
+     * a half-written message or form gone with it. The page reconnects its
+     * own live updates and sends what it held offline (portal-queue.js).
+     */
     private func setOnline(_ now: Bool) {
         let was = online
         online = now
-        if now, !was { webView.reload() }
+        guard now, !was, showingStandIn else { return }
+        showingStandIn = false
+        let target = webView.url.flatMap { rules.isPortalURL($0) ? $0 : nil } ?? URL(string: PortalConfig.url("/"))!
+        Task {
+            let hasSession = self.sessionCookie(in: await self.cookies()) != nil
+            if hasSession, self.openFromShell(target, anyRoute: true) { return }
+            self.load(target)
+        }
     }
 
     private func loadOfflineIfPossible(_ url: URL) async {
         let hasSession = sessionCookie(in: await cookies()) != nil
         if let html = shell.maybeServe(path: url.path.isEmpty ? "/" : url.path, offline: true, hasSession: hasSession) {
             servedFromShell = true
+            instantDocument = true
+            showingStandIn = false
             quietLoad = true
             webView.loadHTMLString(html, baseURL: url)
             return
         }
-        quietLoad = true
-        webView.loadHTMLString(OfflinePages.offline(portalURL: PortalConfig.origin), baseURL: PortalConfig.originURL)
+        showStandIn(OfflinePages.offline(portalURL: PortalConfig.origin), baseURL: PortalConfig.originURL)
+    }
+
+    /*
+     * The back swipe, and only the back swipe.
+     *
+     * WebKit's navigation gestures are both edges: from the left is back, from
+     * the right is forward. Forward reopened the screen just closed (a
+     * Settings page, a chat), and a hard swipe in from the right edge read as
+     * the app opening a panel by itself. The right edge's recogniser is
+     * switched off each time the gestures are switched on, since WebKit makes
+     * them afresh.
+     */
+    private func setEdgeBack(_ on: Bool) {
+        webView.allowsBackForwardNavigationGestures = on
+        guard on else { return }
+        Self.disableForwardSwipe(in: webView)
+    }
+
+    static func disableForwardSwipe(in view: UIView) {
+        let rtl = view.effectiveUserInterfaceLayoutDirection == .rightToLeft
+        let forwardEdge: UIRectEdge = rtl ? .left : .right
+        for recognizer in view.gestureRecognizers ?? [] {
+            if let edge = recognizer as? UIScreenEdgePanGestureRecognizer, edge.edges.contains(forwardEdge) {
+                edge.isEnabled = false
+            }
+        }
+        for sub in view.subviews { disableForwardSwipe(in: sub) }
     }
 
     private func refreshSplash() {
@@ -821,6 +970,21 @@ extension PortalModel: WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, A
             return
         }
         if rules.isPortalURL(url) || rules.isAuthURL(url) {
+            if navigationAction.targetFrame?.isMainFrame == true, rules.isPortalURL(url) {
+                let segment = url.path.split(separator: "/").first.map(String.init) ?? ""
+                // Signing in or out: the kept shell carries this account's
+                // portal, and must never open as the next person's.
+                if segment == "auth" || segment == "sign-in" || segment == "sign-up" {
+                    shell.invalidate()
+                }
+                // A reload of a page painted from the phone is somebody asking
+                // for the portal afresh: that is the network's to answer.
+                if navigationAction.navigationType == .reload, instantDocument {
+                    decisionHandler(.cancel)
+                    load(url)
+                    return
+                }
+            }
             decisionHandler(.allow)
             return
         }
@@ -874,7 +1038,11 @@ extension PortalModel: WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, A
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         // A new page starts with no screen open; it switches the swipe on itself.
         webView.allowsBackForwardNavigationGestures = false
+        pageIsReady = false
         guard !quietLoad else { return }
+        // A navigation the page made itself (signing out, Sign as admin) is
+        // the network's document, not one painted from the phone.
+        instantDocument = false
         loading = true
         refreshSplash()
     }
@@ -890,6 +1058,7 @@ extension PortalModel: WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, A
         splash.pageReady()
         refreshSplash()
         guard let url = webView.url, rules.isPortalURL(url) else { return }
+        if !showingStandIn { pageBecameReady() }
         if let script = pendingCallJS {
             evaluate(script)
             Task {
@@ -904,10 +1073,38 @@ extension PortalModel: WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, A
                 if let token = AppBridge.token { await self.registerPush(token: token) }
                 else { UIApplication.shared.registerForRemoteNotifications() }
             }
-            if !self.servedFromShell {
-                await self.shell.capture(path: url.path.isEmpty ? "/" : url.path, cookieHeader: self.cookieHeader(cookies))
-            }
+            /*
+             * Keep the shell, and its bundles, for the next launch. After a
+             * page painted from the phone this is also the check on it: the
+             * server answering with something other than the shell (signed
+             * out, onboarding, a choice it needs made) means the copy must not
+             * stand in for it, so the network's answer is shown instead.
+             */
+            let fromPhone = self.servedFromShell && self.online
             self.servedFromShell = false
+            guard self.online else { return }
+            let result = await self.shell.capture(path: url.path.isEmpty ? "/" : url.path, cookieHeader: self.cookieHeader(cookies))
+            if fromPhone, result == .notShell, self.instantDocument {
+                self.shell.invalidate()
+                self.load(url)
+            }
+        }
+    }
+
+    /*
+     * iOS took the page away: a heavy document's memory, or long enough in the
+     * background. What was left was the web view's own blue and nothing on
+     * it, until the app was closed and opened again. The page comes back where
+     * it was instead, painted from the phone when the kept shell can do it.
+     */
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        let here = webView.url.flatMap { rules.isPortalURL($0) ? $0 : nil } ?? URL(string: PortalConfig.url("/"))!
+        pageIsReady = false
+        glass.reset()
+        Task {
+            let hasSession = self.sessionCookie(in: await self.cookies()) != nil
+            if hasSession, self.openFromShell(here, anyRoute: true) { return }
+            self.load(here)
         }
     }
 
@@ -934,15 +1131,15 @@ extension PortalModel: WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, A
             let hasSession = self.sessionCookie(in: await self.cookies()) != nil
             if offline, let html = self.shell.maybeServe(path: failed.path.isEmpty ? "/" : failed.path, offline: true, hasSession: hasSession) {
                 self.servedFromShell = true
+                self.instantDocument = true
+                self.showingStandIn = false
                 self.quietLoad = true
                 self.webView.loadHTMLString(html, baseURL: failed)
             } else if offline {
-                self.quietLoad = true
-                self.webView.loadHTMLString(OfflinePages.offline(portalURL: PortalConfig.origin), baseURL: PortalConfig.originURL)
+                self.showStandIn(OfflinePages.offline(portalURL: PortalConfig.origin), baseURL: PortalConfig.originURL)
             } else {
-                self.quietLoad = true
                 let page = OfflinePages.loadError(portalURL: PortalConfig.origin, description: ns.localizedDescription, url: failed.absoluteString)
-                self.webView.loadHTMLString(page, baseURL: PortalConfig.originURL)
+                self.showStandIn(page, baseURL: PortalConfig.originURL)
             }
             self.loading = false
             self.splash.pageReady()
