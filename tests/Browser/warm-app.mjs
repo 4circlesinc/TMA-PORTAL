@@ -185,6 +185,14 @@ try {
   await api(page, `/portal/messaging/conversations/${unopened}/messages`, { method: 'POST', json: { body: UNOPENED, nonce: crypto.randomUUID() } });
   SECTIONS.push({ name: 'A chat never opened before', path: `/social/messages?conversation=${unopened}`, expect: 'twice:' + UNOPENED, unopened: true });
 
+  // The copy for offline starts by itself, and the first time it says so.
+  let cardSeen = false;
+  for (let i = 0; i < 40 && !cardSeen; i++) {
+    cardSeen = await page.evaluate(() => !!document.querySelector('.tma-sync-toast[data-sync-key="offline"]'));
+    if (!cardSeen) await page.waitForTimeout(250);
+  }
+  check(cardSeen, 'a card says the app is downloading for offline');
+
   step(2, 'Visit every section, as someone using the app would');
   for (const s of SECTIONS.filter((x) => !x.unopened)) {
     // A conversation is opened the way a link or a notification opens it.
@@ -196,6 +204,14 @@ try {
   }
   // Whatever runs behind (the first-run download) finishes, as it would while the app sits open.
   await page.waitForTimeout(4000);
+  const offlineCopy = await page.evaluate(async (unopened) => ({
+    complete: !!(await window.TMAStore.get('offline:complete')),
+    profile: !!(await window.TMAStore.get('settings:get:/me/profile')),
+    unopened: ((await window.TMAStore.get('messages:thread:' + unopened)) || { messages: [] }).messages.length,
+  }), SECTIONS.find((x) => x.unopened).path.split('=')[1]);
+  check(offlineCopy.complete, 'the offline copy finished');
+  check(offlineCopy.profile, 'it kept your profile without Settings being opened');
+  check(offlineCopy.unopened > 0, 'it kept a chat nobody opened');
   await page.close();
 
   const dead = async (p) => {

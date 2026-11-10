@@ -379,7 +379,7 @@
    * one at a time, and kept as if it had been opened. A copy kept in the
    * last few minutes is left alone; an open conversation keeps its own.
    */
-  var WARM_THREADS = 15;
+  var WARM_THREADS = 50;
   var WARM_FRESH_MS = 10 * 60 * 1000;
   var warmingThreads = false;
 
@@ -7508,9 +7508,8 @@
 
         if (window.TMAStore) {
           window.TMAStore.put('messages:warm', {
-            // Capped: the list shows what fits a screen, and the fetch that
-            // follows a warm boot brings the rest within a second.
-            threads: (STORE.threads || []).slice(0, 30),
+            // The whole list, as WhatsApp keeps it (rows are small).
+            threads: (STORE.threads || []).slice(0, 300),
             me: STORE.me,
             settings: STORE.settings,
             tabCounts: STORE.tabCounts,

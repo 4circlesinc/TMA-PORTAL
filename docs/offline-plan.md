@@ -179,6 +179,23 @@ newest page of the fifteen most recent chats, so a chat never opened while
 connected is there too. No connection is said in words, never "Failed to
 fetch". `tests/Browser/warm-app.mjs` proves it section by section.
 
+**9. Everything a person reads, on the device (all four apps).** ✅ *Shipped
+10 Nov 2026.* Not only what was opened: `offline-download.js` keeps, a
+little after the app opens and every half hour, the conversation list and
+the newest page of the 50 most recent chats, the inbox's first pages and
+its 40 newest conversations with their bodies (`email-api.js` keeps every
+message, conversation and folder page the mailbox answers, and answers from
+that copy when nothing else does), and the profile and security settings.
+The first copy on a device, and one after a week away, shows as a card
+beside the email sync ("Downloading for offline…", "Ready offline"); every
+other run is silent. People's pictures are kept as they load
+(`offline-pictures.js`, the Cache API, 600 at most) and put back offline in
+place of initials. The CIP tab counts are kept apart from any one page, so
+an offline table never shows empty badges. A profile picture chosen offline
+waits in the write queue and shows at once. Files stay as before: kept when
+opened. Bounded throughout, so a phone is not filled; apps only, by the
+firm's disk decision.
+
 ## What offline applications do and do not do today
 
 Works: opening an application that has been opened before, editing it with no

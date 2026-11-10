@@ -441,7 +441,7 @@
    * download keeps for every client and file: those are thousands, and are
    * read when opened.
    */
-  var BULK = /^(files:folder:|files:item:|clients:record:|cip:application-record:)|sync-cursor/;
+  var BULK = /^(files:folder:|files:item:|clients:record:|cip:application-record:|mail:message:|mail:thread:)|sync-cursor/;
   var preloading = null;
 
   function preload() {

@@ -725,6 +725,44 @@
         fd.append('avatar_photo', file);
       }
       saveBtn.disabled = true;
+      var say = function (text, state) {
+        if (window.TMAToast) window.TMAToast.showFloatingToast(text, { state: state });
+      };
+      /*
+       * Nothing reached the firm. A photo picked from this device is kept
+       * here and sent by itself when the connection is back, the way a
+       * message waits; it shows as your picture straight away. It used to do
+       * nothing at all: no answer, a greyed button, no picture.
+       */
+      var undelivered = function () {
+        var queue = window.TMAQueue;
+        if (source === 'upload' && file && queue && queue.usable && queue.usable()) {
+          queue.add({
+            kind: 'avatar',
+            label: 'Your profile picture',
+            method: 'POST',
+            url: '/me/avatar',
+            parts: [
+              { name: 'source', value: 'upload' },
+              { name: 'avatar_photo', file: file, filename: file.name || 'photo.jpg' },
+            ],
+          }).then(function () {
+            try {
+              me.avatar = URL.createObjectURL(file);
+              me.hasAvatar = true;
+              paint();
+            } catch (e) { /* shown when it lands */ }
+            close();
+            say('Saved on this device. Your picture updates when you’re back online.', 'positive');
+          }, function () {
+            saveBtn.disabled = false;
+            say('Could not save your picture', 'negative');
+          });
+          return;
+        }
+        saveBtn.disabled = false;
+        say('No connection. Try again when you’re back online.', 'negative');
+      };
       fetch('/me/avatar', {
         method: 'POST',
         credentials: 'same-origin',
@@ -735,6 +773,10 @@
         },
         body: fd,
       }).then(function (res) {
+        if (res.headers && res.headers.get('x-tma-offline') === '1') {
+          undelivered();
+          return;
+        }
         if (!res.ok) {
           saveBtn.disabled = false;
           if (window.TMAToast) window.TMAToast.showFloatingToast('Could not save your picture', { state: 'negative' });
@@ -747,9 +789,16 @@
           close();
           if (window.TMAToast) window.TMAToast.showFloatingToast('Profile picture updated', { state: 'positive' });
         });
-      });
+      }, undelivered);
     });
   }
+
+  // A picture saved offline has landed: the firm's copy replaces the local one.
+  document.addEventListener('tma:queue-applied', function (e) {
+    if (e && e.detail && e.detail.kind === 'avatar' && window.TMACurrentUser && window.TMACurrentUser.load) {
+      window.TMACurrentUser.load();
+    }
+  });
 
   /* the greeting link lives inside a re-rendered view, so delegate */
   document.addEventListener('click', function (ev) {

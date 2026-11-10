@@ -61,6 +61,33 @@
     });
   }
 
+  /*
+   * Gmail's promise: mail read once, or fetched for offline, is there with
+   * no connection. In the apps, what the mailbox answered for a message, a
+   * conversation or a folder's first pages is kept on the device, and when
+   * nothing answers at all that is the answer. A refusal (the server
+   * answering) is never replaced. Not in a browser: the firm's decision
+   * about whose disk holds client mail.
+   */
+  function keptRead(key, request) {
+    var store = window.TMAStore;
+    if (!store || !store.persistent) return request();
+
+    return request().then(function (data) {
+      if (data) {
+        try { store.put(key, data); } catch (e) { /* kept next time */ }
+      }
+      return data;
+    }, function (err) {
+      if (!(err && err.offline)) throw err;
+
+      return store.get(key).then(function (kept) {
+        if (kept === undefined || kept === null) throw err;
+        return kept;
+      }, function () { throw err; });
+    });
+  }
+
   function query(params) {
     var parts = [];
     Object.keys(params || {}).forEach(function (key) {
@@ -89,13 +116,20 @@
 
     listMessages: function (opts) {
       opts = opts || {};
-      return mailFetch(BASE + '/messages' + query({
-        folder: opts.folder || 'inbox',
-        q: opts.search,
-        label: opts.label,
-        page: opts.page,
-        perPage: opts.perPage,
-      }));
+      var request = function () {
+        return mailFetch(BASE + '/messages' + query({
+          folder: opts.folder || 'inbox',
+          q: opts.search,
+          label: opts.label,
+          page: opts.page,
+          perPage: opts.perPage,
+        }));
+      };
+      // A folder's first pages are kept; a search is a question, not mail.
+      if (opts.search || (opts.page || 1) > 5) return request();
+
+      return keptRead('mail:list:' + (opts.folder || 'inbox') + ':' + (opts.label || '') + ':' +
+        (opts.page || 1) + ':' + (opts.perPage || ''), request);
     },
 
     /* Recipient typeahead for To/Cc/Bcc: portal people, clients, groups,
@@ -105,14 +139,18 @@
     },
 
     getMessage: function (id) {
-      return mailFetch(BASE + '/messages/' + encodeURIComponent(id));
+      return keptRead('mail:message:' + id, function () {
+        return mailFetch(BASE + '/messages/' + encodeURIComponent(id));
+      });
     },
 
     /* Every message in the conversation the given message belongs to. Only the
      * opened message arrives with its body; the rest report bodyLoaded:false
      * and are pulled through getMessage as the reader expands them. */
     getThread: function (id) {
-      return mailFetch(BASE + '/messages/' + encodeURIComponent(id) + '/thread');
+      return keptRead('mail:thread:' + id, function () {
+        return mailFetch(BASE + '/messages/' + encodeURIComponent(id) + '/thread');
+      });
     },
 
     /* The same conversation as plain list rows, for the inbox's expand arrow.

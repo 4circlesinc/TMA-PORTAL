@@ -4314,6 +4314,7 @@
         if (json && json.phaseCounts) {
           APP_TABLE.phaseCounts = json.phaseCounts;
           APP_TABLE.facetsLoaded = true;
+          keepPhaseCounts(json.phaseCounts);
         }
         storeApplicationPage('cip:applications:v1:' + key, page);
         // Opened while this was on its way: paint it, no second trip.
@@ -4513,6 +4514,17 @@
    * in a browser it is memory, and saves nothing across a reload. The prefix
    * is `cip:`, which every CIP write in this tab already drops.
    */
+  /* The tab badges' last known counts, kept apart from any one page. */
+  function keepPhaseCounts(counts) {
+    if (!window.TMAStore || !counts) return;
+    try { window.TMAStore.put('cip:phase-counts', counts); } catch (e) { /* next listing */ }
+  }
+
+  function keptPhaseCounts() {
+    if (!window.TMAStore) return Promise.resolve(null);
+    return window.TMAStore.get('cip:phase-counts').then(function (v) { return v || null; }, function () { return null; });
+  }
+
   function applicationStoreKey(state, key) {
     if (!window.TMAStore || !state || state.search || APP_TABLE.status || APP_TABLE.page !== 1) return null;
     if (filterValues('bucket').length || filterValues('assignee').length || filterValues('provider').length) return null;
@@ -4587,7 +4599,17 @@
         if (held.personStatuses && held.personStatuses.length) APP_TABLE.personStatuses = held.personStatuses;
         if (held.assignees) APP_TABLE.assignees = held.assignees;
         if (held.providers) APP_TABLE.providers = held.providers;
-        if (held.phaseCounts) APP_TABLE.phaseCounts = held.phaseCounts;
+        if (held.phaseCounts) {
+          APP_TABLE.phaseCounts = held.phaseCounts;
+        } else {
+          // A page kept by a load that did not carry the tab counts: the
+          // last counts this device saw, not empty badges.
+          keptPhaseCounts().then(function (counts) {
+            if (!counts || APP_TABLE.facetsLoaded) return;
+            APP_TABLE.phaseCounts = counts;
+            render();
+          });
+        }
       }
 
       render();
@@ -4718,6 +4740,7 @@
         if (json && json.phaseCounts) {
           APP_TABLE.phaseCounts = json.phaseCounts;
           APP_TABLE.facetsLoaded = true;
+          keepPhaseCounts(json.phaseCounts);
         }
         storeApplicationPage(storeKey, page);
 

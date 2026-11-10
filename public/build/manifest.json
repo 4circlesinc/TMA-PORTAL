@@ -1,6 +1,6 @@
 {
   "css": "app-b77a943bdd91.css",
-  "js": "app-101c2b393566.js",
+  "js": "app-0f7a7c1bc7fe.js",
   "sources": {
     "css": [
       "tokens.css",
@@ -104,6 +104,8 @@
       "cip-sync.js",
       "files-sync.js",
       "clients-sync.js",
+      "offline-pictures.js",
+      "offline-download.js",
       "clients.js",
       "tab-swipe.js",
       "calendar.js",

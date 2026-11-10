@@ -33,11 +33,19 @@
       syncing: 'Syncing SharePoint…',
       icon: '/images/icons/brands/SharePoint40.svg',
     },
+    // The apps' copy for offline (offline-download.js): reported here, not
+    // polled from the server, so it needs no "watch" to be shown.
+    offline: {
+      label: 'Offline copy',
+      syncing: 'Downloading for offline…',
+      icon: '/images/icons/phosphor/CloudArrowDown.svg',
+      local: true,
+    },
   };
 
   /* File-library toasts show only while a run is actually walking Graph.
      Smartsheet stays on the Background Operations page. */
-  var SHOWN = { email: 1, calendar: 1, libraries: 1 };
+  var SHOWN = { email: 1, calendar: 1, libraries: 1, offline: 1 };
 
   var host = null;
   var cards = {}; // key -> { el, minimized, dismissed, doneTimer }
@@ -64,6 +72,7 @@
     var svc = SERVICES[key];
     if (s.state === 'paused' || s.importsPaused) return svc.label + ' paused';
     if (s.state === 'done') {
+      if (key === 'offline') return 'Ready offline';
       return key === 'smartsheet' ? 'Documents imported' : (svc.label + ' synced');
     }
     if (s.state === 'error') return svc.label + ' sync problem';
@@ -75,6 +84,11 @@
   function detail(key, s) {
     if (s.state === 'paused' || s.importsPaused) {
       return 'Resume in Settings → Background Operations.';
+    }
+    if (key === 'offline') {
+      if (s.state === 'done') return 'Messages, email and applications open with no connection.';
+      if (s.state === 'error') return 'It carries on when the connection is back.';
+      return (s.what ? s.what + ' · ' : '') + fmt(s.synced) + (s.total ? ' of ' + fmt(s.total) : '') + ' items';
     }
     if (s.state === 'error') return 'Check Settings → Connectors.';
     // A run we started locally has no counts yet, say so rather than "0".
@@ -150,10 +164,12 @@
     return el;
   }
 
-  function dismiss(key) {
+  /* opts.again: off the screen for now, free to come back (a copy for
+     offline cut short by the connection). The reader's × is for good. */
+  function dismiss(key, opts) {
     var card = cards[key];
     if (!card || !card.el) return;
-    card.dismissed = true;
+    card.dismissed = !(opts && opts.again);
     card.watched = false;
     card.pendingUntil = 0;
     card.el.classList.add('tma-sync-toast--closing');
@@ -198,7 +214,7 @@
     // Background work stays in the background. A card is only for a run the
     // reader started here (watch()): what the server happens to be syncing
     // when the portal opens is not worth a toast on every load.
-    if (!card.watched) return;
+    if (!card.watched && !SERVICES[key].local) return;
 
     // A run started from this page is queued, not running yet: keep the card
     // saying "syncing" until the server confirms one, or the grace runs out.
@@ -225,7 +241,18 @@
     // that finished importing last week doesn't need a toast on every load.
     if (!card.el && s.state !== 'syncing') return;
 
-    if (!card.el) card.el = buildCard(key);
+    if (!card.el) {
+      card.el = buildCard(key);
+      // A copy made behind the screen says so, then steps aside to its chip:
+      // the corner it sits in is where a composer's Send button is.
+      if (SERVICES[key].local) {
+        setTimeout(function () {
+          if (!card.el || card.dismissed) return;
+          card.minimized = true;
+          card.el.classList.add('tma-sync-toast--min');
+        }, 5000);
+      }
+    }
     var el = card.el;
 
     el.querySelector('.tma-sync-toast__title').textContent = title(key, s);
