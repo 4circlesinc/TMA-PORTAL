@@ -383,6 +383,17 @@
                 var skel = document.querySelector('[data-boot-skeleton]');
                 if (skel) skel.className += ' tma-boot-skel--generic';
               }
+              /* The apps, with somebody remembered: what they kept paints
+                 whole a moment from now (TMAStore.ready), and a skeleton
+                 first is exactly the loading a reopened app must not show.
+                 An empty frame, then the screen. A first launch, or a
+                 browser, keeps the skeleton: there it is true. */
+              try {
+                if (window.TMADesktop && window.TMADesktop.isDesktop && localStorage.getItem('tma.me')) {
+                  var held = document.querySelector('[data-boot-skeleton]');
+                  if (held) held.style.visibility = 'hidden';
+                }
+              } catch (e) { /* the skeleton, as before */ }
             })();
           </script>
         </div>

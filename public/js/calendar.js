@@ -106,6 +106,11 @@
   }
 
   function errorMessage(err, fallback) {
+    // Nothing answered: say so, never in the browser's own words
+    // ("Failed to fetch", "Load failed").
+    if (err && !err.status && (err.name === 'TypeError' || /failed to fetch|load failed|networkerror/i.test(err.message || ''))) {
+      return 'No connection. Try again when you’re back online.';
+    }
     return (err && err.message) || fallback;
   }
 
@@ -363,6 +368,9 @@
         state.calendars = snap.calendars || state.calendars;
         state.events = snap.events || state.events;
         state.loading = false;
+        // The kept grid outranks a load that failed, whichever came first.
+        state.warm = true;
+        state.error = null;
         render();
       });
     }
@@ -385,7 +393,9 @@
         state.refreshing = false;
         // A background refresh nobody asked for must not replace a calendar
         // somebody is reading with an error; the next signal can correct it.
-        if (!background) state.error = errorMessage(err, 'Couldn’t load your calendars.');
+        // Nor must a failed load replace the kept grid: it is the last known
+        // calendar, and the next load corrects it.
+        if (!background && !state.warm) state.error = errorMessage(err, 'Couldn’t load your calendars.');
         render();
       });
   }

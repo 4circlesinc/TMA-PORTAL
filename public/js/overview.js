@@ -138,7 +138,8 @@
       FILES = snap.files || [];
       METRICS = snap.metrics || null;
       SIGNINS = snap.signIns || [];
-      SIGNINS_STATE = SIGNINS.length ? 'ready' : SIGNINS_STATE;
+      // A kept list, even an empty one, is what the panel said last time.
+      SIGNINS_STATE = Array.isArray(snap.signIns) ? 'ready' : SIGNINS_STATE;
       if (snap.day === dateKeyOf(new Date())) {
         ROAD = snap.road || [];
         ROAD_EVENTS = snap.roadEvents || [];
@@ -350,8 +351,13 @@
     }
 
     return apiGet('/portal/sign-ins?limit=8').then(function (j) {
-      SIGNINS = (j && j.items) || [];
-      SIGNINS_STATE = j ? 'ready' : 'error';
+      // No answer leaves the kept sign-ins up (hydrateOverview), not an error.
+      if (!j) {
+        if (SIGNINS_STATE !== 'ready') SIGNINS_STATE = 'error';
+        return;
+      }
+      SIGNINS = j.items || [];
+      SIGNINS_STATE = 'ready';
     });
   }
 

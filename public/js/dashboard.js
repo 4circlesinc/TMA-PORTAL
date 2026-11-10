@@ -3688,6 +3688,25 @@
   };
 
   document.addEventListener('DOMContentLoaded', function () {
-    mount(document.querySelector('.tma-dash'));
+    var go = function () { mount(document.querySelector('.tma-dash')); };
+    /*
+     * The apps open whole, the way they were left: the first screen is drawn
+     * once what it kept is up from the disk (TMAStore.ready), so it paints
+     * its data in its first frame instead of a skeleton that its data then
+     * replaces. Never held for long: a slow disk gets the old behaviour.
+     */
+    var store = window.TMAStore;
+    if (!store || !store.persistent || typeof store.ready !== 'function') {
+      go();
+      return;
+    }
+    var done = false;
+    var once = function () {
+      if (done) return;
+      done = true;
+      go();
+    };
+    store.ready().then(once, once);
+    setTimeout(once, 300);
   });
 })();

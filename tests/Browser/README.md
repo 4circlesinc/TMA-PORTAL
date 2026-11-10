@@ -855,6 +855,27 @@ field placement and drawing, and computed CSS only exist in a browser.
   row per kind (the inclusive tie-break re-delivering each boundary row);
   asserting zero there is asserting the bug the tie-break exists to prevent.
 
+- **`warm-app.mjs`** — the installed app closed and opened again with no
+  connection, the way WhatsApp opens: everything there in one go. Walks every
+  main section once while connected (CIP Applications, an application,
+  Messages, a conversation, Calendar, Overview, Files, Feed, Email,
+  Settings), then opens a fresh window (nothing in memory or the tab, only
+  what the app keeps on disk) with every data request dead and the system
+  saying offline, and fails on any skeleton, error card or missing words at
+  any moment of each screen's first seconds: moving around the reopened app,
+  and opening it straight onto each section. Also opens a chat that was
+  never opened while connected, which must still have its message. The
+  shell's boot is timed, not judged (here it comes over a dev server).
+
+  ```sh
+  DB=$(mktemp -d)/warm.sqlite && touch "$DB"
+  export APP_ENV=local DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FEATURE_CIP=true \
+    MAIL_MAILER=log CACHE_STORE=array SESSION_DRIVER=file BROADCAST_CONNECTION=log QUEUE_CONNECTION=sync
+  php artisan migrate --force && php artisan tinker tests/Browser/fixtures/warm-app-seed.php < /dev/null
+  php artisan serve --host=127.0.0.1 --port=8931 --no-reload &
+  TMA_BASE_URL=http://127.0.0.1:8931 node tests/Browser/warm-app.mjs
+  ```
+
 - **`warm-home.mjs`** — the dashboard opens the way it was quit. Visits once
   so every tile snapshots itself into the store, then reloads with every data
   endpoint killed: whatever paints can only have come from the store, so a

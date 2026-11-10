@@ -2937,6 +2937,18 @@
       return;
     }
 
+    if (err && err.offline) {
+      // No connection is not news about the mail. A read that could not go
+      // out leaves the kept mail on screen, and the sync pill already says
+      // Offline; only something the reader did, and that did not happen,
+      // is worth a word.
+      if (state.root && err.method && err.method !== 'GET') {
+        showEmailToast(state.root, 'No connection. Try again when you’re back online.');
+      }
+
+      return;
+    }
+
     if (state.root) showEmailToast(state.root, (err && err.message) || 'Something went wrong');
   }
 

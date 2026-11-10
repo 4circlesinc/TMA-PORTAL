@@ -125,7 +125,7 @@
   }
 
   function secApi(method, url, body) {
-    return fetch(url, {
+    var send = function () { return fetch(url, {
       method: method,
       credentials: 'same-origin',
       headers: {
@@ -135,6 +135,44 @@
         'X-Requested-With': 'XMLHttpRequest'
       },
       body: body ? JSON.stringify(body) : undefined
+    }); };
+    // Never kept: the two-factor secret, its QR code and the recovery codes
+    // (everything under /auth/) must not be written anywhere.
+    if (method !== 'GET' || !window.TMAStore || /^\/auth\//.test(url)) return send();
+
+    /*
+     * Every Settings page reads through here, and every one of them said
+     * "Couldn't load" with no connection. What the server last answered is
+     * kept on the device (on disk in the apps), and when nothing answers it
+     * is that answer the page gets: the settings as they were, not an error.
+     */
+    var key = 'settings:get:' + url;
+    var keptResponse = function (kept) {
+      return new Response(kept.body, {
+        status: kept.status || 200,
+        headers: { 'Content-Type': 'application/json', 'x-tma-kept': '1' },
+      });
+    };
+    // Known to be offline: the kept answer at once, not after a request that
+    // can only fail, which is a skeleton for as long as it takes to.
+    var queue = window.TMAQueue;
+    if (navigator.onLine === false || (queue && queue.online && !queue.online())) {
+      return window.TMAStore.get(key).then(function (kept) {
+        return kept && typeof kept.body === 'string' ? keptResponse(kept) : send();
+      }, send);
+    }
+    return send().then(function (res) {
+      if (res.ok) {
+        res.clone().text().then(function (text) {
+          window.TMAStore.put(key, { status: res.status, body: text });
+        }).catch(function () { /* kept next time */ });
+      }
+      return res;
+    }, function (err) {
+      return window.TMAStore.get(key).then(function (kept) {
+        if (!kept || typeof kept.body !== 'string') throw err;
+        return keptResponse(kept);
+      }, function () { throw err; });
     });
   }
 

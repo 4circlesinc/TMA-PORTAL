@@ -78,6 +78,27 @@
     return api(url);
   }
 
+  /*
+   * The first page each stream showed, kept on the device (on disk in the
+   * apps, in the tab in a browser), so the rail and the popups open on what
+   * they said last time instead of a skeleton, and stay on it with no
+   * connection instead of "Could not load". Only the plain first page: a
+   * filtered or searched one is a question, not the stream.
+   */
+  function plainFilters(filters) {
+    return Object.keys(filters || {}).every(function (k) { return !filters[k]; });
+  }
+
+  function kept(key) {
+    if (!window.TMAStore) return Promise.resolve(null);
+    return window.TMAStore.get(key).then(function (v) { return v || null; }, function () { return null; });
+  }
+
+  function keep(key, value) {
+    if (!window.TMAStore) return;
+    try { window.TMAStore.put(key, value); } catch (e) { /* the next load keeps it */ }
+  }
+
   /* ── A tiny pub/sub base every store shares. ──────────────────────── */
   function createEmitter() {
     var subs = [];
@@ -132,7 +153,12 @@
       state.error = false;
       changed();
       var params = Object.assign({ limit: opts.limit || 20 }, state.filters);
+      var plain = plainFilters(state.filters);
+      var answered = false;
+      var fromDevice = plain && !state.items.length ? kept(KEPT) : Promise.resolve(null);
+      fromDevice.then(function (v) { if (!answered) adopt(v); });
       loadPromise = sharedGet(NOTIF_BASE + qs(params)).then(function (data) {
+        answered = true;
         state.items = data.items || [];
         state.cursor = data.nextCursor || null;
         state.hasMore = !!data.nextCursor;
@@ -141,16 +167,36 @@
         state.loadedAt = Date.now();
         state.loading = false;
         loadPromise = null;
+        if (plain) keep(KEPT, { items: state.items, cursor: state.cursor, unread: state.unread });
         changed();
         return state;
       }).catch(function () {
-        state.loading = false;
-        state.error = true;
-        loadPromise = null;
-        changed();
-        return state;
+        // What was shown last time beats "Could not load": it is the last
+        // known truth, and the stream catches up when the connection does.
+        return fromDevice.then(function (v) {
+          answered = true;
+          state.loading = false;
+          loadPromise = null;
+          if (!state.items.length && !adopt(v)) state.error = true;
+          changed();
+          return state;
+        });
       });
       return loadPromise;
+    }
+
+    var KEPT = 'notify:notifications';
+
+    function adopt(v) {
+      if (!v || !Array.isArray(v.items) || state.items.length) return false;
+      state.items = v.items;
+      state.cursor = v.cursor || null;
+      state.hasMore = !!v.cursor;
+      state.unread = v.unread || 0;
+      state.loaded = true;
+      state.error = false;
+      changed();
+      return true;
     }
 
     /* Load once; later callers just re-sync the count and render from state. */
@@ -364,7 +410,12 @@
       state.error = false;
       changed();
       var params = Object.assign({ limit: opts.limit || 25 }, state.filters);
+      var plain = plainFilters(state.filters);
+      var answered = false;
+      var fromDevice = plain && !state.items.length ? kept(KEPT) : Promise.resolve(null);
+      fromDevice.then(function (v) { if (!answered) adopt(v); });
       loadPromise = sharedGet(ACT_BASE + qs(params)).then(function (data) {
+        answered = true;
         state.items = data.items || [];
         state.cursor = data.nextCursor || null;
         state.hasMore = !!data.nextCursor;
@@ -372,16 +423,35 @@
         state.loaded = true;
         state.loading = false;
         loadPromise = null;
+        if (plain) keep(KEPT, { items: state.items, cursor: state.cursor, isAdmin: state.isAdmin });
         changed();
         return state;
       }).catch(function () {
-        state.loading = false;
-        state.error = true;
-        loadPromise = null;
-        changed();
-        return state;
+        // Last time's activity beats "Could not load" (see notifications).
+        return fromDevice.then(function (v) {
+          answered = true;
+          state.loading = false;
+          loadPromise = null;
+          if (!state.items.length && !adopt(v)) state.error = true;
+          changed();
+          return state;
+        });
       });
       return loadPromise;
+    }
+
+    var KEPT = 'notify:activity';
+
+    function adopt(v) {
+      if (!v || !Array.isArray(v.items) || state.items.length) return false;
+      state.items = v.items;
+      state.cursor = v.cursor || null;
+      state.hasMore = !!v.cursor;
+      state.isAdmin = !!v.isAdmin;
+      state.loaded = true;
+      state.error = false;
+      changed();
+      return true;
     }
 
     function ensureLoaded(opts) {

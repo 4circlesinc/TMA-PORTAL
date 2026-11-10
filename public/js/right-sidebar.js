@@ -229,18 +229,49 @@
        * it) hides the section the same way a 403 does.
        */
       var limit = Math.max(APPS_MAX, previewLimits().applications);
+      /*
+       * Last time's rows, kept on the device: painted at once instead of a
+       * skeleton, and kept on screen with no connection instead of "Could
+       * not load". The server's answer replaces them when it comes.
+       */
+      var answered = false;
+      var store = window.TMAStore;
+      var fromDevice = store && !apps.items.length
+        ? store.get(APPS_KEPT).then(function (v) { return v || null; }, function () { return null; })
+        : Promise.resolve(null);
+      var adopt = function (rows) {
+        if (!Array.isArray(rows) || apps.items.length) return false;
+        apps.items = rows;
+        apps.loaded = true;
+        apps.error = false;
+        renderApplications();
+        return true;
+      };
+      fromDevice.then(function (rows) { if (!answered) adopt(rows); });
       window.TMANotifyAPI.api(ROOT + '/portal/cip/applications/preview?limit=' + encodeURIComponent(limit)).then(function (data) {
+        answered = true;
         apps.items = (data && data.applications) || [];
         apps.loaded = true;
         apps.loading = false;
+        apps.error = false;
+        if (store) { try { store.put(APPS_KEPT, apps.items); } catch (e) { /* next time */ } }
         renderApplications();
       }).catch(function (err) {
+        answered = true;
         apps.loading = false;
-        apps.error = true;
-        if (err && (err.status === 404 || err.status === 403 || err.status === 401)) apps.forbidden = true;
-        renderApplications();
+        if (err && (err.status === 404 || err.status === 403 || err.status === 401)) {
+          apps.forbidden = true;
+          apps.error = true;
+          renderApplications();
+          return;
+        }
+        fromDevice.then(function (rows) {
+          if (!apps.items.length && !adopt(rows)) apps.error = true;
+          renderApplications();
+        });
       });
     }
+    var APPS_KEPT = 'rail:applications';
 
     /* ── data wiring ───────────────────────────────────────────── */
     window.TMANotifications.subscribe(renderNotifications);

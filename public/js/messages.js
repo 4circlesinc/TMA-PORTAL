@@ -177,19 +177,27 @@
    * to the account current-user.js sets, and during deferred execution
    * readyState is already 'interactive' while DCL has not fired (the trap).
    */
+  /* Put the kept list up. True when it did. */
+  function adoptWarm(snap) {
+    // Only the server's answer outranks the kept list. A first load that
+    // failed (no connection) is "loaded" too, with nothing in it, and used
+    // to throw the kept list away behind "could not be loaded".
+    if (!snap || STORE.real || (STORE.threads || []).length || !(snap.threads || []).length) return false;
+    STORE.threads = snap.threads || [];
+    STORE.me = snap.me || null;
+    rememberMe();
+    STORE.settings = snap.settings || {};
+    STORE.tabCounts = snap.tabCounts || {};
+    STORE.loaded = true;
+    STORE.loadError = null;
+    if (warmRerender) warmRerender();
+
+    return true;
+  }
+
   function hydrateMessages() {
     if (!window.TMAStore) return;
-    window.TMAStore.get('messages:warm').then(function (snap) {
-      if (!snap || STORE.real || STORE.loaded) return;
-      STORE.threads = snap.threads || [];
-      STORE.me = snap.me || null;
-      rememberMe();
-      STORE.settings = snap.settings || {};
-      STORE.tabCounts = snap.tabCounts || {};
-      STORE.loaded = true;
-      STORE.loadError = null;
-      if (warmRerender) warmRerender();
-    });
+    window.TMAStore.get('messages:warm').then(adoptWarm);
   }
 
   var messagesHydrated = false;
@@ -362,6 +370,54 @@
         })).catch(function () { /* a full disk costs the copy, not the thread */ });
       } catch (e) { /* as above */ }
     }, 800);
+  }
+
+  /*
+   * Every recent chat there with no connection, not only the ones opened
+   * before: what WhatsApp does. In the apps, a little after the list has
+   * arrived, the newest page of each recent conversation is fetched quietly,
+   * one at a time, and kept as if it had been opened. A copy kept in the
+   * last few minutes is left alone; an open conversation keeps its own.
+   */
+  var WARM_THREADS = 15;
+  var WARM_FRESH_MS = 10 * 60 * 1000;
+  var warmingThreads = false;
+
+  function warmThreads() {
+    var store = window.TMAStore;
+    if (warmingThreads || !store || !store.persistent || !window.TMAMessagingAPI) return;
+    warmingThreads = true;
+    var rows = (STORE.threads || []).slice(0, WARM_THREADS);
+    var i = 0;
+    var next = function () {
+      if (i >= rows.length) {
+        warmingThreads = false;
+        return;
+      }
+      var id = rows[i++] && rows[i - 1].id;
+      var open = id && STORE.threadMessages[id] && STORE.threadMessages[id].loaded;
+      if (!id || open) {
+        next();
+        return;
+      }
+      store.get(threadKey(id)).then(function (kept) {
+        if (kept && kept.keptAt && Date.now() - kept.keptAt < WARM_FRESH_MS) return null;
+
+        return window.TMAMessagingAPI.messages(id).then(function (data) {
+          var messages = (data && data.messages) || [];
+          if (!messages.length) return null;
+
+          return store.put(threadKey(id), {
+            messages: messages.slice(-THREAD_KEEP),
+            hasMore: !!(data && data.hasMore) || messages.length > THREAD_KEEP,
+            keptAt: Date.now(),
+          });
+        });
+      }).catch(function () { /* the next opening tries again */ }).then(function () {
+        setTimeout(next, 250);
+      });
+    };
+    next();
   }
 
   /*
@@ -7444,6 +7500,8 @@
         STORE.loaded = true;
         STORE.loadError = null;
         STORE.real = true;
+        // Behind the screen, once it has settled: every recent chat kept.
+        setTimeout(warmThreads, 3000);
 
         retainOpenThread(previousThreads, state.selectedId);
         markMovedThreads(previousThreads);
@@ -7506,11 +7564,23 @@
         // beat an error card: they are the last known truth, and replacing
         // them with "could not be loaded" because a refresh failed is the
         // File Library lesson unlearned.
-        if (!(STORE.threads || []).length) STORE.loadError = err;
-        render();
-        if (!options.silent && !(STORE.threads || []).length) {
-          showMessagesToast(root, 'Conversations could not be loaded');
+        if ((STORE.threads || []).length) {
+          render();
+          return;
         }
+        // Nothing up yet: the kept list may still be on its way from the
+        // disk, and a dead network answers faster than the disk does. Only
+        // when there is nothing kept is it a list that could not be loaded.
+        var kept = window.TMAStore ? window.TMAStore.get('messages:warm') : Promise.resolve(null);
+        return kept.then(adoptWarm, function () { return false; }).then(function (adopted) {
+          if (adopted || (STORE.threads || []).length) {
+            render();
+            return;
+          }
+          STORE.loadError = err;
+          render();
+          if (!options.silent) showMessagesToast(root, 'Conversations could not be loaded');
+        });
       });
   }
 
@@ -7554,6 +7624,11 @@
           if (!options.before) bucket.stale = false;
         }
         bucket.loaded = true;
+        // Kept from its first opening. mergeMessages keeps a thread only once
+        // it is loaded, and the first page is merged before that, so a
+        // conversation opened and then read offline used to have no copy at
+        // all until a new message happened to arrive in it.
+        persistThread(conversationId);
 
         // The conversation row can have moved on while history was in flight.
         if (data.conversation) replaceThread(data.conversation);
@@ -7583,6 +7658,25 @@
           // truth; an error card in its place would not be.
           bucket.fromDevice = false;
           bucket.stale = true;
+        } else if (!(err && err.status) && window.TMAStore) {
+          // No connection and nothing up yet: the kept copy may still be on
+          // its way from the disk, which answers slower than a dead network
+          // fails. Only with nothing kept is it a thread that could not load.
+          window.TMAStore.get(threadKey(conversationId)).then(function (snap) {
+            if (!bucket.messages.length && snap && snap.messages && snap.messages.length) {
+              mergeMessages(conversationId, snap.messages, false);
+              bucket.hasMore = !!snap.hasMore;
+              bucket.loaded = true;
+              bucket.stale = true;
+            } else if (!bucket.messages.length) {
+              bucket.error = err;
+            }
+            render();
+          }, function () {
+            bucket.error = err;
+            render();
+          });
+          return;
         } else {
           bucket.error = err;
         }

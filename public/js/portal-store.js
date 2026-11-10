@@ -230,6 +230,27 @@
     }
   }
 
+  /*
+   * The apps know who this is at once too. They keep no tab tier, so the
+   * block above never ran for them, and every screen's first read went to
+   * the anonymous scope until /me answered, which offline is never: the
+   * week of data on disk was there and nothing found it. The shell names who
+   * it was served to; a shell kept from before may not, and then the /me the
+   * app remembered does (current-user.js, cleared by sign-out and by the
+   * server refusing). A different account answering later still wipes all
+   * of it (setAccount).
+   */
+  if (persistent && accountId === null) {
+    var bootId = window.TMABootUserId;
+    if (bootId == null) {
+      try {
+        var rememberedMe = JSON.parse(window.localStorage.getItem('tma.me') || 'null');
+        if (rememberedMe && rememberedMe.id != null) bootId = rememberedMe.id;
+      } catch (e) { /* nobody remembered: /me will say */ }
+    }
+    if (bootId != null) accountId = String(bootId);
+  }
+
   /* Settles the first time the account is known. A screen that read before
      /me answered looked under the anonymous scope, where a copy kept from
      last time is not; this is how it asks again once that copy can be found. */
@@ -397,6 +418,78 @@
       return Promise.resolve(kept.value);
     }
 
+    // The boot read may already be bringing this one up.
+    if (preloading) {
+      return preloading.then(function () {
+        var held = memory[k];
+        if (fresh(held)) return held.value;
+
+        return readEntry(k);
+      });
+    }
+
+    return readEntry(k);
+  }
+
+  /*
+   * The apps open the way they were left, in one go (the WhatsApp test the
+   * firm set): every screen's kept copy is read from the disk into memory as
+   * the store starts, in one pass, so a screen asking for it later is
+   * answered within the same task that draws it, before the browser paints
+   * a frame. A copy read from the disk on demand comes a few frames late,
+   * and those frames were the skeleton. Not the records the first-run
+   * download keeps for every client and file: those are thousands, and are
+   * read when opened.
+   */
+  var BULK = /^(files:folder:|files:item:|clients:record:|cip:application-record:)|sync-cursor/;
+  var preloading = null;
+
+  function preload() {
+    if (!persistent || accountId === null || typeof IDBKeyRange === 'undefined') return;
+    var prefix = accountId + '::';
+    preloading = openDb().then(function (db) {
+      if (!db) return;
+
+      return new Promise(function (resolve) {
+        var tx;
+        try {
+          tx = db.transaction(STORE, 'readonly');
+        } catch (e) {
+          resolve();
+
+          return;
+        }
+        var store = tx.objectStore(STORE);
+        var req = store.openKeyCursor
+          ? store.openKeyCursor(IDBKeyRange.bound(prefix, prefix + '￿'))
+          : null;
+        if (!req) {
+          resolve();
+
+          return;
+        }
+        req.onsuccess = function () {
+          var cursor = req.result;
+          if (!cursor) return;
+          var key = String(cursor.key);
+          if (!BULK.test(key.slice(prefix.length)) && !memory[key]) {
+            var one = store.get(cursor.key);
+            one.onsuccess = function () {
+              if (one.result && fresh(one.result) && !memory[key]) memory[key] = one.result;
+            };
+          }
+          cursor.continue();
+        };
+        tx.oncomplete = function () { resolve(); };
+        tx.onerror = function () { resolve(); };
+        tx.onabort = function () { resolve(); };
+      });
+    }).catch(function () { /* each screen reads its own */ }).then(function () {
+      preloading = null;
+    });
+  }
+
+  function readEntry(k) {
     return readDisk(k).then(function (entry) {
       if (!fresh(entry)) return undefined;
       // Promoted, so a second read of the same screen does not go to disk.
@@ -473,6 +566,7 @@
     accountId = next;
 
     var settled = had === null ? claimAnonymous() : clear();
+    if (next !== null) settled = settled.then(function () { preload(); });
     if (next !== null) settled.then(announceAccount, announceAccount);
 
     return settled;
@@ -563,23 +657,22 @@
    */
   function swr(key, fetcher, onData) {
     var delivered = false;
-    var finished = false;
+    var answered = false;
 
-    get(key).then(function (value) {
-      if (value === undefined || finished) return;
+    var kept = get(key).then(function (value) {
+      if (value === undefined || answered) return;
       delivered = true;
       if (onData) onData(value, { stale: true });
-    });
+    }, function () { /* nothing kept */ });
 
     return fetcher().then(function (value) {
-      finished = true;
+      answered = true;
       put(key, value);
       if (onData) onData(value, { stale: false });
       if (window.TMAQueue && window.TMAQueue.answered) window.TMAQueue.answered();
 
       return value;
     }).catch(function (err) {
-      finished = true;
       /*
        * No status means no answer, not a refusal. The queue looks at the
        * firm and says "offline" only if that fails too, which is the one
@@ -587,9 +680,20 @@
        * stays online with the wifi off.
        */
       if (!(err && err.status) && window.TMAQueue && window.TMAQueue.check) window.TMAQueue.check();
-      if (delivered) return undefined;
 
-      throw err;
+      /*
+       * The kept copy may still be on its way from the disk: with no
+       * connection the request fails in a few milliseconds, faster than
+       * IndexedDB answers. This used to mark the read finished and throw,
+       * and the copy arrived to find it over: every screen painted through
+       * here opened empty offline with its data sitting on disk. Wait for
+       * it; when there is one, it is what the screen shows.
+       */
+      return kept.then(function () {
+        if (delivered) return undefined;
+
+        throw err;
+      });
     });
   }
 
@@ -610,5 +714,12 @@
     /* Whether a reload finds what was held: the disk on the desktop, the tab
        in a browser. Not a promise about a restart. */
     warm: persistent || !!tab,
+    /* Settles when what every screen kept is up in memory (the apps), at
+       once everywhere else. A first screen that waits for it paints whole. */
+    ready: function () { return preloading || Promise.resolve(); },
   };
+
+  // The account is known from the start in the apps (above): bring up what
+  // every screen kept before the first of them asks.
+  preload();
 })();

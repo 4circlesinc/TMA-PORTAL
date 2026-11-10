@@ -21815,8 +21815,27 @@
         }, cipProfile)
       : (isExternalCipUser() ? cipProfile() : ClientsAPI.show(id));
 
+    /*
+     * The profile as it was last answered, kept on the device: painted at
+     * once, so a client or an application opens on its tabs rather than a
+     * greyed row, and stays open with no connection. The answer replaces it.
+     * Any write in the hub drops it (the clientsFetch seam drops 'clients:').
+     */
+    var keptKey = 'clients:profile:' + id;
+    if (window.TMAStore) {
+      window.TMAStore.get(keptKey).then(function (kept) {
+        if (stale() || profileLoaded(id) || !kept || !kept.client) return;
+        if (kept.application) rememberApplication(id, kept.application);
+        rememberClientRecord(kept.client);
+        redraw();
+      }, function () { /* the request answers */ });
+    }
+
     request.then(function (res) {
       if (stale()) return;
+      if (res && res.client && window.TMAStore) {
+        try { window.TMAStore.put(keptKey, { client: res.client, application: res.application || null }); } catch (e) { /* next time */ }
+      }
       if (res && res.application) {
         rememberApplication(id, res.application);
         state.applicationFreshFor = id;
@@ -21837,6 +21856,13 @@
       redraw();
     }).catch(function (err) {
       if (stale()) return;
+
+      // Painted from the kept profile with no connection: that stands.
+      if (profileLoaded(id) && !(err && err.status)) {
+        state.profileLoadingFor = null;
+        redraw();
+        return;
+      }
 
       /*
        * The server said something, a 404, a 500, and that answer stands.

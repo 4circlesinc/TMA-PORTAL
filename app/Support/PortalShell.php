@@ -248,7 +248,10 @@ final class PortalShell
 
         return 'window.TMABootHomeUrl='.$board.';'
             .'window.TMABootHome=fetch('.$board.','.$init.');'
+            // Offline the board paints from the device; a dead fetch is not an error.
+            .'window.TMABootHome.catch(function(){});'
             .'window.TMABootHomeFilesUrl='.$files.';'
-            .'window.TMABootHomeFiles=fetch('.$files.','.$init.');';
+            .'window.TMABootHomeFiles=fetch('.$files.','.$init.');'
+            .'window.TMABootHomeFiles.catch(function(){});';
     }
 }

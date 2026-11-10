@@ -33,6 +33,13 @@
       '.tma-skeleton--line{display:block;height:.7em;border-radius:6px;margin:.4em 0}' +
       '.tma-skeleton--circle{border-radius:50%!important;flex:0 0 auto}' +
       '.tma-skeleton-stack{display:flex;flex-direction:column;gap:6px;padding:4px 0}' +
+      /* The apps answer from the device in a frame or two, and a skeleton
+         drawn for those frames is a flash of "loading" with nothing loading.
+         There it shows only for a wait long enough to be one. */
+      (window.TMADesktop && window.TMADesktop.isDesktop
+        ? '.tma-skeleton-stack{animation:tma-skeleton-late 0s linear 240ms both}' +
+          '@keyframes tma-skeleton-late{from{visibility:hidden}to{visibility:visible}}'
+        : '') +
       '.tma-skeleton-row{display:flex;align-items:center;gap:12px;padding:10px 4px}' +
       '.tma-skeleton-row__grow{flex:1;min-width:0}' +
       '.tma-dash__profile-name.tma-skeleton{min-width:92px}' +

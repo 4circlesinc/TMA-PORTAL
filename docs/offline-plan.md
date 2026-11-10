@@ -159,6 +159,26 @@ failing to reach the server: it keeps trying, further apart each time, until
 delivered or refused on its merits. `tests/Browser/messaging-offline.mjs`
 drives all of it, as an installed app and (`TMA_AS_BROWSER=1`) as a browser.
 
+**8. Reopen like WhatsApp (all four apps).** ✅ *Shipped 10 Nov 2026.*
+Closed and opened again with no connection, the app shows every section as
+it was left, in one go: no skeleton, no "Could not load". What stood in the
+way was not missing data, it was on disk, but four ways of not finding it:
+the store did not know the account in the apps until /me answered (it now
+knows from the shell or the remembered /me at once); `swr`, and Messages,
+the rail and the Calendar, threw the kept copy away when a dead network
+failed before the disk answered (they now wait for it); the rail, Settings
+and a client's profile were never kept at all (now `notify:*`,
+`rail:applications`, `settings:get:*` (never the two-factor secrets),
+`clients:profile:*`); and a thread was kept only after its second message
+arrived. In the apps the store now reads every screen's copy into memory as
+it starts (not the first-run download's per-record rows), the first screen
+waits for that (300 ms at most) so it paints whole, the shell's boot
+skeleton is hidden when somebody is remembered, and a list skeleton shows
+only for a wait of a quarter of a second or more. Messages also keeps the
+newest page of the fifteen most recent chats, so a chat never opened while
+connected is there too. No connection is said in words, never "Failed to
+fetch". `tests/Browser/warm-app.mjs` proves it section by section.
+
 ## What offline applications do and do not do today
 
 Works: opening an application that has been opened before, editing it with no

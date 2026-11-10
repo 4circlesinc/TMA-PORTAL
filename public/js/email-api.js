@@ -34,6 +34,14 @@
       credentials: 'same-origin',
       headers: Object.assign(headers, opts.headers || {}),
       body: opts.body,
+    }).catch(function (cause) {
+      // Nothing answered: no connection. Said as such, never in the
+      // browser's own words ("Failed to fetch", "Load failed").
+      var err = new Error('No connection');
+      err.offline = true;
+      err.method = opts.method || 'GET';
+      err.cause = cause;
+      throw err;
     }).then(function (res) {
       var ct = res.headers.get('content-type') || '';
       var parse = ct.indexOf('application/json') !== -1 ? res.json() : Promise.resolve(null);
