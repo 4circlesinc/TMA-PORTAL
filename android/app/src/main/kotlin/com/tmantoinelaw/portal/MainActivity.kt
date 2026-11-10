@@ -186,6 +186,7 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
         viewModel.rememberTheme(dark)
     }
     override fun onOverlay(open: Boolean) = Unit
+    override fun onRendererGone() { recreate() }
     override fun onPortalPage(url: String) { if (host.shellCache.hasSessionCookie()) PushRegistrar.ensure(this, viewModel.config.origin, BuildConfig.VERSION_NAME) }
     override fun onResume() {
         super.onResume()

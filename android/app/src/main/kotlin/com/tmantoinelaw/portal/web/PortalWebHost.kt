@@ -66,6 +66,8 @@ class PortalWebHost(
         fun chooseFiles(intent: Intent, done: (Array<Uri>?) -> Unit)
         /** A portal page finished loading (the moment to register for push once a session exists). */
         fun onPortalPage(url: String)
+        /** The page's renderer was taken away (memory). The window must be rebuilt: a dead WebView paints nothing. */
+        fun onRendererGone() {}
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -245,6 +247,17 @@ class PortalWebHost(
                 val path = Uri.parse(url).path ?: "/"
                 io.execute { runCatching { shellCache.capture(path) } }
             }
+        }
+
+        /*
+         * Android killed the page's renderer: a run of heavy documents, or the
+         * system short of memory. Left alone the WebView stays blank for good
+         * (or, unhandled, the whole app is closed with it). The window is
+         * rebuilt instead, and opens the portal again.
+         */
+        override fun onRenderProcessGone(view: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
+            main.post { listener.onRendererGone() }
+            return true
         }
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
