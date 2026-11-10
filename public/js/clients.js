@@ -3119,6 +3119,172 @@
     );
   }
 
+  /*
+   * Service providers and Provider contacts, as the application tabs' table.
+   *
+   * They were drawn as the client grid's div table, which kept its 720px of
+   * columns inside a phone's cards: provider names went missing, Sign as
+   * admin was squeezed against the type, and every card ran off the right
+   * edge with the pager after it. Post-Approval and the other tabs draw
+   * ui().table with .tma-cip-table, a sheet on a wide screen and cards from
+   * 1024px down, captioned from the headers. These now draw exactly that, so
+   * every tab of the page answers a narrow screen the same way.
+   *
+   * The rows keep their hooks (data-clients-open-company, data-clients-row),
+   * so opening, the context menu, Transfer, delete and Sign as admin are
+   * wired as before.
+   */
+  function directoryFace(person, id) {
+    var av = directoryAvatarItem(person);
+    var name = (person && person.name) || '';
+    var src = av.avatar ? (AVATAR + av.avatar + '.png') : (av.photo || initialsAvatarUri(name, id || name));
+    if (src) {
+      return '<img class="tma-cip-table__applicant-face" src="' + esc(src) + '" alt="" width="26" height="26">';
+    }
+    return '<span class="tma-cip-table__applicant-face tma-cip-table__applicant-face--initial">' +
+      esc((name.charAt(0) || '?').toUpperCase()) + '</span>';
+  }
+
+  function companyFace(company) {
+    if (company.logoUrl) {
+      return '<img class="tma-cip-table__applicant-face" src="' + esc(company.logoUrl) + '" alt="" width="26" height="26">';
+    }
+    return '<span class="tma-cip-table__applicant-face tma-cip-table__applicant-face--initial">' +
+      '<img src="' + ICONS.Buildings + '" alt="" width="14" height="14"></span>';
+  }
+
+  /* Buttons get a cell of their own at the end of the row. Beside the name
+     or after the email they were clipped by the cell's one-line ellipsis
+     (a long firm name or address hid Sign as admin and Transfer); on a card
+     this cell has no caption and sits at the foot. */
+  function renderCompanyTr(company, controls) {
+    var type = company.retired ? 'Retired' : (company.id ? 'Company' : 'CIP provider');
+    var key = company.id || company.cipCode || company.name || '';
+
+    return (
+      '<tr data-key="company:' + esc(key) + '"' +
+      (company.id ? ' data-clients-open-company="' + esc(company.id) + '"' : '') + '>' +
+      '<td><span class="tma-cip-table__applicant">' + companyFace(company) +
+      '<span class="tma-dash__cc-truncate">' + esc(company.name || 'Service provider') + '</span></span></td>' +
+      '<td class="tma-portal-table__muted">' + esc(type) + '</td>' +
+      '<td>' + esc(company.cipCode || '-') + '</td>' +
+      '<td class="tma-portal-table__muted">' + esc(companyRowSummary(company)) + '</td>' +
+      '<td class="tma-portal-table__muted">' + esc(company.email || company.phone || '-') + '</td>' +
+      (controls
+        ? '<td>' + (company.id
+          ? '<button type="button" class="tma-dash__clients-edit-btn" data-clients-sign-in-company="' +
+            esc(company.id) + '" aria-label="Sign as admin">Sign as admin</button>'
+          : '') + '</td>'
+        : '') +
+      '</tr>'
+    );
+  }
+
+  function personControls(person) {
+    return providerContactTransferButton(person) + providerUserRemoveButton(person);
+  }
+
+  function renderPersonTr(entry, controls) {
+    var person = entry.person;
+    var company = entry.company;
+    var cardPerson = providerContactCardPerson(person);
+
+    return (
+      '<tr data-key="person:' + esc(person.id) + '" data-clients-row="' + esc(person.id) + '">' +
+      '<td><span class="tma-cip-table__applicant tma-people tma-people--contact" data-tma-people="' +
+      esc(JSON.stringify([cardPerson])) + '">' +
+      withPersonHoverTarget(directoryFace(person, person.id), 0) +
+      '<span class="tma-dash__cc-truncate" data-tma-person="0" tabindex="0">' + esc(cardPerson.name) + '</span>' +
+      '</span></td>' +
+      '<td class="tma-portal-table__muted">' + esc(person.accountType || '-') + '</td>' +
+      '<td><button type="button" class="tma-dash__clients-company-link tma-dash__cc-truncate" data-clients-open-company="' +
+      esc(company.id) + '">' + esc(company.name || 'Service provider') + '</button></td>' +
+      '<td class="tma-portal-table__muted">' + esc(String(person.email || '').trim() || '-') + '</td>' +
+      (controls ? '<td>' + personControls(person) + '</td>' : '') +
+      '</tr>'
+    );
+  }
+
+  function directoryTableSkeleton(columns) {
+    var disc = '<span class="tma-skeleton tma-skeleton--circle"' +
+      ' style="display:inline-block;width:26px;height:26px"></span>';
+    var rows = '';
+    for (var i = 0; i < 8; i++) {
+      rows += '<tr aria-hidden="true">' +
+        '<td><span class="tma-cip-table__applicant">' + disc + skeletonBar(skeletonWidth(i, 0.8)) + '</span></td>';
+      for (var c = 1; c < columns; c++) rows += '<td>' + skeletonBar(skeletonWidth(i + c * 3, 0.7)) + '</td>';
+      rows += '</tr>';
+    }
+    return rows;
+  }
+
+  function renderDirectoryTable(state) {
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.table) return '';
+
+    var people = onPeopleTab(state);
+    var headers = people
+      ? ['Person', 'Account type', 'Service provider', 'Contact']
+      : ['Service provider', 'Type', 'CIP code', 'People', 'Contact'];
+    var label = people ? (isProviderAdminViewer() ? 'Provider users' : 'Provider contacts') : 'Service providers';
+    var opts = { cls: 'tma-cip-table tma-cip-table--directory', tableAttrs: ' aria-label="' + esc(label) + '"' };
+
+    if (state.loadState === 'loading') return ui.table(headers, directoryTableSkeleton(headers.length), opts);
+
+    var page = getTablePageData(state);
+    if (!page.items.length) {
+      return '<div class="tma-dash__clients-directory-empty">' + renderClientsEmptyState(state) + '</div>';
+    }
+
+    // The buttons' column only when someone on this page has one.
+    var controls = people
+      ? page.items.some(function (entry) { return entry.person && !!personControls(entry.person); })
+      : isClientsAdmin();
+    if (controls) headers = headers.concat(['']);
+
+    return ui.table(headers, page.items.map(function (entry) {
+      return entry.kind === 'company' ? renderCompanyTr(entry.company, controls) : renderPersonTr(entry, controls);
+    }).join(''), opts);
+  }
+
+  /* The application tabs' pager: nothing while it all fits on one page, then
+     the count, five pages around this one, and the arrows. Wired by
+     wireTablePagination through data-page and data-direction. */
+  function renderDirectoryPagination(state, totalRows) {
+    if (state.loadState !== 'ready') return '';
+    var totalPages = clientsTotalPages(state, totalRows);
+    if (totalPages <= 1) return '';
+    if (state.page > totalPages) state.page = totalPages;
+
+    var start = Math.max(1, Math.min(state.page - 2, totalPages - 4));
+    var end = Math.min(totalPages, start + 4);
+    var pages = '';
+    for (var p = start; p <= end; p++) {
+      var active = p === state.page;
+      pages += '<button type="button" class="tma-pagination__button' +
+        (active ? ' tma-pagination__button--active' : '') + '"' +
+        ' aria-label="Page ' + p + '"' + (active ? ' aria-current="page"' : '') +
+        ' data-page="' + p + '"><span class="tma-pagination__label">' + p + '</span></button>';
+    }
+
+    var noun = onPeopleTab(state)
+      ? (totalRows === 1 ? ' provider contact' : ' provider contacts')
+      : (totalRows === 1 ? ' service provider' : ' service providers');
+
+    return '<div class="tma-pagination-bar tma-pagination-bar--footer" data-clients-pagination>' +
+      '<div class="tma-pagination-bar__meta">' +
+      '<span class="tma-pagination-bar__results">' + esc(totalRows.toLocaleString() + noun) + '</span></div>' +
+      '<nav class="tma-pagination" aria-label="Pagination">' + pages +
+      '<button type="button" class="tma-pagination__button tma-pagination__button--icon"' +
+      ' aria-label="Previous page" data-direction="prev"' + (state.page <= 1 ? ' disabled' : '') + '>' +
+      '<img src="' + ICONS.CaretLeft + '" class="tma-pagination__icon" width="16" height="16" alt=""></button>' +
+      '<button type="button" class="tma-pagination__button tma-pagination__button--icon' +
+      ' tma-pagination__button--next" aria-label="Next page" data-direction="next"' +
+      (state.page >= totalPages ? ' disabled' : '') + '>' +
+      '<img src="' + ICONS.CaretRight + '" class="tma-pagination__icon" width="16" height="16" alt=""></button>' +
+      '</nav></div>';
+  }
+
   function renderFullTableRow(entry, index, checked) {
     if (entry.kind === 'company') return renderCompanyTableRow(entry.company, index);
     if (entry.kind === 'person') return renderProviderPersonTableRow(entry, index);
@@ -6144,7 +6310,6 @@
 
   function renderTableListPage(state) {
     var page = getTablePageData(state);
-    var people = onPeopleTab(state);
 
     if (onApplicationsTable(state)) {
       return (
@@ -6156,38 +6321,18 @@
       );
     }
 
+    // Service providers and Provider contacts: the same table, cards and
+    // pager as the application tabs above (renderDirectoryTable). No
+    // checkbox column: bulk actions post to the clients endpoint, and a
+    // company is deleted from its own profile. The tabs live in the page
+    // head, see syncClientsHeadTabs.
     return (
-      // The tabs live in the page head, see syncClientsHeadTabs.
       renderTableToolbar(state) +
       renderClientsFilterChips(state) +
-      // The grid is wider than a narrow window; without a scroller of its own
-      // the last columns are simply unreachable, and the page body scrolling
-      // sideways drags the whole shell with it.
       '<div class="tma-dash__ctable-scroll" data-clients-scroll>' +
-      '<div class="tma-dash__ctable tma-dash__ctable--clients tma-dash__ctable--noselect' +
-      (people ? ' tma-dash__ctable--people' : ' tma-dash__ctable--providers') +
-      '" role="table" aria-label="' +
-      (people ? (isProviderAdminViewer() ? 'Provider users' : 'Provider contacts') : 'Service providers') + '">' +
-      '<div class="tma-dash__ctr tma-dash__ctr--head" role="row">' +
-      // No checkbox column on these tabs. Bulk actions post to the clients
-      // endpoint, and a company is deleted from its own profile.
-      '<div class="tma-dash__cc tma-dash__cc--user tma-dash__cc--head" role="columnheader">' +
-      (people ? 'Person' : 'Service provider') + '</div>' +
-      (people
-        ? '<div class="tma-dash__cc tma-dash__cc--type tma-dash__cc--head" role="columnheader">Account type</div>'
-        : '<div class="tma-dash__cc tma-dash__cc--type tma-dash__cc--head" role="columnheader">Type</div>') +
-      // The CIP code is how the firm refers to a provider in an application
-      // number, so it earns a column of its own rather than living only in
-      // the profile.
-      (people ? ''
-        : '<div class="tma-dash__cc tma-dash__cc--code tma-dash__cc--head" role="columnheader">CIP code</div>') +
-      '<div class="tma-dash__cc tma-dash__cc--referral tma-dash__cc--head" role="columnheader">' +
-      (people ? 'Service provider' : 'People') + '</div>' +
-      '<div class="tma-dash__cc tma-dash__cc--contact tma-dash__cc--head" role="columnheader">Contact</div>' +
+      renderDirectoryTable(state) +
       '</div>' +
-      '<div data-clients-body>' + renderFullTableRows(state) + '</div>' +
-      '</div></div>' +
-      renderClientsPagination(state, page.total)
+      renderDirectoryPagination(state, page.total)
     );
   }
 

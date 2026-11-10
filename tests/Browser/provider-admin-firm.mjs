@@ -100,6 +100,9 @@ function serve() {
     </div>
   </div>
 </div>
+<!-- The shell's table component: Provider users is drawn with it, the same
+     as every other CIP tab. -->
+<script src="/js/portal-views.js"></script>
 <script src="/js/clients.js"></script>
 <script>
   window.TMAClients.mount(document.getElementById('clients'));
@@ -153,7 +156,9 @@ try {
   const peopleTab = (await page.locator('[data-clients-list-tab="people"]').innerText()).replace(/\s+/g, ' ').trim()
   if (!peopleTab.startsWith('Provider users')) throw new Error('provider admin people tab should say Provider users, got: ' + peopleTab)
   await page.waitForSelector('[data-clients-row="dana-reed"]')
-  await page.click('[data-clients-row="dana-reed"]')
+  // A plain cell of the row (Account type): the firm's name in the same row
+  // is a control of its own and opens the firm.
+  await page.click('[data-clients-row="dana-reed"] td:nth-child(2)')
   await page.waitForFunction(() => location.pathname === '/citizenship-applications/dana-reed')
   await page.waitForSelector('.tma-dash__clients-profile-name')
   const detailName = await page.locator('.tma-dash__clients-profile-name').innerText()

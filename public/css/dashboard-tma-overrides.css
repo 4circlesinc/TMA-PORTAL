@@ -1428,6 +1428,9 @@ body::-webkit-scrollbar,
     white-space: normal;
     overflow: visible;
     text-overflow: clip;
+    /* An email or a firm's long name breaks inside its half of the card
+       instead of running under the field beside it. */
+    overflow-wrap: anywhere;
   }
 
   /* Hover keeps its hands off the cards entirely — on touch it sticks

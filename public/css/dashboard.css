@@ -39629,6 +39629,14 @@ span.tma-dash__messages-profile-avatar {
   min-width: 1148px;
 }
 
+/* Service providers and Provider contacts draw this table too (five columns
+   and four), so the nine-column floor would only push them into a sideways
+   scroll on a laptop. Cards below 1024px come from the same rules as every
+   other tab. */
+.tma-cip-table--directory {
+  min-width: 0;
+}
+
 /* Touch-width duplicate of the status, rendered beside the applicant's
    name; only the responsive layer ever shows it. */
 .tma-cip-table__inline-status {
@@ -39803,7 +39811,9 @@ span.tma-dash__messages-profile-avatar {
   cursor: help;
 }
 
-.tma-cip-table tbody tr[data-cip-open] { cursor: pointer; }
+.tma-cip-table tbody tr[data-cip-open],
+.tma-cip-table tbody tr[data-clients-open-company],
+.tma-cip-table tbody tr[data-clients-row] { cursor: pointer; }
 
 .tma-cip-table tbody tr[data-cip-open-member] { cursor: pointer; }
 
