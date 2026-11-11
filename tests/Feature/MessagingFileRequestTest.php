@@ -203,7 +203,11 @@ class MessagingFileRequestTest extends TestCase
         $uuid = $this->ask($staff, $conversation, [
             'application' => $application->uuid,
             'documents' => [$oath->uuid, $payment->uuid],
-        ])->assertCreated()->json('message.id');
+        ])->assertCreated()
+            // No instructions typed: the card says nothing more than its
+            // list (no generated "Please upload X and Y for Z.").
+            ->assertJsonPath('message.fileRequest.message', null)
+            ->json('message.id');
 
         $this->answer($contact, $uuid, $oath->uuid, 'IMG_2231.pdf')
             ->assertCreated()

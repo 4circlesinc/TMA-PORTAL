@@ -18489,6 +18489,13 @@ body:has(.tma-dash__messages-select-bar) .tma-bespoke:not(.is-open) {
   margin: var(--space-8) 0 var(--space-6, 6px);
 }
 
+/* The Request documents chooser asked from a chat has no sentence between
+   the application's numbers and its people (the application page's dialog
+   does, and keeps its own spacing); the list keeps the same distance. */
+.tma-cip-docreq__facts + .tma-cip-not-ready__list {
+  margin-top: var(--space-20);
+}
+
 .tma-dash__messages-composer-main {
   display: flex;
   align-items: center;

@@ -10523,35 +10523,32 @@
    * @param {object} app  the application record (people with their documents)
    * @param {object} [opts]  personId: preselect that person's outstanding documents
    */
-  function openCipDocumentRequestDialog(app, opts) {
+  /*
+   * The dialog's chooser on its own: whose file this is (the applicant's
+   * face and name, the firm, then the numbers the firm and the Unit know it
+   * by, drawn as the facts on the application's own page), and each
+   * person's outstanding documents with a tick box (data-docreq-doc).
+   *
+   * Messages' "/" Request files draws this very markup
+   * (TMAClients.documentRequestPicker), so asking from a chat looks exactly
+   * like asking from the application.
+   *
+   * @param {object} app  the application record (people with their documents)
+   * @param {object} [opts]  personId: tick only that person's documents
+   * @return {{count: number, identity: string, list: string}}
+   */
+  function cipDocumentPicker(app, opts) {
     opts = opts || {};
-    var ui = window.TMAPortalUI;
-    if (!ui || !ui.openModal || !app || !app.id) return;
 
-    var groups = cipFamily(app).map(function (person) {
+    var groups = cipFamily(app || {}).map(function (person) {
       return { person: person, docs: cipOutstandingDocs(person.documents) };
     }).filter(function (g) { return g.docs.length; });
 
-    if (!groups.length) {
-      clientsToast('Every document on this application has been uploaded.', 'neutral');
-      return;
-    }
-
-    var provider = app.provider || '';
-    // The service provider asking for its own file's papers asks someone
-    // else (the applicant, whoever holds them): it is the provider.
-    var providerAsking = isProviderCipUser();
-    var askProvider = provider && !providerAsking;
-    var expiry = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+    var provider = (app && app.provider) || '';
     var checkedFor = function (person) {
       return !opts.personId || opts.personId === person.id;
     };
 
-    /*
-     * Whose file this is, before anything is ticked: the applicant's face
-     * and name, then the numbers the firm and the Unit know it by, drawn as
-     * the facts on the application's own page.
-     */
     var faceFor = function (person, size) {
       var src = cipPersonPhotoSrc(person) || initialsAvatarUri((person && person.name) || '', (person && person.id) || '');
       return src
@@ -10559,7 +10556,8 @@
           (size === 'lg' ? ' width="40" height="40"' : ' width="26" height="26"') + '>'
         : '';
     };
-    var main = app.applicant || (groups[0] && groups[0].person) || null;
+    var main = (app && app.applicant) || (groups[0] && groups[0].person) || null;
+
     var identity =
       '<header class="tma-dash__clients-card-head tma-dash__clients-card-head--person">' +
       '<div class="tma-dash__clients-card-person">' +
@@ -10569,13 +10567,12 @@
       (provider ? '<span class="tma-dash__clients-card-person-name">' + esc(provider) + '</span>' : '') +
       '</div></div></header>' +
       '<div class="tma-cip-docreq__facts">' +
-      cipFact('CIP application number', app.cipNumber || '—') +
-      cipFact(app.phase === 'add_on' ? 'Add-On reference number' : 'Application number', app.internalNumber || app.number || '—') +
+      cipFact('CIP application number', (app && app.cipNumber) || '—') +
+      cipFact(app && app.phase === 'add_on' ? 'Add-On reference number' : 'Application number',
+        (app && (app.internalNumber || app.number)) || '—') +
       '</div>';
 
-    var body =
-      identity +
-      '<p class="tma-portal-modal__text">Choose the documents you need. Each one is renamed and filed in its place on the checklist when it arrives.</p>' +
+    var list =
       '<div class="tma-cip-not-ready__list" data-docreq-list>' +
       groups.map(function (group) {
         return '<section class="tma-cip-not-ready__group">' +
@@ -10599,7 +10596,34 @@
           }).join('') +
           '</ul></section>';
       }).join('') +
-      '</div>' +
+      '</div>';
+
+    return { count: groups.length, identity: identity, list: list };
+  }
+
+  function openCipDocumentRequestDialog(app, opts) {
+    opts = opts || {};
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal || !app || !app.id) return;
+
+    var picker = cipDocumentPicker(app, opts);
+
+    if (!picker.count) {
+      clientsToast('Every document on this application has been uploaded.', 'neutral');
+      return;
+    }
+
+    var provider = app.provider || '';
+    // The service provider asking for its own file's papers asks someone
+    // else (the applicant, whoever holds them): it is the provider.
+    var providerAsking = isProviderCipUser();
+    var askProvider = provider && !providerAsking;
+    var expiry = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+
+    var body =
+      picker.identity +
+      '<p class="tma-portal-modal__text">Choose the documents you need. Each one is renamed and filed in its place on the checklist when it arrives.</p>' +
+      picker.list +
       (providerAsking
         ? '<input type="radio" name="cip-docreq-to" value="someone" data-docreq-to checked hidden>'
         : '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
@@ -23027,6 +23051,8 @@
   window.TMAClients = {
     mount: mount,
     contactFor: contactFor,
+    // The Request documents dialog's chooser, for Messages' "/" Request files.
+    documentRequestPicker: cipDocumentPicker,
     hasContact: function (id) {
       return !!directoryItemFor(id);
     },

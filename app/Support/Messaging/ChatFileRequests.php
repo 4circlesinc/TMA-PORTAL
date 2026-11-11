@@ -191,7 +191,7 @@ class ChatFileRequests
             'id' => $request->uuid,
             'kind' => $rows->isNotEmpty() ? 'documents' : 'folder',
             'title' => $request->title,
-            'message' => $request->message,
+            'message' => self::instructions($request, $rows, $application),
             'application' => $application ? self::presentApplication($application) : null,
             'folder' => $rows->isEmpty() && $request->folder
                 ? ['id' => $request->folder->uuid, 'name' => $request->folder->name]
@@ -228,6 +228,37 @@ class ChatFileRequests
             // The upload stands; the card catches up on the next open.
             report($e);
         }
+    }
+
+    /**
+     * The asker's own instructions, or nothing.
+     *
+     * A request opened before chats stored only what was typed carries
+     * DocumentRequests' generated "Please upload X and Y for Z.", which only
+     * repeats the list the card draws; that one is left off.
+     *
+     * @param  Collection<int, array{slot: CipDocument}>  $rows
+     */
+    private static function instructions(FileRequest $request, Collection $rows, ?CipApplication $application): ?string
+    {
+        $text = trim((string) $request->message);
+        if ($text === '') {
+            return null;
+        }
+
+        if ($rows->isNotEmpty() && $application) {
+            $labels = $rows->map(fn (array $row) => DocumentTypes::present((string) $row['slot']->label))->all();
+            $last = count($labels) > 1 ? array_pop($labels) : null;
+            $listed = $last === null ? ($labels[0] ?? 'the documents') : implode(', ', $labels).' and '.$last;
+            $application->loadMissing('client');
+            $who = $application->client?->name ?: $application->displayNumber();
+
+            if ($text === 'Please upload '.$listed.' for '.$who.'.') {
+                return null;
+            }
+        }
+
+        return $text;
     }
 
     /** One line for the inbox preview, notifications and search. */
@@ -291,7 +322,10 @@ class ChatFileRequests
         $slots = $slots->sortBy(fn (CipDocument $slot) => array_search($slot->uuid, $documents, true))->values();
 
         return DocumentRequests::forMany($application, $slots, $requester, array_filter(array_merge([
-            'message' => $instructions,
+            // Only what the asker typed. The card already lists the
+            // documents; forMany's own "Please upload X and Y for Z." would
+            // say it all again underneath.
+            'message' => $instructions ?? '',
             'expires_at' => $expiresAt,
         ], $recipientFields), fn ($value) => $value !== null));
     }

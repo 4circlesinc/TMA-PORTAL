@@ -4613,8 +4613,10 @@
           'Announcement</span>'
         : '';
 
+    // A request card names itself; the case group's lane label would only
+    // stack a second heading on it.
     var laneHtml =
-      row && row.caseFile && msg.lane && !msg.deleted
+      row && row.caseFile && msg.lane && !msg.deleted && msg.type !== 'file_request'
         ? '<span class="tma-dash__messages-bubble-lane">' +
           (msg.lane === 'internal' ? 'Internal' : 'Service provider') +
           '</span>'
@@ -12711,73 +12713,80 @@
     if (!iso) return '';
     var d = new Date(iso);
     if (isNaN(d.getTime())) return '';
-    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
   }
 
+  /*
+   * Kept to what a glance needs: whose file, how far along, then one line
+   * per document with the one thing to do about it. No chip for "waiting"
+   * (the count says it) and no name on each line when every document is the
+   * same person's (the heading says it).
+   */
   function renderFileRequestCard(msg) {
     var fr = msg.fileRequest;
     var asker = String(fr.requestedBy) === String((STORE.me || {}).id);
     var answering = !asker && fr.open;
     var busy = (STORE.requestUploads || {})[msg.id] || {};
-    var about = fr.application
-      ? [fr.application.name, fr.application.number].filter(Boolean).join(' · ')
-      : (fr.folder ? 'Into ' + fr.folder.name : '');
+    var docs = fr.kind === 'documents' ? (fr.documents || []) : [];
+    var people = {};
+    docs.forEach(function (doc) { if (doc.person) people[doc.person] = true; });
+    var manyPeople = Object.keys(people).length > 1;
 
-    function chip(tone, label) {
-      return '<span class="tma-portal-status tma-portal-status--' + tone + ' tma-portal-status--inline">' + esc(label) + '</span>';
+    var heading = fr.kind === 'documents'
+      ? ((fr.application && (fr.application.name || fr.application.number)) || 'Documents')
+      : (fr.title || 'Files');
+
+    var got = fr.kind === 'documents'
+      ? docs.filter(function (doc) { return doc.received; }).length
+      : (fr.received || 0);
+    var progress = fr.kind === 'documents' ? got + ' of ' + docs.length + ' received' : (got ? got + ' received' : '');
+    var state = !fr.open
+      ? (fr.closedReason === 'complete' ? 'All received' : 'Closed')
+      : (fr.expiresAt ? 'by ' + fileRequestDate(fr.expiresAt) : '');
+    var meta = [fr.kind === 'folder' && fr.folder ? fr.folder.name : '', progress, state].filter(Boolean).join(' · ');
+
+    function received() {
+      return '<span class="tma-portal-status tma-portal-status--success tma-portal-status--inline">Received</span>';
     }
 
     function uploadButton(docId, label) {
-      var progress = busy[docId || '*'];
+      var pct = busy[docId || '*'];
       return (
         '<button type="button" class="tma-dash__clients-edit-btn" data-chatreq-upload="' + esc(msg.id) + '"' +
         (docId ? ' data-chatreq-doc="' + esc(docId) + '"' : ' data-chatreq-multiple') +
-        (progress != null ? ' disabled' : '') + '>' +
-        esc(progress != null ? 'Uploading ' + progress + '%' : label) + '</button>'
+        (pct != null ? ' disabled' : '') + '>' +
+        esc(pct != null ? pct + '%' : label) + '</button>'
       );
     }
 
-    var rows;
-    if (fr.kind === 'documents') {
-      rows = (fr.documents || []).map(function (doc) {
-        var end = doc.received ? chip('success', 'Received')
-          : doc.closed ? chip('neutral', 'No longer needed')
-            : answering ? uploadButton(doc.id, 'Upload')
-              : chip('pending', 'Waiting');
+    var rows = fr.kind === 'documents'
+      ? docs.map(function (doc) {
         return (
           '<li class="tma-dash__clients-checklist-row">' +
           '<span class="tma-dash__clients-checklist-label">' + esc(doc.label) +
-          (doc.person ? ' <span class="tma-dash__messages-person-meta">' + esc(doc.person) + '</span>' : '') +
-          '</span>' + end + '</li>'
+          (manyPeople && doc.person ? ' <span class="tma-dash__messages-person-meta">' + esc(doc.person) + '</span>' : '') +
+          '</span>' +
+          (doc.received ? received() : (answering && !doc.closed ? uploadButton(doc.id, 'Upload') : '')) +
+          '</li>'
         );
-      }).join('');
-    } else {
-      var got = fr.received || 0;
-      rows =
-        '<li class="tma-dash__clients-checklist-row">' +
-        '<span class="tma-dash__clients-checklist-label">' + esc(fr.title || 'Files') + '</span>' +
-        (got ? chip('success', got === 1 ? '1 received' : got + ' received') : '') +
-        (answering ? uploadButton(null, 'Upload files') : (got ? '' : chip('pending', 'Waiting'))) +
-        '</li>';
-    }
-
-    var foot = fr.open
-      ? (fr.expiresAt ? 'Upload by ' + fileRequestDate(fr.expiresAt) : '')
-      : (fr.closedReason === 'complete' ? 'Everything asked for has arrived' : 'This request has closed');
+      }).join('')
+      : (answering
+        ? '<li class="tma-dash__clients-checklist-row">' +
+          '<span class="tma-dash__clients-checklist-label"></span>' + uploadButton(null, 'Upload files') + '</li>'
+        : '');
 
     return (
       '<div class="tma-dash__messages-request">' +
       '<span class="tma-dash__messages-bubble-lane">Requested files</span>' +
-      (about
-        ? '<p class="tma-dash__messages-bubble-line"><span class="tma-dash__messages-bubble-copy"><strong>' +
-          esc(about) + '</strong></span></p>'
-        : '') +
+      '<span class="tma-dash__messages-person-text">' +
+      '<strong class="tma-dash__messages-bubble-copy">' + esc(heading) + '</strong>' +
+      (meta ? '<span class="tma-dash__messages-person-meta">' + esc(meta) + '</span>' : '') +
+      '</span>' +
       (fr.message
         ? '<p class="tma-dash__messages-bubble-line"><span class="tma-dash__messages-bubble-copy">' +
           esc(fr.message) + '</span></p>'
         : '') +
-      '<ul class="tma-dash__clients-checklist">' + rows + '</ul>' +
-      (foot ? '<span class="tma-dash__messages-person-meta">' + esc(foot) + '</span>' : '') +
+      (rows ? '<ul class="tma-dash__clients-checklist">' + rows + '</ul>' : '') +
       '</div>'
     );
   }
@@ -12880,12 +12889,10 @@
       title: 'Request files',
       cls: 'tma-save-folder',
       body:
-        '<p class="tma-portal-modal__text">Which application are these for? Only applications everyone in this chat can see are listed.</p>' +
-        '<div class="tma-dash__clients-field">' +
-        '<label class="tma-dash__clients-field-label" for="tma-chatreq-search">Find an application</label>' +
-        '<input type="search" id="tma-chatreq-search" class="tma-dash__clients-field-input" data-chatreq-search' +
-        ' placeholder="Search by name or number" autocomplete="off" spellcheck="false">' +
-        '</div>' +
+        // Only applications everyone in this chat can see are listed (the
+        // server's rule); the dialog does not need to say so.
+        '<input type="search" class="tma-dash__clients-field-input" data-chatreq-search' +
+        ' placeholder="Search applications" aria-label="Search applications" autocomplete="off" spellcheck="false">' +
         '<div class="tma-portal-picker"><div class="tma-portal-picker__list" data-chatreq-list></div></div>' +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-chatreq-cancel>Cancel</button>' +
@@ -12901,7 +12908,7 @@
             '<button type="button" class="tma-portal-picker__folder" data-chatreq-none>' +
             '<img src="' + ICON + 'Folder.svg" alt="" width="20" height="20">' +
             '<span class="tma-save-folder__name">No application' +
-            '<span class="tma-save-folder__path">Collect the files into a folder</span></span></button>' +
+            '<span class="tma-save-folder__path">Into a folder</span></span></button>' +
             (apps.length
               ? apps.map(function (a) {
                 return (
@@ -12912,7 +12919,7 @@
                   '</span></button>'
                 );
               }).join('')
-              : '<p class="tma-portal-picker__empty">No applications that everyone in this chat can see.</p>');
+              : '<p class="tma-portal-picker__empty">No applications</p>');
 
           list.querySelector('[data-chatreq-none]').addEventListener('click', function () {
             openRequestFolder(ctx, {});
@@ -12941,15 +12948,6 @@
     });
   }
 
-  /* An application's outstanding documents, the ones the Request documents
-     dialog on the application page offers. */
-  function requestableDocs(docs) {
-    return (docs || []).filter(function (d) {
-      return d && d.id && d.type !== 'additional_documents'
-        && (!d.status || d.status === 'pending_upload' || d.status === 'update_required');
-    });
-  }
-
   function requestFoot(ctx, sendLabel) {
     return (
       '<div class="tma-portal-modal__foot">' +
@@ -12965,8 +12963,8 @@
     return (
       '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
       '<label class="tma-dash__clients-field-label" for="tma-chatreq-message">Instructions</label>' +
-      '<textarea id="tma-chatreq-message" class="tma-dash__clients-field-textarea" data-chatreq-message rows="3" maxlength="2000"' +
-      ' placeholder="Anything they should know about these files">' + esc(values.message || '') + '</textarea>' +
+      '<textarea id="tma-chatreq-message" class="tma-dash__clients-field-textarea" data-chatreq-message rows="2" maxlength="2000"' +
+      ' placeholder="Optional">' + esc(values.message || '') + '</textarea>' +
       '</div>' +
       '<div class="tma-dash__clients-field">' +
       '<label class="tma-dash__clients-field-label" for="tma-chatreq-expiry">Upload by</label>' +
@@ -13013,73 +13011,34 @@
     var ui = window.TMAPortalUI;
 
     ui.openModal({
-      title: 'Request files',
+      title: 'Request documents',
       cls: 'tma-cip-not-ready tma-cip-docreq',
-      body: '<div data-chatreq-body>' + (ui.loading ? ui.loading({ count: 4 }) : '<p class="tma-portal-modal__text">Loading…</p>') + '</div>',
+      body: '<div data-chatreq-body>' + (ui.loading ? ui.loading({ count: 4 }) : '') + '</div>',
       onMount: function (host) {
         var body = host.querySelector('[data-chatreq-body]');
 
         chatRequestJSON('/portal/cip/applications/' + encodeURIComponent(application.id)).then(function (res) {
           var app = (res && res.application) || {};
-          var people = [];
-          if (app.applicant) people.push(app.applicant);
-          if (app.sponsor) people.push(app.sponsor);
-          (app.dependents || []).forEach(function (d) { people.push(d); });
+          // The application page's own chooser: the same face, numbers,
+          // people and rows as its Request documents dialog.
+          var clients = window.TMAClients;
+          var picker = clients && clients.documentRequestPicker ? clients.documentRequestPicker(app) : null;
 
-          var groups = people.map(function (person) {
-            return { person: person, docs: requestableDocs(person.documents) };
-          }).filter(function (g) { return g.docs.length; });
-
-          var heading =
-            '<header class="tma-dash__clients-card-head tma-dash__clients-card-head--person">' +
-            '<div class="tma-dash__clients-card-person-text">' +
-            '<h3 class="tma-dash__clients-card-title">' + esc(application.name || application.number || 'Application') + '</h3>' +
-            '<span class="tma-dash__clients-card-person-name">' +
-            esc([application.number, application.provider].filter(Boolean).join(' · ')) + '</span>' +
-            '</div></header>';
-
-          if (!groups.length) {
-            body.innerHTML = heading +
-              '<p class="tma-portal-modal__text">Every document on this application has been uploaded.</p>' +
+          if (!picker || !picker.count) {
+            body.innerHTML = (picker ? picker.identity : '') +
+              '<p class="tma-portal-modal__text">Every document has been uploaded.</p>' +
               '<div class="tma-portal-modal__foot">' +
               (ctx.fixed ? '' : '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-chatreq-back>Back</button>') +
               '<button type="button" class="tma-no-data__btn" data-chatreq-cancel>Close</button></div>';
           } else {
-            body.innerHTML = heading +
-              '<p class="tma-portal-modal__text">Tick the documents you need. Each one is renamed and filed in its place on the checklist when it arrives.</p>' +
-              '<div class="tma-cip-not-ready__list">' +
-              groups.map(function (group) {
-                return (
-                  '<section class="tma-cip-not-ready__group">' +
-                  '<header class="tma-dash__clients-card-head tma-cip-docreq__person">' +
-                  '<h3 class="tma-dash__clients-card-title">' + esc(group.person.name || group.person.label || 'Applicant') + '</h3>' +
-                  '<span class="tma-tab__count">' + esc(String(group.docs.length)) + '</span>' +
-                  '</header>' +
-                  '<ul class="tma-dash__clients-checklist">' +
-                  group.docs.map(function (d) {
-                    return (
-                      '<li class="tma-dash__clients-checklist-row">' +
-                      '<label class="tma-portal-check-row tma-dash__clients-checklist-label">' +
-                      '<input type="checkbox" class="tma-dash__check" data-chatreq-pick="' + esc(d.id) + '">' +
-                      '<span>' + esc(d.label || 'Document') +
-                      (d.required === false ? ' <span class="tma-dash__clients-checklist-optional">Optional</span>' : '') +
-                      '</span></label>' +
-                      '<span class="tma-portal-status tma-portal-status--' + esc(d.statusTone || 'neutral') +
-                      ' tma-portal-status--inline">' + esc(d.statusLabel || 'Pending upload') + '</span>' +
-                      '</li>'
-                    );
-                  }).join('') +
-                  '</ul></section>'
-                );
-              }).join('') +
-              '</div>' +
+            body.innerHTML = picker.identity + picker.list +
               requestDetailsFields({}) +
               requestFoot(ctx, 'Send request');
 
             host.querySelector('[data-chatreq-send]').addEventListener('click', function () {
               var picked = [];
-              host.querySelectorAll('[data-chatreq-pick]').forEach(function (box) {
-                if (box.checked) picked.push(box.getAttribute('data-chatreq-pick'));
+              host.querySelectorAll('[data-docreq-doc]').forEach(function (box) {
+                if (box.checked) picked.push(box.getAttribute('data-docreq-doc'));
               });
               if (!picked.length) {
                 showMessagesToast(ctx.root, 'Tick at least one document to ask for');
@@ -13112,12 +13071,12 @@
       cls: 'tma-cip-docreq',
       body:
         '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
-        '<label class="tma-dash__clients-field-label" for="tma-chatreq-title">What do you need?</label>' +
+        '<label class="tma-dash__clients-field-label" for="tma-chatreq-title">Files needed</label>' +
         '<input type="text" id="tma-chatreq-title" class="tma-dash__clients-field-input" data-chatreq-title maxlength="150"' +
-        ' placeholder="For example, your October invoices" value="' + esc(values.title || '') + '">' +
+        ' placeholder="e.g. October invoices" value="' + esc(values.title || '') + '">' +
         '</div>' +
         '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
-        '<span class="tma-dash__clients-field-label">Where should the files go?</span>' +
+        '<span class="tma-dash__clients-field-label">Folder</span>' +
         '<div class="tma-portal-picker__crumbs">' +
         (values.folder
           ? '<span>' + esc(values.folder.name) + '</span> '
@@ -13142,9 +13101,8 @@
           if (!window.TMASaveToFolder) return;
           window.TMASaveToFolder.open({
             choose: true,
-            title: 'Where should the files go?',
-            text: 'Find the applicant or folder, open the one the files belong in, then choose it.',
-            okLabel: 'Choose this folder',
+            title: 'Choose a folder',
+            okLabel: 'Choose',
             onPick: function (folder) {
               kept.folder = folder;
               openRequestFolder(ctx, kept);

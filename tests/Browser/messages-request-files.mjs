@@ -54,7 +54,7 @@ const messages = [
 ]
 
 const APPLICATION = {
-  id: 'app-1', number: 'CIP-2001', provider: 'Galaxy', sponsor: null,
+  id: 'app-1', number: 'IGA26-00018', internalNumber: 'IGA26-00018', cipNumber: null, phase: 'pre_approval', provider: 'Galaxy', sponsor: null,
   applicant: { id: 'p1', name: 'CHEN WEI', documents: [
     { id: 'd1', type: 'oath', label: 'SL4 - Oath of Allegiance', required: true, status: 'pending_upload', statusLabel: 'Pending upload', statusTone: 'pending' },
     { id: 'd2', type: 'pop', label: 'Proof of payment', required: true, status: 'update_required', statusLabel: 'Update required', statusTone: 'danger' },
@@ -219,10 +219,20 @@ try {
   check(!/ANA LOPEZ/.test(await page.evaluate(() => document.querySelector('[data-chatreq-list]').innerText)), 'search narrows the applications')
   await page.click('[data-chatreq-app="app-1"]')
   await page.waitForTimeout(900)
-  const offered = await page.evaluate(() => [...document.querySelectorAll('[data-chatreq-pick]')].map(b => b.getAttribute('data-chatreq-pick')))
+  const offered = await page.evaluate(() => [...document.querySelectorAll('[data-docreq-doc]')].map(b => b.getAttribute('data-docreq-doc')))
   check(offered.join(',') === 'd1,d2,d4', `the checklist offers what is still outstanding, everyone's (${offered.join(',')})`)
-  await page.check('[data-chatreq-pick="d1"]')
-  await page.check('[data-chatreq-pick="d4"]')
+  const chooser0 = await page.evaluate(() => ({
+    title: document.querySelector('.tma-portal-modal__title, .tma-portal-modal h2').textContent,
+    face: !!document.querySelector('.tma-dash__clients-card-person-face'),
+    facts: document.querySelector('.tma-cip-docreq__facts').innerText,
+    ticked: document.querySelectorAll('[data-docreq-doc]:checked').length,
+    words: [...document.querySelectorAll('.tma-portal-modal .tma-portal-modal__text')].length,
+  }))
+  check(/Request documents/.test(chooser0.title) && chooser0.face && /Application number[\s\S]*IGA26-00018/.test(chooser0.facts),
+    'the application page\'s own chooser: its title, the face, the numbers')
+  check(chooser0.ticked === 3, 'everything outstanding starts ticked, as on the application page')
+  check(chooser0.words === 0, 'no paragraph of explanation')
+  await page.uncheck('[data-docreq-doc="d2"]')
   await page.fill('[data-chatreq-message]', 'Scans of the originals, please.')
   await page.click('[data-chatreq-send]')
   await page.waitForTimeout(1200)
@@ -233,8 +243,9 @@ try {
     const card = [...document.querySelectorAll('.tma-dash__messages-bubble--out .tma-dash__messages-request')].pop()
     return { text: card.innerText, buttons: card.querySelectorAll('[data-chatreq-upload]').length }
   })
-  check(/SL4 - Oath of Allegiance/.test(mine.text) && /Birth certificate/.test(mine.text) && /waiting/i.test(mine.text) && mine.buttons === 0,
-    'my card lists each document as waiting, with no Upload buttons for the person who asked')
+  check(/SL4 - Oath of Allegiance/.test(mine.text) && /Birth certificate/.test(mine.text) && /0 of 2 received/.test(mine.text) && mine.buttons === 0,
+    'my card: the documents and "0 of 2 received", no Upload buttons for the person who asked')
+  check(!/waiting/i.test(mine.text) && !/Please upload/.test(mine.text), 'no Waiting chips, no sentence repeating the list')
 
   console.log('\nAnswering from the card')
   const chooser = page.waitForEvent('filechooser')
@@ -284,7 +295,8 @@ try {
   await page.waitForTimeout(1000)
   const folderCall = lastCall('create')
   check(folderCall.create.folder === 'fold-1' && folderCall.create.title === 'Your October invoices' && !folderCall.create.application, 'the request names the folder')
-  check(/Into Invoices/.test(await page.evaluate(() => [...document.querySelectorAll('.tma-dash__messages-request')].pop().innerText)), 'the card says where the files go')
+  const folderCard = await page.evaluate(() => [...document.querySelectorAll('.tma-dash__messages-request')].pop().innerText)
+  check(/Your October invoices/.test(folderCard) && /Invoices · by/.test(folderCard), 'the card says what is needed and where it goes')
 
   check(page.errors.length === 0, 'no page errors' + (page.errors.length ? ': ' + page.errors.join(' | ') : ''))
 } finally {

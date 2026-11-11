@@ -80,7 +80,7 @@
       cls: 'tma-save-folder',
       body:
         (choosing
-          ? '<p class="tma-portal-modal__text">' + esc(opts.text || 'Find the applicant or folder, open the one you want, then choose it.') + '</p>'
+          ? (opts.text ? '<p class="tma-portal-modal__text">' + esc(opts.text) + '</p>' : '')
           : '<p class="tma-portal-modal__text">Save a copy of <strong>' + esc(opts.name || 'this file') + '</strong> into the document library. ' +
             'Find the applicant, open the subfolder it belongs in, then save.</p>') +
         '<div class="tma-dash__clients-field">' +
