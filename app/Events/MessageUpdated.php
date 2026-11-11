@@ -4,6 +4,7 @@ namespace App\Events;
 
 use App\Models\Message;
 use App\Models\MessageMention;
+use App\Support\Messaging\ChatFileRequests;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
@@ -43,6 +44,12 @@ class MessageUpdated implements ShouldBroadcastNow
                 ->values()
                 ->all(),
             'mentionsAll' => $this->message->mentions->contains(fn (MessageMention $m) => $m->isEveryone()),
+            // A request asked in the chat, as it now stands: a file arrived
+            // and its row is ticked off on every screen showing it. Not an
+            // edit; the page leaves "edited" off when this is present.
+            'fileRequest' => $this->message->type === Message::TYPE_FILE_REQUEST && $this->message->fileRequest
+                ? ChatFileRequests::present($this->message->fileRequest)
+                : null,
         ];
     }
 }

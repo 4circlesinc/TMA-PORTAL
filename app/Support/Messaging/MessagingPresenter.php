@@ -399,6 +399,11 @@ class MessagingPresenter
                     fn (MessageMention $m) => $m->isEveryone() || $m->user_id === $viewer->id
                 ),
             'systemEvent' => $message->system_event,
+            // "/" Request files: what was asked for, each document with
+            // whether it has arrived. The bubble draws it as the message.
+            'fileRequest' => ! $deleted && $message->type === Message::TYPE_FILE_REQUEST && $message->fileRequest
+                ? ChatFileRequests::present($message->fileRequest)
+                : null,
             // Only the sender needs a delivery tick, and only when the people
             // who could read it have read receipts switched on.
             'status' => $message->user_id === $viewer->id

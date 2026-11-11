@@ -106,6 +106,7 @@ use App\Http\Controllers\MeController;
 use App\Http\Controllers\MeOneDriveController;
 use App\Http\Controllers\MessagingAttachmentController;
 use App\Http\Controllers\MessagingController;
+use App\Http\Controllers\MessagingFileRequestController;
 use App\Http\Controllers\NotificationReplyController;
 use App\Http\Controllers\PushReplyController;
 use App\Http\Controllers\MessagingGroupController;
@@ -1532,6 +1533,21 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/messages/{uuid}/star', [MessagingController::class, 'toggleStar'])->name('messages.star');
         Route::post('/messages/{uuid}/forward', [MessagingController::class, 'forwardMessage'])->name('messages.forward');
         Route::post('/conversations/{uuid}/call', [MessagingController::class, 'callSignal'])->name('conversations.call');
+
+        // A message's details from its menu: sent, and seen by whom and when.
+        Route::get('/messages/{uuid}/info', [MessagingController::class, 'messageInfo'])->name('messages.info');
+
+        /*
+         * "/" Request files: which applications a request here may name (all
+         * of the chat must be able to see it), the request itself, posted as
+         * a card, and an upload answering one of its documents. The upload
+         * runs the public link's own code, so it keeps the link's limit.
+         */
+        Route::get('/conversations/{uuid}/file-requests/options', [MessagingFileRequestController::class, 'options'])->name('conversations.file-requests.options');
+        Route::post('/conversations/{uuid}/file-requests', [MessagingFileRequestController::class, 'store'])->name('conversations.file-requests.store');
+        Route::post('/messages/{uuid}/file-request-upload', [MessagingFileRequestController::class, 'upload'])
+            ->middleware('throttle:uploads')
+            ->name('messages.file-request-upload');
 
         // Files are staged by upload first, then claimed by a message on send,
         // so the composer can preview and remove them before anything is sent.

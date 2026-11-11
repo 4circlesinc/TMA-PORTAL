@@ -15,6 +15,7 @@ use Illuminate\Support\Str;
     'uuid', 'conversation_id', 'user_id', 'type', 'body',
     'reply_to_id', 'edited_at', 'system_event', 'client_nonce',
     'cip_application_message_id', 'lane', 'is_announcement', 'is_forwarded',
+    'file_request_id',
 ])]
 class Message extends Model
 {
@@ -27,6 +28,9 @@ class Message extends Model
     public const TYPE_ATTACHMENT = 'attachment';
 
     public const TYPE_SYSTEM = 'system';
+
+    /** "/" Request files: the bubble is the request (see ChatFileRequests). */
+    public const TYPE_FILE_REQUEST = 'file_request';
 
     /** Copied from, or written as, an internal note on the application. */
     public const LANE_INTERNAL = 'internal';
@@ -73,6 +77,12 @@ class Message extends Model
     public function attachments(): HasMany
     {
         return $this->hasMany(MessageAttachment::class);
+    }
+
+    /** The files a TYPE_FILE_REQUEST message asks for. */
+    public function fileRequest(): BelongsTo
+    {
+        return $this->belongsTo(FileRequest::class);
     }
 
     public function reactions(): HasMany

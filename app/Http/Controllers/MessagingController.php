@@ -330,7 +330,7 @@ class MessagingController extends Controller
         $base = fn () => $conversation->messages()
             ->withTrashed()
             ->visibleTo($user)
-            ->with(['sender', 'attachments', 'reactions.user', 'stars', 'mentions', 'replyTo.sender', 'replyTo.attachments'])
+            ->with(['sender', 'attachments', 'reactions.user', 'stars', 'mentions', 'replyTo.sender', 'replyTo.attachments', 'fileRequest'])
             // Respect this participant's own "clear chat" marker. It is
             // personal: the other side still sees everything.
             ->where('id', '>', $cleared);
@@ -1955,6 +1955,63 @@ class MessagingController extends Controller
     }
 
     /** Same guard, reached through the message's conversation. */
+    /**
+     * A message's details, from its menu: when it was sent, who has seen it
+     * and when, who has it but has not opened it, and who it has not reached.
+     *
+     * Seen times are the receipts the faces under the bubbles come from, so
+     * somebody with read receipts switched off is never listed as having
+     * seen it: they appear as delivered once it has reached them. The author
+     * and the person asking are left off the lists.
+     */
+    public function messageInfo(Request $request, string $uuid): JsonResponse
+    {
+        $user = $request->user();
+        $message = $this->messageFor($request, $uuid);
+        abort_if($message->isSystem(), 404);
+
+        $conversation = $message->conversation;
+        $label = fn ($at) => $at ? UserTime::format($at, $user, 'j M Y, g:i A') : null;
+
+        $read = ReadReceipts::forMessages(collect([$message]), $conversation, $user)[(int) $message->id] ?? [];
+        $readIds = array_map(fn (array $face) => (int) $face['id'], $read);
+
+        $delivered = [];
+        $waiting = [];
+        foreach ($conversation->activeParticipants as $participant) {
+            $person = $participant->user;
+            if (! $person
+                || (int) $person->id === (int) $message->user_id
+                || (int) $person->id === (int) $user->id
+                || in_array((int) $person->id, $readIds, true)) {
+                continue;
+            }
+
+            $face = ['id' => (int) $person->id, 'name' => $person->name, 'avatar' => $person->photoUrl()];
+            $reached = max((int) ($participant->last_delivered_message_id ?? 0), (int) ($participant->last_read_message_id ?? 0));
+
+            if ($reached >= (int) $message->id) {
+                $delivered[] = $face;
+            } else {
+                $waiting[] = $face;
+            }
+        }
+
+        return response()->json([
+            'sentAt' => $message->created_at->toIso8601String(),
+            'sentAtLabel' => $label($message->created_at),
+            'editedAt' => $message->edited_at?->toIso8601String(),
+            'editedAtLabel' => $label($message->edited_at),
+            'sender' => $message->sender?->name,
+            'mine' => (int) $message->user_id === (int) $user->id,
+            'readBy' => array_map(fn (array $face) => $face + [
+                'seenAtLabel' => $label(\Illuminate\Support\Carbon::parse($face['seenAt'])),
+            ], $read),
+            'deliveredTo' => $delivered,
+            'waiting' => $waiting,
+        ]);
+    }
+
     private function messageFor(Request $request, string $uuid): Message
     {
         $message = Message::query()

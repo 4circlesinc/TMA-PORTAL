@@ -18482,6 +18482,13 @@ body:has(.tma-dash__messages-select-bar) .tma-bespoke:not(.is-open) {
   color: var(--color-text-secondary);
 }
 
+/* "/" Request files: the application's checklist rows inside the bubble.
+   Layout only, the rows, chips and buttons are the application page's own;
+   the list just needs air from the instructions above and the date below. */
+.tma-dash__messages-request .tma-dash__clients-checklist {
+  margin: var(--space-8) 0 var(--space-6, 6px);
+}
+
 .tma-dash__messages-composer-main {
   display: flex;
   align-items: center;

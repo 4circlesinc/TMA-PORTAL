@@ -274,6 +274,73 @@
       return api(BASE + '/attachments/' + encodeURIComponent(attachmentId), { method: 'DELETE' });
     },
 
+    /*
+     * "/" Request files. Where a request in this chat may point: the case's
+     * own application (fixed), or the applications everyone here can see.
+     */
+    fileRequestOptions: function (conversationId, term) {
+      return api(BASE + '/conversations/' + encodeURIComponent(conversationId) + '/file-requests/options' + query({ q: term }));
+    },
+
+    /* Ask: { application, documents[] } or { folder, title }, with message. Answers { message }. */
+    createFileRequest: function (conversationId, payload) {
+      return api(BASE + '/conversations/' + encodeURIComponent(conversationId) + '/file-requests', {
+        method: 'POST',
+        json: payload,
+      });
+    },
+
+    /*
+     * Answer one requested document (or a folder request) from its card.
+     * XHR for the progress bar, as uploadAttachment. Resolves with
+     * { fileRequest, upload }.
+     */
+    uploadRequestedFile: function (messageId, file, documentId, onProgress) {
+      return new Promise(function (resolve, reject) {
+        var xhr = new XMLHttpRequest();
+        var form = new FormData();
+        form.append('file', file);
+        if (documentId) form.append('document', documentId);
+
+        xhr.open('POST', BASE + '/messages/' + encodeURIComponent(messageId) + '/file-request-upload');
+        xhr.withCredentials = true;
+        xhr.setRequestHeader('Accept', 'application/json');
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.setRequestHeader('X-XSRF-TOKEN', csrf());
+        var socket = socketId();
+        if (socket) xhr.setRequestHeader('X-Socket-ID', socket);
+
+        xhr.upload.addEventListener('progress', function (e) {
+          if (!e.lengthComputable || !onProgress) return;
+          onProgress(Math.round((e.loaded / e.total) * 100));
+        });
+
+        xhr.addEventListener('load', function () {
+          var data = null;
+          try { data = JSON.parse(xhr.responseText); } catch (err) { /* not JSON */ }
+
+          if (xhr.status >= 200 && xhr.status < 300 && data) {
+            resolve(data);
+            return;
+          }
+
+          var err = new Error(
+            (data && (data.message || (data.errors && data.errors.file && data.errors.file[0]))) ||
+              'Upload failed'
+          );
+          err.status = xhr.status;
+          reject(err);
+        });
+        xhr.addEventListener('error', function () { reject(new Error('Upload failed')); });
+        xhr.send(form);
+      });
+    },
+
+    /* When a message was sent, who has seen it and when. */
+    messageInfo: function (messageId) {
+      return api(BASE + '/messages/' + encodeURIComponent(messageId) + '/info');
+    },
+
     /* --- groups --- */
 
     createGroup: function (payload) {

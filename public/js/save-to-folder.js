@@ -60,20 +60,29 @@
     return '';
   }
 
+  /*
+   * opts.choose: the same picker, but it hands the folder back instead of
+   * saving a file there ("/" Request files asks where the files should go).
+   *   { choose: true, title, text, okLabel, onPick({ id, name }), onCancel }
+   */
   function open(opts) {
     opts = opts || {};
     var u = ui();
     var n = net();
-    if (!u || !u.openModal || !n || !opts.id) return;
+    var choosing = !!opts.choose;
+    if (!u || !u.openModal || !n || (!opts.id && !choosing)) return;
 
     var pick = { folder: null, name: '', crumb: [], query: '', searchSeq: 0 };
+    var okLabel = choosing ? (opts.okLabel || 'Choose this folder') : 'Save here';
 
     u.openModal({
-      title: 'Save to Application Folder',
+      title: choosing ? (opts.title || 'Choose a folder') : 'Save to Application Folder',
       cls: 'tma-save-folder',
       body:
-        '<p class="tma-portal-modal__text">Save a copy of <strong>' + esc(opts.name || 'this file') + '</strong> into the document library. ' +
-        'Find the applicant, open the subfolder it belongs in, then save.</p>' +
+        (choosing
+          ? '<p class="tma-portal-modal__text">' + esc(opts.text || 'Find the applicant or folder, open the one you want, then choose it.') + '</p>'
+          : '<p class="tma-portal-modal__text">Save a copy of <strong>' + esc(opts.name || 'this file') + '</strong> into the document library. ' +
+            'Find the applicant, open the subfolder it belongs in, then save.</p>') +
         '<div class="tma-dash__clients-field">' +
         '<label class="tma-dash__clients-field-label" for="tma-save-folder-search">Find an applicant or folder</label>' +
         '<input type="search" id="tma-save-folder-search" class="tma-dash__clients-field-input" data-save-search' +
@@ -83,7 +92,7 @@
         '<div class="tma-portal-modal__foot">' +
         '<span class="tma-save-folder__where" data-save-where></span>' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-save-cancel>Cancel</button>' +
-        '<button type="button" class="tma-no-data__btn" data-save-ok disabled>Save here</button>' +
+        '<button type="button" class="tma-no-data__btn" data-save-ok disabled>' + esc(okLabel) + '</button>' +
         '</div>',
       onMount: function (host) {
         var body = host.querySelector('[data-save-picker]');
@@ -92,11 +101,16 @@
         var where = host.querySelector('[data-save-where]');
         var timer = null;
 
-        host.querySelector('[data-save-cancel]').addEventListener('click', function () { u.closeModal(); });
+        host.querySelector('[data-save-cancel]').addEventListener('click', function () {
+          u.closeModal();
+          if (choosing && typeof opts.onCancel === 'function') opts.onCancel();
+        });
 
         function paintWhere() {
           ok.disabled = !pick.folder;
-          where.textContent = pick.folder ? 'Saving to ' + (pick.name || 'this folder') : 'Choose a folder';
+          where.textContent = pick.folder
+            ? (choosing ? 'Folder: ' : 'Saving to ') + (pick.name || 'this folder')
+            : 'Choose a folder';
         }
 
         function rows(folders, withPath) {
@@ -194,6 +208,11 @@
 
         ok.addEventListener('click', function () {
           if (!pick.folder || ok.disabled) return;
+          if (choosing) {
+            u.closeModal();
+            if (typeof opts.onPick === 'function') opts.onPick({ id: pick.folder, name: pick.name || 'this folder' });
+            return;
+          }
           ok.disabled = true;
           ok.textContent = 'Saving…';
           n.fetchJSON(saveUrl(opts.kind, opts.id), { method: 'POST', json: { folderId: pick.folder } })

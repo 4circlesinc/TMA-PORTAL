@@ -3328,6 +3328,154 @@
     return found;
   }
 
+  /* ── "/" commands ──────────────────────────────────────────────────
+   *
+   * Typed at the very start of the message box, the way an AI chat offers
+   * its shortcuts: "/" lists what can be done from here, typing narrows the
+   * list, Enter or a tap runs the command and the "/word" goes. Drawn as the
+   * @ list is (the same menu and rows), with the command's icon where a face
+   * would be. Request files is the first.
+   */
+  var SLASH_COMMANDS = [
+    {
+      id: 'request-files',
+      name: 'Request files',
+      meta: 'Ask for documents for an application, or files for a folder',
+      icon: 'FileArrowUp',
+      can: canRequestFiles,
+    },
+  ];
+
+  /* The server decides; this only keeps the command off the list of the
+     people it would refuse (an applicant, a client). */
+  function canRequestFiles() {
+    var store = window.TMACurrentUser;
+    var me = (store && store.get && store.get()) || STORE.me || {};
+    return !!(me.isStaff || me.isAdmin || me.isProviderContact || me.isServiceProviderAdmin);
+  }
+
+  function slashTrigger(input) {
+    var caret = caretOffset(input);
+    if (caret === null || caret === undefined) return null;
+
+    var before = (input.textContent || '').slice(0, caret);
+    var match = /^\/([^\n\/]{0,30})$/.exec(before);
+
+    return match ? { term: match[1], caret: caret } : null;
+  }
+
+  function slashResults(state) {
+    var slash = state.slash;
+    if (!slash || slash.dismissed || slash.threadId !== state.selectedId) return [];
+
+    var term = slash.term.trim().toLowerCase();
+
+    return SLASH_COMMANDS.filter(function (command) {
+      if (command.can && !command.can()) return false;
+      if (!term) return true;
+      return command.name.toLowerCase().split(/\s+/).some(function (part, i, parts) {
+        return parts.slice(i).join(' ').indexOf(term) === 0;
+      });
+    });
+  }
+
+  function renderSlashMenu(state) {
+    var results = slashResults(state);
+    var index = results.length ? Math.min(state.slash.index || 0, results.length - 1) : 0;
+
+    return (
+      '<div class="tma-dash__menu tma-dash__feed-mention-menu" data-key="slash-menu" ' +
+      'data-messages-slash-menu role="listbox" aria-label="Commands"' +
+      (results.length ? '' : ' hidden') + '>' +
+      results.map(function (command, i) {
+        var selected = i === index;
+        return (
+          '<button type="button" class="tma-dash__menu-item' +
+          (selected ? ' tma-dash__menu-item--active' : '') + '" ' +
+          'data-messages-slash-pick="' + i + '" role="option" aria-selected="' + selected + '">' +
+          '<img class="tma-dash__feed-mention-avatar" src="' + esc(ICON + command.icon + '.svg') + '" alt="" width="22" height="22">' +
+          '<span class="tma-dash__feed-mention-ident">' +
+          '<span class="tma-dash__feed-mention-name">' + esc(command.name) + '</span>' +
+          '<span class="tma-dash__feed-mention-meta">' + esc(command.meta) + '</span>' +
+          '</span>' +
+          '</button>'
+        );
+      }).join('') +
+      '</div>'
+    );
+  }
+
+  function syncSlash(state, input, render) {
+    var trigger = state.editing || state.recording ? null : slashTrigger(input);
+
+    if (!trigger) {
+      if (state.slash) {
+        state.slash = null;
+        render();
+      }
+      return;
+    }
+
+    var same = state.slash && state.slash.threadId === state.selectedId && state.slash.term === trigger.term;
+    if (same) {
+      state.slash.caret = trigger.caret;
+      return;
+    }
+
+    state.slash = {
+      threadId: state.selectedId,
+      term: trigger.term,
+      index: 0,
+      caret: trigger.caret,
+      dismissed: !!(state.slash && state.slash.dismissed && state.slash.threadId === state.selectedId),
+    };
+    render();
+  }
+
+  function handleSlashKeys(e, root, state, render) {
+    var results = slashResults(state);
+    if (!results.length) return false;
+
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      var step = e.key === 'ArrowDown' ? 1 : -1;
+      state.slash.index = ((state.slash.index || 0) + step + results.length) % results.length;
+      render();
+      return true;
+    }
+
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      pickSlash(root, state, render, Math.min(state.slash.index || 0, results.length - 1));
+      return true;
+    }
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      state.slash.dismissed = true;
+      render();
+      return true;
+    }
+
+    return false;
+  }
+
+  /* Run the command; the "/word" that summoned it goes from the box. */
+  function pickSlash(root, state, render, index) {
+    var command = slashResults(state)[index];
+    if (!command) return;
+
+    var input = root.querySelector('[data-messages-composer-input]');
+    if (input) {
+      input.textContent = '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    state.slash = null;
+    render();
+
+    if (command.id === 'request-files') openFileRequestFlow(root, state, render);
+  }
+
   /*
    * "@name" standing on its own: not inside a word or an address, and not
    * the start of a longer word. The character before it is captured rather
@@ -4392,6 +4540,13 @@
         '<span class="tma-dash__messages-bubble-copy">This message was deleted</span>' +
         timeHtml +
         '</p></div>';
+    } else if (msg.type === 'file_request' && msg.fileRequest) {
+      // "/" Request files: the request is the message. Its time sits under
+      // the card the way it sits under a file-only bubble.
+      inner =
+        renderFileRequestCard(msg) +
+        '<div class="tma-dash__messages-bubble-text tma-dash__messages-bubble-text--meta">' +
+        '<p class="tma-dash__messages-bubble-line">' + timeHtml + '</p></div>';
     } else {
       // A message may be files only, text only, or both. When there is no
       // text the timestamp rides under the attachments instead of an empty
@@ -5004,6 +5159,7 @@
       '">' +
       renderCaseLanes(state) +
       renderMentionMenu(state) +
+      renderSlashMenu(state) +
       renderEmojiPicker(state) +
       (editing
         ? '<div class="tma-dash__messages-composer-editing">Editing message, press Escape to cancel</div>'
@@ -5225,18 +5381,24 @@
         scheduleLinkPreview(state, text, render);
 
         syncMention(state, input, render);
+        syncSlash(state, input, render);
       });
 
       // The caret can leave an "@term" without anything being typed.
       MORPH.on(input, 'keyup', function (e) {
-        if (/^(Arrow(Left|Right)|Home|End)$/.test(e.key)) syncMention(state, input, render);
+        if (/^(Arrow(Left|Right)|Home|End)$/.test(e.key)) {
+          syncMention(state, input, render);
+          syncSlash(state, input, render);
+        }
       });
       MORPH.on(input, 'click', function () {
         syncMention(state, input, render);
+        syncSlash(state, input, render);
       });
 
       MORPH.on(input, 'keydown', function (e) {
-        // The list takes its keys first: Enter picks a name, it does not send.
+        // The lists take their keys first: Enter picks, it does not send.
+        if (handleSlashKeys(e, root, state, render)) return;
         if (handleMentionKeys(e, root, state, render)) return;
 
         if (e.key === 'Escape' && state.editing) {
@@ -5364,6 +5526,14 @@
       });
     }
 
+    MORPH.unwired(composer, '[data-messages-slash-pick]').forEach(function (btn) {
+      MORPH.on(btn, 'mousedown', function (e) { e.preventDefault(); });
+      MORPH.on(btn, 'click', function (e) {
+        e.stopPropagation();
+        pickSlash(root, state, render, parseInt(btn.getAttribute('data-messages-slash-pick'), 10));
+      });
+    });
+
     MORPH.unwired(composer, '[data-messages-mention-pick]').forEach(function (btn) {
       // Not letting the press take focus is what keeps the caret where the
       // name is about to go.
@@ -5458,6 +5628,24 @@
       });
     }
 
+    // The Upload buttons on a "Requested files" card. Caught on the way down,
+    // so a tap on one is not also a tap (or a hold) on its bubble.
+    if (!root._chatRequestBound) {
+      root._chatRequestBound = true;
+      root.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest && e.target.closest('[data-chatreq-upload]');
+        if (!btn || !root.contains(btn) || btn.disabled) return;
+        e.preventDefault();
+        e.stopPropagation();
+        uploadRequestedFiles(
+          root, state, render,
+          btn.getAttribute('data-chatreq-upload'),
+          btn.getAttribute('data-chatreq-doc'),
+          btn.hasAttribute('data-chatreq-multiple')
+        );
+      }, true);
+    }
+
     if (!root._messagesComposerDocBound) {
       root._messagesComposerDocBound = true;
       document.addEventListener('click', function (e) {
@@ -5468,6 +5656,11 @@
           state.mention = null;
           var menu = root.querySelector('[data-messages-mention-menu]');
           if (menu) menu.hidden = true;
+        }
+        if (state.slash) {
+          state.slash = null;
+          var slashMenu = root.querySelector('[data-messages-slash-menu]');
+          if (slashMenu) slashMenu.hidden = true;
         }
 
         if (!state.emojiPickerOpen) return;
@@ -8312,6 +8505,13 @@
     window.TMAMessagingRealtime.listen(channel, 'message.updated', function (payload) {
       var msg = findMessageById(payload.conversationId, payload.messageId);
       if (!msg) return;
+      // A requested file arrived: the card is redrawn, nothing was edited.
+      if (payload.fileRequest) {
+        msg.fileRequest = payload.fileRequest;
+        persistThread(payload.conversationId);
+        render();
+        return;
+      }
       msg.body = payload.body;
       msg.edited = true;
       if (payload.mentions) msg.mentions = payload.mentions;
@@ -12497,6 +12697,545 @@
    * come from the server on each message (`msg.can`), never from hiding
    * buttons client-side alone.
    */
+  /* ── Requested files ───────────────────────────────────────────────
+   *
+   * "/" Request files asks for an application's checklist documents, or for
+   * files into a folder, and the request is posted as a card. Everyone in
+   * the chat except the person who asked gets an Upload button on each
+   * document still wanted; the server renames and files each one in its
+   * slot exactly as the emailed upload link would, and every screen showing
+   * the card ticks it off. Drawn from what the portal already has: the
+   * application's checklist rows, its status chips and its small pill button.
+   */
+  function fileRequestDate(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  function renderFileRequestCard(msg) {
+    var fr = msg.fileRequest;
+    var asker = String(fr.requestedBy) === String((STORE.me || {}).id);
+    var answering = !asker && fr.open;
+    var busy = (STORE.requestUploads || {})[msg.id] || {};
+    var about = fr.application
+      ? [fr.application.name, fr.application.number].filter(Boolean).join(' · ')
+      : (fr.folder ? 'Into ' + fr.folder.name : '');
+
+    function chip(tone, label) {
+      return '<span class="tma-portal-status tma-portal-status--' + tone + ' tma-portal-status--inline">' + esc(label) + '</span>';
+    }
+
+    function uploadButton(docId, label) {
+      var progress = busy[docId || '*'];
+      return (
+        '<button type="button" class="tma-dash__clients-edit-btn" data-chatreq-upload="' + esc(msg.id) + '"' +
+        (docId ? ' data-chatreq-doc="' + esc(docId) + '"' : ' data-chatreq-multiple') +
+        (progress != null ? ' disabled' : '') + '>' +
+        esc(progress != null ? 'Uploading ' + progress + '%' : label) + '</button>'
+      );
+    }
+
+    var rows;
+    if (fr.kind === 'documents') {
+      rows = (fr.documents || []).map(function (doc) {
+        var end = doc.received ? chip('success', 'Received')
+          : doc.closed ? chip('neutral', 'No longer needed')
+            : answering ? uploadButton(doc.id, 'Upload')
+              : chip('pending', 'Waiting');
+        return (
+          '<li class="tma-dash__clients-checklist-row">' +
+          '<span class="tma-dash__clients-checklist-label">' + esc(doc.label) +
+          (doc.person ? ' <span class="tma-dash__messages-person-meta">' + esc(doc.person) + '</span>' : '') +
+          '</span>' + end + '</li>'
+        );
+      }).join('');
+    } else {
+      var got = fr.received || 0;
+      rows =
+        '<li class="tma-dash__clients-checklist-row">' +
+        '<span class="tma-dash__clients-checklist-label">' + esc(fr.title || 'Files') + '</span>' +
+        (got ? chip('success', got === 1 ? '1 received' : got + ' received') : '') +
+        (answering ? uploadButton(null, 'Upload files') : (got ? '' : chip('pending', 'Waiting'))) +
+        '</li>';
+    }
+
+    var foot = fr.open
+      ? (fr.expiresAt ? 'Upload by ' + fileRequestDate(fr.expiresAt) : '')
+      : (fr.closedReason === 'complete' ? 'Everything asked for has arrived' : 'This request has closed');
+
+    return (
+      '<div class="tma-dash__messages-request">' +
+      '<span class="tma-dash__messages-bubble-lane">Requested files</span>' +
+      (about
+        ? '<p class="tma-dash__messages-bubble-line"><span class="tma-dash__messages-bubble-copy"><strong>' +
+          esc(about) + '</strong></span></p>'
+        : '') +
+      (fr.message
+        ? '<p class="tma-dash__messages-bubble-line"><span class="tma-dash__messages-bubble-copy">' +
+          esc(fr.message) + '</span></p>'
+        : '') +
+      '<ul class="tma-dash__clients-checklist">' + rows + '</ul>' +
+      (foot ? '<span class="tma-dash__messages-person-meta">' + esc(foot) + '</span>' : '') +
+      '</div>'
+    );
+  }
+
+  /* A file for one requested document (or several for a folder request). */
+  function uploadRequestedFiles(root, state, render, messageId, docId, multiple) {
+    var conversationId = state.selectedId;
+    var msg = findMessageById(conversationId, messageId);
+    if (!msg || !msg.fileRequest) return;
+
+    var picker = document.createElement('input');
+    picker.type = 'file';
+    picker.multiple = !!multiple;
+    picker.hidden = true;
+    document.body.appendChild(picker);
+
+    picker.addEventListener('change', function () {
+      var files = Array.prototype.slice.call(picker.files || []);
+      picker.remove();
+      if (!files.length) return;
+
+      var key = docId || '*';
+      if (!STORE.requestUploads) STORE.requestUploads = {};
+      var busy = STORE.requestUploads[messageId] = STORE.requestUploads[messageId] || {};
+      var doc = docId ? (msg.fileRequest.documents || []).filter(function (d) { return d.id === docId; })[0] : null;
+      var sent = 0;
+
+      var paintProgress = function (pct) {
+        busy[key] = pct;
+        var selector = '[data-chatreq-upload="' + messageId + '"]' + (docId ? '[data-chatreq-doc="' + docId + '"]' : '');
+        var btn = root.querySelector(selector);
+        if (btn) btn.textContent = 'Uploading ' + pct + '%';
+      };
+
+      busy[key] = 0;
+      render();
+
+      files.reduce(function (chain, file) {
+        return chain.then(function () {
+          return window.TMAMessagingAPI.uploadRequestedFile(messageId, file, docId, paintProgress).then(function (res) {
+            sent += 1;
+            var current = findMessageById(conversationId, messageId) || msg;
+            if (res && res.fileRequest) current.fileRequest = res.fileRequest;
+          });
+        });
+      }, Promise.resolve()).then(function () {
+        delete busy[key];
+        persistThread(conversationId);
+        render();
+        showMessagesToast(root, doc ? doc.label + ' uploaded' : (sent === 1 ? 'File uploaded' : sent + ' files uploaded'));
+      }).catch(function (err) {
+        delete busy[key];
+        render();
+        showMessagesToast(root, (err && err.message) || 'The file could not be uploaded');
+      });
+    });
+
+    picker.click();
+  }
+
+  function chatRequestJSON(url) {
+    return fetch((window.__TMA_SITE_ROOT || '') + url, {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    }).then(function (res) {
+      return res.json().catch(function () { return null; }).then(function (data) {
+        if (!res.ok) {
+          var err = new Error((data && data.message) || 'Request failed');
+          err.status = res.status;
+          throw err;
+        }
+        return data;
+      });
+    });
+  }
+
+  function openFileRequestFlow(root, state, render) {
+    var ui = window.TMAPortalUI;
+    var conversationId = state.selectedId;
+    if (!ui || !ui.openModal || !conversationId) return;
+
+    window.TMAMessagingAPI.fileRequestOptions(conversationId).then(function (res) {
+      if (!res || !res.canRequest) {
+        showMessagesToast(root, 'Only staff and the service provider can request files');
+        return;
+      }
+      var ctx = { root: root, state: state, render: render, conversationId: conversationId, fixed: res.fixed };
+      if (res.fixed) openRequestChecklist(ctx, res.fixed);
+      else openRequestPicker(ctx, res.applications || []);
+    }).catch(function (err) {
+      showMessagesToast(root, (err && err.message) || 'Request files could not be opened');
+    });
+  }
+
+  /* Step one in a chat that is not about one application: which, or none. */
+  function openRequestPicker(ctx, applications) {
+    var ui = window.TMAPortalUI;
+
+    ui.openModal({
+      title: 'Request files',
+      cls: 'tma-save-folder',
+      body:
+        '<p class="tma-portal-modal__text">Which application are these for? Only applications everyone in this chat can see are listed.</p>' +
+        '<div class="tma-dash__clients-field">' +
+        '<label class="tma-dash__clients-field-label" for="tma-chatreq-search">Find an application</label>' +
+        '<input type="search" id="tma-chatreq-search" class="tma-dash__clients-field-input" data-chatreq-search' +
+        ' placeholder="Search by name or number" autocomplete="off" spellcheck="false">' +
+        '</div>' +
+        '<div class="tma-portal-picker"><div class="tma-portal-picker__list" data-chatreq-list></div></div>' +
+        '<div class="tma-portal-modal__foot">' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-chatreq-cancel>Cancel</button>' +
+        '</div>',
+      onMount: function (host) {
+        var list = host.querySelector('[data-chatreq-list]');
+        var search = host.querySelector('[data-chatreq-search]');
+        var seq = 0;
+        var timer = null;
+
+        function paint(apps) {
+          list.innerHTML =
+            '<button type="button" class="tma-portal-picker__folder" data-chatreq-none>' +
+            '<img src="' + ICON + 'Folder.svg" alt="" width="20" height="20">' +
+            '<span class="tma-save-folder__name">No application' +
+            '<span class="tma-save-folder__path">Collect the files into a folder</span></span></button>' +
+            (apps.length
+              ? apps.map(function (a) {
+                return (
+                  '<button type="button" class="tma-portal-picker__folder" data-chatreq-app="' + esc(a.id) + '">' +
+                  '<img src="' + ICON + 'UserList.svg" alt="" width="20" height="20">' +
+                  '<span class="tma-save-folder__name">' + esc(a.name || a.number || 'Application') +
+                  '<span class="tma-save-folder__path">' + esc([a.number, a.provider].filter(Boolean).join(' · ')) + '</span>' +
+                  '</span></button>'
+                );
+              }).join('')
+              : '<p class="tma-portal-picker__empty">No applications that everyone in this chat can see.</p>');
+
+          list.querySelector('[data-chatreq-none]').addEventListener('click', function () {
+            openRequestFolder(ctx, {});
+          });
+          list.querySelectorAll('[data-chatreq-app]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var id = btn.getAttribute('data-chatreq-app');
+              var pick = apps.filter(function (a) { return a.id === id; })[0];
+              if (pick) openRequestChecklist(ctx, pick);
+            });
+          });
+        }
+
+        paint(applications);
+        host.querySelector('[data-chatreq-cancel]').addEventListener('click', function () { ui.closeModal(); });
+        search.addEventListener('input', function () {
+          clearTimeout(timer);
+          timer = setTimeout(function () {
+            var mine = ++seq;
+            window.TMAMessagingAPI.fileRequestOptions(ctx.conversationId, search.value.trim()).then(function (res) {
+              if (mine === seq) paint((res && res.applications) || []);
+            }).catch(function () { /* the list on screen stays */ });
+          }, 250);
+        });
+      },
+    });
+  }
+
+  /* An application's outstanding documents, the ones the Request documents
+     dialog on the application page offers. */
+  function requestableDocs(docs) {
+    return (docs || []).filter(function (d) {
+      return d && d.id && d.type !== 'additional_documents'
+        && (!d.status || d.status === 'pending_upload' || d.status === 'update_required');
+    });
+  }
+
+  function requestFoot(ctx, sendLabel) {
+    return (
+      '<div class="tma-portal-modal__foot">' +
+      (ctx.fixed ? '' : '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-chatreq-back>Back</button>') +
+      '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-chatreq-cancel>Cancel</button>' +
+      '<button type="button" class="tma-no-data__btn" data-chatreq-send>' + esc(sendLabel) + '</button>' +
+      '</div>'
+    );
+  }
+
+  function requestDetailsFields(values) {
+    var expiry = values.expiresAt || new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+    return (
+      '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
+      '<label class="tma-dash__clients-field-label" for="tma-chatreq-message">Instructions</label>' +
+      '<textarea id="tma-chatreq-message" class="tma-dash__clients-field-textarea" data-chatreq-message rows="3" maxlength="2000"' +
+      ' placeholder="Anything they should know about these files">' + esc(values.message || '') + '</textarea>' +
+      '</div>' +
+      '<div class="tma-dash__clients-field">' +
+      '<label class="tma-dash__clients-field-label" for="tma-chatreq-expiry">Upload by</label>' +
+      '<input type="date" id="tma-chatreq-expiry" class="tma-dash__clients-field-input" data-chatreq-expiry value="' + esc(expiry) + '">' +
+      '</div>'
+    );
+  }
+
+  /* Send, post the card into the thread, and close. */
+  function sendFileRequest(ctx, host, payload) {
+    var ui = window.TMAPortalUI;
+    var send = host.querySelector('[data-chatreq-send]');
+    var message = host.querySelector('[data-chatreq-message]');
+    var expiry = host.querySelector('[data-chatreq-expiry]');
+    payload.message = message ? (message.value || '').trim() || null : null;
+    payload.expiresAt = expiry ? expiry.value || null : null;
+
+    send.disabled = true;
+    send.textContent = 'Sending…';
+
+    window.TMAMessagingAPI.createFileRequest(ctx.conversationId, payload).then(function (res) {
+      ui.closeModal();
+      var confirmed = res && res.message;
+      if (!confirmed) return;
+      mergeMessages(ctx.conversationId, [confirmed], false);
+      var row = findThread(ctx.conversationId);
+      if (row) {
+        row.preview = 'You: ' + messagePreview(confirmed);
+        row.timestamp = confirmed.sentAt;
+        row.listed = true;
+      }
+      ctx.render({ chatToBottom: true });
+    }).catch(function (err) {
+      send.disabled = false;
+      send.textContent = 'Send request';
+      var errors = err && err.data && err.data.errors;
+      var first = errors && Object.keys(errors).length ? errors[Object.keys(errors)[0]][0] : null;
+      showMessagesToast(ctx.root, first || (err && err.message) || 'The request could not be sent');
+    });
+  }
+
+  /* Step two for an application: tick its outstanding documents. */
+  function openRequestChecklist(ctx, application) {
+    var ui = window.TMAPortalUI;
+
+    ui.openModal({
+      title: 'Request files',
+      cls: 'tma-cip-not-ready tma-cip-docreq',
+      body: '<div data-chatreq-body>' + (ui.loading ? ui.loading({ count: 4 }) : '<p class="tma-portal-modal__text">Loading…</p>') + '</div>',
+      onMount: function (host) {
+        var body = host.querySelector('[data-chatreq-body]');
+
+        chatRequestJSON('/portal/cip/applications/' + encodeURIComponent(application.id)).then(function (res) {
+          var app = (res && res.application) || {};
+          var people = [];
+          if (app.applicant) people.push(app.applicant);
+          if (app.sponsor) people.push(app.sponsor);
+          (app.dependents || []).forEach(function (d) { people.push(d); });
+
+          var groups = people.map(function (person) {
+            return { person: person, docs: requestableDocs(person.documents) };
+          }).filter(function (g) { return g.docs.length; });
+
+          var heading =
+            '<header class="tma-dash__clients-card-head tma-dash__clients-card-head--person">' +
+            '<div class="tma-dash__clients-card-person-text">' +
+            '<h3 class="tma-dash__clients-card-title">' + esc(application.name || application.number || 'Application') + '</h3>' +
+            '<span class="tma-dash__clients-card-person-name">' +
+            esc([application.number, application.provider].filter(Boolean).join(' · ')) + '</span>' +
+            '</div></header>';
+
+          if (!groups.length) {
+            body.innerHTML = heading +
+              '<p class="tma-portal-modal__text">Every document on this application has been uploaded.</p>' +
+              '<div class="tma-portal-modal__foot">' +
+              (ctx.fixed ? '' : '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-chatreq-back>Back</button>') +
+              '<button type="button" class="tma-no-data__btn" data-chatreq-cancel>Close</button></div>';
+          } else {
+            body.innerHTML = heading +
+              '<p class="tma-portal-modal__text">Tick the documents you need. Each one is renamed and filed in its place on the checklist when it arrives.</p>' +
+              '<div class="tma-cip-not-ready__list">' +
+              groups.map(function (group) {
+                return (
+                  '<section class="tma-cip-not-ready__group">' +
+                  '<header class="tma-dash__clients-card-head tma-cip-docreq__person">' +
+                  '<h3 class="tma-dash__clients-card-title">' + esc(group.person.name || group.person.label || 'Applicant') + '</h3>' +
+                  '<span class="tma-tab__count">' + esc(String(group.docs.length)) + '</span>' +
+                  '</header>' +
+                  '<ul class="tma-dash__clients-checklist">' +
+                  group.docs.map(function (d) {
+                    return (
+                      '<li class="tma-dash__clients-checklist-row">' +
+                      '<label class="tma-portal-check-row tma-dash__clients-checklist-label">' +
+                      '<input type="checkbox" class="tma-dash__check" data-chatreq-pick="' + esc(d.id) + '">' +
+                      '<span>' + esc(d.label || 'Document') +
+                      (d.required === false ? ' <span class="tma-dash__clients-checklist-optional">Optional</span>' : '') +
+                      '</span></label>' +
+                      '<span class="tma-portal-status tma-portal-status--' + esc(d.statusTone || 'neutral') +
+                      ' tma-portal-status--inline">' + esc(d.statusLabel || 'Pending upload') + '</span>' +
+                      '</li>'
+                    );
+                  }).join('') +
+                  '</ul></section>'
+                );
+              }).join('') +
+              '</div>' +
+              requestDetailsFields({}) +
+              requestFoot(ctx, 'Send request');
+
+            host.querySelector('[data-chatreq-send]').addEventListener('click', function () {
+              var picked = [];
+              host.querySelectorAll('[data-chatreq-pick]').forEach(function (box) {
+                if (box.checked) picked.push(box.getAttribute('data-chatreq-pick'));
+              });
+              if (!picked.length) {
+                showMessagesToast(ctx.root, 'Tick at least one document to ask for');
+                return;
+              }
+              sendFileRequest(ctx, host, { application: application.id, documents: picked });
+            });
+          }
+
+          var back = host.querySelector('[data-chatreq-back]');
+          if (back) back.addEventListener('click', function () { openFileRequestFlow(ctx.root, ctx.state, ctx.render); });
+          host.querySelector('[data-chatreq-cancel]').addEventListener('click', function () { ui.closeModal(); });
+        }).catch(function (err) {
+          body.innerHTML = '<p class="tma-portal-modal__text">' + esc((err && err.message) || 'This application could not be loaded.') + '</p>';
+        });
+      },
+    });
+  }
+
+  /*
+   * Step two without an application: what is needed and which folder it
+   * goes in. The folder is chosen in the library's own picker (Save to
+   * Application Folder), which takes this dialog's place and hands back.
+   */
+  function openRequestFolder(ctx, values) {
+    var ui = window.TMAPortalUI;
+
+    ui.openModal({
+      title: 'Request files',
+      cls: 'tma-cip-docreq',
+      body:
+        '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
+        '<label class="tma-dash__clients-field-label" for="tma-chatreq-title">What do you need?</label>' +
+        '<input type="text" id="tma-chatreq-title" class="tma-dash__clients-field-input" data-chatreq-title maxlength="150"' +
+        ' placeholder="For example, your October invoices" value="' + esc(values.title || '') + '">' +
+        '</div>' +
+        '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
+        '<span class="tma-dash__clients-field-label">Where should the files go?</span>' +
+        '<div class="tma-portal-picker__crumbs">' +
+        (values.folder
+          ? '<span>' + esc(values.folder.name) + '</span> '
+          : '') +
+        '<button type="button" class="tma-dash__clients-edit-btn" data-chatreq-folder>' +
+        (values.folder ? 'Change folder' : 'Choose a folder') + '</button>' +
+        '</div></div>' +
+        requestDetailsFields(values) +
+        requestFoot(ctx, 'Send request'),
+      onMount: function (host) {
+        var collect = function () {
+          return {
+            title: (host.querySelector('[data-chatreq-title]').value || '').trim(),
+            message: host.querySelector('[data-chatreq-message]').value || '',
+            expiresAt: host.querySelector('[data-chatreq-expiry]').value || '',
+            folder: values.folder || null,
+          };
+        };
+
+        host.querySelector('[data-chatreq-folder]').addEventListener('click', function () {
+          var kept = collect();
+          if (!window.TMASaveToFolder) return;
+          window.TMASaveToFolder.open({
+            choose: true,
+            title: 'Where should the files go?',
+            text: 'Find the applicant or folder, open the one the files belong in, then choose it.',
+            okLabel: 'Choose this folder',
+            onPick: function (folder) {
+              kept.folder = folder;
+              openRequestFolder(ctx, kept);
+            },
+            onCancel: function () { openRequestFolder(ctx, kept); },
+          });
+        });
+
+        host.querySelector('[data-chatreq-send]').addEventListener('click', function () {
+          var now = collect();
+          if (!now.folder) {
+            showMessagesToast(ctx.root, 'Choose the folder the files should go in');
+            return;
+          }
+          sendFileRequest(ctx, host, { folder: now.folder.id, title: now.title || null });
+        });
+
+        var back = host.querySelector('[data-chatreq-back]');
+        if (back) back.addEventListener('click', function () { openFileRequestFlow(ctx.root, ctx.state, ctx.render); });
+        host.querySelector('[data-chatreq-cancel]').addEventListener('click', function () { ui.closeModal(); });
+      },
+    });
+  }
+
+  /* ── Message details ───────────────────────────────────────────────
+   *
+   * From a bubble's menu: when it was sent, who has seen it and when, who
+   * has it but has not opened it, and who it has not reached yet. Drawn as
+   * the group's member list is (face, name, the detail under it).
+   */
+  function openMessageDetails(root, msg) {
+    var ui = window.TMAPortalUI;
+    if (!ui || !ui.openModal || !msg || !msg.id) return;
+
+    function person(face, detail) {
+      return (
+        '<div class="tma-dash__messages-member">' +
+        (face.avatar
+          ? '<span class="tma-dash__messages-row-avatar"><img src="' + esc(face.avatar) + '" alt="" loading="lazy"></span>'
+          : renderInitialAvatar(face.name || '?')) +
+        '<span class="tma-dash__messages-person-text">' +
+        '<span class="tma-dash__messages-person-name">' + esc(face.name || 'Unknown') + '</span>' +
+        (detail ? '<span class="tma-dash__messages-person-meta">' + esc(detail) + '</span>' : '') +
+        '</span></div>'
+      );
+    }
+
+    function section(title, inner) {
+      return (
+        '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
+        '<span class="tma-dash__clients-field-label">' + esc(title) + '</span>' + inner + '</div>'
+      );
+    }
+
+    ui.openModal({
+      title: 'Message details',
+      cls: 'tma-cip-docreq',
+      body: '<div data-msginfo-body>' + (ui.loading ? ui.loading({ count: 3 }) : '<p class="tma-portal-modal__text">Loading…</p>') + '</div>',
+      onMount: function (host) {
+        var body = host.querySelector('[data-msginfo-body]');
+
+        window.TMAMessagingAPI.messageInfo(msg.id).then(function (info) {
+          var sent = info.sentAtLabel || '';
+          if (!info.mine && info.sender) sent += ' by ' + info.sender;
+
+          var read = (info.readBy || []).map(function (face) {
+            return person(face, 'Seen ' + (face.seenAtLabel || ''));
+          }).join('');
+          var delivered = (info.deliveredTo || []).map(function (face) {
+            return person(face, 'Delivered, not opened yet');
+          }).join('');
+          var waiting = (info.waiting || []).map(function (face) {
+            return person(face, 'Not delivered yet');
+          }).join('');
+
+          body.innerHTML =
+            section('Sent', '<p class="tma-portal-modal__text">' + esc(sent) + '</p>') +
+            (info.editedAtLabel ? section('Edited', '<p class="tma-portal-modal__text">' + esc(info.editedAtLabel) + '</p>') : '') +
+            section('Seen by', read || '<p class="tma-portal-modal__text">Nobody yet</p>') +
+            (delivered ? section('Delivered to', delivered) : '') +
+            (waiting ? section('Not delivered yet', waiting) : '') +
+            '<div class="tma-portal-modal__foot">' +
+            '<button type="button" class="tma-no-data__btn" data-msginfo-close>Close</button></div>';
+          body.querySelector('[data-msginfo-close]').addEventListener('click', function () { ui.closeModal(); });
+        }).catch(function (err) {
+          body.innerHTML = '<p class="tma-portal-modal__text">' + esc((err && err.message) || 'The details could not be loaded.') + '</p>';
+        });
+      },
+    });
+  }
+
   function openMessageMenu(root, state, render, anchor, messageId, position, attachmentId) {
     closeMessageMenu();
 
@@ -12517,10 +13256,10 @@
     // tap can clear them.
     var picked = msg.body ? (highlightedTextIn(root, messageId) || rememberedHighlight(messageId)) : '';
 
-    var items = [
-      { action: 'reply', label: 'Reply' },
-      { action: 'forward', label: 'Forward' },
-    ];
+    var items = [{ action: 'reply', label: 'Reply' }];
+    // A request belongs to this chat: a forwarded copy would carry its words
+    // without its upload buttons.
+    if (msg.type !== 'file_request') items.push({ action: 'forward', label: 'Forward' });
     // Take it up with whoever said it, away from the group. Only in a group,
     // and only on somebody else's message.
     var inGroup = (findThread(state.selectedId) || {}).type === 'group';
@@ -12544,6 +13283,8 @@
       }
     }
     items.push({ action: 'pin', label: msg.starred ? 'Unpin message' : 'Pin message' });
+    // When it was sent, and who has seen it and when. Only once it is stored.
+    if (msg.seq) items.push({ action: 'details', label: 'Details' });
     if (msg.can && msg.can.edit) items.push({ action: 'edit', label: 'Edit' });
     if (msg.can && msg.can.delete) {
       items.push({ action: 'delete', label: 'Delete for everyone', danger: true });
@@ -12604,6 +13345,7 @@
         else if (action === 'forward') forwardMessage(root, state, render, msg);
         else if (action === 'pin') toggleMessagePin(root, state, render, msg);
         else if (action === 'translate') translateMessage(root, state, render, msg);
+        else if (action === 'details') openMessageDetails(root, msg);
         else if (action === 'download') downloadAttachments(files);
         else if (action === 'save-folder' || action.indexOf('save-folder:') === 0) {
           var which = files[parseInt(action.split(':')[1] || '0', 10) || 0];

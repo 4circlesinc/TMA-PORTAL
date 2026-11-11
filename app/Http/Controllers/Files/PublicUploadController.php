@@ -192,6 +192,8 @@ class PublicUploadController extends Controller
             ]);
 
             $this->notifyRequester($fileRequest, $file, (string) $request->input('name', ''));
+            // A request asked in a chat redraws its card there (ticks it off).
+            \App\Support\Messaging\ChatFileRequests::changed($fileRequest);
 
             // The same shape the ordinary path answers with, the upload page
             // reads it and does not care which door the file went through.
@@ -246,6 +248,7 @@ class PublicUploadController extends Controller
         ]);
 
         $this->notifyRequester($fileRequest, $file, (string) $request->input('name', ''));
+        \App\Support\Messaging\ChatFileRequests::changed($fileRequest);
 
         // No explicit broadcast here: FileLibraryObserver already turns the
         // FileItem::create above into a `files` signal, so a requester with the

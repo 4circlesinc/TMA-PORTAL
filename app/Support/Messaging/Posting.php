@@ -25,7 +25,7 @@ final class Posting
     /** What a presented message reads; load these before handing one out. */
     public const RELATIONS = [
         'sender', 'attachments', 'reactions.user', 'stars', 'mentions',
-        'replyTo.sender', 'replyTo.attachments',
+        'replyTo.sender', 'replyTo.attachments', 'fileRequest',
     ];
 
     /**
