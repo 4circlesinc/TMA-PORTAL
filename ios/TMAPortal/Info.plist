@@ -51,6 +51,13 @@
 	<array>
 		<string>audio</string>
 		<string>remote-notification</string>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.tmantoinelaw.portal.refresh</string>
+		<string>com.tmantoinelaw.portal.download</string>
 	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>

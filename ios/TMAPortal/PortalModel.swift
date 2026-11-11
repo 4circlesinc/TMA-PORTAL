@@ -256,6 +256,30 @@ final class PortalModel: NSObject, ObservableObject {
 
     func sceneInactive() {
         calls.leftForeground()
+        // Keep the copy for offline going: finish a run under way, and ask
+        // iOS to wake the app to keep it current (BackgroundSync.swift).
+        BackgroundSync.schedule()
+        BackgroundSync.holdWhileLeaving(self)
+    }
+
+    /// Run the page's offline sync (offline-download.js), for at most `limit`
+    /// seconds: what the app does with the time iOS gives it in the background.
+    func runOfflineSync(limit: TimeInterval) async -> Bool {
+        guard pageIsReady else { return false }
+        return await withCheckedContinuation { (done: CheckedContinuation<Bool, Never>) in
+            var answered = false
+            let finish: (Bool) -> Void = { ok in
+                guard !answered else { return }
+                answered = true
+                done.resume(returning: ok)
+            }
+            webView.callAsyncJavaScript(
+                "if (!window.TMAOfflineDownload) return false; await window.TMAOfflineDownload.run(); return true;",
+                arguments: [:], in: nil, in: .page) { result in
+                    if case .success = result { finish(true) } else { finish(false) }
+                }
+            DispatchQueue.main.asyncAfter(deadline: .now() + limit) { finish(false) }
+        }
     }
 
     func runCallScript(_ script: String) {

@@ -112,6 +112,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         let calls = UNNotificationCategory(identifier: "CALL", actions: [answer, decline], intentIdentifiers: [], options: [])
         // Messages carry a Reply box (MessageReply).
         UNUserNotificationCenter.current().setNotificationCategories([calls, MessageReply.category])
+        // The copy for offline, kept current in the background (BackgroundSync).
+        BackgroundSync.register()
         return true
     }
 

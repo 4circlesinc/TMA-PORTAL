@@ -21,11 +21,16 @@
  *     FileStore.swift on the iPhone, through TMADesktop.keepFiles; Android's
  *     WebView store). A file is fetched again only when it changes.
  *
- * Shown as the dashboard's first section ("Downloading for offline…" with
- * its parts, then "Ready offline"), above the greeting. Runs a little after
- * the app opens, when the connection comes back, and every half hour; one
- * run at a time, a breath between requests, so the screen in front always
- * comes first. The apps only: a browser keeps no client data on its disk.
+ * Downloaded once: the first copy on a device is the dashboard's first
+ * section ("Downloading for offline…" with its parts, then "Ready offline"),
+ * above the greeting, and carries on where it stopped if the app is closed
+ * part way. After that it is kept current in the background without a word
+ * on screen, fetching only what changed: a conversation with a new message,
+ * new mail, a document with a new version, the oldest kept answers. Runs a
+ * little after the app opens, when the connection comes back, every half
+ * hour, and when the iPhone wakes the app in the background (BackgroundSync
+ * .swift); one run at a time. The apps only: a browser keeps no client data
+ * on its disk.
  *
  * Global: window.TMAOfflineDownload ({ run, paint, state })
  */
@@ -39,7 +44,9 @@
   var THREAD_KEEP = 100;
   var THREAD_FRESH_MS = 10 * 60 * 1000;
   var MAIL_TARGET = 500;
-  var REFRESH_LIMIT = 400;
+  // Kept answers refreshed per run: the oldest first, none younger than this.
+  var REFRESH_LIMIT = 100;
+  var REFRESH_AFTER_MS = 2 * 60 * 60 * 1000;
   // The device's file store holds 2.5 GB; the download fills most of it and
   // leaves the rest for what a person opens.
   var FILE_BUDGET = 2.2 * 1024 * 1024 * 1024;
@@ -53,9 +60,12 @@
   var DONE_KEY = 'offline:complete';
   var FILES_KEY = 'offline:files';
 
-  var running = false;
+  var running = null; // the run in progress, as a promise
   // What the dashboard shows. `parts` in the order they run.
   var state = { phase: 'idle', parts: [], finishedAt: null };
+  // Shown only while this device makes its first copy. After that the copy
+  // is kept current in the background, without a word on screen.
+  var visible = false;
 
   function store() {
     var s = window.TMAStore;
@@ -101,7 +111,7 @@
   function paint() {
     var mount = document.querySelector('[data-offline-status-mount]');
     if (!mount) return;
-    if (state.phase === 'idle') {
+    if (state.phase === 'idle' || !visible) {
       mount.innerHTML = '';
       return;
     }
@@ -126,7 +136,7 @@
     var close = mount.querySelector('[data-offline-status-close]');
     if (close) {
       close.addEventListener('click', function () {
-        state.phase = 'idle';
+        visible = false;
         paint();
       });
     }
@@ -209,6 +219,8 @@
       return each(rows, function (row) {
         var key = 'messages:thread:' + row.id;
         return kept.get(key).then(function (held) {
+          // Nothing new in it since it was kept: left as it is.
+          if (held && row.timestamp && held.timestamp === row.timestamp) return null;
           if (held && held.keptAt && Date.now() - held.keptAt < THREAD_FRESH_MS) return null;
 
           return api.messages(row.id).then(function (page) {
@@ -218,6 +230,7 @@
               messages: list.slice(-THREAD_KEEP),
               hasMore: !!(page && page.hasMore) || list.length > THREAD_KEEP,
               keptAt: Date.now(),
+              timestamp: row.timestamp || null,
             });
           });
         }).then(function () { tick(p); });
@@ -274,7 +287,13 @@
     var p = part('everything', 'Everything you have opened');
 
     return kept.list('http:').then(function (held) {
-      var paths = Object.keys(held || {}).map(function (k) {
+      var now = Date.now();
+      var paths = Object.keys(held || {}).filter(function (k) {
+        var at = held[k] && held[k].at;
+        return !at || now - at > REFRESH_AFTER_MS;
+      }).sort(function (a, b) {
+        return ((held[a] && held[a].at) || 0) - ((held[b] && held[b].at) || 0);
+      }).map(function (k) {
         return k.slice(k.indexOf('http:') + 5);
       }).filter(Boolean).slice(0, REFRESH_LIMIT);
       p.total = paths.length;
@@ -347,14 +366,16 @@
 
   function run() {
     var kept = store();
-    if (running || !kept || !online()) return Promise.resolve();
-    running = true;
+    if (running) return running;
+    if (!kept || !online()) return Promise.resolve();
     state = { phase: 'running', parts: [], finishedAt: null };
-    paint();
     var before = null;
 
-    return kept.get(DONE_KEY).then(function (last) {
+    running = kept.get(DONE_KEY).then(function (last) {
       before = last || null;
+      // The first copy on this device is the one worth saying; the rest is upkeep.
+      if (!before) visible = true;
+      paint();
       return settings(kept);
     })
       .then(function () { return messages(kept); })
@@ -371,23 +392,14 @@
         kept.put(DONE_KEY, { at: Date.now() });
         state.phase = 'done';
         state.finishedAt = Date.now();
-        // The first copy on this device stays said until dismissed; keeping
-        // it up to date afterwards says so briefly and steps away.
-        if (before) {
-          var finishedAt = state.finishedAt;
-          setTimeout(function () {
-            if (state.phase === 'done' && state.finishedAt === finishedAt) {
-              state.phase = 'idle';
-              paint();
-            }
-          }, 10000);
-        }
       })
       .catch(function () { state.phase = 'idle'; })
       .then(function () {
-        running = false;
+        running = null;
         paint();
       });
+
+    return running;
   }
 
   if (!(window.TMADesktop && window.TMADesktop.isDesktop)) {

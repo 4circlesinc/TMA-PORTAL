@@ -44,7 +44,7 @@
   var FILES = /^\/portal\/files\/files\/[a-f0-9-]{36}\/(preview|thumb)$/;
 
   var original = window.fetch.bind(window);
-  var lastKept = Object.create(null); // key -> length of the body last kept
+  var lastKept = Object.create(null); // key -> { length, at } of the body last kept
   var keptServedAt = 0;
 
   function store() {
@@ -83,9 +83,12 @@
     var length = Number(res.headers.get('content-length') || 0);
     if (length > ANSWER_LIMIT) return;
     res.clone().text().then(function (body) {
-      if (body.length > ANSWER_LIMIT || lastKept[read.key] === body.length) return;
-      lastKept[read.key] = body.length;
-      s.put(read.key, { status: 200, type: type, body: body });
+      if (body.length > ANSWER_LIMIT) return;
+      // The same answer again, kept less than an hour ago: not worth a write.
+      var last = lastKept[read.key];
+      if (last && last.length === body.length && Date.now() - last.at < 60 * 60 * 1000) return;
+      lastKept[read.key] = { length: body.length, at: Date.now() };
+      s.put(read.key, { status: 200, type: type, body: body, at: Date.now() });
     }).catch(function () { /* kept next time */ });
   }
 

@@ -227,6 +227,24 @@ try {
   check(offlineCopy.unopened > 0, 'it kept a chat nobody opened');
   await page.close();
 
+  // Downloaded once: opened again with a connection, the copy is kept current
+  // in the background and the dashboard says nothing about it.
+  const later = await context.newPage();
+  later.on('pageerror', (e) => errors.push(e.message));
+  await later.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+  let shownAgain = false;
+  for (let i = 0; i < 40 && !shownAgain; i++) {
+    shownAgain = await later.evaluate(() => !!document.querySelector('[data-offline-status-mount] .tma-offline-status'));
+    await later.waitForTimeout(250);
+  }
+  const ranAgain = await later.evaluate(() => {
+    const d = window.TMAOfflineDownload;
+    return !!(d && d.state && d.state().parts.length);
+  });
+  check(ranAgain, 'opened again, it keeps the copy current in the background');
+  check(!shownAgain, 'without saying "Downloading for offline" again');
+  await later.close();
+
   const dead = async (p) => {
     p.on('pageerror', (e) => errors.push(e.message));
     // As a phone or a Mac with no connection reports it. (Windows can say

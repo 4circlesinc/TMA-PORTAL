@@ -122,6 +122,17 @@ final class FileStoreTests: XCTestCase {
         }
     }
 
+    /// iOS ends the app at launch if a background task it registers is not
+    /// permitted in Info.plist, and never wakes it without the modes.
+    func testTheAppMayBeWokenToKeepTheOfflineCopyCurrent() {
+        let ids = Bundle.main.object(forInfoDictionaryKey: "BGTaskSchedulerPermittedIdentifiers") as? [String] ?? []
+        XCTAssertTrue(ids.contains(BackgroundSync.refreshID))
+        XCTAssertTrue(ids.contains(BackgroundSync.downloadID))
+        let modes = Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String] ?? []
+        XCTAssertTrue(modes.contains("fetch"), "background app refresh")
+        XCTAssertTrue(modes.contains("processing"), "longer work while the phone is idle")
+    }
+
     func testTheBudgetIsTheFirmsFigure() {
         XCTAssertEqual(FileStore.budget, 2_684_354_560, "2.5 GB")
     }
