@@ -49,6 +49,13 @@ if (page.url().includes('/auth/stay-signed-in')) {
 }
 await page.waitForTimeout(4000);
 check(await page.evaluate(() => !!window.TMARateLimit && !window.TMARateLimit.coolingDown()), 'the rate-limit switch is loaded and calm');
+// A real conversation to send in at the end, noted before the fake list
+// below is kept as this device's copy of the inbox.
+const realConversation = await page.evaluate(async () => {
+  const list = await window.TMAMessagingAPI.conversations();
+  const first = ((list && list.conversations) || [])[0];
+  return first ? first.id : null;
+});
 
 // Fifty conversations, and the edge refusing every thread: Cloudflare's own 429.
 const fake = Array.from({ length: 50 }, (_, i) => ({ id: 'c' + i, type: 'direct', name: 'Person ' + i, timestamp: new Date(Date.now() - i * 1000).toISOString() }));
@@ -84,15 +91,13 @@ check(kept.status === 200 && kept.kept === '1' && /7/.test(kept.body), 'while co
 
 // A person's send still goes through.
 await page.unroute('**/portal/messaging/conversations'); await page.unroute('**/portal/messaging/conversations/*/messages*');
-const sent = await page.evaluate(async () => {
+const sent = await page.evaluate(async (id) => {
   try {
-    const list = await window.TMAMessagingAPI.conversations();
-    const target = ((list && list.conversations) || [])[0];
-    if (!target) return 'no conversation to send in';
-    const r = await window.TMAMessagingAPI.send(target.id, { body: 'still sends', nonce: window.TMAMessagingAPI.newNonce() });
+    if (!id) return 'no conversation to send in';
+    const r = await window.TMAMessagingAPI.send(id, { body: 'still sends', nonce: window.TMAMessagingAPI.newNonce() });
     return !!(r && r.message);
   } catch (e) { return 'error ' + e.message; }
-});
+}, realConversation);
 check(sent === true, `a message the person sends still goes (${sent})`);
 check(errors.length === 0, 'no page errors ' + errors.join(' | '));
 console.log(fails ? fails + ' failed' : 'all passed');

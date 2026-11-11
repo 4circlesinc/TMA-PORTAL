@@ -1,6 +1,6 @@
 {
   "css": "app-a8af5879f9a3.css",
-  "js": "app-e6c51ef2d7c4.js",
+  "js": "app-d10571b592ad.js",
   "sources": {
     "css": [
       "tokens.css",
@@ -34,6 +34,8 @@
       "feed.css"
     ],
     "js": [
+      "rate-limit.js",
+      "lazy-pictures.js",
       "auth-session.js",
       "dom-morph.js",
       "boot-priority.js",
@@ -75,7 +77,6 @@
       "badge-icons.js",
       "badge.js",
       "email-api.js",
-      "rate-limit.js",
       "portal-store.js",
       "portal-queue.js",
       "offline-fetch.js",

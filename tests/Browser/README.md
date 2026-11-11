@@ -3546,3 +3546,23 @@ DB_CONNECTION=sqlite DB_DATABASE="$DB" DB_URL= FEATURE_CIP=true \
 TMA_COMPANY_MANY=galaxy TMA_COMPANY_FEW=orbit TMA_BASE_URL=http://127.0.0.1:8941 \
   node tests/Browser/provider-access-card.mjs
 ```
+
+- **`edge-rate-limit.mjs`** — the page in a browser under Laravel Cloud's
+  edge rate limit (100 requests a minute per IP, then a five-minute block on
+  every path). The edge is played by answering the page's fetches 429 with no
+  `X-RateLimit-*` headers; the portal's own throttle always sends them, and a
+  429 that carries them must pass through without cooling the page. It pins
+  that a screen's error reads "Too many requests from this network" instead
+  of "Request failed", one toast says so, reads during the cool-down are
+  answered without going out, a write still goes, a reload during the
+  cool-down asks a handful of times instead of the ~50 a boot asks, a reload
+  after the edge lets go loads as usual, and the probe ends a cool-down on
+  its own after 15 s. Also that hidden screens' icons and faces are
+  `loading="lazy"` (lazy-pictures.js) while every picture in view is drawn,
+  and a chat's photos are left alone. `app-rate-limit.mjs` is the same
+  refusal in app mode (the offline download, the walkers, kept copies).
+  Standard throwaway server:
+
+```sh
+TMA_BASE_URL=http://127.0.0.1:8899 node tests/Browser/edge-rate-limit.mjs
+```
