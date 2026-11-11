@@ -74,7 +74,7 @@ final class FileStore: NSObject, WKScriptMessageHandlerWithReply {
         let started = queue.sync { generation }
         Task.detached(priority: .utility) { [weak self] in
             for (i, wanted) in files.enumerated() {
-                guard let self, self.currentGeneration() == started else { break }
+                guard let self, await self.currentGeneration() == started else { break }
                 let ok = await self.fetch(wanted, cookieHeader: cookieHeader, userAgent: userAgent, generation: started)
                 await MainActor.run { progress(i, ok) }
             }
