@@ -39,7 +39,19 @@
 
   if (window.TMAOfflineDownload) return;
 
-  var START_AFTER_MS = 6000;
+  // Well after the app opens: the screens a person is looking at come first.
+  var START_AFTER_MS = 45000;
+  /*
+   * One request at a time, most of a second apart. A twelfth of a second
+   * apart, through every conversation, was enough for the firm's edge to
+   * answer 429 to the whole connection, and then nothing worked: not the
+   * screens, not a send. A first copy now takes minutes instead of seconds,
+   * in the background, which is what a background copy is for.
+   */
+  var GAP_MS = 750;
+  // The iPhone downloads files natively: a handful at a time, then a breather.
+  var FILE_BATCH = 20;
+  var FILE_BATCH_PAUSE_MS = 30000;
   var EVERY_MS = 30 * 60 * 1000;
   var THREAD_KEEP = 100;
   var THREAD_FRESH_MS = 10 * 60 * 1000;
@@ -76,6 +88,12 @@
     if (navigator.onLine === false) return false;
     var queue = window.TMAQueue;
     return !(queue && queue.online && !queue.online());
+  }
+
+  /* The edge said "too many requests": stop, and try again another run. */
+  function cooling() {
+    var limit = window.TMARateLimit;
+    return !!(limit && limit.coolingDown && limit.coolingDown());
   }
 
   /* ── the dashboard's first section ─────────────────────────────── */
@@ -166,13 +184,13 @@
     var i = 0;
     return new Promise(function (resolve) {
       var next = function () {
-        if (i >= items.length || !online()) {
+        if (i >= items.length || !online() || cooling()) {
           resolve();
           return;
         }
         var item = items[i++];
         Promise.resolve().then(function () { return fn(item); }).catch(function () { /* the next */ }).then(function () {
-          setTimeout(next, gapMs == null ? 80 : gapMs);
+          setTimeout(next, Math.max(GAP_MS, gapMs || 0));
         });
       };
       next();
@@ -340,15 +358,27 @@
         paint();
       };
 
-      // The iPhone keeps them natively, downloading in its own session.
+      // The iPhone keeps them natively, downloading in its own session: in
+      // small batches with a pause between, stopping if the edge pushes back.
       if (typeof host.keepFiles === 'function') {
-        return new Promise(function (resolve) {
-          host.keepFiles(stale.map(function (r) {
-            return { path: path(r), version: r.updatedAt || '', size: r.size };
-          }), function (index, ok) {
-            if (ok && stale[index]) mark(stale[index]);
-          }, resolve);
-        });
+        var batches = [];
+        for (var b = 0; b < stale.length; b += FILE_BATCH) batches.push(stale.slice(b, b + FILE_BATCH));
+
+        return batches.reduce(function (chain, batch, n) {
+          return chain.then(function () {
+            if (!online() || cooling()) return null;
+            return new Promise(function (resolve) {
+              host.keepFiles(batch.map(function (r) {
+                return { path: path(r), version: r.updatedAt || '', size: r.size };
+              }), function (index, ok) {
+                if (ok && batch[index]) mark(batch[index]);
+              }, resolve);
+            }).then(function () {
+              if (n === batches.length - 1) return null;
+              return new Promise(function (resolve) { setTimeout(resolve, FILE_BATCH_PAUSE_MS); });
+            });
+          });
+        }, Promise.resolve());
       }
 
       // The desktop and Android keep what passes through them: read it whole.
@@ -367,7 +397,7 @@
   function run() {
     var kept = store();
     if (running) return running;
-    if (!kept || !online()) return Promise.resolve();
+    if (!kept || !online() || cooling()) return Promise.resolve();
     state = { phase: 'running', parts: [], finishedAt: null };
     var before = null;
 

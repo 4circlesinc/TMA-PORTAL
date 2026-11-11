@@ -117,15 +117,37 @@
     }, fail);
   }
 
+  /* The edge said "too many requests" (rate-limit.js). */
+  function cooling() {
+    var limit = window.TMARateLimit;
+    return !!(limit && limit.coolingDown && limit.coolingDown());
+  }
+
   window.fetch = function (input, init) {
     var read = null;
     try { read = describe(input, init); } catch (e) { read = null; }
+
+    /*
+     * While the edge is refusing this connection, a screen's read that this
+     * device holds a copy of is given the copy without asking again: asking
+     * only extends the refusal, and the screen shows what it had rather
+     * than "Request failed". With no copy it still asks.
+     */
+    if (read && !read.file && cooling() && store()) {
+      return store().get(read.key).then(function (entry) {
+        if (entry && typeof entry.body === 'string') return keptResponse(entry);
+        return original(input, init);
+      }, function () { return original(input, init); });
+    }
+
     var request = original(input, init);
     if (!read) return request;
 
     return request.then(function (res) {
       // The desktop app's own "nothing answered" (x-tma-offline) is not the firm.
       if (res.headers.get('x-tma-offline') === '1') return fallback(read, res, null);
+      // Too many requests is not the firm's answer to this read either.
+      if (res.status === 429) return fallback(read, res, null);
       if (!read.file) keep(read, res);
       return res;
     }, function (err) {

@@ -1,6 +1,6 @@
 {
   "css": "app-a8af5879f9a3.css",
-  "js": "app-a07a00e9cabd.js",
+  "js": "app-e6c51ef2d7c4.js",
   "sources": {
     "css": [
       "tokens.css",
@@ -75,6 +75,7 @@
       "badge-icons.js",
       "badge.js",
       "email-api.js",
+      "rate-limit.js",
       "portal-store.js",
       "portal-queue.js",
       "offline-fetch.js",

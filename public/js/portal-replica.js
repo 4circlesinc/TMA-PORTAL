@@ -49,11 +49,24 @@
    * @param {function} config.keep       record -> Promise (store or delete it).
    * @param {string}   [config.doneEvent] Dispatched when a walk took anything.
    */
+  /* The edge said "too many requests" (rate-limit.js): stand back. */
+  function cooling() {
+    var limit = window.TMARateLimit;
+    return !!(limit && limit.coolingDown && limit.coolingDown());
+  }
+
+  // A walk that was refused is not walked again straight away. Every failed
+  // /me used to start all three again, and against a 429 that was a loop
+  // that kept the whole connection refused.
+  var RETRY_AFTER_FAIL_MS = 60 * 1000;
+
   function make(config) {
     var running = false;
+    var failedAt = 0;
 
     function run() {
       if (running || !persistent() || !online()) return Promise.resolve(0);
+      if (cooling() || (failedAt && Date.now() - failedAt < RETRY_AFTER_FAIL_MS)) return Promise.resolve(0);
 
       running = true;
       var taken = 0;
@@ -84,6 +97,7 @@
         return step(cursor);
       }).then(function () {
         running = false;
+        failedAt = 0;
         announce(config.name, taken, false);
         if (taken > 0 && config.doneEvent) {
           document.dispatchEvent(new CustomEvent(config.doneEvent, { detail: { count: taken } }));
@@ -92,8 +106,10 @@
         return taken;
       }).catch(function () {
         // Offline, or an account this record type answers 403/404, either
-        // way the cursor is untouched and the next wake tries again.
+        // way the cursor is untouched and the next wake tries again (after
+        // a minute; see RETRY_AFTER_FAIL_MS).
         running = false;
+        failedAt = Date.now();
         announce(config.name, taken, false);
 
         return taken;
