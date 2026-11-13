@@ -282,6 +282,13 @@ class GoogleCalendarProvider implements CalendarProvider
             );
         }
 
+        if (ThrottledHttp::isUnavailable($response)) {
+            throw new CalendarSyncException(
+                "Google’s calendar service is not answering (HTTP {$response->status()}). This usually clears up within minutes.",
+                transient: true,
+            );
+        }
+
         if ($response->status() === 401 || $response->status() === 403) {
             throw new CalendarSyncException("Google refused to {$what}, the connection may need reauthorising.");
         }

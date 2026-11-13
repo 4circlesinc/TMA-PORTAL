@@ -4,6 +4,7 @@ namespace App\Support\Calendar\Sync;
 
 use App\Models\Calendar;
 use App\Models\CalendarEvent;
+use App\Models\Notification;
 use App\Support\Calendar\CalendarAudit;
 use App\Support\Notifications\Notifier;
 use Illuminate\Support\Str;
@@ -28,6 +29,20 @@ use Illuminate\Support\Str;
  */
 class CalendarSynchronizer
 {
+    /**
+     * Runs in a row the provider may fail to answer (CalendarSyncException
+     * ::$transient) before the calendar is called failed and its owner told.
+     * Until then the job asks again a few minutes later and the calendar
+     * keeps the state it had.
+     */
+    public const TRANSIENT_RUNS_BEFORE_ERROR = 3;
+
+    /** How far back a re-pull reaches: anything older is already here. */
+    private const REPULL_MONTHS_BACK = 3;
+
+    /** Days a Graph delta round is followed before a new one moves its range on. */
+    private const ROUND_DAYS = 30;
+
     public function __construct(private Calendar $calendar) {}
 
     /**
@@ -43,6 +58,13 @@ class CalendarSynchronizer
         }
 
         $provider = ProviderFactory::for($account);
+
+        // What the calendar showed before this run, put back if the provider
+        // merely fails to answer: one 502 is not news for the owner.
+        $before = [
+            'subscription_status' => $this->calendar->subscription_status,
+            'subscription_error' => $this->calendar->subscription_error,
+        ];
 
         $this->calendar->forceFill([
             'subscription_status' => 'syncing',
@@ -68,13 +90,43 @@ class CalendarSynchronizer
 
             $this->finishRun($stats);
         } catch (CalendarSyncException $e) {
-            if (! $e->throttled && ! CalendarSyncException::looksThrottled($e->getMessage())) {
-                $this->recordFailure($e->getMessage());
+            if ($e->throttled || CalendarSyncException::looksThrottled($e->getMessage())) {
+                throw $e;
             }
+
+            $failures = (int) $this->calendar->subscription_failures + 1;
+            if ($e->transient && $failures < self::TRANSIENT_RUNS_BEFORE_ERROR) {
+                // Counted, so a provider that stays down is reported on the
+                // third run, but not yet shown: the job asks again shortly.
+                $this->calendar->forceFill($before + ['subscription_failures' => $failures])->save();
+
+                throw $e;
+            }
+
+            $this->recordFailure($e->getMessage());
             throw $e;
         }
 
         return $stats;
+    }
+
+    /**
+     * The calendar synced: an unread "Calendar sync failed" in its owner's
+     * bell is about a problem that has gone, and only confuses.
+     */
+    public static function clearFailureNotice(Calendar $calendar): void
+    {
+        $ownerId = $calendar->owner_id ?? $calendar->connectedAccount?->user_id;
+        if (! $ownerId) {
+            return;
+        }
+
+        Notification::query()
+            ->where('user_id', $ownerId)
+            ->where('dedupe_key', 'calendar.sync_error:'.$calendar->id)
+            ->where('type', 'calendar.sync_error')
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
     }
 
     /**
@@ -149,6 +201,8 @@ class CalendarSynchronizer
             ])->save();
         }
 
+        self::clearFailureNotice($this->calendar);
+
         CalendarAudit::record(CalendarAudit::SYNC_COMPLETED, null, $this->calendar, context: $stats);
     }
 
@@ -159,41 +213,122 @@ class CalendarSynchronizer
      */
     private function pull(CalendarProvider $provider, array &$stats): void
     {
-        $windowStart = ($this->calendar->sync_window_start ?? now()->subMonths(3))->toIso8601String();
+        $windowStart = $this->calendar->sync_window_start ?? now()->subMonths(3);
 
         /*
-         * Pages are applied and the cursor persisted as they arrive, so a
-         * run killed mid-pull (timeout, worker restart) resumes from the
-         * last page it finished instead of losing the whole pass - which on
-         * a big first import meant a run that could never finish. Providers
-         * that ignore the callback still return everything in the arrays,
-         * handled below; real providers return them empty when streaming.
+         * The first import reaches as far back as the person asked. A re-pull
+         * (expired token, or the wedge below) only needs recent months: the
+         * older events are already here, and every month of window is more
+         * recurring instances for Exchange to expand, which is what makes
+         * Graph's gateway give up with a 502 on a wide calendar view.
          */
-        $onPage = function (array $events, array $deleted, ?string $resumeCursor) use (&$stats): void {
-            $this->applyPage($events, $deleted, $stats);
-
-            if ($resumeCursor !== null) {
-                $this->calendar->forceFill(['sync_cursor' => $resumeCursor])->save();
-            }
-        };
+        if ($this->calendar->subscription_synced_at !== null) {
+            $windowStart = $windowStart->max(now()->subMonths(self::REPULL_MONTHS_BACK));
+        }
+        $windowStart = $windowStart->toIso8601String();
+        $cursor = $this->calendar->sync_cursor;
 
         try {
-            $result = $provider->changedEvents($this->calendar->external_id, $this->calendar->sync_cursor, $windowStart, $onPage);
+            $this->pullRound($provider, $cursor, $windowStart, $stats);
         } catch (CalendarSyncException $e) {
-            if (! $e->cursorExpired) {
+            if (! $e->cursorExpired && ! $this->cursorLooksWedged($e, $cursor)) {
                 throw $e;
             }
-            // The token expired: drop it and re-pull the whole window. This is
-            // why every apply is an idempotent upsert, a full re-pull must
-            // not duplicate what is already here.
-            $result = $provider->changedEvents($this->calendar->external_id, null, $windowStart, $onPage);
+            // The token expired, or the provider keeps failing on it: drop it
+            // and re-pull the whole window. This is why every apply is an
+            // idempotent upsert, a full re-pull must not duplicate what is
+            // already here. The stored cursor is only replaced once the
+            // fresh pass lands a page.
+            $this->pullRound($provider, null, $windowStart, $stats);
+
+            return;
         }
+
+        /*
+         * Graph's delta link keeps the date range of the request that began
+         * its round: followed for ever, it would never see past the six
+         * months ahead it was minted with. Once a month, with this run's
+         * changes (deletions too) already in, a new round starts over
+         * today's range. If it cannot finish now, the next run resumes it.
+         */
+        if ($cursor !== null && $this->roundIsDueToRoll()) {
+            try {
+                $this->pullRound($provider, null, $windowStart, $stats);
+            } catch (CalendarSyncException $e) {
+                if ($e->throttled) {
+                    throw $e;
+                }
+            }
+        }
+    }
+
+    /**
+     * One pass over the provider's changes from `$cursor`, or a new round
+     * from scratch when it is null.
+     *
+     * Pages are applied and the cursor persisted as they arrive, so a run
+     * killed mid-pull (timeout, worker restart) resumes from the last page
+     * it finished instead of losing the whole pass - which on a big first
+     * import meant a run that could never finish. Providers that ignore the
+     * callback still return everything in the arrays, handled below; real
+     * providers return them empty when streaming.
+     *
+     * @param  array<string, int>  $stats
+     */
+    private function pullRound(CalendarProvider $provider, ?string $cursor, string $windowStart, array &$stats): void
+    {
+        $startedAt = $cursor === null ? now() : null;
+
+        $onPage = function (array $events, array $deleted, ?string $resumeCursor) use (&$stats, $startedAt): void {
+            $this->applyPage($events, $deleted, $stats);
+            $this->keepCursor($resumeCursor, $startedAt);
+        };
+
+        $result = $provider->changedEvents($this->calendar->external_id, $cursor, $windowStart, $onPage);
 
         $this->applyPage($result['events'], $result['deleted'], $stats);
+        $this->keepCursor($result['cursor'], $startedAt);
+    }
 
-        if ($result['cursor'] !== null) {
-            $this->calendar->forceFill(['sync_cursor' => $result['cursor']])->save();
+    /** A new round is dated when its first page lands, not when it is asked for. */
+    private function keepCursor(?string $cursor, ?\DateTimeInterface $roundStartedAt): void
+    {
+        if ($cursor === null) {
+            return;
         }
+
+        $this->calendar->forceFill(array_filter([
+            'sync_cursor' => $cursor,
+            'sync_round_started_at' => $roundStartedAt,
+        ]))->save();
+    }
+
+    /** Only Graph pins a range into its token; Google's sync token has none. */
+    private function roundIsDueToRoll(): bool
+    {
+        if ($this->calendar->source !== Calendar::SOURCE_MICROSOFT) {
+            return false;
+        }
+
+        $started = $this->calendar->sync_round_started_at;
+
+        return $started === null || $started->lte(now()->subDays(self::ROUND_DAYS));
+    }
+
+    /**
+     * A stored cursor the provider keeps failing on, rather than a provider
+     * that is down. A run killed mid-pass leaves Graph's nextLink as the
+     * cursor, and Graph can stop serving one without saying it expired: it
+     * answers 502 every time, and every run asked for that same link, so the
+     * calendar never synced again. A second failing run in a row goes fresh;
+     * a single blip keeps the token, since a fresh pass cannot see what was
+     * deleted in the meantime.
+     */
+    private function cursorLooksWedged(CalendarSyncException $e, ?string $cursor): bool
+    {
+        return $e->transient
+            && $cursor !== null
+            && (int) $this->calendar->subscription_failures > 0;
     }
 
     /**

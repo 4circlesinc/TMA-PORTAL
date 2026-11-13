@@ -21,7 +21,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'subscription_frequency', 'subscription_status', 'subscription_error',
     'subscription_synced_at', 'subscription_attempted_at',
     'subscription_etag', 'subscription_failures',
-    'sync_direction', 'sync_cursor', 'sync_window_start', 'sync_cancelled',
+    'sync_direction', 'sync_cursor', 'sync_round_started_at', 'sync_window_start', 'sync_cancelled',
     'remote_can_write',
     'is_system', 'is_archived', 'created_by',
 ])]
@@ -73,6 +73,7 @@ class Calendar extends Model
             'subscription_synced_at' => 'datetime',
             'subscription_attempted_at' => 'datetime',
             'sync_window_start' => 'datetime',
+            'sync_round_started_at' => 'datetime',
             'sync_cancelled' => 'boolean',
             'remote_can_write' => 'boolean',
         ];
@@ -142,6 +143,15 @@ class Calendar extends Model
 
         if ($failures === 0) {
             return true;
+        }
+
+        // Nor is Microsoft's gateway giving up (HTTP 502): the calendar is
+        // fine, the provider is not answering. Doubling the wait to a day
+        // left Outlook events missing for hours after Graph had recovered;
+        // every other sweep is soon enough.
+        if (CalendarSyncException::looksTransient((string) $this->subscription_error)) {
+            return $this->subscription_attempted_at === null
+                || $this->subscription_attempted_at->lte(now()->subMinutes(15));
         }
 
         $waitMinutes = min(10 * (2 ** min($failures, 8)), 1440);

@@ -30,6 +30,17 @@ final class ThrottledHttp
         return in_array($response->status(), [429, 503], true);
     }
 
+    /**
+     * The provider's gateway gave up rather than refused: Exchange timing out
+     * while it expands a wide calendar view, a backend restarting. Not
+     * retried in configure(): there it would also replay creates, and a 502
+     * on a create may still have made the event. Reads retry it themselves.
+     */
+    public static function isUnavailable(Response $response): bool
+    {
+        return in_array($response->status(), [500, 502, 504], true);
+    }
+
     public static function retryAfter(Response $response, int $default = 20): int
     {
         $header = $response->header('Retry-After');

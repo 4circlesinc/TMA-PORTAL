@@ -3,7 +3,6 @@
 namespace App\Jobs;
 
 use App\Models\Calendar;
-use App\Models\Notification;
 use App\Support\Calendar\Sync\CalendarSyncException;
 use App\Support\Calendar\Sync\CalendarSynchronizer;
 use App\Support\Microsoft\MailboxBusyException;
@@ -28,7 +27,15 @@ class SyncProviderCalendar implements ShouldBeUniqueUntilProcessing, ShouldQueue
 {
     use Queueable;
 
-    public int $tries = 2;
+    /*
+     * Two real failures fail the job, as `$tries = 2` used to. Waiting for
+     * a lock is not a failure: every "busy, back in 15s" from the
+     * middleware below is a release, and a release counted as an attempt,
+     * so the third Outlook calendar on a mailbox, queued behind the other
+     * two by the sweep, died "attempted too many times" without ever
+     * running. Releases are bounded by time instead (retryUntil).
+     */
+    public int $maxExceptions = 2;
 
     public int $timeout = 180;
 
@@ -46,6 +53,12 @@ class SyncProviderCalendar implements ShouldBeUniqueUntilProcessing, ShouldQueue
     public function uniqueId(): string
     {
         return (string) $this->calendarId;
+    }
+
+    /** Long enough to wait out a mailbox's other calendars, fixed at dispatch. */
+    public function retryUntil(): \DateTimeInterface
+    {
+        return now()->addMinutes(30);
     }
 
     /**
@@ -97,6 +110,17 @@ class SyncProviderCalendar implements ShouldBeUniqueUntilProcessing, ShouldQueue
 
                 return;
             }
+
+            $failures = (int) $calendar->subscription_failures;
+            if ($e->transient && $failures < CalendarSynchronizer::TRANSIENT_RUNS_BEFORE_ERROR) {
+                // The provider did not answer and the synchronizer has not
+                // called the calendar failed yet: ask again in 2, then 5
+                // minutes. The third miss is recorded and the sweep takes over.
+                static::dispatch($this->calendarId)
+                    ->delay(now()->addSeconds($failures <= 1 ? 120 : 300));
+
+                return;
+            }
             // Already recorded on the calendar by the synchronizer. Swallowed
             // so a provider outage doesn't spill into failed_jobs on every
             // scheduler tick; the row's error state is the record.
@@ -145,11 +169,7 @@ class SyncProviderCalendar implements ShouldBeUniqueUntilProcessing, ShouldQueue
             'subscription_failures' => 0,
         ])->save();
 
-        Notification::query()
-            ->where('type', 'calendar.sync_error')
-            ->where('dedupe_key', 'calendar.sync_error:'.$calendar->id)
-            ->whereNull('read_at')
-            ->update(['read_at' => now()]);
+        CalendarSynchronizer::clearFailureNotice($calendar);
 
         static::dispatch($this->calendarId)
             ->delay(now()->addSeconds(max(30, $retryAfter)));

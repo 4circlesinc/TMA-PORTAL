@@ -6,9 +6,11 @@ use App\Models\ConnectedAccount;
 use App\Support\Mail\MailTokens;
 use App\Support\Microsoft\MailboxGate;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Sleep;
 
 /**
  * Microsoft 365 / Outlook calendars over Graph.
@@ -22,6 +24,11 @@ use Illuminate\Support\Facades\Http;
 class MicrosoftCalendarProvider implements CalendarProvider
 {
     private const BASE = 'https://graph.microsoft.com/v1.0';
+
+    /** Events per delta page, and the size a page Graph could not serve is asked again at. */
+    private const PAGE_SIZE = 100;
+
+    private const SMALL_PAGE_SIZE = 25;
 
     private function __construct(private ConnectedAccount $account) {}
 
@@ -115,14 +122,30 @@ class MicrosoftCalendarProvider implements CalendarProvider
         $events = [];
         $deleted = [];
         $nextCursor = $cursor;
+        $pageSize = self::PAGE_SIZE;
 
         do {
-            $request = $this->request()
-                ->withHeaders(['Prefer' => 'odata.maxpagesize=100']);
-            $response = $query
-                ? $request->get($url, $query)
-                : $request->get($url);
+            $response = $this->eventsPage($url, $query, $pageSize);
+
+            if ($response === null || ThrottledHttp::isUnavailable($response)) {
+                /*
+                 * Graph's gateway gave up on the page (502/504) or nothing
+                 * came back in time. To fill a page Exchange expands every
+                 * recurring series in the window, so ask again, once, for a
+                 * smaller one, and keep that size for the rest of the run.
+                 * This used to fail the calendar on the spot: "Microsoft
+                 * could not list events (HTTP 502)" in the bell, then a
+                 * back-off of 20 minutes and more with nothing arriving.
+                 */
+                $pageSize = self::SMALL_PAGE_SIZE;
+                Sleep::for(2)->seconds();
+                $response = $this->eventsPage($url, $query, $pageSize);
+            }
             $query = [];
+
+            if ($response === null) {
+                throw $this->notAnswering(null);
+            }
 
             if ($response->status() === 410) {
                 throw new CalendarSyncException('Microsoft sync state expired.', cursorExpired: true);
@@ -147,8 +170,8 @@ class MicrosoftCalendarProvider implements CalendarProvider
                 }
             }
 
-            $url = $response->json('@odata.nextLink');
-            $nextCursor = $response->json('@odata.deltaLink') ?: $nextCursor;
+            $url = $this->odata($response, '@odata.nextLink');
+            $nextCursor = $this->odata($response, '@odata.deltaLink') ?: $nextCursor;
 
             if ($onPage) {
                 // A nextLink is a complete URL the cursor path follows as-is,
@@ -172,7 +195,7 @@ class MicrosoftCalendarProvider implements CalendarProvider
         );
         $this->assertOk($response, 'create event');
 
-        return ['externalId' => $response->json('id'), 'etag' => $response->json('@odata.etag')];
+        return ['externalId' => $response->json('id'), 'etag' => $this->odata($response, '@odata.etag')];
     }
 
     public function updateEvent(string $externalCalendarId, string $externalEventId, array $event, ?string $etag): array
@@ -192,7 +215,7 @@ class MicrosoftCalendarProvider implements CalendarProvider
 
         $this->assertOk($response, 'update event');
 
-        return ['etag' => $response->json('@odata.etag')];
+        return ['etag' => $this->odata($response, '@odata.etag')];
     }
 
     public function deleteEvent(string $externalCalendarId, string $externalEventId): void
@@ -345,6 +368,48 @@ class MicrosoftCalendarProvider implements CalendarProvider
         };
     }
 
+    /**
+     * One page of a delta run, or null when nothing answered in time (a
+     * GET, so asking again is safe).
+     *
+     * @param  array<string, string>  $query
+     */
+    private function eventsPage(string $url, array $query, int $pageSize): ?Response
+    {
+        $request = $this->request()->withHeaders(['Prefer' => 'odata.maxpagesize='.$pageSize]);
+
+        try {
+            return $query ? $request->get($url, $query) : $request->get($url);
+        } catch (ConnectionException) {
+            return null;
+        }
+    }
+
+    /**
+     * A top-level key of Graph's answer, read from the array. Never
+     * `$response->json('@odata.nextLink')`: Laravel reads the dot as a path,
+     * looks for ['@odata']['nextLink'] and finds nothing. That is how every
+     * Outlook sync stopped at its first hundred events, never kept its delta
+     * link, and so asked Graph for the whole window again every ten minutes.
+     */
+    private function odata(Response $response, string $key): ?string
+    {
+        $body = $response->json();
+        $value = is_array($body) ? ($body[$key] ?? null) : null;
+
+        return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    private function notAnswering(?Response $response): CalendarSyncException
+    {
+        $status = $response ? ' (HTTP '.$response->status().')' : '';
+
+        return new CalendarSyncException(
+            "Microsoft’s calendar service is not answering{$status}. This usually clears up within minutes.",
+            transient: true,
+        );
+    }
+
     private function request(int $timeout = 30): PendingRequest
     {
         return MailboxGate::bind(
@@ -369,6 +434,10 @@ class MicrosoftCalendarProvider implements CalendarProvider
                 throttled: true,
                 retryAfter: ThrottledHttp::retryAfter($response),
             );
+        }
+
+        if (ThrottledHttp::isUnavailable($response)) {
+            throw $this->notAnswering($response);
         }
 
         if ($response->status() === 401 || $response->status() === 403) {
