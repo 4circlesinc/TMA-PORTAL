@@ -180,9 +180,9 @@ class Facets
             ];
         }
 
-        // Busiest first, then by name. Ordering by id would order by when each
-        // officer's account was created, which tells the reader nothing.
-        usort($officers, fn (array $a, array $b) => $b['count'] <=> $a['count'] ?: strcmp($a['name'], $b['name']));
+        // A to Z. The reader opens this menu looking for a name, and a list
+        // ordered by workload moves every name each time a file changes hands.
+        usort($officers, fn (array $a, array $b) => self::byName($a['name'], $b['name']));
 
         // Always offered, zero included: "nobody has picked anything up" is
         // as much an answer as a number, and a row that vanishes on the good
@@ -248,7 +248,8 @@ class Facets
             fn ($firm) => $filed->has($firm->uuid) && ! in_array($firm->uuid, $kept, true)
         ));
 
-        $rows = $firms->sortByDesc(fn ($firm) => (int) ($filed[$firm->uuid] ?? 0))->values();
+        // A to Z, for the same reason as the officers.
+        $rows = $firms->sort(fn ($a, $b) => self::byName((string) $a->name, (string) $b->name))->values();
 
         return $rows->map(fn ($row) => [
             'id' => (string) $row->uuid,
@@ -326,6 +327,15 @@ class Facets
     }
 
     /* ── internals ─────────────────────────────────── */
+
+    /**
+     * Alphabetical as a reader means it: case does not matter, and "Agent 2"
+     * comes before "Agent 10".
+     */
+    private static function byName(string $a, string $b): int
+    {
+        return strnatcasecmp(trim($a), trim($b)) ?: strcmp($a, $b);
+    }
 
     /**
      * How many applications each officer's name would appear on in the column.

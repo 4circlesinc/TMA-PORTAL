@@ -65,6 +65,20 @@ class Buckets
     public const SERVICE_PROVIDER = 'service_provider';
 
     /**
+     * Not a dashboard: the applications listing's Status menu.
+     *
+     * Every reader is offered the same statuses, in the same order, whichever
+     * dashboard they open their day on. A dashboard is a selection of what to
+     * pick up; a filter is a list of the questions the table can answer, and
+     * a reviewing officer who could only narrow the table to their own four
+     * queues, or a provider who could not ask for the files still at New, was
+     * being handed a menu with most of the answers missing. The counts are
+     * still measured over {@see ApplicationScope}, so each reader sees how
+     * many of *their* files sit at each status, nobody else's.
+     */
+    public const FILTER = 'filter';
+
+    /**
      * The statuses a file is under review in, what a reviewing officer's
      * queue is made of.
      *
@@ -347,6 +361,13 @@ class Buckets
                 'update_required', 'ready_to_submit', 'pending_review', 'non_compliant',
                 'dd_query', 'delayed', 'approved', 'denied',
             ],
+            // The administrator's report, which already names every status
+            // the lane has.
+            self::FILTER => [
+                'new', 'review_application', 'assessment_feedback', 'update_required',
+                'ready_to_submit', 'pending_review', 'non_compliant', 'background_check',
+                'dd_query', 'delayed', 'approved', 'denied',
+            ],
         ],
         Phase::POST_APPROVAL => [
             self::ADMINISTRATOR => self::POST_APPROVAL_PIPELINE,
@@ -355,6 +376,7 @@ class Buckets
                 'information_requests',
             ],
             self::SERVICE_PROVIDER => self::POST_APPROVAL_PIPELINE,
+            self::FILTER => self::POST_APPROVAL_PIPELINE,
         ],
         Phase::ADD_ON => [
             self::ADMINISTRATOR => [
@@ -371,6 +393,14 @@ class Buckets
             // would vanish from this card until Updates Required — and the
             // home widget would look like it only had half the lane.
             self::SERVICE_PROVIDER => [
+                'draft', 'new', 'review_application', 'assessment_feedback',
+                'update_required', 'ready_to_submit', 'pending_review',
+                'non_compliant', 'approved', 'denied',
+            ],
+            // The provider card's list, which is the administrator's with
+            // Draft Add-Ons in front: the one lane where a draft is a real
+            // row on the table.
+            self::FILTER => [
                 'draft', 'new', 'review_application', 'assessment_feedback',
                 'update_required', 'ready_to_submit', 'pending_review',
                 'non_compliant', 'approved', 'denied',
@@ -491,8 +521,27 @@ class Buckets
      */
     public static function summaries(?User $user): array
     {
+        return self::summariesOf($user, self::setFor($user));
+    }
+
+    /**
+     * The listing's Status menu, lane by lane: the same statuses for every
+     * reader, counted over what that reader may see. Empty for somebody the
+     * module is not for, exactly as their dashboard is.
+     *
+     * @return array<string, array{buckets: list<array{key: string, label: string, short: string, count: int, statuses: list<string>, scope: string, tone: string, filter: array<string, string>, aggregate: bool, phase: string}>, total: int}>
+     */
+    public static function filterSummaries(?User $user): array
+    {
+        return self::summariesOf($user, self::setFor($user) === null ? null : self::FILTER);
+    }
+
+    /**
+     * @return array<string, array{buckets: list<array<string, mixed>>, total: int}>
+     */
+    private static function summariesOf(?User $user, ?string $set): array
+    {
         $empty = ['buckets' => [], 'total' => 0];
-        $set = self::setFor($user);
 
         if ($set === null || $user === null) {
             return [
@@ -597,10 +646,12 @@ class Buckets
     /**
      * One bucket of this reader's own dashboard, or null.
      *
-     * Membership is checked, not just existence: a bucket that is not on this
-     * reader's dashboard is not theirs to filter by, and answering with
-     * somebody else's queue, even correctly scoped, so empty, would be the
-     * listing offering a view nothing ever put in front of them.
+     * Membership is checked, not just existence: a bucket that is on neither
+     * this reader's dashboard nor the listing's Status menu was never put in
+     * front of them, and answering with somebody else's queue, even correctly
+     * scoped, so empty, would be the listing offering a view nothing ever
+     * offered. Every status in {@see self::FILTER} is offered to everyone; an
+     * officer's personal queues stay theirs alone.
      *
      * A phase narrows membership to that lane's set. Without one, either
      * lane counts — the listing's Status menu and a typed URL both arrive
@@ -613,7 +664,14 @@ class Buckets
     {
         $set = self::setFor($user);
 
-        if ($set === null || ! in_array($key, self::keysFor($set), true)) {
+        if ($set === null) {
+            return null;
+        }
+
+        $offered = fn (?string $lane) => in_array($key, self::keysFor($set, $lane), true)
+            || in_array($key, self::keysFor(self::FILTER, $lane), true);
+
+        if (! $offered(null)) {
             return null;
         }
 
@@ -624,7 +682,7 @@ class Buckets
         // counted pre-approval does not open post-approval rows. A leftover
         // filter from the other card is still a valid key (no 404) and is
         // left without a phase so the listing's own tab filter empties it.
-        if ($lane !== null && in_array($key, self::keysFor($set, $lane), true)) {
+        if ($lane !== null && $offered($lane)) {
             $found['phase'] = $lane;
             $found['label'] = self::labelFor($key, $lane);
             $found['short'] = self::shortFor($key, $lane);

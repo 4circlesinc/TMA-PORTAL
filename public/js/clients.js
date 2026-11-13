@@ -3852,11 +3852,13 @@
    * the menu shows its own, the same figure the Dashboard's CIP card reports,
    * measured once on the server.
    *
-   * Which set a reader gets is the server's to decide, an officer's four are
-   * a work queue (CRO and Compliance share that view) and an administrator's
-   * twelve are a report, and the difference is scope, not presentation.
+   * Which set a reader's dashboard gets is the server's to decide, an
+   * officer's four are a work queue (CRO and Compliance share that view) and
+   * an administrator's twelve are a report. The Status menu is not a
+   * dashboard: `filters` is every status, in the same order, for everybody,
+   * and `phases` stays the dashboard so a card's bucket still has a name.
    */
-  var BUCKETS = { list: [], phases: null, dashboard: null, loaded: false, loading: false, active: null };
+  var BUCKETS = { list: [], phases: null, filters: null, dashboard: null, loaded: false, loading: false, active: null };
 
   /* The bucket a key names, or null. The reader's own set is the authority:
      the listing 404s on a bucket that was never on their dashboard, so a key
@@ -3888,13 +3890,22 @@
     return (lane && Array.isArray(lane.buckets)) ? lane.buckets : [];
   }
 
-  function allBuckets() {
-    if (!BUCKETS.phases) return BUCKETS.list || [];
+  /* The Status menu's list for one lane, the same for every reader. Falls
+     back to the dashboard's when the server sent none. */
+  function filterBucketsFromPhase(phase) {
+    var lane = BUCKETS.filters && BUCKETS.filters[phase];
 
+    return Array.isArray(lane) ? lane : bucketsFromPhase(phase);
+  }
+
+  var BUCKET_PHASES = ['pre_approval', 'post_approval', 'add_on'];
+
+  /* Each lane's buckets in turn, first appearance of a key kept. */
+  function unionOfLanes(lists) {
     var seen = {};
     var list = [];
-    ['pre_approval', 'post_approval', 'add_on'].forEach(function (phase) {
-      bucketsFromPhase(phase).forEach(function (b) {
+    lists.forEach(function (lane) {
+      lane.forEach(function (b) {
         if (b && b.key && !seen[b.key]) {
           seen[b.key] = true;
           list.push(b);
@@ -3902,18 +3913,30 @@
       });
     });
 
+    return list;
+  }
+
+  /*
+   * Every bucket a key may name: the Status menu's, then the reader's own
+   * dashboard's. A card can open the table on an officer's personal queue,
+   * which the menu does not list, and the chip still needs its name.
+   */
+  function allBuckets() {
+    if (!BUCKETS.phases && !BUCKETS.filters) return BUCKETS.list || [];
+
+    var list = unionOfLanes(BUCKET_PHASES.map(filterBucketsFromPhase)
+      .concat(BUCKET_PHASES.map(bucketsFromPhase)));
+
     return list.length ? list : (BUCKETS.list || []);
   }
 
   function bucketsForCurrentTab(state) {
-    if (!BUCKETS.phases) return BUCKETS.list || [];
+    if (!BUCKETS.phases && !BUCKETS.filters) return BUCKETS.list || [];
 
     var tab = state ? listTabOf(state) : '';
-    if (tab === 'post_approval') return bucketsFromPhase('post_approval');
-    if (tab === 'pre_approval') return bucketsFromPhase('pre_approval');
-    if (tab === 'add_on') return bucketsFromPhase('add_on');
+    if (BUCKET_PHASES.indexOf(tab) !== -1) return filterBucketsFromPhase(tab);
 
-    return allBuckets();
+    return unionOfLanes(BUCKET_PHASES.map(filterBucketsFromPhase));
   }
 
   function bucketFor(key) {
@@ -4008,6 +4031,7 @@
       .then(function (json) {
         BUCKETS.list = (json && json.buckets) || [];
         BUCKETS.phases = (json && json.phases) || null;
+        BUCKETS.filters = (json && json.filters) || null;
         BUCKETS.dashboard = (json && json.dashboard) || null;
       })
       .catch(function () { BUCKETS.list = []; })

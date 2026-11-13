@@ -116,6 +116,17 @@ class CipDashboardController extends Controller
                     'total' => $addon['total'],
                 ],
             ],
+            /*
+             * The applications listing's Status menu, lane by lane.
+             *
+             * Not `phases`: that is this reader's dashboard, and an officer's
+             * is four personal queues. The menu offers every status to
+             * everybody, in the same order, see {@see Buckets::FILTER}.
+             */
+            'filters' => array_map(
+                fn (array $lane) => $lane['buckets'],
+                Buckets::filterSummaries($user),
+            ),
         ];
     }
 }

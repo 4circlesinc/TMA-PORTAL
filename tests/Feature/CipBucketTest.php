@@ -721,18 +721,79 @@ class CipBucketTest extends TestCase
         $this->assertNotNull(Buckets::find($admin, 'dd_query'));
         $this->assertNotNull(Buckets::find($contact, 'non_compliant'));
         $this->assertNotNull(Buckets::find($contact, 'dd_query'));
-        // An administrator holds no queue of their own, a provider firm does
-        // not see Background check, and a plain employee has no dashboard at all.
+        // An administrator holds no queue of their own, nor does a provider
+        // firm, and a plain employee has no dashboard at all.
         $this->assertNull(Buckets::find($admin, 'assigned_reviews'));
-        $this->assertNull(Buckets::find($contact, 'background_check'));
+        $this->assertNull(Buckets::find($contact, 'reviews_pending'));
         $this->assertNull(Buckets::find($employee, 'new'));
+
+        // Every status is on the listing's Status menu for everybody, so a
+        // status off this reader's dashboard is still theirs to filter by.
+        $this->assertNotNull(Buckets::find($contact, 'background_check'));
+        $this->assertNotNull(Buckets::find($contact, 'new'));
 
         $colin = $this->user(Role::COMPLIANCE_OFFICER, 'colin@example.com');
         $this->assertNotNull(Buckets::find($colin, 'assigned_reviews'));
-        $this->assertNull(Buckets::find($colin, 'background_check'));
+        $this->assertNotNull(Buckets::find($colin, 'background_check'));
         $this->assertNotNull(Buckets::find($admin, 'apply_for_cor'));
         $this->assertNotNull(Buckets::find($contact, 'apply_for_cor'));
-        $this->assertNull(Buckets::find($colin, 'apply_for_cor'));
+        $this->assertNotNull(Buckets::find($colin, 'apply_for_cor'));
+        $this->assertNull(Buckets::find($colin, 'no_such_bucket'));
+    }
+
+    public function test_the_status_menu_offers_every_status_to_everybody_in_one_order(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com');
+        $colin = $this->user(Role::COMPLIANCE_OFFICER, 'colin@example.com');
+        [$galaxy, $contact] = $this->providerWithContact('GAL');
+        [$other] = $this->providerWithContact('OTH');
+
+        $this->application($galaxy, $admin, Status::BACKGROUND_CHECK);
+        $this->application($other, $admin, Status::BACKGROUND_CHECK);
+
+        $menus = [];
+        foreach (['admin' => $admin, 'rita' => $rita, 'colin' => $colin, 'contact' => $contact] as $who => $reader) {
+            $menus[$who] = $this->actingAs($reader)->getJson('/portal/cip/dashboard')->assertOk()->json('filters');
+        }
+
+        $keys = fn (array $menu, string $phase) => array_column($menu[$phase], 'key');
+
+        foreach ([Phase::PRE_APPROVAL, Phase::POST_APPROVAL, Phase::ADD_ON] as $phase) {
+            foreach (['rita', 'colin', 'contact'] as $who) {
+                $this->assertSame($keys($menus['admin'], $phase), $keys($menus[$who], $phase), "{$who}'s {$phase} menu");
+            }
+        }
+
+        // The administrator's own order, Draft Add-Ons first on that lane.
+        $this->assertSame(
+            ['new', 'review_application', 'assessment_feedback', 'update_required',
+                'ready_to_submit', 'pending_review', 'non_compliant', 'background_check',
+                'dd_query', 'delayed', 'approved', 'denied'],
+            $keys($menus['admin'], Phase::PRE_APPROVAL),
+        );
+        $this->assertSame('draft', $keys($menus['admin'], Phase::ADD_ON)[0]);
+
+        // The same list, counted over each reader's own slice.
+        $count = fn (array $menu) => collect($menu[Phase::PRE_APPROVAL])->firstWhere('key', 'background_check')['count'];
+        $this->assertSame(2, $count($menus['admin']));
+        $this->assertSame(2, $count($menus['rita']));
+        $this->assertSame(1, $count($menus['contact']));
+
+        // And each count opens onto the rows it counted.
+        $this->assertSame(1, $this->actingAs($contact)
+            ->getJson('/portal/cip/applications?phase='.Phase::PRE_APPROVAL.'&bucket=background_check')
+            ->assertOk()->json('total'));
+        $this->assertSame(2, $this->actingAs($rita)
+            ->getJson('/portal/cip/applications?phase='.Phase::PRE_APPROVAL.'&bucket=background_check')
+            ->assertOk()->json('total'));
+
+        // The dashboards themselves are untouched: an officer's card is still
+        // their four queues.
+        $this->assertSame(
+            ['assigned_reviews', 'reviews_pending', 'assessment_feedback_tasks', 'information_requests'],
+            array_column($this->actingAs($rita)->getJson('/portal/cip/dashboard')->json('buckets'), 'key'),
+        );
     }
 
     public function test_approved_is_the_granted_bucket(): void
@@ -833,7 +894,8 @@ class CipBucketTest extends TestCase
         $this->assertSame(1, collect($providerAddOn['buckets'])->firstWhere('key', 'new')['count']);
         $this->assertSame(1, collect($providerAddOn['buckets'])->firstWhere('key', 'review_application')['count']);
         $this->assertSame(3, $providerAddOn['total'], 'Draft, New and Review all land on the provider Add-On card');
-        $this->assertNull(Buckets::find($admin, 'draft'));
+        // Not on the administrator's card, but on everybody's Status menu.
+        $this->assertNotNull(Buckets::find($admin, 'draft', Phase::ADD_ON));
         $this->assertNotNull(Buckets::find($contact, 'draft', Phase::ADD_ON));
         $this->assertNotNull(Buckets::find($contact, 'new', Phase::ADD_ON));
 

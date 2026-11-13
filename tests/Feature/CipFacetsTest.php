@@ -436,6 +436,38 @@ class CipFacetsTest extends TestCase
         $this->assertSame(1, $byCode['GAL']);
     }
 
+    public function test_officers_and_firms_are_offered_a_to_z_whatever_they_hold(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
+        $zara = $this->user(Role::REVIEWING_OFFICER, 'zara@example.com');
+        $bea = $this->user(Role::REVIEWING_OFFICER, 'bea@example.com');
+        $mo = $this->user(Role::COMPLIANCE_OFFICER, 'mo@example.com');
+        $zeta = CipProvider::create(['name' => 'Zeta Partners', 'code' => 'ZET']);
+        $alpha = CipProvider::create(['name' => 'alpha group', 'code' => 'ALP']);
+        $mid = CipProvider::create(['name' => 'Meridian', 'code' => 'MER']);
+
+        // The busiest officer and firm are last alphabetically, so a list
+        // still ordered by workload would put them first.
+        foreach (range(1, 3) as $ignored) {
+            $this->putOn($this->application($zeta, $admin), $zara, $admin);
+        }
+        $this->putOn($this->application($mid, $admin), $mo, $admin);
+        $this->application($alpha, $admin);
+
+        $body = $this->listing($admin);
+        $names = array_column($body['assignees'], 'name');
+
+        $this->assertSame('Unassigned', $names[0], 'nobody still leads');
+        $people = array_slice($names, 1);
+        $sorted = $people;
+        natcasesort($sorted);
+        $this->assertSame(array_values($sorted), $people);
+        $this->assertLessThan(array_search('Zara', $people, true), array_search('Bea', $people, true));
+        $this->assertLessThan(array_search('Zara', $people, true), array_search('Mo', $people, true));
+
+        $this->assertSame(['alpha group', 'Meridian', 'Zeta Partners'], array_column($body['providers'], 'name'));
+    }
+
     public function test_the_facets_do_not_cost_a_query_per_officer(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
