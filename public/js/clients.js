@@ -5602,9 +5602,11 @@
   /*
    * One list of people, not two.
    *
-   * The ones already on the file come first, ticked, with an × to take them
-   * off. Everyone else is still offered. Each pick keeps the menu open so
-   * more than one person can be named in the same pass.
+   * A to Z, the ones already on the file among the rest, ticked, with an ×
+   * to take them off: the reader is looking for a name, and a name that
+   * jumps to the top once ticked is one they then cannot find where they
+   * left it. Each pick keeps the menu open so more than one person can be
+   * named in the same pass.
    *
    * Firm users sit on the main office. Branch users sit on a branch, and
    * naming one of them is what limits the file to that branch.
@@ -5657,7 +5659,10 @@
       });
     });
 
-    return items;
+    // Case does not matter, and "Agent 2" comes before "Agent 10".
+    return items.sort(function (a, b) {
+      return String(a.label || '').localeCompare(String(b.label || ''), undefined, { sensitivity: 'base', numeric: true });
+    });
   }
 
   function showAssignMenu(button, applicationId, beside, json, refresh) {
