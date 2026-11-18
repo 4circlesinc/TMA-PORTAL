@@ -20663,6 +20663,20 @@ button.tma-file-status-chip:focus-visible,
   opacity: 0.9;
 }
 
+/* Move on to post-approval: green, white type, where Confirm submission
+   stands earlier in the file's life. The darker green keeps 12px white
+   text at 4.5:1. */
+.tma-dash__clients-appbar-action--go {
+  border-color: #15803d;
+  background: #15803d;
+  color: #fff;
+}
+
+.tma-dash__clients-appbar-action--go:hover {
+  border-color: #166534;
+  background: #166534;
+}
+
 .tma-dash__clients-appbar-action--quiet {
   border-color: transparent;
   background: transparent;

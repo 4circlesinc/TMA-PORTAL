@@ -180,7 +180,7 @@
   <link rel="stylesheet" href="/css/tokens.css">
   <link rel="stylesheet" href="/css/theme.css">
   <link rel="stylesheet" href="/css/dashboard.css?v=298">
-  <script src="/js/email-open-links.js?v=2"></script>
+  <script src="/js/email-open-links.js?v=3"></script>
   @include('partials.ui-lockdown')
 </head>
 <body>

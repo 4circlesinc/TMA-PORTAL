@@ -12,6 +12,7 @@ use App\Models\ClientAssignment;
 use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\AdditionalDocuments;
 use App\Support\Cip\AddOn;
 use App\Support\Cip\AddOnRequirements;
 use App\Support\Cip\Appeal;
@@ -2892,6 +2893,9 @@ class CipApplicationController extends Controller
                         'status' => $status,
                         'statusLabel' => DocumentStatus::label($status),
                         'statusTone' => DocumentStatus::tone($status),
+                        // Additional Documents are filed, not judged: the
+                        // checklist draws no chip for them.
+                        'carriesStatus' => ! AdditionalDocuments::carriesNoStatus((string) $slot->type),
                         'packStatus' => $pack['status'] ?? null,
                         'packStatusLabel' => $pack['label'] ?? null,
                         'packStatusTone' => $pack['tone'] ?? null,

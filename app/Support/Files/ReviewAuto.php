@@ -8,6 +8,7 @@ use App\Models\FileComment;
 use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\AdditionalDocuments;
 use App\Support\Cip\DocumentComments;
 use App\Support\Cip\DocumentEngine;
 use App\Support\Cip\DocumentStatus;
@@ -189,12 +190,24 @@ final class ReviewAuto
         string $source,
     ): void {
         $from = $slot->status ?? DocumentStatus::PENDING_UPLOAD;
+        $file ??= $slot->file;
+
+        /*
+         * Additional Documents carry no status, so a comment there is only a
+         * comment: it is kept on both threads like any other, and sends
+         * nothing back — there is no verdict on these papers to change.
+         */
+        if (AdditionalDocuments::carriesNoStatus($slot->type)) {
+            if ($file) {
+                self::mirror($slot, $actor, $reason, $file, $source);
+            }
+
+            return;
+        }
 
         if ($from === DocumentStatus::PENDING_UPLOAD) {
             return;
         }
-
-        $file ??= $slot->file;
         $already = $from === DocumentStatus::UPDATE_REQUIRED;
         $noteAlready = $file !== null && trim((string) $file->review_note) === $reason;
 
@@ -236,6 +249,22 @@ final class ReviewAuto
             }
         }
 
+        self::mirror($slot, $actor, $reason, $file, $source);
+    }
+
+    /**
+     * The comment on the other thread too, so the checklist line and the
+     * file read the same conversation.
+     *
+     * @param  'file'|'slot'  $source
+     */
+    private static function mirror(
+        CipDocument $slot,
+        User $actor,
+        string $reason,
+        ?FileItem $file,
+        string $source,
+    ): void {
         try {
             if ($source === 'file') {
                 DocumentComments::create($slot, $actor, $reason);

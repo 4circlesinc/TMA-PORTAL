@@ -14,8 +14,12 @@ use App\Support\Cip\AdditionalDocuments;
 use App\Support\Cip\ApplicantType;
 use App\Support\Cip\Applications;
 use App\Support\Cip\DocumentSlots;
+use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
+use App\Support\Cip\Review;
 use App\Support\Cip\Tree;
+use App\Support\Files\Comments;
+use App\Support\Files\Presenter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -212,6 +216,47 @@ class CipAdditionalDocumentsBoxTest extends TestCase
             FileItem::find($slot->file_id)->name,
             'Only the open box keeps the sender\'s filename.',
         );
+    }
+
+    /**
+     * Statuses are for the checklist's own documents. A paper in Additional
+     * Documents is filed, not judged: no chip in the library or the viewer,
+     * nothing on the count of whether the package is ready, and a staff
+     * comment on it stays a comment rather than sending it back.
+     */
+    public function test_a_paper_in_additional_documents_carries_no_status(): void
+    {
+        $staff = $this->staff();
+        $application = $this->application($staff);
+        $person = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+
+        DocumentSlots::fill(
+            $person,
+            AdditionalDocuments::KEY,
+            UploadedFile::fake()->create('Guardianship Order.pdf', 40, 'application/pdf'),
+            $staff,
+        );
+        $box = $this->box($person)->fresh(['file']);
+        $this->assertTrue(AdditionalDocuments::carriesNoStatus($box->type));
+
+        $row = (new Presenter($staff))->file($box->file);
+        $this->assertNull($row['status'], 'No chip on the library row.');
+        $this->assertNull($row['review']['status']);
+        $this->assertFalse($row['review']['canReview'], 'No status picker in the viewer.');
+
+        // Everything the checklist asked for is settled: the box alone,
+        // whatever its stored status, does not hold the package back.
+        CipDocument::where('application_id', $application->id)
+            ->where('type', '!=', AdditionalDocuments::KEY)
+            ->update(['status' => DocumentStatus::READY_FOR_SUBMISSION]);
+        $box->forceFill(['status' => DocumentStatus::APPLICATION_REVIEW])->save();
+        Review::forgetTally();
+        $this->assertTrue(Review::documentsAllowReadyToSubmit($application->fresh()));
+
+        Comments::create($box->file, $staff, 'Is this the certified copy?');
+
+        $this->assertSame(DocumentStatus::APPLICATION_REVIEW, $box->fresh()->status, 'A comment sends nothing back.');
+        $this->assertNotSame(DocumentStatus::UPDATE_REQUIRED, $box->file->fresh()->review_status);
     }
 
     private function boxFolder(CipPerson $person): int

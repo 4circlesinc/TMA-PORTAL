@@ -1503,7 +1503,7 @@ class CipAddOnTest extends TestCase
         $this->assertSame([
             'New Add-On Applications', 'Review Applications', 'Assessment Feedback',
             'Updates Required', 'Ready to Submit', 'Pending Review', 'Non-compliant',
-            'Approved', 'Denied',
+            'Background Check', 'Approved', 'Denied',
         ], array_column($body['phases'][Phase::ADD_ON]['buckets'], 'label'));
     }
 
@@ -1772,10 +1772,10 @@ class CipAddOnTest extends TestCase
         $this->assertSame('G1 - Marriage Certificate', $g1['label']);
         $this->assertSame('G1 - Marriage Certificate.pdf', $g1['fileName']);
         $this->assertTrue($g1['additional']);
-        $this->assertTrue($g1['onStatusTable']);
-        $this->assertSame(DocumentStatus::APPLICATION_REVIEW, $g1['packStatus']);
-        $this->assertSame('Application review', $g1['packStatusLabel']);
-        $this->assertSame($g1['status'], $g1['packStatus']);
+        // Filed in Additional Documents: no status, so nothing for the
+        // Document | Status table to show.
+        $this->assertFalse($g1['carriesStatus']);
+        $this->assertFalse($g1['onStatusTable']);
     }
 
     public function test_each_add_on_document_keeps_its_own_review_status(): void
@@ -2242,7 +2242,8 @@ class CipAddOnTest extends TestCase
 
         $this->markChecklistReady($application);
 
-        $this->assertFalse(\App\Support\Cip\Engine::canTransition($application->fresh(), Status::BACKGROUND_CHECK));
+        // Background Check is on offer too; deciding straight away still is.
+        $this->assertTrue(\App\Support\Cip\Engine::canTransition($application->fresh(), Status::BACKGROUND_CHECK));
         $this->assertTrue(\App\Support\Cip\Engine::canTransition($application->fresh(), Status::GRANTED));
         $this->assertTrue(\App\Support\Cip\Engine::canTransition($application->fresh(), Status::DENIED));
 
@@ -2274,6 +2275,67 @@ class CipAddOnTest extends TestCase
         $this->assertSame(Status::GRANTED, $meta['decision'] ?? null);
         $this->assertSame('2026-09-16', $meta['decidedAt'] ?? null);
         $this->assertSame('Spouse Add-On approved.', $meta['note'] ?? null);
+    }
+
+    /**
+     * Background Check is an Add-On step for the firm's staff, not only an
+     * administrator's override: accepted for processing, then decided, with
+     * no DD path.
+     */
+    public function test_firm_staff_can_take_an_add_on_through_background_check(): void
+    {
+        $staff = $this->staff();
+        $officer = $this->officer();
+        $parent = $this->grantedParent($staff);
+
+        $body = $this->file($staff, $this->addOnPayload($parent))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->firstOrFail();
+        Tree::provision($application, $staff);
+        $application->forceFill([
+            'status' => Status::PENDING_REVIEW,
+            'submitted_at' => '2026-09-14',
+            'locked_at' => now(),
+        ])->save();
+        $this->markChecklistReady($application);
+
+        // A reviewing officer's own next steps, not an administrator's override.
+        $this->assertContains(
+            Status::BACKGROUND_CHECK,
+            \App\Support\Cip\Engine::availableTransitions($application->fresh(), $officer),
+        );
+        $this->assertNotContains(
+            Status::BACKGROUND_CHECK,
+            \App\Support\Cip\Engine::availableOverrides($application->fresh(), $staff),
+        );
+
+        $accepted = $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/acceptance', [
+                'acceptedAt' => '2026-09-15',
+            ])
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame(Status::BACKGROUND_CHECK, $accepted['status']);
+        $this->assertSame('2026-09-15', $accepted['acceptedAt']);
+
+        $held = $application->fresh();
+        $this->assertTrue(\App\Support\Cip\Engine::canTransition($held, Status::GRANTED));
+        $this->assertTrue(\App\Support\Cip\Engine::canTransition($held, Status::DENIED));
+        $this->assertFalse(\App\Support\Cip\Engine::canTransition($held, Status::DD_QUERY));
+        $this->assertFalse(\App\Support\Cip\Engine::canTransition($held, Status::DELAYED));
+
+        $shown = $this->postCipDecision($staff, $application->uuid, [
+            'decision' => Status::GRANTED,
+            'decidedAt' => '2026-09-20',
+        ])
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame(Status::GRANTED, $shown['status']);
+        $this->assertSame('2026-09-20', $shown['decidedAt']);
     }
 
     public function test_an_add_on_can_be_denied_from_non_compliant_and_keeps_decision_history(): void

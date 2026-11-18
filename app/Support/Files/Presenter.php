@@ -12,6 +12,7 @@ use App\Models\FolderColourPreference;
 use App\Models\Share;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\AdditionalDocuments;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\DocumentEngine;
 use App\Support\Cip\DocumentStatus;
@@ -942,6 +943,11 @@ class Presenter
     {
         $slot = $this->cipSlot($file);
 
+        // Filed in Additional Documents: no status to show.
+        if ($slot && AdditionalDocuments::carriesNoStatus($slot->type)) {
+            return null;
+        }
+
         if ($slot) {
             return DocumentStatus::badge($slot->status ?? DocumentStatus::PENDING_UPLOAD);
         }
@@ -965,6 +971,25 @@ class Presenter
     private function reviewPayload(FileItem $file, array $perms): array
     {
         $slot = $this->cipSlot($file);
+
+        /*
+         * Additional Documents are filed, not judged: no status, so the
+         * viewer draws no chip and offers no picker. The note stays, in case
+         * one was written before these papers stopped carrying a status.
+         */
+        if ($slot && AdditionalDocuments::carriesNoStatus($slot->type)) {
+            return [
+                'status' => null,
+                'label' => null,
+                'note' => $file->review_note,
+                'reviewedAt' => null,
+                'reviewedBy' => null,
+                'canReview' => false,
+                'all' => [],
+                'next' => [],
+                'overrides' => [],
+            ];
+        }
 
         if ($slot) {
             $status = $slot->status ?? DocumentStatus::PENDING_UPLOAD;

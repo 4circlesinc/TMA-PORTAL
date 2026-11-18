@@ -63,6 +63,72 @@ class CipPostApprovalTreeTest extends TestCase
         $this->assertFalse(Tree::isPersonFolderVariant('Dependent 1', 'Dependent 2 8'));
     }
 
+    public function test_a_spouse_copy_counts_as_the_spouse_folder(): void
+    {
+        $this->assertSame('Spouse', Tree::canonicalPersonName('Spouse'));
+        $this->assertSame('Spouse', Tree::canonicalPersonName('Spouse 14'));
+        $this->assertTrue(Tree::isPersonFolderVariant('Spouse', 'Spouse 3'));
+        $this->assertFalse(Tree::isPersonFolderVariant('Spouse', 'Dependent 1'));
+    }
+
+    public function test_a_spouse_folder_is_called_spouse_and_dependants_number_among_themselves(): void
+    {
+        ['staff' => $staff, 'application' => $application] = $this->filed();
+        $this->spouse($application);
+
+        Tree::provisionPostApproval($application->fresh(['people']), $staff);
+
+        $this->assertSame(['Dependent 1', 'Main Applicant', 'Spouse'], $this->personNames($application));
+    }
+
+    public function test_a_spouse_folder_left_as_a_dependant_is_renamed_in_place_by_the_migration(): void
+    {
+        ['staff' => $staff, 'application' => $application] = $this->filed();
+        $postRoot = Folder::find($application->post_approval_folder_id);
+
+        // How the old naming left it: the spouse numbered after the child.
+        $spouse = $this->spouse($application);
+        $old = $this->numberedPerson($postRoot, $staff, 'Dependent 2');
+        $spouse->forceFill(['post_approval_folder_id' => $old->id])->save();
+        $paper = $this->fileOn($staff, $old->id, 'marriage.pdf');
+
+        $migration = require database_path('migrations/2026_11_18_120000_rename_spouse_person_folders.php');
+        $migration->up();
+
+        $this->assertSame(['Dependent 1', 'Main Applicant', 'Spouse'], $this->personNames($application));
+        $this->assertSame('Spouse', $old->fresh()->name);
+        $this->assertSame($old->id, $spouse->fresh()->post_approval_folder_id);
+        $this->assertSame($old->id, $paper->fresh()->folder_id);
+    }
+
+    /**
+     * Between the two renames the child's new name is the spouse's old one.
+     * The spouse's folder, and the papers in it, must not be folded into the
+     * child's as though it were a SharePoint copy.
+     */
+    public function test_a_dependant_never_takes_over_the_spouse_folder(): void
+    {
+        ['staff' => $staff, 'application' => $application, 'dependent' => $dependent] = $this->filed();
+        $postRoot = Folder::find($application->post_approval_folder_id);
+
+        $spouse = $this->spouse($application);
+        $spouseFolder = $this->numberedPerson($postRoot, $staff, 'Dependent 1');
+        $spouse->forceFill(['post_approval_folder_id' => $spouseFolder->id])->save();
+        $childFolder = Folder::find($dependent->post_approval_folder_id);
+        $childFolder->forceFill(['name' => 'Dependent 2'])->save();
+        $paper = $this->fileOn($staff, $spouseFolder->id, 'marriage.pdf');
+
+        // The child first: the order that used to swallow the spouse's folder.
+        Tree::postApprovalPersonFolder($dependent->fresh(), null, $staff);
+        Tree::postApprovalPersonFolder($spouse->fresh(), null, $staff);
+
+        $this->assertNotNull(Folder::find($spouseFolder->id));
+        $this->assertSame($spouseFolder->id, $spouse->fresh()->post_approval_folder_id);
+        $this->assertSame($childFolder->id, $dependent->fresh()->post_approval_folder_id);
+        $this->assertSame($spouseFolder->id, $paper->fresh()->folder_id);
+        $this->assertSame(['Dependent 1', 'Main Applicant', 'Spouse'], $this->personNames($application));
+    }
+
     public function test_provisioning_twice_does_not_mint_another_dependent_folder(): void
     {
         ['staff' => $staff, 'application' => $application] = $this->filed();
@@ -389,6 +455,17 @@ class CipPostApprovalTreeTest extends TestCase
         $root = Folder::find($application->folder_id);
 
         return compact('staff', 'application', 'dependent', 'root');
+    }
+
+    private function spouse(CipApplication $application): CipPerson
+    {
+        return CipPerson::create([
+            'application_id' => $application->id,
+            'role' => CipPerson::ROLE_DEPENDENT,
+            'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+            'first_name' => 'Mei', 'last_name' => 'Wei',
+            'date_of_birth' => now()->subYears(35),
+        ]);
     }
 
     private function numberedPerson(Folder $parent, User $staff, string $name): Folder

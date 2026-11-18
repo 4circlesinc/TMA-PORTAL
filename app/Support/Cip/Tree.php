@@ -105,6 +105,9 @@ class Tree
     /** Add-On person folder: profile and identity records. */
     public const ADD_ON_APPLICANT = 'Add-On Applicant';
 
+    /** The main applicant's spouse's folder, beside Dependent 1, 2, 3. */
+    public const SPOUSE = 'Spouse';
+
     /** Required documentation for that Add-On type. */
     public const SUPPORTING = 'Supporting Documents';
 
@@ -626,6 +629,7 @@ class Tree
             $name,
             $person->post_approval_folder_id,
             $actor,
+            $person->id,
         );
 
         if ($person->post_approval_folder_id !== $folder->id) {
@@ -650,7 +654,7 @@ class Tree
     {
         $name = trim($name);
 
-        foreach (['Main Applicant', 'Sponsor', self::ADD_ON_APPLICANT] as $label) {
+        foreach (['Main Applicant', 'Sponsor', self::SPOUSE, self::ADD_ON_APPLICANT] as $label) {
             if (preg_match('/^'.preg_quote($label, '/').'(?:\s+\(?\d+\)?)?$/iu', $name)) {
                 return $label;
             }
@@ -869,10 +873,13 @@ class Tree
      * What a person's folder is called.
      *
      * Not {@see Dependents::label}, which answers the government's question —
-     * "Qualified Dependent 2", or "Spouse", the classification section 5 computes
-     * from the dates of birth. A folder answers a simpler one: which of the
-     * dependants is this. So they run 1, 2, 3 down the tree in the order the
-     * classification puts them, and a spouse is a dependant like the rest.
+     * "Qualified Dependent 2", the classification section 5 computes from the
+     * dates of birth. A folder answers a simpler one: whose papers are these.
+     *
+     * A spouse's folder is "Spouse". It used to be numbered among the
+     * dependants ("Dependent 1"), which is not what anybody looking for the
+     * spouse's papers would open. The dependants run 1, 2, 3 down the tree
+     * among themselves, in the order the classification puts them.
      */
     public static function folderName(CipPerson $person): string
     {
@@ -886,19 +893,30 @@ class Tree
         if ($person->role === CipPerson::ROLE_SPONSOR) {
             return 'Sponsor';
         }
+        if (self::isSpouse($person)) {
+            return self::SPOUSE;
+        }
 
         // One composite key, not a list of them: sortBy() reads an array as
         // [column, direction] pairs, so passing two closures sorted by
-        // neither and a spouse came out ahead of the second qualified
-        // dependent. Unnumbered people sort last, then by id so the order is
-        // total and two dependants never swap places between renders.
+        // neither and one dependant came out ahead of another. Unnumbered
+        // people sort last, then by id so the order is total and two
+        // dependants never swap places between renders.
         $order = $person->application?->people
             ->where('role', CipPerson::ROLE_DEPENDENT)
+            ->reject(fn (CipPerson $p) => self::isSpouse($p))
             ->sortBy(fn (CipPerson $p) => ($p->dependent_ordinal ?? 9999) * 1000000 + $p->id)
             ->values()
             ->search(fn (CipPerson $p) => $p->id === $person->id);
 
         return 'Dependent '.(is_int($order) ? $order + 1 : 1);
+    }
+
+    /** A dependant on the file as the main applicant's spouse. */
+    private static function isSpouse(CipPerson $person): bool
+    {
+        return $person->role === CipPerson::ROLE_DEPENDENT
+            && $person->relationship === CipPerson::RELATIONSHIP_SPOUSE;
     }
 
     /**
@@ -908,7 +926,7 @@ class Tree
     public static function personFolder(CipPerson $person, Folder $root, ?User $actor = null): Folder
     {
         $name = self::folderName($person);
-        $folder = self::ensurePersonFolder($root, $name, $person->folder_id, $actor);
+        $folder = self::ensurePersonFolder($root, $name, $person->folder_id, $actor, $person->id);
 
         if ($person->folder_id !== $folder->id) {
             $person->forceFill(['folder_id' => $folder->id])->save();
@@ -927,7 +945,29 @@ class Tree
         $application->load('people');
         self::syncClientName($application, force: true);
 
-        foreach ($application->people as $person) {
+        self::renamePersonFolders($application);
+
+        self::pruneOrphanPersonFolders($application);
+    }
+
+    /**
+     * Each person's folders, in both trees, renamed to what
+     * {@see folderName()} calls them now. Renamed in place, never merged:
+     * the link is the id, and the papers inside stay where they are.
+     *
+     * @return int how many folders were renamed
+     */
+    public static function renamePersonFolders(CipApplication $application): int
+    {
+        $application->loadMissing('people');
+        $renamed = 0;
+
+        // The spouse first: their old "Dependent N" is the name a dependant
+        // may be about to take, and SharePoint refuses a rename onto a name
+        // a sibling still holds.
+        $people = $application->people->sortBy(fn (CipPerson $p) => (self::isSpouse($p) ? 0 : 1_000_000_000) + $p->id);
+
+        foreach ($people as $person) {
             $person->setRelation('application', $application);
             $name = self::folderName($person);
 
@@ -940,20 +980,21 @@ class Tree
                 $folder = Folder::find($folderId);
                 if ($folder && $folder->name !== $name) {
                     $folder->forceFill(['name' => $name])->save();
+                    $renamed++;
                 }
             }
         }
 
-        self::pruneOrphanPersonFolders($application);
+        return $renamed;
     }
 
     /**
-     * Soft-delete Dependent / Sponsor folders that no live person owns.
+     * Soft-delete Dependent / Spouse / Sponsor folders that no live person owns.
      *
      * Soft-deleting a duplicate dependent used to leave an empty "Dependent 8"
      * under Post-Approval Documents — Suha had four children and five folders.
      * Main Applicant / Add-On Applicant drawers are left alone even when briefly
-     * unlinked; only numbered dependents and the sponsor are pruned.
+     * unlinked; only numbered dependents, the spouse and the sponsor are pruned.
      *
      * @return int how many person folders were soft-deleted
      */
@@ -985,7 +1026,8 @@ class Tree
                     continue;
                 }
 
-                $isDependent = (bool) preg_match('/^Dependent\s+\d+$/iu', $canonical);
+                $isDependent = (bool) preg_match('/^Dependent\s+\d+$/iu', $canonical)
+                    || strcasecmp($canonical, self::SPOUSE) === 0;
                 $isSponsor = strcasecmp($canonical, 'Sponsor') === 0;
                 if (! $isDependent && ! $isSponsor) {
                     continue;
@@ -1200,8 +1242,9 @@ class Tree
         string $canonical,
         ?int $preferredId,
         ?User $actor,
+        ?int $personId = null,
     ): Folder {
-        return DB::transaction(function () use ($parent, $canonical, $preferredId, $actor) {
+        return DB::transaction(function () use ($parent, $canonical, $preferredId, $actor, $personId) {
             Folder::query()->whereKey($parent->id)->lockForUpdate()->first();
 
             $matches = Folder::query()
@@ -1210,6 +1253,32 @@ class Tree
                 ->filter(fn (Folder $child) => self::isPersonFolderVariant($canonical, $child->name))
                 ->sortBy('id')
                 ->values();
+
+            /*
+             * A folder somebody else on the file holds is theirs, whatever it
+             * is called.
+             *
+             * Names move when people do: the spouse's "Dependent 1" became
+             * "Spouse", and the dependant after it became "Dependent 1". Until
+             * both have been renamed, the dependant's new name matches the
+             * spouse's old folder, and folding that in as a "copy" would have
+             * put the spouse's papers in the dependant's folder.
+             */
+            if ($personId !== null && $matches->isNotEmpty()) {
+                $ids = $matches->pluck('id')->all();
+                $held = CipPerson::query()
+                    ->whereKeyNot($personId)
+                    ->where(fn ($query) => $query
+                        ->whereIn('folder_id', $ids)
+                        ->orWhereIn('post_approval_folder_id', $ids))
+                    ->get(['folder_id', 'post_approval_folder_id'])
+                    ->flatMap(fn (CipPerson $other) => [(int) $other->folder_id, (int) $other->post_approval_folder_id])
+                    ->all();
+
+                $matches = $matches
+                    ->reject(fn (Folder $child) => in_array((int) $child->id, $held, true))
+                    ->values();
+            }
 
             $preferred = $preferredId
                 ? $matches->first(fn (Folder $child) => $child->id === $preferredId)

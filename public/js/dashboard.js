@@ -1566,8 +1566,13 @@
      * where the module supports it (a client detail, the Overview activity tab).
      * Only genuinely cross-shell targets fall back to a real navigation.
      * Returns true once handled.
+     *
+     * `opts.inPlaceOnly`: never reload. A link inside an email is followed
+     * here only when this shell can draw it; anything else (a download, the
+     * sign-in page) gets false back and opens the way the link would have.
      */
-    function portalNavigate(path) {
+    function portalNavigate(path, opts) {
+      opts = opts || {};
       if (!path) return false;
       var base = String(path);
       var q = '';
@@ -1591,6 +1596,20 @@
           }
         }
         if (root.querySelector('.tma-dash__view[data-view="clients"]')) {
+          /*
+           * The place on the file the link names — a person's tab, one
+           * checklist line, the Confirm submission dialog — handed over
+           * before the file opens. A fresh load reads these off the
+           * address; an in-place open has no load to read them at.
+           */
+          if (contactId && window.TMAClients && window.TMAClients.position) {
+            window.TMAClients.position({
+              contactId: contactId,
+              tab: params.tab || null,
+              doc: params.doc || null,
+              confirm: params.confirm === '1',
+            });
+          }
           activate('clients', {
             view: 'clients', title: 'CIP Applications', crumb: 'CIP Applications',
             clientsScreen: contactId ? 'detail' : 'list', contactId: contactId,
@@ -1719,6 +1738,8 @@
         activate(route.navId, { view: route.view, title: route.title, crumb: route.crumb });
         return true;
       }
+
+      if (opts.inPlaceOnly) return false;
 
       // Cross-shell target this page can't render in place: real navigation.
       window.location.assign(appUrl(base + (q ? '?' + q : '')));

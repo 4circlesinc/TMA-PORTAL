@@ -209,10 +209,15 @@ class Engine
     /**
      * Edges out of the file's current status for its phase.
      *
-     * Add-On reuses the pre-approval path through Pending Review, then skips
-     * Background Check / DD Query / Delayed: from Pending Review or
-     * Non-compliant the Unit either asks for more paper or decides. Approved
+     * Add-On reuses the pre-approval path through Pending Review and
+     * Background Check, without DD Query or Delayed: from Pending Review or
+     * Non-compliant the Unit asks for more paper, accepts the Add-On for
+     * processing (Background Check), or decides it there and then. Approved
      * Add-Ons do not enter the post-approval COR lane.
+     *
+     * Background Check used to be skipped here, so only an administrator
+     * could put an Add-On there, through the override list; the firm's staff
+     * had no such step at all.
      *
      * @return list<string>
      */
@@ -255,8 +260,11 @@ class Engine
         }
 
         return match ($from) {
-            Status::PENDING_REVIEW => [Status::NON_COMPLIANT, Status::GRANTED, Status::DENIED],
-            Status::NON_COMPLIANT => [Status::PENDING_REVIEW, Status::GRANTED, Status::DENIED],
+            Status::PENDING_REVIEW => [Status::NON_COMPLIANT, Status::BACKGROUND_CHECK, Status::GRANTED, Status::DENIED],
+            Status::NON_COMPLIANT => [Status::PENDING_REVIEW, Status::BACKGROUND_CHECK, Status::GRANTED, Status::DENIED],
+            // DD Query and Delayed are refused for the lane in phaseAllows(),
+            // which leaves the decision.
+            Status::BACKGROUND_CHECK => [Status::GRANTED, Status::DENIED],
             Status::GRANTED => [Status::NEW_APPEAL],
             default => $base,
         };
@@ -667,14 +675,13 @@ class Engine
         $post = $phase === Phase::POST_APPROVAL;
 
         /*
-         * Add-On never works Background Check, the DD path, or post-approval
-         * COR collection. Those labels belong to the first filing; an Add-On
-         * that has been submitted is either asked for more paper, approved,
-         * or denied.
+         * Add-On never works the DD path or post-approval COR collection.
+         * Those labels belong to the first filing; an Add-On that has been
+         * submitted is asked for more paper, accepted for processing into
+         * Background Check, approved, or denied.
          */
         if ($phase === Phase::ADD_ON) {
             if (in_array($to, [
-                Status::BACKGROUND_CHECK,
                 Status::DD_QUERY,
                 Status::DELAYED,
                 Status::POST_APPROVAL,

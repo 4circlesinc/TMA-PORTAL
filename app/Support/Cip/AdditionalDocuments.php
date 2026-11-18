@@ -63,6 +63,33 @@ class AdditionalDocuments
     }
 
     /**
+     * Does a paper filed under this slot type go without a review status?
+     *
+     * Statuses are for the checklist's own documents: the papers the firm
+     * asked for, each read and judged. What lands in Additional Documents —
+     * this open box, and the Add-On's G1–G3 extras filed in the same drawer —
+     * is simply filed, and a chip saying "Application review" against it
+     * read as a verdict still owed on paper nobody had asked to judge.
+     *
+     * So these slots draw no chip, offer no status picker, are not sent back
+     * by a comment, and never count towards whether a package is ready.
+     */
+    public static function carriesNoStatus(?string $type): bool
+    {
+        return in_array((string) $type, self::types(), true);
+    }
+
+    /**
+     * The slot types {@see carriesNoStatus()} answers for.
+     *
+     * @return list<string>
+     */
+    public static function types(): array
+    {
+        return [self::KEY, ...AddOnRequirements::ADDITIONAL_KEYS];
+    }
+
+    /**
      * Where this box sits in the checklist: after every paper the firm names,
      * and below the post-approval packs, so it never pushes a required row
      * down the page.

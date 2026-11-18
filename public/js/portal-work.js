@@ -1054,9 +1054,10 @@
   /**
    * Back to the file, with its viewer open.
    *
-   * A full navigation rather than an in-place view swap: the File Library
-   * reads the folder and file from the URL on mount, and there is no way to
-   * hand it both through the SPA router without it clearing one of them.
+   * In place, through the shell's router, which now hands the File Library
+   * both the folder and the file (its /folders/ branch). A full navigation
+   * reloaded the whole portal to show one file; it is kept only for a shell
+   * that cannot draw the library here.
    */
   function wfOpenFile(fileId, folderId) {
     var root = window.__TMA_SITE_ROOT || '';
@@ -1065,7 +1066,14 @@
     if (folderId) params.set('folder', folderId);
     params.set('file', fileId);
 
-    window.location.assign(root + '/folders/all?' + params.toString());
+    var path = '/folders/all?' + params.toString();
+    var dash = document.querySelector('.tma-dash');
+    if (dash && typeof dash._portalNavigate === 'function'
+        && dash._portalNavigate(path, { inPlaceOnly: true }) === true) {
+      return;
+    }
+
+    window.location.assign(root + path);
   }
 
   function wfOpenApplication(clientUid) {

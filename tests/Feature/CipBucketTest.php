@@ -202,7 +202,7 @@ class CipBucketTest extends TestCase
         $this->assertSame([
             'New Add-On Applications', 'Review Applications', 'Assessment Feedback',
             'Updates Required', 'Ready to Submit', 'Pending Review', 'Non-compliant',
-            'Approved', 'Denied',
+            'Background Check', 'Approved', 'Denied',
         ], array_column($body['phases'][Phase::ADD_ON]['buckets'], 'label'));
     }
 
@@ -273,7 +273,7 @@ class CipBucketTest extends TestCase
         $this->assertSame([
             'Draft Add-Ons', 'New Add-On Applications', 'Review Applications',
             'Assessment Feedback', 'Updates Required', 'Ready to Submit',
-            'Pending Review', 'Non-compliant', 'Approved', 'Denied',
+            'Pending Review', 'Non-compliant', 'Background Check', 'Approved', 'Denied',
         ], array_column($body['phases'][Phase::ADD_ON]['buckets'], 'label'));
     }
 

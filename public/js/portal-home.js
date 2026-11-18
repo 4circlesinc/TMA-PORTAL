@@ -2193,10 +2193,10 @@
   /*
    * Back to the file, with its viewer open.
    *
-   * A full navigation rather than an in-place view swap, for the reason the
-   * Workflows page gives: the File Library reads the folder and the file from
-   * the URL on mount, and there is no way to hand it both through the SPA
-   * router without it clearing one of them.
+   * In place, through the shell's router, which hands the File Library both
+   * the folder and the file (its /folders/ branch), the way the Workflows
+   * page does. The full navigation that used to do this reloaded the whole
+   * portal; it is kept only for a shell that cannot draw the library here.
    */
   function openWorkFile(fileId, folderId) {
     if (!fileId) return;
@@ -2204,7 +2204,13 @@
     var params = new URLSearchParams();
     if (folderId) params.set('folder', folderId);
     params.set('file', fileId);
-    window.location.assign(root + '/folders/all?' + params.toString());
+    var path = '/folders/all?' + params.toString();
+    var dash = document.querySelector('.tma-dash');
+    if (dash && typeof dash._portalNavigate === 'function'
+        && dash._portalNavigate(path, { inPlaceOnly: true }) === true) {
+      return;
+    }
+    window.location.assign(root + path);
   }
 
   /* Upcoming Events, drawn by overview.js from the calendar. The tile is a

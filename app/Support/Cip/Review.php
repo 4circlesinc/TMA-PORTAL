@@ -734,16 +734,23 @@ class Review
      * the rest of the family, so the paper they never filed must not hold
      * the family's package; see {@see PersonStatus::isApart()}.
      *
+     * Nor do Additional Documents count, anywhere. They carry no status
+     * ({@see AdditionalDocuments::carriesNoStatus()}), so a paper filed there
+     * is never "unread" and can neither hold a package back nor be named as
+     * what is holding it.
+     *
      * @param  Builder<CipDocument>  $query
      * @return Builder<CipDocument>
      */
     private static function ofLivePeople(Builder $query, bool $postApproval = false): Builder
     {
-        return $query->whereHas('person', function (Builder $person) use ($postApproval) {
-            if ($postApproval) {
-                $person->whereNull('post_approval_apart');
-            }
-        });
+        return $query
+            ->whereNotIn('type', AdditionalDocuments::types())
+            ->whereHas('person', function (Builder $person) use ($postApproval) {
+                if ($postApproval) {
+                    $person->whereNull('post_approval_apart');
+                }
+            });
     }
 
     /**
@@ -793,7 +800,8 @@ class Review
         return self::rowsOf(self::constrainToPack(
             CipDocument::query()
                 ->where('application_id', $application->getKey())
-                ->where('person_id', $person->getKey()),
+                ->where('person_id', $person->getKey())
+                ->whereNotIn('type', AdditionalDocuments::types()),
             $pack,
             $application,
         ));

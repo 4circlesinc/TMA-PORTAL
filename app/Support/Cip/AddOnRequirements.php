@@ -178,8 +178,9 @@ class AddOnRequirements
     /**
      * Whether this slot belongs on the Add-On Document | Status table.
      *
-     * The passport photo is identity, not pack paper. Empty G-series extras
-     * are unnamed supplements and stay off the table until filed.
+     * The passport photo is identity, not pack paper. The G-series extras
+     * and the open Additional documents box carry no status, so they are
+     * never on it.
      */
     public static function onStatusTable(CipDocument $slot): bool
     {
@@ -187,12 +188,10 @@ class AddOnRequirements
             return false;
         }
 
-        if (self::isAdditional($slot->type) && ! $slot->isFilled()) {
-            return false;
-        }
-
-        // An empty open box is the normal state, not an outstanding document.
-        if (AdditionalDocuments::is($slot->type) && ! $slot->isFilled()) {
+        // G1–G3 and the open box are filed in Additional Documents, which
+        // carry no status, so a Document | Status table has nothing to say
+        // about them, empty or filled.
+        if (AdditionalDocuments::carriesNoStatus($slot->type)) {
             return false;
         }
 

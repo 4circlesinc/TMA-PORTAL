@@ -6992,6 +6992,23 @@
    * An optional slot nobody filled does not. No documents on the record means
    * this screen cannot judge it; the server still refuses the write.
    */
+  /*
+   * Does this checklist line carry a review status?
+   *
+   * The checklist's own documents do. What is filed in Additional Documents
+   * (the open box, an Add-On's G1–G3) does not: the server sends
+   * carriesStatus false, draws no chip for it, and leaves it out of whether
+   * the package is ready. Older payloads without the field also hold the
+   * open box by its type.
+   */
+  function cipDocCarriesStatus(d) {
+    if (!d) return false;
+    if (d.carriesStatus === false) return false;
+    if (d.carriesStatus === true) return true;
+
+    return d.type !== 'additional_documents' && !d.additional;
+  }
+
   function cipPackageReady(app) {
     var people = cipFamily(app);
     var i;
@@ -7004,7 +7021,7 @@
       docs = (people[i] && people[i].documents) || [];
       for (j = 0; j < docs.length; j++) {
         doc = docs[j];
-        if (!doc) continue;
+        if (!doc || !cipDocCarriesStatus(doc)) continue;
         if (doc.status === 'application_review' || doc.status === 'update_required') return false;
         if (doc.required && doc.status !== 'ready_for_submission') return false;
       }
@@ -7022,7 +7039,7 @@
     var rows = [];
     cipFamily(app || {}).forEach(function (person) {
       ((person && person.documents) || []).forEach(function (doc) {
-        if (!doc) return;
+        if (!doc || !cipDocCarriesStatus(doc)) return;
         var held = doc.status === 'application_review' || doc.status === 'update_required';
         if (!held && !(doc.required && doc.status !== 'ready_for_submission')) return;
         var filed = !!doc.uploaded;
@@ -7181,7 +7198,7 @@
     for (i = 0; i < people.length; i++) {
       docs = (people[i] && people[i].documents) || [];
       for (j = 0; j < docs.length; j++) {
-        if (docs[j].status === status) return true;
+        if (cipDocCarriesStatus(docs[j]) && docs[j].status === status) return true;
       }
     }
     return false;
@@ -9358,9 +9375,10 @@
     cipFamily(app).forEach(function (p) {
       ((p && p.documents) || []).forEach(function (d) {
         if (d.onStatusTable === false) return;
+        // Filed in Additional Documents: no status for a status table.
+        if (!cipDocCarriesStatus(d)) return;
         if (d.onStatusTable == null) {
           if (d.type === 'passport_photo') return;
-          if (d.additional && !d.uploaded) return;
         }
         rows.push(d);
       });
@@ -9844,12 +9862,12 @@
 
   /*
    * Section 19: the Unit accepted the file. Offered from Pending review and
-   * Non-compliant, the two edges the server accepts into Background check.
-   * Add-On skips that step and decides from Pending review / Non-compliant.
+   * Non-compliant, the two edges the server accepts into Background check,
+   * on an Add-On as on a first filing. An Add-On may also be decided
+   * straight from either, without the check.
    */
   function renderAcceptanceAction(app) {
     if (!canRecordSubmission()) return '';
-    if (app.phase === 'add_on') return '';
     if (['pending_review', 'non_compliant'].indexOf(app.status) === -1) return '';
 
     return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-accept>' +
@@ -9858,9 +9876,10 @@
 
   /*
    * Section 21: the Unit decided. Pre-approval: from Background check, DD
-   * Query or Delayed. Add-On: from Pending review or Non-compliant. Date and
-   * type are both asked for; either one without the other would leave a
-   * terminal file whose reports cannot say when, or which way.
+   * Query or Delayed. Add-On: from Pending review, Non-compliant or
+   * Background check. Date and type are both asked for; either one without
+   * the other would leave a terminal file whose reports cannot say when, or
+   * which way.
    */
   function canRecordDecision() {
     var access = window.TMAPortalAccess;
@@ -9871,7 +9890,7 @@
   function renderDecisionAction(app) {
     if (!canRecordDecision()) return '';
     if (app.phase === 'add_on') {
-      if (['pending_review', 'non_compliant'].indexOf(app.status) === -1) return '';
+      if (['pending_review', 'non_compliant', 'background_check'].indexOf(app.status) === -1) return '';
     } else if (['background_check', 'dd_query', 'delayed'].indexOf(app.status) === -1) {
       return '';
     }
@@ -9888,13 +9907,19 @@
     return !!(access && access.can && access.can('cip.review'));
   }
 
+  /*
+   * An approved file's next stage, as a button where Confirm submission
+   * stands earlier in the lifecycle. Green: it is the file going on, not a
+   * correction. It is the one way in — the status menu no longer offers a
+   * "Post-approval override" row on a pre-approval file.
+   */
   function renderPostApprovalAction(app) {
     if (!canEnterPostApproval()) return '';
     if (app.phase === 'post_approval' || app.phase === 'add_on') return '';
     if (app.status !== 'granted') return '';
 
-    return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--primary" data-cip-post-approval>' +
-      'Move to post-approval</button>';
+    return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--go" data-cip-post-approval>' +
+      'Move on to post-approval</button>';
   }
 
   var CIP_STAGES = {
@@ -10619,8 +10644,10 @@
               '<span>' + esc(d.label || 'Document') +
               (d.required === false ? ' <span class="tma-dash__clients-checklist-optional">Optional</span>' : '') +
               '</span></label>' +
-              '<span class="tma-portal-status tma-portal-status--' + esc(d.statusTone || 'neutral') +
-              ' tma-portal-status--inline">' + esc(d.statusLabel || 'Pending upload') + '</span>' +
+              (cipDocCarriesStatus(d)
+                ? '<span class="tma-portal-status tma-portal-status--' + esc(d.statusTone || 'neutral') +
+                  ' tma-portal-status--inline">' + esc(d.statusLabel || 'Pending upload') + '</span>'
+                : '') +
               '</li>';
           }).join('') +
           '</ul></section>';
@@ -10886,7 +10913,10 @@
       ? '<p class="tma-portal-drop__update-reason"><strong>Update required.</strong> ' + esc(d.updateReason) + '</p>'
       : '';
     var chip = '';
-    if (filed && d.fileId && d.canReview) {
+    if (!cipDocCarriesStatus(d)) {
+      // Filed in Additional Documents: no status, only the conversation.
+      chip = filed ? clientCommentChip(d) : '';
+    } else if (filed && d.fileId && d.canReview) {
       chip =
         clientCommentChip(d) +
         '<span class="tma-portal-status tma-portal-status--' + esc(tone) +
@@ -10943,9 +10973,11 @@
         '</button>' +
         chip +
         '<p class="tma-portal-drop__locked-note">' +
-        (d.status === 'application_review' || d.status === 'ready_for_submission'
-          ? 'Filed and in ' + esc(status) + '. Use <strong>Upload new version</strong> in the file viewer to replace.'
-          : 'This document cannot be replaced from here.') +
+        (!cipDocCarriesStatus(d)
+          ? 'Filed. Use <strong>Upload new version</strong> in the file viewer to replace.'
+          : (d.status === 'application_review' || d.status === 'ready_for_submission'
+            ? 'Filed and in ' + esc(status) + '. Use <strong>Upload new version</strong> in the file viewer to replace.'
+            : 'This document cannot be replaced from here.')) +
         '</p></div>';
     }
 
@@ -11172,7 +11204,10 @@
         : '<span class="tma-portal-field__required" aria-hidden="true">*</span>') +
       '</span>';
     var chip;
-    if (filed && d.fileId && d.canReview) {
+    if (!cipDocCarriesStatus(d)) {
+      // Filed in Additional Documents: no status, only the conversation.
+      chip = clientCommentChip(d);
+    } else if (filed && d.fileId && d.canReview) {
       chip =
         clientCommentChip(d) +
         '<span class="tma-portal-status tma-portal-status--' + esc(tone) +
@@ -15539,14 +15574,21 @@
     var body = renderCipStatusHold(menu.hold) +
       renderCipStatusLaneBody(own, ownLocked, menu.current, order);
 
-    var otherAll = other.concat(otherLocked);
+    /*
+     * Only a post-approval file has the other lane behind a row.
+     *
+     * A pre-approval file goes on to post-approval once it is approved, by
+     * the green "Move on to post-approval" button in the application bar
+     * (and the Post-Approval row an Approved file already has in its own
+     * list). A "Post-approval override" row beside it read as nonsense: the
+     * next stage is not an override of anything.
+     */
+    var otherAll = menu.lane === 'post_approval' ? other.concat(otherLocked) : [];
     if (!otherAll.length) return body || renderCipStatusSub([], menu.current);
 
     // Named for the lane it opens, not for who may press it: "Admin
     // override" said nothing about what was behind it.
-    var label = menu.lane === 'post_approval'
-      ? 'Pre-approval override'
-      : 'Post-approval override';
+    var label = 'Pre-approval override';
 
     return body +
       '<div class="tma-portal-context-menu__sep" role="separator"></div>' +
@@ -17872,7 +17914,7 @@
     }
 
     ui.openModal({
-      title: 'Move to post-approval?',
+      title: 'Move on to post-approval?',
       body:
         '<p class="tma-portal-modal__text">' +
         'Would you like to place this applicant in Post-Approval?</p>' +
@@ -17880,7 +17922,7 @@
         cipStatusCcHtml() +
         '<div class="tma-portal-modal__foot">' +
         '<button type="button" class="tma-no-data__btn tma-portal-btn--ghost" data-cip-decline-post>Not now</button>' +
-        '<button type="button" class="tma-no-data__btn" data-cip-confirm-post>Move to post-approval</button>' +
+        '<button type="button" class="tma-no-data__btn tma-portal-btn--go" data-cip-confirm-post>Move on to post-approval</button>' +
         '</div>',
       onMount: function (el) {
         wireCipStatusAttachment(el);
@@ -17908,7 +17950,7 @@
             })
             .catch(function (err) {
               confirm.disabled = false;
-              confirm.textContent = 'Move to post-approval';
+              confirm.textContent = 'Move on to post-approval';
               clientsToast((err && err.message) || 'Could not move to post-approval.', 'negative');
             });
         });
@@ -23091,6 +23133,42 @@
       clientsMountRoot._clientsController.syncRoute(parsed);
     },
     routeFromPath: parseClientsPath,
+    /*
+     * Where on a file an in-place link lands: a person's tab, one checklist
+     * line, the Confirm submission dialog. The same three a fresh load reads
+     * off the address (BOOT_POSITION), set by dashboard.js just before it
+     * opens the file. A file not yet open claims them as it paints; the one
+     * already on screen is moved at once, since it will not paint again.
+     */
+    position: function (pos) {
+      pos = pos || {};
+      var state = clientsMountState;
+      var here = !!(state && pos.contactId && state.selectedId === pos.contactId);
+
+      if (pos.tab) {
+        BOOT_POSITION.tab = pos.tab;
+        if (state) state.profileTab = pos.tab;
+      }
+
+      if (!here) {
+        if (pos.doc) BOOT_POSITION.doc = pos.doc;
+        if (pos.confirm) BOOT_POSITION.confirm = true;
+        return;
+      }
+
+      var controller = clientsMountRoot && clientsMountRoot._clientsController;
+      setTimeout(function () {
+        if (controller && controller.render) controller.render();
+        if (pos.doc) revealNoticeDocument(pos.doc);
+        if (pos.confirm && controller) {
+          var app = applicationFor(pos.contactId);
+          var open = app && app.canConfirm &&
+            ((app.status === 'ready_to_submit' && !app.locked) ||
+             (app.status === 'apply_for_cor' && !app.corLocked));
+          if (open) openConfirmSubmissionDialog(controller.state, controller.render);
+        }
+      }, 0);
+    },
     openQueuedApplication: openQueuedApplication,
     // Where the intake form for a new filing (by phase) or an edit (by id)
     // lives, for screens outside this view that need to open it.

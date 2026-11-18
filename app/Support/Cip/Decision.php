@@ -24,7 +24,8 @@ use Illuminate\Validation\ValidationException;
  * The status change goes through the engine, not around it: permission is
  * still `cip.decide`, and the outcome and its date are written before the
  * row moves. A pre-approval decision lands from Background check, DD Query
- * or Delayed; an Add-On decision lands from Pending review or Non-compliant;
+ * or Delayed; an Add-On decision lands from Pending review, Non-compliant
+ * or Background check;
  * post-approval uses its own pair at the start of that lane.
  */
 class Decision
@@ -110,7 +111,7 @@ class Decision
             throw new \InvalidArgumentException(
                 match ($phase) {
                     Phase::POST_APPROVAL => 'A post-approval decision is recorded when the file enters the lane, before the COR stage begins.',
-                    Phase::ADD_ON => 'A decision can only be recorded on an Add-On in Pending review or Non-compliant.',
+                    Phase::ADD_ON => 'A decision can only be recorded on an Add-On in Pending review, Non-compliant or Background check.',
                     default => 'A decision can only be recorded on an application in Background check, DD Query or Delayed.',
                 },
             );

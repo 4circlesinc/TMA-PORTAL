@@ -92,6 +92,16 @@
 
 .tma-portal-btn--ghost .tma-no-data__btn-icon { filter: none; opacity: 0.7; }
 
+/* The file going on to its next stage (Move on to post-approval). Green
+   with white type; #15803d rather than the status chips' lighter green so
+   12px white text still reads at 4.5:1. */
+.tma-portal-btn--go {
+  background: #15803d;
+  color: #fff;
+}
+
+.tma-portal-btn--go:hover { filter: none; background: #166534; }
+
 .tma-portal-btn--danger {
   background: var(--color-hover);
   color: var(--color-red);

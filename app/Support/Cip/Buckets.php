@@ -340,7 +340,7 @@ class Buckets
      * four personal queues on every lane; a file they hold that has moved
      * into post-approval is work on the post-approval card, not a leftover
      * on the pre-approval one. Add-On is the same widget with the queues
-     * that lane actually uses: no Background Check / DD Query / Delayed,
+     * that lane actually uses: no DD Query / Delayed,
      * New Applications renamed New Add-On Applications, and Draft Add-Ons
      * on the provider card.
      *
@@ -379,9 +379,13 @@ class Buckets
             self::FILTER => self::POST_APPROVAL_PIPELINE,
         ],
         Phase::ADD_ON => [
+            // Background Check is an Add-On step too, once the Unit accepts
+            // one for processing; without its own bucket an Add-On sitting
+            // there would drop off every card.
             self::ADMINISTRATOR => [
                 'new', 'review_application', 'assessment_feedback', 'update_required',
-                'ready_to_submit', 'pending_review', 'non_compliant', 'approved', 'denied',
+                'ready_to_submit', 'pending_review', 'non_compliant', 'background_check',
+                'approved', 'denied',
             ],
             self::REVIEWING_OFFICER => [
                 'assigned_reviews', 'reviews_pending', 'assessment_feedback_tasks',
@@ -395,7 +399,7 @@ class Buckets
             self::SERVICE_PROVIDER => [
                 'draft', 'new', 'review_application', 'assessment_feedback',
                 'update_required', 'ready_to_submit', 'pending_review',
-                'non_compliant', 'approved', 'denied',
+                'non_compliant', 'background_check', 'approved', 'denied',
             ],
             // The provider card's list, which is the administrator's with
             // Draft Add-Ons in front: the one lane where a draft is a real
@@ -403,7 +407,7 @@ class Buckets
             self::FILTER => [
                 'draft', 'new', 'review_application', 'assessment_feedback',
                 'update_required', 'ready_to_submit', 'pending_review',
-                'non_compliant', 'approved', 'denied',
+                'non_compliant', 'background_check', 'approved', 'denied',
             ],
         ],
     ];
