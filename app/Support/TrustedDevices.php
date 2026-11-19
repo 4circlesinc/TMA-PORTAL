@@ -2,8 +2,8 @@
 
 namespace App\Support;
 
-use App\Models\TrustedDevice;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Str;
@@ -29,12 +29,17 @@ class TrustedDevices
         return SecurityPolicies::sessionDays();
     }
 
-    public static function issue(User $user, Request $request): SymfonyCookie
+    /**
+     * Trust this browser for this account. Reuses the browser's token when it
+     * already has one (another account trusted it), so trusting it for one
+     * account never takes the trust away from another.
+     */
+    public static function issue(User $user, Request $request, ?string $token = null): SymfonyCookie
     {
-        $token = Str::random(64);
+        $token ??= Str::random(64);
 
         $user->trustedDevices()->create([
-            'token_hash' => hash('sha256', $token),
+            'token_hash' => self::hashFor($user, $token),
             'device' => DeviceName::describe((string) $request->userAgent()),
             'ip' => $request->ip(),
             'last_used_at' => now(),
@@ -51,24 +56,27 @@ class TrustedDevices
     {
         $token = (string) $request->cookie(self::COOKIE);
 
-        if ($token !== '') {
-            $device = $user->trustedDevices()
-                ->where('token_hash', hash('sha256', $token))
-                ->first();
-
-            if ($device) {
-                $device->forceFill([
-                    'last_used_at' => now(),
-                    'device' => DeviceName::describe((string) $request->userAgent()),
-                    'ip' => $request->ip(),
-                    'expires_at' => now()->addDays(self::days()),
-                ])->save();
-
-                return self::cookie($token, $request);
-            }
+        if (! self::isToken($token)) {
+            return self::issue($user, $request);
         }
 
-        return self::issue($user, $request);
+        $device = self::rowFor($user, $token)->first();
+
+        if ($device) {
+            $device->forceFill([
+                'last_used_at' => now(),
+                'device' => DeviceName::describe((string) $request->userAgent()),
+                'ip' => $request->ip(),
+                'expires_at' => now()->addDays(self::days()),
+            ])->save();
+
+            return self::cookie($token, $request);
+        }
+
+        // The browser already holds a token for another account. Minting a
+        // new one here replaced it, which is how one person with two accounts
+        // kept being asked for a code: each trust undid the other.
+        return self::issue($user, $request, $token);
     }
 
     /**
@@ -78,12 +86,11 @@ class TrustedDevices
     {
         $token = (string) $request->cookie(self::COOKIE);
 
-        if ($token === '') {
+        if (! self::isToken($token)) {
             return false;
         }
 
-        $device = $user->trustedDevices()
-            ->where('token_hash', hash('sha256', $token))
+        $device = self::rowFor($user, $token)
             ->where('expires_at', '>', now())
             ->first();
 
@@ -100,15 +107,47 @@ class TrustedDevices
         return true;
     }
 
-    public static function forget(Request $request): SymfonyCookie
+    /**
+     * Stop trusting this browser for this account. Other accounts that
+     * trusted the same browser keep their own trust.
+     */
+    public static function forget(User $user, Request $request): SymfonyCookie
     {
         $token = (string) $request->cookie(self::COOKIE);
 
-        if ($token !== '') {
-            TrustedDevice::where('token_hash', hash('sha256', $token))->delete();
+        if (self::isToken($token)) {
+            self::rowFor($user, $token)->delete();
         }
 
         return Cookie::forget(self::COOKIE);
+    }
+
+    /**
+     * Each account's row is filed under the browser's token and the account
+     * together, so one token can stand for several accounts (the token_hash
+     * column is unique) and no account's trust ever stands in for another's.
+     */
+    private static function hashFor(User $user, string $token): string
+    {
+        return hash('sha256', $user->getKey().'|'.$token);
+    }
+
+    /**
+     * This account's row for this browser. Rows written before tokens were
+     * scoped to the account were hashed from the token alone; still honoured.
+     */
+    private static function rowFor(User $user, string $token): HasMany
+    {
+        return $user->trustedDevices()->whereIn('token_hash', [
+            self::hashFor($user, $token),
+            hash('sha256', $token),
+        ]);
+    }
+
+    /** Only a token this class minted is ever reused or looked up. */
+    private static function isToken(string $token): bool
+    {
+        return preg_match('/^[A-Za-z0-9]{64}$/', $token) === 1;
     }
 
     private static function cookie(string $token, Request $request): SymfonyCookie
