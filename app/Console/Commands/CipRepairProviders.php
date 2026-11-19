@@ -261,7 +261,10 @@ class CipRepairProviders extends Command
             $client = $byFolder->get($folder->id) ?? ($folder->client_id ? $byId->get($folder->client_id) : null);
             $companyId = $client?->referred_by_company_id;
             $provider = $companyId ? $providers->get($companyId) : null;
-            $destination = $provider?->folder;
+            // A folder the old library imported stays in that library. Moving
+            // it into the TMA CIP Applications Portal would take it out from
+            // under the sync that still owns it.
+            $destination = $provider?->drawerFor($folder);
             $waiting = $destination === null && $companyId && ($provider !== null || isset($pending[$companyId]));
 
             return [

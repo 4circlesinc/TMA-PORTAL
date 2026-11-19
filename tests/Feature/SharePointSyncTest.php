@@ -77,6 +77,17 @@ class SharePointSyncTest extends TestCase
     /** Every delta URL the fake was asked for, in order. */
     protected array $deltaCalls = [];
 
+    /** A delta token Graph no longer recognises: any link carrying it answers 410. */
+    protected ?string $goneDeltaToken = null;
+
+    /**
+     * Items found by name inside a folder, keyed "parentId/Name". Anything
+     * not listed answers 404, the way Graph does for a name it lacks.
+     *
+     * @var array<string, array>
+     */
+    protected array $remoteByPath = [];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -175,6 +186,19 @@ class SharePointSyncTest extends TestCase
                 if (preg_match('#/items/([^/:?]+)/content#', $url, $m)) {
                     return Http::response(['id' => $m[1], 'cTag' => 'c:NEW', 'name' => 'Brief.txt', 'size' => 10]);
                 }
+            }
+            if ($request->method() === 'GET' && preg_match('#/items/([^/]+):/([^?:]+)$#', $url, $m)) {
+                $key = $m[1].'/'.rawurldecode($m[2]);
+
+                return isset($this->remoteByPath[$key])
+                    ? Http::response($this->remoteByPath[$key])
+                    : Http::response(['error' => ['code' => 'itemNotFound', 'message' => 'Item not found']], 404);
+            }
+            if ($this->goneDeltaToken !== null && str_contains($url, $this->goneDeltaToken)) {
+                $this->deltaCalls[] = $url;
+
+                return Http::response(['error' => ['code' => 'resyncRequired', 'message' => 'Resync required']], 410,
+                    ['Location' => 'https://graph.microsoft.com/v1.0/drives/drive-1/root/delta?token=']);
             }
             if (str_contains($url, '/root/delta')) {
                 $this->deltaCalls[] = $url;
@@ -1989,5 +2013,238 @@ class SharePointSyncTest extends TestCase
         Synchroniser::sync($this->connection);
 
         $this->assertMovedInSharePoint('g-client', 'g-b');
+    }
+
+    /** "METHOD url" of every Graph call after the first $from recorded ones. */
+    private function graphCallsSince(int $from): array
+    {
+        return Http::recorded()->slice($from)
+            ->map(fn ($pair) => $pair[0]->method().' '.urldecode($pair[0]->url()))
+            ->reject(fn ($line) => str_contains($line, 'login.microsoftonline.com'))
+            ->values()->all();
+    }
+
+    /** Import one file and fetch its bytes, with pushes held so nothing else moves. */
+    private function importedAndOpened(string $id = 'i-1'): FileItem
+    {
+        $this->fakeGraph([$this->fileItem($id, 'Brief.txt', 'c:1')], [['id' => $id]], 'v1 bytes');
+        Synchroniser::sync($this->connection);
+        $file = FileItem::where('name', 'Brief.txt')->firstOrFail();
+        Pusher::suspend(fn () => RemoteContent::ensure($file));
+
+        return $file->fresh();
+    }
+
+    /**
+     * Opening an imported file fetches its bytes FROM SharePoint; it must not
+     * then send them straight back. That echo wrote a new SharePoint version
+     * and an app "Modified by" on every file anybody opened.
+     */
+    public function test_opening_an_imported_file_does_not_upload_it_back(): void
+    {
+        $this->fakeGraph([$this->fileItem('i-1', 'Brief.txt', 'c:1')], [['id' => 'i-1']], 'the real bytes');
+        Synchroniser::sync($this->connection);
+        $file = FileItem::where('name', 'Brief.txt')->firstOrFail();
+        $this->remoteItem = $this->fileItem('i-1', 'Brief.txt', 'c:1');
+
+        $from = Http::recorded()->count();
+        $this->assertTrue(RemoteContent::ensure($file));
+
+        $uploads = array_filter($this->graphCallsSince($from), fn ($c) => str_starts_with($c, 'PUT '));
+        $this->assertSame([], array_values($uploads));
+    }
+
+    /**
+     * A SharePoint edit whose download blipped is retried as a PULL. It used
+     * to be retried as a push, and "portal wins" uploaded the stale portal
+     * copy straight over the colleague's edit.
+     */
+    public function test_a_failed_pull_is_retried_as_a_pull_not_pushed_over_the_edit(): void
+    {
+        $file = $this->importedAndOpened();
+        DB::table('files')->where('id', $file->id)->update(['origin' => 'portal']);
+
+        $edited = $this->fileItem('i-1', 'Brief.txt', 'c:2');
+        $this->fakeGraph([$edited], [['id' => 'i-1']], 'v2 edited in SharePoint');
+        $this->remoteItem = $edited;
+        $this->failContentFor = 'i-1';
+        Synchroniser::sync($this->connection->fresh());
+
+        $mapping = SharePointItem::where('graph_item_id', 'i-1')->firstOrFail();
+        $this->assertSame(SharePointItem::FAILED, $mapping->sync_status);
+        $this->assertSame(SharePointItem::PULL, $mapping->failed_direction);
+
+        $this->failContentFor = null;
+        $this->travel(11)->minutes();
+        $from = Http::recorded()->count();
+        (new RetrySharePointFailures)->handle();
+
+        $uploads = array_filter($this->graphCallsSince($from), fn ($c) => str_starts_with($c, 'PUT '));
+        $this->assertSame([], array_values($uploads), 'the stale portal copy was pushed over the edit');
+        $this->assertSame(2, FileVersion::where('file_id', $file->id)->count(), 'the edit arrived as version 2');
+        $this->assertSame(SharePointItem::SYNCED, $mapping->fresh()->sync_status);
+    }
+
+    /** Edits keep arriving after the administrator who connected the library leaves. */
+    public function test_sharepoint_edits_still_arrive_after_the_connecting_admin_is_removed(): void
+    {
+        $file = $this->importedAndOpened();
+        $partner = User::create(['name' => 'Partner', 'email' => 'partner@example.com', 'password' => bcrypt('x')]);
+        $partner->forceFill(['status' => 'approved', 'account_type' => 'Administrator'])->save();
+
+        $this->owner->delete();
+
+        $this->fakeGraph([$this->fileItem('i-1', 'Brief.txt', 'c:2')], [['id' => 'i-1']], 'v2 edited in SharePoint');
+        Synchroniser::sync($this->connection->fresh());
+
+        $this->assertSame(2, FileVersion::where('file_id', $file->id)->count());
+    }
+
+    /**
+     * An expired change cursor starts the walk over instead of failing every
+     * minute for ever. Graph answers 410 once a token can no longer be
+     * resumed, and the only way forward is a fresh enumeration.
+     */
+    public function test_an_expired_delta_cursor_starts_the_walk_again(): void
+    {
+        $this->connection->update([
+            'delta_link' => 'https://graph.microsoft.com/v1.0/drives/drive-1/root/delta?token=EXPIRED',
+            'last_success_at' => now()->subDay(),
+        ]);
+        $this->goneDeltaToken = 'token=EXPIRED';
+        $this->fakeGraph([$this->fileItem('i-1', 'Brief.txt', 'c:1')], [['id' => 'i-1']]);
+
+        $stats = Synchroniser::sync($this->connection->fresh());
+
+        $this->assertArrayNotHasKey('error', $stats);
+        $connection = $this->connection->fresh();
+        $this->assertStringContainsString('token=NEXT', (string) $connection->delta_link);
+        $this->assertSame(SharePointConnection::STATUS_IDLE, $connection->status);
+        $this->assertTrue(FileItem::where('name', 'Brief.txt')->exists());
+    }
+
+    /**
+     * A brand-new item that fails to import leaves a FAILED row, so the
+     * retry sweep can bring it in. Without one there was nothing to retry,
+     * and the cursor had already moved past it.
+     */
+    public function test_a_new_item_that_fails_to_import_is_recorded_and_retried(): void
+    {
+        $failOnce = true;
+        FileItem::creating(function () use (&$failOnce) {
+            if ($failOnce) {
+                $failOnce = false;
+                throw new \RuntimeException('database blip');
+            }
+        });
+
+        $this->fakeGraph([$this->fileItem('i-9', 'Late.txt', 'c:1')], [['id' => 'i-9']]);
+        $stats = Synchroniser::sync($this->connection);
+
+        $this->assertSame(1, $stats['failed']);
+        $row = SharePointItem::where('graph_item_id', 'i-9')->firstOrFail();
+        $this->assertSame(SharePointItem::FAILED, $row->sync_status);
+        $this->assertNull($row->file_id);
+
+        $this->remoteItem = $this->fileItem('i-9', 'Late.txt', 'c:1');
+        $this->travel(11)->minutes();
+        (new RetrySharePointFailures)->handle();
+
+        $file = FileItem::where('name', 'Late.txt')->first();
+        $this->assertNotNull($file, 'the retry imported it');
+        $this->assertSame($file->id, $row->fresh()->file_id);
+        $this->assertSame(1, FileItem::where('name', 'Late.txt')->count());
+    }
+
+    /**
+     * The old copy of a folder that moved to another library is an archive:
+     * renames, edits, new files and deletions there never reach the portal,
+     * and never drag the moved folder back.
+     */
+    public function test_an_archived_copy_is_left_alone_by_the_inbound_sync(): void
+    {
+        $folderItem = ['id' => 'f-1', 'name' => 'Client A', 'folder' => ['childCount' => 1],
+            'eTag' => '"f-1,1"', 'parentReference' => ['id' => 'root-1']];
+        $this->fakeGraph([$folderItem, $this->fileItem('i-2', 'Scan.txt', 'c:1', 'f-1')], [['id' => 'f-1']]);
+        Synchroniser::sync($this->connection);
+
+        $folder = Folder::where('name', 'Client A')->firstOrFail();
+        $file = FileItem::where('name', 'Scan.txt')->firstOrFail();
+        SharePointItem::whereIn('graph_item_id', ['f-1', 'i-2'])
+            ->update(['archived_at' => now(), 'folder_id' => null, 'file_id' => null]);
+
+        $this->fakeGraph([
+            ['eTag' => '"f-1,2"', 'name' => 'Renamed in the archive'] + $folderItem,
+            $this->fileItem('i-2', 'Scan.txt', 'c:2', 'f-1'),
+            $this->fileItem('i-3', 'Added to the archive.txt', 'c:1', 'f-1'),
+        ], [['id' => 'f-1']]);
+        Synchroniser::sync($this->connection->fresh());
+
+        $this->assertSame('Client A', $folder->fresh()->name);
+        $this->assertSame(1, FileVersion::where('file_id', $file->id)->count());
+        $this->assertFalse(FileItem::where('name', 'Added to the archive.txt')->exists());
+        $this->assertTrue(SharePointItem::where('graph_item_id', 'i-3')->firstOrFail()->isArchived());
+
+        $this->fakeGraph([['id' => 'i-2', 'deleted' => ['state' => 'deleted'], 'parentReference' => ['id' => 'f-1']]]);
+        Synchroniser::sync($this->connection->fresh());
+
+        $this->assertFalse($file->fresh()->trashed(), 'deleting the archive copy must not bin the moved file');
+    }
+
+    /**
+     * A folder the portal makes reuses a same-named SharePoint folder that is
+     * already there, instead of letting Graph create "Client A 1" beside it.
+     */
+    public function test_a_new_folder_adopts_an_existing_sharepoint_folder_of_the_same_name(): void
+    {
+        $this->remoteByPath['root-1/Client A'] = [
+            'id' => 'g-existing', 'name' => 'Client A', 'folder' => ['childCount' => 3],
+            'eTag' => '"g-existing,1"', 'parentReference' => ['id' => 'root-1'],
+        ];
+        $folder = $this->portalFolder('Client A', $this->connection->folder_id);
+
+        $this->assertSame('ok', Pusher::pushFolder($folder)['status']);
+
+        Http::assertNotSent(fn (Request $r) => $r->method() === 'POST' && str_contains($r->url(), '/children'));
+        $this->assertSame('g-existing', SharePointItem::where('folder_id', $folder->id)->value('graph_item_id'));
+    }
+
+    /** Identical bytes already in SharePoint are adopted, not uploaded a second time. */
+    public function test_a_new_file_adopts_identical_bytes_already_in_sharepoint(): void
+    {
+        $stream = fopen('php://memory', 'r+');
+        fwrite($stream, 'portal-bytes');
+        rewind($stream);
+        $hash = QuickXorHash::ofStream($stream);
+        fclose($stream);
+
+        $this->remoteByPath['root-1/Doc.txt'] = [
+            'id' => 'i-doc', 'name' => 'Doc.txt', 'size' => 12, 'eTag' => '"i-doc,1"', 'cTag' => 'c:doc',
+            'file' => ['mimeType' => 'text/plain', 'hashes' => ['quickXorHash' => $hash]],
+            'parentReference' => ['id' => 'root-1'],
+        ];
+        $file = $this->portalFile('Doc.txt', $this->connection->folder_id);
+
+        $this->assertSame('adopted', Pusher::pushFile($file)['status']);
+
+        Http::assertNotSent(fn (Request $r) => $r->method() === 'PUT');
+        $this->assertSame('i-doc', SharePointItem::where('file_id', $file->id)->value('graph_item_id'));
+    }
+
+    /** A document a person already holds under that name is kept: the upload goes beside it. */
+    public function test_a_new_file_never_overwrites_a_document_a_person_put_in_sharepoint(): void
+    {
+        $this->remoteByPath['root-1/Doc.txt'] = [
+            'id' => 'i-theirs', 'name' => 'Doc.txt', 'size' => 99, 'eTag' => '"i-theirs,1"', 'cTag' => 'c:t',
+            'file' => ['mimeType' => 'text/plain', 'hashes' => ['quickXorHash' => 'somethingElse=']],
+            'lastModifiedBy' => ['user' => ['displayName' => 'A Colleague']],
+            'parentReference' => ['id' => 'root-1'],
+        ];
+        $file = $this->portalFile('Doc.txt', $this->connection->folder_id);
+
+        $this->assertSame('pushed', Pusher::pushFile($file)['status']);
+
+        Http::assertSent(fn (Request $r) => $r->method() === 'PUT'
+            && str_contains(urldecode($r->url()), 'conflictBehavior=rename'));
     }
 }

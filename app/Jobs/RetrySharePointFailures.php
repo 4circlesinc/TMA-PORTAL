@@ -50,6 +50,7 @@ class RetrySharePointFailures implements ShouldBeUnique, ShouldQueue
         $candidates = SharePointItem::query()
             ->where('sync_status', SharePointItem::FAILED)
             ->where('failure_count', '<', self::MAX_ATTEMPTS)
+            ->whereNull('archived_at')
             ->with('connection')
             ->orderBy('updated_at')
             ->limit(self::BATCH)
@@ -84,6 +85,18 @@ class RetrySharePointFailures implements ShouldBeUnique, ShouldQueue
      */
     private function retryPush(SharePointItem $mapping): bool
     {
+        /*
+         * Only a row that failed on the way OUT is pushed again. A failed pull
+         * (a SharePoint edit whose download blipped) used to come through
+         * here too, and "portal wins" then uploaded the stale portal copy
+         * over the colleague's edit. Rows from before the direction was
+         * recorded go the pull way: re-reading SharePoint can never overwrite
+         * anybody's work, and the portal keeps its own copy either way.
+         */
+        if ($mapping->failed_direction !== SharePointItem::PUSH) {
+            return false;
+        }
+
         if (! $mapping->file_id || ! $mapping->connection->pushesBack()) {
             return false;
         }

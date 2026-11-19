@@ -219,11 +219,12 @@ class Synchroniser
         $link = $connection->delta_link;
         $changedFolders = [];
         $caughtUp = false;
+        $resynced = false;
         $startedAt = microtime(true);
 
         try {
             // Inbound writes must never bounce back out as outbound pushes.
-            Pusher::suspend(function () use ($connection, &$link, &$changedFolders, &$stats, &$caughtUp, $startedAt) {
+            Pusher::suspend(function () use ($connection, &$link, &$changedFolders, &$stats, &$caughtUp, &$resynced, $startedAt) {
                 for ($page = 0; $page < self::maxPages(); $page++) {
                     // Out of clock: stop cleanly on the saved cursor and let
                     // the chained follow-up run continue, rather than being
@@ -232,7 +233,7 @@ class Synchroniser
                         break;
                     }
 
-                    $batch = Drive::delta($connection->drive_id, $link, $connection->root_item_id);
+                    $batch = self::deltaPage($connection, $link, $resynced);
                     $stats['pages']++;
 
                     // One query for this page's mappings, then none per item.
@@ -262,6 +263,11 @@ class Synchroniser
 
                         try {
                             self::apply($connection, $item, $stats);
+                        } catch (GraphThrottledException $e) {
+                            // Graph wants a pause: stop the run on the saved
+                            // cursor. Carrying on would fail every remaining
+                            // item and ignore the Retry-After it just sent.
+                            throw $e;
                         } catch (\Throwable $e) {
                             // Section 26: record the failure against the item and keep
                             // going. One unreadable file must not stall a library.
@@ -301,7 +307,10 @@ class Synchroniser
                  * stale to find yet: the first incremental pass after the
                  * cursor exists reconciles any folder that changes.
                  */
-                if ($connection->last_success_at !== null) {
+                // A resync replays every folder, exactly like a first import,
+                // so the same reasoning applies: listing them all would be
+                // tens of thousands of calls to settle what this run just read.
+                if ($connection->last_success_at !== null && ! $resynced) {
                     self::reconcileDeletions($connection, $changedFolders, $stats);
                 }
             });
@@ -358,6 +367,37 @@ class Synchroniser
         }
 
         return $stats;
+    }
+
+    /**
+     * One page of the change feed, starting over once if Graph has expired
+     * the cursor.
+     *
+     * Graph answers 410 when it can no longer resume from a token (it aged
+     * out, or the tenant was migrated). Keeping that token meant the same
+     * 410 every minute for ever, with the library frozen at its last good
+     * run. A fresh walk is cheap here: every unchanged item stops at the
+     * eTag check in apply().
+     */
+    private static function deltaPage(SharePointConnection $connection, ?string &$link, bool &$resynced): array
+    {
+        try {
+            return Drive::delta($connection->drive_id, $link, $connection->root_item_id);
+        } catch (GraphThrottledException $e) {
+            throw $e;
+        } catch (GraphException $e) {
+            if ($e->status !== 410 || $resynced) {
+                throw $e;
+            }
+
+            $resynced = true;
+            $link = null;
+            $connection->update(['delta_link' => null]);
+            self::log($connection, 'resync', 'warning', null,
+                'Graph expired the change cursor; walking the library again from the start.');
+
+            return Drive::delta($connection->drive_id, null, $connection->root_item_id);
+        }
     }
 
     /** Divergent folders sent to Graph per pass; the rest wait a minute. */
@@ -472,6 +512,8 @@ class Synchroniser
                 // too big to hold in memory.
                 SharePointItem::where('connection_id', $connection->id)
                     ->where('graph_parent_id', $graphFolderId)
+                    // An archive copy has no portal row to recycle or restore.
+                    ->whereNull('archived_at')
                     ->chunkById(self::CHUNK, function ($mappings) use ($connection, $present, &$stats) {
                         foreach ($mappings as $mapping) {
                             self::settle($connection, $mapping, $present, $stats);
@@ -588,6 +630,13 @@ class Synchroniser
 
         $mapping = self::mappingFor($connection, $graphId);
 
+        // The old copy of something that moved to another library. Nothing
+        // done to it — rename, edit, delete — may reach the portal, or the
+        // moved folder would be renamed, rewritten or dragged back.
+        if ($mapping?->isArchived()) {
+            return;
+        }
+
         if (isset($item['deleted'])) {
             if ($mapping) {
                 self::applyDelete($connection, $mapping);
@@ -598,6 +647,21 @@ class Synchroniser
         }
 
         $isFolder = isset($item['folder']);
+
+        // A row with no portal side is an import that failed before it got
+        // one (markFailed keeps it so the sweep can come back). Finish the
+        // import instead of treating the item as up to date.
+        if ($mapping && ! $mapping->file_id && ! $mapping->folder_id) {
+            $mapping = null;
+        }
+
+        // New inside an archived folder: part of the archive too. Recorded,
+        // so its own children are recognised, but never imported.
+        if (! $mapping && self::underArchive($connection, $item)) {
+            self::rememberMapping(self::archiveTombstone($connection, $item, $isFolder));
+
+            return;
+        }
 
         if ($mapping) {
             /*
@@ -634,7 +698,35 @@ class Synchroniser
             return;
         }
 
-        self::applyCreate($connection, $item, $isFolder, $stats);
+        /*
+         * The portal row and its mapping land together or not at all. A file
+         * row written before its mapping failed was an orphan that the next
+         * attempt duplicated, because nothing tied it to the Graph item.
+         */
+        DB::transaction(function () use ($connection, $item, $isFolder, &$stats) {
+            self::applyCreate($connection, $item, $isFolder, $stats);
+        });
+    }
+
+    /** Is this new item's parent the archived copy of a folder that moved away? */
+    private static function underArchive(SharePointConnection $connection, array $item): bool
+    {
+        $parentId = $item['parentReference']['id'] ?? null;
+
+        return $parentId !== null && (bool) self::mappingFor($connection, $parentId)?->isArchived();
+    }
+
+    private static function archiveTombstone(SharePointConnection $connection, array $item, bool $isFolder): SharePointItem
+    {
+        return SharePointItem::updateOrCreate(
+            ['connection_id' => $connection->id, 'graph_item_id' => $item['id']],
+            self::mappingAttributes($connection, $item) + [
+                'item_type' => $isFolder ? 'folder' : 'file',
+                'file_id' => null,
+                'folder_id' => null,
+                'archived_at' => now(),
+            ],
+        );
     }
 
     /**
@@ -838,6 +930,20 @@ class Synchroniser
      */
     public static function retryItem(SharePointConnection $connection, SharePointItem $mapping): bool
     {
+        // Fresh per retry, exactly as sync() does: the sweep runs in a worker
+        // that may have just synced a different connection, and these caches
+        // are keyed by Graph id alone.
+        self::$mappings = [];
+        self::$ownerId = null;
+        self::$portalMoves = ['folders' => [], 'files' => []];
+
+        if ($mapping->isArchived()) {
+            $mapping->update(['sync_status' => SharePointItem::SYNCED, 'last_error' => null,
+                'failure_count' => 0, 'failed_direction' => null]);
+
+            return true;
+        }
+
         $item = Drive::find($connection->drive_id, $mapping->graph_item_id);
 
         if ($item === null) {
@@ -873,6 +979,7 @@ class Synchroniser
                 'sync_status' => SharePointItem::SYNCED,
                 'last_error' => null,
                 'failure_count' => 0,
+                'failed_direction' => null,
                 'last_synced_at' => now(),
             ]);
         }
@@ -952,14 +1059,28 @@ class Synchroniser
     /** Content changed in SharePoint → a new portal version, never an overwrite. */
     private static function pullNewVersion(SharePointConnection $connection, SharePointItem $mapping, array $item, FileItem $file): void
     {
-        $temp = tempnam(sys_get_temp_dir(), 'sp-');
-        Drive::download($connection->drive_id, $item['id'], $temp);
-
-        $stored = Vault::store($temp, strtolower((string) $file->extension));
-        $author = User::find($connection->created_by);
-
+        /*
+         * Filed under whoever connected the library, or the firm's own account
+         * once that person has gone. This used to return quietly with no
+         * author, and the caller still stored the new cTag, so the edit was
+         * dropped for good and its bytes sat orphaned in storage.
+         */
+        $author = User::find($connection->created_by) ?? User::find(FolderProvisioner::systemOwnerId());
         if (! $author) {
-            return;
+            throw new \RuntimeException('No portal account to file the SharePoint edit under.');
+        }
+
+        $temp = tempnam(sys_get_temp_dir(), 'sp-');
+
+        try {
+            Drive::download($connection->drive_id, $item['id'], $temp);
+            $stored = Vault::store($temp, strtolower((string) $file->extension));
+        } finally {
+            // Vault::store removes it on success; a failed download must not
+            // leave it behind on the worker.
+            if (is_file($temp)) {
+                @unlink($temp);
+            }
         }
 
         Versions::addStored(
@@ -1102,6 +1223,7 @@ class Synchroniser
             'last_synced_at' => now(),
             'last_error' => null,
             'failure_count' => 0,
+            'failed_direction' => null,
             // Written from a live Graph item, so by definition not recycled.
             'recycled_at' => null,
         ];
@@ -1126,6 +1248,7 @@ class Synchroniser
             'sync_status' => SharePointItem::SYNCED,
             'last_error' => null,
             'failure_count' => 0,
+            'failed_direction' => null,
             'last_synced_at' => now(),
         ]);
     }
@@ -1193,10 +1316,31 @@ class Synchroniser
         if ($mapping) {
             $mapping->update([
                 'sync_status' => SharePointItem::FAILED,
+                'failed_direction' => SharePointItem::PULL,
                 'last_error' => Str::limit($error, 500),
                 'failure_count' => $mapping->failure_count + 1,
             ]);
+
+            return;
         }
+
+        /*
+         * A brand-new item that failed has no row to mark, and the cursor has
+         * already moved past it: delta never offers it again unless it
+         * changes. A row with no portal side gives the retry sweep something
+         * to come back to; apply() finishes the import when it does.
+         */
+        SharePointItem::create([
+            'connection_id' => $connection->id,
+            'graph_item_id' => $graphId,
+            'graph_parent_id' => $item['parentReference']['id'] ?? null,
+            'item_type' => isset($item['folder']) ? 'folder' : 'file',
+            'name' => $item['name'] ?? null,
+            'sync_status' => SharePointItem::FAILED,
+            'failed_direction' => SharePointItem::PULL,
+            'last_error' => Str::limit($error, 500),
+            'failure_count' => 1,
+        ]);
     }
 
     public static function log(SharePointConnection $connection, string $action, string $level, ?string $graphItemId, ?string $detail, array $meta = []): void

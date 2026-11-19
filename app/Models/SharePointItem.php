@@ -10,7 +10,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'connection_id', 'graph_item_id', 'graph_parent_id', 'item_type', 'child_count', 'file_id', 'folder_id',
     'etag', 'ctag', 'web_url', 'name', 'size', 'mime_type',
     'graph_created_at', 'graph_modified_at', 'graph_modified_by',
-    'sync_status', 'conflict_reason', 'last_error', 'failure_count', 'last_synced_at', 'recycled_at',
+    'sync_status', 'conflict_reason', 'last_error', 'failure_count', 'failed_direction',
+    'last_synced_at', 'recycled_at', 'archived_at',
 ])]
 class SharePointItem extends Model
 {
@@ -23,6 +24,11 @@ class SharePointItem extends Model
     public const CONFLICT = 'conflict';
     public const FAILED = 'failed';
 
+    /** Which way a FAILED row was going when it failed. */
+    public const PULL = 'pull';
+
+    public const PUSH = 'push';
+
     protected function casts(): array
     {
         return [
@@ -30,6 +36,7 @@ class SharePointItem extends Model
             'graph_modified_at' => 'datetime',
             'last_synced_at' => 'datetime',
             'recycled_at' => 'datetime',
+            'archived_at' => 'datetime',
             'size' => 'integer',
             'failure_count' => 'integer',
         ];
@@ -54,6 +61,16 @@ class SharePointItem extends Model
     public function isRecycled(): bool
     {
         return $this->recycled_at !== null;
+    }
+
+    /**
+     * The old copy of something that moved to another library. It keeps its
+     * Graph id so the sync recognises it, but it no longer stands for a
+     * portal row and nothing done to it reaches the portal.
+     */
+    public function isArchived(): bool
+    {
+        return $this->archived_at !== null;
     }
 
     /**

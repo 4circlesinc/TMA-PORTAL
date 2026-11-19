@@ -70,6 +70,12 @@ class CipProvidersFromFolders extends Command
                     return;
                 }
 
+                if ((int) $provider->legacy_folder_id === (int) $folder->id) {
+                    // Its old drawer: the provider now files in the TMA CIP
+                    // Applications Portal and remembers this one as legacy.
+                    return;
+                }
+
                 if (! $provider->folder_id) {
                     $provider->forceFill(['folder_id' => $folder->id])->save();
                     $linked++;

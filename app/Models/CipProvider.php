@@ -18,7 +18,7 @@ use Illuminate\Support\Str;
  * per-provider sequence, so it must never change once numbers exist under it.
  */
 #[Fillable([
-    'uuid', 'name', 'code', 'company_id', 'folder_id', 'contact_name', 'contact_email',
+    'uuid', 'name', 'code', 'company_id', 'folder_id', 'legacy_folder_id', 'contact_name', 'contact_email',
     'notification_emails', 'active',
 ])]
 class CipProvider extends Model
@@ -56,10 +56,39 @@ class CipProvider extends Model
         return $this->belongsTo(Company::class);
     }
 
-    /** The firm's folder in the Citizenship Applications library. */
+    /**
+     * Where the firm's applications are filed: its folder in the TMA CIP
+     * Applications Portal once that library is set up, otherwise its drawer
+     * in the Citizenship Applications library.
+     */
     public function folder(): BelongsTo
     {
         return $this->belongsTo(Folder::class);
+    }
+
+    /**
+     * The firm's drawer in the old Citizenship Applications library, kept
+     * after `folder_id` moved to the new site. Historical folders the sync
+     * imported still live here, and still sync with that library.
+     */
+    public function legacyFolder(): BelongsTo
+    {
+        return $this->belongsTo(Folder::class, 'legacy_folder_id');
+    }
+
+    /**
+     * The drawer a client folder belongs in: a folder the old library sync
+     * imported stays under the old drawer, everything the portal made goes
+     * to the current one. Moving an imported folder into the new site would
+     * take it out from under the library it still syncs with.
+     */
+    public function drawerFor(?Folder $clientFolder): ?Folder
+    {
+        if ($clientFolder?->origin === 'sharepoint' && $this->legacy_folder_id) {
+            return $this->legacyFolder ?? $this->folder;
+        }
+
+        return $this->folder;
     }
 
     public function applications(): HasMany

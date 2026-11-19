@@ -117,7 +117,7 @@ final class FolderAccess
         // point at. The same ids ApplicationScope already decided are this firm's.
         $providers = CipProvider::withTrashed()
             ->whereIn('id', $providerIds)
-            ->get(['id', 'company_id', 'folder_id']);
+            ->get(['id', 'company_id', 'folder_id', 'legacy_folder_id']);
 
         if ($providers->isEmpty()) {
             return [[], []];
@@ -134,7 +134,11 @@ final class FolderAccess
             ->values()
             ->all();
 
+        // Both drawers: the firm's folder in the TMA CIP Applications Portal,
+        // and its old drawer in Citizenship Applications that still holds the
+        // historical folders. Neither is a folder a contact may browse.
         $drawers = $providers->pluck('folder_id')
+            ->merge($providers->pluck('legacy_folder_id'))
             ->filter()
             ->map(fn ($id) => (int) $id)
             ->unique()

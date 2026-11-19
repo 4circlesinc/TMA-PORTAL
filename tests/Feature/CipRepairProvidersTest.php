@@ -106,15 +106,88 @@ class CipRepairProvidersTest extends TestCase
         $this->assertSame($privateFolder->id, $own->fresh()->parent_id);
     }
 
-    private function drawer(Folder $parent, string $name): Folder
+    public function test_a_historical_private_folder_stays_in_the_old_library_after_the_portal_library_exists(): void
     {
-        return Folder::create([
+        $owner = User::factory()->create();
+        $legacy = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'Citizenship Applications',
+            'folder_type' => Folder::TYPE_ORGANIZATION,
+            'owner_id' => $owner->id,
+            'created_by' => $owner->id,
+        ]);
+        Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'TMA CIP Applications Portal',
+            'folder_type' => Folder::TYPE_ORGANIZATION,
+            'owner_id' => $owner->id,
+            'created_by' => $owner->id,
+            'origin' => 'portal',
+        ]);
+        $privateFolder = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'PRIVATE',
+            'parent_id' => $legacy->id,
+            'folder_type' => Folder::TYPE_USER,
+            'owner_id' => $owner->id,
+            'created_by' => $owner->id,
+        ]);
+        CipProvider::create([
+            'name' => 'PRIVATE',
+            'code' => CipProvider::PRIVATE_CLIENT_CODE,
+            'folder_id' => $privateFolder->id,
+            'active' => true,
+        ]);
+
+        $company = Company::create(['uid' => 'respect', 'name' => 'Respect Services']);
+        $oldHome = Folder::create([
+            'uuid' => (string) Str::uuid(),
+            'name' => 'RESPECT SERVICES',
+            'parent_id' => $legacy->id,
+            'folder_type' => Folder::TYPE_USER,
+            'owner_id' => $owner->id,
+            'created_by' => $owner->id,
+        ]);
+        CipProvider::create([
+            'name' => 'RESPECT SERVICES',
+            'code' => 'RES',
+            'company_id' => $company->id,
+            'folder_id' => $oldHome->id,
+            'active' => true,
+        ]);
+
+        $historic = $this->drawer($privateFolder, 'LEON LI', 'sharepoint');
+        $fresh = $this->drawer($privateFolder, 'ANA LOPEZ', 'portal');
+        foreach ([[$historic, 'leon', 'LEON LI'], [$fresh, 'ana', 'ANA LOPEZ']] as [$folder, $uid, $name]) {
+            Client::create([
+                'uid' => $uid,
+                'name' => $name,
+                'folder_id' => $folder->id,
+                'referred_by_company_id' => $company->id,
+                'referral_type' => Client::REFERRAL_COMPANY,
+                'data' => [],
+            ]);
+        }
+
+        $this->artisan('cip:repair-providers', ['--apply' => true])->assertSuccessful();
+
+        $provider = CipProvider::where('code', 'RES')->firstOrFail();
+        $this->assertSame($oldHome->id, $provider->legacy_folder_id);
+        $this->assertSame($oldHome->id, $historic->fresh()->parent_id);
+        $this->assertSame($provider->folder_id, $fresh->fresh()->parent_id);
+        $this->assertNotSame($oldHome->id, $fresh->fresh()->parent_id);
+    }
+
+    private function drawer(Folder $parent, string $name, ?string $origin = null): Folder
+    {
+        return Folder::create(array_filter([
             'uuid' => (string) Str::uuid(),
             'name' => $name,
             'parent_id' => $parent->id,
             'folder_type' => Folder::TYPE_CLIENT,
+            'origin' => $origin,
             'owner_id' => $parent->owner_id,
             'created_by' => $parent->owner_id,
-        ]);
+        ], fn ($value) => $value !== null));
     }
 }

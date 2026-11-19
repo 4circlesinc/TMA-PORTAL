@@ -98,28 +98,36 @@ class RemoteContent
             return false;
         }
 
-        $file->update([
-            'disk' => $stored['disk'],
-            'storage_path' => $stored['path'],
-            'checksum' => $stored['checksum'],
-            // Graph's reported size is what the placeholder carried; the stored
-            // bytes are the truth, and a mismatch would break range requests.
-            'size' => $stored['size'],
-            'content_state' => null,
-        ]);
-
-        // Version 1 was recorded as a placeholder alongside the file, so it
-        // needs the same treatment or the version history 404s.
-        FileVersion::where('file_id', $file->id)
-            ->where('content_state', self::PENDING)
-            ->where('version_number', 1)
-            ->update([
+        /*
+         * These bytes came FROM SharePoint, so recording them must not push
+         * them back. The storage_path change looks exactly like a new upload
+         * to FileSharePointObserver, and it used to write a fresh SharePoint
+         * version (and an app "Modified by") on every file anybody opened.
+         */
+        Pusher::suspend(function () use ($file, $stored) {
+            $file->update([
                 'disk' => $stored['disk'],
                 'storage_path' => $stored['path'],
                 'checksum' => $stored['checksum'],
+                // Graph's reported size is what the placeholder carried; the stored
+                // bytes are the truth, and a mismatch would break range requests.
                 'size' => $stored['size'],
                 'content_state' => null,
             ]);
+
+            // Version 1 was recorded as a placeholder alongside the file, so it
+            // needs the same treatment or the version history 404s.
+            FileVersion::where('file_id', $file->id)
+                ->where('content_state', self::PENDING)
+                ->where('version_number', 1)
+                ->update([
+                    'disk' => $stored['disk'],
+                    'storage_path' => $stored['path'],
+                    'checksum' => $stored['checksum'],
+                    'size' => $stored['size'],
+                    'content_state' => null,
+                ]);
+        });
 
         return true;
     }

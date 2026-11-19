@@ -319,7 +319,9 @@ final class ProviderTransfer
     {
         $client = $application->client;
         $folder = $client?->folder;
-        $destination = $to->folder;
+        // A historical folder the old library imported moves to the new
+        // firm's OLD drawer, so it stays inside the library it syncs with.
+        $destination = $to->drawerFor($folder);
 
         if (! $folder || ! $destination) {
             return;

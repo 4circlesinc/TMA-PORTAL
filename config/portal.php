@@ -59,4 +59,27 @@ return [
 
     'system_account_email' => env('PORTAL_SYSTEM_ACCOUNT_EMAIL', 'portal@tmantoinelaw.com'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Where portal applications are filed
+    |--------------------------------------------------------------------------
+    |
+    | Every application the portal files lives in ONE folder, synced with one
+    | SharePoint site: the folder, then one folder per service provider, then
+    | the applicant folders. Set up with `php artisan cip:library:connect`,
+    | existing applications moved in with `php artisan cip:library:migrate`.
+    |
+    | The older libraries (Citizenship Applications, Post Approval Documents,
+    | General Citizenship Advisory) keep syncing as before; historical folders
+    | they imported stay where they are.
+    |
+    */
+
+    'cip_library' => [
+        'site' => env('CIP_LIBRARY_SITE', 'https://tmant.sharepoint.com/sites/tmacipapplicationsportal'),
+        // Null picks the site's default document library ("Documents").
+        'library' => env('CIP_LIBRARY_NAME'),
+        'folder' => env('CIP_LIBRARY_FOLDER', 'TMA CIP Applications Portal'),
+    ],
+
 ];

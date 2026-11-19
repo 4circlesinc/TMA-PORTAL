@@ -183,7 +183,8 @@ class Pusher
             return $named->graph_item_id;
         }
 
-        $created = Drive::createFolder($connection->drive_id, $parentGraphId, $folder->name);
+        $created = self::adoptableFolder($connection, $parentGraphId, $folder)
+            ?? Drive::createFolder($connection->drive_id, $parentGraphId, $folder->name);
 
         $mapped = SharePointItem::query()->firstOrCreate(
             [
@@ -202,11 +203,37 @@ class Pusher
             ],
         );
 
-        if ($mapped->folder_id === null) {
-            $mapped->update(['folder_id' => $folder->id]);
+        if ($mapped->folder_id === null || self::folderGone((int) $mapped->folder_id)) {
+            $mapped->update(['folder_id' => $folder->id, 'archived_at' => null]);
         }
 
         return $mapped->graph_item_id;
+    }
+
+    /**
+     * A same-named folder SharePoint already holds under this parent, when
+     * this portal folder may use it.
+     *
+     * Graph's create rule is `rename`, so creating over an existing name
+     * makes "Name 1" beside it. That is how a provider or applicant folder
+     * someone made in SharePoint first, or a folder whose mapping was lost,
+     * turned into numbered twins. Reusing the folder that is already there
+     * keeps one. It is not reused when it belongs to a different live portal
+     * folder elsewhere ({@see mayShareFolder()}).
+     */
+    private static function adoptableFolder(SharePointConnection $connection, string $parentGraphId, Folder $folder): ?array
+    {
+        $existing = Drive::childByName($connection->drive_id, $parentGraphId, $folder->name);
+        if (! $existing || ! isset($existing['folder']) || empty($existing['id'])) {
+            return null;
+        }
+
+        $held = SharePointItem::query()
+            ->where('connection_id', $connection->id)
+            ->where('graph_item_id', $existing['id'])
+            ->first();
+
+        return (! $held || self::mayShareFolder($held, $folder)) ? $existing : null;
     }
 
     /**
@@ -466,6 +493,15 @@ class Pusher
                 return ['status' => 'content-remote'];
             }
 
+            $conflict = 'replace';
+            if ($remote === null) {
+                $placement = self::placeNewFile($connection, $mapping, $file, $parentGraphId);
+                if (isset($placement['status'])) {
+                    return $placement;
+                }
+                $conflict = $placement['conflict'];
+            }
+
             // Vault::localCopy handles the case where durable bytes live on
             // object storage rather than the local disk.
             $local = Vault::localCopy($file);
@@ -476,13 +512,7 @@ class Pusher
             try {
                 $result = $remote !== null
                     ? Drive::uploadToItem($connection->drive_id, $mapping->graph_item_id, $local)
-                    : Drive::upload(
-                        $connection->drive_id,
-                        $parentGraphId,
-                        $file->name,
-                        $local,
-                        self::nameHeldByAnother($connection, $parentGraphId, $file) ? 'rename' : 'replace',
-                    );
+                    : Drive::upload($connection->drive_id, $parentGraphId, $file->name, $local, $conflict);
             } finally {
                 Vault::cleanupLocalCopy($local);
             }
@@ -500,6 +530,47 @@ class Pusher
 
             return ['status' => 'failed', 'reason' => $e->getMessage()];
         }
+    }
+
+    /**
+     * How a file that SharePoint does not know yet goes in.
+     *
+     * The name may already be taken in that SharePoint folder:
+     *  - by another live portal file we mapped there → keep both (`rename`);
+     *  - by the very same bytes (a push that landed before its answer was
+     *    lost, or a copy someone put there) → adopt it, upload nothing;
+     *  - by an earlier upload of this app → `replace`, SharePoint keeps the
+     *    old bytes as a version;
+     *  - by anybody else's document → keep both. A person's file is never
+     *    written over by a name collision.
+     *
+     * @return array{status: string}|array{conflict: string}
+     */
+    private static function placeNewFile(SharePointConnection $connection, ?SharePointItem $mapping, FileItem $file, string $parentGraphId): array
+    {
+        if (self::nameHeldByAnother($connection, $parentGraphId, $file)) {
+            return ['conflict' => 'rename'];
+        }
+
+        $namesake = Drive::childByName($connection->drive_id, $parentGraphId, $file->name);
+        if (! $namesake || ! isset($namesake['file']) || empty($namesake['id'])) {
+            return ['conflict' => 'replace'];
+        }
+
+        $hash = $namesake['file']['hashes']['quickXorHash'] ?? null;
+        if ($hash !== null
+            && (int) ($namesake['size'] ?? -1) === (int) $file->size
+            && self::contentMatches($file, $hash)) {
+            self::recordMapping($connection, $mapping, $file, $namesake, $namesake['parentReference']['id'] ?? $parentGraphId);
+            Synchroniser::log($connection, 'push-adopted', 'info', $namesake['id'],
+                'SharePoint already held these exact bytes under this name; mapped instead of uploading.');
+
+            return ['status' => 'adopted'];
+        }
+
+        $writtenByUs = ($namesake['lastModifiedBy']['application']['id'] ?? null) === config('services.microsoft.client_id');
+
+        return ['conflict' => $writtenByUs ? 'replace' : 'rename'];
     }
 
     /**
@@ -642,6 +713,7 @@ class Pusher
             'conflict_reason' => null,
             'last_error' => null,
             'failure_count' => 0,
+            'failed_direction' => null,
             'last_synced_at' => now(),
             // Pushing an item up is the end of its time in the bin, a restore
             // in the portal comes through here.
@@ -825,6 +897,7 @@ class Pusher
         try {
             $mapping->forceFill([
                 'sync_status' => SharePointItem::FAILED,
+                'failed_direction' => SharePointItem::PUSH,
                 'last_error' => Str::limit($error, 500),
                 'failure_count' => $mapping->failure_count + 1,
             ])->saveQuietly();

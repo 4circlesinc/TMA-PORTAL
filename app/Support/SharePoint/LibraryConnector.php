@@ -40,7 +40,7 @@ class LibraryConnector
      *
      * @throws GraphException when the site cannot be reached
      */
-    public static function connect(string $siteInput, ?string $libraryName, User $owner, ?string $folderName = null): array
+    public static function connect(string $siteInput, ?string $libraryName, User $owner, ?string $folderName = null, ?Folder $folder = null): array
     {
         $site = GraphClient::get('/sites/'.self::normaliseSite($siteInput));
 
@@ -73,7 +73,10 @@ class LibraryConnector
          * provisioned separately and deliberately NOT typed this way —
          * `all_staff` on somebody's OneDrive would publish it.
          */
-        $folder = Folder::create([
+        // A caller that has already prepared the portal side (the CIP
+        // applications library, whose access copies the old library's) hands
+        // its folder in rather than getting a fresh one.
+        $folder ??= Folder::create([
             'uuid' => (string) Str::uuid(),
             'name' => $folderName ?: ($drive['name'] ?? 'SharePoint'),
             'owner_id' => $owner->id,

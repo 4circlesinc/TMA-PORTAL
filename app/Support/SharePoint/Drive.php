@@ -131,6 +131,42 @@ class Drive
     }
 
     /**
+     * The child of a folder with this exact name, or null when there is none.
+     *
+     * Asked before creating anything by name, so an item that is already
+     * there is reused rather than answered with a numbered twin ("Name 1").
+     * Like find(), only Graph's 404 means "not there"; anything else throws.
+     */
+    public static function childByName(string $driveId, string $parentItemId, string $name): ?array
+    {
+        try {
+            return GraphClient::get("/drives/{$driveId}/items/{$parentItemId}:/".rawurlencode($name));
+        } catch (GraphException $e) {
+            if (in_array($e->status, [404, 410], true)) {
+                return null;
+            }
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Graph's "slow down" answers on a raw byte transfer, as the same
+     * exception the JSON client raises — otherwise a throttled download is
+     * read as a broken item and the walk keeps hammering a tenant that has
+     * just asked it to wait.
+     */
+    private static function throwIfThrottled(\Illuminate\Http\Client\Response $response): void
+    {
+        if ($response->status() === 429 || $response->status() === 503) {
+            throw new GraphThrottledException(
+                'Graph asked us to slow down.',
+                (int) ($response->header('Retry-After') ?: 10)
+            );
+        }
+    }
+
+    /**
      * Stream an item's bytes to a local path.
      *
      * Streams rather than buffering: a 2 GB document must not be held in
@@ -150,6 +186,8 @@ class Drive
             ->timeout(600)
             ->withOptions(['stream' => true])
             ->get("https://graph.microsoft.com/v1.0/drives/{$driveId}/items/{$itemId}/content");
+
+        self::throwIfThrottled($response);
 
         if (! $response->successful()) {
             throw new GraphException(
@@ -249,6 +287,8 @@ class Drive
             ->withBody(file_get_contents($sourcePath), 'application/octet-stream')
             ->put('https://graph.microsoft.com/v1.0'.$path);
 
+        self::throwIfThrottled($response);
+
         if (! $response->successful()) {
             throw new GraphException('Upload failed ('.$response->status().'): '.$response->body(), $response->status());
         }
@@ -289,6 +329,8 @@ class Drive
                     'Content-Range' => "bytes {$offset}-{$end}/{$size}",
                 ])->connectTimeout(15)->timeout(300)
                     ->withBody($bytes, 'application/octet-stream')->put($url);
+
+                self::throwIfThrottled($response);
 
                 if (! in_array($response->status(), [200, 201, 202], true)) {
                     throw new GraphException(

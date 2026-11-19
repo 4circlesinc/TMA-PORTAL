@@ -196,6 +196,15 @@ class Providers
      */
     public static function ensureFolder(CipProvider $provider): void
     {
+        // Once the TMA CIP Applications Portal folder exists, every provider
+        // files there. This also moves a provider still pointing at its old
+        // Citizenship Applications drawer, keeping that drawer as legacy.
+        if (PortalLibrary::root()) {
+            PortalLibrary::providerFolder($provider);
+
+            return;
+        }
+
         if ($provider->folder_id && Folder::whereKey($provider->folder_id)->exists()) {
             return;
         }
