@@ -556,7 +556,7 @@
 }
 
 /* Sync progress toasts — bottom-right stack shown while email, calendar,
-   OneDrive and Smartsheet import (sync-toasts.js). Deliberately a separate
+   OneDrive import (sync-toasts.js). Deliberately a separate
    host from the notification stack: always bottom-right, whatever the
    notification-position preference says. Naked white card — no watermark
    marks or patterned fills — matching the Outlook “Syncing email…” chrome. */
@@ -628,15 +628,6 @@
   width: 24px;
   height: 24px;
   object-fit: contain;
-}
-
-/* Smartsheet mark is taller than square brand marks — keep it readable. */
-.tma-sync-toast__icon--smartsheet {
-  background: #e8eef5;
-}
-.tma-sync-toast__icon--smartsheet img {
-  width: 18px;
-  height: 22px;
 }
 
 .tma-sync-toast--done .tma-sync-toast__icon { background: #e7f4e8; }

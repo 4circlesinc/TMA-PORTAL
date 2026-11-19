@@ -1085,7 +1085,7 @@
         window.TMAPortalHome.restoreTodayToShell();
         todayWrap = root.querySelector('[data-today-dropdown]');
       }
-      var portalChromeless = ['cbi', 'calculator', 'call-recordings', 'client-hub', 'folders', 'workflows', 'templates', 'signatures', 'inbox', 'people', 'admin', 'dashboard', 'reporting', 'users', 'bespoke'];
+      var portalChromeless = ['calculator', 'call-recordings', 'client-hub', 'folders', 'workflows', 'templates', 'signatures', 'inbox', 'people', 'admin', 'dashboard', 'reporting', 'users', 'bespoke'];
       var hideMainChrome = name === 'overview' || name === 'account' || name === 'messages' || name === 'feed' || name === 'email' || name === 'calendar' || name === 'pricing' || name === 'settings' || portalChromeless.indexOf(name) !== -1;
       if (mainHead) {
         mainHead.style.display = hideMainChrome ? 'none' : '';

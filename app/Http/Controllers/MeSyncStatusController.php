@@ -7,10 +7,7 @@ use App\Models\ConnectedAccount;
 use App\Models\MailMessage;
 use App\Models\MailSyncProgress;
 use App\Models\SharePointConnection;
-use App\Models\SmartsheetAttachment;
 use App\Support\Access\Role;
-use App\Support\Cbi\DocumentImporter;
-use App\Support\Cbi\SyncActor;
 use App\Support\Imports\ImportPause;
 use App\Support\Mail\Mailbox;
 use App\Support\SharePoint\Synchroniser;
@@ -19,7 +16,7 @@ use Illuminate\Http\Request;
 
 /**
  * One aggregate answer to "is my stuff syncing?", email, calendar,
- * OneDrive and (for admins) Smartsheet document import in a single poll.
+ * OneDrive in a single poll.
  * Drives the bottom-right sync toasts that appear right after connecting.
  * Each state is derived from the same records the feature pages read, so
  * the toasts never disagree with the pages; the heavier per-page status
@@ -38,7 +35,6 @@ class MeSyncStatusController extends Controller
             'email' => $this->guard(fn () => $this->email($user)),
             'calendar' => $this->guard(fn () => $this->calendar($user)),
             'onedrive' => $this->guard(fn () => $this->withImportPause($this->onedrive($user), ImportPause::onedrive())),
-            'smartsheet' => $this->guard(fn () => $this->withImportPause($this->smartsheet($user), ImportPause::smartsheet())),
             'libraries' => $this->guard(fn () => $this->libraries($user)),
         ]);
     }
@@ -315,51 +311,6 @@ class MeSyncStatusController extends Controller
             'name' => $connection->folder?->name ?: ($connection->site_name ?: $connection->drive_name),
             'synced' => $synced,
             'total' => $total,
-        ];
-    }
-
-    /**
-     * Smartsheet → client File Library document import (CBI).
-     *
-     * Administrators only, and only while FEATURE_CBI is on, everyone else
-     * gets `off` so the toast never appears for an empty answer.
-     */
-    private function smartsheet($user): array
-    {
-        if (! config('services.smartsheet.cbi_enabled') || ! Role::isAdmin($user)) {
-            return ['state' => 'off'];
-        }
-
-        $actor = SyncActor::resolve($user);
-        if (! $actor) {
-            return ['state' => 'off'];
-        }
-
-        $survey = (new DocumentImporter($actor))->survey();
-        $pending = max(0, $survey['files'] - $survey['orphaned']);
-        $done = $survey['done'];
-        $total = $pending + $done;
-
-        if ($pending < 1) {
-            return $done > 0
-                ? ['state' => 'done', 'synced' => $done, 'total' => $total]
-                : ['state' => 'off'];
-        }
-
-        // Still copying. Prefer recent activity so a crashed run does not pin
-        // an Importing toast forever; CBI can still force the card via watch().
-        $recent = SmartsheetAttachment::query()
-            ->whereNotNull('file_id')
-            ->where('updated_at', '>', now()->subMinutes(30))
-            ->exists();
-
-        return [
-            'state' => ($recent || $done === 0) ? 'syncing' : 'done',
-            'synced' => $done,
-            'total' => $total,
-            'pending' => $pending,
-            'clients' => $survey['clients'],
-            'paused' => ! $recent && $done > 0,
         ];
     }
 }

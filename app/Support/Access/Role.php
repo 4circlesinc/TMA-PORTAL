@@ -184,14 +184,8 @@ class Role
         // Decide which staff are assigned to which client.
         'clients.assign' => [],
 
-        /* ── CBI (Citizenship by Investment) ─────────────────────────── */
-        // Admin-only while the module is in development, and additionally
-        // dark everywhere FEATURE_CBI is off, see the flag check in can().
-        // Widen to [self::EMPLOYEE] (or per-role grants) at launch.
-        'cbi.view' => [],
-
         /* ── CIP (native application-management portal) ──────────────── */
-        // The CBI mirror's replacement. Every cip.* capability is dark while
+        // Every cip.* capability is dark while
         // FEATURE_CIP is off, see the flag check in can(), which sits before
         // the admin short-circuit so the module does not exist for anyone.
         //
@@ -353,7 +347,6 @@ class Role
      */
     private const PAGE_CAPABILITIES = [
         'call-recordings' => 'callRecordings.view',
-        'cbi' => 'cbi.view',
         'clients' => 'clients.view',
         'citizenship-applications' => 'clients.view',
         'email' => 'mail.use',
@@ -557,18 +550,7 @@ class Role
             return false;
         }
 
-        /*
-         * CBI ships behind FEATURE_CBI. While the flag is off the module
-         * does not exist for anyone, administrators included, so this
-         * check sits BEFORE the admin short-circuit. One line here keeps
-         * the page gate, the sidebar row and the capability list in
-         * agreement across every environment.
-         */
-        if ($capability === 'cbi.view' && ! config('services.smartsheet.cbi_enabled')) {
-            return false;
-        }
-
-        // Same contract for the native CIP module: while FEATURE_CIP is off,
+        // While FEATURE_CIP is off,
         // every cip.* capability is denied for everyone, admins included.
         if (str_starts_with($capability, 'cip.') && ! config('services.cip.enabled')) {
             return false;
@@ -659,7 +641,7 @@ class Role
         }
 
         // Both branches route through can(), so per-capability conditions
-        // (the FEATURE_CBI gate) hold for administrators too.
+        // (the FEATURE_CIP gate) hold for administrators too.
         return array_values(array_filter(
             self::capabilityNames(),
             fn (string $capability) => self::can($user, $capability),

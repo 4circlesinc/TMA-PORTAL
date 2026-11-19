@@ -242,7 +242,7 @@ services:
       replicas: 2
     command: >
       php artisan queue:work
-      --queue=default,cbi
+      --queue=default
       --tries=3
       --backoff=10
       --timeout=300

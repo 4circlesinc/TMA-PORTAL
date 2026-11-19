@@ -3,10 +3,8 @@
 use App\Jobs\EnsureGraphSubscriptions;
 use App\Jobs\PublishScheduledFeedPost;
 use App\Jobs\RefreshIcsSubscription;
-use App\Jobs\SyncCbiHub;
 use App\Jobs\SyncMailbox;
 use App\Jobs\SyncProviderCalendar;
-use App\Jobs\SyncSmartsheetSheet;
 use App\Models\AuthEvent;
 use App\Models\Calendar;
 use App\Models\ConnectedAccount;
@@ -17,9 +15,7 @@ use App\Models\FileWorkflowStep;
 use App\Models\MailMessage;
 use App\Models\MailSenderPhoto;
 use App\Models\Report;
-use App\Models\SmartsheetSheet;
 use App\Models\User;
-use App\Support\Cbi\Mapper;
 use App\Support\Cip\CipAccess;
 use App\Support\Cip\Delay;
 use App\Support\Files\ChunkedUpload;
@@ -35,8 +31,6 @@ use App\Support\Messaging\Thumbnailer;
 use App\Support\Notifications\Notifier;
 use App\Support\Reports\ReportRunner;
 use App\Support\Security\SecurityAlerts;
-use App\Support\Smartsheet\Client;
-use App\Support\Smartsheet\Synchroniser;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -637,140 +631,6 @@ Artisan::command('feed:prune-attachments {--hours=24}', function () {
 })->purpose('Remove staged Feed attachments that were never posted');
 
 Schedule::command('feed:prune-attachments')->hourly();
-
-/*
- * ── Smartsheet → CBI ─────────────────────────────────────────────────────
- *
- * One-way inbound sync for the CBI module (the firm is migrating OFF
- * Smartsheet; the portal never writes back). The tick walks the workspace
- * (one API call), then queues one job per sheet whose version moved — the
- * cheap /version gate is what keeps ~300 sheets inside Smartsheet's
- * 300 req/min budget. Everything is inert unless FEATURE_CBI is on and the
- * token is configured, so the schedule can ship dark.
- */
-Artisan::command('smartsheet:sync
-    {--queue : Dispatch per-sheet jobs instead of running inline}
-    {--full : Re-fetch every sheet, ignoring version gates}', function () {
-    if (! config('services.smartsheet.cbi_enabled')) {
-        $this->info('CBI is disabled (FEATURE_CBI).');
-
-        return;
-    }
-    if (ImportPause::smartsheet()) {
-        $this->warn('Smartsheet imports are paused (Settings → Background Operations).');
-
-        return;
-    }
-    if (! Client::configured()) {
-        $this->warn('Smartsheet token or workspace id missing.');
-
-        return;
-    }
-
-    $runId = (string) Str::uuid();
-    $due = Synchroniser::refreshWorkspace($runId);
-
-    if ($this->option('full')) {
-        $due = SmartsheetSheet::query()
-            ->where('sync_enabled', true)
-            ->where('status', '!=', SmartsheetSheet::STATUS_GONE)
-            ->get()
-            ->all();
-    }
-
-    /*
-     * --queue is for the deployed scheduler. Inline is the default because
-     * the queue table is shared with the Cloud deployment: a worker there
-     * pops any job whose class it doesn't have and discards it, so local
-     * dispatches of a not-yet-deployed job class silently vanish.
-     */
-    if ($this->option('queue')) {
-        foreach ($due as $sheet) {
-            SyncSmartsheetSheet::dispatch($sheet, (bool) $this->option('full'));
-        }
-        $this->info('Queued '.count($due).' sheet sync(s).');
-
-        return;
-    }
-
-    $done = 0;
-    foreach ($due as $sheet) {
-        attempt:
-        $result = Synchroniser::syncSheet($sheet, $runId, (bool) $this->option('full'));
-        if ($result['status'] === 'throttled') {
-            $wait = max(1, (int) ($result['retryAfter'] ?? 30));
-            $this->warn("Throttled; waiting {$wait}s…");
-            sleep($wait);
-            goto attempt;
-        }
-        // 'unchanged' maps too: a pass that mirrored but died mid-mapping
-        // reports unchanged on retry, and mapping again is nearly free.
-        if (in_array($result['status'], ['synced', 'unchanged'], true)) {
-            Mapper::mapSheet($sheet->fresh());
-        }
-        $done++;
-        $this->info("[{$done}/".count($due)."] {$result['status']}: {$sheet->name}");
-    }
-
-    $this->info('Synced '.count($due).' sheet(s).');
-})->purpose('Discover Smartsheet changes and sync each changed sheet into CBI');
-
-Schedule::command('smartsheet:sync --queue')
-    ->everyTenMinutes()
-    // The per-sheet job already refuses to overlap itself; this stops a slow
-    // workspace walk from stacking scheduler ticks as well.
-    ->withoutOverlapping(30);
-
-/*
- * Client hub + paperwork, after the metadata sync.
- *
- * Sheet sync only mirrors names and sizes. This pass creates any missing
- * client records (with File Library folders) and copies attachment bytes into
- * those folders so CBI Documents and the client Documents tab open the same
- * file in the shared lightbox. Resumable: ImportCbiDocuments re-queues itself
- * while reachable files remain.
- */
-Schedule::call(function () {
-    if (! config('services.smartsheet.cbi_enabled')) {
-        return;
-    }
-    if (ImportPause::smartsheet()) {
-        return;
-    }
-    SyncCbiHub::dispatch();
-})->name('cbi:sync-hub')->everyTenMinutes()->withoutOverlapping(30);
-
-/*
- * Re-run the mirror → CBI mapping without touching the Smartsheet API.
- * This is the whole point of the two-layer design: mapping fixes are a
- * remap, never a re-walk. Safe to run any time; it upserts.
- */
-Artisan::command('cbi:remap {--sheet= : Remote sheet id to remap alone}', function () {
-    $query = SmartsheetSheet::query()
-        ->whereIn('category', array_merge(
-            SmartsheetSheet::APPLICATION_CATEGORIES,
-            [SmartsheetSheet::CATEGORY_ASSESSMENT],
-        ));
-
-    if ($this->option('sheet')) {
-        $query->where('remote_id', (int) $this->option('sheet'));
-    }
-
-    // Application sheets first so assessment matching has applications to
-    // link against on a cold start.
-    $sheets = $query->get()->sortBy(
-        fn ($s) => $s->category === SmartsheetSheet::CATEGORY_ASSESSMENT ? 1 : 0
-    );
-
-    foreach ($sheets as $sheet) {
-        // force: without it the per-row unchanged-skip makes a remap a
-        // silent no-op — the whole point here is re-extracting everything.
-        Mapper::mapSheet($sheet, force: true);
-        $this->info("Mapped: {$sheet->name}");
-    }
-
-    $this->info('Remapped '.$sheets->count().' sheet(s).');
-})->purpose('Re-run the Smartsheet mirror → CBI application mapping');
 
 /*
  * The optional "Monthly security summary" email from Account settings →

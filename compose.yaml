@@ -228,12 +228,9 @@ services:
   # ---------------------------------------------------------------------------
   # Queue worker.
   #
-  # Development runs one worker across all three queues. Production splits
+  # Development runs one worker across both queues. Production splits
   # mail-photos onto its own — see compose.prod.yaml and the note in
   # app/Jobs/ResolveSenderPhoto.php.
-  #
-  # `cbi` is included because the repository's own `composer dev` script omits
-  # it, which means SyncCbiHub and ImportCbiDocuments never drain there.
   #
   # --timeout=300, not the 60s default: ImportProviderCalendars,
   # PublishScheduledFeedPost and PushFileToSharePoint declare no $timeout and
@@ -244,7 +241,7 @@ services:
     <<: *php
     command: >
       php artisan queue:work
-      --queue=default,mail-photos,cbi
+      --queue=default,mail-photos
       --tries=3
       --backoff=10
       --timeout=300

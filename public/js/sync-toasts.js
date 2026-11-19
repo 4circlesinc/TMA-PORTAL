@@ -1,5 +1,5 @@
-/* Sync progress toasts, bottom-right cards that appear while email, calendar,
-   OneDrive and Smartsheet document import run in the background. Always
+/* Sync progress toasts, bottom-right cards that appear while email, calendar
+   and OneDrive run in the background. Always
    pinned bottom-right (independent of the notification-toast position
    preference), each card can be minimised to a chip or dismissed. Polls
    /me/sync-status while anything is running and goes quiet once done. */
@@ -23,11 +23,6 @@
     email: { label: 'Email', syncing: 'Syncing email…', icon: '/images/icons/brands/Outlook.svg' },
     calendar: { label: 'Calendar', syncing: 'Syncing calendar…', icon: '/images/icons/brands/outlook_calendar.svg' },
     onedrive: { label: 'OneDrive', syncing: 'Syncing OneDrive…', icon: '/images/icons/brands/OneDrive40.svg' },
-    smartsheet: {
-      label: 'Smartsheet',
-      syncing: 'Importing documents…',
-      icon: '/images/icons/phosphor/Smart_sheet.svg',
-    },
     libraries: {
       label: 'SharePoint',
       syncing: 'Syncing SharePoint…',
@@ -35,8 +30,7 @@
     },
   };
 
-  /* File-library toasts show only while a run is actually walking Graph.
-     Smartsheet stays on the Background Operations page. */
+  /* File-library toasts show only while a run is actually walking Graph. */
   var SHOWN = { email: 1, calendar: 1, libraries: 1 };
 
   var host = null;
@@ -64,7 +58,7 @@
     var svc = SERVICES[key];
     if (s.state === 'paused' || s.importsPaused) return svc.label + ' paused';
     if (s.state === 'done') {
-      return key === 'smartsheet' ? 'Documents imported' : (svc.label + ' synced');
+      return svc.label + ' synced';
     }
     if (s.state === 'error') return svc.label + ' sync problem';
     if (key === 'libraries' && s.name) return 'Syncing ' + s.name + '…';
@@ -92,14 +86,6 @@
       return s.state === 'syncing'
         ? fmt(s.synced) + ' of ' + fmt(s.count) + ' calendars'
         : fmt(s.count) + ' calendar' + (s.count === 1 ? '' : 's');
-    }
-    if (key === 'smartsheet') {
-      if (!s.total && !s.synced) return 'Copying into client folders…';
-      var line = s.total
-        ? fmt(s.synced) + ' of ' + fmt(s.total) + ' documents'
-        : fmt(s.synced) + ' documents';
-      if (s.clients) line += ' · ' + fmt(s.clients) + ' clients';
-      return line;
     }
     return s.total
       ? fmt(s.synced) + ' of ' + fmt(s.total) + ' items'
@@ -303,12 +289,11 @@
     });
   }
 
-  /* Smartsheet document import can run for hours; the short lifetime that
-     covers mailbox/calendar first-connect must not kill that card mid-run. */
+  /* A library walk can run for a long time; the short lifetime that covers
+     mailbox and calendar first-connect must not kill that card mid-run. */
   function shouldKeepPolling(data) {
     // Nothing on screen to keep current: the loop has no one to report to.
     if (!anyWatched()) return false;
-    if (data.smartsheet && data.smartsheet.state === 'syncing') return true;
     if (data.libraries && data.libraries.state === 'syncing') return true;
     if (anyPending()) return true;
     return anySyncing(data) && Date.now() - startedAt < MAX_LIFETIME_MS;
@@ -394,7 +379,7 @@
     // Push a status without waiting for /me/sync-status. CBI uses this so
     // the card tracks the same counts the Documents tab already fetched.
     update: update,
-    // One bottom-right column for every sync card (library, mail, Smartsheet…).
+    // One bottom-right column for every sync card (library, mail, OneDrive).
     // Other scripts mount into this so toasts stack instead of overlapping.
     host: ensureHost,
   };

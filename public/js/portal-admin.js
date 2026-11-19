@@ -217,7 +217,6 @@
 
       // The official mark for each source; SharePoint libraries all share one.
       var IMPORT_ICONS = {
-        smartsheet: 'images/icons/brands/Smartsheet40.png',
         onedrive: 'images/icons/brands/OneDrive40.svg',
         library: 'images/icons/brands/SharePoint40.svg',
       };
@@ -239,8 +238,7 @@
         }
         return '<div class="tma-portal-connector-list">' + targets.map(function (t) {
           var icon = IMPORT_ICONS[t.kind] || IMPORT_ICONS.library;
-          // The Smartsheet mark sits on a solid tile; round it like an app icon.
-          var rounded = t.kind === 'smartsheet' ? ' style="border-radius:6px"' : '';
+          var rounded = '';
           // One switch is the whole story: on = syncing (turning it on also
           // catches the source up immediately), off = paused.
           var progress = t.progress ? '<br>' + esc(t.progress) : '';

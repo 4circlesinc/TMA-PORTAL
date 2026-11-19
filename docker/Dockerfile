@@ -453,14 +453,13 @@ COPY --chown=www-data:www-data phpunit.xml ${APP_HOME}/phpunit.xml
 # "file_get_contents(/var/www/html/.env): Failed to open stream" and PHPUnit
 # reports the whole run as risky.
 #
-# The feature flags are forced on because tests/Feature/PortalAccessTest asserts
-# that an administrator holds *every* capability, and the cbi.* capabilities
-# only exist when FEATURE_CBI is set — which is how the suite is run on a
-# developer machine today. phpunit.xml still pins the database to sqlite
-# :memory:, so this never reaches Postgres.
+# FEATURE_CIP is forced on because tests/Feature/PortalAccessTest asserts
+# that an administrator holds every capability, and cip.* is dark without it.
+# phpunit.xml still pins the database to sqlite :memory:, so this never
+# reaches Postgres.
 COPY --chown=www-data:www-data .env.docker.example ${APP_HOME}/.env
 RUN set -eux; \
-    printf '\nFEATURE_CBI=true\nFEATURE_CIP=true\n' >> ${APP_HOME}/.env; \
+    printf '\nFEATURE_CIP=true\n' >> ${APP_HOME}/.env; \
     chown www-data:www-data ${APP_HOME}/.env; \
     composer dump-autoload --optimize
 

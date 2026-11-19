@@ -108,9 +108,9 @@ class BackgroundOperationsController extends Controller
     }
 
     /**
-     * Pause or resume one import source. Smartsheet documents, OneDrive, or
-     * a single SharePoint library. Mailbox and calendar sync stay on each
-     * person's Connectors toggles.
+     * Pause or resume one import source: OneDrive, or a single SharePoint
+     * library. Mailbox and calendar sync stay on each person's Connectors
+     * toggles.
      */
     public function pauseImports(Request $request): JsonResponse
     {
@@ -127,7 +127,7 @@ class BackgroundOperationsController extends Controller
                 'string',
                 'max:80',
                 Rule::in(array_merge(
-                    [ImportPause::TARGET_SMARTSHEET, ImportPause::TARGET_ONEDRIVE],
+                    [ImportPause::TARGET_ONEDRIVE],
                     $libraryIds,
                 )),
             ],
@@ -167,7 +167,7 @@ class BackgroundOperationsController extends Controller
                 'string',
                 'max:80',
                 Rule::in(array_merge(
-                    [ImportPause::TARGET_SMARTSHEET, ImportPause::TARGET_ONEDRIVE],
+                    [ImportPause::TARGET_ONEDRIVE],
                     $libraryIds,
                 )),
             ],
@@ -179,15 +179,6 @@ class BackgroundOperationsController extends Controller
 
         $target = $data['target'];
         $retryFailed = (bool) ($data['retryFailed'] ?? false);
-
-        if ($target === ImportPause::TARGET_SMARTSHEET) {
-            abort_if(ImportPause::smartsheet(), 422, 'Resume this import first.');
-            // The command re-checks the feature flag, pause and token itself,
-            // so queueing it dark is safe.
-            Artisan::queue('smartsheet:sync', ['--queue' => true]);
-
-            return response()->json(['status' => 'ok', 'queued' => 1]);
-        }
 
         if ($target === ImportPause::TARGET_ONEDRIVE) {
             abort_if(ImportPause::onedrive(), 422, 'Resume this import first.');

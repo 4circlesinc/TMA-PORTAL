@@ -108,16 +108,6 @@ return [
         ],
     ],
 
-    'smartsheet' => [
-        // Service-account token — server-side only, never sent to the client.
-        // The whole CBI module is dark without it AND the feature flag below.
-        'token' => env('SMARTSHEET_ACCESS_TOKEN'),
-        'workspace_id' => env('SMARTSHEET_WORKSPACE_ID'),
-        // CBI is in development: no nav, no search, no dashboard presence.
-        // The /dev/cbi preview and the sync schedule both key off this.
-        'cbi_enabled' => (bool) env('FEATURE_CBI', false),
-    ],
-
     'cip' => [
         // The native CIP application-management module (the CBI mirror's
         // replacement) ships dark behind this flag. Role::can() checks it

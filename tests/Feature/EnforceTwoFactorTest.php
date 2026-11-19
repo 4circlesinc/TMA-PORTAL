@@ -122,7 +122,7 @@ class EnforceTwoFactorTest extends TestCase
     }
 
     /**
-     * These three sit outside the portal route group, so the gate never saw
+     * These sit outside the portal route group, so the gate never saw
      * them: typing the URL walked straight past a requirement the rest of the
      * portal enforced.
      */
@@ -131,7 +131,7 @@ class EnforceTwoFactorTest extends TestCase
         $this->requireMfa(true);
         $user = $this->user();
 
-        foreach (['/design/mail', '/dev/cbi', '/onboarding'] as $url) {
+        foreach (['/design/mail', '/onboarding'] as $url) {
             $this->actingAs($user)
                 ->get($url)
                 ->assertRedirect(route('required-authenticator.show'));

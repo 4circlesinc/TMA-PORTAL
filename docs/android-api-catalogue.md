@@ -189,14 +189,14 @@ Every path below is relative to the portal origin. All of it lives in `routes/we
 | `accountType` | one of `Client`, `Employee` (parked), `CRO / Reviewing officer`, `Administrator` (legacy `Reviewing Officer`/`Compliance Officer` alias to officer) — `app/Support/Access/Role.php:29-80` |
 | `isAdmin`, `isStaff` | `Role::isAdmin/isStaff` |
 | `cipReach`, `isProviderContact`, `isPrivateClient` | `CipAccess` (`app/Support/Cip/CipAccess.php:73,104,131`) |
-| `capabilities` | `string[]` of matrix names the user holds (admins get all; `cbi.*`/`cip.*` hidden when feature flags off) — full list `Role.php:150-330` |
+| `capabilities` | `string[]` of matrix names the user holds (admins get all; `cip.*` hidden when the feature flag is off) — full list `Role.php:150-330` |
 | `realtime` | `{enabled:false}` or `{enabled:true,key,host,port,scheme}` |
 | `toasts` | `{enabled:true, position:'bottom-right'|'top-right'|'bottom-left', durationSec:3|5|8|10, stickyImportant, sound, previewText, groupSimilar}` — `app/Support/Notifications/ToastSettings.php` |
 | `desktopNotifications` | `{enabled, preview}` from MessagingSettings `desktopNotifications`/`notificationPreview` (defaults true) |
 | `workStatus` | today's public work plan `{status,label,startsAt:'HH:MM',endsAt,location}` or null — `app/Models/WorkDay.php::publicFromPlan` |
 | `availability` | `AvailabilityService::selfPayload` (see section 6) |
 
-Capability names (the matrix, `Role.php:150-330`): `clients.view/viewAll/manage/invite/assign`, `cbi.view`, `cip.view/create/review/compliance/assign/decide/configure/report`, `users.view/manage`, `directory.view`, `presence.view`, `mail.use`, `feed.view/createChannel/moderate/analytics`, `messaging.contactAll`, `files.viewOrg/admin/settings`, `signatures.create`, `templates.view/email`, `workflows.view`, `callRecordings.view`, `overview.view`, `activity.viewAll`, `calendar.staff/admin`, `groups.view/manage`, `recyclebin.admin`, `settings.security/operations/reporting/branding/clientHub/storage/advanced`. Employee baseline for `clients.*` and `directory.view` is admin-editable (section 9). Page→capability map `Role.php:334-380`, settings-rail map `Role.php:396-430`.
+Capability names (the matrix, `Role.php:150-330`): `clients.view/viewAll/manage/invite/assign`, `cip.view/create/review/compliance/assign/decide/configure/report`, `users.view/manage`, `directory.view`, `presence.view`, `mail.use`, `feed.view/createChannel/moderate/analytics`, `messaging.contactAll`, `files.viewOrg/admin/settings`, `signatures.create`, `templates.view/email`, `workflows.view`, `callRecordings.view`, `overview.view`, `activity.viewAll`, `calendar.staff/admin`, `groups.view/manage`, `recyclebin.admin`, `settings.security/operations/reporting/branding/clientHub/storage/advanced`. Employee baseline for `clients.*` and `directory.view` is admin-editable (section 9). Page→capability map `Role.php:334-380`, settings-rail map `Role.php:396-430`.
 
 Web-client behaviour to replicate (`public/js/current-user.js`): one `/me` in flight at a time; desktop keeps the last answer in `localStorage['tma.me']` and paints it before the network answers; a non-OK response **deletes** the cached copy (signed out/suspended); a network failure keeps it. `applyMe` then scopes the offline store/write-queue to `id`, applies toast/desktop prefs, and runs catch-up syncs (files/CIP/clients). Branding is loaded separately via `GET /admin/branding` (readable by everyone).
 
@@ -208,7 +208,7 @@ Other `/me` routes (`routes/web.php:215-222`):
 | `POST /me/avatar` (multipart) | `avatar_photo` (jpeg/png/webp ≤ 8192 KB) and/or `source: upload|provider` | `{status:'ok', avatar}`; 422 `avatar_photo` messages `"That file is not an image. Use a JPG, PNG, or WebP."`, `"That image is too large. Keep it under 8 MB."`, `"Choose a photo to upload."` |
 | `PUT /profile` | `first_name`*, `middle_name`, `last_name`*, `gender` (`Female|Male|Non-binary|Prefer not to say`), `phone` (`^\+?[0-9 ()\-]{7,32}$`), `job_title`, `company`, `bio` ≤1000, `linkedin_url`, `avatar_photo`, `source` | JSON only with `Accept: application/json`: `{status:'ok', name}` else 302 — `ProfileController.php:22-85`. Email/account type are not self-service. |
 | `GET /profile` | – | 302 to `/account-settings?page=profile` (not JSON) |
-| `GET /me/sync-status` | – | `{importsPaused, email:{state,synced?,total?,mode?}, calendar:{state,count?,synced?,pending?}, onedrive:{state,synced?,total?,importsPaused?}, smartsheet:{...}}`; `state ∈ off|syncing|done|error|paused` — `MeSyncStatusController.php` |
+| `GET /me/sync-status` | – | `{importsPaused, email:{state,synced?,total?,mode?}, calendar:{state,count?,synced?,pending?}, onedrive:{state,synced?,total?,importsPaused?}}`; `state ∈ off|syncing|done|error|paused` — `MeSyncStatusController.php` |
 | `POST /me/onedrive/pause` / `resume` | – | `{paused:true|false}`; 404 `"No OneDrive is connected."` |
 | `GET /admin/connectors` | – | `{microsoftReady, connected, email, features:{email:{linked,writable}, calendar:{linked,readable,writable}, onedrive:{linked,ready,paused}}}` (any signed-in user) |
 
@@ -598,7 +598,7 @@ Administrators pass every check (`Role.php:509-512`). The matrix lists which *no
 | `templates.email` | Employee | compose templates. |
 | `settings.clientHub` | *(nobody)* | client-hub settings, custom fields, service teams. |
 
-The five `clients.*` employee grants are **admin-editable** via `GET/PUT /admin/client-hub` (`app/Http/Controllers/ClientHubSettingsController.php`, `app/Support/Clients/ClientHubSettings.php:42-51`), so an Android client must read the effective capability list from `/me` rather than hard-code roles. Every `cip.*` capability is denied to everyone (admins included) unless `FEATURE_CIP=true` (`config/services.php:126`, `Role.php:506-508`); CBI needs `FEATURE_CBI=true` **and** an administrator, else 404 (`app/Http/Controllers/Cbi/CbiController.php:31-35`). CIP is also reachable by external accounts with no capability: a **provider contact** (active `CompanyMember` of a company registered as a `CipProvider`) or a **private client** (a `Client` row whose `user_id` is the user) (`CipAccess.php` `canReach`, `isProviderContact`, `isPrivateClient`).
+The five `clients.*` employee grants are **admin-editable** via `GET/PUT /admin/client-hub` (`app/Http/Controllers/ClientHubSettingsController.php`, `app/Support/Clients/ClientHubSettings.php:42-51`), so an Android client must read the effective capability list from `/me` rather than hard-code roles. Every `cip.*` capability is denied to everyone (admins included) unless `FEATURE_CIP=true` (`config/services.php`, `Role.php`). CIP is also reachable by external accounts with no capability: a **provider contact** (active `CompanyMember` of a company registered as a `CipProvider`) or a **private client** (a `Client` row whose `user_id` is the user) (`CipAccess.php` `canReach`, `isProviderContact`, `isPrivateClient`).
 
 ### 2. Clients hub — `/portal/clients` (`routes/web.php:797-829`, `app/Http/Controllers/ClientsController.php`)
 
@@ -730,11 +730,7 @@ Statuses (`app/Support/Cip/Status.php`): `draft, new, review_application, assess
 
 Field names are bracketed paths: top-level `firstName,lastName,gender,dateOfBirth,countryOfBirth,countryOfResidence,occupation,passportNumber,investmentType,investmentTypeOther,sponsored(1|0),providerId,phase,submissionId,allowDuplicate`, `passportPhoto` (file), document slots as `{camelKey}[]` (max 10 files each), `sponsor[firstName]`…`sponsor[passportPhoto]`, `dependents[0][firstName]`, `dependents[0][relationship](spouse|qualified)`, `dependents[0][id]` (uuid on edit). Pre-approval filing demands only the principal's `passportPhoto`, `passportBioPage[]`, `birthCertificate[]` (`Intake.php:62-66`). `submissionId` is a client-minted key that makes retries idempotent (`CipApplicationController.php:153-171`). The web queues this whole request offline through `TMAQueue.add({kind:'cip.application', method:'POST', url, parts})` (`cip-intake.js:1353-1368`), replaying on reconnect and firing `tma:queue-applied`.
 
-### 6. CBI (Smartsheet mirror) — `/portal/cbi` (`routes/web.php:1277-1287`, `app/Http/Controllers/Cbi/CbiController.php`)
-
-Admin + `FEATURE_CBI` only, else 404. `GET /summary` → `{stages, total, needsReview, facets:{statuses,referredBy,investmentOptions,assigned,nationalities:[{value,n}]}, sync:{configured,lastSuccessAt,sheets,sheetsWithErrors,syncing}, documents}`. `GET /applications?stage(applications|assessment|tracker|closed)&status&referred_by&investment_option&nationality&assigned_to&needs_review=1&received_from&received_to&q&sort(recent|name|received|status)&per_page(10–100)&page` → `{items:[{uuid,applicantName,applicantNumber,stage,status,progress,referredBy,people,investmentOption,nationality,dependents,receivedAt,decisionReceivedAt,modifiedAt,needsReview,granted}], total, page, lastPage}`. `GET /applications/{uuid}` → `{application (detailPayload :299-366), sources, attachments, pendingDocuments, folderUuid, comments, events, assessment}`. `POST /applications/{uuid}/comments {body≤8000}`; `GET/POST /sync`; `GET /attachments/{id}` redirects to Smartsheet. Read-only mirror otherwise — treat as low priority for Android.
-
-### 7. Templates — `/portal/templates` (`routes/web.php:878-893`, `app/Http/Controllers/TemplatesController.php`)
+### 6. Templates — `/portal/templates` (`routes/web.php:878-893`, `app/Http/Controllers/TemplatesController.php`)
 
 Middleware `capability:templates.view` on system emails and the welcome message; `capability:templates.email` on compose templates. `GET /system-emails` → `{canEdit, fieldLabels, fieldOrder:[subject,preheader,eyebrow,greeting,title,lead,body,quote,button,footNote], htmlFields:[body,footNote], templates:[{key,name,category,when,customized,updatedAt,editor,subjectFixed,fields,defaults,editable,variables:[{token,meaning}]}]}`; `PATCH /{key} {fields{}}`, `POST /{key}/restore`, `POST /{key}/preview {fields?}` → `{subject, html}`. Compose: `GET /email-templates` → `{canShareDefaults, templates:[{id,name,subject,body,bodyHtml,shared,mine,canEdit,updatedAt,editor}]}`; `POST` `{name≤191, subject≤500, body≤20000, shared?}` → 201; `PATCH /{uuid}`; `DELETE /{uuid}` → `{ok:true}`; `POST /preview {subject,body}` → `{subject, html}`. Welcome message: `GET /welcome-message` → `{enabled, senderId, body, defaultBody, maxLength:5000, updatedAt, editor, variables:[{token,meaning}], senders:[{id,name,email,jobTitle,photo}]}`; `PATCH /welcome-message` `{enabled*, senderId?, body*≤5000}` (422 when on with no active administrator, or an unknown `{{token}}`); `POST /welcome-message/preview` `{body?, senderId?}` → `{text}`. Off until an administrator switches it on. Sent once as a direct Messages message when an account is first approved; `users.welcomed_at` is claimed either way, so turning it on later does not greet people who already joined.
 
@@ -1693,18 +1689,6 @@ Generated from `php artisan route:list --json` on 6 Sep 2026 (620 routes; `desig
 | GET | `/portal/call-recordings` | base | `CallRecordingController@index` |
 | POST | `/portal/call-recordings/{uuid}/hold` | base | `CallRecordingController@hold` |
 | GET | `/portal/call-recordings/{uuid}/media` | base | `CallRecordingController@media` |
-
-### `portal/cbi` (7 routes)
-
-| Method | Path | Middleware | Action |
-|---|---|---|---|
-| GET | `/portal/cbi/applications` | base | `Cbi\\CbiController@applications` |
-| GET | `/portal/cbi/applications/{uuid}` | base | `Cbi\\CbiController@application` |
-| POST | `/portal/cbi/applications/{uuid}/comments` | base | `Cbi\\CbiController@storeComment` |
-| GET | `/portal/cbi/attachments/{attachment}` | base | `Cbi\\CbiController@downloadAttachment` |
-| GET | `/portal/cbi/summary` | base | `Cbi\\CbiController@summary` |
-| GET | `/portal/cbi/sync` | base | `Cbi\\CbiController@syncStatus` |
-| POST | `/portal/cbi/sync` | base | `Cbi\\CbiController@triggerSync` |
 
 ### `portal/cip` (46 routes)
 

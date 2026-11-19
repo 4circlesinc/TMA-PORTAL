@@ -46,7 +46,6 @@
   var DRAGGABLE_UI = [
     '[data-files-row]',
     '[data-clients-row]',
-    '[data-cbi-row]',
     '[data-shortcut-row]',
     '[draggable="true"]'
   ].join(',');

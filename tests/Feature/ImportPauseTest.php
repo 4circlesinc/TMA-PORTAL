@@ -2,8 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Jobs\ImportCbiDocuments;
-use App\Jobs\SyncCbiHub;
 use App\Jobs\SyncSharePointLibrary;
 use App\Models\SharePointConnection;
 use App\Models\User;
@@ -14,7 +12,7 @@ use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
- * Per-import pause switches (Smartsheet / OneDrive / each SharePoint library).
+ * Per-import pause switches (OneDrive / each SharePoint library).
  */
 class ImportPauseTest extends TestCase
 {
@@ -65,21 +63,19 @@ class ImportPauseTest extends TestCase
 
     public function test_admin_can_pause_one_import_at_a_time(): void
     {
-        config(['services.smartsheet.cbi_enabled' => true]);
         $admin = $this->admin();
         $lib = $this->library($admin);
 
         $this->actingAs($admin)
             ->putJson('/admin/background-ops/imports-pause', [
-                'target' => 'smartsheet',
+                'target' => 'onedrive',
                 'paused' => true,
             ])
             ->assertOk()
             ->assertJsonPath('paused', true)
-            ->assertJsonPath('target', 'smartsheet');
+            ->assertJsonPath('target', 'onedrive');
 
-        $this->assertTrue(ImportPause::smartsheet());
-        $this->assertFalse(ImportPause::onedrive());
+        $this->assertTrue(ImportPause::onedrive());
         $this->assertFalse(ImportPause::library($lib->uuid));
 
         $this->actingAs($admin)
@@ -90,13 +86,13 @@ class ImportPauseTest extends TestCase
             ->assertOk();
 
         $this->assertTrue(ImportPause::library($lib->uuid));
-        $this->assertTrue(ImportPause::smartsheet());
+        $this->assertTrue(ImportPause::onedrive());
 
         $this->actingAs($admin)
             ->getJson('/admin/background-ops')
             ->assertOk()
             ->assertJsonPath('imports.anyPaused', true)
-            ->assertJsonFragment(['id' => 'smartsheet', 'paused' => true])
+            ->assertJsonFragment(['id' => 'onedrive', 'paused' => true])
             ->assertJsonFragment(['id' => 'library:'.$lib->uuid, 'paused' => true]);
     }
 
@@ -147,31 +143,16 @@ class ImportPauseTest extends TestCase
         );
     }
 
-    public function test_cbi_jobs_noop_when_smartsheet_is_paused(): void
-    {
-        config(['services.smartsheet.cbi_enabled' => true]);
-        $admin = $this->admin();
-        ImportPause::putTarget('smartsheet', true, $admin->id);
-        Queue::fake();
-
-        (new SyncCbiHub($admin->id))->handle();
-        (new ImportCbiDocuments($admin->id))->handle();
-
-        Queue::assertNotPushed(ImportCbiDocuments::class);
-        $this->assertFalse(ImportPause::onedrive());
-    }
-
     public function test_me_sync_status_reports_per_service_pause(): void
     {
-        config(['services.smartsheet.cbi_enabled' => true]);
         $admin = $this->admin();
-        ImportPause::putTarget('smartsheet', true, $admin->id);
+        ImportPause::putTarget('onedrive', true, $admin->id);
 
         $this->actingAs($admin)
             ->getJson('/me/sync-status')
             ->assertOk()
             ->assertJsonPath('importsPaused', true)
-            ->assertJsonPath('smartsheet.importsPaused', true);
+            ->assertJsonPath('onedrive.importsPaused', true);
     }
 
     private function personalDrive(User $owner): SharePointConnection

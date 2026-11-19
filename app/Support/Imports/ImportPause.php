@@ -12,17 +12,15 @@ use Throwable;
 /**
  * Per-import pause switches for firm background imports.
  *
- * Administrators pause one source at a time. Smartsheet document import,
- * personal OneDrive sync, or a single SharePoint library, rather than one
- * kill switch for everything. Mailbox and calendar sync are untouched.
+ * Administrators pause one source at a time: personal OneDrive sync, or a
+ * single SharePoint library, rather than one kill switch for everything.
+ * Mailbox and calendar sync are untouched.
  *
  * Stored in `portal_settings` like {@see \App\Support\Clients\ClientHubSettings}.
  */
 class ImportPause
 {
     public const KEY = 'imports.pause';
-
-    public const TARGET_SMARTSHEET = 'smartsheet';
 
     public const TARGET_ONEDRIVE = 'onedrive';
 
@@ -32,7 +30,6 @@ class ImportPause
     {
         return [
             'services' => [
-                self::TARGET_SMARTSHEET => false,
                 self::TARGET_ONEDRIVE => false,
             ],
             'libraries' => [],
@@ -59,8 +56,6 @@ class ImportPause
 
         return self::$memo = [
             'services' => [
-                self::TARGET_SMARTSHEET => (bool) ($stored['services'][self::TARGET_SMARTSHEET]
-                    ?? $defaults['services'][self::TARGET_SMARTSHEET]),
                 self::TARGET_ONEDRIVE => (bool) ($stored['services'][self::TARGET_ONEDRIVE]
                     ?? $defaults['services'][self::TARGET_ONEDRIVE]),
             ],
@@ -68,12 +63,6 @@ class ImportPause
             'updatedAt' => $stored['updatedAt'] ?? null,
             'updatedBy' => isset($stored['updatedBy']) ? (int) $stored['updatedBy'] : null,
         ];
-    }
-
-    /** True when Smartsheet → client-folder document import is paused. */
-    public static function smartsheet(): bool
-    {
-        return self::all()['services'][self::TARGET_SMARTSHEET] === true;
     }
 
     /** True when personal OneDrive sync is paused. */
@@ -106,7 +95,7 @@ class ImportPause
     public static function any(): bool
     {
         $all = self::all();
-        if ($all['services'][self::TARGET_SMARTSHEET] || $all['services'][self::TARGET_ONEDRIVE]) {
+        if ($all['services'][self::TARGET_ONEDRIVE]) {
             return true;
         }
 
@@ -120,7 +109,7 @@ class ImportPause
     }
 
     /**
-     * @deprecated Use smartsheet() / onedrive() / connection(), kept so
+     * @deprecated Use onedrive() / connection(), kept so
      *   older call sites that meant “everything” still compile during the
      *   split. Prefer the specific helpers.
      */
@@ -132,13 +121,13 @@ class ImportPause
     /**
      * Pause or resume one target.
      *
-     * @param  string  $target  smartsheet | onedrive | library:{uuid}
+     * @param  string  $target  onedrive | library:{uuid}
      */
     public static function putTarget(string $target, bool $paused, ?int $userId = null): void
     {
         $all = self::all();
 
-        if ($target === self::TARGET_SMARTSHEET || $target === self::TARGET_ONEDRIVE) {
+        if ($target === self::TARGET_ONEDRIVE) {
             $all['services'][$target] = $paused;
         } elseif (str_starts_with($target, 'library:')) {
             $uuid = substr($target, strlen('library:'));
@@ -178,18 +167,6 @@ class ImportPause
         $failures = self::failureSamples($libraries->pluck('id'));
 
         $rows = [];
-
-        if (config('services.smartsheet.cbi_enabled')) {
-            $rows[] = [
-                'id' => self::TARGET_SMARTSHEET,
-                'kind' => 'smartsheet',
-                'name' => 'Smartsheet documents',
-                'detail' => 'Copy Smartsheet attachments into client folders (CBI).',
-                'paused' => self::smartsheet(),
-                'state' => 'idle',
-                'progress' => '',
-            ];
-        }
 
         $drives = $libraries->where('drive_kind', 'onedrive')->values();
         $driveLine = self::groupProgress($drives, $counts);
@@ -361,7 +338,6 @@ class ImportPause
     {
         $clean = [
             'services' => [
-                self::TARGET_SMARTSHEET => (bool) ($all['services'][self::TARGET_SMARTSHEET] ?? false),
                 self::TARGET_ONEDRIVE => (bool) ($all['services'][self::TARGET_ONEDRIVE] ?? false),
             ],
             'libraries' => array_map('boolval', $all['libraries'] ?? []),
@@ -391,7 +367,6 @@ class ImportPause
 
             return [
                 'services' => [
-                    self::TARGET_SMARTSHEET => $all,
                     self::TARGET_ONEDRIVE => $all,
                 ],
                 'libraries' => [],
