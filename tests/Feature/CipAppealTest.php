@@ -128,7 +128,9 @@ class CipAppealTest extends TestCase
         $application = $this->decided($staff);
         $application->forceFill(['status' => Status::PENDING_REVIEW])->save();
 
-        $this->lodge($staff, $application->fresh())->assertStatus(422);
+        // An officer; an administrator may put any file on any status.
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+        $this->lodge($officer, $application->fresh())->assertStatus(422);
         $this->assertSame(Status::PENDING_REVIEW, $application->fresh()->status);
         $this->assertNull($application->fresh()->appeal_lodged_at);
     }
@@ -202,7 +204,9 @@ class CipAppealTest extends TestCase
 
         // New appeal → Appeal submitted is not an edge: the provider side has
         // not been asked to confirm yet.
-        $this->actingAs($staff)
+        // Refused to an officer; an administrator may put any file on any status.
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/appeal-submitted', [
                 'appealSubmittedAt' => '2026-09-01',
             ])

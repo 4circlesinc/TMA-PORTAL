@@ -48,6 +48,10 @@ class DdQuery
         $already = $application->status === Status::DD_QUERY;
         $edge = $already || Engine::canTransition($application, Status::DD_QUERY);
 
+        // An administrator is never refused the move; see
+        // CipAccess::skipsRequirements.
+        $override = $override || CipAccess::skipsRequirements($actor);
+
         if (! $edge && ! $override) {
             throw new \InvalidArgumentException(
                 'A DD query can only be recorded once the Unit has accepted the file for processing.',

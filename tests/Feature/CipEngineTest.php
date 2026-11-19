@@ -243,7 +243,7 @@ class CipEngineTest extends TestCase
         $this->assertArrayNotHasKey('override', $event->meta);
     }
 
-    public function test_set_refuses_an_administrator_who_pulls_a_file_back_without_a_reason(): void
+    public function test_an_administrator_pulls_a_file_back_without_a_reason(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
@@ -254,8 +254,12 @@ class CipEngineTest extends TestCase
         $this->assertFalse(collect(Engine::overrideChoices($application, $admin))
             ->firstWhere('value', Status::NEW)['forward']);
 
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Give a reason for changing the status.');
+        // The firm's administrators skip the requirement: no reason is
+        // demanded, and the move is still logged as an override.
         Engine::set($application, Status::NEW, $admin);
+
+        $this->assertSame(Status::NEW, $application->fresh()->status);
+        $event = $application->events()->where('action', \App\Models\CipEvent::ACTION_STATUS_CHANGED)->latest('id')->first();
+        $this->assertTrue($event->meta['override'] ?? false);
     }
 }

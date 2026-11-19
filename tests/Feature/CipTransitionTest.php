@@ -237,15 +237,17 @@ class CipTransitionTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR);
         $application = $this->application($admin);
         $events = CipEvent::count();
+        // An officer: the firm's administrators may set any status.
+        $officer = $this->user(Role::REVIEWING_OFFICER);
 
         // Nothing is granted straight out of a draft.
-        $this->actingAs($admin)
+        $this->actingAs($officer)
             ->postJson($this->statusUrl($application), ['status' => Status::GRANTED])
             ->assertStatus(422);
 
         // And a status the vocabulary has never heard of is the same refusal,
         // not the 500 an uncaught argument exception would have been.
-        $this->actingAs($admin)
+        $this->actingAs($officer)
             ->postJson($this->statusUrl($application), ['status' => 'approved_ish'])
             ->assertStatus(422);
 
@@ -493,7 +495,9 @@ class CipTransitionTest extends TestCase
             Engine::availableTransitions($post, $officer),
         );
         $this->assertNotContains(Status::ASSESSMENT_FEEDBACK, Engine::availableTransitions($post, $officer));
-        $this->assertNotContains(Status::READY_TO_SUBMIT, Engine::availableOverrides($post, $admin));
+        // An administrator, who skips the lifecycle's requirements, is
+        // offered every status by hand, the other lane's included.
+        $this->assertContains(Status::READY_TO_SUBMIT, Engine::availableOverrides($post, $admin));
 
         $apply = $this->at($this->application($admin), Status::APPLY_FOR_COR);
         $apply->forceFill(['phase' => Phase::POST_APPROVAL])->save();
@@ -502,8 +506,8 @@ class CipTransitionTest extends TestCase
             Engine::availableTransitions($apply, $officer),
         );
         $this->assertNotContains(Status::PENDING_COR, Engine::availableTransitions($apply, $admin));
-        $this->assertNotContains(Status::PENDING_COR, Engine::availableOverrides($apply, $admin));
-        $this->assertNotContains(Status::PASSPORT_DELIVERED, Engine::availableOverrides($apply, $admin));
+        $this->assertContains(Status::PENDING_COR, Engine::availableOverrides($apply, $admin));
+        $this->assertContains(Status::PASSPORT_DELIVERED, Engine::availableOverrides($apply, $admin));
     }
 
     /**
@@ -541,10 +545,12 @@ class CipTransitionTest extends TestCase
             'Record passport delivered',
             Stages::payload($working->fresh(), $admin)['label'] ?? null,
         );
-        $this->assertNotContains(
+        // An administrator may still set it by hand; no officer is offered it.
+        $this->assertContains(
             Status::PASSPORT_DELIVERED,
             Engine::availableOverrides($working->fresh(), $admin),
         );
+        $this->assertSame([], Engine::availableOverrides($working->fresh(), $this->user(Role::REVIEWING_OFFICER)));
     }
 
     /**
@@ -569,7 +575,10 @@ class CipTransitionTest extends TestCase
 
         foreach ([$admin, $officer] as $reader) {
             $this->assertSame([Status::CLOSED], Engine::availableTransitions($delivered, $reader));
-            $this->assertSame([], Engine::availableOverrides($delivered, $reader));
+            // An administrator may still set any status by hand.
+            if ($reader === $officer) {
+                $this->assertSame([], Engine::availableOverrides($delivered, $reader));
+            }
             $this->assertSame([], Engine::lockedStatuses($delivered, $reader));
             $this->assertSame([], Engine::stageStatuses($delivered, $reader));
         }
@@ -614,7 +623,9 @@ class CipTransitionTest extends TestCase
             $this->assertContains($preApproval, Engine::availableOverrides($working, $admin));
             $this->assertNotContains($preApproval, Engine::availableTransitions($working, $admin));
         }
-        $this->assertNotContains(Status::PENDING_COR, Engine::availableOverrides($working, $admin));
+        // Every status, the dated steps included: administrators skip the
+        // lifecycle's requirements.
+        $this->assertContains(Status::PENDING_COR, Engine::availableOverrides($working, $admin));
 
         // Refused at the write as well as hidden in the picker.
         $this->expectException(\Illuminate\Auth\Access\AuthorizationException::class);
@@ -714,11 +725,14 @@ class CipTransitionTest extends TestCase
      */
     public function test_the_status_endpoint_refuses_the_edges_that_have_their_own_verb(): void
     {
-        $staff = $this->user(Role::ADMINISTRATOR);
-        $application = $this->application($staff);
+        // Refused to an officer. The firm's administrators may set any of
+        // these by hand; see CipAdminSkipsRequirementsTest.
+        $admin = $this->user(Role::ADMINISTRATOR);
+        $staff = $this->user(Role::REVIEWING_OFFICER);
+        $application = $this->application($admin);
 
         // Leftover Draft → New belongs to submit(), which checks the checklist.
-        $draft = $this->at($this->application($staff), Status::DRAFT);
+        $draft = $this->at($this->application($admin), Status::DRAFT);
         $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$draft->uuid.'/status', ['status' => 'new'])
             ->assertStatus(422);
@@ -726,7 +740,7 @@ class CipTransitionTest extends TestCase
         $this->assertSame(Status::DRAFT, $draft->refresh()->status, 'and it moved nothing');
 
         // Ready to submit → Pending review belongs to the submission verb.
-        $ready = $this->at($this->application($staff), Status::READY_TO_SUBMIT);
+        $ready = $this->at($this->application($admin), Status::READY_TO_SUBMIT);
         $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$ready->uuid.'/status', ['status' => 'pending_review'])
             ->assertStatus(422);
@@ -743,7 +757,7 @@ class CipTransitionTest extends TestCase
          * decides is whether the file has ever gone to the Unit, not where it
          * stands.
          */
-        $unsent = $this->at($this->application($staff), Status::REVIEW_APPLICATION);
+        $unsent = $this->at($this->application($admin), Status::REVIEW_APPLICATION);
         $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$unsent->uuid.'/status', ['status' => 'pending_review'])
             ->assertStatus(422);
@@ -751,7 +765,7 @@ class CipTransitionTest extends TestCase
         $this->assertSame(Status::REVIEW_APPLICATION, $unsent->refresh()->status);
         $this->assertNull($unsent->refresh()->submitted_at);
 
-        $pending = $this->at($this->application($staff), Status::PENDING_REVIEW);
+        $pending = $this->at($this->application($admin), Status::PENDING_REVIEW);
         $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$pending->uuid.'/status', ['status' => 'non_compliant'])
             ->assertStatus(422);
@@ -764,7 +778,7 @@ class CipTransitionTest extends TestCase
         $this->assertSame(Status::PENDING_REVIEW, $pending->refresh()->status);
         $this->assertNull($pending->refresh()->accepted_at);
 
-        $check = $this->at($this->application($staff), Status::BACKGROUND_CHECK);
+        $check = $this->at($this->application($admin), Status::BACKGROUND_CHECK);
         $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$check->uuid.'/status', ['status' => 'delayed'])
             ->assertStatus(422);
@@ -894,7 +908,8 @@ class CipTransitionTest extends TestCase
         $admin = $this->user(Role::ADMINISTRATOR);
         $application = $this->at($this->application($admin), Status::NEW);
 
-        $this->actingAs($admin)->post($this->statusUrl($application), [
+        // Refused to an officer; the firm's administrators may set Delayed.
+        $this->actingAs($this->user(Role::REVIEWING_OFFICER))->post($this->statusUrl($application), [
             'status' => Status::DELAYED,
             'attachment' => UploadedFile::fake()->createWithContent('cover.pdf', '%PDF-1.4 cover'),
         ], [

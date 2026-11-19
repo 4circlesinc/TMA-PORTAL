@@ -269,7 +269,9 @@ class CipDelayTest extends TestCase
     {
         [$application, $admin] = $this->overdue(50);
 
-        $this->actingAs($admin)
+        // An officer; the firm's administrators may set Delayed by hand.
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'otto@example.com', 'Otto Officer');
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::DELAYED,
             ])
@@ -282,7 +284,7 @@ class CipDelayTest extends TestCase
         ]);
     }
 
-    public function test_the_picker_does_not_offer_delayed(): void
+    public function test_delayed_is_never_a_next_step_only_an_administrators_pick(): void
     {
         [$application, $admin] = $this->overdue(50);
 
@@ -290,9 +292,14 @@ class CipDelayTest extends TestCase
             Status::DELAYED,
             Engine::availableTransitions($application, $admin),
         );
-        $this->assertNotContains(
+        // Never a next step. An administrator, who skips the lifecycle's
+        // requirements, may still pick it by hand; nobody else is offered it.
+        $this->assertContains(
             Status::DELAYED,
             Engine::availableOverrides($application, $admin),
         );
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'otto@example.com', 'Otto Officer');
+        $this->assertNotContains(Status::DELAYED, Engine::availableTransitions($application, $officer));
+        $this->assertSame([], Engine::availableOverrides($application, $officer));
     }
 }

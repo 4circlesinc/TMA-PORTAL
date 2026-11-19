@@ -1430,7 +1430,9 @@
       // letter being worked from; a pre-approval one gets its number at
       // submission and the server refuses one sent early.
       (showsCipNumber()
-        ? textField('cipNumber', { placeholder: 'As printed on the approval letter' })
+        ? textField('cipNumber', {
+          placeholder: isPostApprovalIntake() ? 'As printed on the approval letter' : 'If the Unit has issued one',
+        })
         : '') +
       '</div>');
   }
@@ -1761,6 +1763,14 @@
    * application's phase is not the form's to choose.
    */
   function showsCipNumber() {
+    /*
+     * An administrator may enter or change the Unit's number at any stage
+     * and any status, a new filing and a draft included. An Add-On being
+     * filed is the exception: its own number comes with its submission, and
+     * it can be entered on the filed Add-On straight after.
+     */
+    if (assignsCipNumber() && !(isAddOnIntake() && (!state.applicationId || editingDraft()))) return true;
+
     // A draft is a filing that has not happened yet, so it asks what a new
     // filing asks: a post-approval file was decided before the portal saw it,
     // and the Unit's number is on the letter in front of the reader.
@@ -1769,6 +1779,45 @@
     return !!(state.record
       && state.record.canEditCipNumber
       && (state.record.phase === 'post_approval' || state.record.cipNumber));
+  }
+
+  /* The firm's administrators: CipAccess::canAssignCipNumber on the server. */
+  function assignsCipNumber() {
+    if (state.record && typeof state.record.canAssignCipNumber === 'boolean') return state.record.canAssignCipNumber;
+    var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
+
+    return !!(me && me.isAdmin);
+  }
+
+  /*
+   * Saving an edit can tell the file's service provider and assigned staff,
+   * for an administrator who ticks it (CipAccess::skipsRequirements). Off by
+   * default: most edits are the firm tidying its own record.
+   */
+  function notifiesOnSave() {
+    if (!editingFiled()) return false;
+    if (state.record && typeof state.record.skipsRequirements === 'boolean') return state.record.skipsRequirements;
+    var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
+
+    return !!(me && me.isAdmin);
+  }
+
+  function notifyCard() {
+    if (!notifiesOnSave()) return '';
+
+    return titledCard('Notify',
+      '<label class="tma-portal-check-row">' +
+      '<input type="checkbox" class="tma-dash__check" data-cip-intake-notify' + (state.notifyOnSave ? ' checked' : '') + '>' +
+      '<span>Notify the service provider and assigned staff when I save</span>' +
+      '</label>' +
+      (state.notifyOnSave
+        ? '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
+          '<label class="tma-dash__clients-field-label" for="cip-intake-notify-note">What changed (optional)</label>' +
+          '<textarea id="cip-intake-notify-note" class="tma-dash__clients-field-textarea" data-cip-intake-notify-note' +
+          ' rows="3" maxlength="2000" placeholder="Shown in the email and the notification">' +
+          esc(state.notifyNote || '') + '</textarea>' +
+          '</div>'
+        : ''));
   }
 
   function preApprovalFormBody() {
@@ -1964,6 +2013,7 @@
           esc(state.draftSavedAt ? 'Draft saved ' + savedAgo() : '') + '</p>'
         : '') +
       formBody() +
+      notifyCard() +
       '</div>');
     wire(root);
     var point = state.pointAtGap;
@@ -2021,6 +2071,16 @@
   /* ── wiring ────────────────────────────────────────────────────── */
 
   function wire(root) {
+    MORPH.unwired(root, '[data-cip-intake-notify]').forEach(function (box) {
+      box.addEventListener('change', function () {
+        state.notifyOnSave = !!box.checked;
+        render(root);
+      });
+    });
+    MORPH.unwired(root, '[data-cip-intake-notify-note]').forEach(function (note) {
+      note.addEventListener('input', function () { state.notifyNote = note.value; });
+    });
+
     MORPH.unwired(root, '[data-cip-field]').forEach(function (el) {
       var path = el.getAttribute('data-cip-field');
       el.addEventListener('input', function () {
@@ -4184,6 +4244,14 @@
     // request, the one the form already checked, not whatever is on screen
     // when the network finally gives up.
     var sent = decisionParts().concat(batch.parts);
+    // An administrator's "notify when I save": once, on the request that
+    // finishes the save, never on a batch of scans before it.
+    if (notifiesOnSave() && state.notifyOnSave && !batch.heldBack) {
+      sent = sent.concat([{ name: 'notify', value: '1' }]);
+      if (state.notifyNote && state.notifyNote.trim()) {
+        sent = sent.concat([{ name: 'notifyNote', value: state.notifyNote.trim() }]);
+      }
+    }
 
     var delivered = false;
     fetch(url, {
@@ -4269,6 +4337,9 @@
          */
         clearDraft();
         forgetRestored();
+        // Told once: the next save starts unticked again.
+        state.notifyOnSave = false;
+        state.notifyNote = '';
         // The caller announces this, it knows where the reader lands next.
         var moved = (json.moved && json.moved.length) ? json.moved : (state.moved || null);
         state.moved = null;

@@ -397,7 +397,11 @@ class Intake
                         'string',
                         'max:'.Submission::MAX_LENGTH,
                     ]
-                    : ['prohibited'],
+                    // An administrator may enter the Unit's number at any
+                    // stage, a new filing included.
+                    : (CipAccess::canAssignCipNumber(request()->user())
+                        ? ['nullable', 'string', 'max:'.Submission::MAX_LENGTH]
+                        : ['prohibited']),
                 // Minted once when the wizard opens, so a retry after a
                 // timeout names the submission it repeats — see store().
                 'submissionId' => ['nullable', 'string', 'max:64'],
@@ -1036,6 +1040,10 @@ class Intake
                 Engine::record($application, CipEvent::ACTION_STATUS_CHANGED, $creator, [], $from, Status::POST_APPROVAL);
                 Engine::record($application, CipEvent::ACTION_POST_APPROVAL_ENTERED, $creator, []);
                 $announcePostApproval = true;
+            } elseif (filled($data['cipNumber'] ?? null) && CipAccess::canAssignCipNumber($creator)) {
+                // An administrator who already has the Unit's number enters
+                // it with the filing; see CipAccess::canAssignCipNumber.
+                Submission::adopt($application, $creator, (string) $data['cipNumber']);
             }
 
             self::writePerson($application, CipPerson::ROLE_MAIN_APPLICANT, $data);
@@ -1764,9 +1772,11 @@ class Intake
         }
     }
 
-    private static function keepDraftCipNumber(CipApplication $application, array $data): void
+    private static function keepDraftCipNumber(CipApplication $application, array $data, bool $anyLane = false): void
     {
-        if (($application->phase ?? '') !== Phase::POST_APPROVAL) {
+        // A post-approval draft carries the Unit's number; an
+        // administrator's draft may carry it on any lane.
+        if (($application->phase ?? '') !== Phase::POST_APPROVAL && ! $anyLane) {
             return;
         }
 
@@ -1830,7 +1840,7 @@ class Intake
             'sponsored' => (bool) ($data['sponsored'] ?? false),
         ])->save();
 
-        self::keepDraftCipNumber($application, $data);
+        self::keepDraftCipNumber($application, $data, CipAccess::canAssignCipNumber($actor));
 
         $application->load('people');
 
@@ -2078,6 +2088,20 @@ class Intake
          * unnumbered.
          */
         if ($given === '') {
+            return;
+        }
+
+        /*
+         * An administrator may enter or change the Unit's number at any
+         * stage and any status, a draft and an unsubmitted file included.
+         * Through Submission::correct all the same, so it is cleaned,
+         * checked against every other file, and audited with what it was.
+         */
+        if (CipAccess::canAssignCipNumber($actor)) {
+            if (preg_replace('/\s+/u', '', $given) !== (string) $application->cip_number) {
+                Submission::correct($application, $actor, $given);
+            }
+
             return;
         }
 

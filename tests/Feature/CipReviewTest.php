@@ -390,7 +390,8 @@ class CipReviewTest extends TestCase
             Engine::availableTransitions($application->fresh(), $staff),
         );
 
-        $this->actingAs($staff)
+        // An officer; the firm's administrators skip this requirement.
+        $this->actingAs($this->officer($application))
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::READY_TO_SUBMIT,
             ])
@@ -409,7 +410,7 @@ class CipReviewTest extends TestCase
      * acknowledge them and continue; a CRO / Reviewing officer is told to
      * finish the review first.
      */
-    public function test_only_an_administrator_may_continue_to_ready_to_submit_past_a_document_still_in_review(): void
+    public function test_only_an_administrator_goes_on_to_ready_to_submit_past_a_document_still_in_review(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
         $officer = $this->user(Role::REVIEWING_OFFICER, 'off@example.com', 'Otto Officer');
@@ -439,18 +440,11 @@ class CipReviewTest extends TestCase
             ->assertForbidden();
         $this->assertSame(Status::REVIEW_APPLICATION, $application->fresh()->status);
 
-        $warned = $this->actingAs($admin)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
-                'status' => Status::READY_TO_SUBMIT,
-            ])
-            ->assertStatus(422)
-            ->assertJsonPath('canAcknowledge', true);
-        $this->assertStringContainsString('Ready for submission', $warned->json('message'));
-
+        // The firm's administrators skip the requirement: no warning to
+        // acknowledge first.
         $this->actingAs($admin)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::READY_TO_SUBMIT,
-                'acknowledge' => true,
             ])
             ->assertOk()
             ->assertJsonPath('application.status', Status::READY_TO_SUBMIT);
@@ -873,7 +867,7 @@ class CipReviewTest extends TestCase
     public function test_a_refused_confirmation_lists_the_documents_it_is_waiting_on(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
-        $application = $this->application($staff, Status::READY_TO_SUBMIT);
+        $application = $this->application($staff, Status::READY_TO_SUBMIT, $company);
         $main = $application->people()->first();
 
         $this->slot($application, 'passport_bio_page', 'Passport bio page', true, DocumentStatus::READY_FOR_SUBMISSION);
@@ -894,7 +888,8 @@ class CipReviewTest extends TestCase
             'required' => true,
         ]);
 
-        $refused = $this->actingAs($staff)
+        // The provider confirms; the firm's administrators skip the checklist.
+        $refused = $this->actingAs($this->contact($company, $staff))
             ->postJson('/portal/cip/applications/'.$application->uuid.'/confirm')
             ->assertStatus(422);
 
@@ -937,7 +932,8 @@ class CipReviewTest extends TestCase
         $application = $this->application($staff, Status::NEW);
         $this->slot($application, 'police_certificate', 'Police certificate', true, DocumentStatus::PENDING_UPLOAD);
 
-        $this->actingAs($staff)
+        // An officer; the firm's administrators skip the confirmation.
+        $this->actingAs($this->officer($application))
             ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
                 'stage' => 'cor_submitted',
                 'date' => '2026-08-20',
@@ -958,7 +954,9 @@ class CipReviewTest extends TestCase
     public function test_a_removed_dependants_slots_do_not_hold_the_package(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR, 'ada@example.com');
-        $application = $this->application($staff, Status::READY_TO_SUBMIT);
+        $application = $this->application($staff, Status::READY_TO_SUBMIT, $company);
+        // The provider confirms; the firm's administrators skip the checklist.
+        $contact = $this->contact($company, $staff);
         $this->slot($application, 'passport_bio_page', 'Passport bio page', true, DocumentStatus::READY_FOR_SUBMISSION);
 
         $dependant = CipPerson::create([
@@ -979,7 +977,7 @@ class CipReviewTest extends TestCase
         $this->assertSame(['MEI WEI: Birth certificate (Pending upload)'], Review::blockers($application));
 
         try {
-            Confirmation::confirm($application, $staff);
+            Confirmation::confirm($application, $contact);
             $this->fail('An unfinished package was confirmed.');
         } catch (\InvalidArgumentException $e) {
             $this->assertSame('Not yet Ready for submission: MEI WEI: Birth certificate (Pending upload).', $e->getMessage());
@@ -992,7 +990,7 @@ class CipReviewTest extends TestCase
         $this->assertSame([], Review::blockers($application->fresh()));
         $this->assertSame(0, Review::progress($application->fresh())['outstanding']);
 
-        $confirmed = Confirmation::confirm($application->fresh(), $staff);
+        $confirmed = Confirmation::confirm($application->fresh(), $contact);
         $this->assertNotNull($confirmed->locked_at);
     }
 }

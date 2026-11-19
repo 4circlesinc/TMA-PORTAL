@@ -235,7 +235,10 @@ class Stages
                 continue;
             }
 
-            if (($step['lock'] ?? null) === 'cor' && ! $application->isCorLocked()) {
+            // An administrator gets the button before the package is
+            // confirmed too; see CipAccess::skipsRequirements.
+            if (($step['lock'] ?? null) === 'cor' && ! $application->isCorLocked()
+                && ! CipAccess::skipsRequirements($actor)) {
                 continue;
             }
 
@@ -374,7 +377,13 @@ class Stages
             throw new \InvalidArgumentException('This application was closed without a passport delivery.');
         }
 
-        if (($step['lock'] ?? null) === 'cor' && ! $application->isCorLocked()) {
+        // The firm's administrators skip what this step asks for: a
+        // confirmed package, a finished pack, the one status it is normally
+        // recorded from. See CipAccess::skipsRequirements.
+        $skips = $actor !== null && CipAccess::skipsRequirements($actor);
+        $acknowledged = $acknowledged || $skips;
+
+        if (($step['lock'] ?? null) === 'cor' && ! $application->isCorLocked() && ! $skips) {
             throw new \InvalidArgumentException(
                 'The service provider must confirm submission before the COR package can be sent.',
             );
@@ -400,7 +409,7 @@ class Stages
                 Review::blockerRows($application),
             );
 
-            if (! $acknowledged || ! CipAccess::canAcknowledgeBlockers($actor, $step['to'])) {
+            if (! $acknowledged || (! $skips && ! CipAccess::canAcknowledgeBlockers($actor, $step['to']))) {
                 throw $refusal->acknowledgeableBy($actor, $step['to']);
             }
 
@@ -417,9 +426,10 @@ class Stages
          * from there is refused.
          */
         $already = $application->status === $step['to'];
+        $offMap = ! $already
+            && ($application->status !== $step['from'] || ! Engine::canTransition($application, $step['to']));
 
-        if (! $already
-            && ($application->status !== $step['from'] || ! Engine::canTransition($application, $step['to']))) {
+        if ($offMap && ! $skips) {
             throw new \InvalidArgumentException(sprintf(
                 'A %s date cannot be recorded while this application stands at %s.',
                 lcfirst($step['label']),
@@ -429,7 +439,7 @@ class Stages
 
         $stored = null;
 
-        $application = DB::transaction(function () use ($application, $actor, $step, $date, $already, $key, $corNumber, $certificate, $acknowledgedBlockers, &$stored) {
+        $application = DB::transaction(function () use ($application, $actor, $step, $date, $already, $offMap, $key, $corNumber, $certificate, $acknowledgedBlockers, &$stored) {
             if ($key === self::COR_RECEIVED && $certificate !== null && $actor !== null) {
                 $stored = StatusAttachment::keep($application, $certificate, $actor);
             }
@@ -456,7 +466,11 @@ class Stages
                 if ($stored !== null) {
                     $notice['corCertificateFileId'] = $stored->id;
                 }
-                Engine::apply($application, $step['to'], $actor, $notice);
+                // From where the step is not normally recorded: an
+                // administrator's, set rather than applied.
+                $offMap
+                    ? Engine::set($application, $step['to'], $actor, $notice)
+                    : Engine::apply($application, $step['to'], $actor, $notice);
             }
 
             Engine::record($application, $step['action'], $actor, $meta);

@@ -2183,6 +2183,16 @@ class CipApplicationController extends Controller
             $application = collect($moved)->firstWhere('id', $application->id) ?? $application->fresh();
         }
 
+        /*
+         * An administrator saving an edit may tell the file's service
+         * provider and assigned staff. Only when they ticked it: an edit is
+         * usually the firm tidying its own record.
+         */
+        if ($request->boolean('notify') && CipAccess::skipsRequirements($user)) {
+            $note = $request->input('notifyNote');
+            Notices::edited($application->fresh(), $user, is_string($note) ? mb_substr($note, 0, 2000) : null);
+        }
+
         Live::staff(Live::CIP);
 
         return response()->json([
@@ -2324,7 +2334,14 @@ class CipApplicationController extends Controller
         StatusAttachment::accept($request);
 
         $data = $request->validate([
-            'cipNumber' => ['required', 'string', 'max:'.Submission::MAX_LENGTH],
+            // An administrator may record the submission now and the Unit's
+            // number later (CipAccess::skipsRequirements); everyone else
+            // records both together.
+            'cipNumber' => [
+                CipAccess::skipsRequirements($user) ? 'nullable' : 'required',
+                'string',
+                'max:'.Submission::MAX_LENGTH,
+            ],
             // Recorded, not assumed: staff enter a submission after the fact
             // as often as on the day, and defaulting silently to today would
             // put the wrong date on an audit trail.
@@ -2343,7 +2360,7 @@ class CipApplicationController extends Controller
             $application = Submission::record(
                 $application,
                 $user,
-                $data['cipNumber'],
+                $data['cipNumber'] ?? null,
                 Carbon::parse($data['submittedAt']),
                 $request->boolean('override'),
                 trim($data['note'] ?? ''),
@@ -2575,6 +2592,10 @@ class CipApplicationController extends Controller
             // Administrators may enter the Unit's number at any stage, so
             // the Overview offers the control even before it exists.
             'canAssignCipNumber' => CipAccess::canAssignCipNumber($viewer),
+            // The firm's administrators: no status is out of reach, nothing
+            // a status dialog asks for is required, and every move asks
+            // whether to notify the provider and assigned staff.
+            'skipsRequirements' => CipAccess::skipsRequirements($viewer),
             /*
              * Whether Save on the intake form will be accepted. Narrower than
              * canEditPeople (who may propose a name correction): a filed

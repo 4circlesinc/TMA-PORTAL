@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\Cip\Appeal;
 use App\Support\Cip\ApplicationScope;
 use App\Support\Cip\BackgroundCheck;
+use App\Support\Cip\CipAccess;
 use App\Support\Cip\Confirmation;
 use App\Support\Cip\Contacts;
 use App\Support\Cip\DdQuery;
@@ -81,7 +82,20 @@ class CipTransitionController extends Controller
             'acknowledge' => ['nullable', 'boolean'],
         ]);
 
-        $this->refuseIfItHasItsOwnVerb($application, $data['status']);
+        /*
+         * The firm's administrators may put a file on any status from here,
+         * without the verb the status normally has: no decision letter, no
+         * received date, no CIP number asked for. The dialogs still offer
+         * those, and the Timeline takes the dates later; nothing is
+         * required. See CipAccess::skipsRequirements.
+         */
+        if (! CipAccess::skipsRequirements($user)) {
+            $this->refuseIfItHasItsOwnVerb($application, $data['status']);
+        } elseif ($application->status === Status::DRAFT) {
+            // A draft is an unfinished form, not a file on a status: it is
+            // filed (submit), and then any status is an administrator's.
+            abort(422, 'File the draft first. Its status can be changed once it has been filed.');
+        }
 
         $note = trim($data['note'] ?? '');
         $meta = $note === '' ? [] : ['note' => $note];
@@ -317,7 +331,9 @@ class CipTransitionController extends Controller
             'decidedAt' => ['required', 'date'],
             'note' => ['nullable', 'string', 'max:2000'],
             'override' => ['nullable', 'boolean'],
-            'decisionLetter' => DecisionLetter::rules($firstDecision),
+            // Required on a first decision, except from an administrator,
+            // who may record it now and add the letter later.
+            'decisionLetter' => DecisionLetter::rules($firstDecision && ! CipAccess::skipsRequirements($user)),
         ], [
             'decidedAt.required' => 'Enter the decision date.',
             'decisionLetter.required' => 'Upload the decision letter as a PDF.',

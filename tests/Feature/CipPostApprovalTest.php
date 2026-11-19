@@ -1028,10 +1028,12 @@ class CipPostApprovalTest extends TestCase
         $this->assertSame(Status::GRANTED, $fresh->decision);
         $this->assertTrue(Engine::grantedBeforeLane($fresh));
 
+        // Neither reader is offered the decision as a step. (An administrator
+        // may still pick any status by hand, these included.)
         foreach ([$staff, $officer] as $reader) {
             $offered = array_merge(
                 Engine::availableTransitions($fresh, $reader),
-                Engine::availableOverrides($fresh, $reader),
+                $reader === $officer ? Engine::availableOverrides($fresh, $reader) : [],
                 Engine::lockedStatuses($fresh, $reader),
             );
             $this->assertNotContains(Status::POST_APPROVED, $offered);
@@ -1114,7 +1116,7 @@ class CipPostApprovalTest extends TestCase
      * A CRO / Reviewing officer is still refused outright, and is not offered
      * the row. The administrator's move keeps the list on the audit row.
      */
-    public function test_apply_for_cor_warns_an_administrator_of_outstanding_documents_and_lets_them_continue(): void
+    public function test_apply_for_cor_skips_outstanding_documents_for_an_administrator_and_keeps_them_on_the_trail(): void
     {
         Mail::fake();
         $staff = $this->staff();
@@ -1125,23 +1127,11 @@ class CipPostApprovalTest extends TestCase
         $this->assertContains(Status::APPLY_FOR_COR, Engine::availableOverrides($application->fresh(), $staff));
         $this->assertNotContains(Status::APPLY_FOR_COR, Engine::availableOverrides($application->fresh(), $officer));
 
-        $refused = $this->actingAs($staff)
-            ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
-                'status' => Status::APPLY_FOR_COR,
-            ])
-            ->assertStatus(422)
-            ->assertJsonPath('canAcknowledge', true);
-        $message = $refused->json('message');
-
-        $this->assertStringContainsString('Ready for submission', $message);
-        // Which ones, for the dialog: the Oath is one of the COR papers owed.
-        $this->assertContains('Oath of Allegiance', array_column($refused->json('blockers'), 'label'));
-        $this->assertSame(Status::POST_APPROVAL, $application->fresh()->status);
-
+        // The firm's administrators skip the requirement: no warning to
+        // acknowledge, and what was outstanding is kept on the audit row.
         $this->actingAs($staff)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::APPLY_FOR_COR,
-                'acknowledge' => true,
             ])
             ->assertOk()
             ->assertJsonPath('application.status', Status::APPLY_FOR_COR);
@@ -1626,7 +1616,9 @@ class CipPostApprovalTest extends TestCase
         $staff = $this->staff();
         [$application] = $this->corFile($staff);
 
-        $this->actingAs($staff)->post('/portal/cip/applications/'.$application->uuid.'/stage', [
+        // An officer; the firm's administrators skip this requirement.
+        $officer = $this->staff(Role::REVIEWING_OFFICER);
+        $this->actingAs($officer)->post('/portal/cip/applications/'.$application->uuid.'/stage', [
             'stage' => Stages::COR_RECEIVED,
             'date' => '2026-08-21',
             'corNumber' => 'COR-11',
@@ -1651,12 +1643,14 @@ class CipPostApprovalTest extends TestCase
         $this->fileRequiredCor($application, $staff);
         $this->approveRequiredCor($application, $staff);
 
-        $this->actingAs($staff)
+        // An officer; the firm's administrators skip this requirement.
+        $officer = $this->staff(Role::REVIEWING_OFFICER);
+        $this->actingAs($officer)
             ->getJson('/portal/cip/applications/'.$application->uuid)
             ->assertOk()
             ->assertJsonPath('application.stageAction', null);
 
-        $this->actingAs($staff)
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
                 'stage' => Stages::COR_SUBMITTED,
                 'date' => '2026-08-20',
@@ -1695,7 +1689,9 @@ class CipPostApprovalTest extends TestCase
         $this->approveRequiredCor($application, $staff);
         Confirmation::confirm($application->fresh(), $this->contactOn($application, $staff));
 
-        $this->actingAs($staff)
+        // An officer; the firm's administrators skip this requirement.
+        $officer = $this->staff(Role::REVIEWING_OFFICER);
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::PENDING_COR,
             ])
@@ -1732,7 +1728,9 @@ class CipPostApprovalTest extends TestCase
         // The NIC checklist materialised on arrival and stands pending, so
         // the file may NOT move on: required documents come first, and the
         // refusal lists them for the dialog that shows which.
-        $refused = $this->actingAs($staff)
+        // An officer; the firm's administrators skip this requirement.
+        $officer = $this->staff(Role::REVIEWING_OFFICER);
+        $refused = $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
                 'stage' => Stages::NIC_SUBMITTED, 'date' => '2026-08-22',
             ])
@@ -2355,7 +2353,9 @@ class CipPostApprovalTest extends TestCase
         $staff = $this->staff();
         [$application] = $this->intoApplyForNic($staff);
 
-        $this->actingAs($staff)
+        // An officer; the firm's administrators skip this requirement.
+        $officer = $this->staff(Role::REVIEWING_OFFICER);
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::PENDING_NIC,
             ])
@@ -2593,7 +2593,9 @@ class CipPostApprovalTest extends TestCase
         $staff = $this->staff();
         [$application] = $this->intoApplyForPassport($staff);
 
-        $this->actingAs($staff)
+        // An officer; the firm's administrators skip this requirement.
+        $officer = $this->staff(Role::REVIEWING_OFFICER);
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::PENDING_PASSPORT,
             ])
@@ -2664,7 +2666,9 @@ class CipPostApprovalTest extends TestCase
         $staff = $this->staff();
         [$application] = $this->intoPendingPassport($staff);
 
-        $this->actingAs($staff)
+        // An officer; the firm's administrators skip this requirement.
+        $officer = $this->staff(Role::REVIEWING_OFFICER);
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::PASSPORT_RECEIVED,
             ])
@@ -2704,7 +2708,8 @@ class CipPostApprovalTest extends TestCase
         $this->assertNull($recorded['stageAction']);
         // Closed off is the one move left, offered as the next step.
         $this->assertSame([Status::CLOSED], array_column($recorded['availableTransitions'], 'value'));
-        $this->assertSame([], $recorded['availableOverrides']);
+        // Only an administrator, who may set any status, is offered more.
+        $this->assertSame([], Engine::availableOverrides($application->fresh(), $this->staff(Role::REVIEWING_OFFICER)));
         $this->assertTrue($application->fresh()->isClosed());
         $this->assertSame(CipApplication::DECISION_GRANTED, $application->fresh()->decision);
         $this->assertSame(Phase::POST_APPROVAL, $application->fresh()->phase);
@@ -2725,7 +2730,9 @@ class CipPostApprovalTest extends TestCase
         $staff = $this->staff();
         [$application] = $this->intoReadyForDelivery($staff);
 
-        $this->actingAs($staff)
+        // An officer; the firm's administrators skip this requirement.
+        $officer = $this->staff(Role::REVIEWING_OFFICER);
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::PASSPORT_DELIVERED,
             ])
@@ -2773,9 +2780,10 @@ class CipPostApprovalTest extends TestCase
             Status::APPLY_FOR_COR,
             Engine::availableTransitions($application->fresh(), $staff),
         );
+        // Not to an officer; an administrator may set any status by hand.
         $this->assertNotContains(
             Status::APPLY_FOR_COR,
-            Engine::availableOverrides($application->fresh(), $staff),
+            Engine::availableOverrides($application->fresh(), $this->staff(Role::REVIEWING_OFFICER)),
         );
         $this->assertFalse(Engine::canTransition($application->fresh(), Status::APPLY_FOR_COR));
         $this->assertFalse(Engine::canTransition($application->fresh(), Status::POST_APPROVAL));
@@ -2986,26 +2994,29 @@ class CipPostApprovalTest extends TestCase
         Mail::fake();
 
         // By hand it would only bounce: refused, with a reason or without,
-        // and the refusal names the paper.
-        $this->actingAs($staff)
+        // and the refusal names the paper. (To an officer; the firm's
+        // administrators skip the requirement.)
+        $officer = $this->staff(Role::REVIEWING_OFFICER);
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', ['status' => Status::APPLY_FOR_NIC])
             ->assertStatus(422)
             ->assertJsonPath('blockers.0.label', $r3->label);
-        $this->actingAs($staff)
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::APPLY_FOR_NIC, 'note' => 'Moving it on anyway.',
             ])
             ->assertStatus(422);
 
-        $this->actingAs($staff)
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
                 'stage' => Stages::COR_RECEIVED, 'date' => '2026-09-01',
             ])
             ->assertStatus(422);
 
-        $this->actingAs($staff)
+        // Off the map, which an officer may not take at all.
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', ['status' => Status::POST_APPROVAL])
-            ->assertStatus(422);
+            ->assertForbidden();
 
         $fresh = $application->fresh();
         $this->assertSame('2026-08-21', $fresh->cor_received_at->toDateString());
@@ -3043,7 +3054,9 @@ class CipPostApprovalTest extends TestCase
         $this->assertSame(Status::PENDING_PASSPORT, Stages::hold($fresh, $staff)['to'] ?? null);
         $this->assertNotContains(Status::POST_APPROVAL, Engine::availableTransitions($fresh, $staff));
 
-        $this->actingAs($staff)
+        // An officer; the firm's administrators skip this requirement.
+        $officer = $this->staff(Role::REVIEWING_OFFICER);
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
                 'stage' => Stages::NIC_RECEIVED, 'date' => '2026-09-02',
             ])
@@ -3145,14 +3158,16 @@ class CipPostApprovalTest extends TestCase
         $this->approveRequiredCor($application, $staff);
 
         // Apply for COR, unconfirmed: nothing to record, and the menu says why.
+        // (Read as an officer: the firm's administrators skip these
+        // requirements and may record any step from anywhere.)
         $fresh = $application->fresh();
+        $officer = $this->staff(Role::REVIEWING_OFFICER);
         $this->assertSame(Status::APPLY_FOR_COR, $fresh->status);
-        $this->assertNull(Stages::payload($fresh, $staff));
+        $this->assertNull(Stages::payload($fresh, $officer));
         $this->assertSame(
             ['to' => Status::PENDING_COR, 'note' => 'Confirm submission first.'],
             Stages::hold($fresh, $staff),
         );
-        $officer = $this->staff(Role::REVIEWING_OFFICER);
         $this->assertSame(
             'Waiting for the service provider to confirm submission.',
             Stages::hold($fresh, $officer)['note'] ?? null,
@@ -3194,7 +3209,7 @@ class CipPostApprovalTest extends TestCase
                 $before = $application->fresh()->status;
 
                 try {
-                    Stages::record($application->fresh(), $staff, $other, Carbon::parse('2026-09-09'));
+                    Stages::record($application->fresh(), $officer, $other, Carbon::parse('2026-09-09'));
                     $recorded = true;
                 } catch (\InvalidArgumentException) {
                     $recorded = false;
@@ -3241,8 +3256,9 @@ class CipPostApprovalTest extends TestCase
         );
         $this->assertSame(Status::POST_DENIED, $application->fresh()->status);
 
-        // The delivery date is not a way to close it.
-        $this->actingAs($staff)
+        // The delivery date is not a way to close it. (To an officer; the
+        // firm's administrators may record any step from anywhere.)
+        $this->actingAs($this->staff(Role::REVIEWING_OFFICER))
             ->postJson('/portal/cip/applications/'.$application->uuid.'/stage', [
                 'stage' => Stages::PASSPORT_DELIVERED, 'date' => '2026-08-30',
             ])
@@ -3317,7 +3333,8 @@ class CipPostApprovalTest extends TestCase
         [$application] = $this->intoReadyForDelivery($staff);
         $application->forceFill(['decision' => Status::POST_DENIED])->save();
 
-        $this->actingAs($staff)
+        // Refused to an officer; the firm's administrators skip the date.
+        $this->actingAs($this->staff(Role::REVIEWING_OFFICER))
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::PASSPORT_DELIVERED, 'note' => 'Closing it.',
             ])

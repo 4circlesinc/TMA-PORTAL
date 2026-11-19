@@ -155,6 +155,10 @@ class Appeal
          * administrator who typed the confirmation may drive it through
          * Engine::set; everyone else keeps the explanation.
          */
+        // An administrator is never refused the move; see
+        // CipAccess::skipsRequirements.
+        $override = $override || CipAccess::skipsRequirements($actor);
+
         if (! $edge && ! $override) {
             throw new \InvalidArgumentException(
                 'An appeal can only be lodged against an application the Unit has decided.',
@@ -220,6 +224,10 @@ class Appeal
         $already = $application->status === Status::APPEAL_READY;
         $edge = $already || Engine::canTransition($application, Status::APPEAL_READY);
 
+        // An administrator is never refused the move; see
+        // CipAccess::skipsRequirements.
+        $override = $override || CipAccess::skipsRequirements($actor);
+
         if (! $edge && ! $override) {
             throw new \InvalidArgumentException(
                 'An appeal can only be made ready once it has been lodged.',
@@ -267,6 +275,10 @@ class Appeal
         $submittedAt ??= Carbon::now();
         $already = $application->status === Status::APPEAL_SUBMITTED;
         $edge = $already || Engine::canTransition($application, Status::APPEAL_SUBMITTED);
+
+        // An administrator is never refused the move; see
+        // CipAccess::skipsRequirements.
+        $override = $override || CipAccess::skipsRequirements($actor);
 
         if (! $edge && ! $override) {
             throw new \InvalidArgumentException(

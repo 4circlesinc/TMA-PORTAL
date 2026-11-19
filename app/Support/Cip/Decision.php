@@ -100,10 +100,18 @@ class Decision
             $already = true;
         }
 
+        // The firm's administrators may decide from anywhere, change a
+        // decision already recorded, and leave the letter for later; see
+        // CipAccess::skipsRequirements.
+        $skips = CipAccess::skipsRequirements($actor);
+        if ($skips && ! $already && ! Engine::canTransition($application, $decision)) {
+            $override = true;
+        }
+
         if ($already) {
             // Same outcome again: the date can move. The other outcome cannot
             // overwrite this one through this door.
-        } elseif (Status::isOutcomeOf($application->status, $phase)) {
+        } elseif (Status::isOutcomeOf($application->status, $phase) && ! $skips) {
             throw new \InvalidArgumentException(
                 'This application has already been decided.',
             );
@@ -117,11 +125,11 @@ class Decision
             );
         }
 
-        $application = DB::transaction(function () use ($application, $actor, $decision, $decidedAt, $note, $already, $letter, $override) {
+        $application = DB::transaction(function () use ($application, $actor, $decision, $decidedAt, $note, $already, $letter, $override, $skips) {
             if ($letter !== null) {
                 DecisionLetter::store($application, $letter, $actor, $decision);
                 $application->refresh();
-            } elseif (! $already && $application->decision_letter_file_id === null) {
+            } elseif (! $already && ! $skips && $application->decision_letter_file_id === null) {
                 throw ValidationException::withMessages([
                     'decisionLetter' => 'Upload the decision letter as a PDF.',
                 ]);

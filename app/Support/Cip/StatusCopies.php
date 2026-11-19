@@ -40,6 +40,30 @@ class StatusCopies
     ];
 
     /**
+     * Did an administrator choose not to notify anybody of this move?
+     *
+     * The status dialogs carry a "Notify the service provider and assigned
+     * staff" box for administrators ({@see CipAccess::skipsRequirements()}).
+     * Unticked, the dialog sends notify=0 and the standing notice list —
+     * the provider's contacts and whoever holds the file — is not mailed or
+     * belled for anything this request moves. Addresses typed into CC still
+     * get their copy: somebody named them on purpose.
+     *
+     * Only on a status dialog's own route, and only from an administrator:
+     * anyone else's notify=0 is ignored, and so is one sent anywhere else.
+     */
+    public static function silenced(): bool
+    {
+        $request = request();
+
+        if (! $request instanceof Request || ! self::askedOn($request) || ! $request->exists('notify')) {
+            return false;
+        }
+
+        return ! $request->boolean('notify') && CipAccess::skipsRequirements($request->user());
+    }
+
+    /**
      * This request is one of the status dialogs, so a file on it belongs to
      * the notice that dialog is about to send.
      */

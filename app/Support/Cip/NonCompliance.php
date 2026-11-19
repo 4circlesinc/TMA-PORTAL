@@ -54,6 +54,10 @@ class NonCompliance
          * Engine::set (admin gate, reason demanded); everyone else keeps
          * the explanation.
          */
+        // An administrator is never refused the move; see
+        // CipAccess::skipsRequirements.
+        $override = $override || CipAccess::skipsRequirements($actor);
+
         if (! $edge && ! $override) {
             throw new \InvalidArgumentException(
                 'A query can only be recorded on an application the Unit already holds.',

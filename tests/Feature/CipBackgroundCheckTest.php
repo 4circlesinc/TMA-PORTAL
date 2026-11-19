@@ -298,7 +298,9 @@ class CipBackgroundCheckTest extends TestCase
         $staff = $this->user(Role::ADMINISTRATOR);
         $application = $this->pending($staff);
 
-        $this->actingAs($staff)
+        // An officer; the firm's administrators skip this requirement.
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::BACKGROUND_CHECK,
             ])
@@ -314,7 +316,9 @@ class CipBackgroundCheckTest extends TestCase
         $application = $this->pending($staff);
         $application->forceFill(['status' => Status::NEW])->save();
 
-        $this->actingAs($staff)
+        // An officer; the firm's administrators skip this requirement.
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/acceptance', [
                 'acceptedAt' => '2026-08-18',
             ])

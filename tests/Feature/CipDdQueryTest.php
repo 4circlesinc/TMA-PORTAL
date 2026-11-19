@@ -308,7 +308,9 @@ class CipDdQueryTest extends TestCase
         $staff = $this->user(Role::ADMINISTRATOR);
         $application = $this->inBackgroundCheck($staff);
 
-        $this->actingAs($staff)
+        // An officer; the firm's administrators skip this requirement.
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::DD_QUERY,
             ])
@@ -324,7 +326,9 @@ class CipDdQueryTest extends TestCase
         $application = $this->inBackgroundCheck($staff);
         $application->forceFill(['status' => Status::PENDING_REVIEW, 'accepted_at' => null])->save();
 
-        $this->actingAs($staff)
+        // An officer; the firm's administrators skip this requirement.
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/dd-query', [
                 'queryReceivedAt' => '2026-08-18',
             ])

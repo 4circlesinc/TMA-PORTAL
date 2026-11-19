@@ -140,14 +140,17 @@ class CipSubmissionTest extends TestCase
         $staff = $this->user(Role::ADMINISTRATOR);
         $application = $this->ready($staff);
 
-        $this->actingAs($staff)
+        // An officer: the firm's administrators may record the submission
+        // now and the Unit's number later.
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/submission', [
                 'submittedAt' => '2026-08-10',
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrors('cipNumber');
 
-        $this->actingAs($staff)
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/submission', [
                 'cipNumber' => '10T1G12661P',
             ])
@@ -198,7 +201,9 @@ class CipSubmissionTest extends TestCase
         $staff = $this->user(Role::ADMINISTRATOR);
         $application = $this->ready($staff);
 
-        $this->actingAs($staff)
+        // An officer; the firm's administrators skip this requirement.
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::PENDING_REVIEW,
             ])
@@ -214,7 +219,9 @@ class CipSubmissionTest extends TestCase
         $application = Applications::create($this->provider($staff), $staff);
         $application->forceFill(['locked_at' => now()])->save();
 
-        $this->actingAs($staff)
+        // An officer; the firm's administrators skip this requirement.
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/submission', [
                 'cipNumber' => '10T1G12661P',
                 'submittedAt' => '2026-08-10',

@@ -70,14 +70,30 @@ class Submission
         string $note = '',
         bool $acknowledged = false,
     ): CipApplication {
-        $number = self::clean((string) $cipNumber);
-        self::assertFree($number, $application);
+        /*
+         * The firm's administrators skip what this step asks for: the Unit's
+         * number may come later (blank keeps whatever the file has), the
+         * package need not be confirmed first, and the file may be coming
+         * from any status. See CipAccess::skipsRequirements.
+         */
+        $skips = CipAccess::skipsRequirements($actor);
+        if ($skips) {
+            $override = true;
+        }
+
+        $number = $skips && trim((string) $cipNumber) === ''
+            ? (string) ($application->cip_number ?? '')
+            : self::clean((string) $cipNumber);
+
+        if ($number !== '') {
+            self::assertFree($number, $application);
+        }
 
         if ($application->isAddOn()) {
             return self::recordAddOn($application, $actor, $number, $submittedAt, $override, $note, $acknowledged);
         }
 
-        if (! $application->isLocked()) {
+        if (! $application->isLocked() && ! $skips) {
             throw ValidationException::withMessages([
                 'cipNumber' => 'The service provider must confirm submission before the package can be sent to the Unit.',
             ]);
@@ -93,7 +109,7 @@ class Submission
              * reconciling an invoice against this row will look for it.
              */
             $application->forceFill([
-                'cip_number' => $number,
+                'cip_number' => $number !== '' ? $number : null,
                 'submitted_at' => $submittedAt,
                 'submitted_by' => $actor->name,
             ])->save();
@@ -109,10 +125,12 @@ class Submission
             }
             self::moveToPendingReview($application, $actor, $meta, $override, $acknowledged);
 
-            Engine::record($application, CipEvent::ACTION_NUMBER_ASSIGNED, $actor, [
-                'cipNumber' => $number,
-                'internalNumber' => $application->internal_number,
-            ]);
+            if ($number !== '') {
+                Engine::record($application, CipEvent::ACTION_NUMBER_ASSIGNED, $actor, [
+                    'cipNumber' => $number,
+                    'internalNumber' => $application->internal_number,
+                ]);
+            }
 
             return $application->refresh();
         });
@@ -175,7 +193,7 @@ class Submission
         string $note = '',
         bool $acknowledged = false,
     ): CipApplication {
-        if (! $application->isLocked()) {
+        if (! $application->isLocked() && ! CipAccess::skipsRequirements($actor)) {
             throw ValidationException::withMessages([
                 'cipNumber' => 'The service provider must confirm submission before the package can be sent to the Unit.',
             ]);
@@ -186,7 +204,7 @@ class Submission
 
         return DB::transaction(function () use ($application, $actor, $number, $submittedAt, $submittedBy, $override, $note, $acknowledged) {
             $application->forceFill([
-                'cip_number' => $number,
+                'cip_number' => $number !== '' ? $number : null,
                 'submitted_at' => $submittedAt,
                 'submitted_by' => $submittedBy,
             ])->save();
@@ -204,10 +222,12 @@ class Submission
             }
             self::moveToPendingReview($application, $actor, $meta, $override, $acknowledged);
 
-            Engine::record($application, CipEvent::ACTION_NUMBER_ASSIGNED, $actor, [
-                'cipNumber' => $number,
-                'internalNumber' => $application->internal_number,
-            ]);
+            if ($number !== '') {
+                Engine::record($application, CipEvent::ACTION_NUMBER_ASSIGNED, $actor, [
+                    'cipNumber' => $number,
+                    'internalNumber' => $application->internal_number,
+                ]);
+            }
 
             return $application->refresh();
         });

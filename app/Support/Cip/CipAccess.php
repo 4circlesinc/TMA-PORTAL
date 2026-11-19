@@ -305,6 +305,24 @@ class CipAccess
     }
 
     /**
+     * Does this account skip the lifecycle's requirements?
+     *
+     * The firm's administrators. No status is out of their reach: not the
+     * other lane's, not a dated step from the "wrong" status, not one the
+     * checklist would refuse, not a decision already recorded. What a verb
+     * would ask for — a decision letter, the Unit's number, a confirmed
+     * package, a reason for pulling a file back — is optional for them, and
+     * they choose whether the move notifies the file's service provider
+     * and assigned staff ({@see StatusCopies::silenced()}).
+     *
+     * Everyone else keeps the lifecycle as it is.
+     */
+    public static function skipsRequirements(?User $user): bool
+    {
+        return self::canOverrideStatus($user);
+    }
+
+    /**
      * May this account read a document warning and carry on past it?
      *
      * Carrying a file past an unfinished checklist is an override, so it is

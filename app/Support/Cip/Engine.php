@@ -556,16 +556,38 @@ class Engine
             return [];
         }
 
+        $next = self::availableTransitions($application, $actor, $forListing);
+
+        /*
+         * An administrator is offered every status.
+         *
+         * The firm's administrators skip the lifecycle's requirements
+         * ({@see CipAccess::skipsRequirements()}): the other lane, a dated
+         * step from anywhere, Delayed, a decision already recorded, a file
+         * whose papers are not all Ready for submission. Each is a row they
+         * may press. An Add-On is the one limit, and it is the Add-On's own
+         * vocabulary rather than a rule: it never works the post-approval
+         * lane, so those labels are not its statuses at all.
+         */
+        if (CipAccess::skipsRequirements($actor)) {
+            $addOn = ($application->phase ?? Phase::PRE_APPROVAL) === Phase::ADD_ON;
+
+            return array_values(array_filter(
+                Status::listed(),
+                fn (string $to) => $to !== $application->status
+                    && ! in_array($to, $next, true)
+                    && ! ($addOn && Status::laneOf($to) === Phase::POST_APPROVAL),
+            ));
+        }
+
         /*
          * Nor has a delivered passport. The file's work is done; the one
          * thing left is to close it off, which is its mapped next step, and
-         * no other status is offered — not even to an administrator.
+         * no other status is offered.
          */
         if ($application->status === Status::PASSPORT_DELIVERED) {
             return [];
         }
-
-        $next = self::availableTransitions($application, $actor, $forListing);
 
         /*
          * A dated step is normally the date verb's to drive, so it is kept
@@ -829,7 +851,18 @@ class Engine
             throw new AuthorizationException('You cannot move this application to '.Status::label($to).'.');
         }
 
+        /*
+         * An administrator is not stopped by the checklist. The move goes
+         * through set(), which keeps what was not Ready for submission on
+         * the audit row instead of refusing; see CipAccess::skipsRequirements.
+         */
+        $skips = $actor !== null && CipAccess::skipsRequirements($actor);
+
         if (! self::checklistAllows($application, $to)) {
+            if ($skips) {
+                return self::set($application, $to, $actor, array_merge($meta, ['acknowledged' => true]));
+            }
+
             throw (new NotReady(self::checklistRefusal($to), Review::blockerRows($application)))
                 ->acknowledgeableBy($actor, $to);
         }
@@ -845,6 +878,10 @@ class Engine
             Review::forgetTally($application);
 
             if (Review::hasSentBack($application)) {
+                if ($skips) {
+                    return self::set($application, $to, $actor, array_merge($meta, ['acknowledged' => true]));
+                }
+
                 throw new NotReady(
                     'A document that was sent back has to be replaced and accepted first.',
                     Review::blockerRows($application),
@@ -888,6 +925,23 @@ class Engine
         }
 
         /*
+         * The firm's administrators skip the lifecycle's requirements: any
+         * status, either lane, a checklist that is not finished, no reason
+         * demanded. See {@see CipAccess::skipsRequirements()}.
+         */
+        $skips = $actor !== null && CipAccess::skipsRequirements($actor);
+        $phase = $application->phase ?? Phase::PRE_APPROVAL;
+
+        // An Add-On never works the post-approval lane: not a requirement
+        // to skip, simply not this file's statuses.
+        if ($phase === Phase::ADD_ON && Status::laneOf($to) === Phase::POST_APPROVAL) {
+            throw new \InvalidArgumentException(sprintf(
+                '%s is not an Add-On status.',
+                Status::label($to),
+            ));
+        }
+
+        /*
          * The picker draws what an override may reach; the write agrees with
          * it, so an option the menu never shows is not one the endpoint
          * quietly accepts.
@@ -897,7 +951,7 @@ class Engine
          * reason above is what the audit keeps. Apply for COR is the
          * exception, checked just below; see {@see packageAllowsOverride()}.
          */
-        if ($actor !== null && ! self::overrideFits($application, $to)) {
+        if ($actor !== null && ! $skips && ! self::overrideFits($application, $to)) {
             throw new \InvalidArgumentException(sprintf(
                 '%s cannot be set on this application.',
                 Status::label($to),
@@ -905,7 +959,7 @@ class Engine
         }
 
         $forward = self::isForward($application, $to);
-        $acknowledged = ! empty($meta['acknowledged']);
+        $acknowledged = ! empty($meta['acknowledged']) || $skips;
         unset($meta['acknowledged']);
 
         /*
@@ -928,7 +982,7 @@ class Engine
         if ($packageShort) {
             $refusal = new NotReady(self::checklistRefusal($to), Review::blockerRows($application));
 
-            if (! $acknowledged || ! CipAccess::canAcknowledgeBlockers($actor, $to)) {
+            if (! $acknowledged || (! $skips && ! CipAccess::canAcknowledgeBlockers($actor, $to))) {
                 throw $refusal->acknowledgeableBy($actor, $to);
             }
 
@@ -938,12 +992,11 @@ class Engine
             ));
         }
 
-        // Section 26: an administrator may type any listed status, but the audit
-        // row has to say why. System writes (a null actor) skip this — the
-        // checklist inferring Ready to submit is not a person changing a
-        // label by hand. A step further along the lane is not an override
-        // and needs no reason; see {@see isForward()}.
-        if ($actor !== null && ! $forward && trim((string) ($meta['note'] ?? '')) === '') {
+        // Section 26 asked for a reason on every pull back. The firm's
+        // administrators skip that requirement too: a reason given is kept
+        // on the audit row, and none is demanded. System writes (a null
+        // actor) never needed one.
+        if ($actor !== null && ! $skips && ! $forward && trim((string) ($meta['note'] ?? '')) === '') {
             throw new \InvalidArgumentException('Give a reason for changing the status.');
         }
 
@@ -961,6 +1014,27 @@ class Engine
                 $meta['revertedPhase'] = Phase::POST_APPROVAL;
                 $extra['phase'] = Phase::PRE_APPROVAL;
             }
+        }
+
+        /*
+         * Set to a pre-approval status, a post-approval file goes back to
+         * being a pre-approval one, so the label and the lane agree. (Into
+         * the post-approval lane is write()'s, see $enteringPost there.)
+         */
+        if ($phase === Phase::POST_APPROVAL
+            && Status::laneOf($to) === Phase::PRE_APPROVAL
+            && ! array_key_exists('phase', $extra)) {
+            $meta['revertedPhase'] = Phase::POST_APPROVAL;
+            $extra['phase'] = Phase::PRE_APPROVAL;
+        }
+
+        /*
+         * An outcome set by hand is the decision, so the decision column
+         * says what the chip says. The day stays what it was: a date is
+         * recorded, not assumed, and the Timeline is where it is entered.
+         */
+        if (Status::isOutcome($to) && $application->decision !== $to && ! array_key_exists('decision', $extra)) {
+            $extra['decision'] = $to;
         }
 
         $application = self::write($application, $to, $actor, $meta, $extra);
@@ -1076,8 +1150,16 @@ class Engine
         // that then moves the file does not mail the same addresses again.
         $copies = StatusCopies::take();
 
-        $enteringPost = $to === Status::POST_APPROVAL
-            && ($application->phase ?? Phase::PRE_APPROVAL) !== Phase::POST_APPROVAL;
+        /*
+         * Into the post-approval lane. By Post-Approval itself, the ordinary
+         * way after a grant; or, for an administrator setting any status of
+         * that lane on a pre-approval file (see set()), by that status — the
+         * file becomes a post-approval one either way, with its tree and its
+         * checklist, so the label and the lane agree. An Add-On never enters
+         * the lane, and set() refuses it those statuses before this.
+         */
+        $enteringPost = ($application->phase ?? Phase::PRE_APPROVAL) === Phase::PRE_APPROVAL
+            && Status::laneOf($to) === Phase::POST_APPROVAL;
 
         if ($enteringPost) {
             $extra = array_merge([

@@ -2000,7 +2000,8 @@ class CipAddOnTest extends TestCase
 
         // The Unit issues the Add-On its own CIP number; the parent's stays
         // on the parent and is refused here as a duplicate.
-        $this->actingAs($staff)
+        // Required of the officer; an administrator may add it later.
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/submission', [
                 'submittedAt' => '2026-09-14',
             ])
@@ -2074,8 +2075,8 @@ class CipAddOnTest extends TestCase
 
         $application = CipApplication::query()->where('uuid', $body['id'])->firstOrFail();
 
-        // Not numbered yet: the form is not offered the field and the
-        // server refuses a number sent early.
+        // Not numbered yet: the server refuses a number sent early by
+        // anyone but an administrator, who may enter it at any stage.
         $shown = $this->actingAs($staff)
             ->getJson('/portal/cip/applications/'.$application->uuid)
             ->assertOk()
@@ -2083,7 +2084,7 @@ class CipAddOnTest extends TestCase
         $this->assertNull($shown['cipNumber']);
         $this->assertTrue($shown['canEditCipNumber']);
 
-        $this->actingAs($staff)
+        $this->actingAs($this->officer())
             ->post(
                 '/portal/cip/applications/'.$application->uuid,
                 $this->addOnPayload($parent, ['cipNumber' => '10T1GADD01P-AO1']),
@@ -2161,7 +2162,8 @@ class CipAddOnTest extends TestCase
         $this->markRequiredAddOnDocumentsReady($application, $staff);
         $application->forceFill(['status' => Status::READY_TO_SUBMIT])->save();
 
-        $this->actingAs($staff)
+        // An administrator skips the confirmation; the firm's officers do not.
+        $this->actingAs($this->officer())
             ->postJson('/portal/cip/applications/'.$application->uuid.'/submission', [
                 'cipNumber' => '10T1GADD01P-AO1',
                 'submittedAt' => '2026-09-14',
@@ -2391,7 +2393,8 @@ class CipAddOnTest extends TestCase
         Tree::provision($application, $staff);
         $application->forceFill(['status' => Status::READY_TO_SUBMIT])->save();
 
-        $this->postCipDecision($staff, $application->uuid, [
+        // An officer; an administrator may decide from anywhere.
+        $this->postCipDecision($this->officer(), $application->uuid, [
             'decision' => Status::GRANTED,
             'decidedAt' => '2026-09-16',
         ])->assertStatus(422);

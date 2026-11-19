@@ -7172,10 +7172,12 @@
   function cipKeepPendingStatusExtras() {
     var file = cipPendingStatusFile;
     var cc = cipPendingStatusCc;
+    var notify = cipPendingStatusNotify;
 
     return function () {
       cipPendingStatusFile = file;
       cipPendingStatusCc = cc;
+      cipPendingStatusNotify = notify;
     };
   }
 
@@ -9524,7 +9526,10 @@
    */
   function cipNumberOverviewRow(app) {
     var mayEnter = !!app.canAssignCipNumber || (!!app.canEditCipNumber && !!app.cipNumber);
-    if (!mayEnter || app.status === 'draft') return overviewRow('CIP application number', app.cipNumber || '');
+    // An administrator enters it at any stage, a draft included.
+    if (!mayEnter || (app.status === 'draft' && !app.canAssignCipNumber)) {
+      return overviewRow('CIP application number', app.cipNumber || '');
+    }
 
     return overviewRow(
       'CIP application number',
@@ -14804,7 +14809,9 @@
 
         save.addEventListener('click', function () {
           var number = input ? input.value.trim() : '';
-          if (!number) {
+          // An administrator may record the submission now and the Unit's
+          // number later; a correction still needs a number to correct to.
+          if (!number && (correcting || !cipViewerSkipsRequirements())) {
             clientsToast(addOn
               ? 'Enter the CIP application number the Unit issued this Add-On.'
               : 'Enter the CIP application number from the Unit.', 'negative');
@@ -15351,8 +15358,9 @@
       return stageNow && status.value === stageNow && status.value !== (source && source.status);
     });
 
+    // Delayed is the daily check's, never a next step. An administrator's
+    // override list may still hold it: they may set any status by hand.
     next = next.filter(function (status) { return status.value !== 'delayed'; });
-    overrides = overrides.filter(function (status) { return status.value !== 'delayed'; });
     locked = locked.filter(function (status) { return status.value !== 'delayed'; });
 
     /*
@@ -15575,20 +15583,20 @@
       renderCipStatusLaneBody(own, ownLocked, menu.current, order);
 
     /*
-     * Only a post-approval file has the other lane behind a row.
+     * The other lane, behind one row, for whoever is offered it: the
+     * firm's administrators, who may set any status. Everyone else's list
+     * is the file's own lane.
      *
-     * A pre-approval file goes on to post-approval once it is approved, by
-     * the green "Move on to post-approval" button in the application bar
-     * (and the Post-Approval row an Approved file already has in its own
-     * list). A "Post-approval override" row beside it read as nonsense: the
-     * next stage is not an override of anything.
+     * A pre-approval file still goes on to post-approval, once approved, by
+     * the green "Move on to post-approval" button in the application bar.
      */
-    var otherAll = menu.lane === 'post_approval' ? other.concat(otherLocked) : [];
+    var otherAll = other.concat(otherLocked);
     if (!otherAll.length) return body || renderCipStatusSub([], menu.current);
 
-    // Named for the lane it opens, not for who may press it: "Admin
-    // override" said nothing about what was behind it.
-    var label = 'Pre-approval override';
+    // Named for the lane it opens, not for who may press it, and not an
+    // "override": the firm's administrators may set any status, and the
+    // other lane's statuses are simply the other lane's.
+    var label = menu.lane === 'post_approval' ? 'Pre-approval statuses' : 'Post-approval statuses';
 
     return body +
       '<div class="tma-portal-context-menu__sep" role="separator"></div>' +
@@ -16208,7 +16216,45 @@
       '<input type="text" id="cip-status-cc" class="tma-cip-cc__input" data-cip-status-cc' +
       ' placeholder="name@firm.com" autocomplete="off" enterkeyhint="done">' +
       '</div>' +
-      '</div>';
+      '</div>' +
+      cipStatusNotifyHtml();
+  }
+
+  /*
+   * The firm's administrators skip the lifecycle's requirements and choose
+   * whether a move tells anybody (CipAccess::skipsRequirements on the
+   * server, sent as skipsRequirements on the file). Everyone else's moves
+   * always notify, as they always have.
+   */
+  function cipViewerSkipsRequirements() {
+    var app = clientsMountState && applicationFor(clientsMountState.selectedId);
+    if (app && typeof app.skipsRequirements === 'boolean') return app.skipsRequirements;
+    var me = window.TMACurrentUser && window.TMACurrentUser.get && window.TMACurrentUser.get();
+
+    return !!(me && me.isAdmin);
+  }
+
+  var cipPendingStatusNotify = null;
+
+  /*
+   * "Notify the service provider and assigned staff", ticked by default,
+   * beside CC on every status dialog. Unticked, the standing notice list
+   * hears nothing of the move; addresses in CC still get their copy.
+   */
+  function cipStatusNotifyHtml() {
+    if (!cipViewerSkipsRequirements()) return '';
+
+    return '<label class="tma-portal-check-row tma-cip-notify">' +
+      '<input type="checkbox" class="tma-dash__check" data-cip-status-notify checked>' +
+      '<span>Notify the service provider and assigned staff</span>' +
+      '</label>';
+  }
+
+  /* The box's answer, or null on a dialog that has none. */
+  function cipStatusNotifyValue(root) {
+    var box = root && root.querySelector && root.querySelector('[data-cip-status-notify]');
+
+    return box ? !!box.checked : null;
   }
 
   function cipStatusCcParts(value) {
@@ -16504,28 +16550,34 @@
     var list = cipStatusCcValue(root);
     if (list === null) return false;
     cipPendingStatusCc = list;
+    cipPendingStatusNotify = cipStatusNotifyValue(root);
 
     return true;
   }
 
   function cipApplyStatusCc(fields, root) {
     var list;
+    var notify;
     if (root && root.querySelector('[data-cip-status-cc]')) {
       list = cipStatusCcValue(root);
       if (list === null) return null;
+      notify = cipStatusNotifyValue(root);
     } else {
       list = cipPendingStatusCc || [];
+      notify = cipPendingStatusNotify;
     }
     cipPendingStatusCc = null;
+    cipPendingStatusNotify = null;
     fields = fields || {};
-    if (!list.length) return fields;
+    if (!list.length && notify === null) return fields;
 
     var next = {};
     var key;
     for (key in fields) {
       if (Object.prototype.hasOwnProperty.call(fields, key)) next[key] = fields[key];
     }
-    next.cc = list.join(', ');
+    if (list.length) next.cc = list.join(', ');
+    if (notify !== null) next.notify = notify;
 
     return next;
   }
@@ -16558,16 +16610,18 @@
    * that carries it confirms the move and asks for nothing typed. Only a
    * pull back keeps the reason and the typed OVERRIDE.
    */
+  /*
+   * Only administrators hold overrides, and they skip the lifecycle's
+   * requirements (CipAccess::skipsRequirements): the reason is offered for
+   * the Activity tab and never demanded, and nothing has to be typed to
+   * confirm.
+   */
   function cipOverrideFieldsHtml(mode) {
     if (mode === 'forward') return '';
 
     return '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
-      '<label class="tma-dash__clients-field-label" for="cip-override-note">Reason</label>' +
+      '<label class="tma-dash__clients-field-label" for="cip-override-note">Reason (optional)</label>' +
       '<textarea id="cip-override-note" class="tma-dash__clients-field-textarea" data-cip-override-note rows="3" maxlength="2000" placeholder="Why this file is moving"></textarea>' +
-      '</div>' +
-      '<div class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
-      '<label class="tma-dash__clients-field-label" for="cip-override-word">Type <span class="tma-dash__clients-override-word">' + CIP_OVERRIDE_WORD + '</span> to confirm</label>' +
-      '<input type="text" id="cip-override-word" class="tma-dash__clients-field-input" data-cip-override-word autocomplete="off" spellcheck="false" placeholder="' + CIP_OVERRIDE_WORD + '">' +
       '</div>';
   }
 
@@ -16579,11 +16633,8 @@
     if (!note && !word) return '';
     var reason = note && note.value ? note.value.trim() : '';
 
-    if (!reason) {
-      clientsToast('Give a reason for changing the status.', 'negative');
-      return null;
-    }
-    if (!word || word.value.trim().toUpperCase() !== CIP_OVERRIDE_WORD) {
+    // A dialog that still draws the typed confirmation keeps asking for it.
+    if (word && word.value.trim().toUpperCase() !== CIP_OVERRIDE_WORD) {
       clientsToast('Type ' + CIP_OVERRIDE_WORD + ' to confirm the move.', 'negative');
       return null;
     }
@@ -16596,9 +16647,9 @@
     if (!ui || !ui.openModal) return;
 
     ui.openModal({
-      title: 'Override status',
+      title: 'Change status',
       body:
-        '<p class="tma-portal-modal__text">Move this file to ' + esc(label || 'the next status') + '. The Activity tab keeps the reason.</p>' +
+        '<p class="tma-portal-modal__text">Move this file to ' + esc(label || 'the next status') + '. A reason, if you give one, is kept on the Activity tab.</p>' +
         cipOverrideFieldsHtml() +
         cipStatusAttachmentHtml(cipAttachmentPlace(cipSourceFor(extra, clientUid) || applicationFor(clientUid))) +
         cipStatusCcHtml() +
@@ -16793,7 +16844,8 @@
       return;
     }
 
-    if (to === 'delayed') {
+    // Flagged by the daily check; an administrator may also set it by hand.
+    if (to === 'delayed' && !asOverride(to)) {
       clientsToast('Delayed files are flagged automatically after 180 days with no decision.', 'neutral');
 
       return;
@@ -16828,7 +16880,7 @@
     }
 
     var leftoverDraft = to === 'new' && source && source.status === 'draft';
-    if (!leftoverDraft && asOverride(to) === true && !(note && String(note).trim())) {
+    if (!leftoverDraft && !confirmed && asOverride(to) === true && !(note && String(note).trim())) {
       openCipOverrideDialog(to, extra, clientUid, label);
 
       return;
@@ -17197,6 +17249,8 @@
           if (cc === null) return;
           var body = { appealLodgedAt: date };
           if (cc.length) body.cc = cc.join(', ');
+          var notifyLodged = cipStatusNotifyValue(el);
+          if (notifyLodged !== null) body.notify = notifyLodged;
           var messageEl = el.querySelector('[data-cip-appeal-message]');
           var message = messageEl && messageEl.value ? messageEl.value.trim() : '';
           if (message) body.message = message;
@@ -17276,6 +17330,8 @@
           if (cc === null) return;
           var body = {};
           if (cc.length) body.cc = cc.join(', ');
+          var notifyReady = cipStatusNotifyValue(el);
+          if (notifyReady !== null) body.notify = notifyReady;
           var messageEl = el.querySelector('[data-cip-appeal-ready-message]');
           var message = messageEl && messageEl.value ? messageEl.value.trim() : '';
           if (message) body.message = message;
@@ -17693,7 +17749,9 @@
     var today = new Date().toISOString().slice(0, 10);
     var chosen = decision === 'granted' || decision === 'denied' ? decision : '';
     var picking = !chosen;
-    var letterOptional = !!opts.letterOptional;
+    // The firm's administrators skip the requirement: the letter can be
+    // added later from Decision received.
+    var letterOptional = !!opts.letterOptional || cipViewerSkipsRequirements();
     var existingLetter = opts.existingLetter;
     var held = collecting ? null : applicationHeldById(applicationId);
     var route = (opts.investmentType || (held && held.investmentType) || '').trim();
@@ -17875,6 +17933,8 @@
           var attached = cipStatusFile(el);
           if (attached) form.append('attachment', attached);
           if (cc.length) form.append('cc', cc.join(', '));
+          var notifyDecision = cipStatusNotifyValue(el);
+          if (notifyDecision !== null) form.append('notify', notifyDecision ? '1' : '0');
 
           clientsFetch('/portal/cip/applications/' + encodeURIComponent(applicationId) + '/decision', {
             method: 'POST',

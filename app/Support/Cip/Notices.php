@@ -268,6 +268,42 @@ class Notices
     }
 
     /**
+     * An administrator saved changes to the application and chose to tell
+     * the file's service provider and assigned staff.
+     *
+     * Only when asked: most edits are the firm tidying its own record, and
+     * a letter for every corrected spelling would bury the ones that matter.
+     * The same standing list a status change reaches, the same postcard
+     * shape as the other short notices, and the editor's own note when they
+     * wrote one.
+     */
+    public static function edited(CipApplication $application, User $actor, ?string $note = null): void
+    {
+        $facts = Contacts::facts($application);
+        $url = Contacts::url($application);
+        $title = Contacts::label($facts).': application updated';
+        $note = trim((string) $note);
+        $message = $note !== ''
+            ? Str::limit($note, 300)
+            : $actor->name.' updated the details on this application.';
+
+        self::fanOut(
+            $application,
+            fn (?string $name) => Postcards::notification(
+                $title, $message, $url, 'Open the application',
+                $name ? (strtok($name, ' ') ?: $name) : null, 'CIP Applications',
+            ),
+            'cip-application-updated',
+            'cip.application-updated',
+            $actor,
+            $title,
+            $message,
+            $application->status,
+            $actor->email,
+        );
+    }
+
+    /**
      * Somebody has asked to correct a person on a post-approval file.
      *
      * Goes to the administrators, because they are the only ones who can
@@ -483,7 +519,11 @@ class Notices
         $path ??= Contacts::path($application);
         $told = [];
 
-        foreach (Contacts::notices($application) as $recipient) {
+        // An administrator unticked "Notify": the standing list hears
+        // nothing of this move; CC copies below still go.
+        $recipients = StatusCopies::silenced() ? [] : Contacts::notices($application);
+
+        foreach ($recipients as $recipient) {
             $told[mb_strtolower($recipient['email'])] = true;
             if ($skipMailbox !== null && mb_strtolower($recipient['email']) === mb_strtolower($skipMailbox)) {
                 continue;

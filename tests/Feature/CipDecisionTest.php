@@ -261,7 +261,9 @@ class CipDecisionTest extends TestCase
         $staff = $this->user(Role::ADMINISTRATOR);
         $application = $this->inBackgroundCheck($staff);
 
-        $response = $this->actingAs($staff)
+        // An officer: an administrator may leave the letter for later.
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+        $response = $this->actingAs($officer)
             ->post('/portal/cip/applications/'.$application->uuid.'/decision', [], [
                 'Accept' => 'application/json',
                 'X-Requested-With' => 'XMLHttpRequest',
@@ -272,7 +274,7 @@ class CipDecisionTest extends TestCase
         $response->assertJsonValidationErrors('decidedAt');
         $response->assertJsonValidationErrors('decisionLetter');
 
-        $this->actingAs($staff)
+        $this->actingAs($officer)
             ->post('/portal/cip/applications/'.$application->uuid.'/decision', [
                 'decision' => Status::GRANTED,
                 'decisionLetter' => $this->cipDecisionLetterPdf(),
@@ -361,7 +363,9 @@ class CipDecisionTest extends TestCase
         $staff = $this->user(Role::ADMINISTRATOR);
         $application = $this->inBackgroundCheck($staff);
 
-        $this->actingAs($staff)
+        // An officer; the firm's administrators skip this requirement.
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+        $this->actingAs($officer)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::GRANTED,
             ])
@@ -378,7 +382,9 @@ class CipDecisionTest extends TestCase
         $application = $this->inBackgroundCheck($staff);
         $application->forceFill(['status' => Status::PENDING_REVIEW])->save();
 
-        $this->postCipDecision($staff, $application->uuid, [
+        // An officer; an administrator may decide, or change a decision, from anywhere.
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+        $this->postCipDecision($officer, $application->uuid, [
             'decision' => Status::GRANTED,
             'decidedAt' => '2026-08-18',
         ])->assertStatus(422);
@@ -440,7 +446,9 @@ class CipDecisionTest extends TestCase
             $this->cipDecisionLetterPdf(),
         );
 
-        $this->postCipDecision($staff, $application->uuid, [
+        // An officer; an administrator may decide, or change a decision, from anywhere.
+        $officer = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+        $this->postCipDecision($officer, $application->uuid, [
             'decision' => Status::DENIED,
             'decidedAt' => '2026-08-18',
             'decisionLetter' => null,

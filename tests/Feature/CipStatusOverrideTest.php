@@ -102,7 +102,7 @@ class CipStatusOverrideTest extends TestCase
             ->assertJsonPath('events.0.reason', 'The Unit asked for another scan.');
     }
 
-    public function test_an_override_without_a_reason_is_refused(): void
+    public function test_an_administrator_overrides_without_a_reason(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR);
         $application = $this->application($admin);
@@ -112,10 +112,11 @@ class CipStatusOverrideTest extends TestCase
             ->postJson('/portal/cip/applications/'.$application->uuid.'/status', [
                 'status' => Status::ASSESSMENT_FEEDBACK,
             ])
-            ->assertStatus(422)
-            ->assertJsonPath('message', 'Give a reason for changing the status.');
+            ->assertOk();
 
-        $this->assertSame(Status::GRANTED, $application->fresh()->status);
+        // The firm's administrators skip the reason; the pull back is still
+        // an override on the trail.
+        $this->assertSame(Status::ASSESSMENT_FEEDBACK, $application->fresh()->status);
     }
 
     /** Overrides are the administrators' alone, in both lanes. */

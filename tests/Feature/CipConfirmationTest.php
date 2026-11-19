@@ -431,7 +431,8 @@ class CipConfirmationTest extends TestCase
         $this->slot($application, 'passport_bio_page', 'Passport bio page');
 
         try {
-            Submission::record($application, $staff, '10T1G12661P');
+            // An officer; the firm's administrators skip the confirmation.
+            Submission::record($application, $this->officer($application), '10T1G12661P');
             $this->fail('Recording a CIP number skipped confirm submission.');
         } catch (ValidationException $e) {
             $this->assertStringContainsString('confirm submission', $e->errors()['cipNumber'][0]);

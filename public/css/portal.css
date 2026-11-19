@@ -7792,6 +7792,15 @@ body:has(.tma-dash.is-sidebar-collapsed) .tma-sync-pill {
 
 .tma-cip-cc:focus-within { border-color: var(--color-text-secondary); }
 
+/* An administrator's "Notify the service provider and assigned staff",
+   under CC on every status dialog; flush with the fields above it. */
+.tma-cip-notify {
+  margin-top: var(--space-4);
+  padding-left: 0;
+  padding-right: 0;
+  cursor: pointer;
+}
+
 /*
  * As long as its row, beside its label: the status dialog's CC and the
  * Request documents addresses. It grows taller by itself as addresses are

@@ -144,7 +144,9 @@ class Confirmation
             throw new AuthorizationException('Only the service provider can confirm this submission.');
         }
 
-        if (! Review::packageReady($application)) {
+        // An administrator confirms whatever the checklist says; see
+        // CipAccess::skipsRequirements.
+        if (! Review::packageReady($application) && ! CipAccess::skipsRequirements($actor)) {
             throw self::notReady($application);
         }
 
@@ -226,7 +228,9 @@ class Confirmation
             throw new AuthorizationException('Only the service provider can confirm this submission.');
         }
 
-        if (! Review::packageReady($application)) {
+        // An administrator confirms whatever the checklist says; see
+        // CipAccess::skipsRequirements.
+        if (! Review::packageReady($application) && ! CipAccess::skipsRequirements($actor)) {
             throw self::notReady($application);
         }
 

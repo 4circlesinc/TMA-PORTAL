@@ -51,6 +51,10 @@ class BackgroundCheck
          * through Engine::set, which holds the admin gate and demands the
          * reason. Everyone else keeps the explanation.
          */
+        // An administrator is never refused the move; see
+        // CipAccess::skipsRequirements.
+        $override = $override || CipAccess::skipsRequirements($actor);
+
         if (! $edge && ! $override) {
             throw new \InvalidArgumentException(
                 'Acceptance for processing can only be recorded on an application the Unit already holds.',

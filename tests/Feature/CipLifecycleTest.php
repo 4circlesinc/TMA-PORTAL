@@ -67,7 +67,9 @@ class CipLifecycleTest extends TestCase
         // NEW has no edge to Background check. A plain record is refused as
         // ever; the typed confirmation arrives as override + note and drives
         // the move through Engine::set, date recorded.
-        $this->actingAs($ada)
+        // Refused to an officer; an administrator skips the requirement.
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Officer');
+        $this->actingAs($rita)
             ->postJson('/portal/cip/applications/'.$application->uuid.'/acceptance', [
                 'acceptedAt' => '2026-02-18',
             ])

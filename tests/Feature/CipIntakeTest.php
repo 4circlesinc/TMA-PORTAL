@@ -858,9 +858,11 @@ class CipIntakeTest extends TestCase
      * A pre-approval filing has no CIP number yet, so one sent early is a
      * mistake worth refusing rather than storing.
      */
-    public function test_pre_approval_intake_refuses_a_cip_number(): void
+    public function test_pre_approval_intake_refuses_a_cip_number_from_anyone_but_an_administrator(): void
     {
-        $staff = $this->user(Role::ADMINISTRATOR);
+        // An officer: an administrator may enter the Unit's number at any
+        // stage, a new filing included.
+        $staff = $this->user(Role::REVIEWING_OFFICER);
         $provider = $this->provider('GAL');
 
         $this->file($staff, $this->payload($provider, ['cipNumber' => '10T1G12666P']))
