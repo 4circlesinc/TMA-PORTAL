@@ -55,14 +55,21 @@ class DesktopAuthController extends Controller
             'provider' => ['nullable', 'string', 'in:google,microsoft,apple'],
         ]);
 
+        // A browser that is already signed in proves nothing about who is at
+        // the app now: usually it is the session a previous hand-off left
+        // behind, on a shared machine it can be someone else entirely. Handing
+        // it straight back is how "sign out, then Continue with Google" landed
+        // people in the previous account without ever seeing a sign-in screen
+        // or an account picker. Every hand-off starts from a fresh sign-in.
+        // Done before the challenge is parked: invalidating the session
+        // empties it.
+        if ($request->user()) {
+            $this->signOutBrowser($request);
+        }
+
         $request->session()->put('desktop.challenge', $validated['challenge']);
         $request->session()->put('desktop.started_at', now()->timestamp);
         $request->session()->put('url.intended', route('desktop.finish'));
-
-        // Already signed in in this browser? Nothing to do but hand back.
-        if ($request->user()) {
-            return redirect()->route('desktop.finish');
-        }
 
         if ($provider = $validated['provider'] ?? null) {
             return redirect()->route('social.redirect', ['provider' => $provider]);
@@ -91,7 +98,26 @@ class DesktopAuthController extends Controller
             'challenge' => $challenge,
         ], self::TOKEN_TTL);
 
+        // This browser session existed only to mint the token. Left behind,
+        // it outlives the app's own sign-out (that ends the app's session,
+        // not this one), which is what start() used to hand back.
+        $this->signOutBrowser($request);
+
         return response($this->handoffPage($token));
+    }
+
+    /**
+     * End this browser's session, and its remember cookie, without touching
+     * the account anywhere else. Current device only: Auth::logout() would
+     * cycle the remember token, signing the person out of "Stay signed in" on
+     * every other device, and would fire Logout, recording a sign-out the
+     * person never made. This is plumbing, not them signing out.
+     */
+    private function signOutBrowser(Request $request): void
+    {
+        Auth::guard('web')->logoutCurrentDevice();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
     }
 
     /**

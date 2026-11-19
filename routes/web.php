@@ -328,7 +328,10 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
     Route::get('/security-settings/data', [SecuritySettingsController::class, 'data'])
         ->name('security-settings.data');
 
+    // It checks the current password, so it is also a password oracle for
+    // anyone holding a borrowed session: throttle the guesses.
     Route::post('/security-settings/logout-others', [SecuritySettingsController::class, 'logoutOtherDevices'])
+        ->middleware('throttle:6,1')
         ->name('security-settings.logout-others');
 
     Route::post('/security-settings/two-factor-app', [SecuritySettingsController::class, 'setTwoFactorApp'])

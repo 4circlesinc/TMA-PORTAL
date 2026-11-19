@@ -1,267 +1,306 @@
-# Authentication & Onboarding - Design Specification
+# Authentication - Architecture
 
-**Status:** design phase - no authentication code exists yet.
-**Prototype:** every screen below is built as a static page under [`public/auth/`](public/auth/) (plus [`public/security-settings/`](public/security-settings/)). Open [`/auth/`](public/auth/index.html) for a clickable map of all screens and states. Forms are `action="#"` - nothing is submitted anywhere.
-**Design system:** everything reuses `tokens.css → theme.css → auth.css`, with one additive stylesheet (`public/css/auth-flow.css`) and one prototype script (`public/js/auth-flow.js`). The original auth pages (`/sign-in/`, `/sign-up/`, `/forgot-password/`, `/setup-new-password/`, `/two-step-verification/`, `/choose-account-type/`, `/account-info/`) were intentionally left untouched; the new flow lives alongside them.
+**Status:** built and in production. Last reviewed 19 November 2026.
 
-**Decisions this design encodes**
+This replaces the original design-phase specification, whose static prototype
+under `public/auth/` has since been removed; the real screens live in
+`resources/views/auth/`. Where the build departs from the original decisions,
+[section 13](#13-changes-from-the-original-design) says so.
 
-| Decision | Choice |
+Related: [`docs/security-hardening-2026-09.md`](docs/security-hardening-2026-09.md)
+(hardening pass, geographic and VPN rules),
+[`docs/security-pentest-brief.md`](docs/security-pentest-brief.md), and
+[`docs/android-api-catalogue.md`](docs/android-api-catalogue.md) (the session and
+cookie contract the apps rely on).
+
+---
+
+## 1. At a glance
+
+| Concern | Where |
 |---|---|
-| Sign-in providers | Email + password, **Continue with Google**, **Continue with Microsoft**. Apple removed everywhere. |
-| Microsoft naming | "Continue with Microsoft" = OAuth sign-in with a Microsoft account. **Microsoft Authenticator / Google Authenticator** = TOTP apps offered during two-factor setup. One standard TOTP implementation serves both (and any compatible app). |
-| Account type | Chosen **by an administrator** after reviewing the account - users never pick Personal/Corporate. New accounts land on **Pending approval** after onboarding. |
-| Two-factor policy | **Optional but strongly encouraged.** Only email verification is mandatory. Every security step has a visible skip path and can be finished later in Security settings. |
-| Tone | Short, calm, no fear-based wording, no technical detail that helps an attacker, required vs optional clearly labelled. |
-
----
-
-## 1 · Screen list
-
-| # | Screen | Path | States |
-|---|--------|------|--------|
-| 0 | Design preview map | `/auth/` | - |
-| 1 | Create account | `/auth/sign-up/` | default · loading · errors · breached · captcha · locked |
-| 2 | Check your email | `/auth/check-email/` | sent · countdown · resent · change · wrong-email · too-many |
-| 3 | Email verification result | `/auth/verify-email/` | verifying · success · expired · used · invalid · failed · sent-new |
-| 4 | Getting started (security checklist) | `/auth/getting-started/` | fresh · partial · complete · reminder |
-| 5 | Connect sign-in method | `/auth/connect/` | default · connecting · connected · already-linked · mismatch · cancelled · failed · create-password · password-created (+ disconnect dialog) |
-| 6 | Add & verify phone | `/auth/phone/` | enter · sending · code · invalid · expired · too-many · success |
-| 7 | Two-factor setup wizard | `/auth/two-factor-setup/` | intro · app · scan · qr-expired · confirm · wrong · expired-code · locked · done · already · cancel |
-| 8 | Recovery codes | `/auth/recovery-codes/` | fresh · copied · saved · regenerate |
-| 9 | Sign in | `/auth/sign-in/` | default · loading · error · captcha · locked · unverified |
-| 10 | Two-factor challenge | `/auth/two-factor/` | default · invalid · expired · too-many · locked · recovery · recovery-ok · recovery-used |
-| 11 | Stay signed in? | `/auth/stay-signed-in/` | default |
-| 12 | Forgot password | `/auth/forgot-password/` | form · loading · sent · too-many |
-| 13 | Reset password | `/auth/reset-password/` | form · weak · expired · invalid · success |
-| 14 | Security check (suspicious login) | `/auth/security-check/` | new-device · new-location · unusual · attempts · captcha · locked · confirm-email |
-| 15 | Pending approval | `/auth/pending-approval/` | pending · approved · info-needed |
-| 16 | Security settings (in-app) | `/security-settings/` | populated · empty (+ 6 confirm dialogs) |
-
-Every page supports desktop / tablet / mobile (existing `tma-auth` breakpoints at 960 / 760 / 720 / 560 px), light and dark mode (`data-theme="dark"`, shared `tma.themeMode` / `tma.theme` localStorage keys with the dashboard), keyboard navigation, and `?state=<name>` deep links for review.
-
----
-
-## 2 · Screen order (first-time user, email + password)
-
-1. `/auth/sign-up/` - create account
-2. `/auth/check-email/` - confirmation email sent
-3. `/auth/verify-email/` - user opens the emailed link → **success**
-4. `/auth/getting-started/` - security checklist (connect provider / phone / 2FA / recovery codes, all optional)
-5. `/auth/pending-approval/` - admin reviews, approves, and assigns account type
-6. Portal dashboard
-
-A user who registers with Google or Microsoft skips steps 2–3 (the provider's verified email is trusted) and enters the checklist directly, where **Create a password** replaces **Connect a sign-in method** (`/auth/connect/?state=create-password`).
-
-Returning users: `/auth/sign-in/` → (if 2FA on and device not trusted) `/auth/two-factor/` → (first time on a new trusted device) `/auth/stay-signed-in/` → portal. The stay-signed-in question is stored per device and not asked again.
-
----
-
-## 3 · User-flow diagrams
-
-### Master map
+| Sign-in engine | Laravel Fortify, routes under `/auth` - [`config/fortify.php`](config/fortify.php), [`FortifyServiceProvider`](app/Providers/FortifyServiceProvider.php) |
+| Google, Microsoft, Apple | Socialite - [`SocialAuthController`](app/Http/Controllers/SocialAuthController.php), [`AppleCallbackController`](app/Http/Controllers/AppleCallbackController.php) |
+| Second factor | Authenticator app (Fortify TOTP) or an emailed code - `App\Support\LoginChallenge`, `EmailTwoFactor`, `EmailLoginCode` |
+| Trusted browser, "Stay signed in?" | `App\Support\TrustedDevices`, `App\Support\StaySignedIn` |
+| Session lifetime | `SecurityPolicies::sessionDays()`, `EnforceSessionExpiry` |
+| Portal gates | middleware chain on the portal route group ([section 5](#5-gates-on-the-portal)) |
+| Desktop, iOS and Android apps | browser hand-off - [`DesktopAuthController`](app/Http/Controllers/DesktopAuthController.php) ([section 7](#7-desktop-ios-and-android-apps)) |
+| Administrator "Sign in as" | `App\Support\Access\Impersonation` ([section 8](#8-administrator-sign-in-as)) |
+| Abuse controls | Turnstile, rate limits, breached passwords, geo/VPN rules, detectors ([section 10](#10-abuse-controls)) |
+| Audit | `auth_events`, `storage/logs/security.log` ([section 11](#11-audit)) |
 
 ```mermaid
 flowchart TD
-    A[Sign up /auth/sign-up/] -->|email + password| B[Check email /auth/check-email/]
-    A -->|Continue with Google / Microsoft| E
-    B --> C[Verify email /auth/verify-email/]
-    C -->|success| E[Getting started /auth/getting-started/]
-    C -->|expired / used / invalid / failed| B
-    E -->|optional| F[Connect provider /auth/connect/]
-    E -->|optional| G[Phone /auth/phone/]
-    E -->|recommended| H[2FA setup /auth/two-factor-setup/]
-    H --> I[Recovery codes /auth/recovery-codes/]
-    E --> J[Pending approval /auth/pending-approval/]
-    J -->|admin approves + assigns account type| K[Portal]
-
-    L[Sign in /auth/sign-in/] -->|no 2FA| K
-    L -->|2FA on| M[Two-factor /auth/two-factor/]
-    M --> N[Stay signed in? /auth/stay-signed-in/] --> K
-    L -->|forgot| O[Forgot password /auth/forgot-password/]
-    O --> P[Reset password /auth/reset-password/] --> L
-    L -->|risk signals| Q[Security check /auth/security-check/] --> M
-```
-
-### Email + password registration
-
-```mermaid
-flowchart TD
-    S[Create account form] --> V{Server checks}
-    V -->|name/email/password invalid| S
-    V -->|password breached or too common| S
-    V -->|bot score low| CAP[Interactive captcha] --> V
-    V -->|email already registered| N[Show same 'check your email' screen\nsend 'you already have an account' email instead]
-    V -->|ok| CE[Check your email]
-    CE -->|resend, max N per hour| CE
-    CE -->|change address| CE
-    CE -->|link clicked| VR{Token valid?}
-    VR -->|yes, first use, < 24 h| OK[Email verified] --> GS[Getting started]
-    VR -->|expired| EX[Expired → send new link]
-    VR -->|reused| US[Already used → go to sign in]
-    VR -->|malformed| IV[Invalid → send new link]
-```
-
-### Google / Microsoft registration & login (identical shape; only the provider differs)
-
-```mermaid
-flowchart TD
-    B1[Continue with Google / Microsoft] --> R[Provider consent screen]
-    R -->|cancelled| C1[Return with 'connection cancelled' note]
-    R -->|granted| T{Provider identity}
-    T -->|no portal account with this email| NEW[Create account\nemail pre-verified] --> GS[Getting started\noffers 'create a password']
-    T -->|matches existing account, provider already linked| IN[Signed in → 2FA if enabled]
-    T -->|matches existing account, not yet linked| LINK{Verified email matches?}
-    LINK -->|yes, after fresh authentication| OK2[Link + sign in]
-    LINK -->|no| MM[Email mismatch error]
-    T -->|provider account linked to another user| AL[Already-linked error]
-```
-
-### Login + two-factor
-
-```mermaid
-flowchart TD
-    L[Sign in] --> RL{Rate limit / bot check}
-    RL -->|suspicious| CAP[Captcha required]
-    RL -->|too many failures| LOCK[Temporary lockout + email alert]
-    RL -->|ok| CRED{Credentials valid?}
-    CRED -->|no| ERR[Neutral error - never reveals which field]
-    CRED -->|yes, email unverified| UV[Resend confirmation]
-    CRED -->|yes, new device/location| SC[Security check - email code]
-    CRED -->|yes| TFA{2FA enabled and device untrusted?}
-    TFA -->|no| SESS[Session created]
-    TFA -->|yes| CODE[6-digit TOTP]
-    CODE -->|invalid / expired, limited tries| CODE
-    CODE -->|recovery code| RC{Code unused?}
-    RC -->|yes| SESS
-    RC -->|already used| RCERR[Error + remaining-code count]
-    CODE -->|valid| TRUST[Trust this device? 30 days] --> STAY[Stay signed in?] --> SESS
-```
-
-### Forgot / reset password
-
-```mermaid
-flowchart TD
-    F[Enter email + human verification] --> A1["Always: 'If an account exists…' (no enumeration)"]
-    A1 -->|account exists| MAIL[Signed single-use link, 60 min]
-    MAIL --> R[Reset form: new + confirm, strength + breach check]
-    R -->|weak / breached| R
-    R -->|expired link| EXP[Request new link]
-    R -->|ok| DONE[Password updated\noptional sign-out-all-devices\nconfirmation email] --> L[Sign in]
-```
-
-### Phone verification & authenticator setup
-
-```mermaid
-flowchart TD
-    P1[Country + number] --> P2[6-digit SMS code, 10 min expiry]
-    P2 -->|invalid / expired / too many| P2
-    P2 -->|verified| P3[Phone linked - alerts & recovery only]
-
-    T1[2FA intro] --> T2[Choose app: Microsoft Auth / Google Auth / any TOTP]
-    T2 --> T3[QR code + manual setup key]
-    T3 --> T4[Confirm 6-digit code]
-    T4 -->|wrong / expired, limited tries| T4
-    T4 -->|valid| T5[2FA active] --> T6[Recovery codes - copy / download / print / confirm saved]
+    L[Sign-in page /auth/login] -->|email + password| P{Password correct?}
+    L -->|Google / Microsoft| O[Provider, account picker] --> M{Matched to an account?}
+    P -->|no| L
+    M -->|refused| L
+    P -->|yes| C{Second factor needed?}
+    M -->|yes| C
+    C -->|authenticator app| T[Authenticator code]
+    C -->|new browser, no app| E[Email code]
+    C -->|trusted browser or first sign-in| S
+    T --> S[Stay signed in?]
+    E --> S
+    S --> G[Portal gates] --> D[Portal]
 ```
 
 ---
 
-## 4 · Copy & UX rules applied on every screen
+## 2. Signing in
 
-- **Neutral errors.** Never "wrong password" vs "no such account"; never confirm an email exists (sign-up duplicate emails are handled by *emailing the owner*, not an on-screen reveal; forgot-password always says *"If an account exists for this email address, password reset instructions have been sent."*).
-- **Required vs optional labelled** with quiet pill badges: `Done / Optional / Recommended`.
-- **No fear language.** Lockouts and checks say what happened, how long it lasts, and the one thing the user can do next.
-- **Spam-folder hints** on every "we sent you an email" screen; resend buttons always throttled with a visible countdown.
-- **Masked identifiers** where the viewer didn't just type them (`+1 ••• ••• ••89`).
-- **Password managers are first-class:** paste allowed, correct `autocomplete` attributes (`email`, `name`, `new-password`, `current-password`, `one-time-code`), no max-length traps.
-- **Loading / success / warning / disabled / empty / error** states exist for every interactive surface (see state list in section 1; walk them via the `?state=` switcher).
+### Email and password
 
----
+Fortify's pipeline, with the second-factor step replaced
+(`config/fortify.php` -> `pipelines.login`):
 
-## 5 · Bot & abuse prevention plan
+1. `CanonicalizeUsername` lowercases the email.
+2. [`RedirectIfTwoFactorAuthenticatable`](app/Actions/Fortify/RedirectIfTwoFactorAuthenticatable.php) checks the password once, then applies the second-factor rules ([section 3](#3-second-factor)).
+3. `AttemptToAuthenticate`, then `PrepareAuthenticatedSession`, which rotates the session ID.
+4. [`LoginResponse`](app/Http/Responses/LoginResponse.php) stamps `users.last_authenticated_at`, runs `StaySignedIn::afterAuthenticated()`, then sends the person to the page they asked for, or `/`.
 
-No single layer makes the platform hacker-proof; the design assumes each layer fails sometimes and stacks them.
+Errors never say which field was wrong. Attempts are limited to 5 a minute per
+email and IP address.
 
-| Layer | Design | Notes |
-|---|---|---|
-| Human verification | **Cloudflare Turnstile** (recommended; invisible-first). Slot on sign-up, sign-in (challenged state), forgot-password. reCAPTCHA v3/hCaptcha are drop-in alternates. | The prototype shows a quiet placeholder widget; escalate to interactive only on low trust score. |
-| Email verification | Mandatory before the checklist. Signed, single-use tokens, 24 h expiry, newest-link-wins. | Screens 2–3. |
-| Rate limiting | Per-IP and per-account sliding windows on sign-up, sign-in, resend, reset, OTP verify. | Redis-backed (Laravel `RateLimiter`). |
-| Login attempt limits | Progressive delays → 15-min temporary lockout; lockout notice never confirms the account exists. | Screen 9 `locked`, screen 14 `attempts`. |
-| Temporary lockouts | Time-boxed, self-healing, always paired with an email alert and a password-reset path. | Never permanent from automation alone. |
-| Password reset limits | Max requests per address/IP per window; `too-many` state; resend countdowns (60 s). | Screen 12. |
-| Resend-code limits | Countdown + hourly cap for email and SMS codes; SMS additionally capped per day (toll-fraud protection). | Screens 2, 6, 14. |
-| Suspicious device detection | Device fingerprint (UA + heuristics) + IP geolocation; unseen device/location triggers an email code before the session is issued. | Screen 14 `new-device` / `new-location`. |
-| New-device verification | 6-digit email code, 10 min expiry; success registers the device. | Screen 14. |
-| Session management | HttpOnly + Secure + SameSite=Lax cookies, ID rotation on login/privilege change, absolute + idle timeouts, server-side session store so "sign out all devices" works instantly. | Screen 16 sessions section. |
-| Credential stuffing | Breached-password blocking (HIBP k-anonymity) at sign-up/reset, per-account velocity alerts, captcha escalation on distributed failures, optional 2FA. | |
-| Brute force | Lockouts + progressive delays + TOTP attempt caps (wizard and login lock independently). | Screens 7/10 `locked`. |
-| Logging | Append-only auth event log: sign-ins, failures, lockouts, password/2FA/recovery changes, admin approvals - feeds the "Recent login activity" table. | Screen 16. |
-| Security alerts by email | New device sign-in (always on), password changed, 2FA changed, recovery codes regenerated, account locked. | Screen 16 notification prefs. |
-| Expiring links | Email confirmation 24 h · password reset 60 min · email OTP 10 min · SMS OTP 10 min · TOTP 30 s window (±1 step). | Stated in copy on each screen. |
-| Admin approval | New accounts can't reach client data until an administrator approves and assigns the account type - a human backstop against fake registrations. | Screen 15. |
+### Google and Microsoft
 
-## 6 · Password policy (NIST-aligned)
+- `GET /auth/social/{provider}/redirect` -> the provider -> `GET /auth/social/{provider}/callback`.
+- The request always carries `prompt=select_account`, so the provider shows its account picker even when the browser is already signed in there. The one exception is the silent retry after a failed handshake (`retry=1`), which reuses the account the person has just picked.
+- Matching happens in this order (`SocialAuthController::authenticate`):
+  1. An invitation carried through the round trip is checked first. A provider account with a different email bounces back to the invitation.
+  2. The provider identity is already linked (`connected_accounts`): sign in as that account. A deleted account is refused.
+  3. The provider has not verified the email: refused.
+  4. The email belongs to a deleted account: refused.
+  5. The email matches an account: the provider is linked to it and the email counts as verified.
+  6. No account: one is created, pending administrator approval, and the `Registered` event fires exactly as for the password form.
+- Every path then goes through the same second-factor rules as a password sign-in.
+- **Connecting** a provider while signed in (`/connect/{provider}`, or Security settings) is refused if that provider identity belongs to another account. Google and Microsoft must carry the same verified email as the portal account, because they bring a mailbox and calendar. Apple is exempt: it often hands out a relay address, and the person has already proved who they are.
 
-- Minimum **10 characters**; maximum at least **64**; all printable characters + spaces allowed (passphrases encouraged).
-- **Block common & breached passwords** (Have I Been Pwned range API + local top-10k list). The breach message explains *why* without blaming the user.
-- **No forced composition** (symbols are scored, not required) and **no periodic expiry** - rotation only on evidence of compromise.
-- Live **strength meter** (existing 4-segment component) + requirement checklist; server is the source of truth, meter is guidance.
-- Paste and password managers explicitly supported; show/hide toggles on every password field.
-- Reset flow: single-use signed token, 60 min expiry, session rotation, optional (default-on) sign-out-all-other-devices, confirmation email on change.
+### Apple
 
----
+- On the web, Apple posts back to `POST /auth/social/apple/callback` (form post, registered in [`bootstrap/app.php`](bootstrap/app.php)).
+- In the iOS app, the native Sign in with Apple sheet is used. Its credential and a nonce are posted from inside the web view to `POST /auth/social/apple/native`.
+- Apple has no account-picker parameter.
 
-## 7 · Backend services & APIs required (future work)
+### Other ways a session starts
 
-| Concern | Recommendation |
+| Path | Where |
 |---|---|
-| Auth scaffolding | **Laravel Fortify** (login, registration, email verification, reset, TOTP 2FA, rate limiting hooks) - the repo is already Laravel 13. |
-| OAuth | **Laravel Socialite**: Google (OIDC) + Microsoft (Entra ID `common` endpoint) drivers; account-linking table `connected_accounts (user_id, provider, provider_id, email, verified)`. |
-| TOTP | Fortify's built-in (pragmarx/google2fa) - one implementation covers Microsoft Authenticator, Google Authenticator, and every RFC 6238 app. Encrypted secret column; recovery codes stored **hashed**, one-time. |
-| Email | Transactional provider (Postmark / SES / Resend) with templates: confirm email, reset password, security alert, new-device code, account approved / info needed. |
-| SMS | Twilio or Vonage Verify for phone codes; daily caps + country allowlist. |
-| Human verification | Cloudflare Turnstile server-side `siteverify` on sign-up / challenged sign-in / reset. |
-| Breach check | HIBP `range` API (k-anonymity - only a hash prefix leaves the server) with local fallback list. |
-| Rate limiting | Laravel `RateLimiter` on Redis; named limiters per surface (login, signup, otp, resend, reset). |
-| Sessions & devices | DB/Redis session driver; `trusted_devices` and `auth_events` tables; GeoIP lookup for display. |
-| Admin approval | `users.status` (pending / approved / info_needed) + admin queue UI (out of scope here) + "account approved" email; middleware gate on portal routes. |
-| Token infra | Signed single-use tokens for email links (hashed at rest, expiry column, invalidate-previous-on-resend). |
+| Accepting an invitation | `InvitationAcceptController` |
+| Opening the email-verification link, on any device | `UnsignedVerifyEmailController` (the link is signed and bound to the user ID and email) |
+| Finishing an email code | `EmailTwoFactorController` |
+| A desktop or mobile app claiming a browser sign-in | `DesktopAuthController::claim` ([section 7](#7-desktop-ios-and-android-apps)) |
+| An administrator opening an account | `Impersonation::start` ([section 8](#8-administrator-sign-in-as)) |
 
-## 8 · Security considerations & risks
+---
 
-- **Account enumeration** - every public surface (sign-up, sign-in, forgot) responds identically whether or not the account exists; timing should be padded on the email-sending path.
-- **OAuth linking hijack** - only auto-link a provider when the provider email is verified *and* matches; otherwise require a fresh password authentication before linking. Validate `state`/`nonce`; exact-match redirect URIs (open-redirect protection).
-- **TOTP secrets** - encrypted at rest, never re-displayed after setup; re-setup generates a new secret and invalidates the old.
-- **Recovery codes** - hashed like passwords, shown exactly once, count surfaced in settings, regeneration invalidates the old set and sends an alert email.
-- **SMS/SIM-swap** - phone is for alerts + recovery assistance only, never the sole second factor; authenticator app is the primary 2FA.
-- **Session fixation/theft** - rotate session ID at every privilege boundary; trusted-device tokens are httpOnly, per-device, revocable from settings.
-- **Phishing of links** - emails state what was requested and from where; links are single-use; "newest link wins" limits replay of old emails.
-- **Trusted-device token theft** - 30-day cap, revocation list in settings, new-device alerts always on.
-- **Admin-approval social engineering** - approval UI (future) should show verified email, sign-up metadata, and risk signals to the admin before approval.
-- **Residual risks** - malware on the user's device, provider account takeover (Google/Microsoft side), and support-channel social engineering are out of the product's direct control; logging + alerts exist to shorten detection time.
+## 3. Second factor
 
-## 9 · Recommended development order
+`App\Support\LoginChallenge` decides, for every sign-in method:
 
-1. **Core email auth** - Fortify: registration, login, email verification, password reset; password policy + HIBP; neutral error copy. *(Screens 1–3, 9, 12–13)*
-2. **Abuse hardening** - rate limiters, progressive lockouts, Turnstile, security-alert emails, auth event log. *(States: captcha/locked/too-many; screen 14)*
-3. **OAuth** - Google + Microsoft sign-in/sign-up via Socialite; account linking + create-password path. *(Screens 5, provider buttons on 1/9)*
-4. **TOTP 2FA** - setup wizard, QR/manual key, 2FA login challenge, recovery codes (hashed, regenerate). *(Screens 7, 8, 10)*
-5. **Phone verification** - SMS codes for alerts/recovery. *(Screen 6)*
-6. **Sessions & devices** - trusted devices, active sessions, login history, sign-out-all, notification prefs; wire Security settings. *(Screens 11, 16)*
-7. **Risk engine & approval** - new-device/location checks, admin approval queue + account-type assignment, pending/approved emails. *(Screens 14, 15)*
+| Situation | What happens |
+|---|---|
+| Authenticator app set up, browser not trusted for this account | Authenticator code (Fortify's challenge). "Email me a code instead" is offered. |
+| No authenticator app, browser not trusted, has signed in before | Six-digit email code at `/auth/login-code` |
+| First sign-in ever | No second step |
+| Browser trusted for this account | No second step |
 
-Each phase ships independently; the prototype pages become the templates for each phase.
+- **Email codes** (`EmailLoginCode`): valid for 10 minutes, stored only as a hash on the parked half-finished sign-in, never in a shared cache. They can be re-sent every 30 seconds, and entering one is limited to 5 tries a minute.
+- **Authenticator app**: Fortify's TOTP, which works with any RFC 6238 app. Setting it up requires confirming a code; changing it requires the password; codes are accepted one step either side. Recovery codes are Fortify's: stored encrypted with the app key, each usable once.
+- **Required authenticator**: an administrator can require it for one person (`users.require_two_factor`) or for whole account types (Sign-in policy). `EnforceTwoFactor` (`mfa.enforced`) holds the person on `/auth/required-authenticator` until it is set up, and JSON callers get JSON rather than a redirect. `PreventDisablingRequiredAuthenticator` blocks turning it off.
+- **Trusted browser**: the `tma_trusted_device` cookie (HttpOnly, SameSite=Lax) holds a token whose hash is stored in `trusted_devices` **against one account**. Another account signing in on the same browser is not trusted by it. It is issued when the person ticks "Trust this browser" on a code screen or answers yes to "Stay signed in?", and lasts the configured number of session days.
 
-## 10 · Reviewing the prototype
+---
 
-```bash
-cd public && python3 -m http.server 8000     # http://localhost:8000/auth/
+## 4. After sign-in: "Stay signed in?"
+
+`StaySignedIn::afterAuthenticated()` runs after every sign-in method:
+
+- The browser is trusted, or "Trust this browser" was ticked: a remember-me cookie is issued and nothing is asked.
+- The browser has never answered: the person is sent to `/auth/stay-signed-in`, and `EnsureStaySignedInChoice` keeps them there until they answer. Signing out and the code screens are exempt.
+- The browser answered yes before: remember-me is applied again.
+
+The answer is stored per browser in the `tma_device_trust` cookie (`yes` or `no`).
+The remember-me cookie lasts the configured number of session days.
+
+---
+
+## 5. Gates on the portal
+
+Every portal route runs these in order:
+`auth` -> `verified` -> `profile.complete` -> `account.approved` -> `onboarded` -> `mfa.enforced`.
+
+| Gate | Holds the person on |
+|---|---|
+| `verified` | Email verification |
+| `profile.complete` | `/auth/profile-setup` |
+| `account.approved` | `/auth/pending` until an administrator approves the account, `/auth/role-pending` for the retired Employee type. A suspended account is signed out. |
+| `onboarded` | Client onboarding (`/onboarding`), the staff getting-started checklist, or unfinished account setup |
+| `mfa.enforced` | `/auth/required-authenticator` |
+
+Every `web` request also passes `RequireSecureTransport`, `EnforceGeoAccess` and
+`VerifyTurnstile` first, and `IssueTrustedDeviceCookie`,
+`EnsureStaySignedInChoice`, `EnforceSessionExpiry` and
+`PreventDisablingRequiredAuthenticator` after ([`bootstrap/app.php`](bootstrap/app.php)).
+
+---
+
+## 6. Sessions, expiry and signing out
+
+**Storage.** Sessions live in the `sessions` table through
+`ThrottledDatabaseSessionHandler`, which skips writes that change nothing and
+refreshes `last_activity` every 5 minutes. [`config/session.php`](config/session.php)
+maps `cookie` to `database`, because Laravel Cloud injects `cookie`. It must
+stay on the database driver: the session list, revoking a session, "Log out of
+all devices", the password reset's "sign out everywhere" and an
+administrator's force sign-out all work on that table. `.env.example` defaults
+to `database` for the same reason.
+
+**Cookie.** The payload is encrypted. The cookie is HttpOnly and SameSite=Lax,
+Secure over HTTPS, and serialized as JSON.
+
+**One number governs lifetime**: session days (Account settings -> Sign-in,
+default 7, allowed 1-30). It sets:
+
+- the idle lifetime,
+- the remember-me cookie,
+- the trusted-browser lifetime,
+- the absolute cap: `EnforceSessionExpiry` signs the person out once `users.last_authenticated_at` is older than that. Only a real proof (password, provider or code) refreshes the stamp; a remember-me restore does not. An administrator can also set a cut-off that forces everyone to sign in again (`SecurityPolicies::forceReauthAfter`).
+
+**Signing out** ([`public/js/sign-out.js`](public/js/sign-out.js)):
+
+- The browser sends a JSON `POST /auth/logout` (answered `204`), retries once on `419`, and falls back to a plain form post.
+- It clears the tab's cached data, then goes to `/auth/login?from=logout`, which drops any page parked for after sign-in.
+- The server invalidates the session, rotates the CSRF token, clears the remember-me cookie and rotates the account's remember token. Remember-me cookies on the person's other devices stop working, though their open sessions continue until they expire. Push tokens registered by that session are deleted.
+
+**Ending other sessions:**
+
+- **"Log out of all devices"** (Security settings, and Account settings) asks for the current password, is limited to 6 tries a minute, and deletes the account's other `sessions` rows. An account made with Google or Microsoft has no password of its own, so it is told to create one first.
+- Single sessions can be revoked from Security settings. The page identifies them by a digest, never the raw session ID.
+- A password reset offers "sign out everywhere" (ticked by default). It deletes the sessions, clears the remember token and forgets trusted browsers. A confirmation email is always sent.
+
+**What a browser keeps.** No account data is written to disk in a browser; only
+the desktop app keeps a disk copy. The per-tab cache is filed under the account
+ID and wiped the moment a different account answers `/me`. The portal page is
+served `no-store`, because it embeds the reader's capabilities.
+
+---
+
+## 7. Desktop, iOS and Android apps
+
+Google refuses sign-in inside embedded web views, so provider sign-ins in the
+apps happen in the system browser and come back over the `tmaportal://`
+scheme. The exchange is shaped like PKCE, because any app on the machine could
+register that scheme.
+
+```mermaid
+sequenceDiagram
+    participant App
+    participant Browser
+    participant Server
+    App->>Browser: open /auth/desktop/start?challenge=SHA256(verifier)
+    Browser->>Server: start: sign out any existing session, park challenge
+    Browser->>Server: fresh sign-in (any method)
+    Server->>Browser: finish: mint token (single use, 120 s), sign the browser out
+    Browser->>App: tmaportal://auth?token=...
+    App->>Server: claim?token=...&verifier=...
+    Server->>App: verify, sign in with remember-me
 ```
 
-- **All screens:** `/auth/` (also linked from the floating panel on every page).
-- **States:** the "Preview state" control (bottom right) or `?state=<name>` in the URL.
-- **Dark mode:** sun/moon toggle top right - shares the portal's `tma.themeMode` preference.
-- **Flow walk-through:** submitting any form advances to the next screen like the real flow would; the floating panel's "Next screen" link does the same.
-- The GitHub Pages build (`scripts/prepare-github-pages.py`, run by CI) publishes these pages with rewritten asset paths automatically.
+- `start` signs out any session the browser already holds, and its remember-me cookie, before parking the challenge. A browser that is already signed in is never handed back as it is.
+- `finish` signs the browser out once the token is minted, so the browser leg leaves nothing signed in behind.
+- Both use `logoutCurrentDevice()`: the person's remember token is not rotated (which would end "Stay signed in" on their other devices), and no `Logout` event fires (this is not a sign-out the person made).
+- The token is worth nothing without the verifier, which never leaves the app.
+- Email-and-password sign-in in the desktop app happens inside the app. Only provider sign-ins use the hand-off.
+- iOS uses `ASWebAuthenticationSession` (which shares Safari's cookies), Android uses Custom Tabs, and the desktop uses the default browser. Native Sign in with Apple on iOS does not use the hand-off.
+- The desktop app's "Clear Session" menu wipes its cookies and local storage.
+
+---
+
+## 8. Administrator "Sign in as"
+
+- An administrator can open the portal as a service-provider account (`Impersonation::start`). The session becomes that account. The administrator's ID stays in the session (`impersonator_id`) for the way back and for the audit trail.
+- It is not a sign-in: no `auth_events` row, no new-device alert and no second-factor challenge. It is recorded in the activity log as `account.impersonated` and `account.impersonation_ended`.
+- The session-expiry, "Stay signed in?" and required-authenticator gates step aside while it is active. A suspended or unapproved target returns the administrator to their own account.
+- It lives only in the session. Signing out ends it, and nothing resumes at the next sign-in.
+
+---
+
+## 9. Accounts: registration, verification, approval, invitations
+
+- Registration (password or provider) -> email verification (skipped when a provider has verified the email) -> profile setup -> **pending approval** until an administrator approves the account and assigns its type -> onboarding or the getting-started checklist -> portal.
+- Verification links work on any device, without a session.
+- Accepting an invitation creates the account with its company membership and signs the person in. A provider sign-up carrying an invitation must match the invited email.
+- A suspended account is signed out on its next request.
+
+---
+
+## 10. Abuse controls
+
+| Control | Detail |
+|---|---|
+| Cloudflare Turnstile | Every POST that creates a session or a reset: sign in, register, request and complete a password reset, verify and re-send an email code. Off when no secret is configured. |
+| Rate limits | Sign-in 5/min per email and IP. Authenticator and email codes 5/min per half-finished sign-in. App hand-off start and claim 20/min. Native Apple sign-in 20/min. "Log out of all devices" 6/min. |
+| Passwords | Minimum the greater of 8 and the policy value (default 10), maximum 255. Checked against known breaches (Have I Been Pwned, k-anonymity). Optional minimum numbers and symbols from Sign-in policy, none by default. Every change is emailed to the owner. |
+| Geography and anonymisers | Off by default. Allow or block countries, refuse unknown countries, refuse VPNs, proxies and Tor (`EnforceGeoAccess`). See the security-hardening doc. |
+| HTTPS | `RequireSecureTransport`, plus HSTS. |
+| Anomalies | `Detectors` flag impossible travel, a change in IP count, one address used against many accounts, and download bursts, for review rather than automatic lockout. Who is alerted is set in Sign-in policy (`SecurityAlertPolicy`); administrators hear about failed sign-ins past 5 by default. |
+
+---
+
+## 11. Audit
+
+- `auth_events` records `login`, `login_failed`, `lockout`, `logout`, `password_reset`, `registered`, `verified` and more, with IP, user agent and country. Each sign-in writes one row: the echoes Laravel fires during one sign-in (remember-me re-login, the two-factor path) are dropped when they come from the same address and browser within a short window.
+- `storage/logs/security.log` is append-only and cannot be edited from the portal.
+- **"I signed in and ended up in the wrong account"**: each `login` row records the account that actually authenticated. If only the old account shows a new sign-in, its details were what got submitted, usually a password manager filling in the last account used or the provider's picker listing it first. That is not a portal fault. If the intended account shows the sign-in but the screen showed another, that is a display bug to investigate.
+
+---
+
+## 12. Screens and copy rules
+
+The sign-in screens are the Blade views in `resources/views/auth/`, built on
+`tokens.css` -> `theme.css` -> `auth.css` plus `public/css/auth-flow.css`
+(code inputs, countdowns, the password meter come from `public/js/auth-flow.js`).
+They work at the `tma-auth` breakpoints (960 / 760 / 720 / 560 px), in light and
+dark mode (`data-theme="dark"`, sharing the portal's `tma.themeMode`), and by
+keyboard. Every screen follows these rules:
+
+- **Neutral errors.** Never "wrong password" against "no such account". Forgot password always answers "If an account exists for that email, we sent reset instructions", including when none does.
+- **Required and optional are labelled** with quiet Done / Optional / Recommended pills.
+- **No fear language.** A lockout or check says what happened, how long it lasts, and the one thing to do next.
+- **Spam-folder hint** on every "we sent you an email" screen, and re-send buttons show their countdown.
+- **Mask identifiers** the reader did not just type (`+1 ••• ••• ••89`, `ab•••@example.com`).
+- **Password managers are welcome**: pasting is allowed, fields carry the right `autocomplete` (`username`, `current-password`, `new-password`, `one-time-code`), and there are no maximum-length traps.
+
+---
+
+## 13. Changes from the original design
+
+| Original decision | As built |
+|---|---|
+| Apple sign-in removed everywhere | Apple sign-in exists on the web and natively on iOS |
+| A "security check" screen for risky sign-ins (new device or location) | An email code for any browser not yet trusted for the account; no risk scoring |
+| Recovery codes stored hashed | Fortify's recovery codes, stored encrypted |
+| SMS phone verification | Not built |
+| Progressive delays, captcha escalation, 15-minute lockout | Fixed rate limits, plus Turnstile on every sign-in POST; lockouts are recorded |
+| Static clickable prototype under `public/auth/` | Removed; the real screens are in `resources/views/auth/` |
+
+---
+
+## 14. Known gaps
+
+- **The absolute cap is per account, not per session.** `last_authenticated_at` lives on the user, so a fresh sign-in on any device restarts the N-day clock for all of that person's sessions.
+- **No passkeys and no SMS codes.**
+- **iOS shares Safari's cookies** during provider sign-in (`prefersEphemeralWebBrowserSession = false`). That keeps Google and Microsoft from asking for a password every time, and is safe now that the hand-off neither reuses nor leaves behind a portal session.
+- **A remember token is per account.** Signing out anywhere ends remember-me on every device; those devices stay in until their open session expires.
+
+---
+
+## 15. Change log
+
+- **19 November 2026**
+  - App hand-off: `start` and `finish` now sign the browser out. Before this, signing out of an app and choosing Google, Microsoft or Apple again could put the person straight back into the previous account, because the browser was still signed in from the last hand-off (`DesktopAuthTest`).
+  - "Log out of all devices" in Account settings now really signs out other devices. It used to show "You have been logged out from other active sessions" without contacting the server. It now asks for the password, explains what to do on accounts without one, and is rate limited (`SignOutOtherDevicesTest`).
+  - `.env.example` defaults to the database session driver.
+  - A regression test now covers switching between two accounts in one browser, carrying real cookies across requests (`SwitchAccountsInOneBrowserTest`).

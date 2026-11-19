@@ -3782,15 +3782,29 @@
       '</form></div></div>';
   }
 
+  /*
+   * Password first, then the server ends every other session. This popup
+   * used to open straight onto "You have been logged out" without asking the
+   * server anything, so every other device stayed signed in behind a success
+   * message. The done step is only shown once the server has said so.
+   */
   function renderLogoutAllPopup() {
     return '<div class="tma-dash__settings-popup" data-settings-popup="logout-all" hidden role="dialog" aria-modal="true" aria-label="Log out of all devices" data-node-id="30919:278182">' +
       renderPopupBackdrop() +
       '<div class="tma-dash__settings-change-card tma-dash__settings-change-card--logout">' +
       renderPopupClose() +
+      '<form class="tma-dash__settings-change-form--logout" data-logout-all-form action="#" method="post" novalidate>' +
       '<div class="tma-dash__settings-change-copy tma-dash__settings-change-copy--stacked">' +
+      '<p class="tma-dash__settings-change-text">Sign out every other device and browser signed in as</p>' +
+      '<p class="tma-dash__settings-change-email tma-dash__settings-change-email--lg" data-logout-email>' + esc(CURRENT_EMAIL) + '</p></div>' +
+      '<input class="tma-dash__settings-flow-input" type="password" name="password" data-logout-all-password placeholder="Your password" autocomplete="current-password" aria-label="Your password" required>' +
+      '<p class="tma-dash__settings-change-error" data-logout-all-error role="alert" hidden></p>' +
+      '<button type="submit" class="tma-dash__settings-submit" data-logout-all-submit>Log out other devices</button>' +
+      '</form>' +
+      '<div class="tma-dash__settings-change-copy tma-dash__settings-change-copy--stacked" data-logout-all-done hidden>' +
       '<p class="tma-dash__settings-change-text">You have been logged out from other active sessions for</p>' +
       '<p class="tma-dash__settings-change-email tma-dash__settings-change-email--lg" data-logout-email>' + esc(CURRENT_EMAIL) + '</p></div>' +
-      '<button type="button" class="tma-dash__settings-submit tma-dash__settings-submit--secondary" data-logout-all-ok>OK</button></div></div>';
+      '<button type="button" class="tma-dash__settings-submit tma-dash__settings-submit--secondary" data-logout-all-ok hidden>OK</button></div></div>';
   }
 
   function renderOtpGroup(count, label) {
@@ -4212,6 +4226,9 @@
     if (root.querySelector('[data-payment-step]')) {
       resetAddPaymentForm(root);
     }
+    if (root.querySelector('[data-logout-all-form]')) {
+      resetLogoutAllPopup(root);
+    }
   }
 
   function setChangePasswordStep(root, step) {
@@ -4416,8 +4433,47 @@
   function openLogoutAllPopup(root) {
     openPopup(root, 'logout-all');
     var email = root.querySelector('.tma-dash__settings-profile-email');
-    var target = root.querySelector('[data-logout-email]');
-    if (email && target) target.textContent = email.textContent.trim();
+    if (email) {
+      root.querySelectorAll('[data-logout-email]').forEach(function (target) {
+        target.textContent = email.textContent.trim();
+      });
+    }
+    var input = root.querySelector('[data-logout-all-password]');
+    if (input) window.setTimeout(function () { input.focus(); }, 0);
+  }
+
+  /** 'ask' (password form) or 'done' (the server ended the other sessions). */
+  function setLogoutAllStep(root, step) {
+    var form = root.querySelector('[data-logout-all-form]');
+    var done = root.querySelector('[data-logout-all-done]');
+    var ok = root.querySelector('[data-logout-all-ok]');
+    if (form) form.hidden = step !== 'ask';
+    if (done) done.hidden = step !== 'done';
+    if (ok) ok.hidden = step !== 'done';
+  }
+
+  function showLogoutAllError(root, message) {
+    var error = root.querySelector('[data-logout-all-error]');
+    if (!error) return;
+    error.textContent = message || '';
+    error.hidden = !message;
+  }
+
+  /* Closing the popup must not leave a typed password sitting in the page. */
+  function resetLogoutAllPopup(root) {
+    var input = root.querySelector('[data-logout-all-password]');
+    var submit = root.querySelector('[data-logout-all-submit]');
+    if (input) input.value = '';
+    if (submit) submit.disabled = false;
+    showLogoutAllError(root, '');
+    setLogoutAllStep(root, 'ask');
+  }
+
+  function logoutAllFailure(status, body) {
+    if (status === 429) return 'Too many attempts. Wait a minute, then try again.';
+    var errors = body && body.errors;
+    var message = errors && errors.password && errors.password[0];
+    return message || 'Your other devices were not signed out. Try again.';
   }
 
   function isTwoStepEnabled(root) {
@@ -5439,6 +5495,50 @@
       btn.addEventListener('click', function (e) {
         e.preventDefault();
         closePopups(root);
+      });
+    });
+
+    var form = root.querySelector('[data-logout-all-form]');
+    if (!form || form.dataset.bound) return;
+    form.dataset.bound = '1';
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var input = form.querySelector('[data-logout-all-password]');
+      var submit = form.querySelector('[data-logout-all-submit]');
+      var password = input ? input.value : '';
+      if (!password) {
+        showLogoutAllError(root, 'Enter your password.');
+        if (input) input.focus();
+        return;
+      }
+      showLogoutAllError(root, '');
+      if (submit) submit.disabled = true;
+
+      fetch('/security-settings/logout-others', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-XSRF-TOKEN': csrfToken(),
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify({ password: password }),
+      }).then(function (r) {
+        if (r.ok) {
+          if (input) input.value = '';
+          setLogoutAllStep(root, 'done');
+          return null;
+        }
+        return r.json().catch(function () { return {}; }).then(function (body) {
+          showLogoutAllError(root, logoutAllFailure(r.status, body));
+          if (submit) submit.disabled = false;
+          if (input) input.focus();
+        });
+      }).catch(function () {
+        showLogoutAllError(root, 'The portal could not be reached. Try again.');
+        if (submit) submit.disabled = false;
       });
     });
   }

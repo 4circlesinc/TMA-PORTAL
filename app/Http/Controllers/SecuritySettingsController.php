@@ -241,6 +241,14 @@ class SecuritySettingsController extends Controller
 
     public function logoutOtherDevices(Request $request): JsonResponse|RedirectResponse
     {
+        // An account made with Google or Microsoft holds a random password
+        // nobody knows, so "The password is incorrect" would be a dead end.
+        if ($request->user()->password_auto) {
+            throw ValidationException::withMessages([
+                'password' => 'Create a password in Security settings first, then sign out your other devices.',
+            ]);
+        }
+
         $request->validate([
             'password' => ['required', 'current_password'],
         ]);

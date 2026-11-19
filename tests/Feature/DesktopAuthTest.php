@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -150,14 +151,64 @@ class DesktopAuthTest extends TestCase
         $this->get('/auth/desktop/finish')->assertRedirect(route('login'));
     }
 
-    public function test_start_sends_a_signed_in_browser_straight_back(): void
+    /**
+     * The reported bug: sign out of the app, choose "Continue with Google",
+     * and land straight back in the previous account. The browser still held
+     * the session from the last hand-off, and start() handed it back without
+     * the person ever seeing a sign-in screen or an account picker.
+     */
+    public function test_start_signs_out_a_browser_left_signed_in_instead_of_handing_it_back(): void
+    {
+        $previous = User::factory()->create();
+
+        $this->actingAs($previous)
+            ->get('/auth/desktop/start?challenge='.$this->challengeFor($this->verifier()))
+            ->assertRedirect(route('login'))
+            ->assertSessionHas('desktop.challenge');
+
+        $this->assertGuest();
+    }
+
+    public function test_start_signs_out_a_signed_in_browser_before_the_named_provider(): void
+    {
+        $previous = User::factory()->create();
+
+        $this->actingAs($previous)
+            ->get('/auth/desktop/start?challenge='.$this->challengeFor($this->verifier()).'&provider=google')
+            ->assertRedirect(route('social.redirect', ['provider' => 'google']));
+
+        $this->assertGuest();
+    }
+
+    /**
+     * "Stay signed in" puts a remember cookie in that browser, which would
+     * quietly sign it back in on the very next request. It has to go too.
+     */
+    public function test_start_drops_a_remembered_browser_and_its_remember_cookie(): void
+    {
+        $previous = User::factory()->create();
+        $recaller = Auth::guard('web')->getRecallerName();
+        $value = $previous->getAuthIdentifier().'|'.$previous->getRememberToken().'|'.$previous->getAuthPassword();
+
+        $this->withCookie($recaller, $value)
+            ->get('/auth/desktop/start?challenge='.$this->challengeFor($this->verifier()))
+            ->assertRedirect(route('login'))
+            ->assertCookieExpired($recaller);
+
+        $this->assertGuest();
+    }
+
+    /**
+     * The browser's session existed only to mint the token. Left behind, it
+     * outlived the app's own sign-out and was what start() kept handing back.
+     */
+    public function test_finish_leaves_no_signed_in_session_behind_in_the_browser(): void
     {
         $user = User::factory()->create();
-        $verifier = $this->verifier();
 
-        $this->actingAs($user)
-            ->get('/auth/desktop/start?challenge='.$this->challengeFor($verifier))
-            ->assertRedirect(route('desktop.finish'));
+        $this->tokenFor($user, $this->challengeFor($this->verifier()));
+
+        $this->assertGuest();
     }
 
     public function test_start_hands_off_to_the_named_provider(): void
