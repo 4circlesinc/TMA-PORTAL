@@ -58,7 +58,16 @@ Fortify's pipeline, with the second-factor step replaced
 1. `CanonicalizeUsername` lowercases the email.
 2. [`RedirectIfTwoFactorAuthenticatable`](app/Actions/Fortify/RedirectIfTwoFactorAuthenticatable.php) checks the password once, then applies the second-factor rules ([section 3](#3-second-factor)).
 3. `AttemptToAuthenticate`, then `PrepareAuthenticatedSession`, which rotates the session ID.
-4. [`LoginResponse`](app/Http/Responses/LoginResponse.php) stamps `users.last_authenticated_at`, runs `StaySignedIn::afterAuthenticated()`, then sends the person to the page they asked for, or `/`.
+4. [`LoginResponse`](app/Http/Responses/LoginResponse.php) stamps `users.last_authenticated_at`, runs `StaySignedIn::afterAuthenticated()`, then sends the person to the dashboard.
+
+**Every sign-in lands on the dashboard** (`SafeIntended::landing()`), whatever
+the method: password, email code, authenticator, Google, Microsoft, Apple, or
+the "Stay signed in?" answer. A page parked before sign-in is dropped, whether
+a session that ended mid-page sent the browser to the sign-in screen or a
+signed-out visit tried to open it. Only two parked addresses continue, because
+they are steps of a flow rather than a page: the app hand-off
+(`/auth/desktop/finish`) and an invitation being accepted (`/invite/{token}`).
+Only their path is used, so a parked address can never lead off the site.
 
 Errors never say which field was wrong. Attempts are limited to 5 a minute per
 email and IP address.
@@ -304,3 +313,4 @@ keyboard. Every screen follows these rules:
   - "Log out of all devices" in Account settings now really signs out other devices. It used to show "You have been logged out from other active sessions" without contacting the server. It now asks for the password, explains what to do on accounts without one, and is rate limited (`SignOutOtherDevicesTest`).
   - `.env.example` defaults to the database session driver.
   - A regression test now covers switching between two accounts in one browser, carrying real cookies across requests (`SwitchAccountsInOneBrowserTest`).
+  - Signing in always opens the dashboard. It used to reopen whatever page was parked: the page a 401 sent to the sign-in screen with `?return=`, or one a signed-out visit tried to open, which read as "it logged me back in on the same page". The sign-in page no longer saves `?return=`, and the portal no longer sends it (`SignInLandsOnDashboardTest`).

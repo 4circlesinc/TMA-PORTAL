@@ -614,7 +614,7 @@
       if (res.status === 401 || res.status === 419) {
         try { localStorage.removeItem(ME_KEY); } catch (e) { /* nothing to drop */ }
         if (res.status === 401 && !/^\/auth\//.test(location.pathname || '')) {
-          location.assign('/auth/login?return=' + encodeURIComponent(location.pathname + location.search));
+          location.assign('/auth/login');
         }
         return null;
       }

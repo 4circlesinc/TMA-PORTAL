@@ -1,5 +1,6 @@
 /*
- * On API 401, send the user to sign-in and bring them back afterward.
+ * On API 401, send the user to sign-in. Signing in always opens the
+ * dashboard (SafeIntended::landing), so no return page is passed along.
  * Global: wraps window.fetch for same-origin portal pages.
  *
  * Skip this during sign-out. Logging out destroys the session, so leftover
@@ -41,8 +42,7 @@
   window.fetch = function (input, init) {
     return nativeFetch(input, init).then(function (response) {
       if (response.status === 401 && !signingOut()) {
-        var returnTo = location.pathname + location.search;
-        location.assign('/auth/login?return=' + encodeURIComponent(returnTo));
+        location.assign('/auth/login');
       }
       if (response.status === 403 && !signingOut()) {
         redirectIfMfaRequired(response);

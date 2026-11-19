@@ -7,7 +7,6 @@ use App\Support\SafeIntended;
 use App\Support\StaySignedIn;
 use Illuminate\Http\JsonResponse;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
-use Laravel\Fortify\Fortify;
 
 class LoginResponse implements LoginResponseContract
 {
@@ -27,6 +26,6 @@ class LoginResponse implements LoginResponseContract
             return $redirect;
         }
 
-        return redirect()->intended(Fortify::redirects('login'));
+        return redirect(SafeIntended::landing());
     }
 }

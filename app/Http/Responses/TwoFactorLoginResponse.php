@@ -7,7 +7,6 @@ use App\Support\SafeIntended;
 use App\Support\StaySignedIn;
 use Illuminate\Http\JsonResponse;
 use Laravel\Fortify\Contracts\TwoFactorLoginResponse as TwoFactorLoginResponseContract;
-use Laravel\Fortify\Fortify;
 
 class TwoFactorLoginResponse implements TwoFactorLoginResponseContract
 {
@@ -27,6 +26,6 @@ class TwoFactorLoginResponse implements TwoFactorLoginResponseContract
             return $redirect;
         }
 
-        return redirect()->intended(Fortify::redirects('login'));
+        return redirect(SafeIntended::landing());
     }
 }

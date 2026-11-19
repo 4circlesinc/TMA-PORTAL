@@ -6,13 +6,13 @@ use App\Support\EmailLoginCode;
 use App\Support\EmailTwoFactor;
 use App\Support\LoginChallenge;
 use App\Support\LoginSession;
+use App\Support\SafeIntended;
 use App\Support\StaySignedIn;
 use App\Support\TrustedDevices;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
-use Laravel\Fortify\Fortify;
 
 class EmailTwoFactorController extends Controller
 {
@@ -119,6 +119,6 @@ class EmailTwoFactorController extends Controller
             return $redirect;
         }
 
-        return redirect()->intended(Fortify::redirects('login'));
+        return redirect(SafeIntended::landing());
     }
 }

@@ -14,9 +14,7 @@ class StaySignedInController extends Controller
     public function show(Request $request): View|RedirectResponse
     {
         if (! StaySignedIn::isNeeded($request)) {
-            SafeIntended::scrub();
-
-            return redirect()->intended('/');
+            return redirect(SafeIntended::landing());
         }
 
         return view('auth.stay-signed-in');
@@ -46,8 +44,7 @@ class StaySignedInController extends Controller
 
         StaySignedIn::clearNeeded($request);
 
-        SafeIntended::scrub();
-        $response = redirect()->intended('/');
+        $response = redirect(SafeIntended::landing());
 
         foreach (StaySignedIn::answerCookies($request, $data['stay']) as $cookie) {
             $response->withCookie($cookie);

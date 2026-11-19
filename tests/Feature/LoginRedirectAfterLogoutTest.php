@@ -50,20 +50,24 @@ class LoginRedirectAfterLogoutTest extends TestCase
             ->assertRedirect('/');
     }
 
-    public function test_a_deep_link_return_still_opens_that_page(): void
+    /**
+     * Signing in always opens the dashboard, so a ?return= page is no longer
+     * honoured either (see SignInLandsOnDashboardTest for every method).
+     */
+    public function test_a_return_page_on_the_sign_in_screen_still_opens_the_dashboard(): void
     {
         $user = $this->user();
 
         $this->withCookie(StaySignedIn::COOKIE, 'yes')
             ->get('/auth/login?return=/email')
             ->assertOk()
-            ->assertSessionHas('url.intended', '/email');
+            ->assertSessionMissing('url.intended');
 
         $this->withCookie(StaySignedIn::COOKIE, 'yes')
             ->post('/auth/login', [
                 'email' => $user->email,
                 'password' => 'password',
             ])
-            ->assertRedirect('/email');
+            ->assertRedirect('/');
     }
 }

@@ -20,6 +20,7 @@ use App\Support\LoginChallenge;
 use App\Support\LoginSession;
 use App\Support\Microsoft\ChangeNotifications;
 use App\Support\Notifications\Notifier;
+use App\Support\SafeIntended;
 use App\Support\StaySignedIn;
 use GuzzleHttp\Exception\RequestException;
 use Illuminate\Auth\Events\Registered;
@@ -616,7 +617,7 @@ class SocialAuthController extends Controller
             return $redirect;
         }
 
-        return redirect()->intended('/');
+        return redirect(SafeIntended::landing());
     }
 
     /**
