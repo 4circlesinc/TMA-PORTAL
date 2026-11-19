@@ -4,6 +4,8 @@ namespace App\Support\Notifications;
 
 use App\Jobs\SendPush;
 use App\Models\User;
+use App\Support\Messaging\LiveCalls;
+use Illuminate\Support\Facades\URL;
 
 /**
  * What reaches a phone while the portal is not open (docs/android-app-prompt.md section 13).
@@ -54,15 +56,56 @@ final class Push
      * signal is the `call.signal` payload (signalId, conversationId,
      * fromUserId, type, payload{fromName, fromPhoto, media}).
      *
+     * An iPhone gets it as a VoIP push (SendPush), which rings the phone's
+     * own call screen even with the app closed. `callUrl` is the phone's way
+     * back without its web session: whether it should still be ringing, and
+     * a decline from the lock screen (PushCallController).
+     *
      * @param  int[]  $recipientIds
      */
     public static function callRing(array $recipientIds, array $signal): void
     {
+        $signalId = (string) ($signal['signalId'] ?? '');
         foreach ($recipientIds as $id) {
-            self::queue((int) $id, [
+            $data = [
                 'kind' => 'call',
                 'signal' => json_encode($signal, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
-            ], urgent: true, ttlSeconds: 45); // delivery window, slightly above the 40s ring
+            ];
+            if ($signalId !== '') {
+                $data['callUrl'] = URL::temporarySignedRoute('messaging.push-call', now()->addMinutes(10), [
+                    'signal' => $signalId,
+                    'user' => (int) $id,
+                ]);
+            }
+            self::queue((int) $id, $data, urgent: true, ttlSeconds: 45); // delivery window, slightly above the 40s ring
+        }
+    }
+
+    /**
+     * A ringing call stopped ringing (LiveCalls::settle): answered, declined,
+     * or the caller gave up. Every phone it rang is told, including the other
+     * phones of whoever answered or declined, so nothing goes on ringing
+     * after the call is over, the way a phone stops when it is picked up
+     * elsewhere. Android hears this; an iPhone asks through its callUrl
+     * instead (a VoIP push must always ring, so it cannot carry a stop).
+     *
+     * @param  array<string, mixed>  $record  the settled LiveCalls record
+     */
+    public static function callEnded(array $record): void
+    {
+        $signalId = (string) data_get($record, 'signal.signalId', '');
+        if ($signalId === '') {
+            return;
+        }
+
+        foreach ($record['recipients'] ?? [] as $id) {
+            self::queue((int) $id, [
+                'kind' => 'call-end',
+                'signalId' => $signalId,
+                'conversationId' => (string) ($record['conversation'] ?? ''),
+                'outcome' => (string) ($record['outcome'] ?? LiveCalls::ENDED),
+                'by' => (string) ($record['by'] ?? ''),
+            ], urgent: true, ttlSeconds: 30);
         }
     }
 

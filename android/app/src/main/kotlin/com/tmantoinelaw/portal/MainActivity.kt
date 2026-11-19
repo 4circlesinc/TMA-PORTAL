@@ -26,6 +26,7 @@ import com.tmantoinelaw.portal.core.ui.theme.TmaTheme
 import com.tmantoinelaw.portal.web.openCustomTab
 import com.tmantoinelaw.portal.web.PortalWebHost
 import com.tmantoinelaw.portal.web.WebNotifications
+import com.tmantoinelaw.portal.web.CallActions
 import com.tmantoinelaw.portal.web.CallNotifications
 import com.tmantoinelaw.portal.web.CallService
 import com.tmantoinelaw.portal.web.AppForeground
@@ -138,11 +139,23 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
      */
     private fun handle(intent: Intent?): Boolean {
         if (intent == null) return false
+        // A call action loads nothing itself: a cold start still opens the
+        // portal (onCreate), and the action runs once the page is up.
         when (intent.action) {
-            CallNotifications.ACTION_ANSWER -> { host.evaluate("window.TMAMessagingCalls && TMAMessagingCalls.accept(true)"); intent.action = null; return true }
-            CallNotifications.ACTION_DECLINE -> { host.evaluate("window.TMAMessagingCalls && TMAMessagingCalls.decline()"); intent.action = null; return true }
-            CallNotifications.ACTION_HANGUP -> { host.evaluate("window.TMAMessagingCalls && TMAMessagingCalls.end()"); intent.action = null; return true }
-            CallNotifications.ACTION_OPEN -> { intent.action = null; return true }
+            CallNotifications.ACTION_ANSWER -> {
+                CallSession.answeredHere = true
+                CallService.silence()
+                runCallScript("window.TMAMessagingCalls && (TMAMessagingCalls.answerFromHost ? TMAMessagingCalls.answerFromHost(${CallSession.refJson()}, true) : TMAMessagingCalls.accept(true))")
+                intent.action = null; return false
+            }
+            CallNotifications.ACTION_DECLINE -> {
+                if (!CallActions.declineNatively(this)) {
+                    runCallScript("window.TMAMessagingCalls && (TMAMessagingCalls.declineFromHost ? TMAMessagingCalls.declineFromHost(${CallSession.refJson()}) : TMAMessagingCalls.decline())")
+                }
+                intent.action = null; return false
+            }
+            CallNotifications.ACTION_HANGUP -> { runCallScript("window.TMAMessagingCalls && TMAMessagingCalls.end()"); intent.action = null; return false }
+            CallNotifications.ACTION_OPEN -> { ringInPage(); intent.action = null; return false }
         }
         intent.getIntExtra(WebNotifications.EXTRA_ID, 0).takeIf { it > 0 }?.let { id ->
             val url = intent.getStringExtra(WebNotifications.EXTRA_URL).orEmpty()
@@ -176,9 +189,34 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
         val onCall = phase == "ringing" || phase == "active"
         if (onCall) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         when (phase) {
-            "ringing" -> { CallSession.update("ringing", callInfo); CallService.start(this, callInfo, ringing = true) }
-            "active" -> { CallSession.update("active", callInfo); CallService.start(this, callInfo, ringing = false) }
+            "ringing" -> {
+                CallSession.fromPage("ringing", callInfo)
+                CallService.start(this, callInfo, ringing = true)
+                // The phone rings for it from here on (CallService): one ringtone, not two.
+                if (!AppForeground.resumed || CallService.ringsNatively) silencePageRing()
+            }
+            "active" -> { CallSession.fromPage("active", callInfo); CallService.start(this, callInfo, ringing = false) }
+            // Every page starts with no call: that is not the end of a ring
+            // only the push has heard of yet (the app opened for it).
+            "" -> if (!(CallSession.fromPush && CallSession.phase == "ringing")) { CallSession.update("", null); CallService.stop(this); callInfo = null }
+            // "ended": the page looked for the push's call and it is over.
             else -> { CallSession.update("", null); CallService.stop(this); callInfo = null }
+        }
+    }
+
+    private fun silencePageRing() = host.evaluate("window.TMAMessagingCalls && TMAMessagingCalls.silenceRing && TMAMessagingCalls.silenceRing()")
+
+    /** A call script that needs the page: now if it is up, else once it is (onPortalPage). */
+    private var pageLoaded = false
+    private var pendingCallScript: String? = null
+    private fun runCallScript(js: String) {
+        if (pageLoaded) host.evaluate(js) else pendingCallScript = js
+    }
+
+    /** The app opened while a push rings: the page shows that call too. */
+    private fun ringInPage() {
+        if (CallSession.fromPush && CallSession.phase == "ringing") {
+            runCallScript("window.TMAMessagingCalls && TMAMessagingCalls.ringFromHost && TMAMessagingCalls.ringFromHost(${CallSession.refJson()})")
         }
     }
     override fun onTheme(dark: Boolean) {
@@ -187,7 +225,17 @@ class MainActivity : ComponentActivity(), PortalWebHost.Listener {
     }
     override fun onOverlay(open: Boolean) = Unit
     override fun onRendererGone() { recreate() }
-    override fun onPortalPage(url: String) { if (host.shellCache.hasSessionCookie()) PushRegistrar.ensure(this, viewModel.config.origin, BuildConfig.VERSION_NAME) }
+    override fun onPortalPage(url: String) {
+        if (host.shellCache.hasSessionCookie()) PushRegistrar.ensure(this, viewModel.config.origin, BuildConfig.VERSION_NAME)
+        pageLoaded = true
+        if (pendingCallScript == null) ringInPage()
+        val script = pendingCallScript ?: return
+        pendingCallScript = null
+        // Once now, and again in a moment for a page whose scripts are still
+        // settling; the page's *FromHost calls are safe to repeat.
+        host.evaluate(script)
+        window.decorView.postDelayed({ host.evaluate(script) }, 1500)
+    }
     override fun onResume() {
         super.onResume()
         AppForeground.resumed = true

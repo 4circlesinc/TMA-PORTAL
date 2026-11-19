@@ -30,6 +30,7 @@ use App\Support\Files\FileValidationException;
 use App\Support\Messaging\AttachmentIntake;
 use Throwable;
 use App\Support\Messaging\Broadcaster;
+use App\Support\Messaging\LiveCalls;
 use App\Support\Messaging\ClientConversations;
 use App\Support\Messaging\LinkPreviewService;
 use App\Support\Messaging\Mentions;
@@ -1249,14 +1250,31 @@ class MessagingController extends Controller
             ->pluck('user_id')
             ->all();
 
+        // Answering or declining is heard on this person's own channel too:
+        // their other phones and tabs are ringing as well, and stop.
+        $channels = in_array($data['type'], ['accept', 'reject'], true)
+            ? array_merge($recipients, [$user->id])
+            : $recipients;
+
         $signal = new CallSignal(
             $conversation->uuid,
             $user->id,
             $data['type'],
             $payload,
-            $recipients,
+            $channels,
         );
         Broadcaster::toOthers($signal);
+
+        // What a phone that only heard the push catches up from (LiveCalls),
+        // and every phone it rang told once it stops ringing.
+        if ($data['type'] === 'ring') {
+            LiveCalls::ring($signal->broadcastWith(), $recipients);
+        } elseif (($outcome = LiveCalls::outcomeFor($data['type'], $user->id, $conversation->uuid)) !== null) {
+            $settled = LiveCalls::settle($conversation->uuid, $outcome, $user->id);
+            if ($settled !== null) {
+                Push::callEnded($settled);
+            }
+        }
 
         if ($data['type'] === 'ring') {
             // Phones that are not holding the socket still ring; a muted conversation stays quiet.
@@ -1317,6 +1335,25 @@ class MessagingController extends Controller
         }
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * A ring this page missed: the app opened for a call its push announced
+     * (answered or declined on the phone's own call screen, or just opened
+     * while it rang), after the websocket's `ring` had already gone by. The
+     * page picks the call up from this as if it had heard it
+     * (TMAMessagingCalls.answerFromHost). Only someone the call rang is told.
+     */
+    public function liveCall(Request $request, string $signal): JsonResponse
+    {
+        $record = LiveCalls::find($signal);
+        abort_unless($record !== null && LiveCalls::rings($record, (int) $request->user()->id), 404);
+
+        return response()->json([
+            'live' => LiveCalls::isRinging($record),
+            'outcome' => $record['outcome'],
+            'signal' => $record['signal'],
+        ]);
     }
 
     /** Badge counts for the Messages nav bar, for polling and after a call. */

@@ -119,6 +119,57 @@ class ApnsClient
     }
 
     /**
+     * A call as a VoIP push: PushKit wakes the app, closed or not, and it puts
+     * the call on the phone's own incoming-call screen (CallKit). No alert:
+     * the call screen is the alert. Same .p8 key, the `.voip` topic.
+     *
+     * @param  array<string, string>  $data
+     * @return PushTransport::OK|PushTransport::UNREGISTERED|PushTransport::FAILED
+     */
+    public function sendVoip(string $voipToken, array $data, ?int $ttlSeconds = null, bool $sandbox = false): string
+    {
+        $jwt = $this->token();
+        if ($jwt === null) {
+            return PushTransport::FAILED;
+        }
+
+        $host = $sandbox ? 'https://api.sandbox.push.apple.com' : 'https://api.push.apple.com';
+        $headers = [
+            'authorization' => 'bearer '.$jwt,
+            'apns-topic' => config('services.apns.bundle_id').'.voip',
+            'apns-push-type' => 'voip',
+            'apns-priority' => '10',
+            // A ring that cannot arrive while it is still ringing is not sent late.
+            'apns-expiration' => (string) (time() + ($ttlSeconds ?? 45)),
+        ];
+
+        try {
+            $response = Http::withHeaders($headers)
+                ->withBody(json_encode(array_diff_key($data, ['iosSound' => true]), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE), 'application/json')
+                ->withOptions(['version' => 2.0])
+                ->timeout(10)
+                ->post($host.'/3/device/'.$voipToken);
+        } catch (\Throwable $e) {
+            Log::warning('APNs VoIP send failed', ['error' => $e->getMessage()]);
+
+            return PushTransport::FAILED;
+        }
+
+        if ($response->successful()) {
+            return PushTransport::OK;
+        }
+
+        $reason = (string) data_get($response->json(), 'reason', '');
+        if (in_array($reason, ['Unregistered', 'BadDeviceToken', 'DeviceTokenNotForTopic'], true)) {
+            return PushTransport::UNREGISTERED;
+        }
+
+        Log::warning('APNs refused a VoIP push', ['status' => $response->status(), 'reason' => $reason]);
+
+        return PushTransport::FAILED;
+    }
+
+    /**
      * @param  array<string, string>  $data
      * @return array<string, mixed>
      */

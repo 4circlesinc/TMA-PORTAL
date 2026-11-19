@@ -64,6 +64,9 @@
   window.TMADesktop = {
     isDesktop: true,
     isIOS: true,
+    // Incoming calls ring on the phone's own call screen (CallKit,
+    // CallCoordinator.swift); the page shows them without a second ringtone.
+    callKit: true,
     platform: 'ios',
     // The App Store (and TestFlight) is the only way this app is installed.
     // The page keeps offers of other builds out of it.

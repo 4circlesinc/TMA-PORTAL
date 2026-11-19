@@ -8,7 +8,7 @@ use App\Models\DeviceToken;
  * Android tokens go to FCM, iPhone tokens to APNs. Either side can be
  * unconfigured; that side is skipped and the other still sends.
  */
-final class RoutingPushTransport implements PushTransport
+final class RoutingPushTransport implements PushTransport, VoipPushTransport
 {
     public function __construct(
         private FcmClient $fcm,
@@ -37,5 +37,14 @@ final class RoutingPushTransport implements PushTransport
         }
 
         return $this->fcm->send($token, $data, $urgent, $ttlSeconds);
+    }
+
+    public function sendVoip(string $voipToken, array $data, ?int $ttlSeconds = null, bool $sandbox = false): string
+    {
+        if (! $this->apns->enabled()) {
+            return self::FAILED;
+        }
+
+        return $this->apns->sendVoip($voipToken, $data, $ttlSeconds, $sandbox);
     }
 }

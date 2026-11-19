@@ -108,6 +108,7 @@ use App\Http\Controllers\MessagingAttachmentController;
 use App\Http\Controllers\MessagingController;
 use App\Http\Controllers\MessagingFileRequestController;
 use App\Http\Controllers\NotificationReplyController;
+use App\Http\Controllers\PushCallController;
 use App\Http\Controllers\PushReplyController;
 use App\Http\Controllers\MessagingGroupController;
 use App\Http\Controllers\MessagingScheduleController;
@@ -182,6 +183,12 @@ Route::post('/push/mail/{message}/{user}', [PushReplyController::class, 'mail'])
     ->whereNumber('user')
     ->middleware(['signed', 'throttle:30,1'])
     ->name('mail.push-reply');
+// A phone ringing from a push: should it still ring, and Decline from its
+// own call screen, without opening the app (PushCallController).
+Route::post('/push/calls/{signal}/{user}', [PushCallController::class, 'store'])
+    ->whereNumber('user')
+    ->middleware(['signed', 'throttle:120,1'])
+    ->name('messaging.push-call');
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/media/avatars/{name}', [AvatarController::class, 'show'])->name('avatar.show');
@@ -1533,6 +1540,8 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::post('/messages/{uuid}/star', [MessagingController::class, 'toggleStar'])->name('messages.star');
         Route::post('/messages/{uuid}/forward', [MessagingController::class, 'forwardMessage'])->name('messages.forward');
         Route::post('/conversations/{uuid}/call', [MessagingController::class, 'callSignal'])->name('conversations.call');
+        // A ring the page missed, for an app opened by its push (LiveCalls).
+        Route::get('/calls/live/{signal}', [MessagingController::class, 'liveCall'])->name('calls.live');
 
         // A message's details from its menu: sent, and seen by whom and when.
         Route::get('/messages/{uuid}/info', [MessagingController::class, 'messageInfo'])->name('messages.info');

@@ -58,6 +58,7 @@ import androidx.core.view.WindowCompat
 import com.tmantoinelaw.portal.core.ui.R
 import com.tmantoinelaw.portal.core.ui.theme.TmaTheme
 import com.tmantoinelaw.portal.core.ui.theme.Tokens
+import com.tmantoinelaw.portal.web.CallActions
 import com.tmantoinelaw.portal.web.CallNotifications
 import com.tmantoinelaw.portal.web.CallSession
 import kotlin.math.roundToInt
@@ -109,15 +110,20 @@ class CallActivity : ComponentActivity() {
                     onDispose { CallSession.unwatch(watch) }
                 }
                 LaunchedEffect(Unit) {
+                    // Unanswered is a missed call, not a declined one: the
+                    // caller's own clock ends it. The screen just goes.
                     delay(40_000)
-                    handOff(CallNotifications.ACTION_DECLINE)
                     finish()
                 }
                 CallScreen(
                     info = info,
                     ringing = ringing,
                     onAnswer = { handOff(CallNotifications.ACTION_ANSWER); finish() },
-                    onDecline = { handOff(CallNotifications.ACTION_DECLINE); finish() },
+                    onDecline = {
+                        // Declined from here without opening the app, as a phone call is.
+                        if (!CallActions.declineNatively(this@CallActivity)) handOff(CallNotifications.ACTION_DECLINE)
+                        finish()
+                    },
                     onHangup = { handOff(CallNotifications.ACTION_HANGUP); finish() },
                 )
             }

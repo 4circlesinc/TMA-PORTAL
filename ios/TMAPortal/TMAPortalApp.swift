@@ -6,7 +6,7 @@ import WebKit
 @main
 struct TMAPortalApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var model = PortalModel()
+    @StateObject private var model = PortalModel.shared
 
     var body: some Scene {
         WindowGroup {
@@ -114,6 +114,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         UNUserNotificationCenter.current().setNotificationCategories([calls, MessageReply.category])
         // The copy for offline, kept current in the background (BackgroundSync).
         BackgroundSync.register()
+        // Calls ring the phone's own call screen from a VoIP push, even with
+        // the app closed; PushKit has to be listening before launch ends.
+        CallCoordinator.shared.startVoIP()
         return true
     }
 

@@ -156,8 +156,19 @@
     return RINGTONES[key] || RINGTONES['ringtone-1'];
   }
 
+  /*
+   * The phone rings on its own call screen: the iPhone app's CallKit for
+   * every call, Android's call notification when the app was not in front.
+   * Two ringtones at once is the one thing worse than none.
+   */
+  function hostRings() {
+    if (window.TMADesktop && window.TMADesktop.callKit) return true;
+    return !!(session && session.hostRings);
+  }
+
   function startRinging() {
     stopRinging();
+    if (hostRings()) return;
     var src = ringtoneSrc();
     if (!src) return;
 
@@ -368,6 +379,13 @@
       deviceList: null,
       seen: {},
       announced: '',
+
+      // The ring's own id, which the apps use to recognise this call on the
+      // phone's call screen and to ask the server about it.
+      ringSignalId: null,
+      // The phone itself is ringing for this call (CallKit, Android's call
+      // notification): the page stays quiet rather than ring a second time.
+      hostRings: false,
     }, attrs || {});
   }
 
@@ -454,6 +472,10 @@
           name: session.peerName || 'Unknown caller',
           avatar: session.peerAvatar || '',
           media: session.media || 'audio',
+          // The phone apps match this to the same call's push, so it rings
+          // once on the call screen, and can decline it from there.
+          signalId: session.ringSignalId || '',
+          conversationId: session.conversationId || '',
         }));
       } catch (e) { /* a shell that cannot read it just shows less */ }
     } else {
@@ -3261,7 +3283,8 @@
 
   function onSignal(payload, viewerId) {
     if (viewerId != null) meId = viewerId;
-    if (!payload || payload.fromUserId === meId) return;
+    if (!payload) return;
+    if (payload.fromUserId === meId) { ownSignalElsewhere(payload); return; }
 
     // The same signal arrives on the conversation channel and on this user's
     // own channel, apply it once (see App\Events\CallSignal).
@@ -3295,6 +3318,8 @@
           // preview is seeing how you look. The caller has not sent anything
           // yet, and will not until this is answered.
           swapped: media === 'video',
+          ringSignalId: payload.signalId || null,
+          hostRings: !!payload._hostRings,
         });
         render();
         startRinging();
@@ -3305,8 +3330,11 @@
         loadDeviceList();
         armRingTimeout();
         // Tell the caller the phone is actually ringing here, until this
-        // lands their side only knows it asked ("Calling…").
-        signal('state', { payload: { ringing: true } });
+        // lands their side only knows it asked ("Calling…"). A ring picked up
+        // late (an app opened by its push) missed the offer that followed it,
+        // so it also asks for that again.
+        signal('state', { payload: payload._late ? { ringing: true, resend: true } : { ringing: true } });
+        if (payload._late) askForOffer(session, 0);
       } else if (type === 'offer' && body.sdp) {
         session.remoteOffer = body.sdp;
         if (!session.peerAvatar && fromPhoto) session.peerAvatar = fromPhoto;
@@ -3355,8 +3383,17 @@
       // state, so it must not clobber the mute/camera defaults.
       if (body.ringing) {
         if (session.role === 'caller' && !session.connected) {
-          setStatus('Ringing…');
-          announce('Ringing');
+          if (session.statusText !== 'Ringing…') {
+            setStatus('Ringing…');
+            announce('Ringing');
+          }
+          // A phone that opened for this call after the offer went by (its
+          // push woke it): the offer again, with the network paths gathered
+          // since, which its SDP now carries.
+          var local = body.resend && session.pc && session.pc.localDescription;
+          if (local && local.type === 'offer') {
+            signal('offer', { media: session.media, payload: { sdp: { type: local.type, sdp: local.sdp } } });
+          }
         }
         return;
       }
@@ -3448,6 +3485,134 @@
     }
   }
 
+  /*
+   * This person answered or declined on another of their devices: the phone's
+   * own call screen, another tab, the desktop app. This one stops ringing,
+   * the way every phone stops once a call is picked up somewhere.
+   */
+  function ownSignalElsewhere(payload) {
+    if (payload.type !== 'accept' && payload.type !== 'reject') return;
+    if (!session || session.role !== 'callee' || session.accepting || session.answered) return;
+    if (session.conversationId !== payload.conversationId) return;
+    stopRinging();
+    clearRingTimeout();
+    stopTimer();
+    teardownMedia();
+    session = null;
+    closeOverlay();
+    if (payload.type === 'accept' && window.TMAToast && window.TMAToast.show) {
+      window.TMAToast.show('Answered on another device');
+    }
+  }
+
+  /*
+   * A late ring asks the caller for the offer again until it has it: the
+   * websocket may still be connecting when the first ask goes out, and an
+   * offer sent before this page was listening is an offer never heard.
+   */
+  function askForOffer(forSession, tries) {
+    setTimeout(function () {
+      if (!session || session !== forSession || session.remoteOffer || session.answered) return;
+      if (tries >= 4) return;
+      signal('state', { payload: { ringing: true, resend: true } });
+      askForOffer(forSession, tries + 1);
+    }, 2500);
+  }
+
+  /* ------------------------------------------------------------------ *
+   * A call the phone heard about outside the page
+   *
+   * The apps ring on the phone's own call screen (CallKit, Android's call
+   * notification) from a push, with the app closed or asleep. By the time an
+   * app has this page up, the websocket's ring has gone by, so the page asks
+   * the server for it (App\Support\Messaging\LiveCalls) and picks the call up
+   * as if it had heard it. `ref` is {signalId, conversationId}: from the push,
+   * or from the call-info this page published.
+   * ------------------------------------------------------------------ */
+  var hostJoins = {};
+
+  function sessionFor(ref) {
+    if (!session) return null;
+    if (ref.conversationId && session.conversationId !== ref.conversationId) return null;
+    return session;
+  }
+
+  function joinFromHost(ref) {
+    ref = ref || {};
+    if (sessionFor(ref)) return Promise.resolve(session);
+    var id = ref.signalId;
+    if (!id || !api() || !api().liveCall) return Promise.resolve(null);
+    if (hostJoins[id]) return hostJoins[id];
+    var join = api().liveCall(id).then(function (res) {
+      if (!res || !res.live || !res.signal || sessionFor(ref)) return sessionFor(ref);
+      delete seenSignals[res.signal.signalId];
+      onSignal(Object.assign({}, res.signal, { _late: true, _hostRings: true }));
+      return sessionFor(ref);
+    }).catch(function () {
+      return null;
+    }).then(function (found) {
+      delete hostJoins[id];
+      return found;
+    });
+    hostJoins[id] = join;
+    return join;
+  }
+
+  /*
+   * Nothing left to join: the caller gave up, or it was answered elsewhere.
+   * The app's call screen is still up, so it is told ("ended": an explicit
+   * end, unlike the empty phase every page starts with).
+   */
+  function hostCallGone(say) {
+    var el = document.documentElement;
+    if (!session) {
+      el.setAttribute('data-tma-call', 'ended');
+      setTimeout(function () {
+        if (!session && el.getAttribute('data-tma-call') === 'ended') el.removeAttribute('data-tma-call');
+      }, 60);
+    }
+    if (say && window.TMAToast && window.TMAToast.show) window.TMAToast.show('Call ended');
+  }
+
+  function answerFromHost(ref, withVideo) {
+    return joinFromHost(ref).then(function (found) {
+      if (!found) { hostCallGone(true); return false; }
+      if (!found.accepting && !found.answered) acceptIncoming(withVideo !== false);
+      return true;
+    });
+  }
+
+  function declineFromHost(ref) {
+    ref = ref || {};
+    if (sessionFor(ref)) {
+      if (session.mode === MODES.INCOMING && !session.accepting) declineIncoming();
+      return Promise.resolve(true);
+    }
+    // No pop-up to close: decline straight away, without ringing here first.
+    if (!ref.signalId || !api() || !api().liveCall) { hostCallGone(false); return Promise.resolve(false); }
+    return api().liveCall(ref.signalId).then(function (res) {
+      if (res && res.live && res.signal) {
+        var body = res.signal.payload || {};
+        api().callSignal(res.signal.conversationId, {
+          type: 'reject',
+          media: body.media || 'audio',
+          initiatorId: res.signal.fromUserId || null,
+          answered: false,
+        }).catch(function () {});
+      }
+      hostCallGone(false);
+      return true;
+    }).catch(function () { hostCallGone(false); return false; });
+  }
+
+  /* The app opened while its call screen rings: the pop-up, quietly. */
+  function ringFromHost(ref) {
+    return joinFromHost(ref).then(function (found) {
+      if (!found) hostCallGone(false);
+      return !!found;
+    });
+  }
+
   /* Signals seen recently, so a duplicate delivery is applied once. */
   var seenSignals = {};
   function pruneSeen() {
@@ -3482,8 +3647,29 @@
      * window, and its buttons have to land on the same code paths as the ones
      * in the overlay rather than synthesising clicks at them.
      */
-    accept: function (withVideo) { acceptIncoming(withVideo !== false); },
+    accept: function (withVideo) {
+      // An app may deliver the same answer twice (its own screen, then the page load).
+      if (session && (session.accepting || session.answered)) return;
+      acceptIncoming(withVideo !== false);
+    },
     decline: function () { declineIncoming(); },
+    /*
+     * The phone apps' call screen (CallKit, Android's call notification),
+     * which rang from a push and may have opened this page for it. Each
+     * returns a promise of whether there was a call to act on.
+     */
+    answerFromHost: answerFromHost,
+    declineFromHost: declineFromHost,
+    ringFromHost: ringFromHost,
+    /* The phone has started ringing for this call itself: the page goes quiet. */
+    silenceRing: function () {
+      if (!session) return;
+      session.hostRings = true;
+      if (ringEl) {
+        try { ringEl.pause(); ringEl.currentTime = 0; } catch (e) { /* ignore */ }
+        ringEl = null;
+      }
+    },
     /* Settings write-through: the preference is read on the next answered call. */
     setDisplayPreference: function (mode) {
       if (mode === MODES.MODAL || mode === MODES.COMPACT || mode === MODES.ISLAND) {

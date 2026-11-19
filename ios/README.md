@@ -25,7 +25,7 @@ Debug builds talk to `http://127.0.0.1:8001` and may use plain HTTP, including a
 | Sign in with Apple | Apple's web page, same handoff | the system sheet (`ASAuthorizationController`), posted to `/auth/social/apple/native` |
 | Offline boot | `ShellCache` | `ShellCache.swift` |
 | Notifications | the shade | `UNUserNotificationCenter` |
-| Incoming call | CallStyle | CallKit, when the app is not in front |
+| Incoming call | CallStyle | CallKit for every incoming call, rung by a VoIP push (PushKit) even with the app closed; the page stays quiet under it (`TMADesktop.callKit`). While it rings from a push the phone asks the push's signed link whether to go on (`PushCallController`); Decline goes from there without opening the app; Answer opens the page, which picks up the ring it missed (`TMAMessagingCalls.answerFromHost`) |
 | Updates | APK from `/desktop/releases` | the `ios` entry on the same feed; Update opens the URL |
 | Push | FCM, platform `android` | APNs, platform `ios` (release) or `ios-sandbox` (debug) |
 | Bottom bar and header bubbles | the page's own | `GlassChrome.swift` on iOS 26+, in the system's Liquid Glass |

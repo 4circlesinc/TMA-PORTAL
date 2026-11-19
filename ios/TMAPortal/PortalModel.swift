@@ -22,6 +22,14 @@ struct PortalUpdate: Identifiable {
 enum AppBridge {
     static weak var model: PortalModel?
     static var token: String?
+    /// The PushKit token: calls ring the phone's own call screen (CallCoordinator).
+    static var voipToken: String? = UserDefaults.standard.string(forKey: voipTokenKey)
+    static let voipTokenKey = "push.voipToken"
+
+    /// One of this phone's registered tokens, which the call link wants with it.
+    static var callDevice: String? {
+        token ?? UserDefaults.standard.string(forKey: MessageReply.tokenKey) ?? voipToken
+    }
 }
 
 /// The window. One WKWebView over the portal origin, plus the things a browser
@@ -29,8 +37,12 @@ enum AppBridge {
 /// downloads, and deep links. The page is the portal's own front end.
 @MainActor
 final class PortalModel: NSObject, ObservableObject {
+    /// One window, made when first needed: by the scene, or by a call
+    /// answered on the lock screen before there is a scene at all.
+    static let shared = PortalModel()
+
     let webView: WKWebView
-    let calls = CallCoordinator()
+    let calls = CallCoordinator.shared
     /// Location for the page through iOS's own permission, asked once (LocationBridge.swift).
     let location = LocationBridge()
     /// The bottom bar and the header's bubbles, drawn in Liquid Glass (GlassChrome.swift).
@@ -252,6 +264,7 @@ final class PortalModel: NSObject, ObservableObject {
 
     func becameActive() {
         checkForUpdate()
+        calls.appBecameActive()
     }
 
     func sceneInactive() {
@@ -289,15 +302,16 @@ final class PortalModel: NSObject, ObservableObject {
 
     func notificationResponse(_ response: UNNotificationResponse) {
         let action = response.actionIdentifier
+        let info = response.notification.request.content.userInfo
+        // A call's ordinary push (a phone without VoIP yet): its buttons.
         if action == "ANSWER" {
-            runCallScript("window.TMAMessagingCalls && TMAMessagingCalls.accept(true)")
+            calls.answer(fromPush: info)
             return
         }
         if action == "DECLINE" {
-            runCallScript("window.TMAMessagingCalls && TMAMessagingCalls.decline()")
+            calls.decline(fromPush: info)
             return
         }
-        let info = response.notification.request.content.userInfo
         // A message notification opens its conversation.
         if let message = MessageNotification(userInfo: info), let path = message.url, !path.isEmpty {
             openPortalPath(path)
@@ -348,12 +362,18 @@ final class PortalModel: NSObject, ObservableObject {
 
     func remotePush(_ userInfo: [AnyHashable: Any]) {
         guard (userInfo["kind"] as? String) == "call" else { return }
-        calls.reportFromPush(signalJSON: userInfo["signal"] as? String)
+        calls.reportFromAlertPush(userInfo)
     }
 
     func pushTokenArrived(_ token: String) {
         AppBridge.token = token
         Task { await self.registerPush(token: token) }
+    }
+
+    /// The PushKit token rides along with the ordinary one (registerPush).
+    func voipTokenArrived(_ token: String) {
+        guard let pushToken = AppBridge.token else { return }
+        Task { await self.registerPush(token: pushToken) }
     }
 
     func deferUpdate() {
@@ -707,7 +727,8 @@ final class PortalModel: NSObject, ObservableObject {
     private func registerPush(token: String) async {
         let cookies = await cookies()
         guard let session = sessionCookie(in: cookies) else { return }
-        let stamp = sha256(token + "|" + session.value)
+        let voip = AppBridge.voipToken ?? ""
+        let stamp = sha256(token + "|" + voip + "|" + session.value)
         if UserDefaults.standard.string(forKey: "push.registered") == stamp {
             // Already registered: still tell this page load, which starts out
             // believing push is off. Without it every launch after the first
@@ -717,12 +738,14 @@ final class PortalModel: NSObject, ObservableObject {
             return
         }
         guard let url = URL(string: PortalConfig.url("/me/devices")) else { return }
-        let body: [String: String] = [
+        var body: [String: String] = [
             "platform": PortalConfig.pushPlatform,
             "token": token,
             "appVersion": PortalConfig.version,
             "deviceName": PortalConfig.deviceName,
         ]
+        // Calls ring the phone's own call screen through this one, even closed.
+        if !voip.isEmpty { body["voipToken"] = voip }
         var request = URLRequest(url: url, timeoutInterval: 15)
         request.httpMethod = "POST"
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)

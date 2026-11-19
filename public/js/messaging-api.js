@@ -161,6 +161,11 @@
       });
     },
 
+    /* A ring this page missed (the app opened for its push): {live, outcome, signal}. */
+    liveCall: function (signalId) {
+      return api(BASE + '/calls/live/' + encodeURIComponent(signalId));
+    },
+
     /* ── Client-call recording (see CallRecordingController) ──
      * Start is a question, not an order: the server alone decides whether
      * this call records (a staff member talking to a client). Both sides ask

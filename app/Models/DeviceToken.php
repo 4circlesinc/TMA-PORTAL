@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /** A native app's push token (docs/android-app-prompt.md section 13). */
-#[Fillable(['user_id', 'platform', 'token', 'app_version', 'device_name', 'session_id', 'last_seen_at'])]
+#[Fillable(['user_id', 'platform', 'token', 'voip_token', 'app_version', 'device_name', 'session_id', 'last_seen_at'])]
 class DeviceToken extends Model
 {
     public const PLATFORM_ANDROID = 'android';
@@ -15,6 +15,11 @@ class DeviceToken extends Model
     public const PLATFORM_IOS = 'ios';
 
     public const PLATFORM_IOS_SANDBOX = 'ios-sandbox';
+
+    public function isIphone(): bool
+    {
+        return in_array($this->platform, [self::PLATFORM_IOS, self::PLATFORM_IOS_SANDBOX], true);
+    }
 
     protected function casts(): array
     {

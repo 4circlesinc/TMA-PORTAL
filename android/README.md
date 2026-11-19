@@ -33,7 +33,7 @@ Android SDK with `platforms;android-37`, and an emulator or device on API 26+.
 | Loading layer | `splash.js` | `core/ui/splash/BootSplash.kt` over the WebView until `onPageFinished` |
 | Media permissions | `setPermissionRequestHandler` | `WebChromeClient.onPermissionRequest` → runtime permissions |
 | Location | `geolocation` in the same handlers + `NSLocationWhenInUseUsageDescription` | `onGeolocationPermissionsShowPrompt` → ACCESS_FINE/COARSE_LOCATION |
-| Incoming call | `call-window.js` panel, power blocker | `web/CallService.kt` foreground service whose notification *is* the CallStyle (Accept/Decline) while ringing, then "in progress" once answered; TMA mark as the shade icon |
+| Incoming call | `call-window.js` panel, power blocker | `web/CallService.kt` foreground service whose notification *is* the CallStyle (Accept/Decline) while ringing, then "in progress" once answered; TMA mark as the shade icon. Rung when the app is not in front, it plays the phone's own ringtone and vibration (as the ringer switch allows) and the page stays quiet; a `call-end` push stops it the moment the call is answered elsewhere, declined or given up on. Decline goes without opening the app (`web/CallActions.kt`, the push's signed link); Answer opens the portal, which picks up the ring it missed (`TMAMessagingCalls.answerFromHost`) |
 | Auto-update | `updater.js` + `/desktop/releases` | `web/AppUpdater.kt` — same feed, APK download, system install prompt |
 | Downloads / uploads | Chromium | `DownloadManager` with the page's cookies; `onShowFileChooser` |
 

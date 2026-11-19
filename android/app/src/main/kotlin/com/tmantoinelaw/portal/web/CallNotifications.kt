@@ -20,9 +20,11 @@ import org.json.JSONObject
 /**
  * The desktop's incoming-call panel (desktop/call-window.js): the caller's
  * name with Accept and Decline, raised only when the app is not in front.
- * Accept and Decline land on the page's own `TMAMessagingCalls.accept()` /
- * `.decline()`, the same code paths as the in-page buttons. The page rings
- * with its own ringtone, so the notification itself is silent.
+ * Accept opens the app and lands on the page's own answer
+ * (`TMAMessagingCalls.answerFromHost`, which also picks up a ring the page
+ * never heard because the app was closed). Decline goes without opening the
+ * app when it can (CallActions). The notification itself is silent: the
+ * phone's ringtone is played by CallService, or by the page in front.
  *
  * One shade entry: the foreground service *is* this notification (CallStyle
  * while it rings, "in progress" once answered). A second "Ringing" tile was
@@ -84,12 +86,23 @@ object CallNotifications {
         return builder
     }
 
+    /**
+     * Decline without opening the app when the ring carried its link
+     * (CallActions); otherwise the page declines it, so the app opens.
+     */
+    private fun declineIntent(context: Context): PendingIntent =
+        if (CallSession.callUrl != null) PendingIntent.getBroadcast(
+            context, ACTION_DECLINE.hashCode(),
+            Intent(context, CallActionReceiver::class.java).setAction(ACTION_DECLINE),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        ) else activityIntent(context, ACTION_DECLINE)
+
     /** Incoming CallStyle, used as the ringing foreground-service notification. */
     fun incoming(context: Context, info: Info): Notification {
         ensureChannel(context)
         val person = Person.Builder().setName(info.name).setImportant(true)
             .setIcon(IconCompat.createWithResource(context, R.drawable.logo_mark)).build()
-        val decline = activityIntent(context, ACTION_DECLINE)
+        val decline = declineIntent(context)
         val answer = activityIntent(context, ACTION_ANSWER)
         return brand(NotificationCompat.Builder(context, CHANNEL), context)
             .setContentTitle(info.name)

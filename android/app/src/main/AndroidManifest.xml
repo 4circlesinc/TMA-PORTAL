@@ -16,6 +16,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+    <!-- Android 14+ only starts a phoneCall foreground service for an app that manages its own calls:
+         what lets a push ring the phone with the app closed (CallService). Granted at install. -->
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
 
     <queries>
         <intent>
@@ -92,6 +95,10 @@
         <!-- The inline Reply on a message or email notification (MessageNotifications). -->
         <receiver
             android:name=".web.ReplyReceiver"
+            android:exported="false" />
+        <!-- Decline on the incoming-call notification, without opening the app (CallActions). -->
+        <receiver
+            android:name=".web.CallActionReceiver"
             android:exported="false" />
         <provider
             android:name="androidx.core.content.FileProvider"

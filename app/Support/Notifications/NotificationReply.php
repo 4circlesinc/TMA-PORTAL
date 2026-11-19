@@ -80,6 +80,26 @@ final class NotificationReply
         ], $person));
     }
 
+    /**
+     * A call declined on the phone's own call screen (the lock screen's red
+     * button, Android's Decline), sent without opening the app. The same
+     * `reject` the page would send: the caller stops ringing, the history
+     * line and the notifications follow exactly as if it were declined there.
+     *
+     * @param  array<string, mixed>  $record  a ringing LiveCalls record
+     */
+    public static function declineCall(User $person, array $record): JsonResponse
+    {
+        self::actAs($person);
+
+        return app(MessagingController::class)->callSignal(self::request([
+            'type' => 'reject',
+            'media' => (string) ($record['media'] ?? 'audio'),
+            'initiatorId' => (int) ($record['callerId'] ?? 0) ?: null,
+            'answered' => false,
+        ], $person), (string) $record['conversation']);
+    }
+
     /** This request only: nothing is written to a session. */
     private static function actAs(User $person): void
     {

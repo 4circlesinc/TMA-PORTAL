@@ -19,6 +19,8 @@ class DeviceTokenController extends Controller
         $data = $request->validate([
             'platform' => ['required', 'string', 'in:android,ios,ios-sandbox'],
             'token' => ['required', 'string', 'max:512'],
+            // An iPhone's PushKit token: calls ring its own call screen (SendPush).
+            'voipToken' => ['nullable', 'string', 'max:512'],
             'appVersion' => ['nullable', 'string', 'max:32'],
             'deviceName' => ['nullable', 'string', 'max:120'],
         ]);
@@ -31,6 +33,15 @@ class DeviceTokenController extends Controller
             'session_id' => $request->session()->getId(),
             'last_seen_at' => now(),
         ];
+
+        $voip = $data['voipToken'] ?? null;
+        if (is_string($voip) && $voip !== '') {
+            $attrs['voip_token'] = $voip;
+            // Like the ordinary token, it belongs to the phone: whoever signs
+            // in there now is the one it rings.
+            DeviceToken::query()->where('voip_token', $voip)->where('token', '!=', $data['token'])
+                ->update(['voip_token' => null]);
+        }
 
         $existing = DeviceToken::query()->where('token', $data['token'])->first();
         if ($existing) {

@@ -11,7 +11,8 @@ import org.json.JSONObject
  * the page already heard the socket and shows its own UI; otherwise FCM is
  * the shade (notify-store.js does not also banner on Android). A ringing
  * call starts the foreground service, whose notification *is* the incoming
- * CallStyle — not a second tile beside it.
+ * CallStyle — not a second tile beside it — and rings the phone. `call-end`
+ * stops it the moment the call stops ringing (Push::callEnded).
  */
 class PushService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
@@ -44,10 +45,32 @@ class PushService : FirebaseMessagingService() {
             "call" -> {
                 val signal = runCatching { JSONObject(data["signal"] ?: "") }.getOrNull() ?: return
                 if (signal.optString("type") != "ring") return
+                val signalId = signal.optString("signalId").ifBlank { null }
+                // The page in the background already rang this one: keep it, with the push's decline link.
+                if (signalId != null && signalId == CallSession.signalId && CallSession.phase.isNotEmpty()) {
+                    CallSession.callUrl = data["callUrl"] ?: CallSession.callUrl
+                    return
+                }
+                // Already on a call: a second ring does not take the screen from it.
+                if (CallSession.phase == "active") return
                 val payload = signal.optJSONObject("payload")
-                val info = JSONObject().put("name", payload?.optString("fromName")?.ifBlank { null } ?: "Unknown caller").put("media", payload?.optString("media")?.ifBlank { null } ?: "audio")
-                CallSession.update("ringing", info.toString())
+                val info = JSONObject()
+                    .put("name", payload?.optString("fromName")?.ifBlank { null } ?: "Unknown caller")
+                    .put("media", payload?.optString("media")?.ifBlank { null } ?: "audio")
+                    .put("signalId", signalId ?: "")
+                    .put("conversationId", signal.optString("conversationId"))
+                CallSession.ringFromPush(info.toString(), signalId, signal.optString("conversationId").ifBlank { null }, data["callUrl"])
                 CallService.start(this, info.toString(), ringing = true)
+            }
+            // The call stopped ringing: answered elsewhere, declined, or the
+            // caller gave up. This phone stops too, unless it is the one
+            // that answered.
+            "call-end" -> {
+                if (CallSession.phase != "ringing" || CallSession.answeredHere) return
+                val signalId = data["signalId"]
+                if (!signalId.isNullOrBlank() && CallSession.signalId != null && CallSession.signalId != signalId) return
+                CallSession.update("", null)
+                CallService.stop(this)
             }
         }
     }
