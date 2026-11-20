@@ -681,7 +681,7 @@
     if (!a || typeof a.api !== 'function') return Promise.resolve([]);
     var term = String(q || '').trim();
     if (term.length < 2) return Promise.resolve([]);
-    return a.api(root() + '/portal/cip/applications?q=' + encodeURIComponent(term) + '&perPage=8')
+    return a.api(root() + '/portal/cip/applications?q=' + encodeURIComponent(term) + '&perPage=8&facets=0')
       .then(function (data) {
         return ((data && data.applications) || []).slice(0, 8).map(function (app) {
           var name = app.applicantName || app.contactPerson || 'Application';

@@ -2,7 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\CipApplication;
+use App\Models\CipProvider;
 use App\Models\Client;
+use App\Models\Company;
+use App\Models\CompanyMember;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
 use App\Models\FileComment;
@@ -56,6 +60,42 @@ class CipAttentionTest extends TestCase
         ]);
 
         return [$client, $file];
+    }
+
+    public function test_a_provider_contact_is_marked_for_their_own_client_only(): void
+    {
+        config(['services.cip.enabled' => true]);
+
+        $staff = $this->user('Ada Admin', 'a-firm@example.com');
+        [$chen, $file] = $this->clientWithDocument($staff, 'Chen Wei');
+        [$other, $otherFile] = $this->clientWithDocument($staff, 'Other Firm');
+
+        $company = Company::create(['uid' => 'galaxy-attn', 'name' => 'Galaxy', 'created_by' => $staff->id]);
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL', 'company_id' => $company->id]);
+        CipApplication::create([
+            'provider_id' => $provider->id,
+            'client_id' => $chen->id,
+            'created_by' => $staff->id,
+            'investment_type' => 'real_estate',
+        ]);
+
+        $contact = $this->user('Galaxy Contact', 'galaxy-attn@example.com', 'Client');
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'user_id' => $contact->id,
+            'name' => $contact->name,
+            'email' => $contact->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+
+        Comments::create($file, $staff, 'Please rescan page two');
+        Comments::create($otherFile, $staff, 'This file is another firm');
+
+        $marked = Attention::forClients($contact, [$chen->id, $other->id]);
+
+        $this->assertSame(1, $marked[$chen->id]['comments']);
+        $this->assertArrayNotHasKey($other->id, $marked);
     }
 
     public function test_an_unread_thread_on_a_clients_document_marks_that_client(): void

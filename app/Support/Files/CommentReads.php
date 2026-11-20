@@ -7,6 +7,8 @@ use App\Models\FileCommentMention;
 use App\Models\FileCommentRead;
 use App\Models\FileItem;
 use App\Models\User;
+use App\Support\Cip\ApplicationScope;
+use App\Support\Cip\CipAccess;
 use App\Support\Files\Workflow\Hub;
 use App\Support\Realtime\Live;
 use Illuminate\Database\Eloquent\Builder;
@@ -292,16 +294,46 @@ final class CommentReads
      */
     public static function unreadByClient(User $user, array $clientIds): array
     {
+        $clientIds = array_values(array_unique(array_filter(array_map('intval', $clientIds))));
+
         if ($clientIds === []) {
             return [];
         }
 
-        return self::unreadQuery($user)
+        /*
+         * A service provider's book is every client the firm filed. The shared
+         * unread query decides "does this thread concern you" by binding that
+         * whole list, then this method throws away every client that is not on
+         * the page. On the applications table that is one comment scan of the
+         * firm for a page of rows, and each lane asks it again.
+         *
+         * These clients are already theirs. Count unread comments on these
+         * folders, and keep a row only when the application scope agrees, so
+         * a client id from outside the firm still draws nothing. Staff stay
+         * on the shared query: a comment concerns them only when they wrote
+         * it, were named, or own the file, and that set is small.
+         */
+        $firm = ! FileAccess::isStaff($user)
+            && CipAccess::enabled()
+            && ApplicationScope::providerIdsFor($user) !== [];
+
+        $query = self::unreadQuery($user, ! $firm)
             ->join('files', 'files.id', '=', 'file_comments.file_id')
             ->join('folders', 'folders.id', '=', 'files.folder_id')
             ->whereIn('folders.client_id', $clientIds)
             ->whereNull('files.deleted_at')
-            ->whereNull('folders.deleted_at')
+            ->whereNull('folders.deleted_at');
+
+        if ($firm) {
+            $query->whereIn(
+                'folders.client_id',
+                ApplicationScope::query($user)
+                    ->whereNotNull('cip_applications.client_id')
+                    ->select('cip_applications.client_id'),
+            );
+        }
+
+        return $query
             ->groupBy('folders.client_id')
             ->selectRaw('folders.client_id as cid, COUNT(DISTINCT file_comments.root_id) as n')
             ->pluck('n', 'cid')
@@ -348,7 +380,7 @@ final class CommentReads
      * The shared shape: every comment that makes its thread unread for this
      * reader. Callers group it however their indicator needs.
      */
-    private static function unreadQuery(User $user): Builder
+    private static function unreadQuery(User $user, bool $concerning = true): Builder
     {
         return FileComment::query()
             // The reader's marker for this comment's thread, if they have one.
@@ -386,7 +418,10 @@ final class CommentReads
              * meant being @-mentioned bought you exactly one unread comment
              * and every answer to it counted as somebody else's business.
              */
-            ->whereIn('file_comments.root_id', self::threadsConcerning($user));
+            ->when(
+                $concerning,
+                fn (Builder $q) => $q->whereIn('file_comments.root_id', self::threadsConcerning($user)),
+            );
     }
 
     /** Thread ids this reader has any stake in. */

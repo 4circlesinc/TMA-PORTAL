@@ -931,7 +931,6 @@ class CipApplicationController extends Controller
                 'provider:id,uuid,name,code',
                 'client:id,uid,name,email,phone,photo_url,initial,initial_color,user_id',
                 'client.user:id,avatar_url,provider_avatar_url',
-                'assignedOfficer:id,name,email,avatar_url,provider_avatar_url',
                 // Live only, with their people: the column names who holds the
                 // file now, and an ended assignment is somebody who has
                 // stopped. Eager, because this is fifty rows.
@@ -958,9 +957,32 @@ class CipApplicationController extends Controller
                  * documents is loaded for the page afterwards, by
                  * loadFamilyDocuments(), and only for the files that draw one.
                  */
-                'people' => $postApprovalList
-                    ? fn ($q) => $q->orderBy('id')
-                    : fn ($q) => $q->where('role', CipPerson::ROLE_MAIN_APPLICANT),
+                /*
+                 * The name on the row is the main applicant. A family is drawn
+                 * only for a post-approval file, so a pre-approval row on All
+                 * Applications does not need its dependents. Loading every
+                 * person on every file was the page that opened the table.
+                 */
+                'people' => function ($q) use ($postApprovalList) {
+                    $q->orderBy('id');
+
+                    if (! $postApprovalList) {
+                        $q->where('role', CipPerson::ROLE_MAIN_APPLICANT);
+
+                        return;
+                    }
+
+                    $q->where(function ($people) {
+                        $people->where('role', CipPerson::ROLE_MAIN_APPLICANT)
+                            ->orWhereExists(function ($sub) {
+                                $sub->selectRaw('1')
+                                    ->from('cip_applications as family_apps')
+                                    ->whereColumn('family_apps.id', 'cip_people.application_id')
+                                    ->where('family_apps.phase', Phase::POST_APPROVAL)
+                                    ->whereNull('family_apps.deleted_at');
+                            });
+                    });
+                },
                 'parent.people' => fn ($q) => $q->where('role', CipPerson::ROLE_MAIN_APPLICANT),
                 'parent.client:id,name',
                 'parent.provider:id,uuid,name,code',
@@ -1481,9 +1503,9 @@ class CipApplicationController extends Controller
      */
     private function row($application, User $viewer, array $attention = []): array
     {
-        $main = $application->people->first();
+        $main = $application->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT)
+            ?? $application->people->first();
         $client = $application->client;
-        $officer = $application->assignedOfficer;
 
         return [
             'id' => $application->uuid,

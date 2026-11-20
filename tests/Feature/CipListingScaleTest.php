@@ -528,13 +528,24 @@ class CipListingScaleTest extends TestCase
         // Clicking a column header cannot change a count taken over the whole
         // slice, so the aggregates behind the menu must not be asked again.
         $resort = $this->measure(function () {
-            $this->getJson('/portal/cip/applications?perPage=10&sort=applicant&dir=asc')->assertOk();
+            $this->getJson('/portal/cip/applications?perPage=10&sort=applicant&dir=asc&facets=0')->assertOk();
         });
 
         $this->assertLessThan(
             $first['count'],
             $resort['count'],
             'Re-sorting cost as much as the first draw, so the whole-table counts are being recomputed.',
+        );
+
+        $recounted = array_values(array_filter(
+            $resort['queries'],
+            fn (string $sql) => str_contains($sql, 'phase') && str_contains(strtolower($sql), 'group by'),
+        ));
+
+        $this->assertSame(
+            [],
+            $recounted,
+            'A sort still grouped the book by phase, so the tab badges were counted again.',
         );
     }
 }

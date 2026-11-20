@@ -762,6 +762,7 @@
       var p = new URLSearchParams();
       p.set('q', q);
       p.set('perPage', '12');
+      p.set('facets', '0');
       net().fetchJSON('/portal/cip/applications?' + p.toString())
         .then(function (res) {
           if (mine !== seq) return;

@@ -4320,7 +4320,7 @@
     // The address ensureApplicationTable builds for a first draw, so a head
     // start from the shell is taken here rather than asked for twice.
     applicationListingRequest('/portal/cip/applications?perPage=150&page=1' +
-      (APP_TABLE.facetsLoaded ? '' : '&facets=1') +
+      (APP_TABLE.facetsLoaded ? '&facets=0' : '&facets=1') +
       (phase ? '&phase=' + encodeURIComponent(phase) : ''))
       .then(function (json) {
         if (APP_TABLE.fetchGen !== gen) return;
@@ -4478,7 +4478,9 @@
       if (APP_TABLE.cache[key] || APP_TABLE.prefetching[key]) return;
 
       APP_TABLE.prefetching[key] = true;
-      clientsFetch('/portal/cip/applications?perPage=150&page=1' +
+      // facets=0 is explicit. Omitting it asks the server for the menu
+      // counts again, and this fires once per lane the moment the table opens.
+      clientsFetch('/portal/cip/applications?perPage=150&page=1&facets=0' +
         (phase ? '&phase=' + encodeURIComponent(phase) : '') +
         (APP_TABLE.unreadFirst ? '&unread=1' : ''))
         .then(function (json) {
@@ -4709,7 +4711,9 @@
      * kept on APP_TABLE after that: without this every header click paid for
      * five grouped counts over every application the reader may see.
      */
-    if (!APP_TABLE.facetsLoaded) params.push('facets=1');
+    // Absent means "count the whole book". A later page, a sort, and a lane
+    // that was already counted have to say no, or each of them repeats it.
+    params.push(APP_TABLE.facetsLoaded ? 'facets=0' : 'facets=1');
     var phase = applicationPhaseForTab(state);
     if (phase) params.push('phase=' + encodeURIComponent(phase));
     if (state.search) params.push('q=' + encodeURIComponent(state.search));

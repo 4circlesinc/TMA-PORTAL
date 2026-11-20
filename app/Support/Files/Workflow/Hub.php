@@ -15,7 +15,6 @@ use App\Support\Cip\CipAccess;
 use App\Support\Cip\DocumentComments;
 use App\Support\Cip\DocumentTypes;
 use App\Support\Cip\DocumentStatus;
-use App\Support\Cip\FolderAccess;
 use App\Support\Companies\ContactIdentity;
 use App\Support\Files\CommentReads;
 use App\Support\Files\Comments;
@@ -586,7 +585,18 @@ final class Hub
          * somebody joins the query, which is exactly what happened.
          */
         $memberIds = ContactIdentity::idsFor($viewer);
-        $clientIds = FileAccess::isStaff($viewer) ? [] : FolderAccess::clientIdsFor($viewer);
+        /*
+         * The firm's clients, as a subquery rather than a list.
+         *
+         * FolderAccess answers the same question by plucking every client id
+         * into PHP and binding it here. A firm with thousands of filings
+         * turned "threads that concern this contact" into a WHERE IN of the
+         * whole book, on every applications table and every workflows load.
+         * The scope is that list. It stays in the database.
+         */
+        $firmClients = ! FileAccess::isStaff($viewer)
+            && CipAccess::enabled()
+            && ApplicationScope::providerIdsFor($viewer) !== [];
 
         $query
             ->where('file_comments.author_id', $viewer->id)
@@ -622,18 +632,24 @@ final class Hub
                     ->whereNotNull('mine.root_id');
             });
 
-        if ($clientIds !== []) {
+        if ($firmClients) {
             $query->orWhereHas(
                 'file.folder',
-                fn ($folder) => $folder->whereIn('folders.client_id', $clientIds),
+                fn ($folder) => $folder->whereIn(
+                    'folders.client_id',
+                    ApplicationScope::query($viewer)
+                        ->whereNotNull('cip_applications.client_id')
+                        ->select('cip_applications.client_id'),
+                ),
             );
 
-            if (CipAccess::enabled()) {
-                $query->orWhereHas(
-                    'file.cipDocument',
-                    fn ($d) => $d->whereIn('application_id', ApplicationScope::query($viewer)->select('id')),
-                );
-            }
+            $query->orWhereHas(
+                'file.cipDocument',
+                fn ($d) => $d->whereIn(
+                    'application_id',
+                    ApplicationScope::query($viewer)->select('cip_applications.id'),
+                ),
+            );
         }
     }
 
