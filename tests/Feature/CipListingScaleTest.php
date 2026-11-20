@@ -483,7 +483,7 @@ class CipListingScaleTest extends TestCase
             ->assertOk()
             ->assertSee('window.TMABootCipList=fetch(url', escape: false)
             // The address ensureApplicationTable() builds for a first draw.
-            ->assertSee('"/portal/cip/applications?perPage=150&page=1&facets=1"', escape: false)
+            ->assertSee('"/portal/cip/applications?perPage=150&page=1&facets=0"', escape: false)
             // And the key clients.js keeps the reader's tab under.
             ->assertSee('localStorage.getItem("tma.cipListTab.v1")', escape: false);
     }
@@ -547,5 +547,29 @@ class CipListingScaleTest extends TestCase
             $recounted,
             'A sort still grouped the book by phase, so the tab badges were counted again.',
         );
+    }
+
+    public function test_the_rows_come_back_without_the_menu_counts(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+        $this->applications($staff, $provider, 3, Phase::PRE_APPROVAL);
+
+        $this->actingAs($staff);
+
+        $rows = $this->getJson('/portal/cip/applications?perPage=10&facets=0')
+            ->assertOk()
+            ->json();
+
+        $this->assertCount(3, $rows['applications']);
+        $this->assertArrayNotHasKey('phaseCounts', $rows);
+
+        $counts = $this->getJson('/portal/cip/applications?rows=0')
+            ->assertOk()
+            ->json();
+
+        $this->assertArrayNotHasKey('applications', $counts);
+        $this->assertSame(3, $counts['phaseCounts']['all']);
+        $this->assertSame(3, $counts['phaseCounts']['pre_approval']);
     }
 }

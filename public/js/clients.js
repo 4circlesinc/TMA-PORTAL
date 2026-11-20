@@ -4301,6 +4301,47 @@
    * Nothing here paints. If the table is already up, or already asking, it
    * is left to its own load.
    */
+  /*
+   * The menu and the tab badges, after the rows are up.
+   *
+   * They walk every application this reader may see. That used to be part of
+   * the request the table was waiting on, so the skeleton stayed until the
+   * whole book had been counted. One request per visit; a failure leaves the
+   * rows where they are and the next listing asks again.
+   */
+  function requestApplicationFacets(render) {
+    if (APP_TABLE.facetsLoaded || APP_TABLE.facetsLoading) return;
+    APP_TABLE.facetsLoading = true;
+    clientsFetch('/portal/cip/applications?rows=0&facets=1')
+      .then(function (json) {
+        if (!json) return;
+        if (json.assignees) APP_TABLE.assignees = json.assignees;
+        if (json.providers) APP_TABLE.providers = json.providers;
+        if (json.phaseCounts) {
+          APP_TABLE.phaseCounts = json.phaseCounts;
+          APP_TABLE.facetsLoaded = true;
+          keepPhaseCounts(json.phaseCounts);
+        }
+        if (typeof render === 'function') render();
+      })
+      .catch(function () {})
+      .then(function () { APP_TABLE.facetsLoading = false; });
+  }
+
+  /*
+   * A lane fetched before anyone is waiting on it. The promise is what the
+   * table waits on if the reader opens that lane while it is still out, so a
+   * failure can take the skeleton down instead of leaving it up.
+   */
+  function rememberApplicationPrefetch(key, promise) {
+    var settled = promise.then(function (value) { return value; }, function () {});
+    APP_TABLE.prefetching[key] = settled;
+    settled.then(function () {
+      if (APP_TABLE.prefetching[key] === settled) delete APP_TABLE.prefetching[key];
+    });
+    return settled;
+  }
+
   function warmApplicationTable() {
     if (!window.TMABootCipReach) return;
 
@@ -4315,12 +4356,11 @@
     if (APP_TABLE.loadedKey === key || APP_TABLE.loadingKey === key) return;
 
     var gen = APP_TABLE.fetchGen;
-    APP_TABLE.prefetching[key] = true;
 
     // The address ensureApplicationTable builds for a first draw, so a head
     // start from the shell is taken here rather than asked for twice.
-    applicationListingRequest('/portal/cip/applications?perPage=150&page=1' +
-      (APP_TABLE.facetsLoaded ? '&facets=0' : '&facets=1') +
+    // facets=0: the counts are requestApplicationFacets, not this answer.
+    rememberApplicationPrefetch(key, applicationListingRequest('/portal/cip/applications?perPage=150&page=1&facets=0' +
       (phase ? '&phase=' + encodeURIComponent(phase) : ''))
       .then(function (json) {
         if (APP_TABLE.fetchGen !== gen) return;
@@ -4335,19 +4375,11 @@
         APP_TABLE.lanePages[phase || ''] = page.lastPage;
         APP_TABLE.statuses = (json && json.statuses) || APP_TABLE.statuses;
         if (json && json.personStatuses) APP_TABLE.personStatuses = json.personStatuses;
-        if (json && json.assignees) APP_TABLE.assignees = json.assignees;
-        if (json && json.providers) APP_TABLE.providers = json.providers;
-        if (json && json.phaseCounts) {
-          APP_TABLE.phaseCounts = json.phaseCounts;
-          APP_TABLE.facetsLoaded = true;
-          keepPhaseCounts(json.phaseCounts);
-        }
         storeApplicationPage('cip:applications:v1:' + key, page);
         // Opened while this was on its way: paint it, no second trip.
         adoptPrefetchedApplicationPage(key, phase, page);
-      })
-      .catch(function () {})
-      .then(function () { delete APP_TABLE.prefetching[key]; });
+        requestApplicationFacets(repaintClients);
+      }));
   }
 
   /* Dropped while nobody was looking at it: fetched again now, so the next
@@ -4477,10 +4509,9 @@
       var key = applicationTableKeyFor(phase, '', 1, '', '');
       if (APP_TABLE.cache[key] || APP_TABLE.prefetching[key]) return;
 
-      APP_TABLE.prefetching[key] = true;
       // facets=0 is explicit. Omitting it asks the server for the menu
       // counts again, and this fires once per lane the moment the table opens.
-      clientsFetch('/portal/cip/applications?perPage=150&page=1&facets=0' +
+      rememberApplicationPrefetch(key, clientsFetch('/portal/cip/applications?perPage=150&page=1&facets=0' +
         (phase ? '&phase=' + encodeURIComponent(phase) : '') +
         (APP_TABLE.unreadFirst ? '&unread=1' : ''))
         .then(function (json) {
@@ -4499,9 +4530,7 @@
           storeApplicationPage('cip:applications:v1:' + key, page);
           // Click landed while this was still coming: paint it, no second trip.
           adoptPrefetchedApplicationPage(key, phase, page);
-        })
-        .catch(function () {})
-        .then(function () { delete APP_TABLE.prefetching[key]; });
+        }));
     });
   }
 
@@ -4659,6 +4688,7 @@
     var held = APP_TABLE.cache[key];
     if (held) {
       applyCachedApplicationPage(held, lane, key);
+      requestApplicationFacets(render);
       prefetchOtherLanes(state);
       return;
     }
@@ -4669,6 +4699,8 @@
      * than paying a second round trip for the same rows.
      */
     if (APP_TABLE.prefetching[key]) {
+      var pendingGen = APP_TABLE.fetchGen;
+      var pending = APP_TABLE.prefetching[key];
       APP_TABLE.loadingKey = key;
       APP_TABLE.loading = true;
       APP_TABLE.error = null;
@@ -4682,6 +4714,36 @@
       // The copy kept from last time goes up while that answer is out, the
       // same as when this function sends the request itself.
       paintStoredApplicationPage(applicationStoreKey(state, key), key, lane, APP_TABLE.fetchGen, state, render);
+      /*
+       * A prefetch that fails used to leave loading set and return. The next
+       * paint saw a load already in flight and returned too, so the skeleton
+       * stayed up with nobody left to take it down.
+       */
+      if (pending && pending.then) {
+        pending.then(function () {
+          if (APP_TABLE.fetchGen !== pendingGen) return;
+          // Adopted: the prefetch already cleared the wait. A signal that
+          // arrived while it was out still has to be read, or it is lost.
+          if (APP_TABLE.loadedKey === key) {
+            if (!APP_TABLE.refreshAfterLoad) return;
+            APP_TABLE.refreshAfterLoad = false;
+            forgetApplicationTable();
+            render();
+            return;
+          }
+          if (APP_TABLE.loadingKey !== key) return;
+          APP_TABLE.loadingKey = null;
+          APP_TABLE.loading = false;
+          if (!APP_TABLE.rows.length && !APP_TABLE.quiet) {
+            APP_TABLE.error = APP_TABLE.error || 'Could not load applications.';
+          }
+          render();
+          if (!APP_TABLE.refreshAfterLoad) return;
+          APP_TABLE.refreshAfterLoad = false;
+          forgetApplicationTable();
+          render();
+        });
+      }
       return;
     }
 
@@ -4706,14 +4768,12 @@
 
     var params = ['perPage=150', 'page=' + APP_TABLE.page];
     /*
-     * The filter menu and the tab badges are counted over the whole slice, so
-     * a sort or a page turn cannot change them. Asked for once per session and
-     * kept on APP_TABLE after that: without this every header click paid for
-     * five grouped counts over every application the reader may see.
+     * Rows only. The filter menu and the tab badges are counted over the
+     * whole book, so they travel on their own request once these rows are
+     * up. Putting that count on this one is what held the skeleton up, and
+     * a live update during the wait threw the answer away and asked again.
      */
-    // Absent means "count the whole book". A later page, a sort, and a lane
-    // that was already counted have to say no, or each of them repeats it.
-    params.push(APP_TABLE.facetsLoaded ? 'facets=0' : 'facets=1');
+    params.push('facets=0');
     var phase = applicationPhaseForTab(state);
     if (phase) params.push('phase=' + encodeURIComponent(phase));
     if (state.search) params.push('q=' + encodeURIComponent(state.search));
@@ -4809,6 +4869,13 @@
         APP_TABLE.loadingKey = null;
         APP_TABLE.loading = false;
         render();
+        requestApplicationFacets(render);
+        if (APP_TABLE.refreshAfterLoad) {
+          APP_TABLE.refreshAfterLoad = false;
+          forgetApplicationTable();
+          render();
+          return;
+        }
         prefetchOtherLanes(state);
       });
   }
@@ -4820,6 +4887,18 @@
      The lane cache goes with it: every lane may have changed, not only the
      one on screen. */
   function forgetApplicationTable() {
+    /*
+     * The first page has not arrived yet. Dropping it and asking again is
+     * how the skeleton stayed up: a live update during a slow listing threw
+     * that answer away, the next update threw the replacement away, and a
+     * firm with people working never painted a row. Let this one land, then
+     * read again.
+     */
+    if (APP_TABLE.loading && !APP_TABLE.rows.length && APP_TABLE.loadingKey) {
+      APP_TABLE.refreshAfterLoad = true;
+      return;
+    }
+
     APP_TABLE.loadedKey = null;
     APP_TABLE.loadingKey = null;
     APP_TABLE.cache = {};

@@ -897,19 +897,38 @@ class CipApplicationController extends Controller
              * Those counts are taken over the reader's whole slice (see
              * {@see Facets}), so they cost a handful of grouped counts over
              * every row the reader may see — and they cannot change because
-             * somebody clicked a column header or turned a page. Asked for on
-             * the first draw of a table and kept by the browser after that,
-             * which is what makes re-sorting cheap. Deliberately NOT cached
-             * server-side: Facets explains why an officer must see their own
-             * count move.
+             * somebody clicked a column header or turned a page. The table
+             * asks for them on their own, after the rows are on screen, and
+             * keeps them. Deliberately NOT cached server-side: Facets explains
+             * why an officer must see their own count move.
              */
             'facets' => ['nullable', 'boolean'],
+            /*
+             * False asks for the menu and the badges only.
+             *
+             * The table does not wait on them. Counting the whole book inside
+             * the request that paints the rows held the skeleton up until
+             * that count finished, and a live update in that wait discarded
+             * the answer and asked again, so a busy firm never saw a row.
+             */
+            'rows' => ['nullable', 'boolean'],
         ]);
 
         $perPage = (int) ($data['perPage'] ?? self::LIST_PAGE);
         // Absent means yes: a caller that has not been taught to ask still
         // gets the whole answer rather than a table with no filter menu.
-        $withFacets = (bool) ($data['facets'] ?? true);
+        // boolean() rather than a cast: the query string sends "0", and
+        // (bool) "0" is true, which is how a request that asked to skip the
+        // counts used to run them anyway.
+        $withFacets = $request->boolean('facets', true);
+
+        if (! $request->boolean('rows', true)) {
+            return response()->json([
+                'assignees' => Facets::assignees($user),
+                'providers' => Facets::providers($user),
+                'phaseCounts' => $this->phaseCounts($user),
+            ]);
+        }
         /*
          * Whether this page can contain a post-approval file, which is what
          * decides whether the family has to be loaded with it.

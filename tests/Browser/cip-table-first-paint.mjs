@@ -262,7 +262,7 @@ try {
   // Whichever tab this reader left the table on, which the earlier step
   // changed: the head start asks for that one, not always for the first.
   const saved = await tab.evaluate(() => localStorage.getItem('tma.cipListTab.v1') || 'all_applications');
-  const wanted = '/portal/cip/applications?perPage=150&page=1&facets=1'
+  const wanted = '/portal/cip/applications?perPage=150&page=1&facets=0'
     + (saved === 'all_applications' ? '' : '&phase=' + saved);
   check(sent[at] === wanted, `for the tab the reader left it on (${saved}: ${sent[at]})`);
   check(sent.filter(u => u === sent[at]).length === 1, 'and the table took that answer instead of asking again');

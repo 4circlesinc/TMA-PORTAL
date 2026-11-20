@@ -218,11 +218,13 @@ final class PortalShell
      * to the database. The reader watched a skeleton for all of that.
      *
      * Sent from here it has the server to itself and runs while the bundle is
-     * still on its way. Which tab the table opens on is the reader's own
-     * (kept in localStorage by clients.js under the same key), so the address
-     * is worked out in the browser; ensureApplicationTable() takes the answer
-     * only when it is the address it was about to ask for itself, and asks in
-     * the ordinary way when it is not. Nothing here is the authority.
+     * still on its way. Rows only: the menu and the tab badges walk the whole
+     * book, and waiting on them is what left the table on its skeleton. Which
+     * tab the table opens on is the reader's own (kept in localStorage by
+     * clients.js under the same key), so the address is worked out in the
+     * browser; ensureApplicationTable() takes the answer only when it is the
+     * address it was about to ask for itself, and asks in the ordinary way
+     * when it is not. Nothing here is the authority.
      */
     private static function applicationsHeadStart(): string
     {
@@ -233,7 +235,7 @@ final class PortalShell
             .'var lanes={all_applications:"",pre_approval:"pre_approval",post_approval:"post_approval",add_on:"add_on",appeal:"appeal",closed:"closed"};'
             // Service providers and Provider contacts are tabs with no application table.
             .'if(!Object.prototype.hasOwnProperty.call(lanes,tab))return;'
-            .'var url="/portal/cip/applications?perPage=150&page=1&facets=1"+(lanes[tab]?"&phase="+lanes[tab]:"");'
+            .'var url="/portal/cip/applications?perPage=150&page=1&facets=0"+(lanes[tab]?"&phase="+lanes[tab]:"");'
             .'window.TMABootCipListUrl=url;'
             .'window.TMABootCipList=fetch(url,{credentials:"same-origin",headers:{Accept:"application/json","X-Requested-With":"XMLHttpRequest"}});'
             .'window.TMABootCipList.catch(function(){});'
