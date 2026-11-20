@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\MigrateCipApplicantFolder;
 use App\Models\CipProvider;
 use App\Support\Cip\LibraryMigration;
 use App\Support\Cip\PortalLibrary;
@@ -17,14 +18,16 @@ use Illuminate\Console\Command;
  * to the site; the copy already in Microsoft is kept, frozen, as an archive.
  * Historical folders the old libraries imported are never moved.
  *
- * Rerunnable: anything a run could not finish is picked up by the next one.
+ * With a real queue, --apply hands each unfinished folder to its own job and
+ * returns. One process is never asked to upload every application. Anything
+ * a job could not finish is picked up by running this again.
  */
 class CipLibraryMigrate extends Command
 {
     protected $signature = 'cip:library:migrate
         {--apply : Actually move and push. Without it, nothing changes.}
         {--provider= : Only this provider code (e.g. GAL)}
-        {--limit=0 : Stop after this many applicant folders (0 = all)}';
+        {--limit=0 : Only this many unfinished folders (0 = all)}';
 
     protected $description = 'Move portal applications into the TMA CIP Applications Portal and its SharePoint site';
 
@@ -49,13 +52,18 @@ class CipLibraryMigrate extends Command
 
         $candidates = LibraryMigration::candidates($only);
         $limit = max(0, (int) $this->option('limit'));
-        if ($limit > 0) {
-            $candidates = $candidates->take($limit);
+
+        if (! $this->option('apply')) {
+            if ($limit > 0) {
+                $candidates = $candidates->take($limit);
+            }
+
+            return $this->dryRun($candidates, $target);
         }
 
-        return $this->option('apply')
-            ? $this->apply($candidates, $target, $only)
-            : $this->dryRun($candidates, $target);
+        return config('queue.default') === 'sync'
+            ? $this->applyInline($candidates, $target, $only, $limit)
+            : $this->queueRemaining($candidates, $target, $only, $limit);
     }
 
     private function dryRun($candidates, $target): int
@@ -100,19 +108,70 @@ class CipLibraryMigrate extends Command
         return self::SUCCESS;
     }
 
-    private function apply($candidates, $target, ?CipProvider $only): int
+    /**
+     * Hand each unfinished folder to the queue and return.
+     *
+     * The console that runs this is killed once the upload runs long. A
+     * worker finishes one folder, then the next, and a folder already on
+     * the site is not queued again.
+     */
+    private function queueRemaining($candidates, $target, ?CipProvider $only, int $limit): int
     {
-        // Every provider gets its folder up front, so new applications file
-        // in the new place from now on, even firms with nothing to move.
-        CipProvider::query()
-            ->when($only, fn ($q) => $q->whereKey($only->id))
-            ->orderBy('id')
-            ->each(fn (CipProvider $provider) => Pusher::suspend(fn () => PortalLibrary::providerFolder($provider)));
+        $this->ensureProviderFolders($only);
+
+        $queued = 0;
+        $done = 0;
+
+        foreach ($candidates as ['folder' => $folder, 'provider' => $provider]) {
+            if ($this->finished($folder, $target)) {
+                $done++;
+
+                continue;
+            }
+
+            if ($limit > 0 && $queued >= $limit) {
+                break;
+            }
+
+            MigrateCipApplicantFolder::dispatch($folder->id, $provider->id);
+            $queued++;
+        }
+
+        if ($queued === 0) {
+            $this->info('Nothing left to move.');
+            $this->line('When you are happy with the site, resume its sync in Settings → Background Operations.');
+
+            return self::SUCCESS;
+        }
+
+        $this->info($queued.' applicant folder(s) queued. '.$done.' already on the site.');
+        $this->line('Each folder is its own job. Run this again later to queue any that did not finish.');
+        $this->line('Leave inbound sync paused until a run says nothing is left.');
+
+        return self::SUCCESS;
+    }
+
+    private function applyInline($candidates, $target, ?CipProvider $only, int $limit): int
+    {
+        $this->ensureProviderFolders($only);
 
         $done = 0;
         $problems = 0;
+        $attempted = 0;
+        $stopped = false;
 
         foreach ($candidates as ['folder' => $folder, 'provider' => $provider]) {
+            if ($this->finished($folder, $target)) {
+                continue;
+            }
+
+            if ($limit > 0 && $attempted >= $limit) {
+                $stopped = true;
+
+                break;
+            }
+
+            $attempted++;
             $label = $provider->name.' / '.$folder->name;
             $result = LibraryMigration::migrate($folder, $provider, $target);
 
@@ -139,13 +198,29 @@ class CipLibraryMigrate extends Command
 
         $this->line('');
         $this->info($done.' applicant folder(s) complete, '.$problems.' need another run.');
-        if ($problems === 0) {
+        if ($problems === 0 && ! $stopped) {
             $this->line('When you are happy with the site, resume its sync in Settings → Background Operations.');
         } else {
             $this->line('Run the same command again to retry; finished folders are skipped.');
         }
 
         return $problems === 0 ? self::SUCCESS : self::FAILURE;
+    }
+
+    /** Every provider gets its folder up front, so new applications file in the new place. */
+    private function ensureProviderFolders(?CipProvider $only): void
+    {
+        CipProvider::query()
+            ->when($only, fn ($q) => $q->whereKey($only->id))
+            ->orderBy('id')
+            ->each(fn (CipProvider $provider) => Pusher::suspend(fn () => PortalLibrary::providerFolder($provider)));
+    }
+
+    private function finished($folder, $target): bool
+    {
+        $survey = LibraryMigration::survey($folder, $target);
+
+        return $survey['inPlace'] && $survey['waiting'] === 0 && $survey['onSite'] === $survey['files'];
     }
 
     private function size(int $bytes): string

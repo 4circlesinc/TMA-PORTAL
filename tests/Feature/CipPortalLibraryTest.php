@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\MigrateCipApplicantFolder;
 use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\CipProvider;
@@ -28,6 +29,7 @@ use App\Support\SharePoint\Synchroniser;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -240,6 +242,23 @@ class CipPortalLibraryTest extends TestCase
         $this->assertSame($oldParent, $client->fresh()->parent_id);
         $this->assertSame(0, SharePointItem::whereNotNull('archived_at')->count());
         $this->assertSame(RemoteContent::PENDING, $scan->fresh()->content_state);
+    }
+
+    public function test_a_real_queue_is_given_one_job_per_folder_and_the_console_does_not_upload(): void
+    {
+        ['root' => $client] = $this->filing('Chen', 'Wei');
+        $this->artisan('cip:library:connect')->assertSuccessful();
+        $parent = $client->parent_id;
+
+        config(['queue.default' => 'database']);
+        Queue::fake();
+
+        $this->artisan('cip:library:migrate', ['--apply' => true])
+            ->expectsOutputToContain('1 applicant folder(s) queued')
+            ->assertSuccessful();
+
+        Queue::assertPushed(MigrateCipApplicantFolder::class, fn ($job) => $job->folderId === $client->id);
+        $this->assertSame($parent, $client->fresh()->parent_id, 'the console queued the folder instead of uploading it');
     }
 
     // ── fixture ────────────────────────────────────────────────────────
