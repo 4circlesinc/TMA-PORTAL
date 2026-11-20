@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 
 /**
- * An administrator opening the portal as a service-provider account.
+ * An administrator opening the portal as another account.
  *
  * The session becomes that account, so every gate, query and screen answers
  * as they would for the person who actually works there. The administrator's
@@ -120,10 +120,6 @@ final class Impersonation
 
         if (! $target->isApproved() || $target->email_verified_at === null) {
             abort(422, 'This account cannot sign in yet.');
-        }
-
-        if (! self::isServiceProviderAccount($target)) {
-            abort(422, 'This account is not a service provider.');
         }
     }
 

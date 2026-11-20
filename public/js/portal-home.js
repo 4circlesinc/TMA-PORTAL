@@ -2848,6 +2848,67 @@
     });
   }
 
+  /*
+   * Tiles that share a top edge are one row. They take the tallest height in
+   * that row, and anything under a tile that grew moves down with it. Then
+   * the last tile of each column stretches so the columns end level. A list
+   * that grew drops its content-sized cap so the body fills the card.
+   */
+  function alignHomeTileBottoms(placed) {
+    if (!placed.length) return;
+
+    var pass = 0;
+    while (pass++ < 8) {
+      var groups = {};
+      placed.forEach(function (p) {
+        var key = String(Math.round(p.y));
+        (groups[key] = groups[key] || []).push(p);
+      });
+      var keys = Object.keys(groups).map(Number).sort(function (a, b) { return a - b; });
+      var grew = false;
+      keys.forEach(function (key) {
+        var tiles = groups[String(key)];
+        var maxH = 0;
+        tiles.forEach(function (p) { if (p.h > maxH) maxH = p.h; });
+        tiles.forEach(function (p) {
+          var grow = maxH - p.h;
+          if (grow <= 0.5) return;
+          p.h = maxH;
+          p.listSpace = 0;
+          grew = true;
+          placed.forEach(function (other) {
+            if (other !== p && Math.abs(other.x - p.x) < 1 && other.y > p.y + 0.5) {
+              other.y += grow;
+            }
+          });
+        });
+      });
+      if (!grew) break;
+    }
+
+    var maxBottom = 0;
+    placed.forEach(function (p) {
+      if (p.y + p.h > maxBottom) maxBottom = p.y + p.h;
+    });
+    var columns = {};
+    placed.forEach(function (p) {
+      var key = String(Math.round(p.x));
+      (columns[key] = columns[key] || []).push(p);
+    });
+    Object.keys(columns).forEach(function (key) {
+      var col = columns[key];
+      var last = col[0];
+      col.forEach(function (p) {
+        if (p.y + p.h > last.y + last.h) last = p;
+      });
+      var short = maxBottom - (last.y + last.h);
+      if (short > 1) {
+        last.h += short;
+        last.listSpace = 0;
+      }
+    });
+  }
+
   function layoutHomeMasonry(grid, pass) {
     if (!grid) return;
     var width = grid.clientWidth || grid.offsetWidth;
@@ -2876,10 +2937,8 @@
     });
 
     var placed = packHomeTiles(items, width, gap);
+    alignHomeTileBottoms(placed);
 
-    // Cards keep the height of their content. Stretching the short column's
-    // last card down to the tallest column left a blank band under that card
-    // and, where the list then rounded down, cut off the last row.
     var maxBottom = 0;
     placed.forEach(function (p) {
       if (p.y + p.h > maxBottom) maxBottom = p.y + p.h;

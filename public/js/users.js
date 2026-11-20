@@ -1062,8 +1062,7 @@ if (state.filters.user) {
     }
 
     function canSignInAs(row) {
-      return state.canManage && !row._self && row._status !== 'pending' && row._status !== 'suspended'
-        && isServiceProviderContact(row);
+      return state.canManage && !row._self && row._status !== 'pending' && row._status !== 'suspended';
     }
 
     function signInAs(row) {

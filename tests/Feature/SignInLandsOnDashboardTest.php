@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AuthEvent;
 use App\Models\User;
+use App\Support\Access\Role;
 use App\Support\EmailLoginCode;
 use App\Support\StaySignedIn;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -53,6 +54,33 @@ class SignInLandsOnDashboardTest extends TestCase
     private function submitPassword(User $user)
     {
         return $this->post('/auth/login', ['email' => $user->email, 'password' => 'password']);
+    }
+
+    public function test_every_working_role_can_sign_in(): void
+    {
+        foreach ([
+            Role::ADMINISTRATOR,
+            Role::REVIEWING_OFFICER,
+            Role::CLIENT,
+            Role::SERVICE_PROVIDER_ADMIN,
+        ] as $role) {
+            $user = $this->person([
+                'email' => strtolower(str_replace(' ', '-', $role)).'@example.test',
+                'account_type' => $role,
+            ]);
+
+            $this->answeredBrowser()->submitPassword($user)->assertRedirect('/');
+            $this->get('/')->assertOk();
+            $this->post('/auth/logout');
+            $this->flushSession();
+        }
+
+        $employee = $this->person([
+            'email' => 'employee@example.test',
+            'account_type' => Role::EMPLOYEE,
+        ]);
+        $this->answeredBrowser()->submitPassword($employee)->assertRedirect('/');
+        $this->get('/')->assertRedirect('/auth/role-pending');
     }
 
     public function test_a_password_sign_in_opens_the_dashboard_not_the_parked_page(): void

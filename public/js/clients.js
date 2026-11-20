@@ -3750,6 +3750,7 @@
   var CIP_SORTS = {
     number: 'Application',
     applicant: 'Applicant',
+    filed: 'Application Date',
     provider: 'Service provider',
     investment: 'Investment',
     family: 'Family',
@@ -3764,6 +3765,7 @@
     cor: 'COR Number',
     main_applicant: 'Main Applicant Name',
     applicant: 'Add-On Applicant Name',
+    filed: 'Application Date',
     relationship: 'Relationship',
     status: 'Status',
     submitted: 'Submission Date',
@@ -4907,7 +4909,8 @@
       APP_TABLE.dir = APP_TABLE.dir === 'asc' ? 'desc' : 'asc';
     } else {
       APP_TABLE.sort = col;
-      APP_TABLE.dir = 'asc';
+      // A date opens newest-first; the next click reverses it.
+      APP_TABLE.dir = col === 'filed' ? 'desc' : 'asc';
     }
     APP_TABLE.page = 1;
     if (clientsMountState) {
@@ -5185,13 +5188,14 @@
       '<span class="tma-cip-table__member-role">' + esc(cipPersonTitle(member)) + '</span>' +
       '<span class="tma-cip-table__member-name">' + esc(cipUpperName(member.name) || '-') + '</span>' +
       '</div></div></td>' +
+      '<td class="tma-cip-table__member-spacer"></td>' +
       /*
        * Under the Status column, where the application's own chip sits.
        *
-       * The row above has eight cells: number, applicant, provider,
-       * investment, family, status, assigned, menu. This one spanned two
-       * more than that, from when the table had them, which pushed each
-       * person's status past the last column and off the edge of the table.
+       * The row above is number, applicant, application date, provider,
+       * investment, family, status, assigned, menu. The date cell is the
+       * spacer just above this note; the colspan covers provider through
+       * family so the person's status lands on Status.
        */
       '<td colspan="3" class="tma-cip-table__member-spacer"></td>' +
       // Captioned by name: a phone card labels each cell from the header at
@@ -5229,6 +5233,7 @@
       // it only on touch widths, where the Status column's cell is hidden.
       '<td>' + applicantCell(a) +
       '<span class="tma-cip-table__inline-status">' + progressCell + '</span></td>' +
+      applicationDateCell(a) +
       '<td class="tma-portal-table__muted">' + esc(a.provider || '-') + '</td>' +
       '<td class="tma-portal-table__muted">' + esc(a.investmentType || '-') + '</td>' +
       '<td><span class="tma-cip-table__family-wrap">' +
@@ -5269,6 +5274,11 @@
    * the same rule as every other lane — including on All Applications, where
    * Add-On rows used to hide that line.
    */
+  function applicationDateCell(a) {
+    var text = a && a.status !== 'draft' && a.filedAt ? fmtDateTime(a.filedAt) : '';
+    return '<td class="tma-portal-table__muted" data-label="Application Date">' + esc(text || '—') + '</td>';
+  }
+
   function applicationNumberSubline(a) {
     if (!a) return '';
     var secondary = '';
@@ -5296,6 +5306,7 @@
       '<td class="tma-portal-table__muted">' + esc(addOnParentValue(a, 'applicantName') || '-') + '</td>' +
       '<td>' + applicantCell(a) +
       '<span class="tma-cip-table__inline-status">' + progressCell + '</span></td>' +
+      applicationDateCell(a) +
       '<td>' + esc(a.relationshipLabel || '-') + '</td>' +
       '<td class="tma-cip-table__status-cell">' + progressCell + deletionRequestChip(a) + '</td>' +
       '<td class="tma-portal-table__muted">' + esc(submitted || '-') + '</td>' +
@@ -5418,12 +5429,13 @@
     if (isAddOnApplicationsTab(state)) {
       return '<tr data-key="app:' + esc(a.id) + '"' + opener + '>' + number +
         '<td class="tma-portal-table__muted">-</td><td class="tma-portal-table__muted">-</td>' +
-        applicant + '<td>-</td>' +
+        applicant + applicationDateCell(a) + '<td>-</td>' +
         '<td class="tma-cip-table__status-cell">' + chip + '</td>' +
         '<td class="tma-portal-table__muted">-</td><td>-</td><td class="tma-portal-cell--menu"></td></tr>';
     }
 
     return '<tr data-key="app:' + esc(a.id) + '"' + opener + '>' + number + applicant +
+      applicationDateCell(a) +
       '<td class="tma-portal-table__muted">-</td>' +
       '<td class="tma-portal-table__muted">-</td>' +
       '<td><span class="tma-cip-table__family">' + esc(a.familyLabel) + '</span></td>' +
@@ -6088,6 +6100,7 @@
           '<td>' + skeletonBar(skeletonWidth(i + 3, 0.8)) + '</td>' +
           '<td><span class="tma-cip-table__applicant">' + disc +
           skeletonBar(skeletonWidth(i + 4, 0.8)) + '</span></td>' +
+          '<td>' + skeletonBar(skeletonWidth(i + 7, 0.55)) + '</td>' +
           '<td>' + skeletonBar(skeletonWidth(i + 5, 0.5)) + '</td>' +
           '<td>' + chip(34) + '</td>' +
           '<td>' + skeletonBar(skeletonWidth(i + 6, 0.6)) + '</td>' +
@@ -6102,6 +6115,7 @@
         // The face, then the name, the shape the row settles into.
         '<td><span class="tma-cip-table__applicant">' + disc +
         skeletonBar(skeletonWidth(i + 1, 0.8)) + '</span></td>' +
+        '<td>' + skeletonBar(skeletonWidth(i + 8, 0.55)) + '</td>' +
         '<td>' + skeletonBar(skeletonWidth(i + 2, 0.7)) + '</td>' +
         '<td>' + skeletonBar(skeletonWidth(i + 3, 0.8)) + '</td>' +
         '<td>' + skeletonBar(skeletonWidth(i + 4, 0.9)) + '</td>' +
@@ -11408,6 +11422,9 @@
       '<span class="tma-dash__clients-folders-title" data-clients-folder-crumbs>Client documents</span>' +
       (uuid
         ? '<div class="tma-dash__clients-folders-actions">' +
+          '<label class="tma-dash__clients-folders-selectall" data-clients-folder-selectall-wrap hidden>' +
+          '<input type="checkbox" class="tma-dash__check" data-clients-folder-selectall aria-label="Select all">' +
+          '<span>Select all</span></label>' +
           '<button type="button" class="tma-dash__clients-folders-add" data-clients-folder-new>' +
           '<img src="' + ICONS.Plus + '" alt=""><span>New folder</span></button>' +
           '<button type="button" class="tma-dash__clients-folders-add" data-clients-folder-upload>' +
@@ -11622,6 +11639,24 @@
     // one is a single tap, on a phone as on a desk.
     canvas.classList.toggle('has-selection', any);
     paintClientFolderBulk(root);
+    syncFolderSelectAll(root);
+  }
+
+  function syncFolderSelectAll(root) {
+    var wrap = root.querySelector('[data-clients-folder-selectall-wrap]');
+    var box = root.querySelector('[data-clients-folder-selectall]');
+    if (!wrap || !box) return;
+    var ids = clientFolderIds();
+    wrap.hidden = ids.length === 0;
+    if (!ids.length) {
+      box.checked = false;
+      box.indeterminate = false;
+      return;
+    }
+    var n = 0;
+    ids.forEach(function (id) { if (clientFolderSelected[id]) n += 1; });
+    box.checked = n > 0 && n === ids.length;
+    box.indeterminate = n > 0 && n < ids.length;
   }
 
   /*
@@ -11706,6 +11741,7 @@
               : 'No files yet. Use “Upload”, “New folder”, or drag files here.') +
             '</div>') +
         '</div>';
+      syncFolderSelectAll(root);
       return;
     }
     var html = '';
@@ -11785,6 +11821,7 @@
     });
     canvas.innerHTML = html;
     canvas.classList.toggle('has-selection', clientFolderSelectedRows().length > 0);
+    syncFolderSelectAll(root);
   }
 
   function applyClientFolderWriteAccess(root, res) {
@@ -12556,6 +12593,18 @@
         } else if (acts.menu) {
           acts.menu(box.left, box.bottom + 4, picked[0], done);
         }
+      });
+    });
+    MORPH.unwired(root, '[data-clients-folder-selectall]').forEach(function (box) {
+      box.addEventListener('change', function () {
+        var next = {};
+        if (box.checked) {
+          clientFolderIds().forEach(function (id) { next[id] = true; });
+        }
+        clientFolderSelected = next;
+        clientFolderAnchor.id = null;
+        box.indeterminate = false;
+        paintClientFolderSelection(root);
       });
     });
     MORPH.unwired(root, '[data-clients-folder-bulk-clear]').forEach(function (btn) {

@@ -197,7 +197,7 @@ class ImpersonationTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_staff_and_private_clients_cannot_be_opened(): void
+    public function test_an_administrator_can_open_any_approved_account(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'Ada Admin');
         $officer = $this->user(Role::REVIEWING_OFFICER, 'Officer');
@@ -210,13 +210,32 @@ class ImpersonationTest extends TestCase
 
         $this->actingAs($admin)
             ->postJson("/admin/users/{$officer->id}/impersonate")
-            ->assertStatus(422)
-            ->assertJsonPath('message', 'This account is not a service provider.');
+            ->assertOk()
+            ->assertJsonPath('redirect', '/citizenship-applications');
+
+        $this->carrySession();
+
+        $this->getJson('/me')
+            ->assertOk()
+            ->assertJsonPath('id', $officer->id)
+            ->assertJsonPath('isAdmin', false)
+            ->assertJsonPath('accountType', Role::REVIEWING_OFFICER)
+            ->assertJsonPath('impersonation.actorName', 'Ada Admin');
+
+        $this->postJson('/impersonation/leave')->assertOk();
+        $this->carrySession();
 
         $this->actingAs($admin)
             ->postJson("/admin/users/{$private->id}/impersonate")
-            ->assertStatus(422)
-            ->assertJsonPath('message', 'This account is not a service provider.');
+            ->assertOk();
+
+        $this->carrySession();
+
+        $this->getJson('/me')
+            ->assertOk()
+            ->assertJsonPath('id', $private->id)
+            ->assertJsonPath('isAdmin', false)
+            ->assertJsonPath('accountType', Role::CLIENT);
     }
 
     public function test_an_account_that_cannot_sign_in_is_refused(): void

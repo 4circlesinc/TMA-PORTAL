@@ -747,4 +747,89 @@ class CipApplicationTableTest extends TestCase
             ->json('applications');
         $this->assertSame([$newer->uuid, $older->uuid], array_column($own, 'id'));
     }
+
+    public function test_tab_counts_partition_the_book_and_all_is_their_sum(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+
+        $this->application($staff, $provider, 0, false);
+        $post = $this->application($staff, $provider, 0, false);
+        $post->forceFill(['phase' => Phase::POST_APPROVAL, 'post_approval_at' => now()])->save();
+        $addon = $this->application($staff, $provider, 0, false);
+        $addon->forceFill(['phase' => Phase::ADD_ON])->save();
+        $closed = $this->application($staff, $provider, 0, false);
+        $closed->forceFill([
+            'phase' => Phase::ADD_ON,
+            'status' => Status::CLOSED,
+        ])->save();
+        $appeal = $this->application($staff, $provider, 0, false);
+        $appeal->forceFill([
+            'phase' => Phase::POST_APPROVAL,
+            'post_approval_at' => now(),
+            'status' => Status::NEW_APPEAL,
+        ])->save();
+
+        $counts = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications')
+            ->assertOk()
+            ->json('phaseCounts');
+
+        $this->assertSame(1, $counts['pre_approval']);
+        $this->assertSame(1, $counts['post_approval']);
+        $this->assertSame(1, $counts['add_on']);
+        $this->assertSame(1, $counts['closed']);
+        $this->assertSame(1, $counts['appeal']);
+        $this->assertSame(5, $counts['all']);
+        $this->assertSame(
+            $counts['pre_approval'] + $counts['post_approval'] + $counts['add_on'] + $counts['closed'] + $counts['appeal'],
+            $counts['all'],
+        );
+
+        $lane = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications?phase=post_approval')
+            ->assertOk()
+            ->json();
+        $this->assertSame([$post->uuid], array_column($lane['applications'], 'id'));
+
+        $addOnLane = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications?phase=add_on')
+            ->assertOk()
+            ->json();
+        $this->assertSame([$addon->uuid], array_column($addOnLane['applications'], 'id'));
+    }
+
+    public function test_application_date_is_when_the_row_entered_the_portal(): void
+    {
+        $staff = $this->staff();
+        $provider = $this->provider($staff);
+        $older = $this->application($staff, $provider, 0, false);
+        $newer = $this->application($staff, $provider, 0, false);
+        $older->forceFill([
+            'created_at' => '2026-01-02 09:30:00',
+            'submitted_at' => '2026-06-01',
+            'status' => Status::PENDING_REVIEW,
+        ])->save();
+        $newer->forceFill([
+            'created_at' => '2026-03-04 15:45:00',
+            'status' => Status::NEW,
+        ])->save();
+
+        $body = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications?sort=filed&dir=asc')
+            ->assertOk()
+            ->json();
+
+        $this->assertSame([$older->uuid, $newer->uuid], array_column($body['applications'], 'id'));
+        $this->assertSame($older->fresh()->created_at->toIso8601String(), $body['applications'][0]['filedAt']);
+
+        $older->forceFill(['status' => Status::GRANTED, 'submitted_at' => '2026-07-01'])->save();
+
+        $again = $this->actingAs($staff)
+            ->getJson('/portal/cip/applications?sort=filed&dir=desc')
+            ->assertOk()
+            ->json('applications.1.filedAt');
+
+        $this->assertSame($older->fresh()->created_at->toIso8601String(), $again);
+    }
 }

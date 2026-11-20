@@ -2841,7 +2841,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-20);
-  align-items: start;
+  align-items: stretch;
   width: 100%;
   min-height: 120px;
 }
@@ -8539,4 +8539,20 @@ body:has(.tma-dash.is-sidebar-collapsed) .tma-sync-pill {
   line-height: 1;
   padding: 2px 4px;
   cursor: pointer;
+}
+
+.tma-dash__clients-folders-selectall {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 8px;
+  font-size: 14px;
+  line-height: 20px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.tma-dash__clients-folders-selectall[hidden] {
+  display: none;
 }

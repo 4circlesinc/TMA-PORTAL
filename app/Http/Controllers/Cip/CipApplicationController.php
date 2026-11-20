@@ -119,7 +119,7 @@ class CipApplicationController extends Controller
      */
     private const LIST_SORTS = [
         'number', 'applicant', 'provider', 'contact', 'email',
-        'investment', 'family', 'status', 'assigned',
+        'investment', 'family', 'status', 'assigned', 'filed',
         'cip', 'cor', 'main_applicant', 'relationship', 'submitted',
     ];
 
@@ -986,10 +986,14 @@ class CipApplicationController extends Controller
             } elseif (Phase::isValid($data['phase'])) {
                 $query->where('phase', $data['phase']);
 
-                // The lane tabs list work in flight; Closed holds the rest.
-                if (in_array($data['phase'], [Phase::POST_APPROVAL, Phase::ADD_ON], true)) {
-                    $query->where('status', '!=', Status::CLOSED);
-                }
+                /*
+                 * Lane tabs are work in flight. Closed and Appeals are tabs
+                 * of their own, so a file standing on either status is not
+                 * also a row of the lane it was filed in. phaseCounts() uses
+                 * the same cut.
+                 */
+                $query->where('status', '!=', Status::CLOSED)
+                    ->whereNotIn('status', Status::APPEAL_LANE);
             }
         }
 
@@ -1130,39 +1134,58 @@ class CipApplicationController extends Controller
      */
     private function phaseCounts(User $user): array
     {
-        $counts = ApplicationScope::query($user)
-            ->selectRaw('phase, COUNT(*) as aggregate')
-            ->groupBy('phase')
-            ->pluck('aggregate', 'phase');
-
         /*
-         * Closed and Appeals are tabs of their own but not lanes of their own:
-         * a closed file is phase post-approval in the column, and an appealed
-         * one is still whichever phase it was. Both are answered by the status
-         * a file stands on, so ONE grouped read serves both badges — a second
-         * count() per tab is a query per listing, and this listing is already
-         * measured against a budget (see CipApplicationTableTest).
+         * One grouped read, and each application lands in exactly one tab.
+         *
+         * Closed and Appeals are not lanes: a closed file keeps the phase it
+         * was filed in, and an appeal does too. Counting those rows inside
+         * their phase AND on their own tab is why All could not be reconciled
+         * with the other badges, and why a lane badge could name rows the
+         * lane did not show (a closed Add-On stayed in the Add-On total after
+         * the tab had moved it to Closed).
+         *
+         * All is the sum of those exclusive buckets, which is also the number
+         * of applications this reader may see. The lane queries above use the
+         * same cut, so a badge and the table behind it count the same rows.
          */
-        $byStatus = ApplicationScope::query($user)
-            ->whereIn('status', [Status::CLOSED, ...Status::APPEAL_LANE])
-            ->selectRaw('status, COUNT(*) as aggregate')
-            ->groupBy('status')
-            ->pluck('aggregate', 'status');
+        $rows = ApplicationScope::query($user)
+            ->selectRaw('phase, status, COUNT(*) as aggregate')
+            ->groupBy('phase', 'status')
+            ->get();
 
-        $closed = (int) ($byStatus[Status::CLOSED] ?? 0);
-        $appeal = array_sum(array_map(
-            fn (string $status) => (int) ($byStatus[$status] ?? 0),
-            Status::APPEAL_LANE,
-        ));
+        $pre = 0;
+        $post = 0;
+        $addon = 0;
+        $closed = 0;
+        $appeal = 0;
 
-        $pre = (int) ($counts[Phase::PRE_APPROVAL] ?? 0);
-        $post = (int) ($counts[Phase::POST_APPROVAL] ?? 0);
-        $addon = (int) ($counts[Phase::ADD_ON] ?? 0);
+        foreach ($rows as $row) {
+            $n = (int) $row->aggregate;
+            $status = (string) $row->status;
+
+            if ($status === Status::CLOSED) {
+                $closed += $n;
+
+                continue;
+            }
+
+            if (in_array($status, Status::APPEAL_LANE, true)) {
+                $appeal += $n;
+
+                continue;
+            }
+
+            match ((string) $row->phase) {
+                Phase::POST_APPROVAL => $post += $n,
+                Phase::ADD_ON => $addon += $n,
+                default => $pre += $n,
+            };
+        }
 
         return [
-            'all' => $pre + $post + $addon,
+            'all' => $pre + $post + $addon + $closed + $appeal,
             'pre_approval' => $pre,
-            'post_approval' => max(0, $post - $closed),
+            'post_approval' => $post,
             'add_on' => $addon,
             'closed' => $closed,
             'appeal' => $appeal,
@@ -1317,6 +1340,9 @@ class CipApplicationController extends Controller
             'main_applicant' => $this->orderByNullable($query, $this->parentApplicantNameSql(), $dir),
             'applicant' => $this->orderByNullable($query, $this->mainApplicantNameSql(), $dir),
             'relationship' => $this->orderByNullable($query, $this->addOnRelationshipSql(), $dir),
+            // When the application entered the portal. Not submitted_at,
+            // which is the day an administrator recorded the Unit's receipt.
+            'filed' => $this->orderByNullable($query, 'cip_applications.created_at', $dir),
             'submitted' => $this->orderByNullable($query, 'cip_applications.submitted_at', $dir),
             'provider' => $this->orderByNullable(
                 $query,
@@ -1474,6 +1500,12 @@ class CipApplicationController extends Controller
             // first. Read off the row, so it costs nothing.
             'submittedAt' => $application->submitted_at?->toDateString(),
             'submittedBy' => $application->submitted_by,
+            // When this application entered the portal. created_at is written
+            // once and is not moved when status or the Unit submission date
+            // changes. A draft has not been filed yet.
+            'filedAt' => $application->status === Status::DRAFT
+                ? null
+                : $application->created_at?->toIso8601String(),
             // The face on the row: the person's passport portrait first
             // (Add-On applicants keep theirs on the CipPerson), then the hub
             // client's copy, then a portal login avatar when that is all there is.
@@ -1570,6 +1602,9 @@ class CipApplicationController extends Controller
         return [
             'number' => $lower($application->cip_number ?? $application->internal_number),
             'applicant' => $main ? $lower($main->first_name.' '.$main->last_name) : null,
+            'filed' => $application->status === Status::DRAFT
+                ? null
+                : $application->created_at?->toIso8601String(),
             'submitted' => $application->submitted_at?->toDateString(),
             'provider' => $lower($application->provider?->name),
             'contact' => $lower($client?->name),
