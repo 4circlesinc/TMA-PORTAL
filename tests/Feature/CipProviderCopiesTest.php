@@ -89,11 +89,12 @@ class CipProviderCopiesTest extends TestCase
         $this->assertSame(Copies::KINDS, array_keys(Copies::forUser($officer)));
         $this->assertNotContains(false, Copies::forUser($officer));
         $this->assertNotContains(false, Copies::forUser($legacyOfficer));
-        $this->assertNotContains(true, Copies::forUser($admin));
+        // Administrators start with every copy off except provider uploads.
+        $this->assertSame([Copies::UPLOAD], array_keys(array_filter(Copies::forUser($admin))));
 
         foreach (Copies::KINDS as $kind) {
             $this->assertTrue(Copies::wanted($officer, $kind), $kind);
-            $this->assertFalse(Copies::wanted($admin, $kind), $kind);
+            $this->assertSame($kind === Copies::UPLOAD, Copies::wanted($admin, $kind), $kind);
             // The provider side and an account-less mailbox are written to, not copied.
             $this->assertTrue(Copies::wanted($client, $kind), $kind);
             $this->assertTrue(Copies::wanted(null, $kind), $kind);
@@ -175,15 +176,16 @@ class CipProviderCopiesTest extends TestCase
             ->assertStatus(422);
     }
 
-    public function test_an_administrator_reads_every_switch_off_until_they_turn_one_on(): void
+    public function test_an_administrator_reads_every_switch_off_but_uploads_until_they_turn_one_on(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
 
         $all = $this->actingAs($admin)->getJson('/me/preferences')
             ->assertOk()
-            ->assertJsonPath('notifyProviderCopies', false)
+            // "Any copy on": provider uploads are, by default.
+            ->assertJsonPath('notifyProviderCopies', true)
             ->json('cipCopies');
-        $this->assertNotContains(true, $all);
+        $this->assertSame([Copies::UPLOAD], array_keys(array_filter($all)));
         // Reading the page stores nothing, so the default keeps following the role.
         $this->assertArrayNotHasKey('cipCopies', $admin->fresh()->preferences ?? []);
         $this->assertArrayNotHasKey('notifyProviderCopies', $admin->fresh()->preferences ?? []);

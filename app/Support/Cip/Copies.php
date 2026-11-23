@@ -192,6 +192,7 @@ final class Copies
             return $all;
         }
 
-        return self::defaultFor($user);
+        // The firm hears of provider uploads by default, administrators included.
+        return $kind === self::UPLOAD || self::defaultFor($user);
     }
 }

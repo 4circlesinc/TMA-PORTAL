@@ -1550,7 +1550,8 @@
     var fallback = !viewerIsAdmin();
     var out = {};
     providerEmailKinds().forEach(function (id) {
-      out[id] = stored && typeof stored[id] === 'boolean' ? stored[id] : fallback;
+      // Provider uploads start on for everyone, administrators too (Copies::resolve).
+      out[id] = stored && typeof stored[id] === 'boolean' ? stored[id] : (id === 'upload' || fallback);
     });
     return out;
   }
