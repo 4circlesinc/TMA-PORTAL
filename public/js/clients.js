@@ -5409,7 +5409,8 @@
    * Add-On rows used to hide that line.
    */
   function applicationDateCell(a) {
-    var text = a && a.status !== 'draft' && a.filedAt ? fmtDateTime(a.filedAt) : '';
+    // The day only: the time of day read as noise beside every row.
+    var text = a && a.status !== 'draft' && a.filedAt ? fmtShortDate(a.filedAt) : '';
     return '<td class="tma-portal-table__muted" data-label="Application Date">' + esc(text || '—') + '</td>';
   }
 
