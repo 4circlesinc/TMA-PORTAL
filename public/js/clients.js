@@ -8297,6 +8297,7 @@
       companyCard('Assigned staff', renderCompanyStaffBlock(state, company), {
         half: true, count: (state.companyStaff || []).length,
       }) +
+      companyCard('Settings', renderCompanySettings(state, company), {}) +
       '</div></div></div>'
     );
   }
@@ -8656,34 +8657,6 @@
         '</div>'
       : '';
 
-    /*
-     * Where the firm's email notifications go: everyone on the list, or one
-     * of them. Choosing one leaves the others their access and the bell.
-     * It stays drawn while the list reloads, so it does not blink out under
-     * the reader, and it is keyed, because the add form above it comes and
-     * goes and an unkeyed row would be handed that form's element.
-     */
-    var mailable = members.filter(function (m) { return !!companyMemberNotifyAddress(m); });
-    var saved = members.filter(function (m) { return !!m.notificationEmail; })[0];
-    // A choice on its way to the server is what the select shows, and it
-    // waits for the answer. It waits for a reload too: a list read before
-    // the save would land on top of it and put the old choice back.
-    var pending = state.companyNotifyPending && state.companyNotifyPending.company === company.id
-      ? state.companyNotifyPending : null;
-    var picked = pending ? pending.member : (saved ? saved.id : '');
-    var notify = canManage && mailable.length
-      ? '<div class="tma-dash__clients-assign-form" data-key="company-notify">' +
-        '<select class="tma-dash__clients-field-select tma-dash__clients-field-select--wide"' +
-        ' data-company-notify-email aria-label="Email notifications"' +
-        (pending || loading ? ' disabled' : '') + '>' +
-        '<option value=""' + (picked ? '' : ' selected') + '>Email everyone with access</option>' +
-        mailable.map(function (m) {
-          return '<option value="' + esc(m.id) + '"' + (m.id === picked ? ' selected' : '') + '>' +
-            esc('Email only ' + companyMemberNotifyAddress(m)) + '</option>';
-        }).join('') +
-        '</select></div>'
-      : '';
-
     // Keyed: the form above it comes and goes with the load, and an unkeyed
     // list would be redrawn out of the form's element, avatars and all.
     var list = members.length
@@ -8724,18 +8697,64 @@
           ? clientsEmpty(state.companyMembersError, 'Illustration07')
           : clientsEmpty('No portal access yet', 'Illustration09')));
 
+    return '<div class="tma-dash__clients-access-block">' +
+      form + list + '</div>';
+  }
+
+  /*
+   * The provider's own settings, one labelled row each. Administrators and
+   * the firm's Service Provider admin see it; new per-provider settings go here.
+   */
+  function renderCompanySettings(state, company) {
+    if (!canManageCompanyAccess() || !company) return '';
+    var members = (state.companyMembers || []).filter(function (m) {
+      return m && !memberMovedAway(m, company.id);
+    });
+    var loading = !!state.companyMembersLoading;
+    var row = function (label, control) {
+      return '<label class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
+        '<span class="tma-dash__clients-field-label">' + esc(label) + '</span>' + control + '</label>';
+    };
+
+    /*
+     * Where the firm's email notifications go: everyone on the list, or one
+     * of them. Choosing one leaves the others their access and the bell.
+     * It stays drawn while the list reloads, so it does not blink out.
+     */
+    var mailable = members.filter(function (m) { return !!companyMemberNotifyAddress(m); });
+    var saved = members.filter(function (m) { return !!m.notificationEmail; })[0];
+    // A choice on its way to the server is what the select shows, and it
+    // waits for the answer. It waits for a reload too: a list read before
+    // the save would land on top of it and put the old choice back.
+    var pending = state.companyNotifyPending && state.companyNotifyPending.company === company.id
+      ? state.companyNotifyPending : null;
+    var picked = pending ? pending.member : (saved ? saved.id : '');
+    var notify = mailable.length
+      ? '<select class="tma-dash__clients-field-select tma-dash__clients-field-select--wide"' +
+        ' data-company-notify-email aria-label="Email notifications"' +
+        (pending || loading ? ' disabled' : '') + '>' +
+        '<option value=""' + (picked ? '' : ' selected') + '>Email everyone with access</option>' +
+        mailable.map(function (m) {
+          return '<option value="' + esc(m.id) + '"' + (m.id === picked ? ' selected' : '') + '>' +
+            esc('Email only ' + companyMemberNotifyAddress(m)) + '</option>';
+        }).join('') +
+        '</select>'
+      : '';
+
     // Which CIP applications the firm's contacts see. Only on a firm that files.
-    var visibility = canManage && company && company.cipCode
-      ? '<div class="tma-dash__clients-assign-form" data-key="company-cip-visibility">' +
-        '<select class="tma-dash__clients-field-select tma-dash__clients-field-select--wide"' +
+    var visibility = company.cipCode
+      ? '<select class="tma-dash__clients-field-select tma-dash__clients-field-select--wide"' +
         ' data-company-cip-visibility aria-label="Application visibility">' +
         '<option value="all"' + (company.cipAssignedOnly ? '' : ' selected') + '>Staff see all of the firm\u2019s applications</option>' +
         '<option value="assigned"' + (company.cipAssignedOnly ? ' selected' : '') + '>Staff see only applications assigned to them</option>' +
-        '</select></div>'
+        '</select>'
       : '';
 
-    return '<div class="tma-dash__clients-access-block">' +
-      form + notify + visibility + list + '</div>';
+    var rows = (notify ? row('Email notifications', notify) : '') +
+      (visibility ? row('Application visibility', visibility) : '');
+    if (!rows) return '';
+
+    return '<div class="tma-dash__clients-access-block" data-key="company-settings">' + rows + '</div>';
   }
 
   /*
