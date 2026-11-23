@@ -331,6 +331,7 @@
     EnvelopeSimple: ICON + 'EnvelopeSimple.svg',
     CurrencyDollar: ICON + 'CurrencyDollar.svg',
     Bell: ICON + 'Bell.svg',
+    Gear: ICON + 'GearSix.svg',
     Phone: ICON + 'Phone.svg',
     ShareNetwork: ICON + 'ShareNetwork.svg',
     ChatTeardropDots: ICON + 'ChatTeardropDots.svg',
@@ -1695,6 +1696,10 @@
       if (rest === '/companies/new') {
         return { screen: 'add-company', legacyRedirect: legacy };
       }
+      var companySettingsMatch = rest.match(/^\/companies\/([^/]+)\/settings$/);
+      if (companySettingsMatch) {
+        return { screen: 'company-settings', companyId: decodeURIComponent(companySettingsMatch[1]), legacyRedirect: legacy };
+      }
       var companyEditMatch = rest.match(/^\/companies\/([^/]+)\/edit$/);
       if (companyEditMatch) {
         return { screen: 'edit-company', companyId: decodeURIComponent(companyEditMatch[1]), legacyRedirect: legacy };
@@ -1740,6 +1745,9 @@
     if (screen === 'add-company') return cipPagePath('/companies/new');
     if (screen === 'edit-company' && companyId) {
       return cipPagePath('/companies/' + encodeURIComponent(companyId) + '/edit');
+    }
+    if (screen === 'company-settings' && companyId) {
+      return cipPagePath('/companies/' + encodeURIComponent(companyId) + '/settings');
     }
     if (screen === 'company' && companyId) {
       return cipPagePath('/companies/' + encodeURIComponent(companyId));
@@ -6652,6 +6660,9 @@
     if (state.screen === 'company') {
       return renderCompanyProfile(state, opts);
     }
+    if (state.screen === 'company-settings') {
+      return renderCompanySettingsPage(state, opts);
+    }
     if (state.screen === 'new-application' || state.screen === 'edit-application') {
       return '<div class="tma-dash__clients-detail">' +
         // --cards, not --form: the sections are cards, and a card inside the
@@ -6890,7 +6901,7 @@
 
       return;
     }
-    if (state.screen === 'edit-company' && state.companyId) {
+    if ((state.screen === 'edit-company' || state.screen === 'company-settings') && state.companyId) {
       navigate('company', null, { companyId: state.companyId });
 
       return;
@@ -7645,12 +7656,18 @@
           '<button type="button" class="tma-dash__clients-edit-btn" data-clients-merge-company>' +
           '<img src="images/icons/phosphor/ArrowsLeftRight.svg" alt=""><span>Merge</span></button>';
       }
+      var gear = '<button type="button" class="tma-dash__clients-edit-btn" data-clients-company-settings' +
+        ' aria-label="Service provider settings" title="Settings">' +
+        '<img src="' + ICONS.Gear + '" alt=""></button>';
       if (isClientsAdmin()) {
         staffActions +=
           '<button type="button" class="tma-dash__clients-message-btn" data-clients-impersonate-company>' +
           '<img src="' + ICONS.ArrowSquareOut + '" alt=""><span>Sign as admin</span></button>' +
+          gear +
           '<button type="button" class="tma-dash__clients-edit-btn" data-clients-delete-company aria-label="Delete service provider">' +
           '<img src="' + ICONS.Trash + '" alt=""></button>';
+      } else {
+        staffActions += gear;
       }
     }
     return (
@@ -7719,6 +7736,8 @@
       toolbar = renderContactProfileToolbar(contactFor(state.selectedId), state);
     } else if (state.screen === 'company' && state.companyId) {
       toolbar = renderCompanyProfileToolbar(companyFor(state.companyId));
+    } else if (state.screen === 'company-settings' && state.companyId) {
+      toolbar = renderCompanySettingsToolbar(companyFor(state.companyId));
     } else if (state.screen === 'new-application' || state.screen === 'edit-application') {
       // No avatar. A profile head carries one because it depicts somebody; a
       // blank application depicts nobody, and the applicant's actual face is
@@ -8297,7 +8316,6 @@
       companyCard('Assigned staff', renderCompanyStaffBlock(state, company), {
         half: true, count: (state.companyStaff || []).length,
       }) +
-      companyCard('Settings', renderCompanySettings(state, company), {}) +
       '</div></div></div>'
     );
   }
@@ -8701,60 +8719,114 @@
       form + list + '</div>';
   }
 
+  /* While a choice saves, its options wait for the answer. */
+  function lockOptions(group) {
+    Array.prototype.forEach.call(group.querySelectorAll('input'), function (input) { input.disabled = true; });
+  }
+
+  /* One choice in a settings group: a card that is a radio button. */
+  function settingsOption(name, value, checked, icon, title, detail, disabled) {
+    return '<label class="tma-provider-settings__option">' +
+      '<input type="radio" class="tma-provider-settings__radio" name="' + esc(name) + '" value="' + esc(value) + '"' +
+      (checked ? ' checked' : '') + (disabled ? ' disabled' : '') + '>' +
+      '<span class="tma-provider-settings__icon" aria-hidden="true"><img src="' + icon + '" alt=""></span>' +
+      '<span class="tma-provider-settings__text">' +
+      '<span class="tma-provider-settings__title">' + esc(title) + '</span>' +
+      (detail ? '<span class="tma-provider-settings__detail">' + esc(detail) + '</span>' : '') +
+      '</span>' +
+      '<span class="tma-provider-settings__check" aria-hidden="true"></span>' +
+      '</label>';
+  }
+
+  function settingsSection(title, lead, label, attr, options) {
+    return '<section class="tma-dash__clients-card">' +
+      '<header class="tma-dash__clients-card-head"><h3 class="tma-dash__clients-card-title">' + esc(title) + '</h3></header>' +
+      '<p class="tma-provider-settings__lead">' + esc(lead) + '</p>' +
+      '<div class="tma-provider-settings__options" role="radiogroup" aria-label="' + esc(label) + '" ' + attr + '>' +
+      options + '</div></section>';
+  }
+
+  function renderCompanySettingsToolbar(company) {
+    if (!company) return '';
+    return (
+      '<div class="tma-dash__clients-profile-toolbar">' +
+      '<div class="tma-dash__clients-profile-head">' +
+      renderClientsBackArrow(null) +
+      '<span class="tma-dash__clients-avatar tma-dash__clients-avatar--initial tma-dash__clients-avatar--blue" style="width:40px;height:40px">' +
+      '<img src="' + ICONS.Gear + '" alt="" width="20" height="20"></span>' +
+      '<div class="tma-dash__clients-profile-ident">' +
+      '<span class="tma-dash__clients-profile-name">Settings</span>' +
+      '<span class="tma-dash__clients-profile-subtitle">' + esc(company.name) + '</span>' +
+      '</div></div></div>'
+    );
+  }
+
   /*
-   * The provider's own settings, one labelled row each. Administrators and
-   * the firm's Service Provider admin see it; new per-provider settings go here.
+   * A service provider's own settings page. Administrators and the firm's
+   * Service Provider admin reach it from the gear; new per-provider settings
+   * go here as another section.
    */
-  function renderCompanySettings(state, company) {
-    if (!canManageCompanyAccess() || !company) return '';
+  function renderCompanySettingsPage(state, opts) {
+    opts = opts || {};
+    var company = companyFor(state.companyId);
+    var shell = function (body) {
+      return '<div class="tma-dash__clients-detail">' +
+        '<div class="tma-dash__clients-profile tma-dash__clients-profile--company' +
+        (opts.elevateToolbar ? ' tma-dash__clients-profile--elevated' : '') + '">' +
+        (opts.elevateToolbar ? '' : renderCompanySettingsToolbar(company)) +
+        '<div class="tma-dash__clients-cards tma-provider-settings">' + body + '</div></div></div>';
+    };
+    if (!company) return shell(clientsEmpty(state.companyLoadError || 'Loading…', 'Illustration07'));
+    if (!canManageCompanyAccess()) return shell(clientsEmpty('Only administrators can change these settings.', 'Illustration07'));
+
     var members = (state.companyMembers || []).filter(function (m) {
       return m && !memberMovedAway(m, company.id);
     });
-    var loading = !!state.companyMembersLoading;
-    var row = function (label, control) {
-      return '<label class="tma-dash__clients-field tma-dash__clients-field--stacked">' +
-        '<span class="tma-dash__clients-field-label">' + esc(label) + '</span>' + control + '</label>';
-    };
+    var sections = '';
+
+    // Which CIP applications the firm's contacts see. Only on a firm that files.
+    if (company.cipCode) {
+      sections += settingsSection(
+        'Application visibility',
+        'Choose which CIP applications your staff can see. Service provider admins always see every application.',
+        'Application visibility',
+        'data-company-cip-visibility',
+        settingsOption('cip-visibility', 'all', !company.cipAssignedOnly, ICONS.Buildings,
+          'All applications', 'Everyone at the firm sees every application the firm has filed.') +
+        settingsOption('cip-visibility', 'assigned', !!company.cipAssignedOnly, ICONS.User,
+          'Assigned applications only', 'Staff see only the applications assigned to them, and the ones they filed.')
+      );
+    }
 
     /*
      * Where the firm's email notifications go: everyone on the list, or one
-     * of them. Choosing one leaves the others their access and the bell.
-     * It stays drawn while the list reloads, so it does not blink out.
+     * of them. Choosing one leaves the others their access and the bell. A
+     * choice on its way to the server is what is shown until it answers.
      */
     var mailable = members.filter(function (m) { return !!companyMemberNotifyAddress(m); });
-    var saved = members.filter(function (m) { return !!m.notificationEmail; })[0];
-    // A choice on its way to the server is what the select shows, and it
-    // waits for the answer. It waits for a reload too: a list read before
-    // the save would land on top of it and put the old choice back.
-    var pending = state.companyNotifyPending && state.companyNotifyPending.company === company.id
-      ? state.companyNotifyPending : null;
-    var picked = pending ? pending.member : (saved ? saved.id : '');
-    var notify = mailable.length
-      ? '<select class="tma-dash__clients-field-select tma-dash__clients-field-select--wide"' +
-        ' data-company-notify-email aria-label="Email notifications"' +
-        (pending || loading ? ' disabled' : '') + '>' +
-        '<option value=""' + (picked ? '' : ' selected') + '>Email everyone with access</option>' +
+    if (mailable.length) {
+      var saved = members.filter(function (m) { return !!m.notificationEmail; })[0];
+      var pending = state.companyNotifyPending && state.companyNotifyPending.company === company.id
+        ? state.companyNotifyPending : null;
+      var picked = pending ? pending.member : (saved ? saved.id : '');
+      var busy = !!pending || !!state.companyMembersLoading;
+      sections += settingsSection(
+        'Email notifications',
+        'Choose who receives the firm’s CIP emails. Everyone keeps their portal notifications either way.',
+        'Email notifications',
+        'data-company-notify-email',
+        settingsOption('company-notify', '', !picked, ICONS.EnvelopeSimple,
+          'Everyone with access', 'Every person on the firm’s access list is emailed.', busy) +
         mailable.map(function (m) {
-          return '<option value="' + esc(m.id) + '"' + (m.id === picked ? ' selected' : '') + '>' +
-            esc('Email only ' + companyMemberNotifyAddress(m)) + '</option>';
-        }).join('') +
-        '</select>'
-      : '';
+          return settingsOption('company-notify', m.id, m.id === picked, ICONS.User,
+            'Only ' + (m.name || companyMemberNotifyAddress(m)), companyMemberNotifyAddress(m), busy);
+        }).join('')
+      );
+    } else if (state.companyMembersLoading) {
+      sections += '<section class="tma-dash__clients-card"><div class="tma-dash__clients-assigned-empty">Loading…</div></section>';
+    }
 
-    // Which CIP applications the firm's contacts see. Only on a firm that files.
-    var visibility = company.cipCode
-      ? '<select class="tma-dash__clients-field-select tma-dash__clients-field-select--wide"' +
-        ' data-company-cip-visibility aria-label="Application visibility">' +
-        '<option value="all"' + (company.cipAssignedOnly ? '' : ' selected') + '>Staff see all of the firm\u2019s applications</option>' +
-        '<option value="assigned"' + (company.cipAssignedOnly ? ' selected' : '') + '>Staff see only applications assigned to them</option>' +
-        '</select>'
-      : '';
-
-    var rows = (notify ? row('Email notifications', notify) : '') +
-      (visibility ? row('Application visibility', visibility) : '');
-    if (!rows) return '';
-
-    return '<div class="tma-dash__clients-access-block" data-key="company-settings">' + rows + '</div>';
+    return shell(sections || clientsEmpty('No settings for this service provider yet', 'Illustration09'));
   }
 
   /*
@@ -20498,6 +20570,13 @@
       });
     }
 
+    var settingsCompanyBtn = unwiredClientsChrome(root, '[data-clients-company-settings]');
+    if (settingsCompanyBtn) {
+      settingsCompanyBtn.addEventListener('click', function () {
+        navigate('company-settings', null, { companyId: state.companyId });
+      });
+    }
+
     var mergeCompanyBtn = unwiredClientsChrome(root, '[data-clients-merge-company]');
     if (mergeCompanyBtn) {
       mergeCompanyBtn.addEventListener('click', function () {
@@ -20779,11 +20858,11 @@
     var notifyEmail = MORPH.unwiredOne(root, '[data-company-notify-email]');
     if (notifyEmail) {
       notifyEmail.addEventListener('change', function (e) {
-        var select = e.currentTarget;
+        var choice = e.target;
         var companyId = state.companyId;
-        var pending = { company: companyId, member: select.value || '' };
+        var pending = { company: companyId, member: choice.value || '' };
         state.companyNotifyPending = pending;
-        select.disabled = true;
+        lockOptions(notifyEmail);
         var settle = function () {
           if (state.companyNotifyPending === pending) state.companyNotifyPending = null;
         };
@@ -20810,10 +20889,9 @@
     var cipVisibility = MORPH.unwiredOne(root, '[data-company-cip-visibility]');
     if (cipVisibility) {
       cipVisibility.addEventListener('change', function (e) {
-        var select = e.currentTarget;
         var company = companyFor(state.companyId);
-        var assignedOnly = select.value === 'assigned';
-        select.disabled = true;
+        var assignedOnly = e.target.value === 'assigned';
+        lockOptions(cipVisibility);
         CompanyMembersAPI.cipVisibility(state.companyId, assignedOnly).then(function (res) {
           if (company) company.cipAssignedOnly = !!(res && res.cipAssignedOnly);
           clientsToast(assignedOnly
@@ -22597,6 +22675,12 @@
       if (screen === 'add-company') {
         return { title: 'New service provider', crumb: 'CIP Applications / New service provider' };
       }
+      if (screen === 'company-settings') {
+        var settingsFor = companyFor(companyId || state.companyId);
+        var settingsName = settingsFor ? settingsFor.name : 'Service provider';
+
+        return { title: 'Settings', crumb: 'CIP Applications / ' + settingsName + ' / Settings' };
+      }
       if (screen === 'company' || screen === 'edit-company') {
         var company = companyFor(companyId || state.companyId);
         var companyName = company ? company.name : 'Service provider';
@@ -22691,7 +22775,7 @@
         watchCipThread(state, render);
       }
 
-      if (state.screen === 'company' && state.companyId) {
+      if ((state.screen === 'company' || state.screen === 'company-settings') && state.companyId) {
         ensureCompanyLoaded(state, render);
         ensureCompanyPanelsLoaded(state, render);
       }
@@ -22722,7 +22806,7 @@
         return;
       }
 
-      if (screen === 'company') {
+      if (screen === 'company' || screen === 'company-settings') {
         state.draft = null;
         state.companyDraft = null;
         return;
@@ -22941,6 +23025,7 @@
         applyScreen(route.screen || 'detail', route.contactId || state.selectedId, route.companyId || null, route.applicationId);
         if (!state.selectedId && route.screen !== 'add' && route.screen !== 'add-company' &&
             route.screen !== 'company' && route.screen !== 'edit-company' &&
+            route.screen !== 'company-settings' &&
             route.screen !== 'edit-application') {
           var first = firstDirectoryItem();
           state.selectedId = first ? first.id : null;
