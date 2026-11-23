@@ -884,6 +884,8 @@ class CipApplicationController extends Controller
              * continues that order instead of re-sorting whichever fifty it holds.
              */
             'unread' => ['nullable', 'boolean'],
+            // "Only My Applications": the files this reader is assigned to.
+            'mine' => ['nullable', 'boolean'],
             'phase' => ['nullable', 'string', 'max:24'],
             /*
              * Add-On tab only: which of the five search options the box is
@@ -1097,6 +1099,9 @@ class CipApplicationController extends Controller
          */
         Facets::applyAssignees($query, self::list($data['assignee'] ?? null));
         Facets::applyProviders($query, self::list($data['provider'] ?? null));
+        if ($request->boolean('mine')) {
+            Facets::applyMine($query, (int) $user->id);
+        }
 
         $this->applyListSearch(
             $query,

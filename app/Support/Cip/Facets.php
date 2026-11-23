@@ -313,6 +313,20 @@ class Facets
     }
 
     /**
+     * The files this person is assigned to: on the application itself, or on
+     * its client. Either counts, unlike {@see whereHeldBy}, where a client's
+     * assignments outrank the file's — a provider contact named on the file is
+     * still "mine" when staff hold the client.
+     */
+    public static function applyMine(Builder $query, int $userId): Builder
+    {
+        return $query->where(function (Builder $q) use ($userId) {
+            $q->whereHas('assignments', fn ($a) => $a->live()->where('user_id', $userId))
+                ->orWhereHas('client.assignments', fn ($a) => $a->live()->where('user_id', $userId));
+        });
+    }
+
+    /**
      * Narrow a listing to the chosen provider firms, by uuid.
      *
      * @param  list<string>  $chosen

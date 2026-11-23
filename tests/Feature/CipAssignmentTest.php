@@ -509,6 +509,36 @@ class CipAssignmentTest extends TestCase
             'the hand-made grant is not the workflow\'s to end');
     }
 
+    public function test_only_my_applications_lists_what_the_reader_is_assigned_to(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $rita = $this->user(Role::REVIEWING_OFFICER, 'rita@example.com', 'Rita Reviewer');
+        $john = $this->user(Role::CLIENT, 'john@galaxy.example', 'John Doe');
+        $company = Company::create(['uid' => 'galaxy', 'name' => 'Galaxy']);
+        CompanyMember::create([
+            'company_id' => $company->id, 'user_id' => $john->id, 'name' => $john->name,
+            'email' => $john->email, 'role' => 'member', 'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL', 'company_id' => $company->id]);
+        $ritas = $this->filedUnder($provider, $admin, 'ritas-file');
+        $johns = $this->filedUnder($provider, $admin, 'johns-file');
+        $this->filedUnder($provider, $admin, 'nobodys-file');
+
+        $this->assign($admin, $ritas, $rita)->assertCreated();
+        // Staff hold this client too, which is the case the assignee facet reads wrongly for a contact.
+        $this->assign($admin, $johns, $rita)->assertCreated();
+        $this->assign($admin, $johns, $john)->assertCreated();
+
+        $mine = fn (User $who) => array_column(
+            $this->actingAs($who)->getJson('/portal/cip/applications?mine=1&perPage=50')->assertOk()->json('applications'),
+            'id',
+        );
+
+        $this->assertEqualsCanonicalizing([$ritas->uuid, $johns->uuid], $mine($rita));
+        $this->assertSame([$johns->uuid], $mine($john));
+        $this->assertSame([], $mine($admin), 'an administrator holding nothing sees nothing of their own');
+    }
+
     public function test_a_service_provider_contact_can_be_assigned_beside_officers_and_filtered(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');

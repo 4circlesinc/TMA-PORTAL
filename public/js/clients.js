@@ -1785,6 +1785,7 @@
       listParams.push('dir=' + encodeURIComponent(APP_TABLE.dir === 'desc' ? 'desc' : 'asc'));
     }
     if (APP_TABLE.unreadFirst) listParams.push('unread=1');
+    if (APP_TABLE.onlyMine) listParams.push('mine=1');
 
     return CIP_APPLICATIONS_PATH + (listParams.length ? '?' + listParams.join('&') : '');
   }
@@ -1947,6 +1948,7 @@
       sort: params.get('sort') || null,
       dir: params.get('dir') || null,
       unread: params.get('unread') === '1',
+      mine: params.get('mine') === '1',
       // A notice about an application whose client record has gone names the
       // application number instead. Without this the term was dropped and the
       // link landed on the unfiltered list.
@@ -2592,6 +2594,7 @@
           '</button>';
       }).join('') +
       renderUnreadFirstToggle() +
+      renderOnlyMineToggle() +
       '</div>';
   }
 
@@ -2612,6 +2615,33 @@
       ' aria-label="Unread messages first" title="Unread messages first">' +
       '<span class="tma-filter-popover__check" aria-hidden="true"></span>' +
       '<span class="tma-dash__unread-first-label">Unread messages</span></button>';
+  }
+
+  /*
+   * Only the applications assigned to the reader. A filter, unlike the unread
+   * box: the other rows go. It narrows inside whatever the reader may see, so
+   * a firm set to "assigned only" and this box agree rather than compete.
+   */
+  function renderOnlyMineToggle() {
+    var on = !!APP_TABLE.onlyMine;
+
+    return '<button type="button" class="tma-dash__filter-drop tma-dash__unread-first tma-dash__only-mine" data-cip-only-mine' +
+      ' role="checkbox" aria-checked="' + (on ? 'true' : 'false') + '"' +
+      ' aria-label="Only My Applications" title="Only My Applications">' +
+      '<span class="tma-filter-popover__check" aria-hidden="true"></span>' +
+      '<span class="tma-dash__unread-first-label">Only My Applications</span>' +
+      '<span class="tma-dash__only-mine-short" aria-hidden="true">Mine</span></button>';
+  }
+
+  function setOnlyMine(on) {
+    APP_TABLE.onlyMine = !!on;
+    resetApplicationPages();
+    if (clientsMountState) {
+      clientsMountState.page = 1;
+      clientsMountState.selected = {};
+      syncClientsListUrl(clientsMountState);
+    }
+    repaintClients();
   }
 
   function setUnreadFirst(on) {
@@ -2725,6 +2755,9 @@
     }
     if (onApplicationsTable(state) && APP_TABLE.unreadFirst) {
       tags.push({ id: 'unread', label: 'Unread messages first', icon: ICONS.ArrowsDownUp });
+    }
+    if (onApplicationsTable(state) && APP_TABLE.onlyMine) {
+      tags.push({ id: 'mine', label: 'Only my applications', icon: ICONS.User });
     }
     if (!tags.length) return '';
 
@@ -4186,6 +4219,7 @@
       sort || '',
       dir || '',
       APP_TABLE.unreadFirst ? 'unread' : '',
+      APP_TABLE.onlyMine ? 'mine' : '',
       page,
     ].join('|');
   }
@@ -4363,8 +4397,8 @@
 
     var tab = loadListTab();
     if (!onApplicationsTable({ listTab: tab, screen: 'list' })) return;
-    if (APP_TABLE.status || APP_TABLE.unreadFirst) return;
-    if (filterValues('bucket').length || filterValues('assignee').length || filterValues('provider').length) return;
+    if (APP_TABLE.status || APP_TABLE.unreadFirst || APP_TABLE.onlyMine) return;
+    if (filterValues('bucket').length || filterValues('assignee').length || filterValues('provider').length || APP_TABLE.onlyMine) return;
 
     var phase = phaseForListTab(tab);
     var key = applicationTableKeyFor(phase, '', 1, '', '');
@@ -4507,7 +4541,7 @@
    */
   function prefetchOtherLanes(state) {
     if (!state || state.search || APP_TABLE.status) return;
-    if (filterValues('bucket').length || filterValues('assignee').length || filterValues('provider').length) return;
+    if (filterValues('bucket').length || filterValues('assignee').length || filterValues('provider').length || APP_TABLE.onlyMine) return;
 
     var current = listTabOf(state);
     var gen = APP_TABLE.fetchGen;
@@ -4600,7 +4634,7 @@
 
   function applicationStoreKey(state, key) {
     if (!window.TMAStore || !state || state.search || APP_TABLE.status || APP_TABLE.page !== 1) return null;
-    if (filterValues('bucket').length || filterValues('assignee').length || filterValues('provider').length) return null;
+    if (filterValues('bucket').length || filterValues('assignee').length || filterValues('provider').length || APP_TABLE.onlyMine) return null;
 
     return 'cip:applications:v1:' + key;
   }
@@ -4809,6 +4843,7 @@
       params.push('dir=' + encodeURIComponent(APP_TABLE.dir === 'desc' ? 'desc' : 'asc'));
     }
     if (APP_TABLE.unreadFirst) params.push('unread=1');
+    if (APP_TABLE.onlyMine) params.push('mine=1');
 
     var storeKey = applicationStoreKey(state, key);
     paintStoredApplicationPage(storeKey, key, lane, gen, state, render);
@@ -19373,6 +19408,13 @@
       });
     });
 
+    var onlyMine = MORPH.unwiredOne(root, '[data-cip-only-mine]');
+    if (onlyMine) {
+      MORPH.on(onlyMine, 'click', function () {
+        setOnlyMine(!APP_TABLE.onlyMine);
+      });
+    }
+
     var unreadFirst = MORPH.unwiredOne(root, '[data-cip-unread-first]');
     if (unreadFirst) {
       MORPH.on(unreadFirst, 'click', function () {
@@ -19409,6 +19451,10 @@
           setUnreadFirst(false);
           return;
         }
+        if (id === 'mine') {
+          setOnlyMine(false);
+          return;
+        }
         if (id === 'sort') {
           state.sort = 'name';
           state.page = 1;
@@ -19431,6 +19477,7 @@
         // clear.
         clearTableFilters();
         APP_TABLE.unreadFirst = false;
+        APP_TABLE.onlyMine = false;
         resetApplicationPages();
         syncClientsListUrl(state);
         render({ forceFull: true });
@@ -20189,6 +20236,7 @@
          opens, not to whichever tab is looked at next. */
       if (bootedSort || bootedDir) stashApplicationPosition(listTabOf(state));
       if (takeBootPosition('unread')) APP_TABLE.unreadFirst = true;
+      if (takeBootPosition('mine')) APP_TABLE.onlyMine = true;
 
       // The Dashboard's CIP card sets the filter from outside this view, and
       // cannot write an address for a screen that has not mounted yet, so

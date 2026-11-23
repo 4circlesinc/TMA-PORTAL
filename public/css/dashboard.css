@@ -40831,7 +40831,18 @@ span.tma-dash__messages-profile-avatar {
   .tma-dash__unread-first-label {
     display: none;
   }
+
+  /* Two bare boxes side by side would be a guess; this one keeps a word. */
+  .tma-dash__only-mine {
+    width: auto;
+    gap: 4px;
+    padding: 0 var(--space-6, 6px);
+  }
+
+  .tma-dash__only-mine-short { display: inline; font-size: 12px; }
 }
+
+.tma-dash__only-mine-short { display: none; }
 
 .tma-dash__filter-drop:focus-visible {
   outline: 2px solid var(--color-primary);
