@@ -13,6 +13,7 @@ use App\Models\SharePointSyncLog;
 use App\Models\User;
 use App\Support\Cip\Tree;
 use App\Support\Files\Activity;
+use App\Support\Files\FileType;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Files\FolderTree;
 use App\Support\Files\Naming;
@@ -433,6 +434,8 @@ class Synchroniser
             // A folder that keeps failing is the retry sweep's to report,
             // not something to hammer every minute.
             ->where('failure_count', '<', RetrySharePointFailures::MAX_ATTEMPTS)
+            // A name SharePoint refused is asked again tomorrow, not every pass.
+            ->where(fn ($q) => $q->whereNull('conflict_reason')->orWhere('updated_at', '<', now()->subDay()))
             ->with('folder')
             ->orderBy('id')
             ->chunkById(200, function ($items) use ($connection, &$budget) {
@@ -468,7 +471,7 @@ class Synchroniser
                     if ($status === 'throttled') {
                         return false;   // Graph wants a pause; the next pass resumes.
                     }
-                    if (in_array($status, ['moved', 'renamed', 'failed'], true) && --$budget <= 0) {
+                    if (in_array($status, ['moved', 'renamed', 'failed', 'name-taken'], true) && --$budget <= 0) {
                         return false;
                     }
                 }
@@ -1024,13 +1027,12 @@ class Synchroniser
      */
     private static function downloadIntoLibrary(SharePointConnection $connection, array $item, ?Folder $parent, string $name): FileItem
     {
-        $ext = pathinfo($name, PATHINFO_EXTENSION) ?: '';
-
         $file = FileItem::create([
             'uuid' => (string) Str::uuid(),
             'folder_id' => $parent?->id,
             'name' => $name,
-            'extension' => strtolower($ext),
+            // Not pathinfo(): "d. DEP 2-JANE SAMPLE" has a dot and no extension.
+            'extension' => FileType::extensionOf($name),
             'mime_type' => $item['file']['mimeType'] ?? null,
             // Graph's size, so the listing shows a real figure before the
             // bytes arrive. Replaced with the stored size on materialisation.

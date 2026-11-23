@@ -415,6 +415,7 @@ class Pusher
                 'graph_parent_id' => $result['parentReference']['id'] ?? $target ?? $mapping->graph_parent_id,
                 'etag' => $result['eTag'] ?? $mapping->etag,
                 'sync_status' => SharePointItem::SYNCED,
+                'conflict_reason' => null,
                 'last_error' => null,
                 'failure_count' => 0,
                 'last_synced_at' => now(),
@@ -430,11 +431,42 @@ class Pusher
         } catch (GraphThrottledException $e) {
             return ['status' => 'throttled', 'retryAfter' => $e->retryAfter];
         } catch (\Throwable $e) {
+            if (self::settledAsNameTaken($e, $mapping)) {
+                return ['status' => 'name-taken'];
+            }
+
             self::markFailure($mapping, $e->getMessage());
             Synchroniser::log($connection, 'push-failed', 'error', $mapping->graph_item_id, $e->getMessage());
 
             return ['status' => 'failed', 'reason' => $e->getMessage()];
         }
+    }
+
+    /**
+     * Was this Graph's 409 to a rename or move? Then it is settled, not failed.
+     *
+     * SharePoint already holds that name there (a numbered twin, an archived
+     * copy, somebody's own item), so the copy keeps its name and place and
+     * its contents sync as before. This used to be retried every pass and
+     * shown as "could not sync" for good. The reason and the touched row are
+     * what make the folder pass wait a day before asking again.
+     */
+    private static function settledAsNameTaken(\Throwable $e, SharePointItem $mapping): bool
+    {
+        // PATCH is only ever a rename or a move; a 409 to a delete stays a failure.
+        if (! $e instanceof GraphException || $e->status !== 409 || ! str_starts_with($e->getMessage(), 'Graph PATCH ')) {
+            return false;
+        }
+
+        $mapping->fill([
+            'sync_status' => SharePointItem::SYNCED,
+            'conflict_reason' => 'SharePoint already has an item of this name there, so this copy keeps its name and place.',
+            'last_error' => null,
+            'failure_count' => 0,
+            'failed_direction' => null,
+        ])->touch();
+
+        return true;
     }
 
     /**
@@ -858,6 +890,10 @@ class Pusher
         } catch (GraphThrottledException $e) {
             return ['status' => 'throttled', 'retryAfter' => $e->retryAfter];
         } catch (\Throwable $e) {
+            if (self::settledAsNameTaken($e, $mapping)) {
+                return ['status' => 'name-taken'];
+            }
+
             self::markFailure($mapping, $e->getMessage());
             Synchroniser::log($connection, 'push-failed', 'error', $mapping->graph_item_id, $e->getMessage());
 

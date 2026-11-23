@@ -69,7 +69,8 @@ class FileType
 
     public static function extensionOf(string $filename): string
     {
-        if (! preg_match('/\.([A-Za-z0-9]+)$/', $filename, $m)) {
+        // 32 is the width of every extension column; longer is part of the name.
+        if (! preg_match('/\.([A-Za-z0-9]{1,32})$/', $filename, $m)) {
             return '';
         }
 

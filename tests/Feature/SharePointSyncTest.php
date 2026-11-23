@@ -13,6 +13,7 @@ use App\Models\SharePointConnection;
 use App\Models\SharePointItem;
 use App\Models\User;
 use App\Support\Cip\Tree;
+use App\Support\Files\FileType;
 use App\Support\Files\FolderProvisioner;
 use App\Support\Security\Envelope;
 use App\Support\SharePoint\Pusher;
@@ -70,6 +71,9 @@ class SharePointSyncTest extends TestCase
 
     /** Every upload answers 504, the gateway timeout a real push meets. */
     protected bool $failUploads = false;
+
+    /** Every rename or move answers 409: the name is already held there. */
+    protected bool $nameTaken = false;
 
     /** Pages of delta items, when a test exercises a multi-page walk. */
     protected ?array $deltaPages = null;
@@ -177,6 +181,9 @@ class SharePointSyncTest extends TestCase
             }
             if ($this->throttle) {
                 return Http::response('slow down', 429, ['Retry-After' => '42']);
+            }
+            if ($this->nameTaken && $request->method() === 'PATCH') {
+                return Http::response(['error' => ['code' => 'nameAlreadyExists', 'message' => 'Name already exists']], 409);
             }
             if ($request->method() === 'PUT' && str_contains($url, '/content')) {
                 if ($this->failUploads) {
@@ -2246,5 +2253,66 @@ class SharePointSyncTest extends TestCase
 
         Http::assertSent(fn (Request $r) => $r->method() === 'PUT'
             && str_contains(urldecode($r->url()), 'conflictBehavior=rename'));
+    }
+
+    /**
+     * Text after a dot is only an extension when it looks like one. A Mac
+     * sidecar file named after a folder ("._d. DEP 2-JANE SAMPLE ...") put
+     * the rest of the name into the 32-character extension column, and the
+     * import failed on every pass.
+     */
+    public function test_a_dotted_name_without_a_real_extension_is_imported(): void
+    {
+        $name = '._d. DEP 2-JANE SAMPLE APPLICANT-FAMILY OF FOUR';
+        $this->fakeGraph([$this->fileItem('i-dot', $name, 'c:1')], [['id' => 'i-dot']]);
+
+        $stats = Synchroniser::sync($this->connection);
+
+        $this->assertSame(0, $stats['failed']);
+        $this->assertSame('', FileItem::where('name', 'like', '%JANE SAMPLE%')->value('extension'));
+        $this->assertSame('', FileType::extensionOf('scan.'.str_repeat('a', 33)));
+    }
+
+    /**
+     * SharePoint cannot hold two items of one name in a folder, and answers
+     * a rename onto a taken name with 409. Nothing failed to sync: the copy
+     * keeps its name. That was retried every pass and reported as "could not
+     * sync" for good; now it is asked once, then again a day later.
+     */
+    public function test_a_folder_name_sharepoint_already_holds_is_not_a_sync_failure(): void
+    {
+        $folder = $this->portalFolder('Application IGA26-00005', $this->connection->folder_id);
+        $mapping = $this->mapFolder($folder, 'g-app', 'root-1');
+        Pusher::suspend(fn () => $folder->forceFill(['name' => 'VERNON FRANCIS'])->save());
+        $this->nameTaken = true;
+        $this->fakeGraph([]);
+        $renames = fn () => Http::recorded(fn (Request $r) => $r->method() === 'PATCH')->count();
+
+        Synchroniser::sync($this->connection->fresh());
+        Synchroniser::sync($this->connection->fresh());
+
+        $this->assertSame(1, $renames());
+        $this->assertSame(SharePointItem::SYNCED, $mapping->fresh()->sync_status);
+        $this->assertSame(0, $mapping->fresh()->failure_count);
+        $this->assertSame('Application IGA26-00005', $mapping->fresh()->name);
+
+        $this->travel(25)->hours();
+        Synchroniser::sync($this->connection->fresh());
+
+        $this->assertSame(2, $renames());
+    }
+
+    /** A file renamed onto a taken name is settled the same way. */
+    public function test_a_file_name_sharepoint_already_holds_is_not_a_sync_failure(): void
+    {
+        $file = $this->portalFile('Doc.txt', $this->connection->folder_id);
+        $mapping = SharePointItem::create([
+            'connection_id' => $this->connection->id, 'graph_item_id' => 'i-doc', 'graph_parent_id' => 'root-1',
+            'item_type' => 'file', 'file_id' => $file->id, 'name' => 'Doc.txt', 'sync_status' => SharePointItem::SYNCED,
+        ]);
+        $this->nameTaken = true;
+
+        $this->assertSame('name-taken', Pusher::pushRename($file)['status']);
+        $this->assertSame(SharePointItem::SYNCED, $mapping->fresh()->sync_status);
     }
 }
