@@ -212,8 +212,9 @@ class Engine
      * Add-On reuses the pre-approval path through Pending Review and
      * Background Check, without DD Query or Delayed: from Pending Review or
      * Non-compliant the Unit asks for more paper, accepts the Add-On for
-     * processing (Background Check), or decides it there and then. Approved
-     * Add-Ons do not enter the post-approval COR lane.
+     * processing (Background Check), or decides it there and then. Approved,
+     * it goes on to post-approval by the step a first filing takes, and is
+     * a post-approval file from then on.
      *
      * Background Check used to be skipped here, so only an administrator
      * could put an Add-On there, through the override list; the firm's staff
@@ -265,7 +266,9 @@ class Engine
             // DD Query and Delayed are refused for the lane in phaseAllows(),
             // which leaves the decision.
             Status::BACKGROUND_CHECK => [Status::GRANTED, Status::DENIED],
-            Status::GRANTED => [Status::NEW_APPEAL],
+            // Approved, the person still needs a COR, NIC and passport: the
+            // Add-On goes on to post-approval the way a first filing does.
+            Status::GRANTED => [Status::POST_APPROVAL, Status::NEW_APPEAL],
             default => $base,
         };
     }
@@ -565,9 +568,9 @@ class Engine
          * ({@see CipAccess::skipsRequirements()}): the other lane, a dated
          * step from anywhere, Delayed, a decision already recorded, a file
          * whose papers are not all Ready for submission. Each is a row they
-         * may press. An Add-On is the one limit, and it is the Add-On's own
-         * vocabulary rather than a rule: it never works the post-approval
-         * lane, so those labels are not its statuses at all.
+         * may press. An Add-On is the one limit: its way into the
+         * post-approval lane is the mapped step from Approved, so the
+         * lane's labels are not picked for it by hand.
          */
         if (CipAccess::skipsRequirements($actor)) {
             $addOn = ($application->phase ?? Phase::PRE_APPROVAL) === Phase::ADD_ON;
@@ -697,19 +700,19 @@ class Engine
         $post = $phase === Phase::POST_APPROVAL;
 
         /*
-         * Add-On never works the DD path or post-approval COR collection.
-         * Those labels belong to the first filing; an Add-On that has been
-         * submitted is asked for more paper, accepted for processing into
-         * Background Check, approved, or denied.
+         * Add-On never works the DD path. Submitted, it is asked for more
+         * paper, accepted for processing into Background Check, approved,
+         * or denied. Its one way into the post-approval lane is
+         * Post-Approval itself, which the rule further down opens only to
+         * a file standing at Approved.
          */
         if ($phase === Phase::ADD_ON) {
-            if (in_array($to, [
+            if ($to !== Status::POST_APPROVAL && (in_array($to, [
                 Status::DD_QUERY,
                 Status::DELAYED,
-                Status::POST_APPROVAL,
                 Status::POST_APPROVED,
                 Status::POST_DENIED,
-            ], true) || Status::inLane($to)) {
+            ], true) || Status::inLane($to))) {
                 return false;
             }
         }
@@ -932,8 +935,8 @@ class Engine
         $skips = $actor !== null && CipAccess::skipsRequirements($actor);
         $phase = $application->phase ?? Phase::PRE_APPROVAL;
 
-        // An Add-On never works the post-approval lane: not a requirement
-        // to skip, simply not this file's statuses.
+        // An Add-On is not put on a post-approval status by hand: it goes
+        // on from Approved by the mapped step, see transitionsFrom().
         if ($phase === Phase::ADD_ON && Status::laneOf($to) === Phase::POST_APPROVAL) {
             throw new \InvalidArgumentException(sprintf(
                 '%s is not an Add-On status.',
@@ -1012,7 +1015,7 @@ class Engine
 
             if (($application->phase ?? Phase::PRE_APPROVAL) === Phase::POST_APPROVAL) {
                 $meta['revertedPhase'] = Phase::POST_APPROVAL;
-                $extra['phase'] = Phase::PRE_APPROVAL;
+                $extra['phase'] = self::laneBeforePostApproval($application);
             }
         }
 
@@ -1025,7 +1028,7 @@ class Engine
             && Status::laneOf($to) === Phase::PRE_APPROVAL
             && ! array_key_exists('phase', $extra)) {
             $meta['revertedPhase'] = Phase::POST_APPROVAL;
-            $extra['phase'] = Phase::PRE_APPROVAL;
+            $extra['phase'] = self::laneBeforePostApproval($application);
         }
 
         /*
@@ -1044,6 +1047,12 @@ class Engine
         }
 
         return $application;
+    }
+
+    /** The lane a file pulled back out of post-approval returns to: its own. */
+    private static function laneBeforePostApproval(CipApplication $application): string
+    {
+        return $application->isAddOn() ? Phase::ADD_ON : Phase::PRE_APPROVAL;
     }
 
     /** Statuses where the original package is still being put together. */
@@ -1158,7 +1167,7 @@ class Engine
          * checklist, so the label and the lane agree. An Add-On never enters
          * the lane, and set() refuses it those statuses before this.
          */
-        $enteringPost = ($application->phase ?? Phase::PRE_APPROVAL) === Phase::PRE_APPROVAL
+        $enteringPost = ($application->phase ?? Phase::PRE_APPROVAL) !== Phase::POST_APPROVAL
             && Status::laneOf($to) === Phase::POST_APPROVAL;
 
         if ($enteringPost) {
@@ -1328,9 +1337,15 @@ class Engine
          * on it then, and is now. So the checklist is read once as the file
          * arrives, the way it is when a decision lands. Not when the
          * checklist itself brought the file here, which is that reading.
+         *
+         * Entering the lane is the same. A child's Add-On owes only the
+         * photo it already filed, so no paper would ever be judged to walk
+         * it on to Apply for COR, and it would sit at Post-Approval with
+         * every document accepted.
          */
-        if (in_array($to, [Status::APPLY_FOR_NIC, Status::APPLY_FOR_PASSPORT], true)
-            && ($meta['reason'] ?? null) !== 'checklist') {
+        if ((in_array($to, [Status::APPLY_FOR_NIC, Status::APPLY_FOR_PASSPORT], true)
+            && ($meta['reason'] ?? null) !== 'checklist')
+            || ($enteringPost && $to === Status::POST_APPROVAL)) {
             $application = Review::settle($application, $actor);
         }
 

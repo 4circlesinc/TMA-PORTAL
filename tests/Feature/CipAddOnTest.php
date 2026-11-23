@@ -20,14 +20,17 @@ use App\Support\Cip\AddOn;
 use App\Support\Cip\AddOnRequirements;
 use App\Support\Cip\ApplicantType;
 use App\Support\Cip\Applications;
+use App\Support\Cip\CorRequirements;
 use App\Support\Cip\DocumentEngine;
 use App\Support\Cip\DocumentSlots;
 use App\Support\Cip\DocumentStatus;
 use App\Support\Cip\DocumentTypes;
+use App\Support\Cip\Engine;
 use App\Support\Cip\Intake;
 use App\Support\Cip\Notices;
 use App\Support\Cip\Package;
 use App\Support\Cip\Phase;
+use App\Support\Cip\PostApproval;
 use App\Support\Cip\ProviderTransfer;
 use App\Support\Cip\Review;
 use App\Support\Cip\Status;
@@ -2261,7 +2264,8 @@ class CipAddOnTest extends TestCase
         $this->assertSame(Status::GRANTED, $shown['decision']);
         $this->assertSame('2026-09-16', $shown['decidedAt']);
         $this->assertSame($application->internal_number, $shown['number']);
-        $this->assertFalse(\App\Support\Cip\Engine::canTransition($application->fresh(), Status::POST_APPROVAL));
+        // Approved, it goes on to post-approval like any approved file.
+        $this->assertTrue(Engine::canTransition($application->fresh(), Status::POST_APPROVAL));
 
         $this->assertDatabaseHas('cip_events', [
             'application_id' => $application->id,
@@ -2460,6 +2464,137 @@ class CipAddOnTest extends TestCase
 
         $this->assertNotContains('sl1_form', $keys);
         $this->assertContains('sl2b_form', $keys);
+    }
+
+    /**
+     * An approved Add-On goes on to post-approval like any approved file.
+     *
+     * It used to stop at Approved with no next step at all, no button and no
+     * row in the status menu, so the person's COR, NIC and passport could not
+     * be worked in the portal. It moves by the same step, and is still the
+     * spouse or dependant it was filed for: their own short COR checklist,
+     * not the principal applicant's.
+     */
+    public function test_an_approved_add_on_moves_on_to_post_approval(): void
+    {
+        $staff = $this->staff();
+        $officer = $this->officer();
+        $application = $this->approvedAddOn($staff);
+
+        $shown = $this->actingAs($officer)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/post-approval')
+            ->assertOk()
+            ->json('application');
+
+        $this->assertSame(Status::POST_APPROVAL, $shown['status']);
+        $this->assertSame(Phase::POST_APPROVAL, $shown['phase']);
+
+        $fresh = $application->fresh(['people.documents']);
+        $person = $fresh->people->firstOrFail()->setRelation('application', $fresh);
+        $types = $person->documents->pluck('type');
+
+        $this->assertTrue($fresh->isAddOn());
+        $this->assertSame(ApplicantType::SPOUSE, ApplicantType::for($person));
+        $this->assertTrue($types->contains(CorRequirements::OATH_OF_ALLEGIANCE));
+        $this->assertFalse($types->contains(CorRequirements::PROOF_OF_PAYMENT));
+        $this->assertSame(Tree::ADD_ON_APPLICANT, Folder::find($person->folder_id)?->name);
+        // Still not a file another Add-On can be filed against, and no
+        // longer one that keeps its family from filing the next.
+        $this->assertFalse(AddOn::isEligibleParent($fresh));
+        $this->assertFalse(AddOn::hasOpenAddOn($fresh->parent));
+
+        // The oath is all she owes: filed and accepted, Apply for COR follows.
+        $this->assertSame(['MEI WEI: Oath of Allegiance (Pending upload)'], Review::blockers($fresh));
+        DocumentSlots::fill(
+            $person->fresh(['application', 'documents']),
+            CorRequirements::OATH_OF_ALLEGIANCE,
+            UploadedFile::fake()->create('oath.pdf', 40, 'application/pdf'),
+            $staff,
+        );
+        $oath = CipDocument::query()
+            ->where('application_id', $fresh->id)
+            ->where('type', CorRequirements::OATH_OF_ALLEGIANCE)
+            ->firstOrFail();
+        $this->actingAs($officer)->postJson('/portal/cip/documents/'.$oath->uuid.'/approve')->assertOk();
+
+        $this->assertSame(Status::APPLY_FOR_COR, $fresh->fresh()->status);
+    }
+
+    /**
+     * A child's Add-On owes nothing new: its photo carries over. No paper
+     * would ever be judged to walk it on, so the checklist is read as it
+     * enters and it stands at Apply for COR at once.
+     */
+    public function test_a_child_add_on_with_nothing_more_to_file_goes_straight_to_apply_for_cor(): void
+    {
+        $staff = $this->staff();
+        $application = $this->approvedAddOn($staff, overrides: [
+            'addonType' => AddOn::TYPE_DEPENDENT_UNDER_16,
+            'relationship' => AddOn::RELATIONSHIP_DAUGHTER,
+            'firstName' => 'Lin',
+            'dateOfBirth' => now()->subYears(8)->toDateString(),
+            'passportNumber' => 'K7654321',
+        ]);
+
+        $entered = PostApproval::enter($application, $staff);
+
+        $this->assertSame(Phase::POST_APPROVAL, $entered->phase);
+        $this->assertSame(Status::APPLY_FOR_COR, $entered->status);
+    }
+
+    /** An Add-On that has not been approved has no such step. */
+    public function test_an_undecided_add_on_cannot_enter_post_approval(): void
+    {
+        $staff = $this->staff();
+        $application = $this->approvedAddOn($staff, decide: false);
+
+        $this->assertFalse(Engine::canTransition($application, Status::POST_APPROVAL));
+        $this->actingAs($staff)
+            ->postJson('/portal/cip/applications/'.$application->uuid.'/post-approval')
+            ->assertStatus(422);
+        $this->assertSame(Phase::ADD_ON, $application->fresh()->phase);
+    }
+
+    /** Pulled back by an administrator, it is an Add-On again, not a pre-approval file. */
+    public function test_an_add_on_pulled_back_from_post_approval_returns_to_its_own_lane(): void
+    {
+        $staff = $this->staff();
+        $application = PostApproval::enter($this->approvedAddOn($staff), $staff);
+
+        // To Approved: the decision stands, only the lane is undone.
+        $back = Engine::set($application->fresh(), Status::GRANTED, $staff, ['note' => 'Moved on by mistake.']);
+        $this->assertSame(Phase::ADD_ON, $back->fresh()->phase);
+
+        // To before the decision: the decision is cleared as well.
+        $again = PostApproval::enter($back->fresh(), $staff);
+        $earlier = Engine::set($again->fresh(), Status::BACKGROUND_CHECK, $staff, ['note' => 'Decision recorded in error.']);
+        $this->assertSame(Phase::ADD_ON, $earlier->fresh()->phase);
+    }
+
+    /** A spouse Add-On at Pending Review, approved unless told otherwise. */
+    private function approvedAddOn(User $staff, bool $decide = true, array $overrides = []): CipApplication
+    {
+        $body = $this->file($staff, $this->addOnPayload($this->grantedParent($staff), $overrides))
+            ->assertCreated()
+            ->json('application');
+
+        $application = CipApplication::query()->where('uuid', $body['id'])->firstOrFail();
+        Tree::provision($application, $staff);
+        $application->forceFill([
+            'status' => Status::PENDING_REVIEW,
+            'submitted_at' => '2026-09-14',
+            'locked_at' => now(),
+        ])->save();
+        $this->markChecklistReady($application);
+
+        if ($decide) {
+            $this->postCipDecision($staff, $application->uuid, [
+                'decision' => Status::GRANTED,
+                'decidedAt' => '2026-09-16',
+            ])->assertOk();
+        }
+
+        return $application->fresh();
     }
 
     private function markRequiredAddOnDocumentsReady(CipApplication $application, User $actor): void

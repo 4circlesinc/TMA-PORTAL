@@ -9817,15 +9817,17 @@
       ) +
       cipNumberOverviewRow(app) +
       overviewRow('Status', cipStatusChip(app), true) +
-      (app.phase === 'add_on' && app.addonTypeLabel
+      (app.addonTypeLabel
         ? overviewRow('Add-On type', app.addonTypeLabel)
         : '') +
       (app.submittedAt ? overviewRow('Submission date', fmtShortDate(app.submittedAt)) : '') +
       (app.submittedBy ? overviewRow('Submitted by', app.submittedBy) : '') +
+      // An Add-On names its family in post-approval too. The COR row is the
+      // family's while the Add-On is decided, then this person's own.
       (app.parent
         ? overviewRow('Main application CIP number', app.parent.cipNumber || app.parent.number) +
           overviewRow('Main applicant', app.parent.applicantName) +
-          overviewRow('COR number', app.parent.corNumber)
+          overviewRow('COR number', addOn ? app.parent.corNumber : (app.corNumber || ''))
         : overviewRow('COR number', app.corNumber || '')) +
       overviewRow('Investment', app.investmentType) +
       overviewRow('Referred by', app.provider) +
@@ -10185,10 +10187,13 @@
    * stands earlier in the lifecycle. Green: it is the file going on, not a
    * correction. It is the one way in — the status menu no longer offers a
    * "Post-approval override" row on a pre-approval file.
+   *
+   * An approved Add-On gets it too: the person still needs a COR, NIC and
+   * passport, and used to stop at Approved with nothing to press.
    */
   function renderPostApprovalAction(app) {
     if (!canEnterPostApproval()) return '';
-    if (app.phase === 'post_approval' || app.phase === 'add_on') return '';
+    if (app.phase === 'post_approval') return '';
     if (app.status !== 'granted') return '';
 
     return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--go" data-cip-post-approval>' +
@@ -18254,7 +18259,7 @@
               ui.closeModal();
               clientsToast(picked === 'granted' ? 'Recorded as Approved' : 'Recorded as Denied', 'positive');
               var app = data && data.application;
-              if (picked === 'granted' && app && app.status === 'granted' && app.phase === 'pre_approval') {
+              if (picked === 'granted' && app && app.status === 'granted' && app.phase !== 'post_approval') {
                 openPostApprovalPrompt(applicationId, clientUid);
                 return;
               }

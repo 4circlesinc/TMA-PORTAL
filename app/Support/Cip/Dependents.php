@@ -74,7 +74,7 @@ class Dependents
      */
     public static function label(CipPerson $person): string
     {
-        if ($person->application?->phase === Phase::ADD_ON) {
+        if ($person->application?->isAddOn()) {
             return AddOn::personLabel($person);
         }
 

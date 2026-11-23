@@ -886,7 +886,8 @@ class Tree
         if ($person->role === CipPerson::ROLE_MAIN_APPLICANT) {
             $person->loadMissing('application');
 
-            return ($person->application?->phase ?? '') === Phase::ADD_ON
+            // The folder keeps its name when an Add-On goes on to post-approval.
+            return $person->application?->isAddOn()
                 ? self::ADD_ON_APPLICANT
                 : 'Main Applicant';
         }

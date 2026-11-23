@@ -98,9 +98,11 @@ class ApplicantType
          * list (and ignored spouse / dependent uploads) whenever addon_type
          * had not been saved yet on a draft.
          */
+        // isAddOn(), not the phase: an approved Add-On working post-approval
+        // still owes the spouse's or dependant's papers, not the principal's.
         $application = $person->application;
         if ($application
-            && $application->phase === Phase::ADD_ON
+            && $application->isAddOn()
             && $person->role === CipPerson::ROLE_MAIN_APPLICANT) {
             if (AddOn::isValidType((string) $application->addon_type)) {
                 return $application->addon_type;

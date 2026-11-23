@@ -6,6 +6,7 @@ use App\Models\CipApplication;
 use App\Models\CipPerson;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -199,7 +200,7 @@ class AddOn
             ];
         }
 
-        if ($match->phase === Phase::ADD_ON) {
+        if ($match->isAddOn()) {
             return ['ok' => false, 'error' => 'An Add-On application cannot be filed against another Add-On.', 'field' => 'parentCipNumber'];
         }
 
@@ -354,6 +355,8 @@ class AddOn
                 $q->whereNull('cip_applications.phase')
                     ->orWhere('cip_applications.phase', '!=', Phase::ADD_ON);
             })
+            // Nor an Add-On that has gone on to post-approval; see isAddOn().
+            ->whereNull('cip_applications.addon_type')
             ->where(function ($q) {
                 $q->where('cip_applications.status', Status::GRANTED)
                     ->orWhere('cip_applications.status', Status::POST_APPROVED)
@@ -368,7 +371,7 @@ class AddOn
 
     public static function isEligibleParent(CipApplication $application): bool
     {
-        if (($application->phase ?? '') === Phase::ADD_ON) {
+        if ($application->isAddOn()) {
             return false;
         }
 
@@ -393,8 +396,7 @@ class AddOn
 
     public static function hasOpenAddOn(CipApplication $parent, ?int $ignoreId = null): bool
     {
-        $query = $parent->addOns()
-            ->whereNotIn('status', self::OPEN_STATUSES_EXCLUDED);
+        $query = self::open($parent);
 
         if ($ignoreId) {
             $query->where('id', '!=', $ignoreId);
@@ -405,10 +407,18 @@ class AddOn
 
     public static function openAddOn(CipApplication $parent): ?CipApplication
     {
+        return self::open($parent)->latest('id')->first();
+    }
+
+    /**
+     * This parent's Add-Ons still in flight. One that has gone on to
+     * post-approval was approved, and frees the parent as Approved did.
+     */
+    private static function open(CipApplication $parent): HasMany
+    {
         return $parent->addOns()
-            ->whereNotIn('status', self::OPEN_STATUSES_EXCLUDED)
-            ->latest('id')
-            ->first();
+            ->where('phase', Phase::ADD_ON)
+            ->whereNotIn('status', self::OPEN_STATUSES_EXCLUDED);
     }
 
     /**
@@ -475,7 +485,8 @@ class AddOn
      */
     public static function payload(CipApplication $application): array
     {
-        if (($application->phase ?? '') !== Phase::ADD_ON) {
+        // In post-approval too: the page still says whose spouse or child this is.
+        if (! $application->isAddOn()) {
             return [
                 'addonType' => null,
                 'addonTypeLabel' => null,

@@ -264,7 +264,7 @@ final class Knowledge
             'Non-compliant' => 'Did not meet a requirement. Can return to Pending Review or move to Background Check (Add-On: return to Pending Review, or Approved / Denied).',
             'Background Check' => 'Checks in progress. From here: Non-compliant, Delayed, Approved, or Denied. Not used on Add-On.',
             'Delayed' => 'Held up. From here: Non-compliant, Approved, or Denied. Not used on Add-On.',
-            'Approved' => 'Pre-approval grant. Record decision uses Granted letter templates. Next: Post-Approval, or New Appeal. An approved Add-On stays on its AO number and does not enter Post-Approval.',
+            'Approved' => 'Pre-approval grant. Record decision uses Granted letter templates. Next: Post-Approval, or New Appeal. An approved Add-On keeps its AO number and goes on to Post-Approval the same way.',
             'Denied' => 'Refused. Record decision uses Denied letter templates. Next: New Appeal if someone lodges an appeal.',
             'Post-Approval' => 'Work after a grant. Later stages such as Pending COR use Record … buttons so the date travels with the status.',
             'New Appeal' => 'The one status an external account may drive on a decided file that is theirs. Appeal Ready and Appeal Submitted are the firm’s.',

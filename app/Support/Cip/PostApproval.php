@@ -146,8 +146,9 @@ class PostApproval
      */
     public static function enter(CipApplication $application, User $actor): CipApplication
     {
-        abort_unless(
-            $application->phase === Phase::PRE_APPROVAL,
+        // From pre-approval, or from an Add-On: both go on once approved.
+        abort_if(
+            $application->phase === Phase::POST_APPROVAL,
             422,
             'This application is already in post-approval.',
         );

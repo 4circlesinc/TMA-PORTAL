@@ -103,9 +103,17 @@ class CipApplication extends Model
         return $this->phase === Phase::POST_APPROVAL;
     }
 
+    /**
+     * Filed as an Add-On, whichever lane it stands in now.
+     *
+     * `phase` is where the file is working. An approved Add-On goes on to
+     * post-approval and is a post-approval file from then on, but it is
+     * still the spouse or dependant it was filed for, and the type recorded
+     * at filing keeps saying so after the phase has moved.
+     */
     public function isAddOn(): bool
     {
-        return $this->phase === Phase::ADD_ON;
+        return $this->phase === Phase::ADD_ON || filled($this->addon_type);
     }
 
     /** The granted file this Add-On was filed against. */
