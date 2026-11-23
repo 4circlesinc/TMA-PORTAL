@@ -329,6 +329,8 @@
     UserCircle: ICON + 'UserCircle.svg',
     MapPin: ICON + 'MapPin.svg',
     EnvelopeSimple: ICON + 'EnvelopeSimple.svg',
+    CurrencyDollar: ICON + 'CurrencyDollar.svg',
+    Bell: ICON + 'Bell.svg',
     Phone: ICON + 'Phone.svg',
     ShareNetwork: ICON + 'ShareNetwork.svg',
     ChatTeardropDots: ICON + 'ChatTeardropDots.svg',
@@ -10061,6 +10063,13 @@
     if ((i = item(ICONS.MapPin, 'Country of residence', person.countryOfResidence))) fields.push(i);
     if ((i = item(ICONS.MapPin, 'Region', person.region))) fields.push(i);
     if ((i = item(ICONS.Briefcase, 'Occupation', person.occupation))) fields.push(i);
+    if (person.role === 'main_applicant') {
+      if ((i = item(ICONS.CurrencyDollar, 'Net worth', person.netWorth
+        ? '$' + Number(person.netWorth).toLocaleString('en-US') + ' USD'
+        : null))) fields.push(i);
+      if ((i = item(ICONS.EnvelopeSimple, 'Email', person.email))) fields.push(i);
+      fields.push(item(ICONS.Bell, 'Email notifications', person.emailNotifications === false ? 'Off' : 'On'));
+    }
 
     var all = col1.concat(fields);
     if (!all.length) return '';

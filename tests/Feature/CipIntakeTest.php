@@ -359,6 +359,39 @@ class CipIntakeTest extends TestCase
         $this->assertSame('Caribbean', Countries::region('Saint Lucia'));
     }
 
+    public function test_the_main_applicants_net_worth_email_and_notification_choice_are_kept(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+
+        $body = $this->file($staff, $this->payload($this->provider('GAL'), [
+            'netWorth' => '2500000',
+            'email' => 'applicant@example.com',
+            'emailNotifications' => '0',
+        ]))->assertCreated()->json('application');
+
+        $this->assertSame('2500000', $body['applicant']['netWorth']);
+        $this->assertSame('applicant@example.com', $body['applicant']['email']);
+        $this->assertFalse($body['applicant']['emailNotifications']);
+
+        // Encrypted at rest: the figure is not readable in the column.
+        $raw = \DB::table('cip_people')->where('role', CipPerson::ROLE_MAIN_APPLICANT)->value('net_worth');
+        $this->assertNotSame('2500000', $raw);
+    }
+
+    public function test_net_worth_and_email_are_optional_but_never_malformed(): void
+    {
+        $staff = $this->user(Role::ADMINISTRATOR);
+        $provider = $this->provider('GAL');
+
+        $body = $this->file($staff, $this->payload($provider))->assertCreated()->json('application');
+        $this->assertNull($body['applicant']['netWorth']);
+        $this->assertTrue($body['applicant']['emailNotifications'], 'applicants are opted in until they opt out');
+
+        $this->file($staff, $this->payload($provider, ['netWorth' => '-5', 'email' => 'not-an-email']))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['netWorth', 'email']);
+    }
+
     public function test_every_mandatory_field_is_refused_when_missing(): void
     {
         $staff = $this->user(Role::ADMINISTRATOR);

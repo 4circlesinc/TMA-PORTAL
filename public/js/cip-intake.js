@@ -203,6 +203,7 @@
       providerId: '', firstName: '', lastName: '', gender: '',
       dateOfBirth: '', countryOfBirth: '', countryOfResidence: '',
       nationality: '', occupation: '', passportNumber: '',
+      netWorth: '', email: '', emailNotifications: '1',
       investmentType: '', investmentTypeOther: '', sponsored: '',
       cipNumber: '', outcome: '', decided_at: '',
       parentCipNumber: '', parentCorNumber: '', parentApplicantName: '',
@@ -318,6 +319,8 @@
     gender: 'Gender', dateOfBirth: 'Date of birth', countryOfBirth: 'Country of birth',
     countryOfResidence: 'Country of residence', occupation: 'Occupation',
     passportNumber: 'Passport number', passportPhoto: 'Passport photo',
+    netWorth: 'Net worth (USD)', email: 'Email address',
+    emailNotifications: 'Email notifications',
     passportBioPage: 'Passport bio page', birthCertificate: 'Birth certificate',
     investmentType: 'Investment type', investmentTypeOther: 'Specify investment type',
     enterpriseCategory: 'Enterprise category',
@@ -1171,9 +1174,30 @@
         : '');
   }
 
+  /* The main applicant's alone: a sponsor or dependant is not who the firm writes to. */
+  var CONTACT_FIELDS = ['netWorth', 'email', 'emailNotifications'];
+
+  function notificationsField() {
+    var on = state.draft.emailNotifications !== '0';
+    if (fieldsLocked()) return lockedField('emailNotifications', on ? 'On' : 'Off');
+
+    return '<div class="tma-portal-field" data-key="field:emailNotifications">' +
+      fieldLabel('emailNotifications', labelFor('emailNotifications')) +
+      ui().toggle(on, 'data-cip-toggle="emailNotifications"', 'Email the main applicant about this application') +
+      '</div>';
+  }
+
+  function contactFields() {
+    return '<div class="tma-portal-form-grid tma-portal-form-grid--person">' +
+      textField('netWorth', { type: 'number', placeholder: 'Whole US dollars' }) +
+      textField('email', { type: 'email' }) +
+      notificationsField() +
+      '</div>';
+  }
+
   function applicantCard() {
     return titledCard('Main applicant',
-      photoField('passportPhoto') + personFields(''),
+      photoField('passportPhoto') + personFields('') + contactFields(),
       { modifier: 'tma-portal-section--person' });
   }
 
@@ -2071,6 +2095,12 @@
   /* ── wiring ────────────────────────────────────────────────────── */
 
   function wire(root) {
+    MORPH.unwired(root, '[data-cip-toggle]').forEach(function (box) {
+      box.addEventListener('change', function () {
+        state.draft[box.getAttribute('data-cip-toggle')] = box.checked ? '1' : '0';
+        touchDraft();
+      });
+    });
     MORPH.unwired(root, '[data-cip-intake-notify]').forEach(function (box) {
       box.addEventListener('change', function () {
         state.notifyOnSave = !!box.checked;
@@ -4793,6 +4823,10 @@
     record.sponsored = sponsored();
 
     apply(record.applicant, '');
+    if (record.applicant) {
+      CONTACT_FIELDS.forEach(function (f) { record.applicant[f] = state.draft[f]; });
+      record.applicant.emailNotifications = state.draft.emailNotifications !== '0';
+    }
     // A sponsor added offline has no filed record to lay answers over, and
     // inventing one would put a person on the screen the server has never
     // heard of. The queued write is what creates them.
@@ -4940,6 +4974,11 @@
     }
 
     into('', app.applicant);
+    if (app.applicant) {
+      state.draft.netWorth = app.applicant.netWorth || '';
+      state.draft.email = app.applicant.email || '';
+      state.draft.emailNotifications = app.applicant.emailNotifications === false ? '0' : '1';
+    }
     if (app.applicant && app.applicant.nationality) {
       state.draft.nationality = app.applicant.nationality;
     }

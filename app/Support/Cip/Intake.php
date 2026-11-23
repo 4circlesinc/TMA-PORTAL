@@ -294,6 +294,7 @@ class Intake
     private const PERSON_FIELDS = [
         'firstName', 'lastName', 'gender', 'dateOfBirth', 'countryOfBirth',
         'countryOfResidence', 'nationality', 'occupation', 'passportNumber',
+        'netWorth', 'email', 'emailNotifications',
     ];
 
     /**
@@ -413,6 +414,7 @@ class Intake
                 'providerWas' => ['nullable', 'string', 'max:64'],
             ],
             self::personRules(),
+            self::mainApplicantContactRules(),
             self::mainApplicantDocumentRules($draft, $editing),
             self::investmentRules(),
             self::sponsorRules($draft, $editing),
@@ -485,6 +487,7 @@ class Intake
         foreach (['', 'sponsor.', 'dependents.*.'] as $prefix) {
             $rules = array_merge($rules, self::optionalPersonRules($prefix));
         }
+        $rules = array_merge($rules, self::mainApplicantContactRules());
 
         // A dependant carries one answer the other two do not.
         $rules['dependents.*.relationship'] = ['nullable', 'string', 'max:64'];
@@ -530,6 +533,20 @@ class Intake
             $prefix.'countryOfResidence' => ['nullable', 'string', Rule::in(Countries::all())],
             $prefix.'occupation' => ['nullable', 'string', 'max:191'],
             $prefix.'passportNumber' => ['nullable', 'string', 'max:64'],
+        ];
+    }
+
+    /**
+     * The main applicant's contact details. Optional on every save, and not
+     * identity, so they stay out of {@see PersonEdits::FIELDS} and anyone who
+     * can edit the file changes them directly.
+     */
+    private static function mainApplicantContactRules(): array
+    {
+        return [
+            'netWorth' => ['nullable', 'integer', 'min:0', 'max:999999999999999'],
+            'email' => ['nullable', 'email', 'max:191'],
+            'emailNotifications' => ['nullable', 'boolean'],
         ];
     }
 

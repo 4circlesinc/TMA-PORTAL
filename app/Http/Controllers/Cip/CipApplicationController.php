@@ -2912,6 +2912,10 @@ class CipApplicationController extends Controller
             'region' => $person->region,
             'occupation' => $person->occupation,
             'passportNumber' => $person->passport_number,
+            // Whole US dollars, as a string so a large figure survives JSON.
+            'netWorth' => $person->net_worth,
+            'email' => $person->email,
+            'emailNotifications' => (bool) $person->email_notifications,
             // The passport photo, doubling as the avatar every list draws.
             ...$this->personPhotoUrls($person, $photoFile),
             /*

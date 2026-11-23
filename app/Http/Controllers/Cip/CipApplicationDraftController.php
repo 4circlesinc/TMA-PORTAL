@@ -453,6 +453,15 @@ class CipApplicationDraftController extends Controller
         $person($draft->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT), '');
 
         $main = $draft->people->firstWhere('role', CipPerson::ROLE_MAIN_APPLICANT);
+        if ($main) {
+            if (filled($main->net_worth)) {
+                $answers['netWorth'] = (string) $main->net_worth;
+            }
+            if (filled($main->email)) {
+                $answers['email'] = $main->email;
+            }
+            $answers['emailNotifications'] = $main->email_notifications === false ? '0' : '1';
+        }
         if ($main?->relationship) {
             $answers['relationship'] = $main->relationship;
         }

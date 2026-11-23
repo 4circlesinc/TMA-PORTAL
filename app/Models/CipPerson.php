@@ -25,6 +25,7 @@ use Illuminate\Support\Str;
     'post_approval_apart',
     'post_approval_missed',
     'passport_number_lookup', 'date_of_birth_lookup',
+    'net_worth', 'email', 'email_notifications',
 ])]
 class CipPerson extends Model
 {
@@ -124,6 +125,9 @@ class CipPerson extends Model
             // The post-approval steps recorded for this person alone, keyed
             // by stage: see {@see \App\Support\Cip\PersonStatus}.
             'post_approval_dates' => 'array',
+            // Whole US dollars. Financial detail, so encrypted at rest.
+            'net_worth' => 'encrypted',
+            'email_notifications' => 'boolean',
         ];
     }
 
