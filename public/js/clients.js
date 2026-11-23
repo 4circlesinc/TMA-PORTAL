@@ -7584,6 +7584,7 @@
       (subtitle ? '<span class="tma-dash__clients-profile-subtitle">' + subtitle + '</span>' : '') +
       '</div></div>' +
       '<div class="tma-dash__clients-profile-actions">' +
+      (app ? renderPostApprovalAction(app) : '') +
       (clientFolderUuid(c.id)
         ? '<button type="button" class="tma-dash__clients-message-btn" data-clients-open-folder>' +
           '<img src="' + ICONS.FolderNotch + '" alt=""><span>Open folder</span></button>'
@@ -10014,8 +10015,6 @@
     if (accepted) parts.push(accepted);
     var decision = renderDecisionAction(app);
     if (decision) parts.push(decision);
-    var postApproval = renderPostApprovalAction(app);
-    if (postApproval) parts.push(postApproval);
     var stage = renderStageAction(app);
     if (stage) parts.push(stage);
     // Last: an appeal is what happens after everything above has finished.
@@ -10184,21 +10183,25 @@
   }
 
   /*
-   * An approved file's next stage, as a button where Confirm submission
-   * stands earlier in the lifecycle. Green: it is the file going on, not a
-   * correction. It is the one way in — the status menu no longer offers a
-   * "Post-approval override" row on a pre-approval file.
+   * An approved file's next stage, in the toolbar beside Open folder. Green:
+   * it is the file going on, not a correction. It is the one way in — the
+   * status menu no longer offers a "Post-approval override" row on a
+   * pre-approval file.
    *
    * An approved Add-On gets it too: the person still needs a COR, NIC and
    * passport, and used to stop at Approved with nothing to press.
+   *
+   * An icon and a <span> like its neighbours, so it folds to a glyph with
+   * them on a narrow screen. The label then lives on in the title.
    */
   function renderPostApprovalAction(app) {
     if (!canEnterPostApproval()) return '';
     if (app.phase === 'post_approval') return '';
     if (app.status !== 'granted') return '';
 
-    return '<button type="button" class="tma-dash__clients-appbar-action tma-dash__clients-appbar-action--go" data-cip-post-approval>' +
-      'Move on to post-approval</button>';
+    return '<button type="button" class="tma-dash__clients-message-btn tma-dash__clients-message-btn--go"' +
+      ' data-cip-post-approval title="Move on to post-approval" aria-label="Move on to post-approval">' +
+      '<img src="' + ICON + 'ArrowCircleRight.svg" alt=""><span>Move on to post-approval</span></button>';
   }
 
   var CIP_STAGES = {
@@ -15904,7 +15907,7 @@
      * is the file's own lane.
      *
      * A pre-approval file still goes on to post-approval, once approved, by
-     * the green "Move on to post-approval" button in the application bar.
+     * the green "Move on to post-approval" button beside Open folder.
      */
     var otherAll = other.concat(otherLocked);
     if (!otherAll.length) return body || renderCipStatusSub([], menu.current);
@@ -21865,7 +21868,8 @@
       });
     });
 
-    MORPH.unwired(root, '[data-cip-post-approval]').forEach(function (btn) {
+    // In the toolbar, which the detail page lifts into its head.
+    unwiredAllClientsChrome(root, '[data-cip-post-approval]').forEach(function (btn) {
       MORPH.on(btn, 'click', function () {
         var app = applicationFor(state.selectedId);
         if (!app || app.status !== 'granted' || app.phase === 'post_approval') return;

@@ -20663,20 +20663,6 @@ button.tma-file-status-chip:focus-visible,
   opacity: 0.9;
 }
 
-/* Move on to post-approval: green, white type, where Confirm submission
-   stands earlier in the file's life. The darker green keeps 12px white
-   text at 4.5:1. */
-.tma-dash__clients-appbar-action--go {
-  border-color: #15803d;
-  background: #15803d;
-  color: #fff;
-}
-
-.tma-dash__clients-appbar-action--go:hover {
-  border-color: #166534;
-  background: #166534;
-}
-
 .tma-dash__clients-appbar-action--quiet {
   border-color: transparent;
   background: transparent;
@@ -22420,6 +22406,18 @@ a.tma-dash__clients-edit-btn--accent:visited {
   width: 16px;
   height: 16px;
   filter: brightness(0) invert(1);
+}
+
+/* Move on to post-approval, beside Open folder: green, white type. The
+   darker green keeps 12px white text at 4.5:1. Three classes deep so the
+   dark theme's flip of this pill, declared earlier, does not grey it. */
+.tma-dash__clients-profile-actions .tma-dash__clients-message-btn.tma-dash__clients-message-btn--go {
+  background: #15803d;
+  color: #fff;
+}
+
+.tma-dash__clients-profile-actions .tma-dash__clients-message-btn.tma-dash__clients-message-btn--go:hover {
+  background: #166534;
 }
 
 .tma-dash__clients-message-wrap {
