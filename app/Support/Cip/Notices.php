@@ -236,6 +236,38 @@ class Notices
     }
 
     /**
+     * The provider side put files on the application, from any door.
+     *
+     * One notice per sitting, naming every file, to the same section 22 list
+     * as a status change — minus the uploader, who knows. {@see UploadNotices}
+     * gathers the sitting.
+     *
+     * @param  list<string>  $names
+     */
+    public static function uploaded(CipApplication $application, ?User $uploader, string $who, array $names): void
+    {
+        $facts = Contacts::facts($application);
+        $count = count($names);
+        $title = $who.' uploaded '.($count === 1 ? $names[0] : $count.' documents').' · '.Contacts::label($facts);
+        $message = Str::limit(implode(', ', $names), 300);
+
+        self::fanOut(
+            $application,
+            fn (?string $name) => Postcards::notification(
+                $title, $message, Contacts::url($application), 'Open the application',
+                $name ? (strtok($name, ' ') ?: $name) : null, 'CIP Applications',
+            ),
+            'cip-upload',
+            'cip.upload',
+            $uploader,
+            $title,
+            $message,
+            Copies::UPLOAD,
+            $uploader?->email,
+        );
+    }
+
+    /**
      * The provider side has asked the firm to appeal a decision.
      *
      * Addressed to the same section 22 list as everything else on this file, minus

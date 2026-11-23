@@ -287,9 +287,9 @@ class CipProviderCopiesTest extends TestCase
         }
 
         $this->assertSame(
-            [Copies::COMMENT],
+            [Copies::COMMENT, Copies::UPLOAD],
             array_values(array_diff(Copies::KINDS, Status::ALL)),
-            'the only switch that is not a status is the document comment',
+            'the only switches that are not a status are the document comment and the provider upload',
         );
         $this->assertSame(Copies::KINDS, array_values(array_unique(Copies::KINDS)));
     }

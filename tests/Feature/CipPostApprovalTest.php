@@ -2028,6 +2028,57 @@ class CipPostApprovalTest extends TestCase
         $this->assertTrue($oath->fresh()->isFilled());
     }
 
+    public function test_a_provider_upload_tells_the_administrators_and_not_the_uploader(): void
+    {
+        $staff = $this->staff();
+        [$application, , $oath] = $this->corFile($staff);
+        $contact = $this->contactOn($application, $staff);
+
+        $this->actingAs($contact)
+            ->post('/portal/cip/documents/'.$oath->uuid.'/file', [
+                'file' => UploadedFile::fake()->create('oath.pdf', 40, 'application/pdf'),
+            ], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $this->assertDatabaseHas('portal_notifications', ['user_id' => $staff->id, 'type' => 'cip.upload']);
+        $this->assertDatabaseMissing('portal_notifications', ['user_id' => $contact->id, 'type' => 'cip.upload']);
+    }
+
+    public function test_a_staff_upload_is_not_announced(): void
+    {
+        $staff = $this->staff();
+        [, , $oath] = $this->corFile($staff);
+
+        $this->actingAs($staff)
+            ->post('/portal/cip/documents/'.$oath->uuid.'/file', [
+                'file' => UploadedFile::fake()->create('oath.pdf', 40, 'application/pdf'),
+            ], ['Accept' => 'application/json'])
+            ->assertOk();
+
+        $this->assertDatabaseMissing('portal_notifications', ['type' => 'cip.upload']);
+    }
+
+    public function test_a_sitting_of_provider_uploads_is_one_notice_naming_every_file(): void
+    {
+        $staff = $this->staff();
+        [$application, , $oath] = $this->corFile($staff);
+        $contact = $this->contactOn($application, $staff);
+        $first = (new FileItem)->forceFill(['id' => 9001, 'name' => 'a.pdf']);
+        $second = (new FileItem)->forceFill(['id' => 9002, 'name' => 'b.pdf']);
+        $first->setRelation('cipDocument', $oath->fresh('application'));
+        $second->setRelation('cipDocument', $oath->fresh('application'));
+
+        \Illuminate\Support\Facades\Queue::fake();
+        \App\Support\Cip\UploadNotices::filed($first, $contact);
+        \App\Support\Cip\UploadNotices::filed($second, $contact);
+
+        \Illuminate\Support\Facades\Queue::assertPushed(\App\Jobs\SendCipUploadNotice::class, 1);
+        \Illuminate\Support\Facades\Queue::assertPushed(
+            \App\Jobs\SendCipUploadNotice::class,
+            fn ($job) => \App\Support\Cip\UploadNotices::take($job->key) === ['a.pdf', 'b.pdf'],
+        );
+    }
+
     public function test_a_confirmed_cor_package_refuses_checklist_uploads(): void
     {
         $staff = $this->staff();

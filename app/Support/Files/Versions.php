@@ -2,6 +2,7 @@
 
 namespace App\Support\Files;
 
+use App\Support\Cip\UploadNotices;
 use App\Jobs\GenerateFileThumbnail;
 use App\Models\FileComment;
 use App\Models\FileItem;
@@ -144,6 +145,11 @@ class Versions
         ], fn ($value) => $value !== null && $value !== ''));
 
         self::notify($file, $author, $version, $restoredFrom);
+
+        // A restore is not an upload; a new version from the provider side is.
+        if ($restoredFrom === null) {
+            UploadNotices::filed($file, $author);
+        }
 
         $file->loadMissing('cipDocument.person.application.client');
 

@@ -1522,6 +1522,7 @@
     ] },
     { label: 'Comments', kinds: [
       { id: 'comment', label: 'Document comments' },
+      { id: 'upload', label: 'Provider uploads' },
     ] },
   ];
 

@@ -5,6 +5,7 @@ namespace App\Observers;
 use App\Models\FileItem;
 use App\Models\User;
 use App\Support\Cip\DocumentSlots;
+use App\Support\Cip\UploadNotices;
 use App\Support\Realtime\Live;
 
 /**
@@ -18,11 +19,15 @@ class CipFileObserver
 {
     public function created(FileItem $file): void
     {
+        $actor = $file->uploaded_by ? User::find($file->uploaded_by) : null;
+
+        if ($actor !== null) {
+            UploadNotices::filed($file, $actor);
+        }
+
         if (app()->runningUnitTests()) {
             return;
         }
-
-        $actor = $file->uploaded_by ? User::find($file->uploaded_by) : null;
 
         if (DocumentSlots::adoptOrphan($file, $actor)) {
             Live::staff(Live::CIP);

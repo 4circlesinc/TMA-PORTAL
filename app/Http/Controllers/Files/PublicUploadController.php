@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Files;
 
 use App\Http\Controllers\Controller;
+use App\Support\Cip\UploadNotices;
 use App\Models\FileItem;
 use App\Models\FileRequest;
 use App\Models\FileRequestUpload;
@@ -335,6 +336,9 @@ class PublicUploadController extends Controller
      */
     private function notifyRequester(FileRequest $fileRequest, FileItem $file, string $from): void
     {
+        // A request link on a CIP file is the provider side uploading: the whole list hears.
+        UploadNotices::filed($file, null, trim($from) ?: ($fileRequest->recipient_name ?: 'The service provider'));
+
         $creator = $fileRequest->creator;
 
         if (! $creator) {

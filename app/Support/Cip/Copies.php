@@ -42,6 +42,9 @@ final class Copies
     /** The kind for a comment on a checklist document. */
     public const COMMENT = 'comment';
 
+    /** The kind for files the provider side put on an application. */
+    public const UPLOAD = 'upload';
+
     /**
      * Every kind the page offers, in the order it lists them.
      *
@@ -81,6 +84,7 @@ final class Copies
         Status::APPEAL_READY,
         Status::APPEAL_SUBMITTED,
         self::COMMENT,
+        self::UPLOAD,
     ];
 
     /**
