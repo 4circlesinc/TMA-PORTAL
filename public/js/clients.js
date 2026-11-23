@@ -745,6 +745,12 @@
       return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid) +
         '/members/' + encodeURIComponent(memberId), { method: 'DELETE' });
     },
+    /* Whether the firm's contacts see only applications assigned to them. */
+    cipVisibility: function (uid, assignedOnly) {
+      return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid) + '/cip-visibility', {
+        method: 'PUT', json: { assignedOnly: !!assignedOnly },
+      });
+    },
     /* The one member the firm's email notifications go to; none is everyone. */
     notifyOnly: function (uid, memberId) {
       return clientsFetch(COMPANIES_BASE + '/' + encodeURIComponent(uid) + '/notification-email', {
@@ -8718,8 +8724,18 @@
           ? clientsEmpty(state.companyMembersError, 'Illustration07')
           : clientsEmpty('No portal access yet', 'Illustration09')));
 
+    // Which CIP applications the firm's contacts see. Only on a firm that files.
+    var visibility = canManage && company && company.cipCode
+      ? '<div class="tma-dash__clients-assign-form" data-key="company-cip-visibility">' +
+        '<select class="tma-dash__clients-field-select tma-dash__clients-field-select--wide"' +
+        ' data-company-cip-visibility aria-label="Application visibility">' +
+        '<option value="all"' + (company.cipAssignedOnly ? '' : ' selected') + '>Staff see all of the firm\u2019s applications</option>' +
+        '<option value="assigned"' + (company.cipAssignedOnly ? ' selected' : '') + '>Staff see only applications assigned to them</option>' +
+        '</select></div>'
+      : '';
+
     return '<div class="tma-dash__clients-access-block">' +
-      form + notify + list + '</div>';
+      form + notify + visibility + list + '</div>';
   }
 
   /*
@@ -20768,6 +20784,26 @@
           settle();
           clientsToast((err && err.message) || 'Could not save that', 'negative');
           if (state.companyId === companyId) render();
+        });
+      });
+    }
+
+    var cipVisibility = MORPH.unwiredOne(root, '[data-company-cip-visibility]');
+    if (cipVisibility) {
+      cipVisibility.addEventListener('change', function (e) {
+        var select = e.currentTarget;
+        var company = companyFor(state.companyId);
+        var assignedOnly = select.value === 'assigned';
+        select.disabled = true;
+        CompanyMembersAPI.cipVisibility(state.companyId, assignedOnly).then(function (res) {
+          if (company) company.cipAssignedOnly = !!(res && res.cipAssignedOnly);
+          clientsToast(assignedOnly
+            ? 'Staff now see only applications assigned to them'
+            : 'Staff now see all of the firm\u2019s applications', 'positive');
+          render();
+        }).catch(function (err) {
+          clientsToast((err && err.message) || 'Could not save that', 'negative');
+          render();
         });
       });
     }

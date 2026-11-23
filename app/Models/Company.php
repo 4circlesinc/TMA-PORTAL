@@ -49,6 +49,7 @@ class Company extends Model
             'address' => 'array',
             'billing' => 'array',
             'deleted_at' => 'datetime',
+            'cip_assigned_only' => 'boolean',
         ];
     }
 
@@ -159,6 +160,8 @@ class Company extends Model
             'billing' => $this->billing,
             'status' => $this->status,
             'notes' => $this->notes,
+            // Contacts see only the CIP applications they are named on.
+            'cipAssignedOnly' => (bool) $this->cip_assigned_only,
             // Both counts follow the same rule as referredCount below: use the
             // figure the listing query already aggregated, and only fall back
             // to a query when a single company was fetched on its own. This one

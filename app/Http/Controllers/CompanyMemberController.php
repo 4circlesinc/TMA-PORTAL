@@ -265,6 +265,24 @@ class CompanyMemberController extends Controller
     }
 
     /**
+     * Whether this firm's contacts see every CIP application of the firm, or
+     * only the ones they are named on. Administrators and the firm's own
+     * Service Provider admin decide; the admin always sees the whole book.
+     */
+    public function cipVisibility(Request $request, string $uid): JsonResponse
+    {
+        $user = $request->user();
+        $company = Company::where('uid', $uid)->firstOrFail();
+        abort_unless(Role::isAdmin($user) || CompanyAccess::isProviderAdminOf($user, $company), 403);
+
+        $data = $request->validate(['assignedOnly' => ['required', 'boolean']]);
+
+        $company->forceFill(['cip_assigned_only' => (bool) $data['assignedOnly']])->save();
+
+        return response()->json(['cipAssignedOnly' => (bool) $company->cip_assigned_only]);
+    }
+
+    /**
      * Turn the posted ability map into the snake_case flags a member row holds.
      * Anything not named is left to the role's default.
      *

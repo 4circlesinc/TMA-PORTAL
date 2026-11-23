@@ -142,6 +142,40 @@ class CipBranchAssignmentTest extends TestCase
         $this->assertSees($this->firmUser, [$firmFile, $southFile]);
     }
 
+    public function test_a_firm_can_keep_each_contact_to_the_applications_assigned_to_them(): void
+    {
+        $firmFile = $this->application('firm-file');
+        $otherFile = $this->application('other-file');
+
+        // An ordinary contact may not change it; the firm's own admin may.
+        $this->actingAs($this->firmUser)
+            ->putJson('/portal/companies/gcc/cip-visibility', ['assignedOnly' => true])
+            ->assertForbidden();
+        $this->actingAs($this->spAdmin)
+            ->putJson('/portal/companies/gcc/cip-visibility', ['assignedOnly' => true])
+            ->assertOk()
+            ->assertJsonPath('cipAssignedOnly', true);
+        ApplicationScope::forget();
+
+        $this->assertSees($this->firmUser, []);
+        // The admin assigns, so the admin keeps the whole book; so does the firm.
+        $this->assertSees($this->spAdmin, [$firmFile, $otherFile]);
+        $this->assertSees($this->admin, [$firmFile, $otherFile]);
+
+        $this->actingAs($this->spAdmin)
+            ->postJson('/portal/cip/applications/'.$firmFile->uuid.'/assignments', ['userId' => $this->firmUser->id])
+            ->assertCreated();
+        ApplicationScope::forget();
+        $this->assertSees($this->firmUser, [$firmFile]);
+
+        // An administrator can turn it back off.
+        $this->actingAs($this->admin)
+            ->putJson('/portal/companies/gcc/cip-visibility', ['assignedOnly' => false])
+            ->assertOk();
+        ApplicationScope::forget();
+        $this->assertSees($this->firmUser, [$firmFile, $otherFile]);
+    }
+
     public function test_a_branch_sees_the_application_it_just_filed(): void
     {
         $filed = Applications::create($this->provider, $this->northUser);

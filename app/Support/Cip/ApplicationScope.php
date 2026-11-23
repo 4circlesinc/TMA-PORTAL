@@ -3,6 +3,7 @@
 namespace App\Support\Cip;
 
 use App\Models\CipApplication;
+use App\Models\CipApplicationAssignment;
 use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\Company;
@@ -131,7 +132,15 @@ class ApplicationScope
             $byCompany[(int) ($provider->company_id ?? 0)][] = (int) $provider->id;
         }
 
-        $query->where(function (Builder $outer) use ($byCompany, $rules, $user) {
+        // Firms that keep each contact to the files they are named on.
+        $assignedOnly = Company::query()
+            ->whereIn('id', array_keys($byCompany))
+            ->where('cip_assigned_only', true)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $query->where(function (Builder $outer) use ($byCompany, $rules, $user, $assignedOnly) {
             $first = true;
             foreach ($byCompany as $companyId => $ids) {
                 $rule = $companyId === 0
@@ -139,8 +148,11 @@ class ApplicationScope
                     : ($rules[$companyId] ?? self::unlinkedOfficeRule($rules));
                 $method = $first ? 'where' : 'orWhere';
                 $first = false;
-                $outer->{$method}(function (Builder $one) use ($ids, $rule, $user) {
+                $outer->{$method}(function (Builder $one) use ($ids, $rule, $user, $companyId, $assignedOnly) {
                     $one->whereIn('cip_applications.provider_id', $ids);
+                    if (in_array($companyId, $assignedOnly, true)) {
+                        self::onlyTheirs($one, $user);
+                    }
                     $one->where(function (Builder $visible) use ($rule, $user) {
                         $visible->where(function (Builder $office) use ($rule) {
                             self::applyOfficeRule($office, $rule);
@@ -158,6 +170,23 @@ class ApplicationScope
             if ($first) {
                 $outer->whereRaw('1 = 0');
             }
+        });
+    }
+
+    /** Files this contact is named on as service provider contact, or filed themselves. */
+    private static function onlyTheirs(Builder $query, User $user): void
+    {
+        $query->where(function (Builder $mine) use ($user) {
+            $mine->where('cip_applications.created_by', $user->id)
+                ->orWhereExists(function ($held) use ($user) {
+                    $held->selectRaw('1')
+                        ->from('cip_application_assignments')
+                        ->whereColumn('cip_application_assignments.application_id', 'cip_applications.id')
+                        ->where('cip_application_assignments.user_id', $user->id)
+                        ->where('cip_application_assignments.role', Assignments::SERVICE_PROVIDER_CONTACT)
+                        ->where('cip_application_assignments.status', CipApplicationAssignment::STATUS_ACTIVE)
+                        ->whereNull('cip_application_assignments.ended_at');
+                });
         });
     }
 

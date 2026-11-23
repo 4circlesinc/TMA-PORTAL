@@ -1132,6 +1132,7 @@ Route::middleware(['auth', 'verified', 'profile.complete', 'account.approved', '
         Route::delete('/{uid}/members/{member}', [CompanyMemberController::class, 'destroy'])->name('members.destroy');
         // The one member the firm's email notifications go to; null is everyone.
         Route::put('/{uid}/notification-email', [CompanyMemberController::class, 'notificationEmail'])->name('members.notification-email');
+        Route::put('/{uid}/cip-visibility', [CompanyMemberController::class, 'cipVisibility'])->name('members.cip-visibility');
 
         // A provider contact filed on the wrong firm. Portal access moves with them.
         Route::post('/{uid}/contacts/{client}/transfer', [CompaniesController::class, 'transferContact'])
