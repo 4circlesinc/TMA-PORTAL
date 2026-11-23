@@ -8738,12 +8738,31 @@
       '</label>';
   }
 
-  function settingsSection(title, lead, label, attr, options) {
+  /* One person in a long choice: a compact row rather than a card. */
+  function settingsRow(name, value, checked, title, detail, disabled, avatar) {
+    // Initials underneath; the photo covers them, and removes itself if it will not load.
+    var face = '<span class="tma-provider-settings__avatar" aria-hidden="true">' +
+      '<span class="tma-provider-settings__initial">' + esc((title || '?').charAt(0).toUpperCase()) + '</span>' +
+      (avatar ? '<img src="' + esc(avatar) + '" alt="" loading="lazy" onerror="this.remove()">' : '') +
+      '</span>';
+    return '<label class="tma-provider-settings__row">' +
+      '<input type="radio" class="tma-provider-settings__radio" name="' + esc(name) + '" value="' + esc(value) + '"' +
+      (checked ? ' checked' : '') + (disabled ? ' disabled' : '') + '>' +
+      '<span class="tma-provider-settings__check tma-provider-settings__check--inline" aria-hidden="true"></span>' +
+      face +
+      '<span class="tma-provider-settings__text">' +
+      '<span class="tma-provider-settings__title">' + esc(title) + '</span>' +
+      (detail ? '<span class="tma-provider-settings__detail">' + esc(detail) + '</span>' : '') +
+      '</span></label>';
+  }
+
+  /* `body` is the whole choice; `stack` lays it out top to bottom instead of as a grid. */
+  function settingsSection(title, lead, label, attr, body, stack) {
     return '<section class="tma-dash__clients-card">' +
       '<header class="tma-dash__clients-card-head"><h3 class="tma-dash__clients-card-title">' + esc(title) + '</h3></header>' +
       '<p class="tma-provider-settings__lead">' + esc(lead) + '</p>' +
-      '<div class="tma-provider-settings__options" role="radiogroup" aria-label="' + esc(label) + '" ' + attr + '>' +
-      options + '</div></section>';
+      '<div class="tma-provider-settings__' + (stack ? 'stack' : 'options') + '" role="radiogroup" aria-label="' +
+      esc(label) + '" ' + attr + '>' + body + '</div></section>';
   }
 
   function renderCompanySettingsToolbar(company) {
@@ -8815,12 +8834,20 @@
         'Choose who receives the firm’s CIP emails. Everyone keeps their portal notifications either way.',
         'Email notifications',
         'data-company-notify-email',
+        '<div class="tma-provider-settings__options">' +
         settingsOption('company-notify', '', !picked, ICONS.EnvelopeSimple,
           'Everyone with access', 'Every person on the firm’s access list is emailed.', busy) +
+        '</div>' +
+        '<p class="tma-provider-settings__sublabel">Or email only one person</p>' +
+        '<div class="tma-provider-settings__list">' +
         mailable.map(function (m) {
-          return settingsOption('company-notify', m.id, m.id === picked, ICONS.User,
-            'Only ' + (m.name || companyMemberNotifyAddress(m)), companyMemberNotifyAddress(m), busy);
-        }).join('')
+          var address = companyMemberNotifyAddress(m);
+          // No name on the row: the address is the title, said once.
+          return settingsRow('company-notify', m.id, m.id === picked,
+            m.name || address, m.name ? address : '', busy, m.avatar);
+        }).join('') +
+        '</div>',
+        true
       );
     } else if (state.companyMembersLoading) {
       sections += '<section class="tma-dash__clients-card"><div class="tma-dash__clients-assigned-empty">Loading…</div></section>';

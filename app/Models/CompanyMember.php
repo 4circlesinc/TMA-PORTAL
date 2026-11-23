@@ -171,7 +171,8 @@ class CompanyMember extends Model
             'primary' => $this->is_primary,
             'status' => $this->status,
             'hasAccount' => $this->hasLiveAccount(),
-            'avatar' => $this->user?->photoUrl(),
+            // Their own picture, else the face their email address carries (directory / Gravatar).
+            'avatar' => $this->user?->photoUrl() ?: ($this->displayEmail() ? MailSenderPhoto::faceUrlFor($this->displayEmail()) : null),
             'clientUid' => $this->client?->uid,
             'accountType' => $this->user?->account_type,
             'abilities' => $abilities,

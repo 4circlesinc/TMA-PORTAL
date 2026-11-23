@@ -41860,8 +41860,88 @@ body:has(.tma-dash__messages-peek) .tma-bespoke:not(.is-open) {
 
 .tma-provider-settings__options {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  /* min(): one column on a phone instead of a card wider than the screen. */
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   gap: var(--space-12);
+}
+
+.tma-provider-settings__stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  min-width: 0;
+}
+
+.tma-provider-settings__sublabel {
+  margin: var(--space-4) 0 0;
+  font-size: var(--text-size-12);
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+/* Many people: a compact list that scrolls, not a wall of cards. */
+.tma-provider-settings__list {
+  display: flex;
+  flex-direction: column;
+  max-height: 360px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-16);
+}
+
+.tma-provider-settings__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-12) var(--space-16);
+  cursor: pointer;
+}
+
+.tma-provider-settings__row + .tma-provider-settings__row { border-top: 1px solid var(--color-border-soft); }
+.tma-provider-settings__row:hover,
+.tma-provider-settings__row:has(.tma-provider-settings__radio:checked) { background: var(--color-hover); }
+
+.tma-provider-settings__row:has(.tma-provider-settings__radio:focus-visible) {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.tma-provider-settings__row:has(.tma-provider-settings__radio:disabled) {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.tma-provider-settings__row .tma-provider-settings__text { padding-right: 0; }
+
+.tma-provider-settings__avatar {
+  position: relative;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--color-blue);
+}
+
+.tma-provider-settings__initial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: var(--text-size-14);
+  font-weight: 600;
+  color: var(--color-text-white);
+}
+
+.tma-provider-settings__avatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .tma-provider-settings__option {
@@ -41927,6 +42007,7 @@ body:has(.tma-dash__messages-peek) .tma-bespoke:not(.is-open) {
   line-height: 20px;
   font-weight: 600;
   color: var(--color-text-primary);
+  overflow-wrap: anywhere;
 }
 
 .tma-provider-settings__detail {
@@ -41946,7 +42027,13 @@ body:has(.tma-dash__messages-peek) .tma-bespoke:not(.is-open) {
   border-radius: 50%;
 }
 
-.tma-provider-settings__option:has(.tma-provider-settings__radio:checked) .tma-provider-settings__check {
+.tma-provider-settings__check--inline {
+  position: static;
+  flex-shrink: 0;
+}
+
+.tma-provider-settings__option:has(.tma-provider-settings__radio:checked) .tma-provider-settings__check,
+.tma-provider-settings__row:has(.tma-provider-settings__radio:checked) .tma-provider-settings__check {
   border-color: var(--color-primary);
   background: var(--color-primary);
   box-shadow: inset 0 0 0 3px var(--color-bg-card, var(--color-white));
