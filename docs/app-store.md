@@ -9,8 +9,8 @@ apps keep their own updater and are not affected.
 |---|---|---|
 | Build | `ios/scripts/app-store.sh` | `cd desktop && npm run release:mas` |
 | Output | uploaded straight to App Store Connect | `desktop/release-mas/mas-universal/TM ANTOINE Portal-<version>-mas.pkg` |
-| Version | `MARKETING_VERSION` in the Xcode project (now 0.1.0) | `version` in `desktop/package.json` (now 0.8.56) |
-| Build number | date and time, set by the script | same as the version; `MAS_BUILD_VERSION` to re-upload |
+| Version | `MARKETING_VERSION` in the Xcode project (now 1.0) | `STORE_VERSION` in `desktop/electron-builder.mas.cjs` (now 1.0), apart from the direct download's `package.json` version |
+| Build number | UTC date and time, set by the script | UTC date and time, set by the config; `MAS_BUILD_VERSION` overrides it |
 | Updates | App Store and TestFlight | App Store. The app's own updater is off |
 
 ## What the store builds change
@@ -84,7 +84,7 @@ The `ASC_*` variables can be left out if your Apple ID is signed in under Xcode
 cd desktop
 npm run release:mas
 xcrun altool --upload-app -t macos \
-  -f "release-mas/mas-universal/TM ANTOINE Portal-0.8.56-mas.pkg" \
+  -f "release-mas/mas-universal/TM ANTOINE Portal-<package.json version>-mas.pkg" \
   --apiKey XXXXXXXXXX --apiIssuer xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 ```
 
@@ -96,9 +96,10 @@ A store-signed Mac build only opens once it is installed from TestFlight or the
 App Store. To try the sandbox locally without certificates, run
 `MAS_UNSIGNED=1 npm run release:mas` and sign the result ad-hoc.
 
-Each upload needs a build number App Store Connect has not seen. To re-upload
-the same Mac version after a rejection:
-`MAS_BUILD_VERSION=0.8.56.1 npm run release:mas`.
+Each upload needs a build number App Store Connect has not seen. Both builds
+take the UTC date and time as theirs, so a rebuild after a rejection gets a new
+one by itself. The file name keeps the direct download's version; the store
+reads the version from inside the package.
 
 ## The store listing
 
@@ -202,9 +203,6 @@ these are set.
 - **Sign in with Apple keys**, above. Without them on the server the button
   does not show, and App Review will reject the app under 4.8.
 - **The demo account's emailed code**, above.
-- **Version numbers.** The first iOS release would be 0.1.0. Set
-  `MARKETING_VERSION` to 1.0.0 in Xcode first if that should be the public
-  number.
 
 ## After approval
 

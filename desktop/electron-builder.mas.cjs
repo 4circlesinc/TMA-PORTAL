@@ -17,7 +17,7 @@
  *
  *   MAS_IDENTITY              pick a certificate when the keychain has several
  *   MAS_PROVISIONING_PROFILE  profile path, if not build/mas.provisionprofile
- *   MAS_BUILD_VERSION         CFBundleVersion, when re-uploading the same version
+ *   MAS_BUILD_VERSION         CFBundleVersion, instead of the date and time
  *   MAS_UNSIGNED=1            build the .app without signing, to try the sandbox
  *                             locally. Not uploadable.
  *
@@ -32,9 +32,22 @@ const { identity: _adhoc, target: _targets, ...mac } = base.mac;
 
 const unsigned = process.env.MAS_UNSIGNED === '1';
 
+// The version the store shows (CFBundleShortVersionString). It has its own
+// line, like the iOS app's MARKETING_VERSION, apart from the direct download's
+// package.json version. Raise it for each store release.
+const STORE_VERSION = '1.0';
+
+// CFBundleVersion: the UTC date and time, 20261124.308, as
+// ios/scripts/app-store.sh numbers its builds. It always goes up, which the
+// Mac App Store requires of every upload. MAS_BUILD_VERSION overrides it.
+function storeBuildNumber(now = new Date()) {
+  const iso = now.toISOString();
+  return `${iso.slice(0, 10).replace(/-/g, '')}.${Number(iso.slice(11, 13) + iso.slice(14, 16))}`;
+}
+
 module.exports = {
   ...base,
-  ...(process.env.MAS_BUILD_VERSION ? { buildVersion: process.env.MAS_BUILD_VERSION } : {}),
+  buildVersion: process.env.MAS_BUILD_VERSION || storeBuildNumber(),
   // Kept apart from release/, which `php artisan desktop:publish` uploads to
   // the public update feed wholesale, *.pkg included.
   directories: { ...base.directories, output: 'release-mas' },
@@ -42,6 +55,8 @@ module.exports = {
     ...mac,
     // Universal, so Intel Macs can install it from the store too.
     target: [{ target: 'mas', arch: ['universal'] }],
+    // Read from mac, not mas, when the Info.plist is written.
+    bundleShortVersion: STORE_VERSION,
   },
   mas: {
     identity: unsigned ? null : (process.env.MAS_IDENTITY || undefined),

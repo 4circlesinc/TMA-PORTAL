@@ -48,6 +48,12 @@ check('same bundle ID as the iOS app, so both share one App Store record',
   config.appId === 'com.tmantoinelaw.portal');
 check('the direct download signs with Developer ID only, never a development certificate',
   !('identity' in base.mac) && base.mac.type === 'distribution' && base.mac.hardenedRuntime === true && !base.mas);
+check('the store shows its own version line, not the direct download\'s',
+  /^\d+\.\d+(\.\d+)?$/.test(config.mac.bundleShortVersion) && config.mac.bundleShortVersion !== require('./package.json').version);
+check('each upload gets a build number that goes up: the UTC date and time',
+  /^\d{8}\.\d{1,4}$/.test(config.buildVersion) && Number(config.buildVersion.split('.')[0]) >= 20261124);
+check('MAS_BUILD_VERSION overrides the build number',
+  loadConfig({ MAS_BUILD_VERSION: '20261124.999' }).buildVersion === '20261124.999');
 check('export compliance is answered in the bundle',
   config.mas.extendInfo.ITSAppUsesNonExemptEncryption === false);
 check('the camera, microphone and location prompts still have their reasons',
