@@ -3,13 +3,18 @@
 namespace Tests\Feature;
 
 use App\Models\AuthEvent;
+use App\Models\CipApplication;
+use App\Models\CipProvider;
 use App\Models\Client;
+use App\Models\Company;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\ApplicationScope;
 use App\Support\StaySignedIn;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class AppReviewAccountCommandTest extends TestCase
@@ -103,6 +108,88 @@ class AppReviewAccountCommandTest extends TestCase
         $this->assertSame(1, $code, $output);
         $this->assertSame($before, $admin->fresh()->password);
         $this->assertSame($admin->account_type, $admin->fresh()->account_type);
+    }
+
+    /** A sample application on its own applicant record, as staff would make one. */
+    private function sampleApplication(string $applicant = 'Jane Sample'): Client
+    {
+        $staff = User::factory()->create(['account_type' => Role::ADMINISTRATOR]);
+        $company = Company::create(['uid' => 'galaxy-demo', 'name' => 'Galaxy', 'created_by' => $staff->id]);
+        $provider = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL', 'company_id' => $company->id]);
+        $client = Client::create([
+            'uid' => Str::slug($applicant), 'name' => $applicant, 'client_type' => 'private', 'data' => [],
+        ]);
+        CipApplication::create([
+            'provider_id' => $provider->id,
+            'client_id' => $client->id,
+            'created_by' => $staff->id,
+            'investment_type' => 'real_estate',
+        ]);
+
+        return $client;
+    }
+
+    public function test_client_moves_the_demo_account_onto_a_sample_applicants_record(): void
+    {
+        config(['services.cip.enabled' => true]);
+        [, , $password] = $this->runCommand(['email' => 'appreview@example.com']);
+        $user = User::where('email', 'appreview@example.com')->firstOrFail();
+        $demo = Client::where('user_id', $user->id)->firstOrFail();
+        $applicant = $this->sampleApplication();
+
+        ApplicationScope::forget();
+        $this->assertSame(0, ApplicationScope::query($user)->count());
+
+        [$code, $output, $printed] = $this->runCommand(['email' => 'appreview@example.com', '--client' => 'jane sample']);
+
+        $this->assertSame(0, $code, $output);
+        $this->assertStringContainsString('1 application', $output);
+        $this->assertNull($printed, 'the password is kept, not reprinted');
+        $this->assertSame($user->id, $applicant->fresh()->user_id);
+        $this->assertNull($demo->fresh()->user_id);
+        $this->assertTrue(Hash::check($password, $user->fresh()->password));
+
+        ApplicationScope::forget();
+        $this->assertSame(1, ApplicationScope::query($user->fresh())->count());
+    }
+
+    public function test_client_refuses_a_record_that_has_a_login_of_its_own(): void
+    {
+        $this->runCommand(['email' => 'appreview@example.com']);
+        $owner = User::factory()->create(['account_type' => Role::CLIENT]);
+        $taken = Client::create([
+            'uid' => 'someone', 'name' => 'Someone Real', 'client_type' => 'private', 'data' => [], 'user_id' => $owner->id,
+        ]);
+
+        [$code, $output] = $this->runCommand(['email' => 'appreview@example.com', '--client' => 'someone']);
+
+        $this->assertSame(1, $code, $output);
+        $this->assertSame($owner->id, $taken->fresh()->user_id);
+    }
+
+    public function test_client_asks_for_the_uid_when_two_records_share_the_name(): void
+    {
+        $this->runCommand(['email' => 'appreview@example.com']);
+        Client::create(['uid' => 'jane-1', 'name' => 'Jane Sample', 'client_type' => 'private', 'data' => []]);
+        Client::create(['uid' => 'jane-2', 'name' => 'Jane Sample', 'client_type' => 'private', 'data' => []]);
+
+        [$code, $output] = $this->runCommand(['email' => 'appreview@example.com', '--client' => 'Jane Sample']);
+
+        $this->assertSame(1, $code);
+        $this->assertStringContainsString('jane-1', $output);
+    }
+
+    public function test_creating_with_client_uses_that_record_rather_than_a_new_one(): void
+    {
+        $applicant = $this->sampleApplication();
+        $clients = Client::count();
+
+        [$code, $output, $password] = $this->runCommand(['email' => 'appreview@example.com', '--client' => $applicant->uid]);
+
+        $this->assertSame(0, $code, $output);
+        $this->assertNotNull($password);
+        $this->assertSame($clients, Client::count());
+        $this->assertSame(User::where('email', 'appreview@example.com')->value('id'), $applicant->fresh()->user_id);
     }
 
     public function test_it_says_when_the_address_is_missing_from_app_review_emails(): void
