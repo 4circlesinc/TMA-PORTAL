@@ -138,8 +138,10 @@ Reviewers sign in from Apple's own devices. Under App Review Information:
 
 - **Demo account.** Use a dedicated account with sample data. It must not be
   asked for the emailed sign-in code that a new device or location triggers,
-  because the reviewer cannot read that inbox. If the portal cannot exempt
-  one account, that has to be added before submitting.
+  because the reviewer cannot read that inbox. Put its address in
+  `APP_REVIEW_EMAILS` on the server (comma-separated); those accounts skip
+  that code. Do not give it an authenticator, and keep it out of any sign-in
+  policy that requires one, because that is still asked for.
 - **Notes.** Say what the app does beyond the website. Apple rejects plain
   website wrappers (guideline 4.2). For example: "Clients and staff of TM
   ANTOINE Advisory use the app to manage their legal matters. Beyond the web
@@ -202,7 +204,8 @@ these are set.
 
 - **Sign in with Apple keys**, above. Without them on the server the button
   does not show, and App Review will reject the app under 4.8.
-- **The demo account's emailed code**, above.
+- **The demo account**, above: create it and set `APP_REVIEW_EMAILS` to its
+  address on the server.
 
 ## After approval
 

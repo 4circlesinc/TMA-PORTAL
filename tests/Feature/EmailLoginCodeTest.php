@@ -118,6 +118,40 @@ class EmailLoginCodeTest extends TestCase
         });
     }
 
+    public function test_the_app_review_account_skips_the_email_code_on_a_new_device(): void
+    {
+        $user = $this->user();
+        $this->priorLogin($user);
+        config(['auth.review_accounts' => [strtoupper($user->email)]]);
+
+        Mail::fake();
+
+        $this->withCookie(StaySignedIn::COOKIE, 'yes')
+            ->post('/auth/login', [
+                'email' => $user->email,
+                'password' => 'password',
+            ])
+            ->assertRedirect('/');
+
+        Mail::assertNotSent(Postcard::class, fn (Postcard $mail) => ($mail->payload['code'] ?? null) !== null);
+    }
+
+    public function test_an_account_not_listed_for_app_review_still_gets_the_email_code(): void
+    {
+        $user = $this->user();
+        $this->priorLogin($user);
+        config(['auth.review_accounts' => ['reviewer@example.com']]);
+
+        Mail::fake();
+
+        $this->withCookie(StaySignedIn::COOKIE, 'yes')
+            ->post('/auth/login', [
+                'email' => $user->email,
+                'password' => 'password',
+            ])
+            ->assertRedirect(route('login-code.show'));
+    }
+
     public function test_the_sign_in_code_email_names_the_ip_and_country(): void
     {
         $user = $this->user();

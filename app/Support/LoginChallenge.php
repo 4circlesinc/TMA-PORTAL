@@ -22,11 +22,23 @@ final class LoginChallenge
 
     public static function needsEmail(User $user, Request $request): bool
     {
-        if ($user->hasTwoFactorEnabled() || TrustedDevices::trusts($user, $request)) {
+        if ($user->hasTwoFactorEnabled() || TrustedDevices::trusts($user, $request) || self::isReviewAccount($user)) {
             return false;
         }
 
         return self::hasPriorLogin($user);
+    }
+
+    /**
+     * The App Review demo account (auth.review_accounts). Apple's reviewers
+     * sign in from devices it has never used and cannot read its inbox.
+     */
+    public static function isReviewAccount(User $user): bool
+    {
+        $email = strtolower(trim((string) $user->email));
+        $listed = array_map(fn ($entry) => strtolower(trim((string) $entry)), (array) config('auth.review_accounts', []));
+
+        return $email !== '' && in_array($email, $listed, true);
     }
 
     public static function hasPriorLogin(User $user): bool

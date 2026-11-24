@@ -114,4 +114,23 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    |--------------------------------------------------------------------------
+    | App Review Accounts
+    |--------------------------------------------------------------------------
+    |
+    | Email addresses that are never sent the new-device sign-in code. Apple's
+    | reviewers sign in from devices the account has never used and cannot
+    | read its inbox, so the demo account given to App Review goes here
+    | (APP_REVIEW_EMAILS, comma-separated). List only a dedicated account that
+    | holds sample data. An authenticator, if the account has one, is still
+    | asked for.
+    |
+    */
+
+    'review_accounts' => array_values(array_filter(array_map(
+        fn (string $email) => strtolower(trim($email)),
+        explode(',', (string) env('APP_REVIEW_EMAILS', '')),
+    ))),
+
 ];
