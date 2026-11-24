@@ -142,6 +142,10 @@ Reviewers sign in from Apple's own devices. Under App Review Information:
   `APP_REVIEW_EMAILS` on the server (comma-separated); those accounts skip
   that code. Do not give it an authenticator, and keep it out of any sign-in
   policy that requires one, because that is still asked for.
+  `php artisan app-review:account <email>` creates it: an approved client on
+  its own client record, past the profile and onboarding screens, with its
+  password printed once. `--reset-password` gives it a new one. It refuses an
+  address that belongs to a staff or administrator account.
 - **Notes.** Say what the app does beyond the website. Apple rejects plain
   website wrappers (guideline 4.2). For example: "Clients and staff of TM
   ANTOINE Advisory use the app to manage their legal matters. Beyond the web
