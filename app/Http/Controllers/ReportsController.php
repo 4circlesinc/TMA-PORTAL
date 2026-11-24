@@ -90,6 +90,8 @@ class ReportsController extends Controller
             'filters' => ['nullable', 'array'],
             'filters.preset' => ['nullable', 'string', Rule::in(array_keys(CipReport::PRESETS))],
             'filters.status' => ['nullable', 'string', Rule::in(Status::ALL)],
+            'filters.statuses' => ['nullable', 'array'],
+            'filters.statuses.*' => ['string', Rule::in(Status::ALL)],
             'filters.phase' => ['nullable', 'string', Rule::in(Phase::ALL)],
             'filters.providerId' => ['nullable', 'integer'],
             'filters.investmentType' => ['nullable', 'string', Rule::in(array_keys(InvestmentType::ALL))],
@@ -311,8 +313,19 @@ class ReportsController extends Controller
     {
         $clean = [];
 
+        // One list of statuses, whether the caller sent the old single
+        // `status` or the multi-select `statuses`.
+        $statuses = array_values(array_unique(array_filter(array_merge(
+            (array) ($filters['statuses'] ?? []),
+            [$filters['status'] ?? null],
+        ))));
+
+        if ($statuses !== []) {
+            $clean['statuses'] = $statuses;
+        }
+
         foreach ([
-            'preset', 'status', 'phase', 'providerId', 'investmentType', 'addonType',
+            'preset', 'phase', 'providerId', 'investmentType', 'addonType',
             'applicant', 'mainApplicant', 'addonApplicant', 'officerId',
             'cipNumber', 'corNumber',
             'submittedFrom', 'submittedTo', 'decidedFrom', 'decidedTo',

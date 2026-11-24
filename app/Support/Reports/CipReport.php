@@ -154,10 +154,10 @@ final class CipReport
             ->leftJoinSub($applicants, 'pe', 'pe.application_id', '=', 'a.id')
             ->leftJoinSub($parentApplicants, 'ppe', 'ppe.application_id', '=', 'a.parent_application_id');
 
-        $status = self::status($filters);
+        $statuses = self::statuses($filters);
 
-        if ($status !== null) {
-            $query->where('a.status', $status);
+        if ($statuses !== []) {
+            $query->whereIn('a.status', $statuses);
         } else {
             // Leftover DRAFT rows are not a live status. Admin buckets do not
             // name them, and an unfiltered report must not either.
@@ -263,7 +263,11 @@ final class CipReport
         }
 
         if ($rangeKey !== 'all') {
-            $column = in_array($status, [Status::GRANTED, Status::DENIED], true)
+            // Decided rows are dated by their decision; a mix with open
+            // statuses falls back to when the file was opened.
+            $decidedOnly = $statuses !== []
+                && array_diff($statuses, [Status::GRANTED, Status::DENIED]) === [];
+            $column = $decidedOnly
                 ? 'a.decided_at'
                 : 'a.created_at';
 
@@ -278,20 +282,23 @@ final class CipReport
         return $query;
     }
 
-    private static function status(array $filters): ?string
+    /** @return list<string> the statuses to match; empty means any live status. */
+    private static function statuses(array $filters): array
     {
         $preset = (string) ($filters['preset'] ?? '');
         $pinned = $preset !== '' ? (self::PRESETS[$preset] ?? null) : null;
 
         if ($pinned) {
-            return $pinned;
+            return [$pinned];
         }
 
-        if (! empty($filters['status']) && Status::isValid($filters['status'])) {
-            return $filters['status'];
-        }
+        // `status` is the single pick older stored reports carry.
+        $picked = array_merge((array) ($filters['statuses'] ?? []), [$filters['status'] ?? null]);
 
-        return null;
+        return array_values(array_unique(array_filter(
+            $picked,
+            fn ($status) => is_string($status) && Status::isValid($status),
+        )));
     }
 
     private static function phase(array $filters): ?string

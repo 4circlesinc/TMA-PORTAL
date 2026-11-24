@@ -432,6 +432,32 @@ class CipReportingTest extends TestCase
         $this->assertSame('Approved', $this->rows($report)[0][2]);
     }
 
+    public function test_a_report_can_match_several_statuses_at_once(): void
+    {
+        $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');
+        $galaxy = CipProvider::create(['name' => 'Galaxy', 'code' => 'GAL']);
+        $this->application($admin, $galaxy, Status::PENDING_REVIEW);
+        $this->application($admin, $galaxy, Status::DELAYED);
+        $this->application($admin, $galaxy, Status::BACKGROUND_CHECK);
+
+        $report = $this->create($admin, ['filters' => [
+            'statuses' => [Status::PENDING_REVIEW, Status::DELAYED],
+        ]]);
+
+        $this->assertSame([Status::PENDING_REVIEW, Status::DELAYED], $report['filters']['statuses']);
+        $this->assertSame('2', $this->metric($report, 'Applications'));
+        $this->assertSame('0', $this->metric($report, 'Background Check'));
+
+        // Older single-status reports keep working.
+        $legacy = $this->create($admin, ['filters' => ['status' => Status::DELAYED]]);
+        $this->assertSame('1', $this->metric($legacy, 'Applications'));
+
+        $this->actingAs($admin)->postJson('/admin/reports', [
+            'type' => Report::TYPE_CIP, 'range' => 'all',
+            'filters' => ['statuses' => ['not_a_status']],
+        ])->assertUnprocessable();
+    }
+
     public function test_the_report_page_can_open_the_application_from_the_number(): void
     {
         $admin = $this->user(Role::ADMINISTRATOR, 'ada@example.com', 'Ada Admin');

@@ -712,7 +712,11 @@
           'addon_non_compliant', 'addon_granted', 'addon_denied',
         ].indexOf(filters.preset) !== -1;
         var bits = [];
-        if (!pinned && filters.status) bits.push(named(cip.statuses, filters.status));
+        if (!pinned) {
+          (filters.statuses || (filters.status ? [filters.status] : [])).forEach(function (s) {
+            bits.push(named(cip.statuses, s));
+          });
+        }
         if (filters.phase) bits.push(named(cip.phases, filters.phase));
         if (filters.providerId) bits.push(named(cip.providers, filters.providerId));
         if (filters.investmentType) bits.push(named(cip.investmentTypes, filters.investmentType));
@@ -756,8 +760,13 @@
               ? '<div class="tma-rep-filters__span">' +
                 ui().field('Preset', ui().select([{ value: '', label: 'Custom' }].concat(cip.presets || []), '', 'data-rep-preset', 'Preset')) +
                 '</div>' +
-                '<div data-rep-status-field>' +
-                ui().field('Status', ui().select(any.concat(cip.statuses || []), '', 'data-rep-status', 'Status')) +
+                '<div class="tma-rep-filters__span" data-rep-status-field>' +
+                ui().field('Status (none ticked = any)', '<div class="tma-rep-statuses" role="group" aria-label="Status">' +
+                  (cip.statuses || []).map(function (s) {
+                    return '<label class="tma-portal-checkbox"><input type="checkbox" data-rep-status value="' +
+                      ui().esc(s.value) + '"><span>' + ui().esc(s.label) + '</span></label>';
+                  }).join('') +
+                '</div>') +
                 '</div>' +
                 ui().field('Phase', ui().select(any.concat(cip.phases || []), '', 'data-rep-phase', 'Phase')) +
                 ui().field('Service provider', ui().select(any.concat(cip.providers || []), '', 'data-rep-provider', 'Service provider')) +
@@ -837,9 +846,9 @@
                 var chosen = val('data-rep-preset');
                 body.filters = {
                   preset: chosen,
-                  status: pinnedPresets.indexOf(chosen) !== -1 || groupingPresets.indexOf(chosen) !== -1
-                    ? ''
-                    : val('data-rep-status'),
+                  statuses: pinnedPresets.indexOf(chosen) !== -1 || groupingPresets.indexOf(chosen) !== -1
+                    ? []
+                    : Array.prototype.map.call(host.querySelectorAll('[data-rep-status]:checked'), function (el) { return el.value; }),
                   phase: chosen.indexOf('addon_') === 0 ? '' : val('data-rep-phase'),
                   providerId: val('data-rep-provider'),
                   investmentType: val('data-rep-investment'),

@@ -6428,6 +6428,18 @@ label.tma-portal-check-row:hover {
   grid-column: 1 / -1;
 }
 
+.tma-rep-filters__span[hidden] {
+  display: none;
+}
+
+.tma-rep-statuses {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-8) var(--space-16);
+  max-height: 220px;
+  overflow-y: auto;
+}
+
 .tma-rep-cards {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
