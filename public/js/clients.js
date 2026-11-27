@@ -7638,7 +7638,12 @@
       : (provider.companyName
         ? 'Message ' + provider.companyName + ' about ' + (c.name || 'this applicant')
         : 'Message the service provider about ' + (c.name || 'this applicant'));
-    items.push(messageChooserItem('provider', providerLabel, provider.available, provider.reason));
+    /* Nobody at the firm signs in yet: what staff write still reaches them,
+       as the email every message on the application sends. */
+    var providerMeta = provider.available
+      ? (provider.byEmail ? 'No one there has a portal login yet, so they’ll get it by email.' : '')
+      : provider.reason;
+    items.push(messageChooserItem('provider', providerLabel, provider.available, providerMeta));
 
     if (person.available) {
       items.push(messageChooserItem('person', 'Message ' + (person.name || c.name) + ' privately', true, ''));
@@ -7647,17 +7652,19 @@
     return items.join('');
   }
 
-  function messageChooserItem(kind, label, available, reason) {
+  function messageChooserItem(kind, label, available, meta) {
+    var metaHtml = meta ? '<span class="tma-dash__clients-message-choice-meta">' + esc(meta) + '</span>' : '';
+
     if (!available) {
       return '<div class="tma-dash__menu-item tma-dash__menu-item--muted" role="menuitem" aria-disabled="true">' +
         '<span class="tma-dash__clients-message-choice-label">' + esc(label) + '</span>' +
-        (reason ? '<span class="tma-dash__clients-message-choice-meta">' + esc(reason) + '</span>' : '') +
+        metaHtml +
         '</div>';
     }
 
     return '<button type="button" class="tma-dash__menu-item" role="menuitem" data-clients-message-with="' +
       esc(kind) + '">' +
-      '<span class="tma-dash__clients-message-choice-label">' + esc(label) + '</span></button>';
+      '<span class="tma-dash__clients-message-choice-label">' + esc(label) + '</span>' + metaHtml + '</button>';
   }
 
   /* Invite / resend, right next to Edit and Message.

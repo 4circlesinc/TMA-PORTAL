@@ -11,6 +11,7 @@ use App\Models\CipApplicationAssignment;
 use App\Models\CipApplicationMessage;
 use App\Models\CipApplicationMessageRead;
 use App\Models\CipApplicationMessageReceipt;
+use App\Models\CipProvider;
 use App\Models\Client;
 use App\Models\ClientAssignment;
 use App\Models\Company;
@@ -20,6 +21,7 @@ use App\Models\ConversationParticipant;
 use App\Models\Message;
 use App\Models\User;
 use App\Support\Access\Role;
+use App\Support\Cip\Contacts;
 use App\Support\Cip\FolderAccess;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -143,25 +145,26 @@ class ClientConversations
      */
     public static function options(Client $client, User $viewer): array
     {
-        $company = self::providerCompany($client);
-        $contacts = $company ? self::providerContacts($company) : collect();
-        $reachable = $contacts->filter(fn (User $u) => $u->isApproved());
+        $reach = self::providerReach($client);
+        $company = $reach['company'];
+        $contacts = $reach['contacts'];
+        $logins = $reach['logins'];
 
         $provider = [
-            'available' => $reachable->isNotEmpty(),
-            'companyName' => $company?->name,
+            'available' => $reach['reason'] === null,
+            'companyName' => $reach['name'],
             'companyId' => $company?->uid,
-            'accountCount' => $reachable->count(),
+            'accountCount' => $logins->count(),
+            // Nobody there signs in: what is written reaches them as email.
+            'byEmail' => $reach['reason'] === null && $logins->isEmpty(),
             'contacts' => $contacts->map(fn (User $u) => [
                 'name' => $u->name,
                 'hasAccount' => $u->isApproved(),
             ])->values()->all(),
         ];
 
-        if (! $company) {
-            $provider['reason'] = 'This applicant isn’t linked to a service provider.';
-        } elseif ($reachable->isEmpty()) {
-            $provider['reason'] = 'No one at '.$company->name.' has a portal login yet.';
+        if ($reach['reason'] !== null) {
+            $provider['reason'] = $reach['reason'];
         }
 
         $person = [
@@ -248,24 +251,20 @@ class ClientConversations
 
     private static function openProvider(Client $client, User $actor): Conversation
     {
-        $company = self::providerCompany($client);
-        if (! $company) {
+        $reach = self::providerReach($client);
+        if ($reach['reason'] !== null) {
             throw ValidationException::withMessages([
-                'with' => 'This applicant isn’t linked to a service provider.',
+                'with' => $reach['reason'],
             ]);
         }
 
-        $members = self::providerContacts($company)->filter(fn (User $u) => $u->isApproved());
-        if ($members->isEmpty()) {
-            throw ValidationException::withMessages([
-                'with' => 'No one at '.$company->name.' has a portal login yet.',
-            ]);
-        }
-
-        $application = self::applicationFor($client);
+        $company = $reach['company'];
+        $firmName = $reach['name'];
+        $members = $reach['logins'];
+        $application = $reach['application'];
         $staff = self::firmSideFor($client);
 
-        return DB::transaction(function () use ($client, $actor, $company, $members, $application, $staff) {
+        return DB::transaction(function () use ($client, $actor, $company, $firmName, $members, $application, $staff) {
             $conversation = Conversation::query()
                 ->where('client_id', $client->id)
                 ->where('subject', Conversation::SUBJECT_PROVIDER)
@@ -276,10 +275,12 @@ class ClientConversations
                 $conversation = Conversation::create([
                     'type' => Conversation::TYPE_GROUP,
                     'name' => $client->name,
-                    'description' => 'Conversation with '.$company->name.' about '.$client->name,
+                    'description' => $firmName
+                        ? 'Conversation with '.$firmName.' about '.$client->name
+                        : 'Conversation about '.$client->name,
                     'created_by' => $actor->id,
                     'client_id' => $client->id,
-                    'company_id' => $company->id,
+                    'company_id' => $company?->id,
                     'cip_application_id' => $application?->id,
                     'subject' => Conversation::SUBJECT_PROVIDER,
                 ]);
@@ -319,12 +320,12 @@ class ClientConversations
                 self::systemMessage($conversation, 'case_opened', [
                     'actorName' => $actor->name,
                     'clientName' => $client->name,
-                    'companyName' => $company->name,
+                    'companyName' => $firmName,
                 ]);
             } else {
                 $conversation->forceFill([
                     'name' => $client->name,
-                    'company_id' => $company->id,
+                    'company_id' => $company?->id ?? $conversation->company_id,
                     'cip_application_id' => $application?->id ?? $conversation->cip_application_id,
                 ])->save();
 
@@ -558,6 +559,53 @@ class ClientConversations
         $client->loadMissing('companyRecord');
 
         return $client->companyRecord;
+    }
+
+    /**
+     * Whether staff can reach the provider side about this applicant, and how.
+     *
+     * A portal login at the firm is one way. The other is the addresses a
+     * service-provider message on the application is already emailed to
+     * ({@see Contacts::providerContacts}): the firm's people, its registry
+     * contact and its mailbox. A firm whose people have not signed in yet,
+     * or a provider on the register that was never linked to a company
+     * record, still gets every line written in the case chat, because each
+     * one is filed on the application and announced from there. Refusing
+     * them left staff with a provider on the file and no way to write to it.
+     *
+     * The reserved private-client bucket is not a firm. A file under it
+     * reaches a service provider only through a company the applicant is
+     * linked to, as before.
+     *
+     * @return array{
+     *     application: ?CipApplication,
+     *     company: ?Company,
+     *     name: ?string,
+     *     contacts: Collection<int, User>,
+     *     logins: Collection<int, User>,
+     *     reason: ?string,
+     * }
+     */
+    private static function providerReach(Client $client): array
+    {
+        $application = self::applicationFor($client);
+        $company = self::providerCompany($client);
+        $contacts = $company ? self::providerContacts($company) : collect();
+        $logins = $contacts->filter(fn (User $u) => $u->isApproved())->values();
+
+        $provider = $application?->provider;
+        $firm = $provider && $provider->code !== CipProvider::PRIVATE_CLIENT_CODE ? $provider : null;
+        $name = $company?->name ?? $firm?->name;
+
+        $reason = null;
+
+        if ($logins->isEmpty() && ! ($firm && Contacts::providerContacts($firm, $application) !== [])) {
+            $reason = $name === null
+                ? 'This applicant isn’t linked to a service provider.'
+                : 'No one at '.$name.' has a portal login or an email address yet.';
+        }
+
+        return compact('application', 'company', 'name', 'contacts', 'logins', 'reason');
     }
 
     private static function applicationFor(Client $client): ?CipApplication

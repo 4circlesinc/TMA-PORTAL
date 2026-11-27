@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Mail\Postcard;
 use App\Models\CallRecording;
 use App\Models\CipApplication;
 use App\Models\CipProvider;
@@ -627,5 +628,120 @@ class ClientConversationTest extends TestCase
             ->pluck('body');
 
         $this->assertTrue($after->contains('The scan is attached.'));
+    }
+
+    /**
+     * An applicant on a file whose provider can only be reached by email.
+     *
+     * @return array{staff: User, client: Client, provider: CipProvider}
+     */
+    private function applicantWithProviderBy(array $provider, ?Company $company = null): array
+    {
+        $staff = $this->staff();
+        $provider = CipProvider::create($provider + ['company_id' => $company?->id]);
+        $client = Client::create([
+            'uid' => 'maria-lopez',
+            'name' => 'Maria Lopez',
+            'email' => 'maria@example.com',
+            'data' => [],
+        ]);
+        Applications::create($provider, $staff, ['client_id' => $client->id]);
+
+        return compact('staff', 'client', 'provider');
+    }
+
+    public function test_a_provider_with_no_portal_login_is_still_offered_and_told_by_email(): void
+    {
+        Mail::fake();
+
+        $company = Company::create(['uid' => 'harbour', 'name' => 'Harbour Trust', 'email' => 'office@harbour.test']);
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'name' => 'Lena Ward',
+            'email' => 'lena@harbour.test',
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_INVITED,
+        ]);
+        $fx = $this->applicantWithProviderBy(['name' => 'Harbour Trust', 'code' => 'HAR'], $company);
+
+        $options = $this->actingAs($fx['staff'])
+            ->getJson('/portal/clients/'.$fx['client']->uid.'/conversations')
+            ->assertOk()
+            ->json('options.provider');
+
+        $this->assertTrue($options['available']);
+        $this->assertSame('Harbour Trust', $options['companyName']);
+        $this->assertSame(0, $options['accountCount']);
+        $this->assertTrue($options['byEmail']);
+        $this->assertArrayNotHasKey('reason', $options);
+
+        $opened = $this->actingAs($fx['staff'])
+            ->postJson('/portal/clients/'.$fx['client']->uid.'/conversations', ['with' => 'provider'])
+            ->assertCreated()
+            ->json('conversation');
+
+        $this->assertSame('provider', $opened['subject']);
+
+        $this->actingAs($fx['staff'])
+            ->postJson('/portal/messaging/conversations/'.$opened['id'].'/messages', ['body' => 'Could you send the bank letter?'])
+            ->assertOk();
+
+        $application = CipApplication::query()->where('client_id', $fx['client']->id)->firstOrFail();
+        $this->assertSame(
+            ['Could you send the bank letter?'],
+            $application->messages()->pluck('body')->all(),
+            'A line in the case chat is filed on the application.'
+        );
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('office@harbour.test'));
+    }
+
+    public function test_a_provider_not_linked_to_a_company_is_offered_by_its_own_name(): void
+    {
+        Mail::fake();
+
+        $fx = $this->applicantWithProviderBy([
+            'name' => 'Coral Advisory',
+            'code' => 'COR',
+            'contact_name' => 'Dev Patel',
+            'contact_email' => 'dev@coral.test',
+        ]);
+
+        $options = $this->actingAs($fx['staff'])
+            ->getJson('/portal/clients/'.$fx['client']->uid.'/conversations')
+            ->assertOk()
+            ->json('options.provider');
+
+        $this->assertTrue($options['available']);
+        $this->assertSame('Coral Advisory', $options['companyName']);
+        $this->assertTrue($options['byEmail']);
+
+        $opened = $this->actingAs($fx['staff'])
+            ->postJson('/portal/clients/'.$fx['client']->uid.'/conversations', ['with' => 'provider'])
+            ->assertCreated()
+            ->json('conversation');
+
+        $this->actingAs($fx['staff'])
+            ->postJson('/portal/messaging/conversations/'.$opened['id'].'/messages', ['body' => 'Is the passport scan coming?'])
+            ->assertOk();
+
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo('dev@coral.test'));
+    }
+
+    public function test_a_provider_nobody_can_be_reached_at_is_not_offered(): void
+    {
+        $fx = $this->applicantWithProviderBy(['name' => 'Quiet Partners', 'code' => 'QUI']);
+
+        $options = $this->actingAs($fx['staff'])
+            ->getJson('/portal/clients/'.$fx['client']->uid.'/conversations')
+            ->assertOk()
+            ->json('options.provider');
+
+        $this->assertFalse($options['available']);
+        $this->assertSame('No one at Quiet Partners has a portal login or an email address yet.', $options['reason']);
+
+        $this->actingAs($fx['staff'])
+            ->postJson('/portal/clients/'.$fx['client']->uid.'/conversations', ['with' => 'provider'])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.with.0', 'No one at Quiet Partners has a portal login or an email address yet.');
     }
 }
