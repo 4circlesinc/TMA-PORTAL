@@ -18,6 +18,44 @@ use Illuminate\Validation\ValidationException;
 class Providers
 {
     /**
+     * The company behind a register row.
+     *
+     * Its own link when it has one. A row the library sync made from a
+     * folder has none, or lost it when the company it named was merged
+     * away, and it is the firm whose name it carries: the same match
+     * {@see ApplicationScope} uses to let that firm's people open its files.
+     * Reading only the link left those people able to see a file but "no
+     * one" to message about it or to send its notices to. One firm by that
+     * name, or none: two candidates are not guessed between.
+     */
+    public static function companyFor(?CipProvider $provider): ?Company
+    {
+        if ($provider === null) {
+            return null;
+        }
+
+        if ($provider->company_id !== null) {
+            $provider->loadMissing('company');
+            if ($provider->company) {
+                return $provider->company;
+            }
+        }
+
+        $key = ProviderMerge::key((string) $provider->name);
+        if ($key === '' || $provider->code === CipProvider::PRIVATE_CLIENT_CODE) {
+            return null;
+        }
+
+        $companies = Company::query()->orderBy('id')->get();
+        $exact = $companies->filter(fn (Company $company) => ProviderMerge::key((string) $company->name) === $key);
+        $matches = $exact->isNotEmpty()
+            ? $exact
+            : $companies->filter(fn (Company $company) => ProviderMerge::matches($provider, (string) $company->name));
+
+        return $matches->count() === 1 ? $matches->first() : null;
+    }
+
+    /**
      * The code a provider of this name should get, free for the taking.
      *
      * Three letters of the name, which is what the firm says and what an

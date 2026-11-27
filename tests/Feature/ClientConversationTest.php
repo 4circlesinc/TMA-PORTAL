@@ -744,4 +744,49 @@ class ClientConversationTest extends TestCase
             ->assertStatus(422)
             ->assertJsonPath('errors.with.0', 'No one at Quiet Partners has a portal login or an email address yet.');
     }
+
+    /**
+     * A register row the library sync made from a folder carries the firm's
+     * name and no company link. Its firm's people can already open its files
+     * (ApplicationScope matches the name), so they are who a message about
+     * one reaches, not "no one".
+     */
+    public function test_a_folder_born_provider_row_reaches_the_firm_of_the_same_name(): void
+    {
+        Mail::fake();
+
+        $company = Company::create(['uid' => 'global-citizen', 'name' => 'Global Citizen Consultants']);
+        $contact = $this->portalUser();
+        CompanyMember::create([
+            'company_id' => $company->id,
+            'user_id' => $contact->id,
+            'name' => $contact->name,
+            'email' => $contact->email,
+            'role' => 'member',
+            'status' => CompanyMember::STATUS_ACTIVE,
+        ]);
+        $fx = $this->applicantWithProviderBy(['name' => 'GLOBAL CITIZEN CONSULTANTS', 'code' => 'GCC']);
+
+        $options = $this->actingAs($fx['staff'])
+            ->getJson('/portal/clients/'.$fx['client']->uid.'/conversations')
+            ->assertOk()
+            ->json('options.provider');
+
+        $this->assertTrue($options['available']);
+        $this->assertSame('Global Citizen Consultants', $options['companyName']);
+        $this->assertSame(1, $options['accountCount']);
+        $this->assertFalse($options['byEmail']);
+
+        $opened = $this->actingAs($fx['staff'])
+            ->postJson('/portal/clients/'.$fx['client']->uid.'/conversations', ['with' => 'provider'])
+            ->assertCreated()
+            ->json('conversation');
+        $members = Conversation::where('uuid', $opened['id'])->firstOrFail()->activeParticipants()->pluck('user_id')->all();
+        $this->assertContains($contact->id, $members);
+
+        $this->actingAs($fx['staff'])
+            ->postJson('/portal/messaging/conversations/'.$opened['id'].'/messages', ['body' => 'Please send the police record.'])
+            ->assertOk();
+        Mail::assertQueued(Postcard::class, fn (Postcard $mail) => $mail->hasTo($contact->email));
+    }
 }

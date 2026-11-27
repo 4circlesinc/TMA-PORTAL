@@ -253,9 +253,9 @@ class Contacts
      */
     public static function providerContacts(CipProvider $provider, ?CipApplication $application = null): array
     {
-        $provider->loadMissing('company');
         $recipients = [];
-        $company = $provider->company;
+        // The firm behind the row, a folder-born row's by its name.
+        $company = Providers::companyFor($provider);
         // The one member the firm asked its notification emails to go to,
         // if it chose one, and where they sit on this list.
         $chosen = NotificationEmail::memberFor($company);

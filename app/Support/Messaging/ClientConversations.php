@@ -23,6 +23,7 @@ use App\Models\User;
 use App\Support\Access\Role;
 use App\Support\Cip\Contacts;
 use App\Support\Cip\FolderAccess;
+use App\Support\Cip\Providers;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -551,7 +552,8 @@ class ClientConversations
     public static function providerCompany(Client $client): ?Company
     {
         $application = self::applicationFor($client);
-        $fromProvider = $application?->provider?->company;
+        // A folder-born register row is the firm whose name it carries.
+        $fromProvider = Providers::companyFor($application?->provider);
         if ($fromProvider) {
             return $fromProvider;
         }
