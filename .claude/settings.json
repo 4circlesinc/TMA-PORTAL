@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(*cloud database:delete*)",
+      "Bash(*cloud database-cluster:delete*)",
+      "Bash(*cloud database-user:delete*)",
+      "Bash(*cloud environment:delete*)",
+      "Bash(*cloud application:delete*)",
+      "Bash(*migrate:fresh*)",
+      "Bash(*migrate:reset*)",
+      "Bash(*migrate:rollback*)",
+      "Bash(*db:wipe*)",
+      "Bash(*DROP DATABASE*)",
+      "Bash(*drop database*)",
+      "Bash(*DROP TABLE*)",
+      "Bash(*drop table*)",
+      "Bash(*DROP SCHEMA*)",
+      "Bash(*drop schema*)",
+      "Bash(*TRUNCATE*)",
+      "Bash(*truncate table*)",
+      "Bash(*cloud deploy*production*)",
+      "Bash(*cloud deploy*env-a23cafcc-a00d-489e-8a9c-f124f084c08c*)",
+      "Bash(*cloud environment:variables*production*)",
+      "Bash(*cloud environment:variables*env-a23cafcc-a00d-489e-8a9c-f124f084c08c*)",
+      "Bash(*cloud environment:update*production*)",
+      "Bash(*cloud environment:update*env-a23cafcc-a00d-489e-8a9c-f124f084c08c*)",
+      "Bash(*cloud command:run*production*)",
+      "Bash(*cloud command:run*env-a23cafcc-a00d-489e-8a9c-f124f084c08c*)",
+      "Bash(*cloud tinker*production*)",
+      "Bash(*cloud tinker*env-a23cafcc-a00d-489e-8a9c-f124f084c08c*)"
+    ]
+  }
+}
