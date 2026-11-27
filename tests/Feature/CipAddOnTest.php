@@ -796,6 +796,56 @@ class CipAddOnTest extends TestCase
     }
 
     /**
+     * An administrator changes a filed Add-On's service provider on its Edit
+     * form, and the family goes with it: the main application and the
+     * Add-On, so the family never straddles two firms.
+     */
+    public function test_an_administrator_changes_a_filed_add_ons_provider_on_its_edit_form(): void
+    {
+        $admin = $this->staff();
+        $parent = $this->grantedParent($admin);
+        $bluemina = $this->secondProvider();
+        $yy = now()->format('y');
+
+        $filed = $this->file($admin, $this->addOnPayload($parent))->assertCreated()->json('application');
+        $row = CipApplication::query()->where('uuid', $filed['id'])->firstOrFail();
+        $row->forceFill(['status' => Status::GRANTED, 'locked_at' => now()])->save();
+
+        $edit = [
+            'providerId' => $bluemina->uuid,
+            'addonType' => AddOn::TYPE_SPOUSE,
+            'firstName' => 'Mei',
+            'lastName' => 'Wei',
+            'dateOfBirth' => '1988-06-01',
+            'nationality' => 'China',
+            'countryOfResidence' => 'China',
+            'passportNumber' => 'X1234567',
+            'relationship' => CipPerson::RELATIONSHIP_SPOUSE,
+            'parentCipNumber' => $parent->cip_number,
+            'parentCorNumber' => $parent->cor_number,
+            'parentApplicantName' => 'Chen Wei',
+        ];
+
+        $this->actingAs($this->officer())
+            ->post('/portal/cip/applications/'.$filed['id'], $edit, ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Only an administrator can change the service provider.');
+        $this->assertSame($parent->provider_id, $row->fresh()->provider_id);
+
+        $this->actingAs($admin)
+            ->post('/portal/cip/applications/'.$filed['id'], $edit, ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('application.providerId', $bluemina->uuid)
+            ->assertJsonCount(2, 'moved');
+
+        $row->refresh();
+        $this->assertSame($bluemina->id, $row->provider_id);
+        $this->assertSame("BLU-AO-{$yy}-00001", $row->internal_number);
+        $this->assertSame($parent->id, $row->parent_application_id);
+        $this->assertSame($bluemina->id, $parent->fresh()->provider_id, 'The main application moves with its Add-On.');
+    }
+
+    /**
      * A filed Add-On does not change firm because somebody retyped its main
      * application's number.
      *

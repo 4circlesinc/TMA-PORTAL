@@ -3270,6 +3270,13 @@ class Intake
 
         $parentRules = $editing
             ? [
+                /*
+                 * Another firm for the whole family, an administrator's to
+                 * choose, judged in the controller exactly as on a main
+                 * application. Left out, the choice was dropped here and the
+                 * save answered "saved" with nothing moved.
+                 */
+                'providerId' => ['nullable', 'string'],
                 'parentCipNumber' => ['nullable', 'string', 'max:'.Submission::MAX_LENGTH],
                 'parentCorNumber' => ['nullable', 'string', 'max:64'],
                 'parentApplicantName' => ['nullable', 'string', 'max:191'],

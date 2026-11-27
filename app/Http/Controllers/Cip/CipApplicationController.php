@@ -2259,7 +2259,13 @@ class CipApplicationController extends Controller
         }
 
         $moved = [];
-        if ($toProvider !== null) {
+        /*
+         * An Add-On re-linked to another firm's main application has already
+         * gone to that firm with the edit. Asking for the same firm again
+         * would answer "already holds it" for a save that has landed.
+         */
+        if ($toProvider !== null
+            && (int) CipApplication::query()->whereKey($application->id)->value('provider_id') !== (int) $toProvider->id) {
             $moved = ProviderTransfer::transfer($application, $toProvider, $user, confirmed: true);
             $application = collect($moved)->firstWhere('id', $application->id) ?? $application->fresh();
         }

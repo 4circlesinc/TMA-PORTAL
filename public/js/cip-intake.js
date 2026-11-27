@@ -1276,13 +1276,13 @@
      * server would turn away.
      */
     /*
-     * A filed Add-On is with its main application's firm whatever a select
-     * says, so it is never offered one here: the control was drawn, the
-     * choice was posted, the save answered "saved", and nothing moved. An
-     * administrator moves the whole family from the table's row menu.
+     * At any stage, an Add-On included: a filed Add-On is with its main
+     * application's firm, so the administrator's choice here moves the
+     * whole family, the same move as the table's row menu, and the card
+     * says so once another firm is picked.
      */
     var fixed = (state.options && state.options.providerFixed)
-      || (editingFiled() && (isAddOnIntake() || !(state.record && state.record.canTransferProvider)));
+      || (editingFiled() && !(state.record && state.record.canTransferProvider));
     if (fixed) {
       // On a filed application the record is the fact; the draft key can
       // still hold the main application's firm from the prefill.
@@ -1908,6 +1908,11 @@
         '</div>' +
         (state.parentError
           ? '<p class="tma-portal-note" role="status">' + esc(state.parentError) + '</p>'
+          : '') +
+        (providerChanged()
+          ? '<p class="tma-portal-note" role="status">Saving moves this Add-On, its main application and the ' +
+            'family’s other Add-Ons to ' + esc(providerName(state.draft.providerId) || 'the new service provider') +
+            '. Each gets a new number and the current service provider loses access.</p>'
           : '') +
         openNote) +
       // The Add-On's own CIP number, once the Unit has issued it. Its own
