@@ -2,6 +2,7 @@
 
 namespace App\Support\Companies;
 
+use App\Models\ActivityLog;
 use App\Models\CipApplication;
 use App\Models\CipProvider;
 use App\Models\Client;
@@ -210,10 +211,31 @@ class CompanyMerge
     private static function moveProviders(Company $duplicate, Company $keeper): void
     {
         $drops = self::providersFor($duplicate);
-        $keep = self::providersFor($keeper)->first();
+        $kept = self::providersFor($keeper);
+        /*
+         * The files settle on a LIVE row. The register clean-up of 2026-09-24
+         * ({@see \App\Support\Cip\ProviderMerge}) binned duplicate rows with
+         * their company link intact, so a firm can still "have" a row that
+         * is in the bin. Taking that one moved every application onto it:
+         * each file read as having no service provider, and the firm left
+         * the provider list, while the live row the files had been on was
+         * retired below.
+         */
+        $keep = $kept->first(fn (CipProvider $provider) => ! $provider->trashed());
+
+        if (! $keep && $drops->every(fn (CipProvider $provider) => $provider->trashed())) {
+            // Nothing live on either side: bring back the row the files are on.
+            $keep = $kept->concat($drops)->first(
+                fn (CipProvider $provider) => CipApplication::withTrashed()->where('provider_id', $provider->id)->exists(),
+            );
+            if ($keep) {
+                $keep->restore();
+                $keep->forceFill(['company_id' => $keeper->id, 'name' => $keeper->name])->save();
+            }
+        }
 
         foreach ($drops as $drop) {
-            if (! $keep) {
+            if (! $keep && ! $drop->trashed()) {
                 $drop->forceFill([
                     'company_id' => $keeper->id,
                     'name' => $keeper->name,
@@ -223,11 +245,15 @@ class CompanyMerge
                 continue;
             }
 
-            if ((int) $keep->id === (int) $drop->id) {
+            if (! $keep || (int) $keep->id === (int) $drop->id) {
                 continue;
             }
 
-            self::uniteFolders($keep, $drop);
+            // A binned row's folder may be another live row's since the
+            // clean-up; only a live row's library is this firm's to fold in.
+            if (! $drop->trashed()) {
+                self::uniteFolders($keep, $drop);
+            }
 
             CipApplication::withTrashed()
                 ->where('provider_id', $drop->id)
@@ -240,7 +266,125 @@ class CompanyMerge
                 'company_id' => null,
                 'folder_id' => null,
             ])->save();
-            $drop->delete();
+            if (! $drop->trashed()) {
+                $drop->delete();
+            }
+        }
+
+        if ($keep) {
+            self::settleBinnedRows($kept, $keep);
+        }
+    }
+
+    /**
+     * Put back files a merge left on a binned provider row.
+     *
+     * Both merges move every application off a row before binning it, so a
+     * binned row that still holds files is what {@see moveProviders} did
+     * when it took a binned row for the keeper's. Each goes to its firm's
+     * live row; a firm with none gets the binned row back, since it is the
+     * one its files and numbers are on. A company merged away since is
+     * followed to the firm that remains. Nothing is renumbered.
+     *
+     * @return array{moved: int, restored: int, left: list<string>}
+     */
+    public static function repairStranded(): array
+    {
+        $result = ['moved' => 0, 'restored' => 0, 'left' => []];
+
+        $rows = CipProvider::onlyTrashed()
+            ->whereIn('id', CipApplication::withTrashed()->select('provider_id'))
+            ->orderBy('id')
+            ->get();
+
+        foreach ($rows as $row) {
+            DB::transaction(function () use ($row, &$result) {
+                $company = self::liveCompanyFor($row->company_id);
+                $live = $company
+                    ? CipProvider::query()->where('company_id', $company->id)->orderBy('id')->first()
+                    : null;
+
+                if ($live) {
+                    $result['moved'] += CipApplication::withTrashed()
+                        ->where('provider_id', $row->id)
+                        ->update(['provider_id' => $live->id]);
+                    self::moveCounters($row, $live);
+                    $row->forceFill(['company_id' => null])->save();
+
+                    return;
+                }
+
+                if ($company) {
+                    $row->restore();
+                    $row->forceFill(['company_id' => $company->id, 'name' => $company->name])->save();
+                    $result['restored']++;
+
+                    return;
+                }
+
+                // No firm left to name. A person has to choose where these go.
+                $result['left'][] = $row->name.' ('.$row->code.')';
+            });
+        }
+
+        if ($result['moved'] > 0 || $result['restored'] > 0) {
+            Cache::forget('companies.directory');
+            ClientDirectory::flush();
+        }
+
+        return $result;
+    }
+
+    /**
+     * The live company an id names, following merges to the firm that remains.
+     */
+    private static function liveCompanyFor(?int $companyId): ?Company
+    {
+        for ($hops = 0; $companyId && $hops < 10; $hops++) {
+            $company = Company::withTrashed()->find($companyId);
+
+            if (! $company) {
+                return null;
+            }
+
+            if (! $company->trashed()) {
+                return $company;
+            }
+
+            $companyId = ActivityLog::query()
+                ->where('activity_type', 'company.merged')
+                ->where('subject_type', $company->getMorphClass())
+                ->where('old_values->companyUid', $company->uid)
+                ->latest('id')
+                ->value('subject_id');
+        }
+
+        return null;
+    }
+
+    /**
+     * The keeper's binned rows stop naming it.
+     *
+     * Anything still filed on one goes to the live row, and the company link
+     * is cleared so no later merge or lookup takes the binned row for the
+     * firm's own. Its folder is left alone: the clean-up could leave a
+     * binned row and another firm's live row on the same folder, and folding
+     * that folder in here would empty the other firm's library.
+     *
+     * @param  \Illuminate\Support\Collection<int, CipProvider>  $rows
+     */
+    private static function settleBinnedRows($rows, CipProvider $keep): void
+    {
+        foreach ($rows as $row) {
+            if (! $row->trashed() || (int) $row->id === (int) $keep->id) {
+                continue;
+            }
+
+            CipApplication::withTrashed()
+                ->where('provider_id', $row->id)
+                ->update(['provider_id' => $keep->id]);
+            self::moveCounters($row, $keep);
+            $row->forceFill(['company_id' => null])->save();
         }
     }
 
